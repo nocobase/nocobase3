@@ -184,7 +184,7 @@ interface CreateAgentOptions {
 }
 ```
 
-All three of `sessionId`, `actor`, and `runtime` are required: a fixed agent has nowhere to persist without a session, and there is no implicit root. `model` is fixed at creation and a request cannot override it; if none is supplied, the factory takes the first enabled model when the agent is created, and rejects there if there is none. `tools` names registered tools to activate. `skills` activates the tools those Skills name and gives the agent `getSkill`, bound to exactly those Skills, with the Skills listed in its system prompt — so the model loads a Skill's procedure when a request matches it, as an employee's does. A Skill's tools are active from the start rather than after it is loaded. A fixed agent has no employee presets, so each tool's own `defaultPermission` decides: `ALLOW` runs without asking, and `ASK` — which is also what a tool declaring nothing gets — pauses the run exactly as it does for an employee, reported as `interrupt` from `invoke()` and continued with `resumeInvoke()`. `autoCall` does not exist here. The pause is checkpointed in the plugin's own tables under the default persistence, and in the process beside a `persistence` the caller supplies, so a run paused under a custom persistence can be resumed only by the same `AgentService`. `messages` is not a creation option — the turn's messages go to `invoke()` or `stream()`.
+All three of `sessionId`, `actor`, and `runtime` are required: a fixed agent has nowhere to persist without a session, and there is no implicit root. `model` is fixed at creation and a request cannot override it; if none is supplied, the factory takes the first enabled model when the agent is created, and rejects there if there is none. `tools` names registered tools to activate. `skills` activates the tools those Skills name and gives the agent `getSkill`, bound to exactly those Skills, with the Skills listed in its system prompt — so the model loads a Skill's procedure when a request matches it, as an employee's does. `getSkill` loads nothing outside that list, so a Skill that tells the model to load another works only when both are listed: give `data-query` together with `data-metadata`. A name that matches no registered Skill is dropped without an error — the agent is created, and that Skill is simply absent from its prompt — so check each name against the Skills in AI settings. A Skill's tools are active from the start rather than after it is loaded. A fixed agent has no employee presets, so each tool's own `defaultPermission` decides: `ALLOW` runs without asking, and `ASK` — which is also what a tool declaring nothing gets — pauses the run exactly as it does for an employee, reported as `interrupt` from `invoke()` and continued with `resumeInvoke()`. `autoCall` does not exist here. The pause is checkpointed in the plugin's own tables under the default persistence, and in the process beside a `persistence` the caller supplies, so a run paused under a custom persistence can be resumed only by the same `AgentService`. `messages` is not a creation option — the turn's messages go to `invoke()` or `stream()`.
 
 ## Executing an agent
 
@@ -242,45 +242,65 @@ An agent driven from a job, a schedule, a workflow node, or any other caller wit
 
 **Pass an `AbortSignal` and own the cancellation.** `AgentRequest.signal` is merged with the service's own controller, so either can stop the run. Give it the signal the surrounding system already cancels with — a job timeout, a shutdown hook, a user cancelling upstream — rather than inventing a second timer. There is no built-in wall-clock limit; the only automatic stop is a graph recursion limit of 200 steps, which surfaces as its own error code. On abort the run rejects with `code: 'ABORTED'`, and only the assistant turn in progress at that moment is dropped. Everything before it stays: the user message is saved when the run starts, each earlier step's assistant message and tool results are saved as the run goes, and a tool that already ran has already had its effect. So before retrying, read the conversation to see how far the run got, and rely on the tools being safe to call twice rather than on the run having left nothing behind. A tool that was still running when the signal fired is recorded with `status: 'error'` and the abort reason as its content, but it may have finished its work anyway: its side effect can have happened even though the record says it failed, so judge progress from the business data the tool writes, not from that status alone.
 
-**Run as a real, authorized user.** A job has no signed-in user, but the agent still needs one. A conversation's `userId` references a user row, so an invented id fails at `conversations.create`; and the data tools authorize the actor's id through the authorization service, never through `isRoot`, so an actor with no grants reads an empty catalog rather than an error. Create a dedicated service account for the job, grant it exactly what the job reads and writes, and pass that user as `actor`.
+**Run as a real, authorized user.** A job has no signed-in user, but the agent still needs one. A conversation's `userId` references a user row, so an invented id fails at `conversations.create`; and the data tools authorize the actor's id through the authorization service, never through `isRoot`, so an actor with no grants reads an empty catalog rather than an error. Create a dedicated service account for the job, grant it exactly what the job reads and writes, and pass that user as `actor`, with `roles` set to that account's real role names and `isRoot: false`.
+
+**Say which day it is.** A job that works by date — yesterday's orders, this month's total — passes `state.timezone`, an IANA name such as `Asia/Shanghai`. The current date in the employee's system prompt and the data tools' date handling both use it; without it they follow the server's own time zone, which a deployment often sets to UTC.
 
 **Decide what an interrupt means before it happens.** A tool that is not allowed to run on its own suspends the run to ask a person, and in an unattended run there is nobody to ask. `invoke()` then resolves with `interrupt` set and the paused tool calls recorded, and the run stays suspended until someone resumes it. So the reliable arrangement is not to interrupt at all, which means knowing every tool the run can reach:
 
-- **`createAgent()`** reaches only the tools it names, the ones its Skills name, and `getSkill` when it has Skills. Name only tools declaring `defaultPermission: 'ALLOW'` that run on the server: a tool with `execution: 'frontend'` pauses whatever its permission says, because only a browser can run it.
+- **`createAgent()`** reaches only the tools it names, the ones its Skills name, and `getSkill` when it has Skills — list a chain of Skills in full, since `getSkill` loads only the ones given. Name only tools declaring `defaultPermission: 'ALLOW'` that run on the server: a tool with `execution: 'frontend'` pauses whatever its permission says, because only a browser can run it.
 - **`createAIEmployee()`** also reaches every `GENERAL` tool, and several of those pause: `suggestions` asks, `formFiller` runs in a browser, which an unattended run does not have, and so does any other `GENERAL` tool that does not declare `ALLOW` — including every tool of a configured MCP server whose name does not start with `get`, since MCP tools register as `GENERAL` (see [capabilities.md § MCP servers](capabilities.md#mcp-servers-configyml)). A model commonly ends a turn by offering suggestions, so an employee run that does not exclude them stops there. Exclude them by naming the session's tools in `skillSettings`, as an allowlist:
 
 ```ts
+// Every tool this run may use, including the ones a Skill activates.
+// data-query has the model load data-metadata first, so both are listed.
+const skillSettings = {
+  toolsVersion: 1,
+  tools: [
+    'getSkill',
+    'getDataSources',
+    'getCollectionNames',
+    'getCollectionMetadata',
+    'searchFieldMetadata',
+    'dataSourceQuery',
+    'dataSourceCounting',
+    'dataQuery',
+  ],
+  skillsVersion: 1,
+  skills: ['data-query', 'data-metadata'],
+};
+
+const conversation = await conversations.create({
+  userId: actor.id,
+  aiEmployee: { username: 'order-desk' },
+  title: 'Nightly order summary',
+  options: { skillSettings },
+});
+
 const agent = await factory.createAIEmployee({
   username: 'order-desk',
-  state: { sessionId: conversation.sessionId },
+  state: { sessionId: conversation.sessionId, timezone: 'Asia/Shanghai' },
   actor,
   runtime: { logger },
-  // Every tool this run may use, including the ones a Skill activates.
-  // data-query has the model load data-metadata first, so both are listed.
-  skillSettings: {
-    toolsVersion: 1,
-    tools: [
-      'getSkill',
-      'getDataSources',
-      'getCollectionNames',
-      'getCollectionMetadata',
-      'searchFieldMetadata',
-      'dataSourceQuery',
-      'dataSourceCounting',
-      'dataQuery',
-    ],
-  },
+  skillSettings,
 });
 ```
 
-The list narrows what the employee already allows; it never adds a tool the employee does not have. It covers tools a Skill activates as well as base tools, so a Skill's tools have to be on it too — and when one Skill tells the model to load another, as `data-query` does with `data-metadata`, the whole chain's tools, or the model gets `Tool unavailable.` partway and the run ends in a guessed answer rather than an error. Two groups pass it regardless: the system tools — `getSkill`, `subAgentWebSearch`, `knowledge-base-retrieve` and `aiEmployeeWorkflowTaskOutput` — each still subject to its own switch, and `loadFrontendTool` and `executeFrontendTool`, which appear only when the session carries a frontend tool manifest and then always pause; a server-side run should not pass one. `toolsVersion` matters only for an empty list: with it, `tools: []` leaves only the system tools; without it, an empty list means no filter at all.
+Give the conversation the same `skillSettings` as the agent. The agent's copy governs this run; every later run over HTTP — a tool decision, a resume or a retry from the chat or the conversation center — rebuilds the agent from the conversation's copy, so a conversation without one is resumed with the employee's full tool set.
+
+The list narrows what the employee already allows; it never adds a tool the employee does not have. It covers tools a Skill activates as well as base tools, so a Skill's tools have to be on it too — and when one Skill tells the model to load another, as `data-query` does with `data-metadata`, the whole chain's tools, or the model gets `Tool unavailable.` partway and the run ends in a guessed answer rather than an error. Two groups pass it regardless: the system tools — `getSkill`, `subAgentWebSearch`, `knowledge-base-retrieve` and `aiEmployeeWorkflowTaskOutput` — each still subject to its own switch, and `loadFrontendTool` and `executeFrontendTool`, which appear only when the session carries a frontend tool manifest and then always pause; a server-side run should not pass one. `toolsVersion` matters only for an empty list: with it, `tools: []` leaves only the system tools; without it, an empty list means no filter at all. `skills` with `skillsVersion` narrows the Skills the same way — only the named Skills are offered to `getSkill` and listed in the prompt, and with `skillsVersion` an empty list offers none — so a run that should follow one procedure is not offered the others.
 
 If a tool that asks is genuinely required, the caller is deciding on the user's behalf and should say so — resume with an explicit decision per action rather than a blanket approval, and make only a decision the action allows:
 
 ```ts
 let result = await agent.invoke({ userMessages });
-// A resumed run can pause again on the next tool it reaches.
-while (result.interrupt) {
+// A resumed run can pause again on the next tool it reaches, so bound the rounds.
+for (let round = 0; result.interrupt; round++) {
+  if (round >= 5) {
+    throw new Error(
+      `Still paused after ${round} decisions: ${conversation.sessionId}`,
+    );
+  }
   const { id, actions } = result.interrupt;
   result = await agent.resumeInvoke({
     userDecisions: {
@@ -297,7 +317,7 @@ while (result.interrupt) {
 }
 ```
 
-Approving whatever is pending, unconditionally, turns every `ASK` into an `ALLOW` without the tool or the employee saying so. If that is the intent, make it the tool's declared permission instead, where it is visible.
+A model that keeps calling a tool the loop rejects would otherwise loop for as long as it keeps trying; past the bound the run stays paused, with its calls recorded, for someone to look at. Approving whatever is pending, unconditionally, turns every `ASK` into an `ALLOW` without the tool or the employee saying so. If that is the intent, make it the tool's declared permission instead, where it is visible.
 
 An action identifies its tool call — `toolCall.id` and `toolCall.name` — but does not carry the arguments. A caller that decides on what the tool was about to do, rather than on which tool it is, reads the arguments from `message.toolCalls` on the same result and joins them on `id`: `message` is the assistant turn that requested the paused calls.
 
@@ -331,7 +351,7 @@ try {
 }
 ```
 
-Both factory methods resolve the model when the agent is created, so a missing or unusable model rejects there with `CONFIGURATION_ERROR`, before `invoke()` is reached. An unknown employee `username` rejects at creation with a plain `Error`, since it is a mistake in the caller rather than a state to retry.
+Where a model problem surfaces depends on the factory method. `createAgent()` resolves its model and LLM service completely when the agent is created, so a missing or unusable model rejects there with `CONFIGURATION_ERROR`, before `invoke()` is reached. `createAIEmployee()` rejects at creation with `CONFIGURATION_ERROR` only when no model is usable at all: the employee lists models of its own and none of them is enabled, or it lists none and no service has an enabled model. A model that resolves but points at a service that cannot run — its provider no longer registered, say — fails when `invoke()` or `stream()` runs, with the same code. So handle `CONFIGURATION_ERROR` from both creation and the run. An unknown employee `username` rejects at creation with a plain `Error`, since it is a mistake in the caller rather than a state to retry.
 
 `retryable` says whether an immediate second attempt could plausibly differ:
 
@@ -345,7 +365,7 @@ Both factory methods resolve the model when the agent is created, so a missing o
 
 The two retryable ones are retryable because a model is not deterministic: another attempt may take fewer steps or actually answer. `EMPTY_RESPONSE` comes only from `stream()`; the same outcome from `invoke()` resolves with `message: null` instead of rejecting, so check for it. `CONFIGURATION_ERROR` fails the same way until someone changes the configuration. `PROVIDER_ERROR` is the catch-all — a provider outage, a rate limit, a network failure, and also a tool dependency the container cannot resolve — and `false` means only that an immediate retry is not worth it, because the provider client has already retried transient failures itself. A retry the caller schedules minutes later, with backoff, can still succeed; read `rootMessage` to tell an outage from a mistake before deciding.
 
-`AgentServiceErrorCode` also declares `MODEL_RESPONSE_ERROR` and `PERSISTENCE_ERROR`, which this package maps to HTTP statuses but never raises from the agent path. Handle them if switching exhaustively; do not wait for them.
+`AgentServiceErrorCode` also declares `MODEL_RESPONSE_ERROR` and `PERSISTENCE_ERROR`, which the agent path never raises. Handle them if switching exhaustively; do not wait for them. Over HTTP, the chat actions answer `200` with an SSE body whatever the run does, and a failed run arrives as an `error` event carrying the same `code`; see [api-reference.md § SSE](api-reference.md#sse).
 
 Read `rootMessage` rather than walking `cause`: it returns the deepest message in the chain, guarding against cycles, and it is the one worth logging — the wrapper's own message is usually the least specific thing available.
 

@@ -92,6 +92,7 @@ Do these in order; each step depends on the one before it.
 - The new tool runs from chat, is approved when its permission is `ASK`, returns a serializable result, and leaves the expected database row behind. Run it twice and verify no duplicate.
 - An unauthorized user is refused by the tool, not only by the prompt.
 - The employee the page opens on is the one intended, not whichever sorts first.
+- If the chat opens from a floating trigger: clicking the trigger opens the dialog or side panel, and closing it brings the trigger back. A surface that stays shut is holding its own `open` state instead of the controller's; see [chat-surfaces.md § Surfaces](references/chat-surfaces.md#surfaces).
 - If web search is activated: ask something that needs it and confirm the answer is retrieved rather than recalled. On a provider without built-in search the tool reports that no search ran; that error is the correct outcome, not a bug to route around.
 - If a knowledge base is bound: ask something only its documents can answer, and confirm the answer cites them rather than general knowledge.
 - If attachments are enabled: dropping an image and pasting a document both reach the assistant, and the reply shows it read them.

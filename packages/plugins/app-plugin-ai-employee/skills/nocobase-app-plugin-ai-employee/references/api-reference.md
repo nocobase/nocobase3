@@ -837,8 +837,15 @@ data: <JSON>\n\n
 The installed stream parser handles content, reasoning, web search, tool-call chunks/status, interrupts, message persistence, new messages, sub-agent lifecycle, and errors. A stream failure is sent as:
 
 ```json
-{ "type": "error", "body": "message", "errorName": "optional" }
+{
+  "type": "error",
+  "body": "message",
+  "errorName": "optional",
+  "code": "optional"
+}
 ```
+
+The chat actions answer HTTP 200 once the stream opens, whatever the run does afterwards, so the status never tells a failed run from a successful one. When the failure is the agent's, `code` carries its `AgentServiceErrorCode` — `CONFIGURATION_ERROR` for a missing or disabled model or service, `PROVIDER_ERROR` for a provider failure, and the rest as listed in [server-runs.md § Failures a caller has to tell apart](server-runs.md#failures-a-caller-has-to-tell-apart) — so branch on `code`, never on the text of `body`. A failure before the agent runs, such as an unknown conversation, has no `code`.
 
 Always pass an `AbortSignal`. After disconnect, inspect active state/history and use resume; never blindly duplicate a mutation.
 

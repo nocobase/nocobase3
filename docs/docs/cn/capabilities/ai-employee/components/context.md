@@ -12,6 +12,20 @@ keywords: 'useAIPageElement,useAIForm,AIPageContextScope,workContext,frontend to
 
 ## 注册页面元素
 
+`useAIPageElement`、`useAIPageElementPicker` 和 `useAIForm` 从 `components` 导入，`AIPageContextScope` 和 `useAIChat` 从 `providers` 导入：
+
+```tsx
+import {
+  useAIForm,
+  useAIPageElement,
+  useAIPageElementPicker,
+} from '@/extensions/nocobase-ai/components';
+import {
+  AIPageContextScope,
+  useAIChat,
+} from '@/extensions/nocobase-ai/providers';
+```
+
 ```tsx
 const customerRef = useAIPageElement({
   id: 'customer-detail',

@@ -109,7 +109,7 @@ export function CustomerAssistant() {
 </AIChatProvider>
 ```
 
-`AIChatProvider` 初始使用服务返回的第一个可用模型，用户可以通过 `AIChatWindow` 的模型选择器切换。需要为某个业务任务固定模型时，在 `AIEmployeeTask.model` 中使用 `{ llmService, model }`；`llmService` 是 `config.yml` 或 LLM 管理页中的服务 `name`，不是 Provider 名称。
+`AIChatProvider` 初始使用服务返回的第一个可用模型；当前员工开启了自己的模型设置时，改为这个员工允许、并且仍启用的模型中的第一个，选择器也只列出这些模型。用户可以通过 `AIChatWindow` 的模型选择器切换。需要为某个业务任务固定模型时，在 `AIEmployeeTask.model` 中使用 `{ llmService, model }`，它同样要在员工允许的范围内，否则使用员工允许的第一个模型；`llmService` 是 `config.yml` 或 LLM 管理页中的服务 `name`，不是 Provider 名称。
 
 ## 扩展输入区
 

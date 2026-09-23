@@ -84,19 +84,19 @@ git check-ignore -q .env && ! git ls-files --error-unmatch .env >/dev/null 2>&1 
 
 下面的命令都要在你自己的终端里运行。命令运行后会提示 `OpenAI API Key:`，粘贴密钥后回车即可；输入时屏幕上不会显示，密钥也不会出现在命令行和 shell 历史里。不要把密钥发给 AI 助手，也不要让它代你执行这些命令，否则密钥会留在对话记录里。
 
-这些命令在 zsh、bash 下实测过：配置文件不存在时会新建，并且只有你自己可读；配置文件是软链接时，写入链接指向的文件，不会替换链接本身；其他行原样保留，同名的旧设置会被替换，重复执行也只留下一行；密钥里有引号、`$`、反斜杠或反引号时也能原样读回。命令不依赖你设置的 alias。
+这些命令在 zsh、bash 下实测过：配置文件不存在时会新建，并且只有你自己可读；已经存在的文件保持原来的权限，如果它别人也能读，先用 `chmod 600` 收紧；配置文件是软链接时，写入链接指向的文件，不会替换链接本身；其他行原样保留，同名的旧设置会被替换，重复执行也只留下一行；密钥里有引号、`$`、反斜杠、反引号或首尾空格时也能原样读回。命令不依赖你设置的 alias。输入时按 Ctrl-C 可以取消，什么也不会写入，终端回显也会恢复。
 
 **系统环境变量。** 按你使用的 shell 选一条：
 
 ```bash
 # zsh（会读取 ZDOTDIR 指定的目录）
-f="${ZDOTDIR:-$HOME}/.zshrc"; read -rs 'v?OpenAI API Key: '; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
+f="${ZDOTDIR:-$HOME}/.zshrc"; IFS= read -rs 'v?OpenAI API Key: '; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
 
 # bash（Linux）
-f=~/.bashrc; read -rsp 'OpenAI API Key: ' v; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
+f=~/.bashrc; IFS= read -rsp 'OpenAI API Key: ' v; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
 
 # bash（macOS）：终端启动的是登录 shell，依次查找 ~/.bash_profile、~/.bash_login、~/.profile，写入第一个存在的文件，都不存在时新建 ~/.bash_profile
-f=~/.bash_profile; for c in ~/.bash_profile ~/.bash_login ~/.profile; do [ -e "$c" ] && { f=$c; break; }; done; read -rsp 'OpenAI API Key: ' v; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
+f=~/.bash_profile; for c in ~/.bash_profile ~/.bash_login ~/.profile; do [ -e "$c" ] && { f=$c; break; }; done; IFS= read -rsp 'OpenAI API Key: ' v; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
 ```
 
 ```powershell
@@ -116,15 +116,21 @@ if ($env:OPENAI_API_KEY) { 'OPENAI_API_KEY 已设置' } else { 'OPENAI_API_KEY �
 
 `source` 只对执行它的那个终端生效。其他已经打开的终端和正在运行的进程仍然使用启动时的环境，AI 助手的终端也一样：在当前会话里新设的变量，AI 助手启动的 `pnpm dev` 读不到，`${OPENAI_API_KEY}` 会展开成空字符串。所以要么在你自己的终端里启动服务，要么从已经有这个变量的终端重新打开 AI 助手的会话。
 
-**直接写入 `config.yml`。** 先把 `apiKey` 写成单引号包起来的占位标记 `apiKey: 'REPLACE_WITH_OPENAI_API_KEY'`，再运行下面的命令。它按 YAML 单引号字符串的规则写入密钥（单引号写成两个），读回来就是原值：
+**直接写入 `config.yml`。** 先把 `apiKey` 写成单引号包起来的占位标记 `apiKey: 'REPLACE_WITH_OPENAI_API_KEY'`，再运行下面的命令。它按 YAML 单引号字符串的规则写入密钥（单引号写成两个），读回来就是原值；文件里找不到占位标记时会报错，不改动文件。插件同步配置时会把值里的 `${字母开头的名字}` 当成环境变量展开，这种片段在 `config.yml` 里没有办法转义，所以密钥里恰好有这样的片段时，命令会提示你改用系统环境变量：
 
 ```bash
-command printf 'OpenAI API Key: '; stty -echo; IFS= read -r v; stty echo; echo; KEY="$v" command perl -pi -e 's/REPLACE_WITH_OPENAI_API_KEY/(my $k = $ENV{KEY}) =~ s{\x27}{\x27\x27}g; $k/ge' config.yml; unset v
+command printf 'OpenAI API Key: '; stty -echo; IFS= read -r v; stty echo; echo; case $v in *'${'[A-Za-z_]*'}'*) command printf '%s\n' '这个密钥含有 ${字母…} 形式的片段，插件会把它当成环境变量展开，请改用系统环境变量。';; *) KEY="$v" command perl -e 'local $/; my $f = shift; open my $in, "<", $f or die "$f: $!\n"; my $s = <$in>; close $in; (my $k = $ENV{KEY}) =~ s/\x27/\x27\x27/g; $s =~ s/REPLACE_WITH_OPENAI_API_KEY/$k/g or die "$f 里没有找到 REPLACE_WITH_OPENAI_API_KEY\n"; open my $out, ">", $f or die "$f: $!\n"; print $out $s; close $out or die "$f: $!\n"' config.yml;; esac; unset v
 ```
 
 选择这种方式意味着 AI 助手之后每次修改 `config.yml`（添加 MCP 服务、附件存储或其他 LLM 服务）都会读到密钥，密钥会因此进入对话记录，所以它排在第二位。
 
 **`.env`。** 当前版本中，只有 `pnpm dev` 会把 `.env` 合并进服务进程的环境；构建后的服务（`pnpm start` 和部署环境）读不到它，`${OPENAI_API_KEY}` 会展开成空字符串。这个问题会在后续版本处理。
+
+`pnpm dev` 合并时，`.env.local` 里的同名变量优先于 `.env`，启动 `pnpm dev` 的终端里已有的环境变量又优先于这两个文件。所以用 `.env` 之前，先在要启动服务的终端里确认两处都没有 `OPENAI_API_KEY`，否则 `.env` 里的值不会生效。下面的命令只输出有没有，不打印值：
+
+```bash
+[ -n "$OPENAI_API_KEY" ] && echo "终端里已有 OPENAI_API_KEY" || echo "终端里没有"; command grep -q '^OPENAI_API_KEY=' .env.local 2>/dev/null && echo ".env.local 里已有 OPENAI_API_KEY" || echo ".env.local 里没有"
+```
 
 `.env` 里的值即使加了引号，`$NAME` 和 `${NAME}` 也会被展开成环境变量，`\n`、`\r` 会被转成换行。下面的命令把值用单引号包起来，并把会被展开的 `$` 写成 `\$`；密钥里如果恰好有「反斜杠加 n 或 r」，`.env` 无法保存，命令会提示你改用系统环境变量：
 

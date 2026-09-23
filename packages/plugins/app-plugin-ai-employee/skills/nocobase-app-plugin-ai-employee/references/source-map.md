@@ -75,6 +75,8 @@ Inside the extension, the files worth opening:
 
 A module that exports a component exports nothing else: an App lints this source with its own Portal configuration, and Fast Refresh requires it. A component's context, hooks, and helpers live in a sibling module — `page-element-store.ts` beside `page-element-provider.tsx`, `tool-call-utils.ts` beside `tool-call-card.tsx` — so import a hook or helper from that sibling, and put new non-component exports there too.
 
+A working floating chat — trigger, push side panel, and expand to dialog, all on one controller — ships with the plugin as its demo page: `node_modules/@nocobase/app-plugin-ai-employee/dist/client/dev/demo/floating.js`, built from `client/dev/demo/floating.tsx` in the plugin's source. It imports the Registry through the plugin's own relative paths, so copy its wiring rather than its imports, and import from the App's `@/extensions/nocobase-ai`. The controlled-surface rule it follows is in [chat-surfaces.md § Surfaces](chat-surfaces.md#surfaces).
+
 If `client/extensions/nocobase-ai` is missing, install the Registry item before doing frontend work; see [chat-surfaces.md § Install the extension](chat-surfaces.md#install-the-extension). A missing extension is never a reason to import UI from `@nocobase/ai-employee` or to rebuild chat under `client/`.
 
 ## App server

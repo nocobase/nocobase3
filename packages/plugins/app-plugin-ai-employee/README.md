@@ -14,7 +14,7 @@ helpers. The dependency is one-way; the core package does not import this plugin
 - `server/plugin.ts` is the only server runtime entry and contributes provider lifecycle, routes, and migration location.
 - `server/provider/ai-employee.ts` registers App-container-scoped repository and service factories, initializes package resources before the application's external `ai/` directory, and synchronizes `ai.llmServices` on configuration reload.
 - `server/route/index.ts` creates the authenticated `/api/ai` child router. Every action requires a signed-in session and answers 401 without one; the actions behind the AI settings page — those listed in `server/route/settings-access.ts`, plus the conversation, skill and tool management reads with guards of their own — also require `{ resource: { type: 'page', id: 'ai.settings' }, action: 'access' }` and answer 403 without it, while chat actions stay open to every signed-in user. `tests/app/settings-access.test.ts` classifies every registered action and fails on one that is in no group, so a new action has to be placed deliberately. Routes parse HTTP input and map responses while domain behavior is delegated to factory-owned services.
-- `server/service/ai-mcp-server-service.ts` synchronizes MCP servers from `ai.mcpServers` in `config.yml` and exposes read, test, and tool-inspection operations.
+- `server/service/ai-mcp-server-service.ts` synchronizes MCP servers from `ai.mcpServers` in `config.yml` and exposes read, test, enable-switch, tool-inspection, and tool-permission operations.
 - `database/collections` defines the AI Employee collection layout, and
   `database/migrations` creates it through the App migration system.
 
@@ -44,7 +44,7 @@ The configured service name set is authoritative, including an empty array. Chan
 
 ## MCP server configuration
 
-Declare MCP servers in the application's `config.yml`; the settings page is read-only:
+Declare MCP servers in the application's `config.yml`; the settings page cannot create, edit, or delete a connection:
 
 ```yaml
 ai:
@@ -65,7 +65,7 @@ ai:
         Authorization: Bearer ${MCP_SERVER_TOKEN}
 ```
 
-Each start synchronizes the configured server set and rebuilds the MCP client. Servers are stored in `aiMcpClients`; an existing server keeps the enable switch an administrator set, and tool permissions are saved on the server's row, so both survive restarts. The UI only provides connection testing and viewing the tools discovered from each configured server; a test names a configured server, or gives an inline `http`/`sse` URL, and never runs an inline `stdio` command. The configured server name set is authoritative, including an empty array.
+Each start synchronizes the configured server set and rebuilds the MCP client. Servers are stored in `aiMcpClients`; an existing server keeps the enable switch an administrator set, and tool permissions are saved on the server's row, so both survive restarts. The settings page switches each server on or off, lists the tools discovered from each configured server, sets each tool's permission (`ASK` or `ALLOW`), and tests connections; the switch and the permissions are both persisted. A connection test names a configured server, or gives an inline `http`/`sse` URL, and never runs an inline `stdio` command. Removing or renaming a server in `config.yml` discards its switch and tool permissions. The configured server name set is authoritative, including an empty array.
 
 ## Conversation center
 

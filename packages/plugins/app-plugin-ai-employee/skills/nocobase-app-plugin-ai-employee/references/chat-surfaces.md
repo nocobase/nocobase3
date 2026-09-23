@@ -231,6 +231,61 @@ type AIChatProviderProps = PropsWithChildren<{
 
 `ChatInline`, `ChatPage`, `ChatDialog`, `ChatSidePanel`, and the variant-switching `ChatSurface` are the available containers. To expand a chat from side panel to dialog, change `ChatSurface.variant` rather than remounting: that preserves messages, composer, scroll, and tool state.
 
+`ChatDialog`, `ChatSidePanel`, and `ChatSurface` are controlled: `open` and `onOpenChange` are required, and none of them reads the controller on its own. A floating trigger opens the chat by calling `controller.setOpen(true)`, so the surface opens only when its `open` comes from `useAIChatControllerState(controller).open` and its `onOpenChange` calls `controller.setOpen`. A surface given its own `useState` instead never sees the trigger's click. Create the controller in the component that renders `AIChatProvider`, pass the same controller to the provider and the trigger, and keep the trigger and the surface outside `AIChatWindow`:
+
+```tsx
+import { useState } from 'react';
+import {
+  AIChatFloatingTrigger,
+  AIChatProvider,
+  AIChatWindow,
+  ChatSurface,
+  ChatSurfaceActions,
+  useAIChatController,
+  useAIChatControllerState,
+} from '@/extensions/nocobase-ai';
+
+// Rendered where the readiness gate above returns its chat.
+function FloatingChat() {
+  const controller = useAIChatController();
+  const { open } = useAIChatControllerState(controller);
+  const [expanded, setExpanded] = useState(false);
+
+  const onOpenChange = (next: boolean) => {
+    if (!next) setExpanded(false);
+    controller.setOpen(next);
+  };
+
+  return (
+    <AIChatProvider
+      id='global-ai-chat'
+      controller={controller}
+      defaultEmployee='order-desk'
+    >
+      <AIChatFloatingTrigger controller={controller} />
+      <ChatSurface
+        open={open}
+        variant={expanded ? 'dialog' : 'side-panel'}
+        onOpenChange={onOpenChange}
+        width={450}
+      >
+        <AIChatWindow
+          headerActions={
+            <ChatSurfaceActions
+              expanded={expanded}
+              onExpandedChange={setExpanded}
+              onClose={() => onOpenChange(false)}
+            />
+          }
+        />
+      </ChatSurface>
+    </AIChatProvider>
+  );
+}
+```
+
+A `ChatDialog` or `ChatSidePanel` opened by a trigger is wired the same way: `open={open}` and `onOpenChange={controller.setOpen}`. The plugin's own floating demo, which also pushes the page aside instead of covering it, is listed in [source-map.md](source-map.md).
+
 `AIChatWindow` is the chat itself:
 
 ```ts
@@ -259,7 +314,7 @@ type AIChatWindowProps = {
 
 What the assistant then sees is decided server-side, not by the page. Every provider sends images to the model as content blocks; PDFs go as documents on some providers and as loader-extracted text on others, and on a gateway provider a document is accepted only if the endpoint behind it takes one; other recognized document types are extracted to text; anything else produces a message telling the user the type is unsupported. Which provider does what is in [capabilities.md § What each provider can actually do](capabilities.md#what-each-provider-can-actually-do). So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 
-That last one is on you to get right, and nothing checks it. `AIModel` has no field for image input, so neither the selector nor the composer can warn that the selected model will not read the picture. When a flow can start from an image, say so in the employee's description and make the chat's default model one that accepts images — which means `defaultEmployee` here and, on the server, `overrideEnabledModels` plus service `sort`, since the chat opens on the first model of the first enabled service — unless the employee has its own model settings, in which case the chat offers only those models and opens on the first of them.
+That last one is on you to get right, and nothing checks it. `AIModel` has no field for image input, so neither the selector nor the composer can warn that the selected model will not read the picture. When a flow can start from an image, say so in the employee's description and make the chat's default model one that accepts images — which means `defaultEmployee` here and, on the server, `overrideEnabledModels` plus service `sort`, since the chat opens on the first model of the first enabled service — unless the employee has its own model settings, in which case the chat offers only those of its models that are enabled and opens on the first of them; with none enabled it cannot send at all.
 
 ## Tasks and shortcuts
 
