@@ -73,7 +73,7 @@ export default defineAIEmployee({
 
 `tools[].name` must match a registered tool name exactly.
 
-`autoCall` is narrower than it reads, and in one case it does the opposite of what it sounds like. The runtime consults it only for `CUSTOM` tools; for `SPECIFIED` and `GENERAL` it is ignored entirely and automatic calling follows `defaultPermission === 'ALLOW'`. On a `CUSTOM` tool, `autoCall: true` is what makes the call automatic, so it overrides an `ASK` default rather than respecting it. Leave it out unless the tool is `CUSTOM` and skipping approval is the intent.
+`autoCall` is narrower than it reads, and in one case it does the opposite of what it sounds like. The runtime consults it only for `CUSTOM` tools; for `SPECIFIED` and `GENERAL` it is ignored entirely and automatic calling follows `defaultPermission === 'ALLOW'`. On a `CUSTOM` tool listed here, `autoCall` replaces `defaultPermission` altogether: `autoCall: true` makes the call automatic, overriding an `ASK` default rather than respecting it, and leaving `autoCall` out makes it ask, even when the tool declares `ALLOW`. So a `CUSTOM` tool listed in `tools` states `autoCall` either way. The value is also written to the employee record the first time the employee is registered, and a stored `true` or `false` wins over whatever the definition says afterwards — changing `autoCall` in code later does not change a deployed employee; the administrator changes it in AI settings.
 
 `skills` and `tools` are the employee's declared capability set, but listing a tool is not always enough to reach it: a tool named by any registered Skill stays behind that Skill until the conversation loads it. Read [How Skills and Tools relate](#how-skills-and-tools-relate) before deciding which of the two lists a capability belongs in — the choice is not cosmetic, and the failure mode is a tool that never activates and never complains.
 
@@ -185,7 +185,29 @@ There is no ambient handle to the database, the container, or the App's managers
 
 A tool that writes owns three things the runtime will not do for it.
 
-**Authorize.** The check belongs in the tool, against `ctx.actor`, not in the prompt and not in the schema. Prefer declaring an App service token that already enforces the App's rules over declaring a raw database handle: the built-in data tools do exactly this, resolving an actor-bound service and passing `ctx.actor` into it, so no read reaches a collection unauthorized.
+**Authorize.** The check belongs in the tool, against `ctx.actor`, not in the prompt and not in the schema, and not as `ctx.actor.roles.includes('admin')`. Prefer declaring an App service token that already enforces the App's rules over declaring a raw database handle: the built-in data tools do exactly this, resolving an actor-bound service and passing `ctx.actor` into it, so no read reaches a collection unauthorized.
+
+An App service usually authorizes through the request scope the authorization middleware installs, and a tool call has no request. The service the tool declares builds the same scope from the actor instead, with the same subjects the middleware would add — `authenticated:*`, and every membership the authorization service resolves for the user:
+
+```ts
+import { authorizationToken } from '@nocobase/app-plugin-authorization';
+
+// Inside the App service the tool declares; `authz` is resolved from authorizationToken.
+const principal = { type: 'user', id: String(actor.id) };
+const scope = authz.for({
+  principal,
+  subjects: [
+    { type: 'authenticated', id: '*' },
+    ...(await authz.subjects.resolveFor(principal)),
+  ],
+});
+const decision = await scope.authorize({
+  resource: { type: 'resource', id: 'sales.orders' },
+  action: 'create',
+});
+```
+
+Leaving out `resolveFor` is the easy mistake: the check still runs, but anything granted to a team or another membership is denied. What to do with the decision — rejecting a denial, binding `decision.conditions.database` to the write with `repository.withPolicy()` — belongs to the `nocobase-app-plugin-authorization` Skill.
 
 **Transact.** One tool call should leave one consistent state. If the write spans several collections, own the transaction inside the App service the tool declares.
 
@@ -218,7 +240,9 @@ tools:
 
 `name` and `description` are required; `scope` defaults to `SPECIFIED`. `description` is model-facing — it is what the model reads to decide whether to load the Skill — so write it as a trigger, not as a title. The Markdown body is the Skill content handed to the model.
 
-`tools` names tools that are **already registered in code**. A Skill directory defines no tool. The loader does scan a `tools/` subdirectory, but it only takes filenames from it and appends them to this same list of names, so a source file placed there without a matching registration in `server/ai/tools/` contributes a dead name that resolves to nothing. Keep tool source under `server/ai/tools/` and name it in the frontmatter.
+**An employee Skill is one file.** Loading it with `getSkill` hands the model the body of `SKILL.md` and nothing else, and the model has no tool that reads a file, so a link to `references/contracts.md` is a link it cannot follow. This is not the layout of an agent Skill such as this one: put everything the procedure needs into the `SKILL.md` body, and keep any `references/` pages for the people maintaining it.
+
+`tools` names tools that are **already registered in code**. A Skill directory defines no tool. The loader does scan a `tools/` subdirectory, but it only takes filenames from it and appends them to this same list of names, so a source file placed there without a matching registration in `server/ai/tools/` contributes a dead name that resolves to nothing. The build copies only Markdown, so those names exist in development and are gone from a built server — and where one does match a registered tool, the Skill gates that tool in development and not in production. Keep tool source under `server/ai/tools/` and name every tool in the frontmatter.
 
 The plugin loads Skills from its own package root first, then the App root's `ai/skills`, then any directory listed in `ai.skills.paths`. Later directories register later.
 
@@ -289,7 +313,7 @@ Each body carries more than the tool list: `data-query` documents the supported 
 
 Nineteen, in six families. All are `backend` unless the table says otherwise, and none should ever be imported — activate them by name.
 
-**Data (7)** — `SPECIFIED`, `ALLOW`, gated behind `data-metadata` / `data-query`. Every one reads through an actor-bound service, so the current user's permissions apply, and all are bounded (see the capacity limits below).
+**Data (7)** — `SPECIFIED`, `ALLOW`, gated behind `data-metadata` / `data-query`. Every one reads through an actor-bound service, so the current user's permissions apply, including those inherited through a team or another membership, and all are bounded (see the capacity limits below).
 
 | Tool                    | What it does                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------- |
@@ -363,7 +387,7 @@ Decide it while there is nothing to migrate. If an application already uses bare
 
 ### Missing means invisible, not refused
 
-Discovery hides what it cannot reach. A collection that is unregistered, registered under a bare name, missing the `read` action, or simply not granted to this user is absent from the catalog with nothing logged. Worse than a missing table: **the connection disappears with it**, so `getDataSources` comes back empty and the assistant reports having no data sources at all rather than being unable to find one table — which sends whoever is debugging it toward the database configuration instead of the grant. A direct query naming that collection is rejected rather than hidden, and its error is the quickest way to tell "not granted" from "not registered".
+Discovery hides what it cannot reach. A collection that is unregistered, registered under a bare name, missing the `read` action, or simply not granted to this user is absent from the catalog with nothing logged. Worse than a missing table: **the connection disappears with it**, so `getDataSources` comes back empty and the assistant reports having no data sources at all rather than being unable to find one table — which sends whoever is debugging it toward the database configuration instead of the grant. A direct query naming that collection is rejected rather than hidden, but with the same message whether it is unregistered, registered without `read`, or not granted, so the error confirms the collection is unreachable without saying why; check the registration and the grant in turn. Only a field left out of the grant gets a message of its own.
 
 The same rule applies one level down: a query may touch only the intersection of registered fields, the authorization decision's output fields, and supported scalar metadata, so a field left out of a grant is missing rather than forbidden. Relations are one-hop and same-connection, and each side is authorized independently.
 
@@ -504,16 +528,17 @@ touch .env && k=$(grep -v '^OPENAI_API_KEY=' .env); printf '%s\nOPENAI_API_KEY=%
 
 Two capabilities vary by provider and neither is visible from the configuration. Pick the provider against this table when a feature depends on one.
 
-| `provider:`                                           | PDF to the model | Built-in web search |
-| ----------------------------------------------------- | ---------------- | ------------------- |
-| `openai`                                              | yes              | yes                 |
-| `anthropic`, `google-genai`                           | yes              | yes                 |
-| `dashscope`, `mimo`                                   | text-extracted   | yes                 |
-| `deepseek`                                            | text-extracted   | three models only   |
-| `openai-completions`, `xai`, `ollama`, `shengsuanyun` | yes              | **no**              |
-| `kimi`, `mistral`, `orcarouter`                       | text-extracted   | **no**              |
+| `provider:`                                 | How a PDF is sent                          | Built-in web search |
+| ------------------------------------------- | ------------------------------------------ | ------------------- |
+| `openai`                                    | as a document                              | yes                 |
+| `anthropic`, `google-genai`                 | as a document                              | yes                 |
+| `dashscope`, `mimo`                         | text-extracted                             | yes                 |
+| `deepseek`                                  | text-extracted                             | three models only   |
+| `openai-completions`, `xai`, `shengsuanyun` | as a document, if the endpoint accepts one | **no**              |
+| `ollama`                                    | text-extracted                             | **no**              |
+| `kimi`, `mistral`, `orcarouter`             | text-extracted                             | **no**              |
 
-Every provider in the list sends images to the model. "text-extracted" means a PDF goes through the document loader and arrives as text rather than as a document the model sees — usually fine, but layout and figures are lost. `deepseek` supports web search only on the models its own capability table marks, and rejects the rest with a clear error rather than silently.
+Every provider in the list sends images to the model. The PDF column says what the plugin sends, not what the far end does with it. "as a document" means a `file` content block the model sees as a document; "text-extracted" means the PDF goes through the document loader and arrives as text — usually fine, but layout and figures are lost. `openai-completions`, `xai` and `shengsuanyun` speak to whatever endpoint the service points at, so whether a `file` block is accepted is that endpoint's decision; one that rejects it fails the whole turn with `PROVIDER_ERROR` rather than falling back to text, so try a PDF against the real endpoint before relying on it. `deepseek` supports web search only on the models its own capability table marks, and rejects the rest with a clear error rather than silently.
 
 Web search is the one to check first, because there is no capability check anywhere else: neither the model selector nor the composer reads `AIModel.supportWebSearch`, so a chat with web search switched on looks identical on a provider that cannot search. The `subAgentWebSearch` tool refuses on those providers rather than answering from memory, which is what makes the gap visible at all.
 
@@ -529,15 +554,15 @@ Where the key is available, prove the configuration end to end with one small co
 
 `enabledModels` scopes what the model selector and `ai:listAllEnabledModels` offer, and which model is used when a caller names none. It is not an access boundary: a caller naming an unlisted model still runs.
 
-On reload the name set is authoritative — new names are created, existing names have their provider, title, connection and sort updated, removed names are dropped. **The model list and the enable switch are not updated.** They are treated as an administrator's, so for a service that already exists the values in the database win and `config.yml` is ignored. That is right when the list is curated in AI settings, and surprising in every other case:
+On every load the name set is authoritative — new names are created, existing names have their provider, title, `options`, `modelOptions` and `sort` rewritten from `config.yml`, removed names are dropped. Rewritten means replaced, not merged: a service whose entry leaves out `options` gets `{}`, and one that leaves out `modelOptions` gets the defaults (`temperature: 1`, `topP: 1`, both penalties `0`), overwriting whatever was tuned in AI settings. So an entry that exists in `config.yml` states those fields in full, or accepts the defaults. **The model list and the enable switch are not updated.** They are treated as an administrator's, so for a service that already exists the values in the database win and `config.yml` is ignored. That is right when the list is curated in AI settings, and surprising in every other case:
 
 - a model id written wrongly the first time cannot be corrected from `config.yml`;
 - a service first created without `enabledModels` stays at zero models no matter what is added later;
 - neither situation reports anything.
 
-`overrideEnabledModels: true` on a service reapplies its configured list on every load. It is per service, optional, and defaults to `false`, so nothing changes unless it is set. Turning it on means the list lives in `config.yml` and edits made in AI settings are overwritten on the next reload — say that to the user rather than letting them find out. The switch governs the model list alone: a service an administrator disabled stays disabled.
+`overrideEnabledModels: true` on a service reapplies its configured list on every load. It is per service, optional, and defaults to `false`, so nothing changes unless it is set. Turning it on means the list lives in `config.yml` and edits made in AI settings are overwritten on the next load — say that to the user rather than letting them find out. The switch governs the model list alone: a service an administrator disabled stays disabled, even when its entry says `enabled: true`.
 
-It is also the only way an App controls the chat's default model from source. The selector lists every enabled service's models ordered by service `sort` then name, and the chat opens on the first one, so `sort` plus a deliberate first entry in `enabledModels` decides it — but only while `overrideEnabledModels` is on, because otherwise the order is whatever the database holds.
+It is also how an App keeps the chat's default model under source control. The selector lists every enabled service's models ordered by service `sort` then name, and the chat opens on the first one, so the service `sort` — rewritten on every load — picks the service, and the first entry of its `enabledModels` picks the model. That first entry comes from `config.yml` when the service is created, and afterwards only while `overrideEnabledModels` is on; otherwise it is whatever the database holds.
 
 A duplicate name, a wrong field type, an empty `name`/`provider`, or a non-boolean `overrideEnabledModels` rejects the whole snapshot before anything is written.
 
@@ -601,7 +626,9 @@ ai:
       - packages/shared-ai-skills/skills
 ```
 
-Paths may be absolute or relative to the App root; they are trimmed and de-duplicated, and a missing directory is skipped. This affects Skill loading only — it does not discover employees or tools.
+Paths may be absolute or relative to the App root; they are trimmed and de-duplicated, and a missing directory is skipped without a message. This affects Skill loading only — it does not discover employees or tools.
+
+The App root is not the same directory in both places. In development it is the source root; a built server runs from `dist/`, so a relative path resolves inside `dist/`, where the build has copied nothing, and the directory is skipped in silence. The build copies only the App's own `ai/skills`. For a deployment, list an absolute path the deployment itself provides.
 
 ## Knowledge base
 
