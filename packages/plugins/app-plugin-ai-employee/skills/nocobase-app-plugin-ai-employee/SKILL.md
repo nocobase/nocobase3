@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-ai-employee
-description: Use when a NocoBase App needs an AI employee — "add a chat box to this page", "let the assistant read the file I dropped in", "give it a tool that writes to one of our collections", "let it look something up on the web", "configure an LLM service / MCP server / attachment storage", "the composer is disabled and I don't know why". Not for the collections, pages, permissions, or workflows the employee acts on: those stay with nocobase-app-development, and this Skill assumes they already exist.
+description: Use when a NocoBase App needs an AI employee — "add a chat box to this page", "let it answer from what is on this screen", "give it a tool that writes to one of our collections", "let it fill this form for me", "let the assistant read the file I dropped in", "have it summarize our data", "configure an LLM service / MCP server / attachment storage", "run an agent from a job instead of a chat", "the composer is disabled and I don't know why". Not for the collections, pages, permissions, or workflows the employee acts on: those stay with nocobase-app-development, and this Skill assumes they already exist.
 metadata:
   short-description: Build AI employees, tools, skills, and chat surfaces in a NocoBase App
 ---
@@ -8,6 +8,8 @@ metadata:
 # AI Employee in a NocoBase App
 
 This Skill covers the application-owned half of `@nocobase/app-plugin-ai-employee`: what the App writes, where it writes it, and what the plugin already does so the App does not rebuild it. Work inside a CLI-created App (`pnpm create @nocobase/app <name>`); the current directory is the App root when it holds `client/`, `server/`, and `package.json`.
+
+Ignore any globally installed NocoBase 2 AI Skill. They answer to the same words — "AI employee", "AI manager" — and describe a different product with different APIs.
 
 ## Ownership
 
@@ -28,27 +30,35 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 
 ## Prerequisites
 
-1. `@nocobase/app-plugin-ai-employee` is enabled in `package.json#nocobase.plugins`.
+1. `@nocobase/app-plugin-ai-employee` is registered in `server/plugins.ts` and `client/plugins.ts`. Those two files are the registration; `package.json#nocobase` carries template metadata and no plugin list, so do not look for one there or add one.
 2. `config.yml` declares at least one usable `ai.llmServices` entry. Nothing works without it, and its models must be real — see [capabilities.md § LLM services](references/capabilities.md#llm-services-configyml).
 3. Frontend work needs `client/extensions/nocobase-ai/index.ts` to exist. If it does not, install the Registry item first — see [chat-surfaces.md § Install the extension](references/chat-surfaces.md#install-the-extension).
 4. Chat attachments need a storage disk decided deliberately — see [capabilities.md § Attachment storage](references/capabilities.md#attachment-storage-configyml).
 5. The built-in data tools see only collections registered for authorization as `<connection>.<collection>`, and they hide what they cannot see instead of failing. A collection registered under its bare name is invisible to them — see [capabilities.md § Making a collection visible to the data tools](references/capabilities.md#making-a-collection-visible-to-the-data-tools).
 
+## Known limitations
+
+Three things behave differently once the App is built and deployed. None of them is fixable from the App, so plan around them rather than discovering them in production.
+
+- **`.env` does not reach a built server.** `${NAME}` in `ai.llmServices` and `ai.mcpServers` expands from `process.env`. `pnpm dev` passes a merged environment to the server process, so it works; `pnpm start` loads the built server in-process and the application's `.env` is not merged into `process.env`, so the placeholder becomes an empty string and the provider reports an authentication failure. Set real environment variables in the deployment rather than relying on a `.env` file beside `dist/`.
+- **`ai/skills` is not copied into `dist/`.** The build does not carry it, and a missing Skill directory is logged at debug level and skipped. App Skills therefore load in development and silently disappear after deployment. Until the build carries them, either ship them through `ai.skills.paths` pointing at a directory the deployment does have, or treat App-defined Skills as development-only.
+- **Nothing limits which employees a user can talk to.** `aiEmployees:listByUser` filters on `enabled` only, so every authenticated user sees and can converse with every enabled employee; roles narrow sub-agent dispatch, not the chat. The real boundary is each tool's own check against `ctx.actor`. Do not treat an employee as a permission boundary.
+
 ## What to build for what the user asked
 
-| The user wants                                            | Build                                             | Where                                 |
-| --------------------------------------------------------- | ------------------------------------------------- | ------------------------------------- |
-| A chat box on a page                                      | a chat surface behind the readiness gate          | App page                              |
-| The assistant to see what is on screen                    | a page element with `getContext`                  | App page                              |
-| The assistant to fill a visible form                      | `useAIForm`                                       | App page                              |
-| The assistant to change something visible, without saving | a frontend tool                                   | App page element                      |
-| The assistant to read or write business data              | a backend tool with declared `dependencies`       | `server/ai/tools/<name>.ts`           |
-| The assistant to follow a named procedure                 | a Skill                                           | `ai/skills/<name>/SKILL.md`           |
-| A named persona with a fixed set of skills and tools      | an Employee                                       | `server/ai/employees/<name>/index.ts` |
-| Tools from an external MCP server                         | `ai.mcpServers`                                   | `config.yml`                          |
-| Current information from the web                          | activate the built-in `subAgentWebSearch`         | employee `tools`                      |
-| Answers grounded in uploaded documents                    | a knowledge base, then `knowledge-base-retrieve`  | AI settings, then employee `tools`    |
-| The assistant to read an image or PDF the user dropped in | nothing — enable attachments and configure a disk | chat surface props, `config.yml`      |
+| The user wants                                            | Build                                                           | Where                                 |
+| --------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------- |
+| A chat box on a page                                      | a chat surface behind the readiness gate                        | App page                              |
+| The assistant to see what is on screen                    | a page element with `getContext`                                | App page                              |
+| The assistant to fill a visible form                      | `useAIForm`                                                     | App page                              |
+| The assistant to change something visible, without saving | a frontend tool                                                 | App page element                      |
+| The assistant to read or write business data              | a backend tool with declared `dependencies`                     | `server/ai/tools/<name>.ts`           |
+| The assistant to follow a named procedure                 | a Skill                                                         | `ai/skills/<name>/SKILL.md`           |
+| A named persona with a fixed set of skills and tools      | an Employee                                                     | `server/ai/employees/<name>/index.ts` |
+| Tools from an external MCP server                         | `ai.mcpServers`                                                 | `config.yml`                          |
+| Current information from the web                          | `subAgentWebSearch`, if the provider searches                   | employee `tools`                      |
+| Answers grounded in uploaded documents                    | a knowledge base, which needs a plugin that enables the feature | AI settings, then employee `tools`    |
+| The assistant to read an image or PDF the user dropped in | nothing — enable attachments and configure a disk               | chat surface props, `config.yml`      |
 
 Reach for an App-defined tool before concluding a capability is missing: a backend tool may declare any container token as a dependency, so anything an App service can do, a tool can do. Do not copy a built-in employee, tool, or skill into the App to modify it.
 
@@ -58,17 +68,17 @@ Two of those rows are alternatives more often than they look. When the values we
 
 Do these in order; each step depends on the one before it.
 
-1. **Configure a model.** Add an `ai.llmServices` entry with `${NAME}` placeholders, verify the key resolves a real model list from the provider, and restart. Verify in the UI that a model is selectable.
+1. **Configure a model.** Add an `ai.llmServices` entry with `${NAME}` placeholders and a real `enabledModels` list fetched from the provider, and reload the application configuration — a process restart and an AI resource rescan are not required. Record the same keys in `config.example.yml`, which is committed while `config.yml` is not. Verify in the UI that a model is selectable. `enabledModels` is applied when the service row is first created and ignored afterwards unless the service sets `overrideEnabledModels`, so getting it right now matters more than it looks — see [capabilities.md § LLM services](references/capabilities.md#llm-services-configyml).
 2. **Write the tool first, then the skill that names it.** A tool is registered in code; a Skill references it by name and cannot define one. `ai/skills/` holds Skills only.
 3. **Aggregate and register.** Static-import employees and tools in `server/ai/index.ts` through a subclass of `AIResourceRegistrar`, then call `registerAIResources()` from an App `ServiceProvider.boot()` with `aiManagerToken`. See [server-runs.md § Register App resources](references/server-runs.md#register-app-resources).
 4. **Define the employee.** `defineAIEmployee()` with a stable `username`, a `systemPrompt`, an `avatar` copied from the plugin's list, and explicit `skills` and `tools`. See [capabilities.md § Employees](references/capabilities.md#employees).
-5. **Mount a chat surface** behind the readiness gate, enabling attachments when the flow starts from a dropped image or a pasted document.
+5. **Mount a chat surface** behind the readiness gate, passing `defaultEmployee` so the page opens on the App's employee rather than whichever one sorts first — the built-in `atlas` has `sort: 0` and wins by default. Enable attachments when the flow can start from an uploaded file.
 6. **Verify by observation**, not by reading the source back. Run the checks below.
 
 ## Safety
 
-- Credentials belong in the environment. Write `${OPENAI_API_KEY}` in `config.yml`, put the real value in `.env`, and confirm `.env` is in `.gitignore` before writing it. Never commit a key, and never place one in `config.yml.client`, which the browser can read.
-- Never invent a model id, a provider `baseURL`, or an avatar key. A wrong model id fails at call time; a wrong avatar key silently renders the fallback avatar. Fetch the model list from the provider, and take avatar keys from the plugin's list.
+- Credentials belong in the environment. Write `${OPENAI_API_KEY}` in `config.yml`, put the real value in `.env` for development, and confirm `.env` is in `.gitignore` before writing it. Set the same variable for real in the deployment, because a built server does not read the application's `.env`. Never commit a key, and never place one in `config.yml.client`, which the browser can read.
+- Never invent a model id, a provider key, a provider `baseURL`, or an avatar key. A wrong model id fails at call time, but a wrong provider key and a wrong avatar key both fail silently — an unregistered provider drops the whole service out of the model list, and an unknown avatar renders the fallback face. Fetch the model list from the provider, copy provider keys from the table, and take avatar keys from the plugin's list.
 - `defaultPermission: 'ALLOW'` is for reversible, local, low-consequence actions. Anything that persists, charges, sends, or deletes stays `ASK`.
 - A tool that writes business data owns three things the runtime will not do for it: authorize against `ctx.actor`, keep its writes in one transaction, and make a repeat call safe. A model retries.
 - Context and tool results must survive structured cloning. Never send DOM nodes, callbacks, class instances, credentials, or unbounded record sets.
@@ -82,6 +92,8 @@ Do these in order; each step depends on the one before it.
 - The App employee, tool, and skill appear in AI settings after start, and the employee's tool list shows exactly what was declared.
 - The new tool runs from chat, is approved when its permission is `ASK`, returns a serializable result, and leaves the expected database row behind. Run it twice and verify no duplicate.
 - An unauthorized user is refused by the tool, not only by the prompt.
+- The employee the page opens on is the one intended, not whichever sorts first.
+- If web search is activated: ask something that needs it and confirm the answer is retrieved rather than recalled. On a provider without built-in search the tool now reports that no search ran; that error is the correct outcome, not a bug to route around.
 - If attachments are enabled: dropping an image and pasting a document both reach the assistant, and the reply shows it read them.
 - App-local `lint`, `typecheck`, `test`, and `build` pass.
 - No App file imports a plugin private path, and no changed file lives under `.agents/skills/`.

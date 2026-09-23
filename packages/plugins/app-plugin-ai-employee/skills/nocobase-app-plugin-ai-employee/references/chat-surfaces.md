@@ -191,7 +191,11 @@ function ConfiguredChat() {
   }
 
   return (
-    <AIChatProvider id='assistant-chat' controller={controller}>
+    <AIChatProvider
+      id='assistant-chat'
+      controller={controller}
+      defaultEmployee='order-desk'
+    >
       <ChatInline>
         <AIChatWindow enableAttachments />
       </ChatInline>
@@ -209,6 +213,8 @@ export default function AssistantPage() {
 ```
 
 Use the App's real import alias and localize the messages. If a root AI provider already wraps the route, mount `ConfiguredChat` under it rather than nesting a second root. Call hooks unconditionally before the guards return, and keep the controller identity stable. Do not key the chat by employee or model to force re-initialization — that discards conversation state. Recovery from a configuration error is a page reload, not an employee or model switch.
+
+`defaultEmployee` is not optional in practice. Without it the chat opens on `employees[0]`, which is the lowest `sort` across every enabled employee — and the built-in `atlas` ships with `sort: 0`, so a page built to talk to the App's own employee opens on the router instead. The readiness gate passes either way and the first send works, so nothing looks wrong; the conversation is just with the wrong assistant. Pass the username explicitly.
 
 ## Surfaces
 
@@ -251,9 +257,9 @@ type AIChatWindowProps = {
 
 `enableAttachments` is off by default. Turning it on gives the composer a file action, drag-and-drop over the chat window, and paste of files from the clipboard — no extra code. Uploads go to `aiFiles:create` and land on the disk resolved in [capabilities.md § Attachment storage](capabilities.md#attachment-storage-configyml); decide that disk with the user before switching this on.
 
-What the assistant then sees is decided server-side, not by the page: images and PDFs are sent to the model as multimodal content blocks, other recognized document types are extracted to text, and anything else produces a message telling the user the type is unsupported. So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
+What the assistant then sees is decided server-side, not by the page. Every provider sends images to the model as content blocks; PDFs go as documents on some providers and as loader-extracted text on others; other recognized document types are extracted to text; anything else produces a message telling the user the type is unsupported. Which provider does what is in [capabilities.md § What each provider can actually do](capabilities.md#what-each-provider-can-actually-do). So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 
-That last one is on you to get right. `AIModel` carries `supportWebSearch` but nothing for image input, so neither the selector nor the composer can warn that the selected model will not read the picture; the failure arrives from the provider, mid-turn, in whatever words it chooses. When a flow can start from an image, say so in the employee's description and make its default model one that accepts images.
+That last one is on you to get right, and nothing checks it. `AIModel` has no field for image input, so neither the selector nor the composer can warn that the selected model will not read the picture. When a flow can start from an image, say so in the employee's description and make the chat's default model one that accepts images — which means `defaultEmployee` here and, on the server, `overrideEnabledModels` plus service `sort`, since the chat opens on the first model of the first enabled service.
 
 ## Tasks and shortcuts
 
@@ -278,6 +284,8 @@ Use `AIChatProvider.employeeTasks` for empty-state presets and `AIEmployeeShortc
 
 ## Page context
 
+**`AIPageContextScope` must be an ancestor of the chat, not of the element it describes.** It is a React context provider, and `AIChatProvider` reads the nearest one above itself when it mounts. Wrapping the described element instead compiles, renders, and sends an empty context forever, with nothing reported. The `ref` goes on the visible element; the scope goes around the chat.
+
 ```tsx
 const customer = useAIPageElementHandle({
   id: 'customer-detail', // required for the handle form; use a stable id
@@ -288,9 +296,12 @@ const customer = useAIPageElementHandle({
 return (
   <AIPageContextScope context={customer.context}>
     <section ref={customer.ref}>...</section>
+    <ConfiguredChat />
   </AIPageContextScope>
 );
 ```
+
+When the chat lives in a side panel, a dialog, or the application shell rather than beside the element, put the scope high enough to contain both — or hand the reference to the chat through a task's `message.workContext` instead.
 
 ```ts
 type AIPageElementDescriptor = {
@@ -321,7 +332,26 @@ const formRef = useAIForm({
 });
 ```
 
-Attach the returned ref to the visible form. Sending its context automatically activates the built-in `formFiller`; do not add a duplicate App tool and do not list `formFiller` in a task's skill settings. `applyReactHookFormValues` is the shipped react-hook-form adapter in the extension's `adapters/`.
+Attach the returned ref to the visible form. `applyReactHookFormValues` is the shipped react-hook-form adapter, imported from `@/extensions/nocobase-ai/adapters/react-hook-form` — it is not part of the extension's `index.ts`, so importing it from the package root fails to compile.
+
+`useAIForm` returns a ref and nothing else. Registering the form does not put it in the conversation, and there is no context handle to pass along, so a chat on the same page still sees nothing until the form is referenced. Build the reference yourself and scope it around the chat:
+
+```tsx
+const formRef = useAIForm({ id: 'order-form', title: 'Order form', ... });
+const formContext = useMemo(
+  () => createAIPageContextReference({ id: 'order-form', title: 'Order form' }),
+  [],
+);
+
+return (
+  <AIPageContextScope context={formContext}>
+    <form ref={formRef}>...</form>
+    <ConfiguredChat />
+  </AIPageContextScope>
+);
+```
+
+Sending that context is what activates the built-in `formFiller`; do not add a duplicate App tool and do not list `formFiller` in a task's skill settings. The alternative is to leave the form unreferenced and let the user pick it with `useAIPageElementPicker()`, which is the right choice when a page has several forms and only one is meant at a time.
 
 Field `name` values must be unique. `AIFormField` accepts `name`, `title?`, `type?`, `description?`, `readonly?`, `required?`, `enum?`, and extra keys. Built-in type validation covers string/text/textarea/email/url/date/datetime, number/percent, integer, boolean/checkbox, array, and object. `setValues` receives only declared, editable, type- and enum-compatible fields, the runtime reports what it applied and skipped, and it never submits or saves — submission stays an explicit user or App action.
 

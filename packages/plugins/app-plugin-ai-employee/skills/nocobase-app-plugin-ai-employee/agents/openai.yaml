@@ -3,9 +3,12 @@ interface:
   short_description: 'Build CLI-created App AI features'
   default_prompt: >
     Use $nocobase-app-plugin-ai-employee when developing a NocoBase App created by
-    pnpm create @nocobase/app. Treat the current directory as the App root and
-    make changes only in App-owned ai/, client/extensions/nocobase-ai, client/,
-    server/, tests, or App plugins. Consume the public @nocobase/ai-employee
+    pnpm create @nocobase/app. Ignore globally installed NocoBase 2 AI Skills,
+    which match the same words and describe a different product. Treat the
+    current directory as the App root and make changes only in App-owned ai/,
+    client/extensions/nocobase-ai, client/, server/, and tests; build an
+    application feature in the application, not in a new plugin package.
+    Consume the public @nocobase/ai-employee
     root exports, installed AI service/components, and public plugin client
     APIs. Before writing code, load the skill's capabilities.md, chat-surfaces.md
     or server-runs.md for the area being changed, and copy parameter names,

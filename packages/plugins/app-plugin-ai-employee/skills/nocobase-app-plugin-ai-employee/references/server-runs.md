@@ -64,7 +64,7 @@ export default class AIResourcesProvider extends ServiceProvider<Application> {
 Notes that decide whether this works:
 
 - Import `aiManagerToken` from the package export. `createServiceToken` keys the container by object identity, so recreating a token with the same name yields a different key that resolves nothing.
-- `registerAIResources()` runs tools, then MCP, then skills, then employees — one fixed order, so an employee may name anything registered before it.
+- `registerAIResources()` runs tools, then MCP, then skills, then employees. Do not reason from that order: names are resolved when the agent runs, not when it registers, so the App's employees can name the plugin's built-ins even though the plugin's own Provider booted first. What the order does buy is that one registrar's own resources are in place before its employees are read.
 - The App root's `ai/skills` is already a default Skill directory; do not add it again. Add further directories through `config.yml` `ai.skills.paths`, not through the registrar's constructor.
 - `AIResourceRegistrarOptions` also accepts `logger`, `mcpDirectory`, and `skillsDirectories`. Only `logger` and `source` are worth setting from an App: MCP belongs in `config.yml`, and Skill paths belong in `config.yml`.
 - Two tools registered under one name is a decision, not an accident. Make it explicit rather than relying on registration order.

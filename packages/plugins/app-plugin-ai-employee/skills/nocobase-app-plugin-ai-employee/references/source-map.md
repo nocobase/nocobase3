@@ -25,7 +25,7 @@ Read these App-local files when present, before writing anything:
 
 - `README.md` — setup and development notes.
 - `AGENTS.md` — App-specific coding rules; they outrank this Skill's defaults.
-- `package.json` — enabled plugins (`nocobase.plugins`), dependencies, scripts.
+- `package.json` — dependencies and scripts. Plugin registration is in `server/plugins.ts` and `client/plugins.ts`, not here.
 - `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml).
 - `.env` and `.gitignore` — confirm secrets are ignored before adding a variable.
 - `ai/README.md` — the AI resource layer and its build behavior.
@@ -44,6 +44,8 @@ Read these App-local files when present, before writing anything:
 | `server/ai/index.ts`                  | static imports, aggregated by an `AIResourceRegistrar` subclass |
 | `server/providers/ai-resources.ts`    | the `ServiceProvider` that calls `registerAIResources()`        |
 | `ai/skills/<name>/SKILL.md`           | one Skill; it names tools, and defines none                     |
+
+`ai/` is not copied into `dist/` by the build, and a missing Skill directory is skipped with a debug log, so App Skills load in development and vanish after deployment. Until that changes, point `ai.skills.paths` at a directory the deployment does have, or treat App Skills as development-only.
 
 There is no filesystem scan for employees or tools, and no employee-local prompt, skill, or tool auto-binding. See [capabilities.md § Where each resource is registered](capabilities.md#where-each-resource-is-registered) and [server-runs.md § Register App resources](server-runs.md#register-app-resources).
 
@@ -77,11 +79,11 @@ If `client/extensions/nocobase-ai` is missing, install the Registry item before 
 
 ## App server
 
-`server/` holds the App's own services, routes, runtime, and plugin integration. `package.json#nocobase.plugins` lists the enabled plugins. The App runtime owns one `AIManager`, created by the AI Employee plugin.
+`server/` holds the App's own services, routes, runtime, and plugin integration. `server/plugins.ts` and `client/plugins.ts` are where a plugin is registered. The App runtime owns one `AIManager`, created by the AI Employee plugin.
 
 Use the plugin runtime for authenticated conversations, persistence, `/api/ai`, SSE, and settings. Direct `AgentService` use is for isolated App-owned server integrations only — see [server-runs.md](server-runs.md#when-to-drive-an-agent-directly).
 
-An App backend tool reaches App services through its declared `dependencies`, so a service the tool needs must be registered in the App container under a token the tool can import.
+An App backend tool reaches App services through its declared `dependencies`, so a service the tool needs must be registered in the App container under a token the tool can import — by convention a provider under `server/providers/`, with its token exported from `server/providers/index.ts`.
 
 ## The installed dependency
 
@@ -110,4 +112,4 @@ pnpm test
 pnpm build
 ```
 
-If a script is absent, read `package.json` and run the closest equivalent. Verify that the built output carries the `ai/` resources and that the enabled AI Employee plugin loads them.
+If a script is absent, read `package.json` and run the closest equivalent. Employees and tools are TypeScript compiled into the build, so they deploy normally. `ai/skills` does not — check for it explicitly rather than assuming the build carried it.

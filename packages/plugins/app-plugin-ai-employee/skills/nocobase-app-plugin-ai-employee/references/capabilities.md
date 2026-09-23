@@ -13,7 +13,7 @@ What an App can add to the AI Employee runtime, what is already there, and the `
 - [Tool and Skill display i18n](#tool-and-skill-display-i18n)
 - [Built-in employee, tools, and skills](#built-in-employee-tools-and-skills)
 - [Making a collection visible to the data tools](#making-a-collection-visible-to-the-data-tools)
-- [Three ways to reach outside the App](#three-ways-to-reach-outside-the-app)
+- [Reaching outside the App](#reaching-outside-the-app)
 - [LLM services (`config.yml`)](#llm-services-configyml)
 - [MCP servers (`config.yml`)](#mcp-servers-configyml)
 - [Attachment storage (`config.yml`)](#attachment-storage-configyml)
@@ -34,7 +34,7 @@ There is one registration path per resource kind. A second path does not exist, 
 
 There is no filesystem scan for employees or tools, and a Skill directory carries no tool definitions — a Skill's `tools` array names tools that are already registered in code. So the order is: write the tool, register it, then write the Skill that names it. See [server-runs.md § Register App resources](server-runs.md#register-app-resources) for the registrar and the Provider that calls it.
 
-Registration runs in one fixed order: tools, MCP, skills, employees. An employee may therefore name any skill or tool, and a skill may name any tool.
+Registration runs in one fixed order: tools, MCP, skills, employees. That order is not why a name resolves, though — names are looked up at execution time, so an employee may name a tool or skill registered anywhere, including one the plugin registers before the App's own Provider runs.
 
 ## Employees
 
@@ -69,9 +69,20 @@ export default defineAIEmployee({
 
 `username` is the identity everything else uses — chat requests, `AIEmployeeShortcut.aiEmployee`, tasks, sub-agent dispatch, stored conversations. Changing it after users have conversations orphans them.
 
-`tools[].name` must match a registered tool name exactly. `autoCall: true` opts the tool into the runtime's automatic-call policy; it does not bypass approval, so a tool whose `defaultPermission` is `ASK` still asks.
+`tools[].name` must match a registered tool name exactly.
 
-`skills` and `tools` are the employee's declared capability set. A `SPECIFIED` tool reaches an employee only through this list or through a Skill the employee has; a `GENERAL` tool is available to every employee without being listed.
+`autoCall` is narrower than it reads, and in one case it does the opposite of what it sounds like. The runtime consults it only for `CUSTOM` tools; for `SPECIFIED` and `GENERAL` it is ignored entirely and automatic calling follows `defaultPermission === 'ALLOW'`. On a `CUSTOM` tool, `autoCall: true` is what makes the call automatic, so it overrides an `ASK` default rather than respecting it. Leave it out unless the tool is `CUSTOM` and skipping approval is the intent.
+
+`skills` and `tools` are the employee's declared capability set, but listing a tool is not always enough to reach it.
+
+**A tool named by any registered Skill is not a base tool for anyone.** The runtime removes every name that appears in any registered Skill's `tools` from the employee's base set — every Skill in the installation, not only the ones this employee has — and puts it back only once that Skill has actually been loaded into the conversation, via `getSkill`. `getSkill` itself is exempt.
+
+Two consequences worth planning around:
+
+- The seven data tools are named by the built-in `data-metadata` and `data-query` Skills, so listing `dataSourceQuery` in an employee's `tools` does not make it callable on the first turn. Those Skills are `GENERAL`, so the model can load them, but it costs a round trip and depends on the model choosing to.
+- If one App Skill names a tool, a _different_ employee that lists the same tool without that Skill never activates it, and nothing reports the dead reference. Give the second employee the Skill, or keep the tool out of every Skill's `tools` and let the employee list decide.
+
+A `GENERAL` tool no Skill names is available to every employee without being listed.
 
 The persisted employee record carries more than the definition does — `enabled`, `builtIn`, `deprecated`, `about`, `defaultPrompt`, `skillSettings`, `knowledgeBase`, model settings, roles. Those are administered in AI settings. Do not put them in the definition.
 
@@ -93,7 +104,7 @@ Use one of those keys, or a `data:`, `blob:`, or `http(s)://` URL, which are pas
 ```ts
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { orderServiceToken } from '../services/order-service.js';
+import { orderServiceToken } from '../../providers/index.js';
 
 export default defineTools({
   scope: 'SPECIFIED',
@@ -173,7 +184,7 @@ interface AgentRuntime {
 
 There is no ambient handle to the database, the container, or the App's managers. There is no `ctx.logger`, no `ctx.translate`, no `ctx.repositories`, no `ctx.services`, and no `ctx.state.messages`. Log through `ctx.runtime.logger`, localize through `ctx.runtime.translate`, and read the timezone from `ctx.state.timezone` rather than the `x-timezone` header, which the route already resolved.
 
-`dependencies` is the only way in. Each token is resolved from the **App container**, so an App tool declares the App's own service tokens — the same ones the App's routes use. A token the container cannot resolve fails the execution with an error naming the tool and the token, rather than surfacing as an undefined property halfway through.
+`dependencies` is the only way in. Each token is resolved from the **App container**, so an App tool declares the App's own service tokens — the same ones the App's routes use, registered by a provider under `server/providers/` and exported from `server/providers/index.ts`. A token the container cannot resolve fails the execution with an error naming the tool and the token, rather than surfacing as an undefined property halfway through.
 
 `ctx.actor` is the authorization identity. A model can put anything in its arguments, including a user id; never treat an argument as authorization.
 
@@ -286,19 +297,23 @@ Miss any of them and nothing raises. Discovery simply omits that collection, so 
 
 Field visibility follows the same rule one level down: a query may touch only the intersection of registered fields, the authorization decision's output fields, and supported scalar metadata — so a field absent from the grant is missing rather than forbidden. Relations are one-hop and same-connection, and both sides are authorized independently.
 
+These tools are bounded, and the bounds are hard rather than advisory. More than 1,000 registered authorization resources fails the whole catalog with an error; a collection with more than 500 fields is hidden entirely; detail queries take 1–50 explicit fields, at most 30 flat AND conditions and 8 sort keys, with limit 1–100 and offset up to 10,000; grouped aggregates need explicit value domains bounded to 100 combinations. An application whose model is larger than this needs its own tool rather than a larger request.
+
 So when a new business collection is meant to be queryable by an assistant, registering it for authorization is part of building it, not a later permissions chore. Verify it by asking the assistant to list collections before writing anything that depends on the answer.
 
-## Three ways to reach outside the App
+**Pick the name once, for the whole application.** `orders` and `main.orders` are two different resource ids, not two spellings of one, and the authorization plugin accepts both. The rest of an application — permission declarations, route guards, role grants — commonly uses the bare name, and its own Skill's examples do. Renaming a collection to the two-part form to satisfy these tools means renaming it everywhere it is already referenced; registering both names produces two resources that grant separately. Decide before there is anything to migrate, and if the application already uses bare names, that is a conversation with the user rather than a silent rename.
 
-These are distinct and are chosen for different reasons; naming the wrong one gets a plausible answer with no evidence behind it.
+## Reaching outside the App
 
-| Mechanism                     | What happens                                                                       | Choose it when                                               |
-| ----------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `webSearch` on the chat/state | The provider's own built-in search runs inside the main model call                 | The model provider supports it and the search is incidental  |
-| `subAgentWebSearch` tool      | A separate provider call per query, run in parallel, results returned to the agent | Research is the task — several queries, results worth citing |
-| An MCP server                 | Tools discovered from an external process or endpoint                              | The data lives in a specific system with its own protocol    |
+There are two mechanisms, not three, and the difference between them is smaller than it looks.
 
-`webSearch` is provider-dependent and is not universally available; `subAgentWebSearch` needs the conversation's model to be resolvable and is activated like any other `SPECIFIED` tool.
+**Web search is one tool with two switches.** `webSearch: true` — on `AIChatProvider`, on a task, or in the agent state — does not make the main model call search. All it does is add the `subAgentWebSearch` tool to this conversation. The other switch is listing `subAgentWebSearch` in an employee's `tools`. Either way the same tool runs: one separate provider call per query, in parallel, results returned to the agent.
+
+**Both depend on the provider having built-in search**, because that is the only searching that happens anywhere. The tool asks its provider for a model with search enabled; a provider that does not implement it ignores the request without error. See the capability table above for which providers do — and note that `openai-completions`, the key a gateway normally uses, is not one of them.
+
+On a provider that cannot search, the tool returns `status: 'error'` saying no search ran. That refusal is deliberate. Without it the request still reached a model, and a model given a retrieval prompt produces findings and a source list from training data; the answer looks researched and cites URLs that were never fetched. If an App needs search on such a provider, give it an MCP search server instead.
+
+**An MCP server** is the other mechanism: tools discovered from an external process or endpoint, for data that lives in a specific system with its own protocol. It is also the answer when the provider cannot search and the model cannot be changed.
 
 ## LLM services (`config.yml`)
 
@@ -313,16 +328,17 @@ ai:
       options:
         apiKey: ${OPENAI_API_KEY}
         # baseURL: https://gateway.internal/v1   # optional; overrides the provider default
-      enabledModels: # optional; omit when the real model list is unknown
+      enabledModels: # applied when the service row is created; see below
         - label: GPT-5.6
           value: gpt-5.6
+      overrideEnabledModels: false # optional, default false; see below
       modelOptions:
         temperature: 0.2
       enabled: true
       sort: 10
 ```
 
-`${NAME}` placeholders are expanded recursively **after** validation. A missing variable becomes an empty string, which typically surfaces as an authentication failure rather than a configuration error, so confirm the variable exists.
+`${NAME}` placeholders are expanded recursively **after** validation. A missing variable becomes an empty string, which typically surfaces as an authentication failure rather than a configuration error, so confirm the variable exists. In a built and deployed server the application's `.env` is not merged into `process.env`, so set real environment variables there rather than shipping a `.env` file.
 
 ### Keys never go in source
 
@@ -353,19 +369,48 @@ Add the variable name, with no value, to `.env.example` so the next person knows
 | `google-genai`                 | `https://generativelanguage.googleapis.com`         | `GET {base}/v1beta/models?key=<key>` (no auth header)                 | `models[].name` |
 | `ollama`                       | `http://localhost:11434`                            | `GET {base}/api/tags` (no key)                                        | `models[].name` |
 
-`{base}` is `options.baseURL` when set, otherwise the default above; the request path is resolved against it with a trailing slash, so a base ending in `/v1` already contains that segment. Provider keys are case-sensitive. `openai` is the Responses API; use `openai-completions` for a gateway that only implements Chat Completions.
+`{base}` is `options.baseURL` when set, otherwise the default above; the request path is resolved against it with a trailing slash, so a base ending in `/v1` already contains that segment. Provider keys are case-sensitive, and an unregistered one is dropped in silence: validation only checks that `provider` is a non-empty string, so a typo removes the whole service from the model list with nothing in the logs. `openai` is the Responses API; use `openai-completions` for a gateway that only implements Chat Completions.
+
+### What each provider can actually do
+
+Two capabilities vary by provider and neither is visible from the configuration. Pick the provider against this table when a feature depends on one.
+
+| `provider:`                                           | PDF to the model | Built-in web search |
+| ----------------------------------------------------- | ---------------- | ------------------- |
+| `openai`                                              | yes              | yes                 |
+| `anthropic`, `google-genai`                           | yes              | yes                 |
+| `dashscope`, `mimo`                                   | text-extracted   | yes                 |
+| `deepseek`                                            | text-extracted   | three models only   |
+| `openai-completions`, `xai`, `ollama`, `shengsuanyun` | yes              | **no**              |
+| `kimi`, `mistral`, `orcarouter`                       | text-extracted   | **no**              |
+
+Every provider in the list sends images to the model. "text-extracted" means a PDF goes through the document loader and arrives as text rather than as a document the model sees — usually fine, but layout and figures are lost. `deepseek` supports web search only on the models its own capability table marks, and rejects the rest with a clear error rather than silently.
+
+Web search is the one to check first, because there is no capability check anywhere else: neither the model selector nor the composer reads `AIModel.supportWebSearch`, so a chat with web search switched on looks identical on a provider that cannot search. The `subAgentWebSearch` tool refuses on those providers rather than answering from memory, which is what makes the gap visible at all.
 
 So, in order:
 
 1. Fetch the list with the row above and pick from what comes back.
 2. If the request fails or the key is not available yet, ask the user which models to enable.
-3. If that is still unresolved, **omit `enabledModels` entirely** and say so. The service is then in provider-model mode and an administrator picks models in AI settings after start. An omitted list is correct; an invented one is a bug that surfaces as a failed chat.
+3. If that is still unresolved, leave `enabledModels` out **and tell the user the service has no usable model until someone picks one in AI settings**. Omitting it is not a soft default: the list normalizes to an empty provider-mode list, an empty list drops the service out of `ai:listAllEnabledModels` altogether, and the application then has a configured service and nothing to chat with. An omitted list is honest; an invented one is a bug that surfaces as a failed chat.
 
 Where the key is available, prove the configuration end to end with one small completion against a chosen model before declaring it done. A model list can succeed while the account has no access to the model that was picked.
 
+### `enabledModels` applies once, unless you say otherwise
+
 `enabledModels` scopes what the model selector and `ai:listAllEnabledModels` offer, and which model is used when a caller names none. It is not an access boundary: a caller naming an unlisted model still runs.
 
-On reload, the name set is authoritative — new names are created, existing names have their provider, title and connection updated, removed names are dropped. An administrator's `enabled` state and model list survive a reload. A duplicate name, a wrong field type, or an empty `name`/`provider` rejects the whole snapshot before anything is written.
+On reload the name set is authoritative — new names are created, existing names have their provider, title, connection and sort updated, removed names are dropped. **The model list and the enable switch are not updated.** They are treated as an administrator's, so for a service that already exists the values in the database win and `config.yml` is ignored. That is right when the list is curated in AI settings, and surprising in every other case:
+
+- a model id written wrongly the first time cannot be corrected from `config.yml`;
+- a service first created without `enabledModels` stays at zero models no matter what is added later;
+- neither situation reports anything.
+
+`overrideEnabledModels: true` on a service reapplies its configured list on every load. It is per service, optional, and defaults to `false`, so nothing changes unless it is set. Turning it on means the list lives in `config.yml` and edits made in AI settings are overwritten on the next reload — say that to the user rather than letting them find out. The switch governs the model list alone: a service an administrator disabled stays disabled.
+
+It is also the only way an App controls the chat's default model from source. The selector lists every enabled service's models ordered by service `sort` then name, and the chat opens on the first one, so `sort` plus a deliberate first entry in `enabledModels` decides it — but only while `overrideEnabledModels` is on, because otherwise the order is whatever the database holds.
+
+A duplicate name, a wrong field type, an empty `name`/`provider`, or a non-boolean `overrideEnabledModels` rejects the whole snapshot before anything is written.
 
 ## MCP servers (`config.yml`)
 
@@ -430,6 +475,8 @@ ai:
 Paths may be absolute or relative to the App root; they are trimmed and de-duplicated, and a missing directory is skipped. This affects Skill loading only — it does not discover employees or tools.
 
 ## Knowledge base
+
+**Check first that the feature is available.** Retrieval is gated on a knowledge-base feature flag that this plugin never turns on by itself; a separate plugin enables it. Without that plugin `knowledge-base-retrieve` returns nothing for every employee, whatever the settings page shows — so in an application that does not have it, a knowledge base is not the answer to "ground the assistant in our documents", and saying so early is better than wiring one up. Where the plugin is installed, follow its own Skill for vector databases, embedding services and ingestion; the rest of this section is only the part this plugin owns.
 
 The plugin exposes the retrieval half: an employee bound to a knowledge base in AI settings can call the built-in `knowledge-base-retrieve` tool, which resolves the conversation's employee and returns matching passages.
 
