@@ -116,7 +116,7 @@ export function AIChatProvider({
     ai.employees.find((employee) => employee.username === defaultEmployee)
       ?.username ??
     ai.employees[0]?.username ??
-    'assistant';
+    '';
   const [state, dispatch] = useReducer(
     aiChatReducer,
     createAIChatState({
@@ -256,9 +256,22 @@ export function AIChatProvider({
     () => getEmployeeModels(ai.models, configuredEmployee),
     [ai.models, configuredEmployee],
   );
-  // A send checks the stored model against the resolved one, and the request
-  // carries the stored one, so it follows what the chat resolved — the
+  // A send checks the stored selections against the resolved ones, and the
+  // request carries the stored ones, so they follow what the chat resolved:
+  // the default employee once employees load after the chat mounted, and the
   // employee's first allowed model when the stored one is not allowed.
+  const configuredEmployeeUsername = configuredEmployee?.username;
+  useEffect(() => {
+    if (
+      configuredEmployeeUsername &&
+      configuredEmployeeUsername !== state.selectedEmployeeUsername
+    ) {
+      dispatch({
+        type: 'select-employee',
+        username: configuredEmployeeUsername,
+      });
+    }
+  }, [configuredEmployeeUsername, state.selectedEmployeeUsername]);
   const configuredModelKey = configuredModel
     ? getAIModelKey(configuredModel)
     : undefined;

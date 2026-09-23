@@ -1,6 +1,7 @@
 import { Chat } from '@ai-sdk/react';
 import {
   useCallback,
+  useEffect,
   useRef,
   type Dispatch,
   type MutableRefObject,
@@ -47,6 +48,13 @@ export function useChatRuntime({
   moveWorkContext: (from: string, to: string) => void;
   dispatch: Dispatch<AIChatAction>;
 }) {
+  // A chat is created once and cached, and its transport asks for the context
+  // on every send. Reading the configuration through a ref keeps a chat made
+  // before the employees and models loaded from sending with empty lists.
+  const aiRef = useRef(ai);
+  useEffect(() => {
+    aiRef.current = ai;
+  }, [ai]);
   const chatsRef = useRef(new Map<string, Chat<AIChatMessage>>());
   const transportsRef = useRef(new Map<string, NocoBaseChatTransport>());
   const runtimeContextsRef = useRef(
@@ -98,12 +106,13 @@ export function useChatRuntime({
         chatId: `${id}:${conversationId}`,
         getContext: () => {
           const runtimeContext = getRuntimeContext(runtimeConversationId);
+          const { employees, models } = aiRef.current;
           const employee =
-            ai.employees.find(
+            employees.find(
               (item) => item.username === runtimeContext.employeeUsername,
-            ) ?? ai.employees[0];
+            ) ?? employees[0];
           const model = resolveEmployeeModel(
-            ai.models,
+            models,
             employee,
             runtimeContext.model,
           );
