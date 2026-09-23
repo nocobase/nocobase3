@@ -45,7 +45,7 @@ Read these App-local files when present, before writing anything:
 | `server/providers/ai-resources.ts`    | the `ServiceProvider` that calls `registerAIResources()`        |
 | `ai/skills/<name>/SKILL.md`           | one Skill; it names tools, and defines none                     |
 
-The application build does not yet copy `ai/` into `dist/`, and a missing Skill directory is skipped with a debug log, so App-defined Skills load in development and vanish after deployment. The plugin's own built-in Skills ship with the plugin and are unaffected. This is a known gap with a fix planned; until it lands, point `ai.skills.paths` at a directory the deployment does have, or treat App Skills as development-only.
+The application build copies the Markdown under `ai/skills` into `dist/ai/skills`, which is where a deployed server looks — it resolves the application root from `dist/server`. That covers a Skill's `references/` pages as well as its `SKILL.md`; nothing else in the directory is copied, because tools are registered in code and a Skill only names them. A directory listed in `ai.skills.paths` is not copied, so point those at a path the deployment itself provides.
 
 There is no filesystem scan for employees or tools, and no employee-local prompt, skill, or tool auto-binding. See [capabilities.md § Where each resource is registered](capabilities.md#where-each-resource-is-registered) and [server-runs.md § Register App resources](server-runs.md#register-app-resources).
 

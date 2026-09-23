@@ -38,10 +38,9 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 
 ## Known gaps in this version
 
-Three things do not yet work the way they should. They are open defects rather than intended behaviour, and fixes are planned; none of them can be fixed from the App in the meantime, so work around them until the release that closes them. If you are reading this from a newer version of the plugin, check whether a gap still applies before designing around it.
+Two things do not yet work the way they should. They are open defects rather than intended behaviour, and fixes are planned; neither can be fixed from the App in the meantime, so work around them until the release that closes them. If you are reading this from a newer version of the plugin, check whether a gap still applies before designing around it.
 
 - **`.env` does not reach a built server.** `${NAME}` in `ai.llmServices` and `ai.mcpServers` expands from `process.env`. `pnpm dev` passes a merged environment to the server process, so it works; `pnpm start` loads the built server in-process and the application's `.env` is not merged into `process.env`, so the placeholder becomes an empty string and the provider reports an authentication failure. For now, set real environment variables in the deployment rather than relying on a `.env` file beside `dist/`.
-- **The App's own `ai/skills` is not copied into its `dist/`.** The application build does not carry it, and a missing Skill directory is logged at debug level and skipped, so App-defined Skills load in development and silently disappear after deployment. The plugin's built-in Skills are unaffected — the plugin's own build copies them. For now, either point `ai.skills.paths` at a directory the deployment does have, or treat App-defined Skills as development-only.
 - **Nothing yet limits which employees a user can talk to.** `aiEmployees:listByUser` filters on `enabled` only, so every authenticated user sees and can converse with every enabled employee; roles narrow sub-agent dispatch, not the chat. Until per-employee access lands, the only boundary is each tool's own check against `ctx.actor` — so put the access decision in the tool, and do not rely on an employee being unreachable.
 
 ## What to build for what the user asked
