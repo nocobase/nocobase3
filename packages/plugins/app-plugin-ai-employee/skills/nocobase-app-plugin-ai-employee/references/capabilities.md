@@ -15,7 +15,7 @@ What an App can add to the AI Employee runtime, what is already there, and the `
 - [Built-in Skills](#built-in-skills)
 - [Built-in Tools](#built-in-tools)
 - [Built-in employee](#built-in-employee)
-- [Making a collection visible to the data tools](#making-a-collection-visible-to-the-data-tools)
+- [What the data tools can see](#what-the-data-tools-can-see)
 - [Reaching outside the App](#reaching-outside-the-app)
 - [LLM services (`config.yml`)](#llm-services-configyml)
 - [MCP servers (`config.yml`)](#mcp-servers-configyml)
@@ -345,23 +345,34 @@ One: `atlas`, `sort: 0`. It is a router — it analyses a request, decides wheth
 
 Its `sort: 0` has a practical consequence: it is `employees[0]` for any application that does not give an employee a lower sort, and a chat without `defaultEmployee` opens on it.
 
-## Making a collection visible to the data tools
+## What the data tools can see
 
-The seven data tools and the two data Skills read nothing the App has not opted into, and the opt-in is not the collection itself. Three things must all hold for one collection, and all three are the App's to arrange:
+The seven data tools and the two data Skills read nothing an application has not opted into, and the opt-in is authorization: a collection is reachable only through a registered authorization resource the current user is granted read on. **Registering and granting is not this plugin's to explain** — it belongs to the `nocobase-app-plugin-authorization` Skill, and to `nocobase-app-development` for where that work sits in an application. Go there for the API, the grants, and the permission sets.
 
-1. It is registered for authorization under the **two-part** name `<connection>.<collection>` — `authz.db.collections.add({ name: 'main.orders', title: 'Orders' })`. A registration under a bare `orders` works for the rest of the application and is skipped here: the catalog keeps only names that split into exactly two dot-separated parts, and the first part must match a configured connection name exactly. There is no default-connection alias.
-2. Its registration keeps the `read` action. The default action set includes it; a narrowed `actions` list can drop it.
-3. The current user's permission set actually grants read on it, producing a conditional decision with fields and a scope.
+What this plugin adds on top is one constraint and one failure mode. Both are its own, and neither is written down anywhere else.
 
-Miss any of them and nothing raises. Discovery simply omits that collection, so the assistant answers "I could not find that table" while the table plainly exists and the application's own pages read it fine. A direct query against it is rejected instead of hidden, which is the faster way to tell the two apart.
+### The resource id must be `<connection>.<collection>`
 
-Field visibility follows the same rule one level down: a query may touch only the intersection of registered fields, the authorization decision's output fields, and supported scalar metadata — so a field absent from the grant is missing rather than forbidden. Relations are one-hop and same-connection, and both sides are authorized independently.
+These tools read the authorization catalog and keep only resource ids that split into exactly two dot-separated parts, with the first part matching a configured connection name. A resource registered under a bare `orders` is skipped; `main.orders` is seen. There is no default-connection alias.
 
-These tools are bounded, and the bounds are hard rather than advisory. More than 1,000 registered authorization resources fails the whole catalog with an error; a collection with more than 500 fields is hidden entirely; detail queries take 1–50 explicit fields, at most 30 flat AND conditions and 8 sort keys, with limit 1–100 and offset up to 10,000; grouped aggregates need explicit value domains bounded to 100 combinations. An application whose model is larger than this needs its own tool rather than a larger request.
+That id is not this plugin's private key — it is the same id the rest of an application already uses in its permission declarations, route guards and role grants, and the authorization Skill's examples use the bare form. So this is a naming decision for the whole application, taken once:
 
-So when a new business collection is meant to be queryable by an assistant, registering it for authorization is part of building it, not a later permissions chore. Verify it by asking the assistant to list collections before writing anything that depends on the answer.
+- Renaming an existing resource to the two-part form means renaming it everywhere it is referenced, or the application's own pages and APIs break.
+- Registering both names produces two independent resources that grant separately, so a user granted one still cannot read through the other.
 
-**Pick the name once, for the whole application.** `orders` and `main.orders` are two different resource ids, not two spellings of one, and the authorization plugin accepts both. The rest of an application — permission declarations, route guards, role grants — commonly uses the bare name, and its own Skill's examples do. Renaming a collection to the two-part form to satisfy these tools means renaming it everywhere it is already referenced; registering both names produces two resources that grant separately. Decide before there is anything to migrate, and if the application already uses bare names, that is a conversation with the user rather than a silent rename.
+Decide it while there is nothing to migrate. If an application already uses bare names, that is a conversation with the user, not a silent rename.
+
+### Missing means invisible, not refused
+
+Discovery hides what it cannot reach. A collection that is unregistered, registered under a bare name, missing the `read` action, or simply not granted to this user is absent from the catalog with nothing logged — so the assistant reports that it could not find a table that plainly exists and that the application's own pages read fine. A direct query naming that collection is rejected rather than hidden, which is the quickest way to tell "not granted" from "not registered".
+
+The same rule applies one level down: a query may touch only the intersection of registered fields, the authorization decision's output fields, and supported scalar metadata, so a field left out of a grant is missing rather than forbidden. Relations are one-hop and same-connection, and each side is authorized independently.
+
+So when a new business collection is meant to be queryable by an assistant, arranging its authorization is part of building it rather than a later chore — and the check is to ask the assistant to list collections before writing anything that depends on the answer.
+
+### Hard limits
+
+These bounds fail rather than truncate. More than 1,000 registered authorization resources fails the whole catalog with an error; a collection with more than 500 fields is hidden entirely; detail queries take 1–50 explicit fields, at most 30 flat AND conditions and 8 sort keys, with limit 1–100 and offset up to 10,000; grouped aggregates need explicit value domains bounded to 100 combinations. An application whose model is larger than this needs a tool of its own rather than a larger request.
 
 ## Reaching outside the App
 
