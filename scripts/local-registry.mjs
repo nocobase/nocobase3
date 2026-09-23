@@ -20,8 +20,12 @@ pnpm local-registry:create NAME [--template default|examples|hub] [--dialect sql
 pnpm local-registry:verify [--template default|examples|hub] [--dialect sqlite]
   [--config /absolute/test.yml] [--timeout 420] [--workdir /empty/directory]
 pnpm local-registry:stop
+eval "$(pnpm -s local-registry:env)"
 
 Prepare builds and publishes all workspace packages to a fresh loopback registry.
+Env prints the variables create and verify run with, as shell exports, so plain
+pnpm and npm commands in the current shell — and an agent started from it — resolve
+the snapshot too, instead of the registry in your own pnpm and npm configuration.
 Use --reset to stop the previous session and clear its snapshot before preparing again.
 Verify runs test/dev/build/start and retains applications and logs outside the repository.
 Non-SQLite verification requires --config pointing to a dedicated test database;
@@ -30,8 +34,8 @@ application migrations and seeds may modify it. Stop removes registry state, not
 
 export function parseArgs(argv) {
   const [action, ...args] = argv;
-  if (!['prepare', 'create', 'verify', 'stop'].includes(action))
-    throw new Error('Expected prepare, create, verify, or stop.');
+  if (!['prepare', 'create', 'verify', 'env', 'stop'].includes(action))
+    throw new Error('Expected prepare, create, verify, env, or stop.');
   const options = {
     action,
     port: 4873,
@@ -43,6 +47,7 @@ export function parseArgs(argv) {
     prepare: ['port'],
     verify: ['template', 'dialect', 'config', 'timeout', 'workdir'],
     create: ['template', 'dialect', 'output-dir'],
+    env: [],
     stop: [],
   };
   for (let i = 0; i < args.length; i++) {
@@ -111,14 +116,30 @@ function run(
   return result.stdout?.trim();
 }
 
+const INHERITED_CONFIG = /^(npm_config_|pnpm_config_)/i;
+
 export function registryEnv(state) {
-  const sessionDir = path.dirname(state.npmrc);
   const env = { ...process.env };
   // Ignore inherited registry/auth/cache overrides; use a session-only npmrc for both tools.
   for (const key of Object.keys(env))
-    if (/^(npm_config_|pnpm_config_)/i.test(key)) delete env[key];
+    if (INHERITED_CONFIG.test(key)) delete env[key];
+  return { ...env, ...registryEnvOverrides(state) };
+}
+
+/**
+ * What `registryEnv` sets on top of the inherited environment.
+ *
+ * `XDG_CONFIG_HOME` is the one that is easy to leave out and the one that matters most. `pnpm config set` writes a
+ * scoped registry to the global `auth.ini` in pnpm's configuration directory (`~/Library/Preferences/pnpm` on macOS,
+ * `$XDG_CONFIG_HOME/pnpm` elsewhere), and that file is read however `PNPM_CONFIG_USERCONFIG` is set. Anyone who
+ * followed the documented `pnpm config set @nocobase:registry …` has one, so without a session configuration
+ * directory every `@nocobase/*` package still resolves against the published registry — and because a snapshot
+ * carries the same version numbers as the last release, nothing reports that it did. pnpm reads no other variable for
+ * that directory, so moving it means moving `XDG_CONFIG_HOME` as a whole.
+ */
+export function registryEnvOverrides(state) {
+  const sessionDir = path.dirname(state.npmrc);
   return {
-    ...env,
     NPM_CONFIG_USERCONFIG: state.npmrc,
     PNPM_CONFIG_USERCONFIG: state.npmrc,
     PNPM_CONFIG_NPMRC_AUTH_FILE: state.npmrc,
@@ -133,6 +154,45 @@ export function registryEnv(state) {
     PNPM_CONFIG_STORE_DIR: path.join(sessionDir, 'store'),
     NPM_CONFIG_CACHE: path.join(sessionDir, 'npm-cache'),
   };
+}
+
+/**
+ * `registryEnv` as commands a POSIX shell can evaluate, so that plain `pnpm` and `npm` in an interactive shell — and
+ * an agent started from it — resolve exactly as `create` and `verify` do. `inherited` is the environment this process
+ * received, which is the calling shell's plus whatever pnpm adds to run the script: the configuration variables
+ * `registryEnv` drops are unset, which is harmless for the ones only pnpm set.
+ */
+export function formatShellEnv(state, inherited = process.env) {
+  const overrides = registryEnvOverrides(state);
+  const unset = Object.keys(inherited)
+    .filter((key) => INHERITED_CONFIG.test(key) && !(key in overrides))
+    .sort();
+  return [
+    `# Local registry ${state.registry} for ${state.repo}`,
+    '# XDG_CONFIG_HOME moves for this shell too, so tools that keep their settings there (gh, for one) will not find',
+    '# them here. Open a new shell to leave the session.',
+    ...(unset.length ? [`unset ${unset.join(' ')}`] : []),
+    ...Object.entries(overrides).map(
+      ([key, value]) => `export ${key}=${shellQuote(value)}`,
+    ),
+  ].join('\n');
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'\\''`)}'`;
+}
+
+async function assertRegistryAvailable(state) {
+  try {
+    const response = await fetch(`${state.registry}-/ping`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) throw new Error('Registry is unavailable.');
+  } catch {
+    throw new Error(
+      'Local registry is unavailable. Run pnpm local-registry:stop and pnpm local-registry:prepare.',
+    );
+  }
 }
 
 function assertRegistries(state, env, cwd = repo) {
@@ -317,6 +377,8 @@ For an automated check: pnpm local-registry:verify --template default
 For manual testing, run outside the repository:
   node ${JSON.stringify(wrapper)} my-app --json
 The wrapper runs pnpm create with isolated configuration and snapshot versions.
+To make plain pnpm and npm in a shell resolve the snapshot, for example to test an agent Skill:
+  eval "$(pnpm -s local-registry:env)"
 Stop with: pnpm local-registry:stop`);
 }
 
@@ -430,16 +492,7 @@ async function main() {
       const state = readState();
       if (!state.ready)
         throw new Error('Run pnpm local-registry:prepare first.');
-      try {
-        const response = await fetch(`${state.registry}-/ping`, {
-          signal: AbortSignal.timeout(3000),
-        });
-        if (!response.ok) throw new Error('Registry is unavailable.');
-      } catch {
-        throw new Error(
-          'Local registry is unavailable. Run pnpm local-registry:stop and pnpm local-registry:prepare.',
-        );
-      }
+      await assertRegistryAvailable(state);
       const parent = path.resolve(
         options['output-dir'] ?? path.join(repo, '..', 'nocobase-local-apps'),
       );
@@ -509,6 +562,13 @@ async function main() {
         ],
         { env },
       );
+    } else if (options.action === 'env') {
+      const state = readState();
+      if (!state.ready)
+        throw new Error('Run pnpm local-registry:prepare first.');
+      await assertRegistryAvailable(state);
+      // stdout carries only what the shell evaluates; everything meant for a person is a comment.
+      console.log(formatShellEnv(state));
     } else {
       stop();
     }
