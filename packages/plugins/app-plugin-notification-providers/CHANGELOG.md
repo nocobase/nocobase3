@@ -1,5 +1,27 @@
 # @nocobase/app-plugin-notification-providers
 
+## 0.2.0-beta.7
+
+### Minor Changes
+
+- ffafc2a: Use unique Channel map keys for sending, test sending, runtime isolation and retries. Preserve message types separately in delivery records and reject retries after the original Channel or Provider becomes unavailable. Migrate existing Channel identities and update application configuration and integration guidance.
+- ffafc2a: Replace actionUrl with a validated route-or-URL target. Render internal inbox routes through the application Router and full URLs through native links. Add nullable target storage without converting historical links, expose test-send target fields, and include only URL targets in IM messages. Legacy actionUrl values are ignored.
+- ffafc2a: Replace notification configuration with named single-Provider Channels and send complete messages through a Channel-keyed map. Validate all messages before enqueueing, deliver native recipients independently, and retain retries bound to the original Channel and Provider. Simplify the test form and remove Provider instance names from delivery records with a new migration.
+
+### Patch Changes
+
+- ffafc2a: Move notification documentation to the root documentation site, keep plugin packages focused on their published Skills, and simplify Delivery retry status and configuration.
+- Updated dependencies [8f1ead4]
+- Updated dependencies [77d34b6]
+- Updated dependencies [ffafc2a]
+- Updated dependencies [ffafc2a]
+- Updated dependencies [ffafc2a]
+- Updated dependencies [ffafc2a]
+- Updated dependencies [ffafc2a]
+- Updated dependencies [a1a8690]
+  - @nocobase/app-server@1.0.0-beta.24
+  - @nocobase/app-plugin-notification@0.1.0-beta.15
+
 ## 0.2.0-beta.6
 
 ### Patch Changes
