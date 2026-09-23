@@ -71,7 +71,7 @@ Switching a dialect means changing **both** layers. `config.yml` deep-merges int
 
 Passing `pnpm typecheck` validates neither the YAML contents nor connectivity. Only starting the application against the target proves either.
 
-The mechanics belong to the application rather than to this package: how `pnpm create @nocobase/app --dialect` scaffolds one, the per-dialect connection fields and defaults, driver installation and native binaries, and the typing of `defineAppDatabaseConfig` are in `.agents/skills/nocobase-app-development/references/database-connections.md`.
+The mechanics belong to the application rather than to this package: how `pnpm config:init` configures one, the per-dialect connection fields and defaults, driver installation and native binaries, and the typing of `defineAppDatabaseConfig` are in `.agents/skills/nocobase-app-development/references/database-connections.md`.
 
 Keep `@nocobase/db` itself in `dependencies`, not `devDependencies`: the deployed server resolves it at runtime, and TypeScript reads that declaration to infer the database configuration.
 

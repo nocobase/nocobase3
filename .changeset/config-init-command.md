@@ -5,6 +5,7 @@
 '@nocobase/app-server': minor
 '@nocobase/app-cli': minor
 '@nocobase/app-skills': minor
+'@nocobase/db': patch
 ---
 
 Add `nocobase app config init`, which writes the configuration file an application starts from, and run it in an application with `pnpm config:init`.
@@ -17,4 +18,4 @@ The three application templates now declare `@nocobase/db-sqlite`, the driver th
 
 `@nocobase/app-server` exports `OFFICIAL_DIALECTS` and `OfficialDialect` from `@nocobase/app-server/database`, so tooling that has to name the dialects reads the same list the runtime loads drivers from.
 
-The application development and deployment Skills describe the new step: how an application is configured, that the driver decides which dialects it can run on, and that a deployment writes its configuration with `node ./dist/cli/index.js app config init` from the `config.example.yml` the archive carries.
+The application development and deployment Skills describe the new step: how an application is configured, that the driver decides which dialects it can run on, and that a deployment writes its configuration with `node ./dist/cli/index.js app config init` from the `config.example.yml` the archive carries. The database Skill shipped with `@nocobase/db` now points at `pnpm config:init` rather than at a creation flag that no longer exists.
