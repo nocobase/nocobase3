@@ -43,7 +43,7 @@ After creation and startup, recommend that the user start a new session in the a
 
 Confirm that the working directory is the application root. Read `AGENTS.md`, `package.json`, and relevant local development guidance. Inspect existing configuration and continue unfinished work.
 
-Ask which database the user wants; do not choose it for them in the initial creation prompt. Common options include SQLite, PostgreSQL, and MySQL. SQLite uses a local file; PostgreSQL and MySQL require a reachable database service. For other databases, consult the project's current database guidance for the driver and connection requirements.
+Use the database the user named; otherwise ask which one they want, and do not choose it for them. Common options include SQLite, PostgreSQL, and MySQL. SQLite uses a local file; PostgreSQL and MySQL require a reachable database service. For other databases, consult the project's current database guidance for the driver and connection requirements.
 
 After the user chooses, configure the application from its own directory. SQLite needs nothing installed, because the templates depend on its driver:
 
@@ -80,7 +80,7 @@ Provide the user with:
 
 - The application directory and actual URL
 - The account to use for first sign-in and where to obtain its password
-- How to stop and restart the service
+- That the service started by the agent stops when the agent's session ends, and how to start it again with `pnpm dev` (or `pnpm start` for a Hub) in the application directory
 - Any remaining configuration tasks or startup errors
 
 If the template uses its initial administrator, the account is `admin@nocobase.com` with password `admin123`; confirm this against the generated project's account guidance before presenting it. If the user configured an administrator or connected an existing database, use the actual account information instead of assuming the defaults. Do not repeat user-defined passwords in the conversation.
