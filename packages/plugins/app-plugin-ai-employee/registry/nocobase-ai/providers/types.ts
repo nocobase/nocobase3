@@ -97,7 +97,8 @@ export type AIEmployeeTask = {
 export type AIEmployeeTasks = Record<string, AIEmployeeTask[]>;
 
 export type AIEmployeeTaskTrigger = {
-  aiEmployee: string | AIEmployee;
+  /** Omitted: the chat's `defaultEmployee`, or its first employee without one. */
+  aiEmployee?: string | AIEmployee;
   task?: AIEmployeeTask;
   tasks?: AIEmployeeTask[];
   context?: AIWorkContextItem[];

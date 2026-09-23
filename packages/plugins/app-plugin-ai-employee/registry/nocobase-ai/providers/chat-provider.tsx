@@ -232,10 +232,17 @@ export function AIChatProvider({
     dispatch,
   });
 
+  // The first selection is made on the first render, which can be before the
+  // employees load; falling back to the default rather than to the first
+  // employee keeps `defaultEmployee` honoured once they arrive.
   const configuredEmployee =
     ai.employees.find(
       (employee) => employee.username === state.selectedEmployeeUsername,
-    ) ?? ai.employees[0];
+    ) ??
+    ai.employees.find(
+      (employee) => employee.username === defaultEmployeeUsername,
+    ) ??
+    ai.employees[0];
   const configuredModel =
     findAIModel(ai.models, state.selectedModel) ?? ai.models[0];
   const currentEmployee = configuredEmployee ?? UNAVAILABLE_EMPLOYEE;
@@ -540,16 +547,20 @@ export function AIChatProvider({
       const operationVersion = interactionVersionRef.current + 1;
       interactionVersionRef.current = operationVersion;
       cancelEditingMessage();
-      const employee = findTriggeredAIEmployee(
-        ai.employees,
-        options.aiEmployee,
-      );
+      // A trigger that names no employee opens this chat's own default, the
+      // same one the chat starts on, rather than whichever employee sorts first.
+      if (!options.aiEmployee && !ai.employees.length) {
+        if (options.open !== false) controller?.open();
+        return;
+      }
+      const requestedEmployee = options.aiEmployee ?? defaultEmployeeUsername;
+      const employee = findTriggeredAIEmployee(ai.employees, requestedEmployee);
 
       if (!employee) {
         const requested =
-          typeof options.aiEmployee === 'string'
-            ? options.aiEmployee
-            : options.aiEmployee.username;
+          typeof requestedEmployee === 'string'
+            ? requestedEmployee
+            : requestedEmployee.username;
         console.warn(`AI employee "${requested}" was not found.`);
         return;
       }
@@ -622,6 +633,7 @@ export function AIChatProvider({
       ai.models,
       cancelEditingMessage,
       controller,
+      defaultEmployeeUsername,
       getConfiguredTaskSet,
       inheritedPageContext,
       invalidateConversationHistory,

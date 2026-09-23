@@ -46,10 +46,7 @@ function GlobalChatContent() {
       controller={controller}
       defaultEmployee={DEFAULT_EMPLOYEE}
     >
-      <AIChatFloatingTrigger
-        controller={controller}
-        aiEmployee={DEFAULT_EMPLOYEE}
-      />
+      <AIChatFloatingTrigger controller={controller} />
       <ChatSurface
         open={open}
         variant={expanded ? 'dialog' : 'side-panel'}
@@ -93,7 +90,7 @@ export function GlobalChat() {
 
 `controller` 必须同时传给 `AIChatProvider`、`AIChatFloatingTrigger`，并用来读取 `open` 状态。如果在 Provider 的子组件里另外调用 `useAIChatController()` 而不传给 Provider，得到的是一个和聊天没有关联的新 Controller，入口发起的任务不会到达这个聊天。
 
-悬浮按钮点击时会用自己的 `aiEmployee` 开启新会话；不传时用的是 `employees[0]`，而不是 Provider 的 `defaultEmployee`。所以两处都写上同一个员工的 `username`。`AIChatFloatingTrigger` 默认在面板打开时隐藏自己（`hideWhenOpen`），不需要再手动判断。
+悬浮按钮点击时会开启一个新会话。不传 `aiEmployee` 时，用的是 Provider 的 `defaultEmployee`，所以默认员工只需要在 `AIChatProvider` 上写一次；只有这个入口要打开另一个员工时，才给它传 `aiEmployee`。`AIChatFloatingTrigger` 默认在面板打开时隐藏自己（`hideWhenOpen`），不需要再手动判断。
 
 全局入口通常不需要显示加载和错误提示，上面的 `GlobalChat` 在配置没有就绪时直接不渲染。页面里的嵌入式聊天需要给用户明确的提示，写法见 [聊天框 · 等配置就绪再挂载](./chat.md#等配置就绪再挂载)。
 
@@ -105,7 +102,7 @@ export function GlobalChat() {
 
 ## 未读和默认员工
 
-`AIChatFloatingTrigger.unreadCount` 可以展示未读数量。默认员工通过 `AIChatProvider.defaultEmployee` 和 `AIChatFloatingTrigger.aiEmployee` 指定，不要在每次点击入口时创建新 Provider。
+`AIChatFloatingTrigger.unreadCount` 可以展示未读数量。默认员工通过 `AIChatProvider.defaultEmployee` 指定，`AIChatFloatingTrigger.aiEmployee` 只在要覆盖它时使用；不要在每次点击入口时创建新 Provider。
 
 ## 相关链接
 

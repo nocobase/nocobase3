@@ -172,7 +172,7 @@ command printf 'OpenAI API Key: '; stty -echo; IFS= read -r v; stty echo; echo; 
 - 点击后用 ChatSurface 打开右侧对话面板，并允许展开为 dialog；
 - 复用同一个 AIChatProvider、controller 和 AIChatWindow，切换容器时不要重建会话；
 - 用 useAI() 的就绪状态控制渲染：员工或模型还在加载、加载失败、没有可用员工或没有已启用模型时，显示对应的提示，而不是一个看起来可用的输入框；
-- 给 AIChatProvider 传入 defaultEmployee，同时给 AIChatFloatingTrigger 传入同一个 aiEmployee（悬浮入口不读取 defaultEmployee），指定入口默认使用的员工，不要依赖排序第一的内置员工；
+- 给 AIChatProvider 传入 defaultEmployee，指定入口默认使用的员工（悬浮入口不传 aiEmployee 时也会用它），不要依赖排序第一的内置员工；
 - 保留历史会话、Tool 审批、附件和断线恢复能力；
 - 完成后运行应用的 lint、typecheck、test 和 build。
 ```
