@@ -572,3 +572,81 @@ describe('Authentication seed', () => {
     }
   });
 });
+
+describe('user administration search', () => {
+  async function setup() {
+    const database = createDatabaseManager({
+      drivers: { sqlite },
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    await migrateAuthentication(database);
+    const connection = database.connection();
+    const now = new Date();
+    for (const [id, name, email] of [
+      ['plain', 'Alice Smith', 'alice@example.com'],
+      ['percent', '100% Coverage', 'percent@example.com'],
+      ['underscore', 'a_c report', 'underscore@example.com'],
+      ['literal', 'abc report', 'literal@example.com'],
+    ] as const) {
+      await connection.query
+        .insertInto('user')
+        .values({
+          id,
+          name,
+          email,
+          emailVerified: false,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+    }
+    const users = createUserAdministrationService({
+      auth: new Auth({
+        connection,
+        secret: 'development-secret-at-least-32-characters',
+        baseURL: 'http://localhost/api/auth',
+      }),
+      connection,
+    });
+    return { database, users };
+  }
+
+  it('matches the search term as literal text rather than as a SQL pattern', async () => {
+    const { database, users } = await setup();
+    try {
+      // `%` used to be a wildcard, so this listed every account.
+      await expect(users.list({ search: '%' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'percent' }],
+      });
+      // `_` used to match any single character, so this also found "abc".
+      const underscore = await users.list({ search: 'a_c' });
+      expect(underscore.total).toBe(1);
+      expect(underscore.items.map(({ id }) => id)).toEqual(['underscore']);
+      await expect(users.list({ search: 'alice' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'plain' }],
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('orders a page by creation time and breaks ties on id', async () => {
+    const { database, users } = await setup();
+    try {
+      const first = await users.list({ pageSize: 2 });
+      const second = await users.list({ page: 2, pageSize: 2 });
+      expect(first.total).toBe(4);
+      // Every row was inserted with the same timestamp, so only the tiebreaker
+      // keeps the two pages from overlapping.
+      expect([
+        ...first.items.map(({ id }) => id),
+        ...second.items.map(({ id }) => id),
+      ]).toEqual(['literal', 'percent', 'plain', 'underscore']);
+    } finally {
+      await database.destroy();
+    }
+  });
+});
