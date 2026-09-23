@@ -110,7 +110,9 @@ export function formatHelp(binary: string): string {
     '  The generated app is not configured yet. Configure it inside the app directory with:',
     '    pnpm config:init',
     '',
-    '  That writes config.yml with generated secrets. It uses SQLite unless another driver is',
-    '  installed first, for example: pnpm add @nocobase/db-postgres',
+    '  That writes config.yml with generated secrets for SQLite, whose driver the app already has.',
+    '  For another database, install its driver and name the dialect:',
+    '    pnpm add @nocobase/db-postgres',
+    '    pnpm config:init --dialect postgres',
   ].join('\n');
 }
