@@ -1,4 +1,4 @@
-import enUS from '../client/locales/en-US.js';
+import enUS from './rule-locales.js';
 
 /**
  * The English catalogue, read the way the runtime reads it, so a test asserts

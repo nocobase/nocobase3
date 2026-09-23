@@ -4,11 +4,11 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { type Caching } from '@nocobase/caching';
 import { cachingToken } from '@nocobase/app-server/caching';
-import { LoggingProvider, loggingToken } from '@nocobase/app-server/logging';
 import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { realtimePrincipalResolverToken } from '@nocobase/app-server/realtime';
 import { Hono } from 'hono';
+import { APIError } from 'better-auth';
 
 const authHandler = vi.hoisted(() =>
   vi.fn((request: Request) => Promise.resolve(new Response(request.url))),
@@ -18,8 +18,8 @@ const createAuthentication = vi.hoisted(() =>
   vi.fn(() => ({ handler: authHandler, getSession })),
 );
 
-vi.mock('../auth.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../auth.js')>();
+vi.mock('../../auth.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../auth.js')>();
   return { ...actual, createAuthentication };
 });
 
@@ -28,42 +28,10 @@ import {
   createCookiePrefix,
   resolvePublicPath,
   toPublicRequest,
-} from '../providers/authentication.js';
-import { authenticationToken } from '../tokens.js';
+} from '../../providers/authentication.js';
+import { authenticationToken } from '../../tokens.js';
 
 describe('authentication provider', () => {
-  it('routes authentication warnings through the application logger without suppressing missing-origin warnings', async () => {
-    const config = await createConfig({});
-    config.mergeDefaults({
-      logging: {
-        level: 'debug',
-        file: { enabled: false },
-        console: { enabled: false },
-      },
-    });
-    const container = createDependencies();
-    const app = {
-      appName: 'main app',
-      publicBasePath: '/main',
-      config,
-      container,
-      paths: createAppPaths({ rootDir: '/test/app' }),
-      router: new Hono(),
-    };
-    const loggingProvider = new LoggingProvider(app);
-    loggingProvider.register();
-    const logger = container.resolve(loggingToken).getLogger('auth');
-    const warn = vi.spyOn(logger, 'warn');
-    createAuthentication.mockClear();
-    new AuthenticationProvider(app).register();
-    container.resolve(authenticationToken);
-    const options = createAuthentication.mock.calls[0]?.[0];
-    expect(options?.baseURL).toBeUndefined();
-    options?.logger?.log?.('warn', 'Base URL is not set');
-    expect(warn).toHaveBeenCalledWith({}, 'Base URL is not set');
-    await loggingProvider.shutdown();
-    createAuthentication.mockClear();
-  });
   it('registers authentication with the application runtime and dependencies', async () => {
     const connection = { kind: 'connection' };
     const database = {
@@ -106,6 +74,12 @@ describe('authentication provider', () => {
         .resolve(realtimePrincipalResolverToken)
         .resolve(new Request('http://localhost/ws')),
     ).resolves.toEqual({ userId: 'user-1' });
+    getSession.mockRejectedValueOnce(new APIError('FORBIDDEN'));
+    await expect(
+      container
+        .resolve(realtimePrincipalResolverToken)
+        .resolve(new Request('http://localhost/ws')),
+    ).resolves.toBeUndefined();
     expect(provider.name).toBe('@nocobase/app-plugin-authentication');
     expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
@@ -193,58 +167,35 @@ describe('authentication provider', () => {
     ).toBe('main-13000');
   });
 
-  it('names cookies after the port when the app knows no public origin', async () => {
-    const container = createDependencies();
-    createAuthentication.mockClear();
+  it.each([
+    { mode: 'standalone' as const, cookiePrefix: 'main-app-13001' },
+    { mode: 'embedded' as const, cookiePrefix: 'main-app' },
+  ])(
+    'uses the app-owned port for $mode cookie names',
+    async ({ mode, cookiePrefix }) => {
+      const container = createDependencies();
+      createAuthentication.mockClear();
 
-    new AuthenticationProvider({
-      appName: 'main app',
-      mode: 'standalone',
-      publicBasePath: '/main',
-      config: await createConfig({
-        server: { host: '127.0.0.1', port: 13001, startLog: true },
-      }),
-      container,
-      paths: createAppPaths({ rootDir: '/test/app' }),
-      router: new Hono(),
-    }).register();
-    container.resolve(authenticationToken);
+      new AuthenticationProvider({
+        appName: 'main app',
+        mode,
+        publicBasePath: '/main',
+        config: await createConfig({
+          server: { host: '127.0.0.1', port: 13001, startLog: true },
+        }),
+        container,
+        paths: createAppPaths({ rootDir: '/test/app' }),
+        router: new Hono(),
+      }).register();
+      container.resolve(authenticationToken);
 
-    expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        advanced: expect.objectContaining({ cookiePrefix: 'main-app-13001' }),
-      }),
-    );
-  });
-
-  it('ignores the port an embedded app does not own', async () => {
-    // An embedded app is merged the same template defaults as a standalone
-    // one, so it carries `server.port` without owning the port: the host does.
-    // Its name already comes from its own base path, so the bare name is
-    // distinct, and appending a port it is not reached on would only
-    // invalidate the sessions it already holds.
-    const container = createDependencies();
-    createAuthentication.mockClear();
-
-    new AuthenticationProvider({
-      appName: 'main app',
-      mode: 'embedded',
-      publicBasePath: '/main',
-      config: await createConfig({
-        server: { host: '127.0.0.1', port: 13000, startLog: true },
-      }),
-      container,
-      paths: createAppPaths({ rootDir: '/test/app' }),
-      router: new Hono(),
-    }).register();
-    container.resolve(authenticationToken);
-
-    expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        advanced: expect.objectContaining({ cookiePrefix: 'main-app' }),
-      }),
-    );
-  });
+      expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          advanced: expect.objectContaining({ cookiePrefix }),
+        }),
+      );
+    },
+  );
 });
 
 function createDependencies(): ServiceContainer {

@@ -16,7 +16,7 @@ vi.mock('../server/authorization.js', async (importOriginal) => {
 
 import { AuthorizationProvider } from '../server/providers/authorization.js';
 import type { AuthorizationConfig } from '../server/authorization.js';
-import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import { authorizationToken } from '../server/tokens.js';
 
 describe('authorization provider', () => {
@@ -25,7 +25,7 @@ describe('authorization provider', () => {
   });
 
   it('registers authorization with the service-container database', () => {
-    const plugins = [sharingRules()];
+    const plugins = [{ name: 'test-rule' } as AuthorizationPlugin];
     const connection = { kind: 'connection' };
     const database = {
       connection: vi.fn(() => connection),
