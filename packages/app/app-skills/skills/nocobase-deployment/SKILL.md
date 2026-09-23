@@ -71,7 +71,7 @@ The reverse proxy must preserve the public `Host` and protocol headers, forward 
 
 ### Standalone Node.js
 
-Extract the archive as the service user or transfer ownership to that user. Write the configuration with `node ./dist/cli/index.js app config init`, which generates `config.yml` beside `dist/` from the `config.example.yml` the archive carries, with fresh secrets; it installs nothing, so a dialect whose driver the build does not include has to be added in the application sources and built again. Keep `config.yml` and `storage/` beside `dist/`, configure `APP_CONFIG_FILE`, and run `node ./dist/server/standalone.js` through the service manager. Replace `dist` during an update while retaining configuration and storage. Do not start a second process against the same data directory.
+Extract the archive as the service user or transfer ownership to that user. Write the configuration by running `pnpm config:init` inside `dist/`, which generates `config.yml` beside it from the `config.example.yml` the archive carries, with fresh secrets; it installs nothing, so a dialect whose driver the build does not include has to be added in the application sources and built again. Keep `config.yml` and `storage/` beside `dist/`, configure `APP_CONFIG_FILE`, and run `node ./dist/server/standalone.js` through the service manager. Replace `dist` during an update while retaining configuration and storage. Do not start a second process against the same data directory.
 
 ### Standalone Docker
 

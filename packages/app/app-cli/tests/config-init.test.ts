@@ -181,6 +181,47 @@ describe('runConfigInit', () => {
     expect(result.dialect).toBe('postgres');
   });
 
+  /**
+   * A bare `pnpm add` installs the newest driver, which during a prerelease can be one the installed runtime was never
+   * built against. The runtime already declares the range it supports for every official driver.
+   */
+  it('pins the suggested install to the range the installed runtime accepts', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+    const runtime = path.join(
+      rootDir,
+      'node_modules',
+      '@nocobase',
+      'app-server',
+    );
+    await mkdir(runtime, { recursive: true });
+    await writeFile(
+      path.join(runtime, 'package.json'),
+      JSON.stringify({
+        name: '@nocobase/app-server',
+        peerDependencies: {
+          '@nocobase/db-postgres': '^1.2.0-beta.3',
+          '@nocobase/db-mysql': '>=1.0.0 <2.0.0',
+          '@nocobase/db-oracle': 'workspace:^',
+        },
+      }),
+    );
+
+    const suggestion = async (dialect: string) =>
+      runConfigInit({ rootDir, dialect, environment: {} }).catch(
+        (error: ConfigInitError) => error.suggestedCommand,
+      );
+
+    expect(await suggestion('postgres')).toBe(
+      'pnpm add @nocobase/db-postgres@^1.2.0-beta.3',
+    );
+    // A range with spaces has to reach pnpm as a single argument.
+    expect(await suggestion('mysql')).toBe(
+      'pnpm add "@nocobase/db-mysql@>=1.0.0 <2.0.0"',
+    );
+    // A workspace protocol means nothing outside this repository, so it is not repeated back.
+    expect(await suggestion('oracle')).toBe('pnpm add @nocobase/db-oracle');
+  });
+
   it('reports having no driver at all with the command that installs one', async () => {
     const { rootDir } = await createApplication({ drivers: [] });
 

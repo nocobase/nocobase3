@@ -10,12 +10,12 @@
 // with no driver — each is reported with the key and the command that fixes it. Those errors are worth reaching, so
 // anything that could legitimately supply configuration passes here.
 //
-// Deliberately not wired into `build`. A build compiles the client and server, generates `dist/package.json` and
-// installs production dependencies; none of that reads a secret. Requiring configuration there would break every
-// template's own `pnpm check`, whose `config.yml` is gitignored and absent from a fresh checkout, and the Hub image
-// build, which creates the application and builds it before any configuration exists — its configuration arrives at
-// run time, where `start` checks for it.
-import { existsSync, readFileSync } from 'node:fs';
+// Only `dev` needs it. `start` and a deployment's own `pnpm start` run the server directly, and a server with no
+// secret already exits at once with an error naming `nocobase app config init` — the problem is only ever the
+// watcher that keeps that error from ending the command. `build` is left alone too: it compiles, generates
+// `dist/package.json` and installs production dependencies, none of which reads a secret, and requiring one would
+// break a template's own `pnpm check` and any image build that builds before its configuration exists.
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 /** The extensions the runtime accepts, in the order it probes them. */
@@ -49,7 +49,8 @@ export function findConfigurationSource(rootDir, env) {
 
   // An application whose secrets come from the environment needs no file at all. Only `AUTH_SECRET` is looked for:
   // an application that has that one and not the others gets the runtime's own error naming exactly which is missing.
-  if ((env.AUTH_SECRET ?? '').trim() !== '' || hasDotenvAuthSecret(rootDir)) {
+  // `env` is the environment as the application loads it, `.env` files included, so there is nothing to parse here.
+  if ((env.AUTH_SECRET ?? '').trim() !== '') {
     return {
       kind: 'environment',
       file: undefined,
@@ -59,38 +60,6 @@ export function findConfigurationSource(rootDir, env) {
   }
 
   return undefined;
-}
-
-/**
- * Whether a `.env` file assigns `AUTH_SECRET` a value.
- *
- * Deliberately a probe rather than a dotenv implementation: this only has to decide whether the application has a
- * configuration source, and the runtime parses these files properly a moment later. `start` runs under plain Node
- * from a script the application owns, so it cannot import the loader the way `dev` does — in a source checkout that
- * loader is TypeScript, which Node will not resolve.
- */
-function hasDotenvAuthSecret(rootDir) {
-  for (const name of ['.env.local', '.env']) {
-    const file = path.join(rootDir, name);
-
-    if (!existsSync(file)) {
-      continue;
-    }
-
-    const assignment =
-      /^[^\S\n]*(?:export[^\S\n]+)?AUTH_SECRET[^\S\n]*=(.*)$/mu.exec(
-        readFileSync(file, 'utf8'),
-      );
-
-    if (
-      assignment &&
-      assignment[1].trim().replaceAll(/^["']|["']$/gu, '') !== ''
-    ) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /** Stops with something the reader can run, rather than letting the server fail where nothing will show it. */

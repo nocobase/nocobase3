@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -174,7 +174,7 @@ export async function runConfigInit(
   const dialect = await resolveDialect(
     options.dialect,
     available,
-    mode,
+    { rootDir, mode },
     options.selectDialect,
   );
   const configFile = resolveConfigFile(
@@ -239,7 +239,7 @@ export async function runConfigInit(
 async function resolveDialect(
   requested: string | undefined,
   available: readonly OfficialDialect[],
-  mode: ConfigInitMode,
+  where: DriverLocation,
   select:
     | ((available: readonly OfficialDialect[]) => Promise<OfficialDialect>)
     | undefined,
@@ -251,12 +251,12 @@ async function resolveDialect(
         `Unknown dialect "${requested}". Choose one of: ${OFFICIAL_DIALECTS.join(', ')}.`,
       );
     }
-    assertDriverInstalled(requested, available, mode);
+    assertDriverInstalled(requested, available, where);
     return requested;
   }
 
   if (available.length === 0) {
-    throw noDriversError(mode);
+    throw noDriversError(where);
   }
 
   if (available.length === 1) {
@@ -265,7 +265,7 @@ async function resolveDialect(
 
   if (select) {
     const chosen = await select(available);
-    assertDriverInstalled(chosen, available, mode);
+    assertDriverInstalled(chosen, available, where);
     return chosen;
   }
 
@@ -276,10 +276,15 @@ async function resolveDialect(
   );
 }
 
-export function assertDriverInstalled(
+interface DriverLocation {
+  readonly rootDir: string;
+  readonly mode: ConfigInitMode;
+}
+
+function assertDriverInstalled(
   dialect: OfficialDialect,
   available: readonly OfficialDialect[],
-  mode: ConfigInitMode,
+  where: DriverLocation,
 ): void {
   if (available.includes(dialect)) {
     return;
@@ -287,7 +292,7 @@ export function assertDriverInstalled(
 
   const packageName = driverPackage(dialect);
 
-  if (mode === 'deployment') {
+  if (where.mode === 'deployment') {
     throw new ConfigInitError(
       'driver-missing',
       `This build does not include ${packageName}. Install it in the application sources and build again.`,
@@ -299,25 +304,67 @@ export function assertDriverInstalled(
     'driver-missing',
     `The ${dialect} driver is not installed.`,
     {
-      suggestedCommand: `pnpm add ${packageName}`,
+      suggestedCommand: installCommand(where.rootDir, packageName),
       details: { dialect, missingDrivers: [packageName] },
     },
   );
 }
 
-function noDriversError(mode: ConfigInitMode): ConfigInitError {
-  if (mode === 'deployment') {
+function noDriversError(where: DriverLocation): ConfigInitError {
+  if (where.mode === 'deployment') {
     return new ConfigInitError(
       'no-drivers',
       'This build includes no database driver. Install one in the application sources and build again.',
     );
   }
 
+  const packageName = driverPackage('sqlite');
   return new ConfigInitError(
     'no-drivers',
-    `No database driver is installed. Install the one this application should use, for example: ${driverPackage('sqlite')}.`,
-    { suggestedCommand: `pnpm add ${driverPackage('sqlite')}` },
+    `No database driver is installed. Install the one this application should use, for example: ${packageName}.`,
+    { suggestedCommand: installCommand(where.rootDir, packageName) },
   );
+}
+
+/**
+ * The `pnpm add` for a driver, pinned to the range the installed runtime accepts.
+ *
+ * A bare `pnpm add @nocobase/db-postgres` installs whatever is newest, which during a prerelease can be a version the
+ * application's `@nocobase/app-server` was never built against. The runtime declares every official driver as an
+ * optional peer with the range it supports, so that range is read from the copy actually installed — no registry
+ * request, and the answer describes this application rather than the latest release. Without a readable range, or in a
+ * workspace where it is still a `workspace:` protocol, the command falls back to the bare name.
+ */
+function installCommand(rootDir: string, packageName: string): string {
+  const range = readPeerRange(rootDir, packageName);
+  if (range === undefined) return `pnpm add ${packageName}`;
+  const specifier = `${packageName}@${range}`;
+  // A range such as `>=1 <2` has to reach pnpm as one argument.
+  return /^[\w@/.^~*+-]+$/u.test(specifier)
+    ? `pnpm add ${specifier}`
+    : `pnpm add ${JSON.stringify(specifier)}`;
+}
+
+function readPeerRange(
+  rootDir: string,
+  packageName: string,
+): string | undefined {
+  const runtime = findInstalledPackage(rootDir, '@nocobase/app-server');
+  if (runtime === undefined) return undefined;
+  try {
+    const manifest: unknown = JSON.parse(
+      readFileSync(path.join(runtime, 'package.json'), 'utf8'),
+    );
+    const peers = isRecord(manifest) ? manifest.peerDependencies : undefined;
+    const range = isRecord(peers) ? peers[packageName] : undefined;
+    return typeof range === 'string' &&
+      range.trim() !== '' &&
+      !range.startsWith('workspace:')
+      ? range.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

@@ -63,39 +63,6 @@ describe('findConfigurationSource', () => {
     expect(findConfigurationSource(root, {})).toBeUndefined();
   });
 
-  /**
-   * `start` runs under plain Node and cannot import the loader that reads these files, so the secret in a developer's
-   * `.env` has to be recognised here or a perfectly runnable application would be refused.
-   */
-  it.each(['.env', '.env.local'])(
-    'accepts AUTH_SECRET from %s',
-    async (name) => {
-      const root = await createRoot();
-      await writeFile(
-        path.join(root, name),
-        'APP_SERVER_PORT=13000\nAUTH_SECRET="from-dotenv"\n',
-      );
-
-      expect(findConfigurationSource(root, {})).toMatchObject({
-        kind: 'environment',
-      });
-    },
-  );
-
-  it('ignores an AUTH_SECRET assigned nothing in .env', async () => {
-    const root = await createRoot();
-    await writeFile(path.join(root, '.env'), 'AUTH_SECRET=\n');
-
-    expect(findConfigurationSource(root, {})).toBeUndefined();
-  });
-
-  it('does not mistake a commented-out AUTH_SECRET for a value', async () => {
-    const root = await createRoot();
-    await writeFile(path.join(root, '.env'), '# AUTH_SECRET=example\n');
-
-    expect(findConfigurationSource(root, {})).toBeUndefined();
-  });
-
   /** A path named in APP_CONFIG_FILE is loaded non-optionally, so pointing at a missing file is itself the error. */
   it('answers APP_CONFIG_FILE even when the file is absent', async () => {
     const root = await createRoot();

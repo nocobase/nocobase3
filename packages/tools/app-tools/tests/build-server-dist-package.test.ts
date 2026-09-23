@@ -140,6 +140,7 @@ describe('server package generation', () => {
         migrate: 'node ./cli/index.js app migrate',
         seed: 'node ./cli/index.js app seed',
         nocobase: 'node ./cli/index.js',
+        'config:init': 'node ./cli/index.js app config init',
       },
       engines: { node: '>=24.0.0' },
     });

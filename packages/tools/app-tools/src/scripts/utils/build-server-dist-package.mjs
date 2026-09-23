@@ -275,6 +275,9 @@ const distPackage = {
     migrate: 'node ./cli/index.js app migrate',
     seed: 'node ./cli/index.js app seed',
     nocobase: 'node ./cli/index.js',
+    // The same command the source checkout runs, so a deployment is configured with the step its documentation
+    // already gave for development. It writes beside `dist/`, where this build's runtime reads configuration from.
+    'config:init': 'node ./cli/index.js app config init',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',
