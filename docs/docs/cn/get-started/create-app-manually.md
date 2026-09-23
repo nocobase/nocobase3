@@ -41,20 +41,29 @@ PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm create @nocobase/app my-app
 pnpm create @nocobase/app my-app
 ```
 
-生成的 `config.yml` 包含应用配置和密钥，保留在本地，不提交到代码仓库。
+创建命令到此为止，得到的是一个可以配置的项目。它不会生成 `config.yml`，下一步才会。
 
-## 确认数据库配置
-
-启动前检查 `server/config/database.ts` 中注册的数据库驱动，以及 `config.yml` 中的连接配置。沿用生成项目的数据库配置时，无需重复配置。
-
-如果使用其他数据库，需要安装对应的 `@nocobase/db-*` 包，在 `drivers` 中注册，再配置连接地址、数据库名和账号信息。连接密码保存在本地配置中。
-
-## 启动应用
-
-进入刚创建的目录，启动开发服务：
+## 配置应用
 
 ```bash
 cd my-app
+pnpm config:init
+```
+
+这一步以 `config.example.yml` 为底生成 `config.yml`，保留其中的注释，并填入认证与会话密钥。该文件包含应用配置和密钥，保留在本地，不提交到代码仓库。
+
+默认使用 SQLite——模板已经依赖它，也不需要单独的数据库服务。使用其他数据库时，先安装驱动，再在配置时指定：
+
+```bash
+pnpm add @nocobase/db-postgres
+pnpm config:init --dialect postgres
+```
+
+`pnpm config:init` 不会安装任何东西：驱动缺失时它会报出对应的安装命令并且不写入任何文件，装好之后重新运行即可。非 SQLite 数据库需要在 `config.yml` 中填写连接地址、数据库名和账号信息，并在启动前准备好目标数据库。
+
+## 启动应用
+
+```bash
 pnpm dev
 ```
 

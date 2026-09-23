@@ -66,21 +66,27 @@ async function template(kind = 'app'): Promise<void> {
 const run = (argv: string[]) =>
   createApp({ argv, version: 'test', binary: 'create-app' });
 describe('JSON creation flow', () => {
-  it('installs by default and reports actionable configuration without leaking secrets', async () => {
+  it('installs by default and hands the configuration step to config:init', async () => {
     await template();
-    expect(await run(['crm', '--dialect', 'postgres', '--json'])).toBe(0);
+    expect(await run(['crm', '--json'])).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
       status: 'success',
       projectCreated: true,
       dependenciesInstalled: true,
-      configurationRequired: true,
-      nextCommands: ['pnpm dev'],
+      configured: false,
+      nextCommands: ['pnpm config:init', 'pnpm dev'],
     });
     expect(installDependencies).toHaveBeenCalledOnce();
-    const config = await readFile(path.join(root, 'crm/config.yml'), 'utf8');
-    expect(config).toContain('dialect: postgres');
+    // Creation writes no configuration at all, so there is no secret for it to leak and nothing for `config:init` to
+    // refuse to overwrite.
+    await expect(readFile(path.join(root, 'crm/config.yml'))).rejects.toThrow();
     expect(stdout).not.toContain('secret');
     await expect(readFile(path.join(root, 'crm/.env'))).rejects.toThrow();
+    // The registry the templates came from has to survive into the project, or the next `pnpm add @nocobase/…` the
+    // user runs resolves against the public npm.
+    expect(await readFile(path.join(root, 'crm/.npmrc'), 'utf8')).toContain(
+      '@nocobase:registry=',
+    );
   });
   it('returns a nonzero install failure and retains the generated project', async () => {
     await template();
@@ -95,9 +101,9 @@ describe('JSON creation flow', () => {
       dependenciesInstalled: false,
       nextCommands: ['pnpm install'],
     });
-    expect(await readFile(path.join(root, 'crm/config.yml'), 'utf8')).toContain(
-      'database.sqlite',
-    );
+    expect(
+      await readFile(path.join(root, 'crm/package.json'), 'utf8'),
+    ).toContain('"name": "crm"');
   });
   it('supports no-install and Hub startup commands', async () => {
     await template('hub');
@@ -106,12 +112,16 @@ describe('JSON creation flow', () => {
     ).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
       dependenciesInstalled: false,
-      configurationRequired: false,
-      nextCommands: ['pnpm install', 'pnpm build', 'pnpm start'],
+      nextCommands: [
+        'pnpm install',
+        'pnpm config:init',
+        'pnpm build',
+        'pnpm start',
+      ],
     });
     expect(installDependencies).not.toHaveBeenCalled();
   });
-  it.each([['--json'], ['crm', '--json', '--dialect', 'invalid']])(
+  it.each([['--json'], ['crm', '--json', '--template-tag', 'invalid']])(
     'rejects invalid input before download: %s',
     async (...argv) => {
       expect(await run(argv)).toBe(2);
@@ -136,29 +146,21 @@ describe('JSON creation flow', () => {
       'existing content',
     );
   });
-  it.each(['postgres', 'oracle'])(
-    'states verification limits for %s even after a successful install',
-    async (dialect) => {
-      await template();
-      expect(await run(['crm', '--dialect', dialect, '--json'])).toBe(0);
-      expect(JSON.parse(stdout)).toMatchObject({
-        status: 'success',
-        dependenciesInstalled: true,
-        databaseConnectionVerified: false,
-        warnings: [
-          expect.stringContaining(
-            `The selected ${dialect} driver and database connection have not been verified`,
-          ),
-        ],
-      });
-      expect(verifyDriver).toHaveBeenCalledWith(path.join(root, 'crm'));
-    },
-  );
+  /** The one native addon every application gets, through the SQLite driver the templates depend on. */
+  it('verifies the native driver after installing', async () => {
+    await template();
+    expect(await run(['crm', '--json'])).toBe(0);
+    expect(JSON.parse(stdout)).toMatchObject({
+      status: 'success',
+      dependenciesInstalled: true,
+    });
+    expect(verifyDriver).toHaveBeenCalledWith(path.join(root, 'crm'));
+  });
   it('returns help as JSON', async () => {
     expect(await run(['--json', '--help'])).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
       status: 'success',
-      help: expect.stringContaining('--dialect'),
+      help: expect.stringContaining('config:init'),
     });
   });
 });

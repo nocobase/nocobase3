@@ -108,7 +108,7 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 
 首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名和密码。
 
-`database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像，或改用应用模板方式并在创建时指定 `--dialect`。
+`database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像——驱动要在构建前进入应用的 `dependencies`，镜像构建完成后无法补装。
 
 镜像以 `node` 用户运行。可用以下命令确认 UID 和 GID，并为该用户设置 `config.yml` 的读取权限及 `storage` 的写入权限：
 
@@ -197,9 +197,9 @@ pnpm create @nocobase/app hub --template=hub
 cd hub
 ```
 
-创建命令会下载 Hub 模板、安装依赖，并生成 `config.yml` 和 `.env`。`config.yml` 已包含随机认证与会话密钥，默认主数据库为 SQLite。
+创建命令会下载 Hub 模板、安装依赖，并生成 `.env`。它不生成 `config.yml`——在应用目录里运行 `pnpm config:init` 来生成，其中包含随机认证与会话密钥，默认主数据库为 SQLite。
 
-使用其他主数据库时，在创建命令中追加 `--dialect`，例如 `--dialect postgres`。固定版本时，将创建命令中的包名改为 `@nocobase/app@<CREATE_APP_VERSION>`，模板改为 `--template @nocobase/app-template-hub@<HUB_TEMPLATE_VERSION>`，替换为实际发布版本。
+使用其他主数据库时，先安装驱动再配置，例如 `pnpm add @nocobase/db-postgres` 后运行 `pnpm config:init --dialect postgres`。固定版本时，将创建命令中的包名改为 `@nocobase/app@<CREATE_APP_VERSION>`，模板改为 `--template @nocobase/app-template-hub@<HUB_TEMPLATE_VERSION>`，替换为实际发布版本。
 
 ### 2. 配置运行环境
 

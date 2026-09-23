@@ -4,7 +4,6 @@
 '@nocobase/app-plugin-authorization': minor
 '@nocobase/app-plugin-file': minor
 '@nocobase/app-plugin-i18n': minor
-'@nocobase/app-plugin-install': minor
 '@nocobase/app-plugin-notification': minor
 '@nocobase/app-plugin-notification-in-app': minor
 '@nocobase/app-plugin-notification-provider': minor

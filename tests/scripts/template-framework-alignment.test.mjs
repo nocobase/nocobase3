@@ -336,16 +336,17 @@ for (const template of templates) {
     );
     assert.deepEqual(duplicates, []);
     assert.ok(dependencies['@nocobase/db']);
-    // create-app adds SQLite when selected; templates must not force its installation.
-    assert.equal(
+    // The dialect `server/config/database.ts` defaults to. Creation no longer chooses a database, so a template that
+    // did not depend on its own default would scaffold an application unable to start until a driver was installed
+    // by hand. Switching databases means adding another driver and, if nothing else uses SQLite, removing this one.
+    assert.ok(
       dependencies['@nocobase/db-sqlite'],
-      undefined,
-      `${template.kind}: the SQLite driver must be supplied by create-app`,
+      `${template.kind}: the driver for the default dialect must be a dependency`,
     );
     assert.equal(
       devDependencies['@nocobase/db-sqlite'],
       undefined,
-      `${template.kind}: devDependencies must not force SQLite installation`,
+      `${template.kind}: the SQLite driver is a runtime dependency, not a development one`,
     );
     assert.equal(dependencies.hono, 'catalog:');
     assert.equal(devDependencies.hono, undefined);

@@ -15,6 +15,7 @@ const help = `Local published-package testing
 
 pnpm local-registry:prepare [--port 4873] [--reset]
 pnpm local-registry:create NAME [--template default|examples|hub] [--dialect sqlite]
+  # --dialect only decides which configuration commands are printed afterwards
   [--output-dir /parent/directory] [--json] [--no-install]
 pnpm local-registry:verify [--template default|examples|hub] [--dialect sqlite]
   [--config /absolute/test.yml] [--timeout 420] [--workdir /empty/directory]
@@ -314,7 +315,7 @@ try { createManually(process.argv.slice(2)); } catch (error) { console.error(err
 For manual development: pnpm local-registry:create my-app
 For an automated check: pnpm local-registry:verify --template default
 For manual testing, run outside the repository:
-  node ${JSON.stringify(wrapper)} my-app --dialect postgres --json
+  node ${JSON.stringify(wrapper)} my-app --json
 The wrapper runs pnpm create with isolated configuration and snapshot versions.
 Stop with: pnpm local-registry:stop`);
 }
@@ -448,17 +449,30 @@ async function main() {
           options.name,
           '--template',
           options.template,
-          '--dialect',
-          options.dialect,
           ...(options.json ? ['--json'] : []),
           ...(options['no-install'] ? ['--no-install'] : []),
         ],
         fs.realpathSync(parent),
       );
-      if (!options.json)
+      if (!options.json) {
+        // Creation stops at a configurable project. `--dialect` is not passed through — it decides which driver the
+        // application depends on, which is a change to the application rather than to how it is scaffolded.
+        const configure =
+          options.dialect === 'sqlite'
+            ? ['pnpm config:init']
+            : [
+                `pnpm add @nocobase/db-${options.dialect}`,
+                `pnpm config:init --dialect ${options.dialect}`,
+              ];
         console.log(
-          `Application: ${target}\nNext: cd ${JSON.stringify(target)}`,
+          [
+            `Application: ${target}`,
+            `Next: cd ${JSON.stringify(target)}`,
+            ...(options['no-install'] ? ['  pnpm install'] : []),
+            ...configure.map((command) => `  ${command}`),
+          ].join('\n'),
         );
+      }
     } else if (options.action === 'verify') {
       const state = readState();
       if (!state.ready)

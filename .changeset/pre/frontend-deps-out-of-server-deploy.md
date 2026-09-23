@@ -5,7 +5,6 @@
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/app-plugin-authorization': patch
 '@nocobase/app-plugin-file': patch
-'@nocobase/app-plugin-install': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-workflow': patch

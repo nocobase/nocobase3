@@ -112,15 +112,11 @@ echo "workdir:     $WORKDIR"
 cd "$WORKDIR"
 
 CREATE_ARGS=("@nocobase/app@$CREATE_APP_VERSION" "$APP_NAME" "--registry=$REGISTRY" "--template=$TEMPLATE")
-if [ -n "$DIALECT" ]; then CREATE_ARGS+=("--dialect=$DIALECT"); fi
 if [ "$JSON_OUTPUT" = 1 ]; then
   pnpm create "${CREATE_ARGS[@]}" --json > "$WORKDIR/create.json"
   node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(r.status!=="success" || !r.dependenciesInstalled) process.exit(1)' "$WORKDIR/create.json"
 else
   pnpm create "${CREATE_ARGS[@]}"
-fi
-if [ -n "$CONFIG" ]; then
-  node "$SCRIPT_DIR/local-registry-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
 fi
 echo "::endgroup::"
 
@@ -129,7 +125,32 @@ if [ ! -d "$APP_DIR/node_modules" ]; then
   exit 1
 fi
 
+# Creation deliberately leaves the application unconfigured; `config:init` is what writes this file.
+if [ -e "$APP_DIR/config.yml" ]; then
+  echo "::error::create-app wrote config.yml, which config:init owns"
+  exit 1
+fi
+
 cd "$APP_DIR"
+
+echo "::group::Configure the application with pnpm config:init"
+# Which dialects an application can run on is decided by the driver it depends on, so a non-SQLite run installs one
+# first — exactly the two commands the documentation gives a user switching databases.
+if [ -n "$DIALECT" ] && [ "$DIALECT" != "sqlite" ]; then
+  pnpm add "@nocobase/db-$DIALECT"
+fi
+CONFIG_INIT_ARGS=("--json")
+if [ -n "$DIALECT" ]; then CONFIG_INIT_ARGS+=("--dialect=$DIALECT"); fi
+pnpm config:init "${CONFIG_INIT_ARGS[@]}" > "$WORKDIR/config-init.json"
+node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(!r.ok) process.exit(1)' "$WORKDIR/config-init.json"
+if [ ! -f "$APP_DIR/config.yml" ]; then
+  echo "::error::pnpm config:init reported success without writing config.yml"
+  exit 1
+fi
+if [ -n "$CONFIG" ]; then
+  node "$SCRIPT_DIR/local-registry-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
+fi
+echo "::endgroup::"
 echo "::group::Synchronize NocoBase package Skills"
 # create-app reports a synchronization failure as a warning. Exercise the command
 # explicitly so an invalid published Skill cannot pass this smoke test.

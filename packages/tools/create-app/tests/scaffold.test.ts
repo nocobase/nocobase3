@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertTargetIsUsable,
   assertValidAppName,
-  readConfigExample,
   REQUIRED_PACKAGE_MANAGER,
   scaffoldFromTemplate,
 } from '../src/lib/scaffold.ts';
@@ -393,24 +392,6 @@ describe('packageManager', () => {
   });
 });
 
-describe('readConfigExample', () => {
-  it('reads the template example when present', async () => {
-    const directory = await createTemplate({
-      'config.example.yml': 'app:\n  publicBasePath: /main\n',
-    });
-
-    expect(await readConfigExample(directory)).toBe(
-      'app:\n  publicBasePath: /main\n',
-    );
-  });
-
-  it('returns undefined when the template ships none', async () => {
-    const directory = await createTemplate();
-
-    expect(await readConfigExample(directory)).toBeUndefined();
-  });
-});
-
 describe('gitignore handling', () => {
   /**
    * The published `@nocobase/app-template-default` ships no ignore file of any name. Without a fallback the generated
@@ -467,25 +448,5 @@ describe('gitignore handling', () => {
     // The skills sync writes this mirror, so an older template that never ignored it still gets the entry appended.
     expect(contents).toContain('/.claude/skills/');
     expect(contents).toContain('/.env');
-  });
-});
-
-describe('dialect dependencies', () => {
-  it('adds a selected driver without removing template dependencies', async () => {
-    const templateDirectory = await createTemplate();
-    const targetDirectory = await createTempDirectory();
-    await scaffoldFromTemplate({
-      templateDirectory,
-      targetDirectory,
-      name: 'crm',
-      additionalDependencies: { '@nocobase/db-postgres': '^2.0.0' },
-    });
-    const manifest = JSON.parse(
-      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
-    ) as { dependencies: Record<string, string> };
-    expect(manifest.dependencies).toEqual({
-      knex: '^3.1.0',
-      '@nocobase/db-postgres': '^2.0.0',
-    });
   });
 });

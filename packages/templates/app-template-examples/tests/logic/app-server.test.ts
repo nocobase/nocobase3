@@ -803,37 +803,6 @@ describe('app server', () => {
     expect(rejected.status).toBe(401);
   });
 
-  it('redirects HTML navigation to installation in install mode', async () => {
-    vi.stubEnv('APP_BASE_PATH', '/main');
-    vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
-    const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/html; charset=utf-8');
-      response.end('<main>installation page</main>');
-    });
-    const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl }),
-    );
-
-    const redirectResponse = await requestApp(app, 'http://localhost/main/', {
-      headers: { Accept: 'text/html' },
-    });
-    expect(redirectResponse.status).toBe(302);
-    expect(redirectResponse.headers.get('Location')).toBe('/main/install');
-
-    const installResponse = await requestApp(
-      app,
-      'http://localhost/main/install',
-      {
-        headers: { Accept: 'text/html' },
-      },
-    );
-    expect(installResponse.status).toBe(200);
-    expect(installResponse.headers.get('Location')).toBeNull();
-    await expect(installResponse.text()).resolves.toContain(
-      'installation page',
-    );
-  });
-
   it('dispatches jobs from enabled app plugins', async () => {
     vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
     const app = trackCloseable(

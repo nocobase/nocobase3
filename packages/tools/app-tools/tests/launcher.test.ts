@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import {
   mkdtemp,
   mkdir,
@@ -17,6 +18,8 @@ it('uses the supplied app root rather than the tooling package or working direct
   const rootDir = await mkdtemp(path.join(tmpdir(), 'app-tools-root-'));
   try {
     await mkdir(path.join(rootDir, 'dist/server'), { recursive: true });
+    // Starting requires configuration, so the fixture carries the file an application would have.
+    await writeFile(path.join(rootDir, 'config.yml'), '');
     await writeFile(
       path.join(rootDir, 'dist/server/standalone.js'),
       `
@@ -28,6 +31,39 @@ it('uses the supplied app root rather than the tooling package or working direct
     expect(await readFile(path.join(rootDir, 'started'), 'utf8')).toBe(
       await realpath(rootDir),
     );
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A built application with nowhere to read configuration from would otherwise fail inside the server, where `dev`
+ * hides it behind a watcher that never exits. Reported here, with the command that fixes it.
+ */
+it('refuses to start an application that has no configuration', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'app-tools-no-config-'));
+  try {
+    await mkdir(path.join(rootDir, 'dist/server'), { recursive: true });
+    await writeFile(
+      path.join(rootDir, 'dist/server/standalone.js'),
+      `import { writeFileSync } from 'node:fs';
+       export function startServer() { writeFileSync(${JSON.stringify(path.join(rootDir, 'started'))}, 'yes'); }`,
+    );
+
+    const entry = fileURLToPath(
+      new URL('../src/scripts/start.mjs', import.meta.url),
+    );
+    const result = spawnSync(process.execPath, [entry], {
+      cwd: rootDir,
+      encoding: 'utf8',
+      env: { ...process.env, NOCOBASE_TOOL_ROOT: rootDir, AUTH_SECRET: '' },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('has no configuration');
+    expect(result.stderr).toContain('pnpm config:init');
+    // The server is never reached, so nothing half-started is left behind.
+    expect(existsSync(path.join(rootDir, 'started'))).toBe(false);
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }

@@ -156,8 +156,8 @@ Generated     .agents/skills/ — synchronized copies, gitignored, replaced
               .claude/skills/ — symbolic links to the above so Claude Code
               discovers them; gitignored, rewritten by the same sync
 
-Config        config.yml — gitignored, holds secrets; document options in
-              config.example.yml instead
+Config        config.yml — written by pnpm config:init, gitignored, holds
+              secrets; document options in config.example.yml instead
 ```
 
 Reach a plugin's capability only through its documented package exports. Never import a plugin's internal source path or write to its tables directly.

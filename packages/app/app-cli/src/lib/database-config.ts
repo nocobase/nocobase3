@@ -1,22 +1,28 @@
+import type { OfficialDialect } from '@nocobase/app-server/database';
 import { parseDocument } from 'yaml';
-import { runCommand } from './run-command.ts';
 
-export const DIALECTS = [
-  'sqlite',
-  'postgres',
-  'mysql',
-  'mssql',
-  'oracle',
-  'dameng',
-  'kingbase',
-  'oceanbase',
-] as const;
-export type Dialect = (typeof DIALECTS)[number];
+/** Default listening ports, used for the connection settings the generated file starts from. */
+const PORTS: Readonly<Record<Exclude<OfficialDialect, 'sqlite'>, number>> = {
+  postgres: 5432,
+  mysql: 3306,
+  mssql: 1433,
+  oracle: 1521,
+  dameng: 5236,
+  kingbase: 54321,
+  oceanbase: 2881,
+};
 
-/** Preserve policies and other connections, but replace dialect-specific connection parameters. */
+/**
+ * Rewrites the main connection for `dialect`, preserving policies and every other connection.
+ *
+ * Only `database.connections.main` and `database.default` are touched. An application's other connections are its
+ * own — the Examples template's `analytics` is a second SQLite database that has nothing to do with which dialect the
+ * main one uses — and the policy keys carry decisions the example made deliberately, so they are read before the
+ * connection is replaced and written back afterwards.
+ */
 export function configureDatabase(
   contents: string,
-  dialect: Dialect,
+  dialect: OfficialDialect,
   name: string,
 ): string {
   const document = parseDocument(contents);
@@ -45,22 +51,13 @@ export function configureDatabase(
   const policies = policyKeys.map(
     (key) => [key, document.getIn([...main, key], true)] as const,
   );
-  const ports = {
-    postgres: 5432,
-    mysql: 3306,
-    mssql: 1433,
-    oracle: 1521,
-    dameng: 5236,
-    kingbase: 54321,
-    oceanbase: 2881,
-  };
   const connection: Record<string, unknown> =
     dialect === 'sqlite'
       ? { dialect, database: 'database.sqlite' }
       : {
           dialect,
           host: 'localhost',
-          port: ports[dialect],
+          port: PORTS[dialect],
           ...(dialect === 'oracle'
             ? { serviceName: 'FREEPDB1' }
             : dialect === 'dameng'
@@ -80,39 +77,4 @@ export function configureDatabase(
     if (value !== undefined) document.setIn([...main, key], value);
   document.setIn(['database', 'default'], 'main');
   return document.toString();
-}
-
-/** Use the template runtime's published peer contract, not the CLI version or an unrelated driver's version. */
-export async function resolveDialectDependency(
-  dependencies: Record<string, string>,
-  dialect: Dialect,
-  registry: string,
-): Promise<Record<string, string>> {
-  const packageName = `@nocobase/db-${dialect}`;
-  if (dependencies[packageName]) return {};
-  const runtime = dependencies['@nocobase/app-server'];
-  if (!runtime)
-    throw new Error(
-      `The template must declare @nocobase/app-server to select ${packageName}.`,
-    );
-  const { stdout } = await runCommand(
-    'npm',
-    [
-      'view',
-      `@nocobase/app-server@${runtime}`,
-      'peerDependencies',
-      '--json',
-      `--registry=${registry}`,
-    ],
-    { timeoutMs: 60_000 },
-  );
-  const result = JSON.parse(stdout) as
-    Record<string, unknown> | Record<string, unknown>[];
-  const peers = Array.isArray(result) ? result.at(-1) : result;
-  const version = peers?.[packageName];
-  if (typeof version !== 'string' || version.startsWith('workspace:'))
-    throw new Error(
-      `The template runtime does not declare a published compatibility range for ${packageName}.`,
-    );
-  return { [packageName]: version };
 }

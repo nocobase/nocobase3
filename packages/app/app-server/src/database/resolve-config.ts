@@ -2,6 +2,17 @@ import type { DatabaseDriverRegistration } from '@nocobase/db';
 import { resolveDatabaseDriver } from '@nocobase/db';
 import type { AppDatabaseConfig } from './types.js';
 
+/** A dialect this runtime loads a driver for without the application registering one. */
+export type OfficialDialect =
+  | 'sqlite'
+  | 'mysql'
+  | 'postgres'
+  | 'mssql'
+  | 'oracle'
+  | 'dameng'
+  | 'kingbase'
+  | 'oceanbase';
+
 const officialDriverLoaders = {
   sqlite: () => import('@nocobase/db-sqlite'),
   mysql: () => import('@nocobase/db-mysql'),
@@ -11,10 +22,23 @@ const officialDriverLoaders = {
   dameng: () => import('@nocobase/db-dameng'),
   kingbase: () => import('@nocobase/db-kingbase'),
   oceanbase: () => import('@nocobase/db-oceanbase'),
+  // Keyed by the exported union rather than by `string`, so a dialect added to one and not the other fails to compile
+  // instead of producing a list the runtime cannot load from.
 } satisfies Record<
-  string,
+  OfficialDialect,
   () => Promise<{ default?: DatabaseDriverRegistration }>
 >;
+
+/**
+ * The dialects above, as a list tooling can name them from.
+ *
+ * Anything that has to present the choice to a person — `nocobase app config init`, the documentation it prints —
+ * reads this rather than keeping its own copy. A separate list is one that silently stops matching the loaders the
+ * day a dialect is added, and the mismatch only shows up as a dialect the CLI offers and the runtime cannot load.
+ */
+export const OFFICIAL_DIALECTS: readonly OfficialDialect[] = Object.freeze(
+  Object.keys(officialDriverLoaders) as OfficialDialect[],
+);
 
 /** Configuration properties needed for driver loading; other properties are preserved. */
 export type DatabaseConfigInput = Pick<
@@ -80,8 +104,11 @@ export async function resolveDatabaseConfig<
             `Cannot find package '${packageName}' imported from `,
           )
         ) {
+          // The remedy names the application rather than "here" on purpose: in a deployment this runs from a built
+          // `dist`, where installing a driver is undone by the next build. The driver has to reach the application's
+          // dependencies, and a deployment has to be built again afterwards.
           throw new Error(
-            `Database connection "${name}" requires "${packageName}". Install it with "pnpm add ${packageName}".`,
+            `Database connection "${name}" requires "${packageName}". Add it to the application's dependencies with "pnpm add ${packageName}"; a deployment needs to be built again afterwards.`,
             { cause },
           );
         }

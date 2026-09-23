@@ -46,9 +46,15 @@ Confirm that the working directory is the application root. Read `AGENTS.md`, `p
 
 Ask which database the user wants; do not choose it for them in the initial creation prompt. Common options include SQLite, PostgreSQL, and MySQL. SQLite uses a local file; PostgreSQL and MySQL require a reachable database service. For other databases, consult the project's current database guidance for the driver and connection requirements.
 
-After the user chooses, inspect the registered drivers in `server/config/database.ts` and connection settings in `config.yml`. Install and register the appropriate driver and configure the connection following project guidance. A dialect name in configuration does not register a driver. Preserve existing business data; do not delete a database or configuration file to trigger installation again.
+After the user chooses, configure the application from its own directory. SQLite needs nothing installed, because the templates depend on its driver:
 
-Let the user enter database passwords in local configuration or an available installation interface. Do not require passwords in the conversation or print complete configuration files. If the application opens an installation interface, follow its actual fields and restart instructions. Do not assume all generated projects have identical database or administrator setup screens, or invent an `install` command.
+```bash
+pnpm config:init --dialect sqlite --json
+```
+
+Any other database needs its driver first, for example `pnpm add @nocobase/db-postgres`, and then the same command with that dialect. `pnpm config:init` installs nothing and writes nothing when the driver is missing: it reports the `pnpm add` that supplies it, so install and run it again. A dialect name in configuration does not supply a driver. Preserve existing business data; do not delete a database or configuration file to make configuration run again — use `--force` only when the user asks for the configuration to be replaced.
+
+Let the user enter database passwords in local configuration. Do not require passwords in the conversation or print complete configuration files. Generated applications have no installation web page; `pnpm config:init` is the only configuration step, and `pnpm dev` refuses to start until it has run.
 
 ## 5. Start the application and provide sign-in instructions
 

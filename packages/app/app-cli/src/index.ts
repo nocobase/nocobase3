@@ -3,6 +3,7 @@ import type { AppCommandContext } from './context.js';
 import { AppCommand } from './context.js';
 import { createDefaultCommandContext } from './default-context.js';
 import Info from './commands/info.js';
+import ConfigInit from './commands/config-init.js';
 import DbApply from './commands/db-apply.js';
 import DbReset from './commands/db-reset.js';
 import DbRepair from './commands/db-repair.js';
@@ -25,6 +26,7 @@ export function createAppCommands(options: AppCommandsOptions): AppCliCommands {
   const context = createDefaultCommandContext(options);
   const commands: Record<string, typeof AppCommand> = {
     info: Info,
+    'config:init': ConfigInit,
     'db:apply': DbApply,
     'db:reset': DbReset,
     'db:repair': DbRepair,
