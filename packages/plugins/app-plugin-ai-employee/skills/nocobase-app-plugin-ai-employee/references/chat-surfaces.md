@@ -335,6 +335,8 @@ type AIEmployeeTask = {
 
 Use `AIChatProvider.employeeTasks` for empty-state presets and `AIEmployeeShortcut` for an entry point outside the chat, keeping both on the same controller. `message.user` is the prompt, `message.system` is background, and `message.workContext` holds references rather than resolved data. Use `autoSend: false` when the user should review the context or the generated request first. An explicit `task.message.workContext` overrides the trigger's context and the surrounding scope.
 
+`skillSettings.tools` is an allowlist: a non-empty list is every tool the conversation may use, and it is stored on the conversation, so it holds for every later turn too. Leave it out unless the task genuinely has to be narrowed — without it the employee keeps all of its tools. When a task does narrow its tools and its context references a form, the chat adds `formFiller` to that list itself.
+
 `AIEmployeeShortcut` takes `aiEmployee` (username or object, required), `tasks?` (`[]`), `context?`, `target?` (defaults to the global controller), `auto?`, `size?` (48), `label?`, `showNotice?` (false), `className?`, and `onTrigger?`.
 
 ## Page context

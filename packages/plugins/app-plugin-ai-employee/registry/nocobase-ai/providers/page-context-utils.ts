@@ -59,13 +59,20 @@ export function getAIWorkContextToolScope(items: AIWorkContextItem[]): {
   };
 }
 
+/**
+ * Adds the tools a work context needs to a task's tool allowlist. The server
+ * reads a non-empty `tools` list as the only tools the session may use, so
+ * without an allowlist there is nothing to add to: the employee's tools are
+ * all available already, and creating a list here would hide every other one.
+ */
 export function mergeAIRequiredTools(
   skillSettings: AIEmployeeTask['skillSettings'],
   requiredTools: string[],
 ): AIEmployeeTask['skillSettings'] {
-  if (!requiredTools.length) return skillSettings;
+  const tools = skillSettings?.tools;
+  if (!requiredTools.length || !tools?.length) return skillSettings;
   return {
     ...skillSettings,
-    tools: [...new Set([...(skillSettings?.tools ?? []), ...requiredTools])],
+    tools: [...new Set([...tools, ...requiredTools])],
   };
 }
