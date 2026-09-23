@@ -90,6 +90,17 @@ describe('Authentication', () => {
     router.get('/api/optional', auth.optional(), (context) =>
       context.json({ auth: context.get('auth') }),
     );
+    router.post('/api/private', auth.required(), (context) =>
+      context.json({ ok: true }),
+    );
+    router.post('/api/optional', auth.optional(), (context) =>
+      context.json({ authenticated: Boolean(context.get('auth')) }),
+    );
+    router.post(
+      '/api/skipped',
+      auth.required({ skip: () => true }),
+      (context) => context.json({ ok: true }),
+    );
   });
 
   it('requires an explicit authentication secret', () => {
@@ -216,6 +227,66 @@ describe('Authentication', () => {
         session: { id: expect.any(String), userId: expect.any(String) },
       },
     });
+  });
+
+  it('checks the browser origin before cookie-authenticated business writes', async () => {
+    const send = (path: string, headers: Record<string, string>) =>
+      router.request(path, { method: 'POST', headers: { cookie, ...headers } });
+
+    expect(
+      (await send('/api/private', { origin: 'http://localhost' })).status,
+    ).toBe(200);
+    expect(
+      (await send('/api/private', { referer: 'http://localhost/app/page' }))
+        .status,
+    ).toBe(200);
+    for (const headers of [
+      {},
+      { origin: 'null' },
+      { origin: 'https://evil.example' },
+      { origin: 'http://localhost.evil.example' },
+      { origin: 'https://evil.example', authorization: 'Bearer fake' },
+    ]) {
+      const response = await send('/api/private', headers);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        code: 'INVALID_CSRF_ORIGIN',
+      });
+    }
+
+    expect((await send('/api/optional', {})).status).toBe(403);
+    expect(
+      (await send('/api/skipped', { authorization: 'Bearer fake' })).status,
+    ).toBe(403);
+    expect(
+      (await router.request('/api/private', { method: 'POST' })).status,
+    ).toBe(401);
+  });
+
+  it('accepts explicitly trusted origins, including dynamic patterns', async () => {
+    const trustedAuth = new Auth({
+      connection: database.connection(),
+      baseURL: 'http://localhost/api/auth',
+      secret: 'development-secret-at-least-32-characters',
+      trustedOrigins: async () => ['https://*.example.com'],
+      advanced: { cookiePrefix: 'nocobase3' },
+      session: { storeSessionInDatabase: true },
+    });
+    const trustedRouter = new Hono<AuthEnv>();
+    trustedRouter.post('/write', trustedAuth.required(), (context) =>
+      context.json({ ok: true }),
+    );
+
+    const allowed = await trustedRouter.request('/write', {
+      method: 'POST',
+      headers: { cookie, origin: 'https://app.example.com' },
+    });
+    expect(allowed.status).toBe(200);
+    const denied = await trustedRouter.request('/write', {
+      method: 'POST',
+      headers: { cookie, origin: 'https://example.com.attacker.test' },
+    });
+    expect(denied.status).toBe(403);
   });
 
   it('supports optional sessions', async () => {
