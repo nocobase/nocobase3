@@ -19,15 +19,37 @@ The current artifact is `storage/exports/dist.tar.gz`. Upload it from the App de
 
 ## Publish through the CLI
 
-`HUB_API_KEY` is created in Hub, not in the application. Open **API Keys** in the Hub navigation (`<HUB_URL>/api-keys`, which requires `hub.app / manage-api-keys`, granted to `hub-administrator` and `hub-operator` by default) and choose **Create API Key**: select the target application under **Applications**, or **All applications (including future apps)**, then grant **Upload release** for uploads and both **Upload release** and **Deploy release** for anything that deploys. The plaintext key is shown once at creation and can be copied again by its creator while the key is active. Bound applications and permissions cannot be changed afterwards, so a key with the wrong scope is deleted and recreated. A key never exceeds its creator's current permissions.
+### Create a publishing key
+
+`HUB_API_KEY` is created in Hub, not in the application. Open **API Keys** in the Hub navigation (`<HUB_URL>/api-keys`), which requires `hub.app / manage-api-keys`, granted to `hub-administrator` and `hub-operator` by default.
+
+![The API Keys page in Hub, with the create action in the top right and no keys yet](https://static-docs.nocobase.com/20260923151656.png)
+
+Choose **Create API Key**:
+
+1. Under **Applications**, select the target application, or **All applications (including future apps)**.
+2. Under **Permissions**, grant what the commands need: **Upload release** for uploads alone, and **Deploy release** as well for anything that deploys.
+3. Set an expiration if you want one, then copy the plaintext key after creation.
+
+Permissions stay disabled until an application is selected; the dialog says so.
+
+![The Create API Key dialog: name and expiration, the application scope, and the Upload release and Deploy release permissions](https://static-docs.nocobase.com/20260923151943.png)
+
+The plaintext key is shown once at creation and can be copied again by its creator while the key is active. Bound applications and permissions cannot be changed afterwards, so a key with the wrong scope is deleted and recreated. Every request rechecks the creator's current permissions, so uploads and deployments made with the key are rejected once its creator loses access to the bound application. Supply it through a CI secret or a protected local environment rather than command arguments, version control, or logs.
+
+### Configure the CLI environment
 
 Provide `HUB_URL` (including its mount path), `HUB_APP_ID`, and `HUB_API_KEY` through a protected environment or the project's gitignored `.env`. Flags override process environment, which overrides `.env`; publishing does not load `.env.local`.
+
+### Upload and deploy
 
 ```bash
 pnpm nocobase app upload --deploy --config ./runtime.yml --wait --json
 ```
 
 For an existing uploaded Release, use `pnpm nocobase app deploy --release-id <releaseId> --wait --json`. Without `--config`, an existing deployment reuses current configuration; first deployment uses Release-template initialization. A supplied UTF-8 YAML document replaces configuration, subject to existing secret handling and validation, rather than merging arbitrary fields. The limit is 1 MiB; upload without `--deploy` rejects `--config`.
+
+### Wait for results and automate
 
 Keep the same idempotency key and payload for network retries. Use a new deployment key only when intentionally requesting another deployment. Acceptance is not completion: check the exit code and `result.operationStatus`, particularly with `--no-wait`.
 
