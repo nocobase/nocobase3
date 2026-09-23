@@ -7,7 +7,7 @@ import {
 } from 'react';
 import type { AIChatAction, AIChatState } from './chat-reducer.js';
 import { NocoBaseChatTransport } from './chat-transport.js';
-import { findAIModel, getAIModelKey } from './model.js';
+import { getAIModelKey, resolveEmployeeModel } from './model.js';
 import type { useAI } from './ai-context.js';
 import {
   AI_DRAFT_CONVERSATION_ID,
@@ -102,8 +102,11 @@ export function useChatRuntime({
             ai.employees.find(
               (item) => item.username === runtimeContext.employeeUsername,
             ) ?? ai.employees[0];
-          const model =
-            findAIModel(ai.models, runtimeContext.model) ?? ai.models[0];
+          const model = resolveEmployeeModel(
+            ai.models,
+            employee,
+            runtimeContext.model,
+          );
           if (!employee || !model) {
             throw new Error(
               'AIProvider requires at least one employee and model',

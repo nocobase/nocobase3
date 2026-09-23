@@ -24,6 +24,8 @@ Profile 显示 `Username`、`Nickname`、`Position`、`Bio` 和 `Greeting`。这
 
 开启「Enable dedicated model configuration」后，可以限制这个员工使用哪些 `{ llmService, model }`。列表只包含已启用 LLM 服务开放的模型。关闭专用配置后，员工使用当前运行时允许的通用模型集合。
 
+开启后，和这个员工对话时，聊天框的模型选择器只列出这里选中的模型，顺序与这里一致，默认选中第一个；服务端也只会用这些模型运行。选中的模型如果都已经在 LLM 服务里停用，聊天框会退回列出全部已启用模型，但服务端仍按这里的第一项运行，所以停用模型后记得回来调整这个列表。
+
 ## Skills
 
 Skills 标签页是一个平铺列表，列出 `SkillsLoader` 已经加载的全部 Skill，每一项显示标题、名称和描述，右侧的开关决定这个员工能不能加载它。

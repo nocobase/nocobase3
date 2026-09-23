@@ -1,4 +1,4 @@
-import type { AIModel } from './types.js';
+import type { AIEmployee, AIModel } from './types.js';
 
 export type AIModelGroup = {
   key: string;
@@ -29,4 +29,44 @@ export function groupAIModels(models: AIModel[]): AIModelGroup[] {
   }
 
   return Array.from(groups.values());
+}
+
+/**
+ * The models this employee may run on, in the order the employee lists them.
+ * The server swaps any other model for the first of these, so the chat shows
+ * and sends from the same list rather than displaying one model and getting
+ * an answer from another. An employee without its own model settings, or
+ * whose listed models are all disabled, uses every enabled model.
+ */
+export function getEmployeeModels(
+  models: AIModel[],
+  employee?: AIEmployee,
+): AIModel[] {
+  const settings = employee?.modelSettings;
+  if (!settings?.enabled) return models;
+  const allowed = (settings.models ?? []).filter(
+    (item) => item?.llmService && item?.model,
+  );
+  if (!allowed.length && settings.llmService && settings.model) {
+    allowed.push({ llmService: settings.llmService, model: settings.model });
+  }
+  const available = allowed.flatMap((item) => {
+    const model = models.find(
+      (candidate) =>
+        candidate.value === item.model &&
+        candidate.llmService === item.llmService,
+    );
+    return model ? [model] : [];
+  });
+  return available.length ? available : models;
+}
+
+/** The model to show and send for this employee: the selection if allowed. */
+export function resolveEmployeeModel(
+  models: AIModel[],
+  employee: AIEmployee | undefined,
+  key: string,
+): AIModel | undefined {
+  const allowed = getEmployeeModels(models, employee);
+  return findAIModel(allowed, key) ?? allowed[0];
 }

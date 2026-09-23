@@ -31,7 +31,11 @@ import {
   type AIChatController,
 } from './chat-controller.js';
 import { useAI } from './ai-context.js';
-import { findAIModel, getAIModelKey } from './model.js';
+import {
+  getAIModelKey,
+  getEmployeeModels,
+  resolveEmployeeModel,
+} from './model.js';
 import { useChatAttachments } from './use-chat-attachments.js';
 import {
   useChatMessageActions,
@@ -243,8 +247,26 @@ export function AIChatProvider({
       (employee) => employee.username === defaultEmployeeUsername,
     ) ??
     ai.employees[0];
-  const configuredModel =
-    findAIModel(ai.models, state.selectedModel) ?? ai.models[0];
+  const configuredModel = resolveEmployeeModel(
+    ai.models,
+    configuredEmployee,
+    state.selectedModel,
+  );
+  const employeeModels = useMemo(
+    () => getEmployeeModels(ai.models, configuredEmployee),
+    [ai.models, configuredEmployee],
+  );
+  // A send checks the stored model against the resolved one, and the request
+  // carries the stored one, so it follows what the chat resolved — the
+  // employee's first allowed model when the stored one is not allowed.
+  const configuredModelKey = configuredModel
+    ? getAIModelKey(configuredModel)
+    : undefined;
+  useEffect(() => {
+    if (configuredModelKey && configuredModelKey !== state.selectedModel) {
+      dispatch({ type: 'select-model', model: configuredModelKey });
+    }
+  }, [configuredModelKey, state.selectedModel]);
   const currentEmployee = configuredEmployee ?? UNAVAILABLE_EMPLOYEE;
   const currentModel = configuredModel ?? UNAVAILABLE_MODEL;
   const canSend = Boolean(
@@ -308,8 +330,11 @@ export function AIChatProvider({
         ai.employees.find(
           (item) => item.username === currentState.selectedEmployeeUsername,
         ) ?? ai.employees[0];
-      const model =
-        findAIModel(ai.models, currentState.selectedModel) ?? ai.models[0];
+      const model = resolveEmployeeModel(
+        ai.models,
+        employee,
+        currentState.selectedModel,
+      );
       const conversation = currentState.conversations.find(
         (item) => item.id === currentId,
       );
@@ -598,8 +623,9 @@ export function AIChatProvider({
       dispatch({ type: 'select-employee', username: employee.username });
       dispatch({ type: 'start-new-conversation' });
 
-      const taskModel = findAIChatTaskModel(ai.models, task);
-      const resolvedModel = taskModel ?? ai.models[0];
+      const allowedModels = getEmployeeModels(ai.models, employee);
+      const taskModel = findAIChatTaskModel(allowedModels, task);
+      const resolvedModel = taskModel ?? allowedModels[0];
       if (resolvedModel) {
         dispatch({
           type: 'select-model',
@@ -771,7 +797,7 @@ export function AIChatProvider({
     () => ({
       id,
       employees: ai.employees,
-      models: ai.models,
+      models: employeeModels,
       currentEmployee,
       currentModel,
       canSend,
@@ -885,6 +911,7 @@ export function AIChatProvider({
       currentModel,
       canSend,
       configuredEmployee,
+      employeeModels,
       getConfiguredTaskSet,
       invalidateConversationHistory,
       invalidatePendingInteraction,
