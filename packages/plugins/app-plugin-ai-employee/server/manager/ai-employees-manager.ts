@@ -88,11 +88,26 @@ export class AIEmployeesManager {
       if (!configuredModels.length) {
         throw new Error('AI employee model not configured');
       }
+      // Only what is enabled right now: the chat offers the same intersection,
+      // so what it shows is what runs, and a disabled model never runs.
+      const enabled = await this.ai.llmProviderManager.listAllEnabledModels();
+      const availableModels = configuredModels.filter((item) =>
+        enabled.some(
+          (service) =>
+            service.llmService === item.llmService &&
+            service.enabledModels.some((option) => option.value === item.model),
+        ),
+      );
+      if (!availableModels.length) {
+        throw new Error(
+          'None of the models this AI employee may use is enabled',
+        );
+      }
 
       if (
         model?.llmService &&
         model?.model &&
-        configuredModels.some(
+        availableModels.some(
           (item) =>
             item.llmService === model.llmService && item.model === model.model,
         )
@@ -100,7 +115,7 @@ export class AIEmployeesManager {
         return model;
       }
 
-      const firstModel = configuredModels[0];
+      const firstModel = availableModels[0];
       if (firstModel?.llmService && firstModel?.model) {
         return {
           llmService: firstModel.llmService,

@@ -32,11 +32,12 @@ export function groupAIModels(models: AIModel[]): AIModelGroup[] {
 }
 
 /**
- * The models this employee may run on, in the order the employee lists them.
- * The server swaps any other model for the first of these, so the chat shows
- * and sends from the same list rather than displaying one model and getting
- * an answer from another. An employee without its own model settings, or
- * whose listed models are all disabled, uses every enabled model.
+ * The models this employee may run on: those it lists that are enabled, in
+ * the order it lists them. The server makes the same choice, so the chat
+ * shows and sends from the same list rather than displaying one model and
+ * getting an answer from another. An employee without its own model settings
+ * uses every enabled model; one whose listed models are all disabled has none,
+ * and the chat cannot send until one is enabled again.
  */
 export function getEmployeeModels(
   models: AIModel[],
@@ -58,7 +59,7 @@ export function getEmployeeModels(
     );
     return model ? [model] : [];
   });
-  return available.length ? available : models;
+  return available;
 }
 
 /** The model to show and send for this employee: the selection if allowed. */

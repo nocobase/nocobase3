@@ -65,13 +65,17 @@ describe('getEmployeeModels', () => {
     ).toEqual([vision]);
   });
 
-  it('uses every model when the settings are off or name none that is enabled', () => {
+  it('uses every model when the employee has no model settings of its own', () => {
     expect(
       getEmployeeModels(models, {
         ...restricted,
         modelSettings: { ...restricted.modelSettings, enabled: false },
       }),
     ).toEqual(models);
+    expect(getEmployeeModels(models, undefined)).toEqual(models);
+  });
+
+  it('offers nothing when every model the employee lists is disabled', () => {
     expect(
       getEmployeeModels(models, {
         username: 'stale',
@@ -80,8 +84,7 @@ describe('getEmployeeModels', () => {
           models: [{ llmService: 'main', model: 'removed-model' }],
         },
       }),
-    ).toEqual(models);
-    expect(getEmployeeModels(models, undefined)).toEqual(models);
+    ).toEqual([]);
   });
 
   it('keeps an allowed selection and replaces a disallowed one with the first allowed', () => {
@@ -183,5 +186,31 @@ describe('the chat for an employee with its own models', () => {
     const body = JSON.stringify(service.sendMessagesStream.mock.calls[0]?.[0]);
     expect(body).toContain('fast-model');
     expect(body).not.toContain('general-model');
+  });
+
+  it('cannot send when every model the employee lists is disabled', async () => {
+    const service = createService();
+    service.listEmployees = vi.fn().mockResolvedValue([
+      {
+        username: 'order-desk',
+        nickname: 'Order desk',
+        modelSettings: {
+          enabled: true,
+          models: [{ llmService: 'main', model: 'removed-model' }],
+        },
+      },
+    ]);
+    render(
+      <AIProvider service={service}>
+        <ReadyChat />
+      </AIProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled(),
+    );
+    expect(screen.getByTestId('models')).toHaveTextContent('');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(service.sendMessagesStream).not.toHaveBeenCalled();
   });
 });
