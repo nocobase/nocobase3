@@ -289,10 +289,17 @@ export const createClientLibraryConfig: (
 // upstream source does, so the rules that object to those shapes are relaxed
 // for the registry paths alone. Hand-written components in
 // `client/components/` are still held to the full rule set.
-const shadcnRegistry: Linter.Config[] = [
+//
+// `root` is the directory holding the `components/ui/` and `hooks/` that
+// `shadcn add` writes to. The Portal factory passes `client`; a package that
+// keeps its primitives elsewhere, such as the UI Library's `website`, passes
+// its own directory instead of copying the list.
+export const createShadcnRegistryConfig: (root?: string) => Linter.Config[] = (
+  root = 'client',
+) => [
   {
     name: '@nocobase/dev-config/shadcn-registry',
-    files: ['client/components/ui/**/*.tsx', 'client/hooks/use-mobile.ts'],
+    files: [`${root}/components/ui/**/*.tsx`, `${root}/hooks/use-mobile.ts`],
     rules: {
       'react-refresh/only-export-components': 'off',
       'react-hooks/set-state-in-effect': 'off',
@@ -307,7 +314,7 @@ const shadcnRegistry: Linter.Config[] = [
     // Recharts exposes loosely typed tooltip and legend payloads; the upstream
     // chart wrapper reads them as-is.
     name: '@nocobase/dev-config/shadcn-registry-chart',
-    files: ['client/components/ui/chart.tsx'],
+    files: [`${root}/components/ui/chart.tsx`],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -325,7 +332,7 @@ export const createPortalConfig: (
     environment: [
       ...scopeConfigs(react, portalClientFiles),
       ...scopeConfigs(node, portalNodeFiles),
-      ...shadcnRegistry,
+      ...createShadcnRegistryConfig(),
       ...(options.environment ?? []),
     ],
   });

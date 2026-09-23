@@ -61,6 +61,8 @@ test artifacts. React and Vitest rules are scoped to their relevant files.
 `client/components/ui/**/*.tsx` and `client/hooks/use-mobile.ts`, and a few more
 for `client/components/ui/chart.tsx`.
 
+The list comes from `createShadcnRegistryConfig(root)`, which scopes the same blocks to `<root>/components/ui/` and `<root>/hooks/` and defaults `root` to `client`. A package whose primitives live elsewhere passes its own directory rather than copying the rules, so it keeps up with the list; the UI Library, whose primitives live in `website/`, uses `environment: createShadcnRegistryConfig('website')`.
+
 Those files are not written by hand. `shadcn add` copies them from the upstream
 registry verbatim, and `shadcn add <name> --diff` only stays meaningful while
 the local copy matches. The primitives export their `cva` variants, contexts and
