@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -159,5 +159,24 @@ describe('MCP loader test cases', () => {
     (restarted as any).toolsMap = manager.toolsMap;
     const tools = await restarted.listMCPTools();
     expect(tools.weather?.[0]?.permission).toBe('ALLOW');
+  });
+
+  it('logs a server it cannot reach instead of failing, and exposes none of its tools', async () => {
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    const manager = new DefaultMCPServerManager(
+      (mcpServerManager as any).repository,
+      { logger },
+    );
+    await manager.registerMCP({
+      unreachable: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+    });
+
+    await expect(manager.rebuildClient()).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ serverName: 'unreachable' }),
+      expect.stringContaining('unreachable'),
+    );
+    expect((await manager.listMCPTools()).unreachable).toBeUndefined();
   });
 });

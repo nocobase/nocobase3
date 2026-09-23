@@ -40,7 +40,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
 
   constructor(
     private repository: AIMCPRepository,
-    _runtime: MCPRuntime = {},
+    private readonly runtime: MCPRuntime = {},
   ) {}
 
   async registerMCP(registration: {
@@ -127,8 +127,27 @@ export class DefaultMCPServerManager implements MCPServerManager {
       );
     }
 
-    this.client = new MultiServerMCPClient(connections);
-    const toolsMap = await this.client.initializeConnections();
+    // A server that cannot be reached must not take the application down with
+    // it: skip it, say so, and keep every server that did connect.
+    this.client = new MultiServerMCPClient({
+      mcpServers: connections,
+      onConnectionError: ({ serverName, error }) => {
+        this.runtime.logger?.warn(
+          { err: error, serverName },
+          `MCP server "${serverName}" could not be reached; its tools are unavailable`,
+        );
+      },
+    });
+    let toolsMap: Record<string, StructuredToolInterface[]>;
+    try {
+      toolsMap = await this.client.initializeConnections();
+    } catch (error) {
+      this.runtime.logger?.error(
+        { err: error },
+        'MCP servers could not be initialized; MCP tools are unavailable',
+      );
+      return;
+    }
     for (const [serverName, tools] of Object.entries(toolsMap)) {
       this.toolsMap[serverName] = tools as StructuredToolInterface[];
       for (const tool of tools as StructuredToolInterface[]) {

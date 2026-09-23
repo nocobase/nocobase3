@@ -571,7 +571,7 @@ ai:
         MCP_API_KEY: ${MCP_API_KEY}
 ```
 
-`stdio` spawns a child process in the NocoBase server's environment — scope its command, working directory and file access to the minimum. `http` and `sse` take `url` and optional `headers`. `${NAME}` is expanded recursively here too.
+`stdio` spawns a child process in the NocoBase server's environment — scope its command, working directory and file access to the minimum. `http` and `sse` take `url` and optional `headers`. `${NAME}` is expanded recursively here too. A server that cannot be reached when the client is built — at start, or when it is switched on — is skipped with a warning in the server log naming it, and the application starts without its tools; the others connect as usual. So a missing MCP tool in the chat is a reason to read the log, not a sign the configuration was ignored.
 
 A server's tools register as `GENERAL` tools named `mcp-<server>-<tool>`, so every employee whose tool selection has never been saved has them from the moment the server connects. Once an employee's tool switches are saved in AI settings, that selection is a fixed list, and a tool discovered afterwards — a new MCP tool included — stays off for that employee until someone switches it on. Use that exact name wherever a tool is named: in a Skill's `tools`, an employee's `tools`, or a session's `skillSettings`. Narrowing them for one employee is its tool selection in AI settings, or a session's `skillSettings` allowlist.
 

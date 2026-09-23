@@ -12,7 +12,7 @@ import { createMigrator, databaseManagerToken } from '@nocobase/db';
 import { createDriveManager } from '@nocobase/drive';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { type AIEmployeeConfig } from '../server/config.js';
 import {
@@ -240,17 +240,9 @@ describe('AIEmployeeProvider application config', () => {
         },
       },
     });
-    // Connecting is not what this checks; the server is never reachable here.
-    const offline = (container: ServiceContainer) =>
-      vi
-        .spyOn(
-          container.resolve(aiManagerToken).mcpServerManager,
-          'rebuildClient',
-        )
-        .mockResolvedValue(undefined);
+    // The server is never reachable here, which must not stop the start.
     const first = await createProvider(config, deps);
     first.provider.register();
-    offline(first.container);
     await first.provider.boot();
     await first.container
       .resolve(aiManagerToken)
@@ -259,7 +251,6 @@ describe('AIEmployeeProvider application config', () => {
 
     const second = await createProvider(config, deps);
     second.provider.register();
-    offline(second.container);
     await second.provider.boot();
 
     await expect(
