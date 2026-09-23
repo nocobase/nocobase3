@@ -286,6 +286,28 @@ describe('package-owned data skill runtime', () => {
     ).toMatchObject({ status: 'error', content: 'Tool unavailable.' });
   });
 
+  it('leaves out the tools that pause an unattended run when a session names its tools', async () => {
+    const fixture = await createFixture();
+    const unfiltered = await fixture.runtime();
+    // Every employee session gets these GENERAL tools: one asks, one runs in a
+    // browser, and either one pauses a run nobody is watching.
+    expect(unfiltered.discovered.tools.has('suggestions')).toBe(true);
+    expect(unfiltered.discovered.tools.has('formFiller')).toBe(true);
+
+    const unattended = await fixture.runtime({
+      toolsVersion: 1,
+      tools: ['getSkill', 'dataQuery'],
+    });
+
+    expect(unattended.discovered.tools.has('suggestions')).toBe(false);
+    expect(unattended.discovered.tools.has('formFiller')).toBe(false);
+    await unattended.call('getSkill', { skillName: 'data-query' });
+    expect(await unattended.visibleTools()).toEqual(
+      expect.arrayContaining(['getSkill', 'dataQuery']),
+    );
+    expect(await unattended.visibleTools()).not.toContain('suggestions');
+  });
+
   it('does not activate selected skill tools until an available skill is loaded', async () => {
     const fixture = await createFixture();
     const settings = { enabledTools: ['getSkill', 'dataQuery'] };

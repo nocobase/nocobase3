@@ -94,7 +94,7 @@ const conversations = container.resolve(aiConversationsManagerToken);
 const factory = container.resolve(agentServiceFactoryToken);
 ```
 
-These two, plus `aiManagerToken`, are the whole public server surface, along with the `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, `AgentInvokeInterrupt`, `AgentInterruptAction`, and `AgentStreamEvent` types exported from the same entry. The plugin's internal factories — its repository, manager, service, and data-service tokens — are not exported and are not part of the contract; an App tool declares the App's own service tokens instead. Never deep-import a plugin server or agent source file.
+These two, plus `aiManagerToken`, are the whole public server surface, along with the `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, `AgentInvokeInterrupt`, `AgentInterruptAction`, `AgentStreamEvent`, and `AgentServiceErrorCode` types and the `AgentServiceError` class exported from the same entry. The plugin's internal factories — its repository, manager, service, and data-service tokens — are not exported and are not part of the contract; an App tool declares the App's own service tokens instead. Never deep-import a plugin server or agent source file.
 
 `AgentServiceFactory` is an App-level singleton, but every `createAIEmployee()` or `createAgent()` call produces a new session-scoped `AgentService` with its own private context and conversation objects. Do not cache an `AgentService` globally or register one as a singleton.
 
@@ -185,7 +185,7 @@ interface CreateAgentOptions {
 }
 ```
 
-All three of `sessionId`, `actor`, and `runtime` are required: a fixed agent has nowhere to persist without a session, and there is no implicit root. `model` is fixed at creation and a request cannot override it; if none is supplied, the service must receive a usable model through configuration before it executes. `tools` and `skills` name registered resources to activate. `messages` is not a creation option — the turn's messages go to `invoke()` or `stream()`.
+All three of `sessionId`, `actor`, and `runtime` are required: a fixed agent has nowhere to persist without a session, and there is no implicit root. `model` is fixed at creation and a request cannot override it; if none is supplied, the service must receive a usable model through configuration before it executes. `tools` and `skills` name registered resources to activate. A fixed agent has no employee presets, so each tool's own `defaultPermission` decides: `ALLOW` runs without asking, and `ASK` — which is also what a tool declaring nothing gets — pauses the run exactly as it does for an employee, reported as `interrupt` from `invoke()` and continued with `resumeInvoke()`. `autoCall` does not exist here. The pause is checkpointed in the plugin's own tables under the default persistence, and in the process beside a `persistence` the caller supplies, so a run paused under a custom persistence can be resumed only by the same `AgentService`. `messages` is not a creation option — the turn's messages go to `invoke()` or `stream()`.
 
 ## Executing an agent
 
@@ -241,9 +241,27 @@ An agent driven from a job, a schedule, a workflow node, or any other caller wit
 
 **Use `invoke()`, not `stream()`.** `stream()` is an async generator: the run advances only while something consumes it, so an unattended caller that forgets to drain it stalls holding an open conversation. `invoke()` runs the loop to completion and returns the result. Use `responseFormat` when the caller needs data rather than prose — it is simpler and more reliable than instructing the model to put its answer somewhere.
 
-**Pass an `AbortSignal` and own the cancellation.** `AgentRequest.signal` is merged with the service's own controller, so either can stop the run. Give it the signal the surrounding system already cancels with — a job timeout, a shutdown hook, a user cancelling upstream — rather than inventing a second timer. There is no built-in wall-clock limit; the only automatic stop is a graph recursion limit of 200 steps, which surfaces as its own error code. On abort the run rejects with `code: 'ABORTED'` and no assistant message is persisted, so an aborted attempt leaves nothing half-written to reason about.
+**Pass an `AbortSignal` and own the cancellation.** `AgentRequest.signal` is merged with the service's own controller, so either can stop the run. Give it the signal the surrounding system already cancels with — a job timeout, a shutdown hook, a user cancelling upstream — rather than inventing a second timer. There is no built-in wall-clock limit; the only automatic stop is a graph recursion limit of 200 steps, which surfaces as its own error code. On abort the run rejects with `code: 'ABORTED'`, and only the assistant turn in progress at that moment is dropped. Everything before it stays: the user message is saved when the run starts, each earlier step's assistant message and tool results are saved as the run goes, and a tool that already ran has already had its effect. So before retrying, read the conversation to see how far the run got, and rely on the tools being safe to call twice rather than on the run having left nothing behind.
 
-**Decide what an interrupt means before it happens.** A tool whose resolved permission is not automatic suspends the run to ask a person, and in an unattended run there is nobody to ask. `invoke()` then resolves with `interrupt` set and the paused tool calls recorded, and the run stays suspended until someone resumes it. So the reliable arrangement is not to interrupt at all: activate only tools that run automatically, which for `SPECIFIED` and `GENERAL` means `defaultPermission: 'ALLOW'`, and for `CUSTOM` means `autoCall`. If a tool that asks is genuinely required, the caller is deciding on the user's behalf and should say so — resume with an explicit decision rather than a blanket approval:
+**Decide what an interrupt means before it happens.** A tool that is not allowed to run on its own suspends the run to ask a person, and in an unattended run there is nobody to ask. `invoke()` then resolves with `interrupt` set and the paused tool calls recorded, and the run stays suspended until someone resumes it. So the reliable arrangement is not to interrupt at all, which means knowing every tool the run can reach:
+
+- **`createAgent()`** reaches only the tools it names and the ones its Skills name. Name only tools declaring `defaultPermission: 'ALLOW'`.
+- **`createAIEmployee()`** also reaches every `GENERAL` tool, and two of those always pause: `suggestions` asks, and `formFiller` runs in a browser, which an unattended run does not have. A model commonly ends a turn by offering suggestions, so an employee run that does not exclude them stops there. Exclude them by naming the session's tools in `skillSettings`, as an allowlist:
+
+```ts
+const agent = await factory.createAIEmployee({
+  username: 'order-desk',
+  state: { sessionId: conversation.sessionId },
+  actor,
+  runtime: { logger },
+  // Every tool this run may use, including the ones a Skill activates.
+  skillSettings: { toolsVersion: 1, tools: ['getSkill', 'dataQuery'] },
+});
+```
+
+The list narrows what the employee already allows; it never adds a tool the employee does not have. It covers tools a Skill activates as well as base tools, so a Skill's tools have to be on it too. The system tools — `getSkill`, `subAgentWebSearch`, `knowledge-base-retrieve` and `aiEmployeeWorkflowTaskOutput` — pass it regardless, each still subject to its own switch. `toolsVersion` matters only for an empty list: with it, `tools: []` leaves only the system tools; without it, an empty list means no filter at all.
+
+If a tool that asks is genuinely required, the caller is deciding on the user's behalf and should say so — resume with an explicit decision per action rather than a blanket approval, and make only a decision the action allows:
 
 ```ts
 const { interrupt } = await agent.invoke({ userMessages });
@@ -253,7 +271,8 @@ if (interrupt) {
       interruptId: interrupt.id,
       // One decision per action, in `interrupt.actions` order.
       decisions: interrupt.actions.map((action) =>
-        action.toolCall?.name === 'draft-reply'
+        action.toolCall?.name === 'draft-reply' &&
+        action.allowedDecisions?.includes('approve')
           ? { type: 'approve' }
           : { type: 'reject', message: 'Not allowed in an unattended run' },
       ), // 'edit' with editedAction is the third choice
@@ -266,23 +285,40 @@ Approving whatever is pending, unconditionally, turns every `ASK` into an `ALLOW
 
 An action identifies its tool call — `toolCall.id` and `toolCall.name` — but does not carry the arguments. A caller that decides on what the tool was about to do, rather than on which tool it is, reads the arguments from `message.toolCalls` on the same result and joins them on `id`: `message` is the assistant turn that requested the paused calls.
 
-A run that is neither resumed nor revisited stays paused, with its calls recorded as `interrupted`. Do not send a new turn into that conversation: the chat route clears pending calls with `cancelToolCall()` before a new user turn, but `invoke()` does not. Start a new conversation instead, or resume the one that paused.
+A run that is neither resumed nor revisited stays paused, with its calls recorded as `interrupted`. Do not send a new turn into that conversation as it stands: `invoke()` does not clear pending calls. `agent.cancelToolCall()` does — it closes them as declined and returns the tool messages that close them — but the chat route also puts the closed turn ahead of the next message, which is not part of the public API. For an unattended run, start a new conversation instead, or resume the one that paused.
 
 **Give the run a way out, if it needs one.** Anything the agent should do _during_ the run — report progress, notify a channel, hand a partial result onward — is an ordinary backend tool: register it in code, declare what it needs on `dependencies`, and activate it by name for this agent. The model calls it like any other tool. This is for effects that must happen while the run is going; when all the caller wants is the answer at the end, `responseFormat` already delivers it and a tool adds a failure mode for nothing.
 
 ### Failures a caller has to tell apart
 
-`AgentServiceError` carries a typed code, and an unattended caller needs it because retrying is its decision to make. `retryable` says whether a second attempt could plausibly differ:
+`AgentServiceError` carries a typed code, and an unattended caller needs it because retrying is its decision to make. Import it from the public entry and check it by class:
+
+```ts
+import { AgentServiceError } from '@nocobase/app-plugin-ai-employee/server';
+
+try {
+  await agent.invoke({ userMessages });
+} catch (error) {
+  if (!(error instanceof AgentServiceError)) throw error;
+  logger.warn(
+    { code: error.code, cause: error.rootMessage },
+    'agent run failed',
+  );
+  if (error.retryable) scheduleRetry();
+}
+```
+
+`retryable` says whether an immediate second attempt could plausibly differ:
 
 | Code                    | What happened                                     | `retryable` |
 | ----------------------- | ------------------------------------------------- | ----------- |
 | `GRAPH_RECURSION_ERROR` | The 200-step limit was reached                    | `true`      |
-| `EMPTY_RESPONSE`        | A stream produced nothing at all                  | `true`      |
+| `EMPTY_RESPONSE`        | `stream()` produced nothing at all                | `true`      |
 | `CONFIGURATION_ERROR`   | No usable model, LLM service, or provider         | `false`     |
 | `PROVIDER_ERROR`        | Anything else that failed, including the provider | `false`     |
 | `ABORTED`               | The signal fired; `aborted` is also set           | `false`     |
 
-The two retryable ones are retryable because a model is not deterministic: another attempt may take fewer steps or actually answer. The rest fail the same way the second time, so a caller that retries them burns an attempt and arrives at the same place.
+The two retryable ones are retryable because a model is not deterministic: another attempt may take fewer steps or actually answer. `EMPTY_RESPONSE` comes only from `stream()`; the same outcome from `invoke()` resolves with `message: null` instead of rejecting, so check for it. `CONFIGURATION_ERROR` fails the same way until someone changes the configuration. `PROVIDER_ERROR` is the catch-all — a provider outage, a rate limit, a network failure, and also a tool dependency the container cannot resolve — and `false` means only that an immediate retry is not worth it, because the provider client has already retried transient failures itself. A retry the caller schedules minutes later, with backoff, can still succeed; read `rootMessage` to tell an outage from a mistake before deciding.
 
 `AgentServiceErrorCode` also declares `MODEL_RESPONSE_ERROR` and `PERSISTENCE_ERROR`, which this package maps to HTTP statuses but never raises from the agent path. Handle them if switching exhaustively; do not wait for them.
 

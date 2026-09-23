@@ -44,19 +44,20 @@ One thing does not yet work the way it should. It is an open defect rather than 
 
 ## What to build for what the user asked
 
-| The user wants                                            | Build                                                           | Where                                 |
-| --------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------- |
-| A chat box on a page                                      | a chat surface behind the readiness gate                        | App page                              |
-| The assistant to see what is on screen                    | a page element with `getContext`                                | App page                              |
-| The assistant to fill a visible form                      | `useAIForm`                                                     | App page                              |
-| The assistant to change something visible, without saving | a frontend tool                                                 | App page element                      |
-| The assistant to read or write business data              | a backend tool with declared `dependencies`                     | `server/ai/tools/<name>.ts`           |
-| The assistant to follow a named procedure                 | a Skill                                                         | `ai/skills/<name>/SKILL.md`           |
-| A named persona with a fixed set of skills and tools      | an Employee                                                     | `server/ai/employees/<name>/index.ts` |
-| Tools from an external MCP server                         | `ai.mcpServers`                                                 | `config.yml`                          |
-| Current information from the web                          | `subAgentWebSearch`, if the provider searches                   | employee `tools`                      |
-| Answers grounded in uploaded documents                    | a knowledge base, which needs a plugin that enables the feature | AI settings, then employee `tools`    |
-| The assistant to read an image or PDF the user dropped in | nothing — enable attachments and configure a disk               | chat surface props, `config.yml`      |
+| The user wants                                               | Build                                                           | Where                                                                             |
+| ------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| A chat box on a page                                         | a chat surface behind the readiness gate                        | App page                                                                          |
+| The assistant to see what is on screen                       | a page element with `getContext`                                | App page                                                                          |
+| The assistant to fill a visible form                         | `useAIForm`                                                     | App page                                                                          |
+| The assistant to change something visible, without saving    | a frontend tool                                                 | App page element                                                                  |
+| The assistant to read or write business data                 | a backend tool with declared `dependencies`                     | `server/ai/tools/<name>.ts`                                                       |
+| The assistant to follow a named procedure                    | a Skill                                                         | `ai/skills/<name>/SKILL.md`                                                       |
+| A named persona with a fixed set of skills and tools         | an Employee                                                     | `server/ai/employees/<name>/index.ts`                                             |
+| Tools from an external MCP server                            | `ai.mcpServers`                                                 | `config.yml`                                                                      |
+| Current information from the web                             | `subAgentWebSearch`, if the provider searches                   | employee `tools`                                                                  |
+| Answers grounded in uploaded documents                       | a knowledge base, which needs a plugin that enables the feature | AI settings, then employee `tools`                                                |
+| The assistant to read an image or PDF the user dropped in    | nothing — enable attachments and configure a disk               | chat surface props, `config.yml`                                                  |
+| A job, schedule, or workflow to run the assistant unattended | `invoke()` on an agent built in server code                     | App server code, [unattended rules](references/server-runs.md#running-unattended) |
 
 Reach for an App-defined tool before concluding a capability is missing: a backend tool may declare any container token as a dependency, so anything an App service can do, a tool can do. Do not copy a built-in employee, tool, or skill into the App to modify it.
 
@@ -93,6 +94,7 @@ Do these in order; each step depends on the one before it.
 - The employee the page opens on is the one intended, not whichever sorts first.
 - If web search is activated: ask something that needs it and confirm the answer is retrieved rather than recalled. On a provider without built-in search the tool now reports that no search ran; that error is the correct outcome, not a bug to route around.
 - If attachments are enabled: dropping an image and pasting a document both reach the assistant, and the reply shows it read them.
+- If an agent runs unattended: run the same job twice and find no duplicate record; abort one mid-run and find a conversation whose state explains how far it got; and trigger a tool that asks, confirming the run either never reaches it or resolves the interrupt the way the caller decided.
 - App-local `lint`, `typecheck`, `test`, and `build` pass.
 - No App file imports a plugin private path, and no changed file lives under `.agents/skills/`.
 
