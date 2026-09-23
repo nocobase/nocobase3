@@ -253,7 +253,7 @@ export function NotificationInAppInbox(): ReactElement {
         </CardHeader>
         <CardContent className='p-0'>
           {error ? (
-            <Alert variant='destructive' className='m-4'>
+            <Alert variant='destructive' className='m-4 w-auto'>
               <AlertTitle>
                 {t('inbox.unavailable', {
                   defaultValue: 'Inbox unavailable',

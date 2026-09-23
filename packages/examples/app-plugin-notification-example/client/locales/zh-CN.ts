@@ -28,7 +28,7 @@ const messages = {
       '将一个简单任务分配给其他用户。负责人会收到包含任务摘要的站内通知，并可从详情页调整任务。',
     listTitle: '全部任务',
     listDescription: '这里展示你创建或被分配的全部任务。',
-    count: '{{count}} 条',
+    count: '{{count}} 条记录',
     empty: '暂时还没有任务。',
     assignee: '负责人',
     columns: {
@@ -42,6 +42,9 @@ const messages = {
     },
     view: '查看详情',
     refresh: '刷新',
+    previous: '上一页',
+    next: '下一页',
+    page: '第 {{page}} 页',
     add: '新增任务',
     drawerTitle: '新增任务',
     drawerDescription: '创建任务后，负责人会收到包含任务基本信息的站内通知。',
@@ -50,7 +53,6 @@ const messages = {
   },
   taskDetail: {
     title: '任务详情',
-    description: '创建人和负责人都可以调整任务详情。',
     summary: '任务详情',
     createdAt: '创建时间',
     updatedAt: '最近更新',

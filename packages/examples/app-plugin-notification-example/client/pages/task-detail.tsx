@@ -20,10 +20,16 @@ import {
 } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select.js';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '../components/ui/sheet.js';
@@ -56,6 +62,14 @@ export default function TaskDetailPage(): ReactElement {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
+  const statusItems = TASK_STATUSES.map((value) => ({
+    value,
+    label: t(`status.${value}`),
+  }));
+  const assigneeItems = users.map((user) => ({
+    value: user.id,
+    label: user.name || user.email,
+  }));
 
   const load = useCallback(async (): Promise<
     { task: Task; users: User[] } | undefined
@@ -140,7 +154,7 @@ export default function TaskDetailPage(): ReactElement {
     <PageContainer>
       <PageHeader
         title={t('taskDetail.title')}
-        description={t('taskDetail.description')}
+        description={t('taskDetail.notificationHint')}
       />
       {error && !editing ? (
         <p role='alert' className='text-sm text-destructive'>
@@ -175,7 +189,7 @@ export default function TaskDetailPage(): ReactElement {
             <CardHeader>
               <CardTitle>{t('taskDetail.summary')}</CardTitle>
             </CardHeader>
-            <CardContent className='space-y-5'>
+            <CardContent>
               <dl className='grid gap-4 sm:grid-cols-2'>
                 <div>
                   <dt className='text-xs text-muted-foreground'>
@@ -230,9 +244,6 @@ export default function TaskDetailPage(): ReactElement {
                   <dd className='mt-1 text-sm'>{formatDate(task.updatedAt)}</dd>
                 </div>
               </dl>
-              <p className='border-t pt-4 text-sm leading-6 text-muted-foreground'>
-                {t('taskDetail.notificationHint')}
-              </p>
             </CardContent>
           </Card>
         </>
@@ -256,83 +267,109 @@ export default function TaskDetailPage(): ReactElement {
         }}
       >
         <SheetContent
+          showCloseButton={false}
           className='overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl'
           aria-describedby={undefined}
         >
           <SheetHeader>
             <SheetTitle>{t('taskDetail.edit')}</SheetTitle>
-            <SheetDescription>{t('taskDetail.description')}</SheetDescription>
+            <SheetDescription>
+              {t('taskDetail.notificationHint')}
+            </SheetDescription>
           </SheetHeader>
           {error ? (
-            <p role='alert' className='px-5 text-sm text-destructive'>
+            <p role='alert' className='px-4 text-sm text-destructive'>
               {error}
             </p>
           ) : null}
-          <Card className='mx-5 mb-5'>
-            <CardContent className='pt-5'>
+          <Card>
+            <CardContent>
               <form
-                className='space-y-5'
+                className='space-y-4'
                 onSubmit={(event) => void submit(event)}
               >
-                <label className='block space-y-2'>
-                  <span className='text-sm font-medium'>
-                    {t('fields.title')}
-                  </span>
-                  <Input
-                    required
-                    autoFocus
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
-                </label>
-                <label className='block space-y-2'>
-                  <span className='text-sm font-medium'>
-                    {t('fields.description')}
-                  </span>
-                  <Textarea
-                    required
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                </label>
-                <label className='block space-y-2'>
-                  <span className='text-sm font-medium'>
-                    {t('fields.status')}
-                  </span>
-                  <select
-                    className='h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-                    value={status}
-                    onChange={(event) =>
-                      setStatus(event.target.value as TaskStatus)
-                    }
-                  >
-                    {TASK_STATUSES.map((value) => (
-                      <option key={value} value={value}>
-                        {t(`status.${value}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className='block space-y-2'>
-                  <span className='text-sm font-medium'>
-                    {t('fields.assignee')}
-                  </span>
-                  <select
-                    className='h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-                    value={assigneeId}
-                    onChange={(event) => setAssigneeId(event.target.value)}
-                  >
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name || user.email}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p className='rounded-lg border border-dashed bg-muted/20 p-3 text-sm leading-6 text-muted-foreground'>
-                  {t('taskDetail.notificationHint')}
-                </p>
-                <SheetFooter className='-mx-5 mb-[-1.25rem] px-5'>
+                <div className='grid gap-4 sm:grid-cols-2'>
+                  <label className='space-y-2 text-sm font-medium'>
+                    <span>{t('fields.title')}</span>
+                    <Input
+                      required
+                      autoFocus
+                      disabled={saving}
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                    />
+                  </label>
+                  <div className='space-y-2 text-sm font-medium'>
+                    <span
+                      id='notification-example-status-label'
+                      className='block'
+                    >
+                      {t('fields.status')}
+                    </span>
+                    <Select
+                      disabled={saving}
+                      items={statusItems}
+                      required
+                      value={status}
+                      onValueChange={(value) => {
+                        if (value) setStatus(value);
+                      }}
+                    >
+                      <SelectTrigger
+                        aria-labelledby='notification-example-status-label'
+                        className='w-full'
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TASK_STATUSES.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {t(`status.${value}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className='space-y-2 text-sm font-medium sm:col-span-2'>
+                    <span>{t('fields.description')}</span>
+                    <Textarea
+                      required
+                      disabled={saving}
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                    />
+                  </label>
+                  <div className='space-y-2 text-sm font-medium'>
+                    <span
+                      id='notification-example-task-assignee-label'
+                      className='block'
+                    >
+                      {t('fields.assignee')}
+                    </span>
+                    <Select
+                      disabled={saving}
+                      items={assigneeItems}
+                      required
+                      value={assigneeId}
+                      onValueChange={(value) => setAssigneeId(value ?? '')}
+                    >
+                      <SelectTrigger
+                        aria-labelledby='notification-example-task-assignee-label'
+                        className='w-full'
+                      >
+                        <SelectValue placeholder={t('fields.chooseAssignee')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name || user.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className='flex gap-2'>
                   <Button type='submit' disabled={saving}>
                     {saving ? t('common.saving') : t('taskDetail.save')}
                   </Button>
@@ -344,7 +381,7 @@ export default function TaskDetailPage(): ReactElement {
                   >
                     {t('taskDetail.cancel')}
                   </Button>
-                </SheetFooter>
+                </div>
               </form>
             </CardContent>
           </Card>

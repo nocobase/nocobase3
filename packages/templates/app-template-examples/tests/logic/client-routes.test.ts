@@ -24,6 +24,13 @@ describe('app client routes', () => {
 
   it('declares application and settings route contributions', async () => {
     expect(applicationRoutes).toHaveLength(2);
+    // The inbox is reached from the header bell, so it deliberately declares no menu entry. Adding one would put a
+    // second path to the same page in the sidebar, which is what the bell replaced.
+    expect(
+      applicationRoutes[0].routes.find(
+        (route) => route.name === 'notifications',
+      ),
+    ).not.toHaveProperty('navigation');
     expect(applicationRoutes[0]).toMatchObject({
       parent: 'app',
       routes: [

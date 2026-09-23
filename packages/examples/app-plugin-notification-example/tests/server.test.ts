@@ -130,6 +130,70 @@ it('sends task summaries to the related people', async () => {
   expect(reassignmentRecipients).toEqual(expect.arrayContaining(['u2', 'u3']));
 });
 
+it('paginates tasks visible to the current user', async () => {
+  const database = await createFixture();
+  const router = await createRouter(
+    database,
+    vi.fn(async () => undefined),
+  );
+
+  for (const title of ['First task', 'Second task', 'Third task']) {
+    const response = await request(router, 'POST', 'u1', '/tasks', {
+      title,
+      description: `${title} description`,
+      assigneeId: 'u2',
+    });
+    expect(response.status).toBe(201);
+  }
+
+  const firstPage = await request(
+    router,
+    'GET',
+    'u1',
+    '/tasks?page=1&pageSize=2',
+  );
+  const firstPageBody = (await firstPage.json()) as {
+    data: unknown[];
+    total: number;
+    page: number;
+    pageSize: number;
+  };
+  expect(firstPageBody).toMatchObject({
+    total: 3,
+    page: 1,
+    pageSize: 2,
+    data: expect.arrayContaining([
+      expect.objectContaining({ title: expect.any(String) }),
+    ]),
+  });
+  expect(firstPageBody.data).toHaveLength(2);
+
+  const secondPage = await request(
+    router,
+    'GET',
+    'u1',
+    '/tasks?page=2&pageSize=2',
+  );
+  const secondPageBody = (await secondPage.json()) as {
+    data: unknown[];
+    total: number;
+    page: number;
+    pageSize: number;
+  };
+  expect(secondPageBody).toMatchObject({
+    total: 3,
+    page: 2,
+    pageSize: 2,
+  });
+  expect(secondPageBody.data).toHaveLength(1);
+
+  await expect(
+    request(router, 'GET', 'u3', '/tasks?page=1&pageSize=2').then((response) =>
+      response.json(),
+    ),
+  ).resolves.toMatchObject({ total: 0, page: 1, pageSize: 2, data: [] });
+});
+
 it('does not expose or accept disabled and deleted users as assignees', async () => {
   const database = await createFixture();
   await database
