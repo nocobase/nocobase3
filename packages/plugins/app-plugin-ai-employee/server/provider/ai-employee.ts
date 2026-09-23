@@ -2,7 +2,6 @@ import {
   createAIManager,
   DriveFileStorageFactory,
   fileStorageFactoryToken,
-  type AIManager,
 } from '@nocobase/ai-employee';
 import {
   driveManagerToken,
@@ -10,11 +9,7 @@ import {
 } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import {
-  createServiceToken,
-  ServiceProvider,
-  type ServiceToken,
-} from '@nocobase/service-provider';
+import { ServiceProvider } from '@nocobase/service-provider';
 
 import path from 'node:path';
 
@@ -24,18 +19,9 @@ import {
   AIEmployeeResources,
   normalizeAISkillDirectories,
 } from '../ai/index.js';
-import {
-  ManagerFactory,
-  managerFactoryToken,
-} from '../factory/manager-factory.js';
-import {
-  RepositoryFactory,
-  repositoryFactoryToken,
-} from '../factory/repository-factory.js';
-import {
-  AgentServiceFactory,
-  agentServiceFactoryToken,
-} from '../agent/service/agent-service-factory.js';
+import { ManagerFactory } from '../factory/manager-factory.js';
+import { RepositoryFactory } from '../factory/repository-factory.js';
+import { AgentServiceFactory } from '../agent/service/agent-service-factory.js';
 import { aiConversationsManagerToken } from '../manager/ai-conversations-manager.js';
 import { databaseManagerToken } from '@nocobase/db';
 import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
@@ -43,14 +29,16 @@ import {
   createDataServices,
   dataServicesFactoryToken,
 } from '../service/data-services.js';
+import { ServiceFactory } from '../factory/service-factory.js';
 import {
-  ServiceFactory,
+  agentServiceFactoryToken,
+  aiManagerToken,
+  managerFactoryToken,
+  repositoryFactoryToken,
   serviceFactoryToken,
-} from '../factory/service-factory.js';
+} from '../tokens.js';
 
-/** Public cross-plugin AI manager capability. */
-export const aiManagerToken: ServiceToken<AIManager> =
-  createServiceToken<AIManager>('@nocobase/app-plugin-ai-employee/manager');
+export { aiManagerToken };
 
 export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-ai-employee';

@@ -1,8 +1,4 @@
-import {
-  createServiceToken,
-  type ServiceResolver,
-  type ServiceToken,
-} from '@nocobase/service-provider';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import {
   databaseManagerToken,
   type DatabaseManager,
@@ -38,20 +34,16 @@ import { DatabaseConversationPersistence } from '../conversation/persistence/dat
 import { ConversationProvider } from '../conversation/conversation-provider.js';
 import { createAgentContext } from '../context.js';
 import type { Actor, ModelRef } from '../../types.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
+import type { ManagerFactory } from '../../factory/manager-factory.js';
 import {
-  repositoryFactoryToken,
-  type RepositoryFactory,
-} from '../../factory/repository-factory.js';
-import {
+  agentServiceFactoryToken,
+  aiManagerToken,
   managerFactoryToken,
-  type ManagerFactory,
-} from '../../factory/manager-factory.js';
-import { aiManagerToken } from '../../provider/ai-employee.js';
+  repositoryFactoryToken,
+} from '../../tokens.js';
 
-export const agentServiceFactoryToken: ServiceToken<AgentServiceFactory> =
-  createServiceToken<AgentServiceFactory>(
-    '@nocobase/app-plugin-ai-employee/agent-service-factory',
-  );
+export { agentServiceFactoryToken };
 
 export interface CreateEmployeeOptions {
   readonly username: string;

@@ -28,7 +28,6 @@ import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
 import type { AgentInvokeResult } from '../../agent/types.js';
-import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
   AgentRuntime,
@@ -36,6 +35,7 @@ import type {
   SubAgentConversationMetadata,
   AIMessageInput,
 } from '@nocobase/ai-employee';
+import { agentServiceFactoryToken } from '../../tokens.js';
 
 export type SubAgentTask = {
   sessionId: string;

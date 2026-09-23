@@ -8,7 +8,7 @@ import {
   findCurrentFrontendTool,
   readFrontendToolResult,
 } from '../../agent/context/ai-employee/frontend-tools.js';
-import { repositoryFactoryToken } from '../../factory/repository-factory.js';
+import { repositoryFactoryToken } from '../../tokens.js';
 
 export default defineTools({
   scope: 'GENERAL',

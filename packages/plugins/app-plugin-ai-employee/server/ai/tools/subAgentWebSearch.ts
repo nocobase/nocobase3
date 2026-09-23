@@ -9,7 +9,7 @@
 
 import { defineTools, type AIManager } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { aiManagerToken } from '../../provider/ai-employee.js';
+import { aiManagerToken } from '../../tokens.js';
 
 export default defineTools({
   scope: 'SPECIFIED',

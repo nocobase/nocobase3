@@ -1,12 +1,14 @@
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { managerFactoryToken } from '../../../factory/manager-factory.js';
-import { repositoryFactoryToken } from '../../../factory/repository-factory.js';
 import {
   getAccessibleAIEmployee,
   getSkillSettingsFromMain,
   updateMessageMetadata,
 } from '../../sub-agents/shared.js';
+import {
+  managerFactoryToken,
+  repositoryFactoryToken,
+} from '../../../tokens.js';
 
 export default defineTools({
   scope: 'SPECIFIED',

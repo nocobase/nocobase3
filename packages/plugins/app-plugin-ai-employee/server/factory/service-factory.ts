@@ -1,26 +1,19 @@
 import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
-import { type AIManager } from '@nocobase/ai-employee';
+import type { AIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
-import {
-  createServiceToken,
-  type ServiceContainer,
-  type ServiceToken,
-} from '@nocobase/service-provider';
+import type { ServiceContainer } from '@nocobase/service-provider';
 
 import type {
   AIEmployeeLLMServiceConfig,
   AIApplicationConfig,
 } from '../config.js';
 import type { AIResourceRegistrar } from '../ai/index.js';
-import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
-import { repositoryFactoryToken } from './repository-factory.js';
+import type { ManagerFactory } from './manager-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
 import { AI_API_BASE_PATH } from '../types.js';
-import { aiManagerToken } from '../provider/ai-employee.js';
-import { agentServiceFactoryToken } from '../agent/service/agent-service-factory.js';
 import { AgentServiceFactory } from '../agent/service/agent-service-factory.js';
 import { AIConversationService } from '../service/ai-conversation-service.js';
 import { AIEmployeeService } from '../service/ai-employee-service.js';
@@ -32,10 +25,14 @@ import { AIFileMetadataRepository } from '../repository/file-storage/ai-file-met
 import { LLMService } from '../service/llm-service.js';
 import { ModelService } from '../service/model-service.js';
 import { loadResources } from '../service/resource-loader.js';
-export const serviceFactoryToken: ServiceToken<ServiceFactory> =
-  createServiceToken<ServiceFactory>(
-    '@nocobase/app-plugin-ai-employee/internal/services',
-  );
+import {
+  agentServiceFactoryToken,
+  aiManagerToken,
+  managerFactoryToken,
+  repositoryFactoryToken,
+  serviceFactoryToken,
+} from '../tokens.js';
+export { serviceFactoryToken };
 
 export interface ServiceFactoryOptions {
   readonly container: ServiceContainer;
