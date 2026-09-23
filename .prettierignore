@@ -30,8 +30,11 @@ docs/theme/components/HomeHero/
 # The `**/` matters: an unanchored path matches only the repository root, and each template under packages/templates/
 # has both directories of its own. `.gitignore` lists them too, but `--ignore-path` replaces `.gitignore` rather than
 # adding to it, and both `pnpm format` and `pnpm format:all` pass it.
+#
+# The root `skills/` holds the Skills users install globally with `npx skills add`, and is prose for the same reason.
 **/.agents/skills/
 **/.claude/skills/
+/skills/
 
 # The generated Collection artifacts an application keeps under `database/<connection>/collections/`: one JSON file
 # per Collection plus a `_manifest.json`, written by `pnpm collections:generate` through a stable serializer so that
