@@ -353,7 +353,7 @@ What this plugin adds on top is one constraint and one failure mode. Both are it
 
 ### The resource id must be `<connection>.<collection>`
 
-These tools read the authorization catalog and keep only resource ids that split into exactly two dot-separated parts, with the first part matching a configured connection name. A resource registered under a bare `orders` is skipped; `main.orders` is seen. There is no default-connection alias.
+These tools read the authorization catalog and keep only resource ids that split into exactly two dot-separated parts, with the first part matching a configured connection name. A resource registered under a bare `orders` is skipped; `main.orders` is seen. There is no default-connection alias, and this is deliberate rather than an oversight: these tools address a collection as `{ dataSource, collection }`, and a flat catalog of bare names cannot say which connection an `orders` belongs to. Note the asymmetry, because it is easy to assume otherwise — a _query_ does default `dataSource` to `main`, but a _registration_ is never assumed to mean it.
 
 That id is not this plugin's private key — it is the same id the rest of an application already uses in its permission declarations, route guards and role grants, and the authorization Skill's examples use the bare form. So this is a naming decision for the whole application, taken once:
 
@@ -364,7 +364,7 @@ Decide it while there is nothing to migrate. If an application already uses bare
 
 ### Missing means invisible, not refused
 
-Discovery hides what it cannot reach. A collection that is unregistered, registered under a bare name, missing the `read` action, or simply not granted to this user is absent from the catalog with nothing logged — so the assistant reports that it could not find a table that plainly exists and that the application's own pages read fine. A direct query naming that collection is rejected rather than hidden, which is the quickest way to tell "not granted" from "not registered".
+Discovery hides what it cannot reach. A collection that is unregistered, registered under a bare name, missing the `read` action, or simply not granted to this user is absent from the catalog with nothing logged. Worse than a missing table: **the connection disappears with it**, so `getDataSources` comes back empty and the assistant reports having no data sources at all rather than being unable to find one table — which sends whoever is debugging it toward the database configuration instead of the grant. A direct query naming that collection is rejected rather than hidden, and its error is the quickest way to tell "not granted" from "not registered".
 
 The same rule applies one level down: a query may touch only the intersection of registered fields, the authorization decision's output fields, and supported scalar metadata, so a field left out of a grant is missing rather than forbidden. Relations are one-hop and same-connection, and each side is authorized independently.
 
