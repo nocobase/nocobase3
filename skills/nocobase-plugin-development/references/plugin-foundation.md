@@ -197,4 +197,4 @@ Every package under `packages/` is publishable: use the required public metadata
 
 Implement the required data model, service contract and Provider, HTTP/Job boundary, Client behavior, locales, and integration knowledge in dependency order. Registry source is needed only when the App should own editable UI. Keep implementation, declarations, exports, dependencies, published files, tests, README, and Plugin Skills aligned throughout.
 
-Continue with [registration](registration.md) when target App integration is requested and [testing](testing.md) for completion checks. The [capability source](../../../../packages/tools/create-plugin/src/lib/capabilities.ts) and [generator templates](../../../../packages/tools/create-plugin/template) are authoritative when extending the scaffold itself.
+Continue with [registration](registration.md) when target App integration is requested and [testing](testing.md) for completion checks. The capability source (`packages/tools/create-plugin/src/lib/capabilities.ts`) and generator templates (`packages/tools/create-plugin/template`) are authoritative when extending the scaffold itself.

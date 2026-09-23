@@ -201,8 +201,8 @@ Run the modified plugin's `lint`, `typecheck`, `test`, and `build`, plus the aff
 
 Use these maintained implementations when a detail is uncertain:
 
-- [App Server plugin contract](../../../../packages/app/app-server/src/plugins/types.ts)
-- [Server plugin path resolution](../../../../packages/app/app-server/src/plugins/resolve.ts)
-- [Application startup and Route mounting](../../../../packages/app/app-server/src/application/index.ts)
-- [Runnable Route plugin](../../../../packages/examples/app-plugin-routes-example)
-- [Runnable Queue plugin](../../../../packages/examples/app-plugin-queue-example)
+- App Server plugin contract (`packages/app/app-server/src/plugins/types.ts`)
+- Server plugin path resolution (`packages/app/app-server/src/plugins/resolve.ts`)
+- Application startup and Route mounting (`packages/app/app-server/src/application/index.ts`)
+- Runnable Route plugin (`packages/examples/app-plugin-routes-example`)
+- Runnable Queue plugin (`packages/examples/app-plugin-queue-example`)

@@ -1,10 +1,13 @@
-# Global Skills
+# Skills
 
-The Skills in this directory are installed once, globally, so that an agent knows how to reach NocoBase 3 before any application exists. Everything an agent needs after that ships inside the application it creates, under `.agents/skills/`, synchronized from the installed packages.
+This directory holds every Skill this repository commits. `pnpm install` links each of them into `.agents/skills/` and `.claude/skills/`, so agents working in the checkout see them; see "Repository Skills" in the root `AGENTS.md`.
 
-| Skill                                                    | What it does                                                                                                                                  |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`nocobase-create-app`](nocobase-create-app/SKILL.md) | Creates an application with `pnpm create @nocobase/app`, configures it with `config:init`, `config:set` and `config:check`, and starts it |
+| Skill                                                                 | Who uses it                                        | What it does                                                                                                                              |
+| --------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [`nocobase-create-app`](nocobase-create-app/SKILL.md)                 | Users, installed globally                          | Creates an application with `pnpm create @nocobase/app`, configures it with `config:init`, `config:set` and `config:check`, and starts it |
+| [`nocobase-plugin-development`](nocobase-plugin-development/SKILL.md) | Contributors developing plugins in this repository | Scaffolds, implements, registers and verifies a NocoBase 3 plugin                                                                        |
+
+The rest of this file is about `nocobase-create-app`. It is installed once, globally, so that an agent knows how to reach NocoBase 3 before any application exists. Everything an agent needs after that ships inside the application it creates, under `.agents/skills/`, synchronized from the installed packages.
 
 There are two ways to use it: against the published packages, which is what users do, and against a local registry holding this checkout, which is how a change is tested before it is released.
 
@@ -23,7 +26,7 @@ Use this to install NocoBase with an agent. The packages come from `https://npm.
 npx skills add nocobase/nocobase3 --skill nocobase-create-app -g
 ```
 
-`--skill` is required. The `skills` CLI also discovers this repository's `.agents/skills/`, and without it would offer the Skills used to develop NocoBase itself alongside this one. Add `-a claude-code`, or another agent's name, to install for one agent only.
+`--skill` is required. The `skills` CLI reads this whole directory, and without it would offer `nocobase-plugin-development`, which is for developing NocoBase itself, alongside this one. Add `-a claude-code`, or another agent's name, to install for one agent only.
 
 Agents load Skills when a session starts, so start a new session after installing.
 

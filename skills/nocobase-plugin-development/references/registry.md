@@ -207,8 +207,8 @@ There is no automatic Registry update, remove, merge, lockfile, installed-versio
 
 Current implementation and maintained examples:
 
-- [Registry build and materialize script](../../../../scripts/registry.mjs)
-- [Registry example package](../../../../packages/examples/app-plugin-registry-example/package.json)
-- [Registry example configuration](../../../../packages/examples/app-plugin-registry-example/registry.config.json)
-- [Page source extension example](../../../../packages/examples/app-plugin-registry-example/registry/page-ui/extension.ts)
-- [Default Template source-extension loader](../../../../packages/templates/app-template-default/client/source-extensions.ts)
+- Registry build and materialize script (`scripts/registry.mjs`)
+- Registry example package (`packages/examples/app-plugin-registry-example/package.json`)
+- Registry example configuration (`packages/examples/app-plugin-registry-example/registry.config.json`)
+- Page source extension example (`packages/examples/app-plugin-registry-example/registry/page-ui/extension.ts`)
+- Default Template source-extension loader (`packages/templates/app-template-default/client/source-extensions.ts`)

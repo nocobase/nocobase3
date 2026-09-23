@@ -1,6 +1,6 @@
 # Repository Query and Mutation Examples
 
-Use these examples for a plugin page that reads or changes Collections through the host API Client. They follow the current [Repository example plugin](../../../../packages/examples/app-plugin-repository-example/README.md), its [customer migration](../../../../packages/examples/app-plugin-repository-example/database/migrations/202609060001_repository_example_create_crm.ts), and [remote Repository contract](../../../../packages/libs/api-client/src/repository.ts). Register that example plugin and run its migrations before trying its Collection names; these examples need no demonstration Seed.
+Use these examples for a plugin page that reads or changes Collections through the host API Client. They follow the current Repository example plugin (`packages/examples/app-plugin-repository-example/README.md`), its customer migration (`packages/examples/app-plugin-repository-example/database/migrations/202609060001_repository_example_create_crm.ts`), and remote Repository contract (`packages/libs/api-client/src/repository.ts`). Register that example plugin and run its migrations before trying its Collection names; these examples need no demonstration Seed.
 
 ## Expose only the intended server operations
 
@@ -209,11 +209,11 @@ const order = await orders.createOne({
 
 Here `orders` is the separately resolved `repositoryExampleOrders` Repository and `customerId` identifies an existing customer. Its exposure must explicitly allow the relation operation and nested target fields where applicable. This operation is not enabled by the customer-only exposure above. `disconnect` preserves the target record; `delete` deletes it; `set` is for to-many relations. One root write and its nested writes are transactional, but independent HTTP requests do not automatically share a transaction.
 
-See the maintained [relation mutation examples](../../../../packages/examples/app-plugin-repository-example/client/relation-mutations.ts) and [HTTP tests](../../../../packages/examples/app-plugin-repository-example/tests/routes.test.ts) for relation policies, nested writes, version conflicts, and constraint failures.
+See the maintained relation mutation examples (`packages/examples/app-plugin-repository-example/client/relation-mutations.ts`) and HTTP tests (`packages/examples/app-plugin-repository-example/tests/routes.test.ts`) for relation policies, nested writes, version conflicts, and constraint failures.
 
 ## Test real HTTP behavior
 
-The following test belongs in the existing Repository example plugin's `tests/` directory. It imports that package's real [fixture](../../../../packages/examples/app-plugin-repository-example/tests/helpers.ts), which creates an in-memory SQLite database, runs migrations, binds the real `Auth` with a controlled session lookup, mounts the production contribution under `/main/api`, and connects an API Client to `router.fetch`. Creating this isolated transport is appropriate in a test; product components still use the host Client.
+The following test belongs in the existing Repository example plugin's `tests/` directory. It imports that package's real fixture (`packages/examples/app-plugin-repository-example/tests/helpers.ts`), which creates an in-memory SQLite database, runs migrations, binds the real `Auth` with a controlled session lookup, mounts the production contribution under `/main/api`, and connects an API Client to `router.fetch`. Creating this isolated transport is appropriate in a test; product components still use the host Client.
 
 ```ts
 // @vitest-environment node
@@ -261,4 +261,4 @@ it('protects customer writes and executes CRUD through the production router', a
 });
 ```
 
-For a new plugin, own the equivalent fixture and point it at that plugin's production contribution and migrations. Add denied fields/relations, unknown actions, maximum limits, and caller-specific policy cases for its actual API. The [API Client guide](../../../../packages/libs/api-client/README.md) describes streaming, Builder positions, return values, and error handling in more detail.
+For a new plugin, own the equivalent fixture and point it at that plugin's production contribution and migrations. Add denied fields/relations, unknown actions, maximum limits, and caller-specific policy cases for its actual API. The API Client guide (`packages/libs/api-client/README.md`) describes streaming, Builder positions, return values, and error handling in more detail.

@@ -32,7 +32,7 @@ Publish Skills with the package:
 }
 ```
 
-Use the maintained [Skills Example plugin](../../../../packages/examples/app-plugin-skills-example) as the smallest complete reference. It connects a public Client component, a Server `ServiceToken`, an authenticated API, an App-owned page integration, and behavior verification instead of demonstrating Markdown structure alone.
+Use the maintained Skills Example plugin (`packages/examples/app-plugin-skills-example`) as the smallest complete reference. It connects a public Client component, a Server `ServiceToken`, an authenticated API, an App-owned page integration, and behavior verification instead of demonstrating Markdown structure alone.
 
 ## Name Skills by package ownership
 
@@ -112,6 +112,6 @@ After synchronizing, inspect the App copy only to confirm delivery. Make all con
 
 Current implementation and maintained example:
 
-- [Skills synchronization implementation](../../../../packages/tools/cli/src/lib/skills-sync.ts)
-- [Preferred Skills sync command](../../../../packages/tools/cli/src/commands/skills/sync.ts)
-- [Skills Example source](../../../../packages/examples/app-plugin-skills-example/skills/nocobase-app-plugin-skills-example/SKILL.md)
+- Skills synchronization implementation (`packages/tools/cli/src/lib/skills-sync.ts`)
+- Preferred Skills sync command (`packages/tools/cli/src/commands/skills/sync.ts`)
+- Skills Example source (`packages/examples/app-plugin-skills-example/skills/nocobase-app-plugin-skills-example/SKILL.md`)
