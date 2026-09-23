@@ -109,7 +109,7 @@ it('creates logical and physical audit schema and rolls it back', async () => {
 
 The maintained [Repository migration test](../../../../packages/examples/app-plugin-repository-example/tests/database.test.ts) additionally verifies relation metadata, physical foreign keys, indexes, optimistic-lock fields, and reverse deletion order.
 
-Run the dialect integration suites selected by the repository-local `nocobase-db-integration-testing` Skill when the change affects shared `packages/libs/db*` behavior. A normal plugin-specific Migration usually needs its real test database and target App upgrade path rather than every dialect locally.
+Run the dialect integration suites selected by `packages/libs/db-testkit/TESTING.md` when the change affects shared `packages/libs/db*` behavior. A normal plugin-specific Migration usually needs its real test database and target App upgrade path rather than every dialect locally.
 
 ## Write deterministic Seeds
 
