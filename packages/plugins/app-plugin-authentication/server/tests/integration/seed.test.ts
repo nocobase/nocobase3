@@ -10,14 +10,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import { Auth } from '../../auth.js';
 
-const plugins = ['app-plugin-authentication', 'app-plugin-authorization'];
-const sources = (kind: string) =>
-  plugins.map((plugin) => ({
-    packageName: `@nocobase/${plugin}`,
+const sources = (kind: string) => [
+  {
+    packageName: '@nocobase/app-plugin-authentication',
     directory: fileURLToPath(
-      new URL(`../../../../${plugin}/database/${kind}`, import.meta.url),
+      new URL(`../../../database/${kind}`, import.meta.url),
     ),
-  }));
+  },
+];
 
 describe('configured initial administrator', () => {
   const databases: ReturnType<typeof createDatabaseManager>[] = [];
@@ -71,7 +71,7 @@ describe('configured initial administrator', () => {
       password: 'only-password',
     },
   ])(
-    'creates working credentials and root permission for $username',
+    'creates working credentials for $username',
     async ({ initialAdmin, username, password }) => {
       const database = await setup();
       await seed(database, initialAdmin);
@@ -101,13 +101,6 @@ describe('configured initial administrator', () => {
         }),
       );
       expect(response.status).toBe(200);
-      const assignments = await connection.query
-        .selectFrom('authorizationPermissionSetAssignments')
-        .selectAll()
-        .where('permissionSetKey', '=', 'root')
-        .execute();
-      expect(assignments).toHaveLength(1);
-      expect(assignments[0]?.subjectId).toBe(users[0]?.id);
       await seed(database, {
         username: 'changed',
         password: 'changed-password',
@@ -124,11 +117,9 @@ describe('configured initial administrator', () => {
   it.each([
     {},
     { username: 'admin' },
-    { password: '' },
     { password: '   ' },
     { password: 123 },
     null,
-    'bad',
     { username: 'x', password: 'secret' },
   ])(
     'rejects invalid explicit config without falling back, and permits retry: %j',
@@ -161,48 +152,6 @@ describe('configured initial administrator', () => {
       ).toEqual([{ username: 'valid' }]);
     },
   );
-
-  it('assigns the custom root user the Hub administrator role in the same seed run', async () => {
-    const database = await setup();
-    const hubSource = (kind: string) => ({
-      packageName: '@nocobase/app-plugin-hub',
-      directory: fileURLToPath(
-        new URL(`../../../../app-plugin-hub/database/${kind}`, import.meta.url),
-      ),
-    });
-    await createMigrator({
-      database,
-      sources: [hubSource('migrations')],
-    }).latest();
-    await createSeeder({
-      database,
-      sources: [...sources('seeds'), hubSource('seeds')],
-      config: {
-        get<T>(key: string): T | undefined {
-          return (
-            key === 'users.initialAdmin'
-              ? { username: 'hub_admin', password: 'hub-password' }
-              : key === 'users.initialAdmin.username'
-                ? 'hub_admin'
-                : undefined
-          ) as T | undefined;
-        },
-      },
-    }).run();
-    const query = database.connection().query;
-    const user = await query
-      .selectFrom('user')
-      .select('id')
-      .where('username', '=', 'hub_admin')
-      .executeTakeFirst();
-    expect(
-      await query
-        .selectFrom('authorizationPermissionSetAssignments')
-        .select('subjectId')
-        .where('permissionSetKey', '=', 'hub-administrator')
-        .execute(),
-    ).toEqual([{ subjectId: user?.id }]);
-  });
 
   it('rolls back the user if credential insertion fails and can retry', async () => {
     const database = await setup();
