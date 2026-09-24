@@ -109,6 +109,7 @@ export async function resolveAppRuntime(
     runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
     if (definition.defaultConfigs.sections) {
       runtime.config.defineSections(definition.defaultConfigs.sections);
+      await runtime.config.loadSectionEnvironment(context.environment);
     }
   }
   const database = runtime.config.get<AppDatabaseConfig>('database');

@@ -314,6 +314,7 @@ const distPackage = {
     'config:init': 'node ./cli/index.js app config init',
     'config:check': 'node ./cli/index.js app config check',
     'config:set': 'node ./cli/index.js app config set',
+    'config:env': 'node ./cli/index.js app config env',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',

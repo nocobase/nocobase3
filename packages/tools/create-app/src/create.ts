@@ -153,7 +153,6 @@ async function run(
     if (kind === 'hub')
       extraFiles['.env'] = buildHubEnvFile({
         example: await readEnvExample(template.directory),
-        name,
       });
     await scaffoldFromTemplate({
       name,
