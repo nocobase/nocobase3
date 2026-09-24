@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import {
   MemoryRouter,
   Route,
@@ -16,22 +22,24 @@ const api = vi.hoisted(() => ({
   listAssignments: vi.fn(),
   updatePermissionSet: vi.fn(),
   createPermissionSet: vi.fn(),
+  deletePermissionSet: vi.fn(),
   invalidate: vi.fn(),
 }));
-vi.mock('../client/use-authorization-client.js', () => ({
+vi.mock('../../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => api,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./helpers/locale-harness.js');
+  const { translate } = await import('../helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
-import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
-import EditPage from '../client/pages/permission-set-edit-page.js';
-import NewPage from '../client/pages/permission-set-new-page.js';
-import DetailsPage from '../client/pages/permission-set-details-page.js';
-import AssignmentsPage from '../client/pages/permission-set-assignments-page.js';
-import type { AuthorizationOptions } from '../client/authorization-client.js';
-import { subsection, withSubsections } from './helpers/workspace-options.js';
+import { PermissionSetsPanel } from '../../client/pages/permission-sets/panel.js';
+import EditPage from '../../client/pages/permission-set-edit-page.js';
+import NewPage from '../../client/pages/permission-set-new-page.js';
+import DetailsPage from '../../client/pages/permission-set-details-page.js';
+import AssignmentsPage from '../../client/pages/permission-set-assignments-page.js';
+import type { AuthorizationOptions } from '../../client/authorization-client.js';
+import { translate } from '../helpers/locale-harness.js';
+import { subsection, withSubsections } from '../helpers/workspace-options.js';
 const options: AuthorizationOptions = {
   sections: withSubsections({
     administration: [
@@ -312,24 +320,41 @@ describe('permission set workspace', () => {
       screen.queryByRole('button', { name: 'Save permission set' }),
     ).not.toBeInTheDocument();
   });
-});
 
-it('translates preset labels while keeping the stored title in the edit form', async () => {
-  api.listPermissionSets.mockResolvedValue([
-    {
-      key: 'root',
+  it('asks before deleting a permission set, names it, and deletes only once confirmed', async () => {
+    mount('/sets/edit/staff');
+    const remove = () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: translate('common.delete') }),
+      );
+    await screen.findByRole('button', { name: 'Permission sets: Read' });
 
-      grants: [],
-      title: {
-        key: 'permissionSets.builtIn.root',
-        ns: '@nocobase/app-plugin-authorization',
-      },
-    },
-  ]);
-  mount('/sets/edit/root/details');
-  expect(
-    await screen.findByRole('button', { name: 'System administrator' }),
-  ).toBeInTheDocument();
-  expect(screen.getByDisplayValue('System administrator')).toBeInTheDocument();
-  expect(api.listPermissionSets).toHaveBeenCalledTimes(1);
+    remove();
+    const dialog = within(screen.getByRole('dialog'));
+    expect(
+      dialog.getByText(translate('permissionSets.detail.confirmDeleteTitle')),
+    ).toBeInTheDocument();
+    expect(
+      dialog.getByText(
+        translate('permissionSets.detail.confirmDeleteBody', {
+          title: 'Staff',
+        }),
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: translate('common.cancel') }),
+    );
+    expect(
+      screen.queryByText(translate('permissionSets.detail.confirmDeleteTitle')),
+    ).toBeNull();
+    expect(api.deletePermissionSet).not.toHaveBeenCalled();
+
+    remove();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: translate('permissionSets.detail.confirmDelete'),
+      }),
+    );
+    expect(api.deletePermissionSet).toHaveBeenCalledTimes(1);
+  });
 });

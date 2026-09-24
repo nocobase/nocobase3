@@ -4,9 +4,9 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { expect, it, vi } from 'vitest';
 import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
-import locales from '../client/locales/index.js';
-import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
-import DetailsPage from '../client/pages/permission-set-details-page.js';
+import locales from '../../client/locales/index.js';
+import { PermissionSetsPanel } from '../../client/pages/permission-sets/panel.js';
+import DetailsPage from '../../client/pages/permission-set-details-page.js';
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
   revision: () => 0,
@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   listPermissionSets: vi.fn(),
   listAssignments: vi.fn(),
 }));
-vi.mock('../client/use-authorization-client.js', () => ({
+vi.mock('../../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => api,
 }));
 

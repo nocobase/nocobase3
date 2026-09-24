@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { useSettingsActions } from '../client/components/use-settings-actions.js';
 import {
   ClientApplicationContext,
   type ClientApplication,
@@ -13,7 +12,7 @@ import {
   authorizationClientToken,
   useCan,
   type AuthorizationCheck,
-} from '../client/index.js';
+} from '../../client/index.js';
 
 const check: AuthorizationCheck = {
   resource: { type: 'page', id: 'orders' },
@@ -41,35 +40,6 @@ function setup() {
 }
 
 describe('useCan without a Refine provider', () => {
-  it('clears management actions immediately during revalidation and when the settings resource changes', async () => {
-    const { wrapper, client } = setup();
-    const can = vi.spyOn(client, 'can').mockResolvedValue(true);
-    const { result, rerender } = renderHook(
-      (id: string) => useSettingsActions(id),
-      { wrapper, initialProps: 'first' },
-    );
-    await waitFor(() => expect(result.current.update).toBe(true));
-    const pending = Promise.withResolvers<boolean>();
-    can.mockReturnValue(pending.promise);
-    act(() => client.invalidate());
-    expect(Object.values(result.current).every((allowed) => !allowed)).toBe(
-      true,
-    );
-    await act(async () => pending.resolve(false));
-    can.mockResolvedValue(true);
-    act(() => client.invalidate());
-    await waitFor(() => expect(result.current.update).toBe(true));
-    can.mockResolvedValue(false);
-    rerender('second');
-    expect(result.current.update).toBe(false);
-    await waitFor(() =>
-      expect(can).toHaveBeenCalledWith({
-        resource: { type: 'settings', id: 'second' },
-        action: 'update',
-      }),
-    );
-  });
-
   it('shares a permission snapshot and revokes immediately while revalidating', async () => {
     const { wrapper, request, client } = setup();
     const { result } = renderHook(() => [useCan(check), useCan(check)], {

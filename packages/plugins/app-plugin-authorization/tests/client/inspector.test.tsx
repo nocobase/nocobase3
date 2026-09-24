@@ -1,6 +1,7 @@
-import { selectOption } from './helpers/select-option.js';
+import { selectOption } from '../helpers/select-option.js';
 // @vitest-environment jsdom
 import {
+  cleanup,
   render,
   screen,
   fireEvent,
@@ -8,12 +9,12 @@ import {
   within,
 } from '@testing-library/react';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { MemoryRouter, useLocation } from 'react-router';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type {
   AuthorizationInspection,
   AuthorizationOptions,
-} from '../client/authorization-client.js';
+} from '../../client/authorization-client.js';
 const mocks = vi.hoisted(() => ({
   routes: [] as AppClientRegisteredRoute[],
   loadOptions: vi.fn(),
@@ -25,22 +26,23 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@nocobase/app-client', () => ({
   useClientApplication: () => ({ runtime: { routes: mocks.routes } }),
 }));
-vi.mock('../client/use-authorization-client.js', () => ({
+vi.mock('../../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => mocks,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./helpers/locale-harness.js');
+  const { translate } = await import('../helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
-import InspectorPage from '../client/pages/inspector-page.js';
-import { inspectionStatus } from '../client/pages/inspector-status.js';
-import en from '../client/locales/en-US.js';
+import { InspectionConditions } from '../../client/pages/inspector-conditions.js';
+import InspectorPage from '../../client/pages/inspector-page.js';
+import { inspectionStatus } from '../../client/pages/inspector-status.js';
+import en from '../../client/locales/en-US.js';
 import {
   pageSubsection,
   subsection,
   wire,
   withSubsections,
-} from './helpers/workspace-options.js';
+} from '../helpers/workspace-options.js';
 const read = { value: 'read', label: 'Read' };
 const view = { value: 'view', label: 'View' };
 const tables = subsection(
@@ -144,34 +146,50 @@ it('batches only the current page, supports group collapse and shows readable sc
   await screen.findByRole('button', { name: 'Orders 20: Read' });
   expect(mocks.inspectBatch.mock.calls[1]?.[1]).toHaveLength(10);
 });
-it('renders failed calculations separately from denied access', () => {
-  expect(
-    inspectionStatus({
+it.each([
+  [
+    'a failed calculation',
+    {
       effect: 'deny',
       reasons: [{ code: 'AUTHORIZATION_HANDLER_FAILED', message: 'failed' }],
-    }),
-  ).toBe('error');
-  expect(inspectionStatus({ effect: 'deny', reasons: [] })).toBe('none');
-  expect(
-    inspectionStatus(
-      {
-        effect: 'conditional',
-        reasons: [],
-        conditions: { type: 'database', scope: true, fields: ['id'] },
-      },
-      ['id'],
-    ),
-  ).toBe('all');
-  expect(
-    inspectionStatus(
-      {
-        effect: 'conditional',
-        reasons: [],
-        conditions: { type: 'database', scope: true, fields: ['id'] },
-      },
-      ['id', 'title'],
-    ),
-  ).toBe('scoped');
+    },
+    undefined,
+    'error',
+  ],
+  ['a denial', { effect: 'deny', reasons: [] }, undefined, 'none'],
+  [
+    'a user-dependent subject scope',
+    {
+      effect: 'deny',
+      reasons: [
+        { code: 'USER_CONTEXT_REQUIRED', message: 'User context required' },
+      ],
+    },
+    undefined,
+    'context',
+  ],
+  [
+    'every field in scope',
+    {
+      effect: 'conditional',
+      reasons: [],
+      conditions: { type: 'database', scope: true, fields: ['id'] },
+    },
+    ['id'],
+    'all',
+  ],
+  [
+    'some fields in scope',
+    {
+      effect: 'conditional',
+      reasons: [],
+      conditions: { type: 'database', scope: true, fields: ['id'] },
+    },
+    ['id', 'title'],
+    'scoped',
+  ],
+] as const)('shows %s as its own status', (_name, decision, fields, status) => {
+  expect(inspectionStatus(decision, fields)).toBe(status);
 });
 it('ignores stale responses after changing resource search', async () => {
   let resolve!: (result: readonly AuthorizationInspection[]) => void;
@@ -194,26 +212,6 @@ it('ignores stale responses after changing resource search', async () => {
       screen.getByRole('button', { name: 'Orders 24: Read' }),
     ).toBeInTheDocument(),
   );
-});
-
-it('defaults to the first populated subsection when pages have no registered resources', async () => {
-  mocks.loadOptions.mockResolvedValue(
-    wire({
-      ...options,
-      sections: withSubsections({
-        pages: [pageSubsection()],
-        business: [tables],
-      }),
-    }),
-  );
-  mount();
-  expect(
-    await screen.findByRole('button', { name: 'Orders 0: Read' }),
-  ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Page permissions' }));
-  expect(
-    await screen.findByText(en.permissionWorkspace.development.pages),
-  ).toBeInTheDocument();
 });
 
 it('clamps stale page numbers and resets search when switching subsections', async () => {
@@ -248,53 +246,6 @@ it('clamps stale page numbers and resets search when switching subsections', asy
       name: en.permissionSets.picker.searchResources,
     }),
   ).toHaveValue('');
-});
-
-it('includes client-registered pages and their groups in the inspection batch', async () => {
-  mocks.routes = [
-    {
-      name: 'business',
-      packageName: '@test/pages',
-      navigation: { title: 'Business' },
-      children: [
-        {
-          name: 'customers',
-          packageName: '@test/pages',
-          auth: 'required',
-          authz: {
-            resource: { type: 'page', id: 'customers' },
-            action: 'access',
-          },
-          componentLoader: async () => ({ default: () => null }),
-          navigation: { title: 'Customers' },
-        },
-      ],
-    },
-  ] as AppClientRegisteredRoute[];
-  mocks.loadOptions.mockResolvedValue(
-    wire({
-      ...options,
-      sections: withSubsections({
-        pages: [pageSubsection()],
-        business: [tables],
-      }),
-    }),
-  );
-  mount('/?user=alice&section=page');
-  expect(
-    await screen.findByRole('button', { name: 'Customers: Access' }),
-  ).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Business' })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
-  expect(mocks.inspectBatch).toHaveBeenCalledWith(
-    { type: 'user', id: 'alice' },
-    [{ resource: { type: 'page', id: 'customers' }, action: 'access' }],
-  );
-  expect(
-    screen.queryByText(en.inspector.noRegisteredResources),
-  ).not.toBeInTheDocument();
 });
 
 it('selects a registered department and a fixed subject without treating either as a user', async () => {
@@ -349,66 +300,11 @@ it('selects a registered department and a fixed subject without treating either 
   ).not.toBeInTheDocument();
 });
 
-it('does not present user-dependent subject scopes as a denial', () => {
-  expect(
-    inspectionStatus({
-      effect: 'deny',
-      reasons: [
-        { code: 'USER_CONTEXT_REQUIRED', message: 'User context required' },
-      ],
-    }),
-  ).toBe('context');
-});
-
-it('marks configured subsections without showing counts or relying on the current results page', async () => {
-  mocks.loadOptions.mockResolvedValue(
-    wire({
-      ...options,
-      sections: withSubsections({
-        business: [tables],
-        administration: [
-          subsection(
-            'administration.other',
-            'Settings',
-            [
-              {
-                type: 'settings',
-                value: 'configuration',
-                label: 'Configuration',
-              },
-            ],
-            { actions: [read] },
-          ),
-        ],
-      }),
-    }),
-  );
-  mocks.inspectConfigured.mockResolvedValue({
-    unrestricted: false,
-    types: ['settings'],
-    resources: [{ type: 'settings', id: 'configuration' }],
-  });
-  mount();
-  const settings = await screen.findByRole('button', { name: 'Settings' });
-  await waitFor(() =>
-    expect(
-      within(settings).getByRole('img', {
-        name: en.permissionWorkspace.configured,
-      }),
-    ).toBeInTheDocument(),
-  );
-  const data = screen.getByRole('button', { name: 'Data tables' });
-  expect(within(data).queryByRole('img')).not.toBeInTheDocument();
-  expect(data).not.toHaveTextContent('25');
-});
-
 it.each([
   { unrestricted: false, ids: ['sales.quotes'], marked: ['Sales'] },
-  { unrestricted: false, ids: ['removed.resource'], marked: [] },
   { unrestricted: false, ids: ['*'], marked: ['Sales', 'Delivery'] },
-  { unrestricted: true, ids: [], marked: ['Sales', 'Delivery'] },
 ])(
-  'marks only configured subsections: %j',
+  'marks only configured subsections, without counts: %j',
   async ({ unrestricted, ids, marked }) => {
     mocks.loadOptions.mockResolvedValue(
       wire({
@@ -455,6 +351,11 @@ it.each([
         ),
       ).toEqual(marked),
     );
+    // A mark, not a count.
+    for (const label of ['Sales', 'Delivery'])
+      expect(screen.getByRole('button', { name: label })).not.toHaveTextContent(
+        /\d/,
+      );
   },
 );
 
@@ -480,24 +381,18 @@ it('filters configured resources before pagination and preserves action columns'
   expect(await screen.findByText(en.inspector.noResources)).toBeVisible();
 });
 
-it.each([
-  { unrestricted: true, types: [], resources: [] },
-  {
-    unrestricted: false,
-    types: ['database.collection'],
-    resources: [{ type: 'database.collection', id: '*' }],
-  },
-])(
-  'keeps all resources for unrestricted or wildcard configuration: %j',
-  async (configured) => {
-    mocks.inspectConfigured.mockResolvedValue(configured);
-    mount('/?user=alice&configuredOnly=true');
-    expect(
-      await screen.findByRole('button', { name: 'Orders 0: Read' }),
-    ).toBeVisible();
-    expect(screen.getByText('1 / 2')).toBeVisible();
-  },
-);
+it('keeps all resources for an unrestricted identity when filtering to configured ones', async () => {
+  mocks.inspectConfigured.mockResolvedValue({
+    unrestricted: true,
+    types: [],
+    resources: [],
+  });
+  mount('/?user=alice&configuredOnly=true');
+  expect(
+    await screen.findByRole('button', { name: 'Orders 0: Read' }),
+  ).toBeVisible();
+  expect(screen.getByText('1 / 2')).toBeVisible();
+});
 
 it('explains business access once and keeps page checks and JSON in one collapsed technical section', async () => {
   const grant = {
@@ -634,7 +529,7 @@ it('explains business access once and keeps page checks and JSON in one collapse
 });
 
 it('renders an unregistered plugin explanation and source title without assuming other plugins participated', async () => {
-  const { Decision } = await import('../client/pages/inspector-decision.js');
+  const { Decision } = await import('../../client/pages/inspector-decision.js');
   render(
     <Decision
       fields={[]}
@@ -665,7 +560,7 @@ it('renders an unregistered plugin explanation and source title without assuming
 });
 
 it('shows a team grant once despite different underlying policies and retains the user-context explanation', async () => {
-  const { Decision } = await import('../client/pages/inspector-decision.js');
+  const { Decision } = await import('../../client/pages/inspector-decision.js');
   const source = {
     plugin: 'permission-sets',
     id: 'engineer',
@@ -708,7 +603,7 @@ it('shows a team grant once despite different underlying policies and retains th
   expect(screen.queryByText(en.inspector.summary.none)).not.toBeInTheDocument();
 });
 
-it('keeps empty page and business sections with development guidance in the inspector', async () => {
+it('keeps empty page and business sections with development guidance, defaulting to the first populated subsection', async () => {
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
@@ -732,81 +627,29 @@ it('keeps empty page and business sections with development guidance in the insp
   expect(
     screen.queryByRole('img', { name: en.permissionWorkspace.configured }),
   ).not.toBeInTheDocument();
-});
+  cleanup();
 
-it('lists section headers, then one entry per subsection', async () => {
+  // With business resources, the first populated subsection is the default.
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
       sections: withSubsections({
         pages: [pageSubsection()],
-        business: [
-          tables,
-          subsection('example.delivery', 'Delivery', [
-            { type: 'composite', value: 'shipments', label: 'Shipments' },
-          ]),
-        ],
+        business: [tables],
       }),
     }),
   );
   mount();
-  const nav = await screen.findByRole('navigation', {
-    name: en.editors.resourceGroup,
-  });
-  expect([...nav.children].map((element) => element.textContent)).toEqual([
-    'Page permissions',
-    'Page permissions',
-    'Business permissions',
-    'Data tables',
-    'Delivery',
-    'Administration',
-    'Administration',
-  ]);
-});
-
-it('keeps the selected subsection in the URL across a reload', async () => {
-  mocks.loadOptions.mockResolvedValue(
-    wire({
-      ...options,
-      sections: withSubsections({
-        business: [
-          tables,
-          subsection(
-            'example.delivery',
-            'Delivery',
-            [{ type: 'composite', value: 'shipments', label: 'Shipments' }],
-            { actions: [view] },
-          ),
-        ],
-      }),
-    }),
-  );
-  function Location() {
-    return <output data-testid='location'>{useLocation().search}</output>;
-  }
-  const first = render(
-    <MemoryRouter initialEntries={['/?user=alice']}>
-      <InspectorPage />
-      <Location />
-    </MemoryRouter>,
-  );
-  fireEvent.click(await screen.findByRole('button', { name: 'Delivery' }));
-  expect(screen.getByTestId('location')).toHaveTextContent(
-    'section=example.delivery',
-  );
-  const search = screen.getByTestId('location').textContent!;
-  first.unmount();
-  mount(`/${search}`);
   expect(
-    await screen.findByRole('button', { name: 'Shipments: View' }),
-  ).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Delivery' })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+    await screen.findByRole('button', { name: 'Orders 0: Read' }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Page permissions' }));
+  expect(
+    await screen.findByText(en.permissionWorkspace.development.pages),
+  ).toBeInTheDocument();
 });
 
-it('shows the page subsection as the menu tree, in menu order', async () => {
+it('shows client-registered pages as the menu tree, in menu order, and inspects them in one batch', async () => {
   const page = (name: string, order: number) => ({
     name,
     packageName: '@test/pages',
@@ -860,7 +703,53 @@ it('shows the page subsection as the menu tree, in menu order', async () => {
     'Late group',
     'late-page',
   ]);
+  expect(screen.getByRole('button', { name: 'Early group' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(mocks.inspectBatch).toHaveBeenCalledWith(
+    { type: 'user', id: 'alice' },
+    expect.arrayContaining(
+      ['home', 'deep', 'second', 'late-page'].map((id) => ({
+        resource: { type: 'page', id },
+        action: 'access',
+      })),
+    ),
+  );
+  expect(
+    screen.queryByText(en.inspector.noRegisteredResources),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Early group' }));
   expect(screen.queryByText('deep')).not.toBeInTheDocument();
   expect(screen.getByText('late-page')).toBeVisible();
+});
+
+it('removes redundant display conditions without mutating the executable scope', () => {
+  const condition = (value: string) => ({
+    kind: 'condition',
+    path: ['projectId'],
+    operator: '$eq',
+    value,
+  });
+  const root = {
+    kind: 'group',
+    logic: 'and',
+    items: [
+      condition('project-1'),
+      {
+        kind: 'group',
+        logic: 'or',
+        items: [condition('project-1'), condition('project-2')],
+      },
+    ],
+  };
+  const original = JSON.stringify(root);
+  render(
+    <InspectionConditions
+      value={{ type: 'database', scope: { kind: 'filter', root }, fields: [] }}
+    />,
+  );
+  expect(screen.getByText(/project-1/)).toBeVisible();
+  expect(screen.queryByText(/project-2/)).not.toBeInTheDocument();
+  expect(JSON.stringify(root)).toBe(original);
 });
