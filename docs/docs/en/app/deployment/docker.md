@@ -19,6 +19,15 @@ docker build --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
 
 The build stage runs on the build machine's own architecture and fetches the target platform's native modules through `pnpm build --target`, so building for another architecture compiles nothing under emulation, for example `docker buildx build --platform linux/amd64,linux/arm64 ...`. The runtime image is based on Debian bookworm with Node 24 and cannot be swapped for an Alpine base.
 
+If `dist/` is already built on your machine, skip the build inside the image and package it directly. Build it for the image's platform, then pass `DIST=prebuilt`:
+
+```bash
+APP_BASE_PATH=/crm pnpm build --target linux-x64
+docker build --build-arg DIST=prebuilt --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
+```
+
+The image build checks `dist/`: it must have been built for `linux`, glibc, the image's architecture and Node 24, and its client for the same `APP_BASE_PATH` as the build argument; otherwise the build fails and names the arguments to use. `pnpm build` writes server variables from local `.env` files into `dist/.env`, which can include `DB_PASSWORD`; that file never enters the image. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
+
 If the application was created with `pnpm create @nocobase/app` before these files existed, copy `Dockerfile` and `Dockerfile.dockerignore` from a newer version of the same template. Use them together: without `Dockerfile.dockerignore`, local configuration and data enter the build context.
 
 ## 2. Prepare the runtime configuration

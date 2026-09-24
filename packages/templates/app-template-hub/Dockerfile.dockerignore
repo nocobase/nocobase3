@@ -26,3 +26,14 @@
 **/logs
 **/*.log
 **/.DS_Store
+
+# The application's own build, for DIST=prebuilt. Re-included last and whole, because the rules above would otherwise
+# strip dependency directories inside it that happen to share a name with them, such as langchain's `storage/`.
+!dist
+!dist/**
+!packages/templates/*/dist
+!packages/templates/*/dist/**
+
+# Except the server settings `pnpm build` extracts from local .env files, which can include DB_PASSWORD.
+dist/.env
+packages/templates/*/dist/.env

@@ -165,10 +165,14 @@ function sharedFrameworkSource(template, file) {
       'packages/templates/app-template-default',
     );
     if (template.kind === 'hub') {
+      const stagesDeclaringBasePath = (text) =>
+        [...text.matchAll(/^ARG APP_BASE_PATH=/gmu)].length;
       assert.equal(
         [...source.matchAll(/^ARG APP_BASE_PATH=\/hub$/gmu)].length,
-        2,
-        'Hub Dockerfile must default APP_BASE_PATH to /hub in both stages',
+        stagesDeclaringBasePath(
+          readFileSync(path.join(baseline.directory, file), 'utf8'),
+        ),
+        'Hub Dockerfile must default APP_BASE_PATH to /hub in every stage that declares it',
       );
       source = source.replaceAll(
         'ARG APP_BASE_PATH=/hub',

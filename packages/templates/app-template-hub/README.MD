@@ -284,6 +284,15 @@ The build runs `pnpm build` inside the container, and the image holds only `dist
 
 `APP_BASE_PATH` is compiled into the client, so set it when building, `--build-arg APP_BASE_PATH=/crm`; it defaults to `/hub`. The build runs on the builder's own architecture and cross-targets native modules, so `docker buildx build --platform linux/amd64,linux/arm64` compiles nothing under emulation.
 
+To package a `dist/` you have already built instead, build it for the image's platform and pass `DIST=prebuilt`. Nothing is installed or compiled in the image, and it works in any directory that holds the build:
+
+```bash
+pnpm build --target linux-x64
+docker build --build-arg DIST=prebuilt -t my-app .
+```
+
+The image build fails unless `dist/` was built for `linux` with glibc, the image's architecture, and Node 24, and unless its client was built for the same `APP_BASE_PATH` the image is given. `dist/.env`, which `pnpm build` fills from your local `.env` files, is never copied in. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
+
 Run it with the configuration and data mounted, never copied in:
 
 ```bash

@@ -1,26 +1,33 @@
 # syntax=docker/dockerfile:1
 #
-# Builds this application from its own sources into a production image.
+# Builds this application into a production image, either from its sources or from a `dist/` already built.
 #
-# In a generated application, run from the project root:
+# From source, in a generated application, run from the project root:
 #
 #   docker build -t my-app .
 #
-# In the nocobase3 repository, the build context has to be the repository root, because the template resolves its
-# `workspace:` dependencies from there:
+# From source in the nocobase3 repository, the build context has to be the repository root, because the template
+# resolves its `workspace:` dependencies from there:
 #
 #   docker build -f packages/templates/app-template-hub/Dockerfile \
 #     --build-arg APP_DIR=packages/templates/app-template-hub -t my-app .
+#
+# From a prebuilt `dist/`, which works in the template's own directory too. Build it for the image's platform first:
+#
+#   pnpm build --target linux-arm64
+#   docker build --build-arg DIST=prebuilt -t my-app .
 #
 # The image holds code and production dependencies only. Mount the runtime configuration at /app/config.yml and
 # persistent data at /app/storage; neither belongs in the image.
 
 ARG NODE_VERSION=24.15.0
+# `source` builds `dist/` inside the image; `prebuilt` takes the one in the build context.
+ARG DIST=source
 
 # The build runs on the builder's own architecture and cross-targets the image platform through `pnpm build --target`,
 # which fetches the matching native binaries. Building under emulation would compile every TypeScript package and the
 # client bundle there too, many times slower, while only the `.node` files actually differ between platforms.
-FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm AS build
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm AS dist-source
 ARG PNPM_VERSION=11.7.0
 RUN npm install --global pnpm@${PNPM_VERSION} \
     && pnpm config set store-dir /pnpm/store
@@ -28,7 +35,14 @@ RUN npm install --global pnpm@${PNPM_VERSION} \
 # `.` in a generated application; the template's directory when building inside the nocobase3 repository.
 ARG APP_DIR=.
 WORKDIR /src
-COPY . .
+# A local `dist/` is in the context for DIST=prebuilt; a source build replaces it, so it is not copied here.
+COPY --exclude=dist --exclude=packages/templates/*/dist . .
+RUN test -f pnpm-lock.yaml || { \
+      echo 'No pnpm-lock.yaml in the build context. Inside the nocobase3 repository, build from the repository root' \
+        'with -f <template>/Dockerfile --build-arg APP_DIR=<template>, or build dist/ first and pass' \
+        '--build-arg DIST=prebuilt.' >&2; \
+      exit 1; \
+    }
 # Installs this application and the workspace packages it depends on, and nothing else in the repository. The
 # application is selected by its package name, which in a generated application is simply the root project.
 RUN --mount=type=cache,target=/pnpm/store \
@@ -50,6 +64,47 @@ RUN --mount=type=cache,target=/pnpm/store \
     && APP_BASE_PATH="${APP_BASE_PATH}" NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD=1 \
       pnpm build --target "${target}" --node-version "$(node -p "process.versions.node.split('.')[0]")"
 
+# A `dist/` built outside the image was built for whatever `--target` it was given, so it is checked against the
+# image before anything is copied: a darwin or musl binary would build a working image that fails only when the
+# database driver loads. `dist/.env` never reaches this stage — see Dockerfile.dockerignore.
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm-slim AS dist-prebuilt
+ARG APP_DIR=.
+ARG APP_BASE_PATH=/hub
+ARG TARGETARCH
+WORKDIR /src/${APP_DIR}
+COPY ${APP_DIR}/dist/ ./dist/
+COPY ${APP_DIR}/config.example.yml ./config.example.yml
+RUN node <<'EOF'
+const fs = require('node:fs');
+const fail = (message) => {
+  console.error(message);
+  process.exit(1);
+};
+if (!fs.existsSync('dist/package.json') || !fs.existsSync('dist/node_modules')) {
+  fail('dist/ is not a complete production build. Run pnpm build --target <platform> first.');
+}
+const target = JSON.parse(fs.readFileSync('dist/package.json', 'utf8')).nocobase?.buildTarget ?? {};
+const arch = { amd64: 'x64', arm64: 'arm64' }[process.env.TARGETARCH];
+const nodeMajor = Number(process.versions.node.split('.')[0]);
+if (target.platform !== 'linux' || target.arch !== arch || target.libc !== 'glibc' || target.nodeMajor !== nodeMajor) {
+  fail(
+    `dist/ was built for ${JSON.stringify(target)}, but this image is linux/${arch} glibc with Node ${nodeMajor}. ` +
+      `Rebuild with pnpm build --target linux-${arch} --node-version ${nodeMajor}.`,
+  );
+}
+const index = fs.readFileSync('dist/client/index.html', 'utf8');
+const built = index.match(/src="([^"]*)\/assets\/[^"]+\.js"/)?.[1];
+const normalize = (value) => value.replace(/\/+$/, '');
+if (built === undefined || normalize(built) !== normalize(process.env.APP_BASE_PATH)) {
+  fail(
+    `dist/client was built for APP_BASE_PATH=${built || '/'}, but the image is being built for ` +
+      `${process.env.APP_BASE_PATH}. Pass --build-arg APP_BASE_PATH=${built || '/'} or rebuild dist/.`,
+  );
+}
+EOF
+
+FROM dist-${DIST} AS dist
+
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 ARG APP_DIR=.
 ARG APP_BASE_PATH=/hub
@@ -61,9 +116,9 @@ ENV NODE_ENV=production \
 
 # The runtime takes the directory above `dist` as its deployment root, so storage resolves to /app/storage.
 WORKDIR /app
-COPY --from=build --chown=node:node /src/${APP_DIR}/dist/ ./dist/
+COPY --from=dist --chown=node:node /src/${APP_DIR}/dist/ ./dist/
 # Kept as a starting point for config.yml; the real file, with its secrets, is supplied at runtime.
-COPY --from=build /src/${APP_DIR}/config.example.yml ./config.example.yml
+COPY --from=dist /src/${APP_DIR}/config.example.yml ./config.example.yml
 RUN mkdir -p storage && chown node:node storage
 USER node
 EXPOSE 13000
