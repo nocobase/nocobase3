@@ -362,36 +362,63 @@ export class Authorization {
     };
   }
 
+  /**
+   * Lists exactly the (type, id, action) triples `can()` permits among the
+   * identity's expanded grants, so the client never shows what the server
+   * refuses.
+   */
   private async snapshot(
     identity: AuthorizationIdentity,
     grants: AuthorizationGrantService,
     constraints: AccessConstraintService,
   ): Promise<AuthorizationSnapshot> {
-    const unrestricted = (await grants.unrestricted?.(identity)) === true;
+    if ((await grants.unrestricted?.(identity)) === true)
+      return { unrestricted: true, permissions: [] };
+    const candidates = new Map<
+      string,
+      { resource: ResourceRef; action: string }
+    >();
+    for (const grant of await grants.resolveAll(identity))
+      candidates.set(
+        JSON.stringify([grant.resource.type, grant.resource.id, grant.action]),
+        {
+          resource: { type: grant.resource.type, id: grant.resource.id },
+          action: grant.action,
+        },
+      );
+    const permitted = await Promise.all(
+      [...candidates.values()].map(async (candidate) => ({
+        candidate,
+        permitted:
+          (
+            await this.authorizeWithGrants<undefined>(
+              { ...identity, ...candidate },
+              grants,
+              constraints,
+              false,
+            )
+          ).effect === 'permit',
+      })),
+    );
     const grouped = new Map<
       string,
       { resource: ResourceRef; actions: Set<string> }
     >();
-    for (const grant of await grants.resolveAll(identity)) {
-      if (grant.policy !== undefined) {
-        const decision = await this.authorizeWithGrants<undefined>(
-          { ...identity, resource: grant.resource, action: grant.action },
-          grants,
-          constraints,
-          false,
-        );
-        if (decision.effect !== 'permit') continue;
-      }
-      const key = JSON.stringify([grant.resource.type, grant.resource.id]);
+    for (const { candidate, permitted: allowed } of permitted) {
+      if (!allowed) continue;
+      const key = JSON.stringify([
+        candidate.resource.type,
+        candidate.resource.id,
+      ]);
       const permission = grouped.get(key) ?? {
-        resource: { type: grant.resource.type, id: grant.resource.id },
+        resource: candidate.resource,
         actions: new Set<string>(),
       };
-      permission.actions.add(grant.action);
+      permission.actions.add(candidate.action);
       grouped.set(key, permission);
     }
     return {
-      unrestricted,
+      unrestricted: false,
       permissions: [...grouped.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([, permission]) => ({
