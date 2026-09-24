@@ -1,17 +1,11 @@
 import type { ScheduleConfig } from './config.js';
 import { createMemoryScheduleExecutor } from './memory/index.js';
+import { createRedisScheduleExecutor } from './redis/index.js';
 import {
   createScheduleExecuteServiceWith,
   type ManagedScheduleExecuteService,
   type ScheduleExecuteServiceDependencies,
-  type ScheduleExecutorFactory,
 } from './service.js';
-
-const unavailable =
-  (adapter: string): ScheduleExecutorFactory =>
-  () => {
-    throw new Error(`The ${adapter} schedule adapter is not available.`);
-  };
 
 /**
  * Creates the schedule service for one application. `config` is the
@@ -23,7 +17,9 @@ export function createScheduleExecuteService(
   dependencies: ScheduleExecuteServiceDependencies,
 ): ManagedScheduleExecuteService {
   return createScheduleExecuteServiceWith(config, dependencies, {
-    memory: createMemoryScheduleExecutor,
-    redis: unavailable('redis'),
+    memory: (resolved, { logger }) =>
+      createMemoryScheduleExecutor(resolved, { logger }),
+    redis: (resolved, { logger }) =>
+      createRedisScheduleExecutor(resolved, { logger }),
   });
 }
