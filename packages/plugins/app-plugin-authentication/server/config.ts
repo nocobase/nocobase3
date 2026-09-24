@@ -2,6 +2,7 @@ import {
   ApplicationNotConfiguredError,
   assertSecretIsNotPlaceholder,
   defineAppConfig,
+  envString,
   type AppConfigDefinition,
   type AppConfigFactory,
   type ConfigValidator,
@@ -17,6 +18,9 @@ export const AUTH_PUBLIC_PATHS: readonly string[] = [
   'emailAndPassword.enabled',
   'emailAndPassword.disableSignUp',
 ];
+
+/** The environment variables that set `auth` fields, which this plugin reads. */
+const AUTH_ENVIRONMENT = { AUTH_SECRET: envString('secret') };
 
 const BOOLEAN_FIELDS = ['enabled', 'disableSignUp', 'autoSignIn'] as const;
 
@@ -65,6 +69,7 @@ export function defineAuthConfig(
     defaults: definition.defaults,
     validate: [validateAuthConfig, ...extra],
     public: [...new Set([...AUTH_PUBLIC_PATHS, ...(definition.public ?? [])])],
+    env: { ...AUTH_ENVIRONMENT, ...definition.env },
   });
 }
 

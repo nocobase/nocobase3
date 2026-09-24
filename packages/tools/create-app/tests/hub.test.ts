@@ -24,79 +24,40 @@ async function createTempDirectory(): Promise<string> {
 /** What the hub template ships today, so the tests exercise the real shape rather than an idealized one. */
 const TEMPLATE_ENV_EXAMPLE = [
   '# Application',
-  'APP_NAME=hub',
   'APP_BASE_PATH=/hub',
   '',
   '# Server',
   '# APP_SERVER_HOST=127.0.0.1',
   '# APP_SERVER_PORT=13000',
   '',
-  '# Browser API client storage, kept aligned with the main NocoBase frontend when customized.',
-  '# API_CLIENT_STORAGE_PREFIX=NOCOBASE_',
-  '# API_CLIENT_STORAGE_TYPE=localStorage',
-  '# API_CLIENT_SHARE_TOKEN=false',
-  '',
 ].join('\n');
 
 describe('buildHubEnvFile', () => {
-  it('names the hub after the directory it was created in', () => {
-    const env = buildHubEnvFile({
-      example: TEMPLATE_ENV_EXAMPLE,
-      name: 'my-hub',
-    });
-
-    expect(env).toContain('APP_NAME=my-hub');
-    expect(env).not.toContain('APP_NAME=hub\n');
-  });
-
   /**
-   * The base path is where the hub is served rather than what it is called, so it stays at the template's `/hub` even
+   * The base path is where the hub is served, and its name follows from it, so it stays at the template's `/hub` even
    * when the project is named something else. A deployment that wants the hub elsewhere sets the value itself.
    */
-  it('leaves the base path alone', () => {
-    const env = buildHubEnvFile({
-      example: TEMPLATE_ENV_EXAMPLE,
-      name: 'my-hub',
-    });
-
-    expect(env).toContain('APP_BASE_PATH=/hub');
+  it('copies the example, base path included', () => {
+    expect(buildHubEnvFile({ example: TEMPLATE_ENV_EXAMPLE })).toBe(
+      TEMPLATE_ENV_EXAMPLE,
+    );
   });
 
   /** The comments explain each setting, and the commented-out keys are documented defaults. Both must survive. */
   it('keeps the example comments and optional keys', () => {
-    const env = buildHubEnvFile({
-      example: TEMPLATE_ENV_EXAMPLE,
-      name: 'my-hub',
-    });
+    const env = buildHubEnvFile({ example: TEMPLATE_ENV_EXAMPLE });
 
     expect(env).toContain('# Server');
-    expect(env).toContain('# API_CLIENT_STORAGE_PREFIX=NOCOBASE_');
+    expect(env).toContain('# APP_SERVER_HOST=127.0.0.1');
   });
 
-  /** Uncommenting an optional key would silently switch on a setting the user never chose. */
-  it('does not uncomment a commented-out assignment', () => {
-    const env = buildHubEnvFile({
-      example: '# APP_NAME=hub\n',
-      name: 'my-hub',
-    });
-
-    expect(env).toContain('# APP_NAME=hub');
-    expect(env).toContain('APP_NAME=my-hub');
-  });
-
-  /** A template that ships no example must still yield a hub that knows its own name. */
+  /** A template that ships no example must still yield a hub that knows where it is served. */
   it('falls back to a complete file when the template ships no example', () => {
-    const env = buildHubEnvFile({ name: 'my-hub' });
-
-    expect(env).toContain('APP_NAME=my-hub');
-    expect(env).toContain('APP_BASE_PATH=/hub');
+    expect(buildHubEnvFile()).toBe('# Application\nAPP_BASE_PATH=/hub\n');
   });
 
   it('ends with exactly one trailing newline', () => {
-    const env = buildHubEnvFile({
-      example: TEMPLATE_ENV_EXAMPLE,
-      name: 'my-hub',
-    });
+    const env = buildHubEnvFile({ example: `${TEMPLATE_ENV_EXAMPLE}\n\n` });
 
     expect(env.endsWith('\n')).toBe(true);
     expect(env.endsWith('\n\n')).toBe(false);

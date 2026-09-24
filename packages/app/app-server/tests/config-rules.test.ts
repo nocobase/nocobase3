@@ -336,6 +336,60 @@ describe('database section rules', () => {
   });
 });
 
+describe('section environment variables', () => {
+  it('maps the variables a section declares, above the configuration file', async () => {
+    const { envBoolean, envString } = await import('../src/config/index.js');
+    const config = await createConfig(
+      {
+        auth: defineAppConfig({
+          defaults: { emailAndPassword: { enabled: true } },
+          env: {
+            AUTH_SECRET: envString('secret'),
+            AUTH_DISABLE_SIGN_UP: envBoolean('emailAndPassword.disableSignUp'),
+          },
+        }),
+      },
+      { auth: { secret: 'from-file' } },
+    );
+
+    await config.loadSectionEnvironment({
+      AUTH_SECRET: 'from-environment',
+      AUTH_DISABLE_SIGN_UP: 'true',
+      UNRELATED: 'ignored',
+    });
+
+    expect(config.get('auth.secret')).toBe('from-environment');
+    expect(config.get('auth.emailAndPassword')).toEqual({
+      enabled: true,
+      disableSignUp: true,
+    });
+    expect(config.sectionEnvironmentVariables()).toEqual({
+      AUTH_SECRET: 'auth.secret',
+      AUTH_DISABLE_SIGN_UP: 'auth.emailAndPassword.disableSignUp',
+    });
+  });
+
+  it('refuses one variable declared for two different fields', async () => {
+    const { envString } = await import('../src/config/index.js');
+    const config = await createConfig({
+      auth: defineAppConfig({
+        defaults: {},
+        env: { SHARED_SECRET: envString('secret') },
+      }),
+      session: defineAppConfig({
+        defaults: {},
+        env: { SHARED_SECRET: envString('secret') },
+      }),
+    });
+
+    await expect(
+      config.loadSectionEnvironment({ SHARED_SECRET: 'value' }),
+    ).rejects.toThrow(
+      'Environment variable SHARED_SECRET is declared for both auth.secret and session.secret.',
+    );
+  });
+});
+
 describe('database connection options', () => {
   it('asks the dialect driver whether it accepts the options, without connecting', async () => {
     const { defineAppDatabaseConfig } =

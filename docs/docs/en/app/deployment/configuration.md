@@ -210,9 +210,9 @@ In Docker, use the path inside the container, such as `/app/config.yml`, and mou
 
 ### Environment variable overrides
 
-The default template loads the configuration file first and then applies its environment variable mappings. **When the same setting appears both in the file and in its environment variable, the environment variable wins.** For example, `AUTH_SECRET` and `SESSION_SECRET` override `auth.secret` and `session.secret`.
+The default template loads the configuration file first and then applies the environment variables its configuration sections declare. **When the same setting appears both in the file and in its environment variable, the environment variable wins.** For example, `AUTH_SECRET` and `SESSION_SECRET` override `auth.secret` and `session.secret`.
 
-Only variables with a declared mapping override anything; do not assume a variable such as `DB_HOST` exists just because the name looks plausible. For a customized application, the project's `server/environment.ts` is the authority.
+Only declared variables override anything; do not assume a variable such as `DB_HOST` exists just because the name looks plausible. Run `pnpm config:env` in the application, or in `dist/` for a build, to list every variable it reads, the configuration path each one sets, and whether it is set.
 
 ### Persistent directory
 

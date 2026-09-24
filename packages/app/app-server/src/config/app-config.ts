@@ -8,6 +8,10 @@ import { tomlParser } from '@nocobase/config/parsers/toml';
 import { yamlParser } from '@nocobase/config/parsers/yaml';
 import type { Logger } from '@nocobase/logging';
 import { fileProvider } from '@nocobase/config/providers/file';
+import {
+  environmentProvider,
+  type EnvironmentMapping,
+} from '@nocobase/config/providers/env';
 
 import type {
   AppConfigChangeListener,
@@ -118,10 +122,53 @@ export class AppConfig {
           ? {
               validators: [...existing.validators, ...rules.validators],
               public: [...new Set([...existing.public, ...rules.public])],
+              env: { ...existing.env, ...rules.env },
             }
           : rules,
       );
     }
+  }
+
+  /**
+   * Adds the environment variables sections declare, as one more source above everything already loaded, and
+   * recomputes the configuration. Called once the sections are known, which is after the application's own sources
+   * were loaded; a variable an application also maps itself to the same field is harmless.
+   */
+  public async loadSectionEnvironment(
+    environment: Readonly<Record<string, string | undefined>>,
+  ): Promise<void> {
+    const mappings: Record<string, EnvironmentMapping> = {};
+    for (const [section, rules] of this.sections) {
+      for (const [variable, mapping] of Object.entries(rules.env ?? {})) {
+        const absolute = { ...mapping, path: `${section}.${mapping.path}` };
+        const existing = mappings[variable];
+        if (existing && existing.path !== absolute.path) {
+          throw new Error(
+            `Environment variable ${variable} is declared for both ${existing.path} and ${absolute.path}.`,
+          );
+        }
+        mappings[variable] = absolute;
+      }
+    }
+    if (Object.keys(mappings).length === 0) return;
+    this.sources.push({
+      provider: environmentProvider(environment, {
+        name: 'section-environment',
+        mappings,
+      }),
+    });
+    this.current = await this.loadConfig();
+  }
+
+  /** Every environment variable the sections declare, in full, such as `{ AUTH_SECRET: 'auth.secret' }`. */
+  public sectionEnvironmentVariables(): Readonly<Record<string, string>> {
+    const variables: Record<string, string> = {};
+    for (const [section, rules] of this.sections) {
+      for (const [variable, mapping] of Object.entries(rules.env ?? {})) {
+        variables[variable] = `${section}.${mapping.path}`;
+      }
+    }
+    return variables;
   }
 
   /** Every issue the declared rules find in the current configuration, warnings included. Throws nothing. */
