@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-import { RouteOverlayContext } from '../hooks/use-route-overlay.js';
+import { RouteOverlayContext } from './use-route-overlay.js';
 
 export interface RouteOverlayProps {
   readonly title: ReactNode;

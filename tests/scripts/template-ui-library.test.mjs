@@ -7,13 +7,16 @@ const repoRoot = path.resolve(import.meta.dirname, '../..');
 const libraryRoot = path.join(repoRoot, 'ui-library');
 const templates = ['default', 'examples', 'hub'];
 
-// The UI Library items every template preinstalls under `client/extensions/nocobase-<item>/`. The library is the
-// source of truth, so each template ships exactly what `shadcn add` would install today, plus the item's README; a
-// change to an item is carried into all three templates in the same pull request. `auth-ui` is not listed: its
-// template copies diverged from the library before this check existed and are due to be removed.
+// The UI Library items every template preinstalls. The library is the source of truth, so each template carries
+// exactly the files `shadcn add` would install today, at their targets; a change to one of these items is carried into
+// all three templates in the same pull request. `auth-ui` is not listed: its template copies diverged from the
+// library before this check existed and are due to be resynchronized.
 const preinstalled = [
-  { group: 'page', item: 'page-ui' },
-  { group: 'page', item: 'route-overlay-ui' },
+  { group: 'components', item: 'page-container' },
+  { group: 'components', item: 'page-header' },
+  { group: 'components', item: 'route-dialog' },
+  { group: 'components', item: 'route-drawer' },
+  { group: 'components', item: 'route-child-page' },
 ];
 
 function registryItem(group, name) {
@@ -26,14 +29,6 @@ function registryItem(group, name) {
   const item = registry.items.find((candidate) => candidate.name === name);
   assert.ok(item, `ui-library/registry/${group} must declare ${name}`);
   return item;
-}
-
-function filesIn(directory) {
-  return fs
-    .readdirSync(directory, { recursive: true })
-    .filter((entry) => fs.statSync(path.join(directory, entry)).isFile())
-    .map((entry) => entry.split(path.sep).join('/'))
-    .sort();
 }
 
 for (const kind of templates) {
@@ -49,32 +44,20 @@ for (const kind of templates) {
   for (const { group, item: name } of preinstalled) {
     test(`${kind} ships the current ${name} from the UI Library`, () => {
       const item = registryItem(group, name);
-      const itemRoot = `client/extensions/nocobase-${name}`;
-      const expected = new Map([
-        [
-          'README.md',
-          path.join(libraryRoot, 'registry', group, name, 'README.md'),
-        ],
-      ]);
-      for (const file of item.files) {
-        assert.ok(
-          file.target.startsWith(`${itemRoot}/`),
-          `${name}: ${file.target} must install under ${itemRoot}/`,
-        );
-        expected.set(
-          file.target.slice(itemRoot.length + 1),
-          path.join(libraryRoot, 'registry', group, file.path),
-        );
-      }
 
-      // Both directions, so a file the item dropped or renamed does not linger in the template.
-      const installedRoot = path.join(templateRoot, itemRoot);
-      assert.deepEqual(filesIn(installedRoot), [...expected.keys()].sort());
-      for (const [relative, source] of expected) {
+      for (const file of item.files) {
+        const installed = path.join(templateRoot, file.target);
+        assert.ok(
+          fs.existsSync(installed),
+          `${kind}: ${name} installs ${file.target}`,
+        );
         assert.equal(
-          fs.readFileSync(path.join(installedRoot, relative), 'utf8'),
-          fs.readFileSync(source, 'utf8'),
-          `${kind}: refresh ${itemRoot}/${relative} from the UI Library`,
+          fs.readFileSync(installed, 'utf8'),
+          fs.readFileSync(
+            path.join(libraryRoot, 'registry', group, file.path),
+            'utf8',
+          ),
+          `${kind}: refresh ${file.target} from ui-library/registry/${group}/${file.path}`,
         );
       }
 

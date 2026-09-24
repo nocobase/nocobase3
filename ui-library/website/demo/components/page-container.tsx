@@ -10,8 +10,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-import { PageContainer } from '../../../../registry/page/page-ui/components/page-container';
-import { PageHeader } from '../../../../registry/page/page-ui/components/page-header';
+import { PageContainer } from '../../../registry/components/page-container';
+import { PageHeader } from '../../../registry/components/page-header';
 
 const summaries = [
   { label: 'Open orders', value: '128', detail: '12 awaiting payment' },
@@ -19,7 +19,7 @@ const summaries = [
   { label: 'Returns', value: '6', detail: '2 need review' },
 ] as const;
 
-export function PageUiDemo(): ReactElement {
+export function PageContainerDemo(): ReactElement {
   return (
     <div className='min-h-svh bg-background text-foreground'>
       <PageContainer>

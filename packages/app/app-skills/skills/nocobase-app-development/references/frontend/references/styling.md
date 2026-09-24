@@ -165,7 +165,7 @@ For the "More" menu in table rows, see `table.md`.
 
 ## 3. Page container: PageContainer
 
-Wrap a page component's content in `PageContainer` (`@/extensions/nocobase-page-ui/components/page-container`). It renders a `section` and owns the full width, the spacing between blocks, and the responsive padding (`w-full space-y-6 p-6 md:p-8`).
+Wrap a page component's content in `PageContainer` (`@/components/page-container`). It renders a `section` and owns the full width, the spacing between blocks, and the responsive padding (`w-full space-y-6 p-6 md:p-8`).
 
 ```tsx
 // client/pages/projects/index.tsx (skeleton)
@@ -174,8 +174,8 @@ import { PlusIcon } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
-import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
-import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
+import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 
 export default function ProjectsPage(): ReactElement {
@@ -231,7 +231,7 @@ pnpm exec shadcn search @shadcn -q dialog  # search by keyword
 
 ## 5. Customize template and registry components
 
-When a component provided by the template or a registry (for example `nocobase-auth-ui`, `nocobase-page-ui`, `nocobase-route-overlay-ui` or `nocobase-file-component-ui` under `client/extensions/`) needs different behavior or a different appearance, choose in this order:
+When a component provided by the template or a registry (for example `nocobase-auth-ui` or `nocobase-file-component-ui` under `client/extensions/`) needs different behavior or a different appearance, choose in this order:
 
 1. **Use existing capabilities first**: props, slots, page composition.
 2. **If that is not enough, write the application's own component**: put it in `client/components/` (or the feature's own directory, not under `client/extensions/`), compose it from the existing primitives and public hooks, then switch the pages that use the original over to the new component. Keep the original extension files for reuse and upgrades.

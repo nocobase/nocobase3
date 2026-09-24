@@ -2,9 +2,9 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { Layers3, MessageSquare } from 'lucide-react';
 import { Link, Outlet } from 'react-router';
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
-import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
-import { RouteChildPage } from '@/extensions/nocobase-route-overlay-ui/components/route-child-page';
+import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/components/page-container';
+import { RouteChildPage } from '@/components/route-child-page';
 import { Button } from '@/components/ui/button';
 
 import type { RouteChildPageTopic } from './topics.js';

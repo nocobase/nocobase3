@@ -9,9 +9,9 @@ import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import { RouteDialog } from '../../client/extensions/nocobase-route-overlay-ui/components/route-dialog';
-import { RouteDrawer } from '../../client/extensions/nocobase-route-overlay-ui/components/route-drawer';
-import { useRouteOverlay } from '../../client/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
+import { RouteDialog } from '../../client/components/route-dialog';
+import { RouteDrawer } from '../../client/components/route-drawer';
+import { useRouteOverlay } from '../../client/components/use-route-overlay';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

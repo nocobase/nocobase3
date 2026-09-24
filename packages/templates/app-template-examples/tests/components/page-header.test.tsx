@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { PageHeader } from '../../client/extensions/nocobase-page-ui/components/page-header.js';
+import { PageHeader } from '../../client/components/page-header.js';
 
 describe('PageHeader', () => {
   it('renders the title, description, and right-aligned actions', () => {

@@ -172,8 +172,8 @@ import { Link, Outlet, useLocation, useSearchParams } from 'react-router';
 
 import { DataTable } from '@/components/data-table';
 import { DataTableColumnHeader } from '@/components/data-table-column-header';
-import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
-import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
+import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
 import {
   Alert,
   AlertAction,

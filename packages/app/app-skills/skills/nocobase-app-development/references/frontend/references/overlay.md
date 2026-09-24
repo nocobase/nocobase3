@@ -18,7 +18,7 @@ This document shows how to write overlays. For the rules on choosing and stackin
 - `RouteChildPage` covers the content area and is not modal, so the sidebar and header stay usable; see `child-routes.md`.
 - Stacking: a drawer can open dialogs and confirmation dialogs on top of it; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer (guideline I1).
 
-Component locations: `@/extensions/nocobase-route-overlay-ui/components/route-dialog`, `@/extensions/nocobase-route-overlay-ui/components/route-drawer`, `@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay`, `@/components/ui/alert-dialog`, `@/components/ui/sheet`. The route overlays are the application's copy of the NocoBase UI Library item `route-overlay-ui`; when they need to behave or look different, follow "Customize template and registry components" in `styling.md`.
+Component locations: `@/components/route-dialog`, `@/components/route-drawer`, `@/components/use-route-overlay`, `@/components/ui/alert-dialog`, `@/components/ui/sheet`.
 
 ## 2. Overlays as child routes
 
@@ -234,7 +234,7 @@ export default function NewProjectPage(): ReactElement {
 import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, useRef, useState } from 'react';
 
-import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
+import { RouteDialog } from '@/components/route-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -323,10 +323,10 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 
-import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
+import { RouteDialog } from '@/components/route-dialog';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
+import { useRouteOverlay } from '@/components/use-route-overlay';
 
 import { ProjectForm } from './project-form.js';
 import type { ProjectsOutletContext } from './types.js';
@@ -425,8 +425,8 @@ import {
   useParams,
 } from 'react-router';
 
-import { RouteDrawer } from '@/extensions/nocobase-route-overlay-ui/components/route-drawer';
-import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
+import { RouteDrawer } from '@/components/route-drawer';
+import { useRouteOverlay } from '@/components/use-route-overlay';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -669,8 +669,8 @@ import { AlertCircleIcon } from 'lucide-react';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useParams } from 'react-router';
 
-import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
-import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
+import { RouteDialog } from '@/components/route-dialog';
+import { useRouteOverlay } from '@/components/use-route-overlay';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

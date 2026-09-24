@@ -14,12 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-import { PageContainer } from '../../../../registry/page/page-ui/components/page-container';
-import { PageHeader } from '../../../../registry/page/page-ui/components/page-header';
-import { RouteChildPage } from '../../../../registry/page/route-overlay-ui/components/route-child-page';
-import { RouteDialog } from '../../../../registry/page/route-overlay-ui/components/route-dialog';
-import { RouteDrawer } from '../../../../registry/page/route-overlay-ui/components/route-drawer';
-import { useRouteOverlay } from '../../../../registry/page/route-overlay-ui/hooks/use-route-overlay';
+import { PageContainer } from '../../../registry/components/page-container';
+import { PageHeader } from '../../../registry/components/page-header';
+import { RouteChildPage } from '../../../registry/components/route-child-page';
+import { RouteDialog } from '../../../registry/components/route-dialog';
+import { RouteDrawer } from '../../../registry/components/route-drawer';
+import { useRouteOverlay } from '../../../registry/components/use-route-overlay';
 
 interface Order {
   readonly id: string;
@@ -43,11 +43,11 @@ const orders: readonly Order[] = [
  * Every overlay is a child route of the orders page, so each state has a URL: `new` opens a dialog, an order id opens
  * a drawer, `edit` stacks a dialog on that drawer, and `report` covers the page with a child page.
  */
-export function RouteOverlayUiDemo(): ReactElement {
+export function RouteOverlaysDemo(): ReactElement {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<OrdersPage />} path='/demo/page/route-overlay-ui'>
+        <Route element={<OrdersPage />} path='/demo/components/route-overlays'>
           <Route element={<NewOrderDialog />} path='new' />
           <Route element={<ReportChildPage />} path='report' />
           <Route element={<OrderDrawer />} path=':orderId'>

@@ -8,9 +8,9 @@ import {
   Routes,
   useLocation,
 } from 'react-router';
-import { RouteDialog } from '../../client/extensions/nocobase-route-overlay-ui/components/route-dialog';
-import { RouteDrawer } from '../../client/extensions/nocobase-route-overlay-ui/components/route-drawer';
-import { useRouteOverlay } from '../../client/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
+import { RouteDialog } from '../../client/components/route-dialog';
+import { RouteDrawer } from '../../client/components/route-drawer';
+import { useRouteOverlay } from '../../client/components/use-route-overlay';
 import { Button } from '../../client/components/ui/button';
 import { Input } from '../../client/components/ui/input';
 import { AppThemeProvider, useTheme } from '../../client/theme';

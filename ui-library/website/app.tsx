@@ -1,11 +1,14 @@
 import {
+  AppWindow,
   Blocks,
   Check,
   Copy,
+  Heading,
+  Layers,
+  LayoutTemplate,
   Monitor,
   Moon,
   PanelRight,
-  PanelTop,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -48,8 +51,9 @@ import {
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
 import { AuthenticationUiDemo } from './demo/auth/auth-ui';
-import { PageUiDemo } from './demo/page/page-ui';
-import { RouteOverlayUiDemo } from './demo/page/route-overlay-ui';
+import { PageContainerDemo } from './demo/components/page-container';
+import { PageHeaderDemo } from './demo/components/page-header';
+import { RouteOverlaysDemo } from './demo/components/route-overlays';
 
 interface RegistryItem {
   name: string;
@@ -82,8 +86,24 @@ interface ItemPreview {
 // Items are not discovered: each one is wired here, and routed to its demo in `AppContent`.
 const itemPreviews: Record<string, ItemPreview> = {
   'auth-ui': { path: '/demo/auth/auth-ui/login', icon: ShieldCheck },
-  'page-ui': { path: '/demo/page/page-ui', icon: PanelTop },
-  'route-overlay-ui': { path: '/demo/page/route-overlay-ui', icon: PanelRight },
+  'page-container': {
+    path: '/demo/components/page-container',
+    icon: LayoutTemplate,
+  },
+  'page-header': { path: '/demo/components/page-header', icon: Heading },
+  // The three route overlays share one demo; each preview opens the route that presents its component.
+  'route-dialog': {
+    path: '/demo/components/route-overlays/new',
+    icon: AppWindow,
+  },
+  'route-drawer': {
+    path: '/demo/components/route-overlays/SO-1043',
+    icon: PanelRight,
+  },
+  'route-child-page': {
+    path: '/demo/components/route-overlays/report',
+    icon: Layers,
+  },
 };
 
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -128,11 +148,14 @@ function AppContent(): ReactElement {
   if (pathname.startsWith('/demo/auth/auth-ui')) {
     return <AuthenticationUiDemo />;
   }
-  if (pathname.startsWith('/demo/page/page-ui')) {
-    return <PageUiDemo />;
+  if (pathname.startsWith('/demo/components/page-container')) {
+    return <PageContainerDemo />;
   }
-  if (pathname.startsWith('/demo/page/route-overlay-ui')) {
-    return <RouteOverlayUiDemo />;
+  if (pathname.startsWith('/demo/components/page-header')) {
+    return <PageHeaderDemo />;
+  }
+  if (pathname.startsWith('/demo/components/route-overlays')) {
+    return <RouteOverlaysDemo />;
   }
 
   return <RegistryDocs />;

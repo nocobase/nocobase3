@@ -79,8 +79,8 @@ import { PlusIcon } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
-import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
+import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 
 export default function ProjectsPage(): ReactElement {
@@ -111,12 +111,12 @@ export default function ProjectsPage(): ReactElement {
 }
 ```
 
-- **`PageContainer`** (`@/extensions/nocobase-page-ui/components/page-container`) provides the page padding and the spacing between sections (`space-y-6`). Do not add another padded wrapper div.
+- **`PageContainer`** (`@/components/page-container`) provides the page padding and the spacing between sections (`space-y-6`). Do not add another padded wrapper div.
 - **`PageContainer` is provided by the component that owns the page, one per page**:
   - An inline child page (including tab content) renders inside the parent page's `PageContainer`; do not add another one.
   - A covering child page uses its own `PageContainer` inside `RouteChildPage` (see `child-routes.md`).
   - Dialog and drawer content uses the overlay's own container; do not add `PageContainer`.
-- **`PageHeader`** (`@/extensions/nocobase-page-ui/components/page-header`) props: `title` (required), `description`, `actions` (on the right, for page-level actions). The title matches the menu name (guidelines L1, L3 and L5).
+- **`PageHeader`** (`@/components/page-header`) props: `title` (required), `description`, `actions` (on the right, for page-level actions). The title matches the menu name (guidelines L1, L3 and L5).
 - A page with child routes must place `<Outlet />` itself, or the child route content does not render; put it at the end of `PageContainer`. For how to write child routes, see `child-routes.md` and `overlay.md`.
 - Navigate to a child route with a relative path and keep the current query parameters: `new` for create, `String(id)` for detail, `` `${id}/edit` `` for edit, for example `<Link to={{ pathname: String(id), search: location.search }}>`.
 

@@ -1,4 +1,4 @@
-import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageContainer } from '@/components/page-container';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   ArrowUpRight,

@@ -86,7 +86,7 @@ import {
   useLocation,
   useResolvedPath,
 } from 'react-router';
-import { PageContainer } from '../../extensions/nocobase-page-ui/components/page-container.js';
+import { PageContainer } from '../../components/page-container.js';
 
 export default function Workspace(): ReactElement {
   const { t } = useTranslation();
@@ -204,7 +204,7 @@ The page that declares `children` must render `<Outlet />` where the child belon
 
 ```tsx
 import { Outlet } from 'react-router';
-import { PageContainer } from '../extensions/nocobase-page-ui/components/page-container.js';
+import { PageContainer } from '../components/page-container.js';
 
 export default function OrdersPage() {
   return (
@@ -221,15 +221,15 @@ export default function OrdersPage() {
 ### 3. Choose the overlay component
 
 ```tsx
-import { RouteDialog } from '../extensions/nocobase-route-overlay-ui/components/route-dialog.js';
-import { RouteDrawer } from '../extensions/nocobase-route-overlay-ui/components/route-drawer.js';
+import { RouteDialog } from '../components/route-dialog.js';
+import { RouteDrawer } from '../components/route-drawer.js';
 ```
 
 Use `RouteDialog` for focused editing, confirmation, and short forms. Use `RouteDrawer` for details, filters, inspectors, and content that benefits from a side panel. Use the plugin-local source copies described above, preserving their route-driven behavior rather than adding a local `open` prop.
 
 ```tsx
 import { Outlet } from 'react-router';
-import { RouteDialog } from '../extensions/nocobase-route-overlay-ui/components/route-dialog.js';
+import { RouteDialog } from '../components/route-dialog.js';
 
 export default function OrderEditPage() {
   return (
@@ -250,8 +250,8 @@ Call `useRouteOverlay()` only in a descendant component rendered inside the `Rou
 Keep the wrapper in the page and put the hook in a separate component, rendered as JSX:
 
 ```tsx
-import { RouteDialog } from '../extensions/nocobase-route-overlay-ui/components/route-dialog.js';
-import { useRouteOverlay } from '../extensions/nocobase-route-overlay-ui/hooks/use-route-overlay.js';
+import { RouteDialog } from '../components/route-dialog.js';
+import { useRouteOverlay } from '../components/use-route-overlay.js';
 import { Button } from '../components/ui/button.js';
 
 export default function OrderEditPage() {

@@ -14,8 +14,8 @@ import {
 import { Link, Outlet, useLocation } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
-import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/components/page-container';
 
 export default function RouteOverlaysPage() {
   const { t } = useTranslation();
