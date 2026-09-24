@@ -1,6 +1,6 @@
 # Theme
 
-Theme presets belong to the application, not to a plugin. This document is the complete reference for the theme tokens, the steps for adding, changing and removing presets, and how the color mode and preset a user picks are saved and defaulted. For how to use the tokens while writing components, see `styling.md`; the rules they serve (F1–F7, A5) are in `ui-guidelines.md`.
+Theme presets belong to the application, not to a plugin. This document is the complete reference for the theme tokens, the steps for adding, changing and removing presets, and how the color mode and preset a user picks are saved and defaulted. For how to use the tokens while writing components, see `styling.md`; the rules they serve (F1–F7, A5) are in `../ui-guidelines.md`.
 
 ## 1. Files and mechanism
 
@@ -39,7 +39,7 @@ The id `default` dates from when that preset was the default. It keeps the id be
 
 - Values are complete CSS colors, normally OKLCH, not HSL channels. Do not wrap them in `hsl()`.
 - Define all 31 color tokens in both the light and the dark rule.
-- Surfaces and foregrounds come in pairs: a background and the text or icons on it. A pair does not guarantee enough contrast; measure it (guideline A5 in `ui-guidelines.md`).
+- Surfaces and foregrounds come in pairs: a background and the text or icons on it. A pair does not guarantee enough contrast; measure it (guideline A5 in `../ui-guidelines.md`).
 
 | Tokens                                              | Meaning and consumers                                            |
 | --------------------------------------------------- | ---------------------------------------------------------------- |
@@ -207,7 +207,7 @@ Some values stay fixed on purpose. Know which ones, and keep your own explicit.
   - The Appearance popover panel is `w-xs max-w-[calc(100vw-2rem)]`, with a comment saying its width stays independent of density while its content uses tokens.
   - The small sizes of buttons, toggles and native selects cap their radius (see "Radius").
   - `index.html` draws a loading indicator with literal colors that follow only `prefers-color-scheme`. It renders before the client restores the preferences, so it cannot use the tokens.
-- When a size must stay fixed, make it visible: a comment next to the value saying why, as `client/theme/theme-settings.tsx` does, and an entry in the design file, as guideline F7 in `ui-guidelines.md` requires. Colors, font sizes and spacing do not qualify.
+- When a size must stay fixed, make it visible: a comment next to the value saying why, as `client/theme/theme-settings.tsx` does, and an entry in the design file, as guideline F7 in `../ui-guidelines.md` requires. Colors, font sizes and spacing do not qualify.
 
 ### Constraints from the token test
 

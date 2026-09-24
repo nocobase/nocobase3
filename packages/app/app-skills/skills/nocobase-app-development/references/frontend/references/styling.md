@@ -1,6 +1,6 @@
 # Components and styling
 
-The UI is composed of shadcn/ui primitives (the Base UI version) and styled with Tailwind utility classes and the theme's semantic tokens. For what the UI should look like, see `ui-guidelines.md` ("F Foundations", "L Page structure", "A Accessibility and adaptation"); for the full token reference and theme presets, see `theme.md`.
+The UI is composed of shadcn/ui primitives (the Base UI version) and styled with Tailwind utility classes and the theme's semantic tokens. For what the UI should look like, see `../ui-guidelines.md` ("F Foundations", "L Page structure", "A Accessibility and adaptation"); for the full token reference and theme presets, see `theme.md`.
 
 ## 1. Read the reference pages first
 
@@ -382,7 +382,7 @@ export function ProjectStatusChart({
 - Use sonner: `import { toast } from 'sonner'`, and call `toast.success(...)`, `toast.info(...)`, or `toast.error(...)` in event handlers.
 - You do not need to mount a `Toaster` yourself. The registered `@nocobase/app-plugin-notification-provider` (`client/plugins.ts`) mounts sonner's `Toaster` at the outermost layer of the application: toasts appear in the top-right corner and take their colors from `--popover`, `--popover-foreground`, and `--border`, so they follow the theme. Mounting another one produces duplicate toasts.
 - Do not use `@/components/ui/toast`. It is a separate Base UI toast component; the application does not mount its `Toaster`, so calling it displays nothing. The `toast.add(...)` calls in the reference pages and README do not apply to this application.
-- For which kind of message to use in which situation and how to write the copy, see `api.md` and `ui-guidelines.md` (T3.7, C5, C6).
+- For which kind of message to use in which situation and how to write the copy, see `api.md` and `../ui-guidelines.md` (T3.7, C5, C6).
 
 ## 8. Semantic tokens
 
@@ -426,7 +426,7 @@ Using `bg-background` because it "looks right" puts a page-colored block inside 
 - Spacing: `gap-2` (between related controls), `gap-4`, `gap-6` (between blocks; `PageContainer` already provides it), `p-4`, `p-6`. Do not use `mt-[7px]`.
 - Sizes: numeric classes such as `h-8`, `size-4`, and `w-64`, which scale with `--spacing`.
 - Radius: `rounded-md`, `rounded-lg`; shadows: `shadow-sm`, `shadow-md`. Usually just use the component defaults.
-- Deliberate fixed values (image sizes, viewport-related limits, circular icons) may stay, but confirm that fixed sizes, separately set line heights (`leading-*`, `text-sm/6`), and shadow color classes (`shadow-black/30`) do not override the theme's settings; state the reason in the design file (`ui-guidelines.md` F7).
+- Deliberate fixed values (image sizes, viewport-related limits, circular icons) may stay, but confirm that fixed sizes, separately set line heights (`leading-*`, `text-sm/6`), and shadow color classes (`shadow-black/30`) do not override the theme's settings; state the reason in the design file (`../ui-guidelines.md` F7).
 - Do not globally rewrite isolated third-party content to unify the look. Font variables take effect only after the font resources have loaded (see `theme.md`).
 
 ### Common layouts

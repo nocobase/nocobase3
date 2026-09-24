@@ -96,7 +96,7 @@ A feature with a page and an API usually needs migrations, server routes, and a 
 
 The three database pages above are the application side — where the files live, which commands run them, how connections are configured. The database API they are written against belongs to `@nocobase/db` and is documented by the `nocobase-db` Skill synchronized alongside this one. Read that Skill before writing a migration, a seed, or a query.
 
-Style with the shared theme tokens in [themes and tokens](references/frontend/theme.md) so AI-authored components respond to theme changes; the same document covers creating, editing and removing presets. Frontend forms follow [forms](references/frontend/form.md). Frontend validation complements server-side validation and does not replace it.
+Style with the shared theme tokens in [themes and tokens](references/frontend/references/theme.md) so AI-authored components respond to theme changes; the same document covers creating, editing and removing presets. Frontend forms follow [forms](references/frontend/references/form.md). Frontend validation complements server-side validation and does not replace it.
 
 ## Business permissions
 
@@ -148,9 +148,9 @@ Reach a plugin's capability only through its documented package exports. Never i
 
 ## Reversible customization
 
-When customizing template or registry UI, prefer existing props and composition, then new application components outside `client/extensions/`. Keep the original extension implementation as the reusable baseline; edit it only when explicitly requested or when composition cannot reasonably meet the requirement, and explain that choice. See [styling](references/frontend/styling.md).
+When customizing template or registry UI, prefer existing props and composition, then new application components outside `client/extensions/`. Keep the original extension implementation as the reusable baseline; edit it only when explicitly requested or when composition cannot reasonably meet the requirement, and explain that choice. See [styling](references/frontend/references/styling.md).
 
-Treat disabling a feature as a reversible availability change by default: preserve its page and component source, conditionally exclude or guard its route, and hide its links and actions. A hidden navigation item alone does not disable direct URL access. Enforce the same feature policy on the server so direct API calls cannot execute the disabled operation. Do not delete feature code merely to remove it from the current UI; explicit permanent removal can justify deletion. See [pages and routes](references/frontend/page.md).
+Treat disabling a feature as a reversible availability change by default: preserve its page and component source, conditionally exclude or guard its route, and hide its links and actions. A hidden navigation item alone does not disable direct URL access. Enforce the same feature policy on the server so direct API calls cannot execute the disabled operation. Do not delete feature code merely to remove it from the current UI; explicit permanent removal can justify deletion. See [pages and routes](references/frontend/references/page.md).
 
 ## Non-negotiables
 
@@ -159,7 +159,7 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
-- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [styling](references/frontend/styling.md).
+- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [styling](references/frontend/references/styling.md).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
@@ -195,7 +195,7 @@ Verify observable behavior, not just that the commands passed. [Testing and veri
 
 After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone and exits nonzero until the lists align. A client-only language is still supported at runtime and the server falls back to English; add matching server translations when server-produced text should use that language.
 
-Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See [internationalization](references/i18n.md), [frontend copy](references/frontend/i18n.md) and [themes and tokens](references/frontend/theme.md).
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See [internationalization](references/i18n.md), [frontend copy](references/frontend/references/i18n.md) and [themes and tokens](references/frontend/references/theme.md).
 
 Navigation groups retain their expanded or collapsed state while the navigation tree stays mounted. Selecting a new page expands its ancestor groups without collapsing other groups; users can still collapse the active group manually. Keep this behavior aligned across the application, Settings, and Dev tools navigation.
 

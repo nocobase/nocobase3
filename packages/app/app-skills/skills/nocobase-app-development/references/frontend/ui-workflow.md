@@ -1,6 +1,6 @@
 # Frontend development workflow
 
-This is the entry point for the application's frontend work: read it before writing or changing anything under `client/` — pages, components, styles or copy. It covers only which workflow to follow, what to do at each step, and what counts as done. It says which changes take the full workflow (write a design file and review it once, then run one independent acceptance review after development), which can be a quick change (edit directly and run static checks only), and which parts of `ui-guidelines.md` and `frontend-dev.md` to read at each step. What the interface should look like is in `ui-guidelines.md`; how to write the code is in `frontend-dev.md`. These documents all sit in the same directory, so this one refers to them by file name.
+This is the entry point for the application's frontend work: read it before writing or changing anything under `client/` — pages, components, styles or copy. It covers only which workflow to follow, what to do at each step, and what counts as done. It says which changes take the full workflow (write a design file and review it once, then run one independent acceptance review after development), which can be a quick change (edit directly and run static checks only), and which parts of `ui-guidelines.md` and `frontend-dev.md` to read at each step. What the interface should look like is in `ui-guidelines.md`; how to write the code is in `frontend-dev.md`. Paths in this document are relative to its own directory: `ui-guidelines.md` and `frontend-dev.md` sit beside it, the topic references are under `references/`, and the record templates are under `templates/`.
 
 ## Choosing a workflow
 
@@ -15,7 +15,7 @@ When unsure, explain the difference in one sentence (the full workflow adds a de
 
 ## Quick change
 
-1. Read `frontend-dev.md` and the references related to the change. When the change affects how the interface looks or behaves, also read the relevant guidelines in `ui-guidelines.md`, and at minimum check the relevant items of the "Review checklist" at its end.
+1. Read `frontend-dev.md` and the references under `references/` related to the change. When the change affects how the interface looks or behaves, also read the relevant guidelines in `ui-guidelines.md`, and at minimum check the relevant items of the "Review checklist" at its end.
 2. Follow how the page is already written: keep components, spacing and copy style consistent with what surrounds the change.
 3. Run static checks on the changed files only: `pnpm exec tsc -p tsconfig.json --noEmit`, `pnpm exec eslint --max-warnings 0 <files>`, `pnpm exec prettier --check <files>`.
 4. Report what you changed and which checks you ran.
@@ -48,7 +48,7 @@ These files are used only while the task is in progress: the reviewer and the ma
 
 ### Step 1: Design
 
-1. Read all of `ui-guidelines.md` and `templates/design.md`; then read `frontend-dev.md` and the references relevant to this page (usually page, overlay, form, table and api; add child-routes when there are child pages or tabs), and confirm that the routes, permissions, overlays and way of updating data in the design can all be implemented.
+1. Read all of `ui-guidelines.md` and `templates/design.md`; then read `frontend-dev.md` and the references under `references/` relevant to this page (usually page, overlay, form, table and api; add child-routes when there are child pages or tabs), and confirm that the routes, permissions, overlays and way of updating data in the design can all be implemented.
 2. Work out the data:
    - The endpoint exists: read its implementation or documentation, and copy its fields, parameters, response shape and error codes into the design.
    - The endpoint does not exist: specify the endpoint you need in the design; the backend is implemented to that contract.
@@ -70,14 +70,14 @@ The confirmed design is the basis for development and the acceptance review.
 
 ### Step 3: Development
 
-1. Read `frontend-dev.md` first, then the references for each topic involved.
+1. Read `frontend-dev.md` first, then the references under `references/` for each topic involved.
 2. Implement according to `design.md`: every item in the component list, every state, every interaction and every piece of copy must have a matching implementation.
 3. When new backend endpoints are needed, implement them to the endpoint contract in the design (for backend code, see `../server-routes.md`, `../migrations.md` and `../database-and-data.md`).
 4. When the design contains decisions that the code does not show by itself but that anyone changing this page later needs to know (for example, why an approach was not used, or what limits an endpoint has), write them as code comments. `design.md` is deleted when the task ends.
 5. Move on to step 4 only after every self-check passes:
    - Type checking: `pnpm exec tsc -p tsconfig.json --noEmit`; if you changed server or database code, also run `pnpm exec tsc -p tsconfig.server.json --noEmit`
    - Changed files only: `pnpm exec eslint --max-warnings 0 <files>`, `pnpm exec prettier --check <files>`
-   - Related tests: `pnpm exec vitest run <files>`. When you add a page that requires sign-in (including child routes), add its route name to the page grant list in `tests/logic/client-routes.test.ts` (see section 12 of `page.md`); cover the page's key behavior (state changes, submission, error handling) with component tests in `tests/components/`, written as described in `testing.md`
+   - Related tests: `pnpm exec vitest run <files>`. When you add a page that requires sign-in (including child routes), add its route name to the page grant list in `tests/logic/client-routes.test.ts` (see section 12 of `references/page.md`); cover the page's key behavior (state changes, submission, error handling) with component tests in `tests/components/`, written as described in `references/testing.md`
    - `tests/` is outside the scope of every tsconfig, so only ESLint covers test files; after writing tests, confirm they actually run and pass
 
 If you find during development that the design is not feasible, follow "Design changes".

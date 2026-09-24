@@ -157,9 +157,9 @@ When a template, application runtime, or CLI change affects how an agent develop
 
 ## Application Themes and UI Styling
 
-For creating or editing theme presets, read `packages/app/app-skills/skills/nocobase-app-development/references/frontend/theme.md` from the repository root.
+For creating or editing theme presets, read `packages/app/app-skills/skills/nocobase-app-development/references/frontend/references/theme.md` from the repository root.
 
-For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/app/app-skills/skills/nocobase-app-development/references/frontend/theme.md` from the repository root. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/app/app-skills/skills/nocobase-app-development/references/frontend/references/theme.md` from the repository root. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 
 ## Database Migration Development
 

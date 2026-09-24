@@ -1,6 +1,6 @@
 # Dialogs, drawers and confirmation dialogs
 
-This document shows how to write overlays. For the rules on choosing and stacking overlays, see I1 in `ui-guidelines.md`; for the form itself, see `form.md`; for how to load data, see `api.md`.
+This document shows how to write overlays. For the rules on choosing and stacking overlays, see I1 in `../ui-guidelines.md`; for the form itself, see `form.md`; for how to load data, see `api.md`.
 
 ## 1. Choosing an overlay
 
