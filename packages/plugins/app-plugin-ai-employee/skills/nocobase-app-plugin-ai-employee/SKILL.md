@@ -110,5 +110,5 @@ Do these in order; each step depends on the one before it.
 - [capabilities.md](references/capabilities.md) — employees, tools, skills, MCP, knowledge base, avatars, the built-in tools and skills, and the whole `config.yml` `ai` block.
 - [chat-surfaces.md](references/chat-surfaces.md) — installing the extension, the readiness gate, surfaces, attachments, page context, forms, frontend tools, renderers, settings pages.
 - [server-runs.md](references/server-runs.md) — registering App resources, and running an agent directly from App server code.
-- [runtime-extensions.md](references/runtime-extensions.md) — what the `AIManager` offers past the registrar: dynamic tools, Skills and employees from code, model lookups, a custom LLM provider, and a direct model call.
+- [runtime-extensions.md](references/runtime-extensions.md) — what the `AIManager` offers past the registrar: dynamic tools, model lookups, a custom LLM provider, and a direct model call.
 - [api-reference.md](references/api-reference.md) — read only when calling `/api/ai` directly instead of through the installed service; the installed transport already covers every normal case.

@@ -1,13 +1,12 @@
 # Runtime Extensions
 
-What an App reaches through the `AIManager` when a resource cannot be written once and registered by an `AIResourceRegistrar`: tools that depend on the request, Skills and employees computed at start, a custom LLM provider, and a direct model call.
+What an App reaches through the `AIManager` beyond what an `AIResourceRegistrar` registers: tools that depend on who is asking, model lookups, a custom LLM provider, and a direct model call.
 
 ## Table of contents
 
 - [When to go past the registrar](#when-to-go-past-the-registrar)
 - [Reaching the manager](#reaching-the-manager)
 - [Dynamic tools](#dynamic-tools)
-- [Skills and employees from code](#skills-and-employees-from-code)
 - [LLM services and model lookups](#llm-services-and-model-lookups)
 - [A custom LLM provider](#a-custom-llm-provider)
 - [A direct model call](#a-direct-model-call)
@@ -15,11 +14,11 @@ What an App reaches through the `AIManager` when a resource cannot be written on
 
 ## When to go past the registrar
 
-Everything static goes through an `AIResourceRegistrar` subclass, as [server-runs.md § Register App resources](server-runs.md#register-app-resources) shows. Call a manager directly only when the resource is:
+Employees and tools are registered only through an `AIResourceRegistrar` subclass, and Skills only as `SKILL.md` files under `ai/skills` or a directory listed in `config.yml` `ai.skills.paths`, as [server-runs.md § Register App resources](server-runs.md#register-app-resources) shows — including when a definition is computed from another service, since the registrar's methods run in the App's own `boot()`. Reach for the `AIManager` itself only for:
 
-- computed from another service or from configuration at start;
-- conditional on something only known at run time, such as the request's actor;
-- an LLM backend no built-in provider speaks.
+- a tool set that depends on who is asking;
+- an LLM backend no built-in provider speaks;
+- reading which models exist, or making one model call with no conversation.
 
 ## Reaching the manager
 
@@ -64,24 +63,6 @@ ai.toolsManager.registerDynamicTools(async (register, filter) => {
 - A `GENERAL` tool produced this way reaches every employee whose tool selection has never been saved, like any other `GENERAL` tool; see [capabilities.md § How Skills and Tools relate](capabilities.md#how-skills-and-tools-relate).
 
 The rest of the tools manager: `getTools(name, filter?)`, `listTools(filter?)`, `isToolsExisted(name)`, and `unregisterTools(name | name[])`, which returns how many it removed.
-
-## Skills and employees from code
-
-When a Skill's text comes from a service rather than a `SKILL.md`, register it:
-
-```ts
-await ai.skillsManager.registerSkills({
-  scope: 'SPECIFIED', // or 'GENERAL', or 'CUSTOM'
-  name: 'company-policy',
-  description: 'Apply the current company policy.',
-  content: await policy.renderSkill(),
-  tools: ['policy-search'],
-});
-```
-
-Registering again under the same `name` updates that Skill: the fields given replace the stored ones, and `tools`, `introduction` and `i18n` keep their stored values when left out. Employees and `skillSettings` refer to a Skill by that name, so keep it stable. `getSkills(name | name[])`, `listSkills(filter?)` and `deleteSkills(name)` complete the manager.
-
-An employee computed at start goes through `ai.employeeManager.registerEmployee(options)`, which takes what `defineAIEmployee()` takes — see [capabilities.md § Employees](capabilities.md#employees) — and, like the registrar, keeps an administrator's tool and Skill switches and saved approval choices when the employee already exists. `upsertEmployee(entity)` instead writes a complete stored employee as given, keeping only the tool and Skill switches the entry leaves out, so it is for an App that owns every field, not for defining one.
 
 ## LLM services and model lookups
 

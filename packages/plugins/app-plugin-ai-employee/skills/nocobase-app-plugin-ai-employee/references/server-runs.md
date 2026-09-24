@@ -68,7 +68,7 @@ Notes that decide whether this works:
 - The App root's `ai/skills` is already a default Skill directory; do not add it again. Add further directories through `config.yml` `ai.skills.paths`, not through the registrar's constructor.
 - `AIResourceRegistrarOptions` accepts `logger`, `source`, and `skillsDirectories`. Only `logger` and `source` are worth setting from an App: Skill paths belong in `config.yml`. A registrar registers no MCP servers; they are defined only in `config.yml`.
 - Two tools registered under one name is a decision, not an accident. Make it explicit rather than relying on registration order.
-- A resource computed at start or dependent on the request, and a custom LLM provider, go through the managers on the same `ai` instead; see [runtime-extensions.md](runtime-extensions.md).
+- A definition computed from another service still goes through the registrar, whose methods run in this `boot()`. Only a tool set that depends on who is asking, and a custom LLM provider, use the managers on `ai` directly; see [runtime-extensions.md](runtime-extensions.md).
 
 ## When to drive an agent directly
 
