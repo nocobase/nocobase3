@@ -90,6 +90,10 @@ const result = await agent.invoke({
 
 `createAgent()` 不查找 Employee，`sessionId`、`actor` 和 `runtime` 都是必填项。它在创建时就解析模型：没有传 `model` 时取第一个启用的模型，一个都没有就在创建时报错。它会激活 `tools` 点名的 Tool 和 `skills` 里各个 Skill 点名的 Tool；传了 `skills` 时还会自动带上 `getSkill`，并在系统提示词里列出这些 Skill，模型遇到匹配的请求时就能加载 Skill 的正文。`getSkill` 只能加载这里给出的 Skill，一个 Skill 要求模型再加载另一个时，两个都要列出，比如 `data-query` 和 `data-metadata`。名字对不上任何已注册 Skill 的会被直接忽略，创建照样成功，只是提示词里没有它，所以要对照设置页核对名字。它默认使用数据库会话持久化。固定 Agent 没有员工的 Tool 预设，每个 Tool 是否需要确认由它自己的 `defaultPermission` 决定：`ALLOW` 直接执行，`ASK`（没有声明时也是 `ASK`）会像员工一样暂停，由 `invoke()` 返回 `interrupt`，再通过 `resumeInvoke()` 继续。
 
+暂停的运行由 checkpointer 保存。默认存在插件自己的数据表里，之后为同一个 `sessionId` 新建的 Agent 也能恢复它。需要换地方时传 `checkpointer`，比如不想让短时任务的暂停状态写进数据库。用工厂提供的方法获取：`factory.getMemorySaver()` 只存在当前进程里，只有同一个 `AgentService` 能恢复；`factory.getDatabaseCheckpointSaver()` 存在插件的数据表里。不要自己用 `@langchain/langgraph` 创建：这个选项的类型来自插件自己依赖的那份 `@langchain/langgraph`，别的副本创建出来的 saver 可能对不上。自己实现的 saver（比如存到别的存储）也要继承同一个包里的 `BaseCheckpointSaver`。
+
+`createAIEmployee()` 不接受 checkpointer：员工的暂停状态始终存在插件的数据表里，因为在聊天或会话中心里确认 Tool、恢复运行时，都会重建 Agent，并从那里读取；子 Agent 不保存暂停状态，它的暂停交给调用它的 Agent 处理。
+
 ## 无人值守运行
 
 从任务、定时器或工作流里运行 Agent 时，没有人在旁边确认。插件只提供 AI 能力，任务怎么调度、结果写到哪里由调用方决定；下面只是插件对调用方的要求。

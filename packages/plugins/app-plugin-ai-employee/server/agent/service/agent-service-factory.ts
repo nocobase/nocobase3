@@ -4,7 +4,7 @@ import {
   type DatabaseManager,
   type DatabaseConnection,
 } from '@nocobase/db';
-import { MemorySaver } from '@langchain/langgraph';
+import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
@@ -28,7 +28,7 @@ import type { AIEmployeeSkillSettings } from '../context/ai-employee/options.js'
 import { FixedAgentContextProvider } from '../context/fixed/context.js';
 import { createAgentProviders } from '../providers.js';
 import { DefaultChatMessageConverters } from '../message/converters.js';
-import { NativeCollectionSaver } from '../checkpoint/index.js';
+import { CheckpointSaverFactory } from '../checkpoint/index.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
 import { DatabaseConversationPersistence } from '../conversation/persistence/database.js';
 import { ConversationProvider } from '../conversation/conversation-provider.js';
@@ -67,6 +67,11 @@ export interface CreateAgentOptions {
   readonly persistence?: ConversationPersistence;
   readonly actor: Actor;
   readonly runtime: AgentRuntime;
+  /**
+   * Where a paused run is kept. Defaults to the plugin's own tables under the
+   * default persistence, and to this process beside a caller's `persistence`.
+   */
+  readonly checkpointer?: BaseCheckpointSaver;
 }
 
 export class AgentServiceFactory {
@@ -79,6 +84,7 @@ export class AgentServiceFactory {
   private readonly loggerService: Logger;
   private readonly cachingService: Caching;
   private readonly idGenerator: IdGeneratorService;
+  private readonly checkpointSaverFactory: CheckpointSaverFactory;
 
   public constructor(
     container: ServiceResolver | { container: ServiceResolver },
@@ -94,6 +100,9 @@ export class AgentServiceFactory {
       .getLogger('ai-employee');
     this.cachingService = this.container.resolve(cachingToken);
     this.idGenerator = this.container.resolve(idGeneratorToken);
+    this.checkpointSaverFactory = new CheckpointSaverFactory(
+      this.repositoryFactory,
+    );
   }
 
   public async createAIEmployee(
@@ -174,14 +183,11 @@ export class AgentServiceFactory {
           caching: this.cachingService,
           getHeader: options.runtime.getHeader,
         }),
+        // A sub-agent has none: its pause surfaces to the agent that called it.
         checkpointer:
           options.from === 'sub-agent'
             ? undefined
-            : new NativeCollectionSaver({
-                checkpoints: repositories.lcCheckpoints,
-                blobs: repositories.lcCheckpointBlobs,
-                writes: repositories.lcCheckpointWrites,
-              }),
+            : this.checkpointSaverFactory.getDatabaseCheckpointSaver(),
       }),
     );
   }
@@ -272,16 +278,25 @@ export class AgentServiceFactory {
         logger: this.loggerService,
         converters: undefined,
         // Without one, a tool that asks cannot pause the run or resume it. A
-        // caller's own persistence keeps the checkpoints beside it, in process.
-        checkpointer: options.persistence
-          ? new MemorySaver()
-          : new NativeCollectionSaver({
-              checkpoints: repositories.lcCheckpoints,
-              blobs: repositories.lcCheckpointBlobs,
-              writes: repositories.lcCheckpointWrites,
-            }),
+        // caller's own persistence keeps the checkpoints beside it, in process,
+        // unless the caller says where they go.
+        checkpointer:
+          options.checkpointer ??
+          (options.persistence
+            ? this.checkpointSaverFactory.getMemorySaver()
+            : this.checkpointSaverFactory.getDatabaseCheckpointSaver()),
       }),
     );
+  }
+
+  /** A checkpointer in the plugin's own tables, for `createAgent({ checkpointer })`. */
+  public getDatabaseCheckpointSaver(): BaseCheckpointSaver {
+    return this.checkpointSaverFactory.getDatabaseCheckpointSaver();
+  }
+
+  /** A checkpointer in this process, for `createAgent({ checkpointer })`. */
+  public getMemorySaver(): BaseCheckpointSaver {
+    return this.checkpointSaverFactory.getMemorySaver();
   }
 
   // A fixed agent resolves its model once, here, so a missing one fails the

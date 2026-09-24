@@ -9,3 +9,4 @@
 
 export { NativeCollectionSaver } from './saver.js';
 export { CheckpointCleaner } from './cleaner.js';
+export { CheckpointSaverFactory } from './factory.js';
