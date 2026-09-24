@@ -11,18 +11,7 @@ Start with the business outcome, then add rules and examples. Let your AI Agent 
 
 “Build an order system” leaves too much open: fields, editing rules, and the definition of done. A smaller first round gives you something you can inspect.
 
-This is an example prompt:
-
-```text
-I want to manage customer orders first.
-After signing in, I can open an order list from the menu and see order numbers, customer names, and amounts.
-I can create and edit orders. Amounts cannot be negative and order numbers must be unique.
-Saved data must remain after refreshing the browser.
-Do not add approvals, notifications, or bulk import in this round.
-Inspect the existing project, implement these interactions, and verify them.
-```
-
-It defines the entry point, data, operations, limits, and completion criteria while leaving room to follow project conventions.
+Look back at the requirement in [your first feature](../first-feature.md). It states the entry point (an order list opened from the menu), the data (order number, customer name, amount), the operations (create and edit), the limits (no negative amounts, unique order numbers), the scope (no approvals or notifications yet), and the completion criteria (data remains after refreshing). That leaves your AI Agent room to follow project conventions and gives you something concrete to check. Write new requirements along the same lines.
 
 ## Clarify rules that change behavior
 

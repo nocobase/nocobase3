@@ -34,16 +34,16 @@ features:
     items:
       - title: '怎么提需求'
         details: '话怎么说 AI Agent 才做得对，给几组好的和不好的对比。'
-        link: /ai/writing-requirements
+        link: /get-started/ai-agent/writing-requirements
       - title: '检查 AI Agent 的产出'
         details: '该看哪几个地方，跑哪几个命令。'
-        link: /ai/reviewing-output
+        link: /get-started/ai-agent/reviewing-output
       - title: '做复杂功能'
         details: '一句话说不清的需求，怎么拆成几次说。'
-        link: /ai/complex-features
+        link: /get-started/ai-agent/complex-features
       - title: '加上你们团队的规矩'
         details: '把自己团队的要求写进去，AI Agent 就会照着做。'
-        link: /ai/team-conventions
+        link: /get-started/ai-agent/team-conventions
 
   - title: '应用开发'
     details: '想看懂代码、或者自己动手改，来这儿查。'

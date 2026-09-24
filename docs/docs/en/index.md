@@ -34,16 +34,16 @@ features:
     items:
       - title: 'Writing requirements'
         details: 'How to phrase a request so your AI Agent gets it right, with side-by-side examples.'
-        link: /ai/writing-requirements
+        link: /get-started/ai-agent/writing-requirements
       - title: 'Reviewing what AI Agent produced'
         details: 'Which places to look at, and which commands to run.'
-        link: /ai/reviewing-output
+        link: /get-started/ai-agent/reviewing-output
       - title: 'Building complex features'
         details: 'How to break a requirement that does not fit in one sentence into several rounds.'
-        link: /ai/complex-features
+        link: /get-started/ai-agent/complex-features
       - title: "Adding your team's conventions"
         details: "Write your team's rules into the project and your AI Agent will follow them."
-        link: /ai/team-conventions
+        link: /get-started/ai-agent/team-conventions
 
   - title: 'Application development'
     details: 'Consult this when you want to understand the code or change it yourself.'
