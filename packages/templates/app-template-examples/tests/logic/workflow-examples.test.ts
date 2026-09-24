@@ -125,6 +125,15 @@ beforeAll(async function startExampleServer() {
           },
         },
       },
+      // The app-server suite starts applications at the same time; the memory schedule adapter allows one
+      // process per state directory.
+      schedule: {
+        default: 'memory',
+        memory: {
+          adapter: 'memory',
+          persistence: { path: path.join(temporary, 'schedule') },
+        },
+      },
     }),
   );
   server = await createStandaloneServer({

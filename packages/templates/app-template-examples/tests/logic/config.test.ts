@@ -15,6 +15,7 @@ import {
 } from '@nocobase/app-server/database';
 import { createAppDatabaseTaskContributions } from '@nocobase/app-server/plugins';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
+import type { AppScheduleConfig } from '@nocobase/app-server/schedule';
 import {
   type CachingConfig,
   type AppDriveConfig,
@@ -229,8 +230,19 @@ describe('application config', () => {
     ).toBeUndefined();
     expect(runtime.config.get('logging.file.name')).toBe('app');
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
-    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toEqual({
-      schedule: { connection: 'database' },
+    // Scheduler runs on the schedule service, not on a queue of its own.
+    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
+    expect(runtime.config.get<AppScheduleConfig>('schedule')).toEqual({
+      memory: {
+        adapter: 'memory',
+        persistence: { path: runtime.paths.storage('schedule') },
+      },
+      redis: {
+        adapter: 'redis',
+        connection: { host: '127.0.0.1', port: 6379, db: 0 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: { age: 604_800 },
+      },
     });
     expect(
       runtime.config.get<AppQueueConfig>('queue')!.jobs?.locations,

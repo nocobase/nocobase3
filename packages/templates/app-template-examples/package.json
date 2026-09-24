@@ -205,6 +205,7 @@
     "@nocobase/repository-input": "workspace:^",
     "@nocobase/authorization": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/schedule": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/ai-employee": "workspace:^",

@@ -113,6 +113,18 @@ snowflake:
   workerId: 0
   epoch: 1605024000
 
+# Scheduled jobs, such as the Scheduler plugin's. Without schedule.default they run on the built-in memory adapter:
+# one process on one host, with state under storage/schedule. Set default to memory to keep that without the startup
+# warning, or to redis to run several instances, each firing executed once. Redis must persist its data (AOF or RDB)
+# and use maxmemory-policy noeviction, or schedules can be lost.
+# schedule:
+#   default: redis
+#   redis:
+#     connection:
+#       host: 127.0.0.1
+#       port: 6379
+#     # namespace: my-app # defaults to the application name; set it when deployments share one Redis
+
 # File logging is independent of terminal formatting.
 logging:
   level: info

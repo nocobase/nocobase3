@@ -147,6 +147,7 @@ const writeDistWorkspace = () => {
       '  oracledb: true',
       '  esbuild: true',
       '  tesseract.js: false',
+      '  msgpackr-extract: false',
       '',
     ].join('\n'),
   );

@@ -4209,6 +4209,9 @@ importers:
       '@nocobase/repository-input':
         specifier: workspace:^
         version: link:../../libs/repository-input
+      '@nocobase/schedule':
+        specifier: workspace:^
+        version: link:../../libs/schedule
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -4597,6 +4600,9 @@ importers:
       '@nocobase/repository-input':
         specifier: workspace:^
         version: link:../../libs/repository-input
+      '@nocobase/schedule':
+        specifier: workspace:^
+        version: link:../../libs/schedule
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -4928,6 +4934,9 @@ importers:
       '@nocobase/repository-input':
         specifier: workspace:^
         version: link:../../libs/repository-input
+      '@nocobase/schedule':
+        specifier: workspace:^
+        version: link:../../libs/schedule
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
