@@ -1,4 +1,3 @@
-import routes from './routes.js';
 import path from 'node:path';
 
 import {
@@ -9,7 +8,6 @@ import {
 const authzRestrictionRulesPlugin: AppServerPlugin = defineServerPlugin({
   baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-authz-restriction-rules',
-  routes,
   locales: () => import('./locales/index.js'),
   database: {
     migrations: './database/migrations',

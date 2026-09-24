@@ -1,96 +1,95 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Hono } from 'hono';
-import { ServiceContainer } from '@nocobase/service-provider';
-import { createAppPaths } from '@nocobase/app-server/config';
 import {
-  authenticationToken,
-  type Auth,
-} from '@nocobase/app-plugin-authentication';
-import {
-  createAppAuthorization,
-  authorizationToken,
-} from '@nocobase/app-plugin-authorization/server';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import contributions from '../server/routes.js';
+  AuthorizationDeniedError,
+  type AuthorizationContext,
+} from '@nocobase/authorization/core';
+import type { SharingRule } from '@nocobase/authorization/sharing-rules';
+import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import { sharingRules } from '../server/authorization.js';
 
-async function fixture(installed = true, signedIn = true, permitted = true) {
-  const authorization = createAppAuthorization({});
-  const list = vi.fn(async () => []);
-  if (installed) Object.assign(authorization, { sharingRules: { list } });
+class MemoryStore {
+  rules: SharingRule[] = [];
+  list = async () => this.rules;
+  get = async (key: string) => this.rules.find((rule) => rule.key === key);
+  create = async (rule: SharingRule) => {
+    this.rules.push(rule);
+    return rule;
+  };
+  update = async (_key: string, rule: SharingRule) => rule;
+  delete = async () => {};
+  withTransaction = () => this;
+}
+
+function fixture(permitted = true) {
+  const authz = createAppAuthorization({
+    config: { plugins: [sharingRules({ store: new MemoryStore() })] },
+  });
   const require = vi.fn(async () => {
     if (!permitted)
       throw new AuthorizationDeniedError({ effect: 'deny', reasons: [] });
   });
-  const scope = authorization.for({ principal: { type: 'user', id: 'admin' } });
-  scope.require = require;
-  authorization.middleware = () => async (context, next) => {
-    context.set('authz', scope);
-    await next();
-  };
-  const container = new ServiceContainer();
-  container.instance(authorizationToken, authorization);
-  container.instance(authenticationToken, {
-    required: () => async (context, next) => {
-      if (!signedIn) return context.json({ code: 'UNAUTHENTICATED' }, 401);
-      await next();
-    },
-  } as Auth);
-  const router = new Hono();
-  for (const route of contributions)
-    router.route(
-      '/',
-      await route.createRouter({
-        container,
-        appName: 'test',
-        publicBasePath: '',
-        config: { app: { name: 'test', publicBasePath: '' } },
-        paths: createAppPaths({ rootDir: '/missing' }),
-        router,
-      }),
-    );
-  return { router: new Hono().route('/portal/api', router), require, list };
+  const call = (path: string, init?: RequestInit) =>
+    authz.routes.handle({
+      request: new Request(`http://app/api/authz${path}`, init),
+      path,
+      authorization: { require } as unknown as AuthorizationContext,
+    });
+  return { authz, require, call };
 }
-describe('independent rule management routes', () => {
-  it('owns authentication and authorization, including options', async () => {
+
+describe('sharing rules through the authorization dispatcher', () => {
+  it('registers its settings item and route', () => {
+    const { authz } = fixture();
+    expect(
+      authz.resourceTypes
+        .get('settings')
+        .items?.get('authorization.sharing-rules'),
+    ).toMatchObject({
+      group: 'authorization',
+      actions: ['read', 'create', 'update', 'delete'].map((name) =>
+        expect.objectContaining({ name }),
+      ),
+    });
+    expect(authz.routes.list()).toContain('/sharing-rules');
+    expect('sharingRules' in authz).toBe(true);
+  });
+
+  it('gates every route on its own settings item', async () => {
+    const { call, require } = fixture();
     for (const path of [
-      '/authz/sharing-rules',
-      '/authz/sharing-rules/options',
-      '/authz/sharing-rules/records/orders',
-      '/authz/sharing-rules/subjects/user',
+      '/sharing-rules',
+      '/sharing-rules/options',
+      '/sharing-rules/records/orders',
     ]) {
-      const anonymous = await fixture(true, false);
-      expect(
-        (await anonymous.router.request('/portal/api' + path)).status,
-      ).toBe(401);
-      expect(anonymous.list).not.toHaveBeenCalled();
-      const denied = await fixture(true, true, false);
-      expect((await denied.router.request('/portal/api' + path)).status).toBe(
-        403,
-      );
-      expect(denied.list).not.toHaveBeenCalled();
-      expect(denied.require).toHaveBeenCalledWith({
+      const response = await call(path);
+      expect(response?.status).toBe(200);
+      expect(require).toHaveBeenLastCalledWith({
         resource: { type: 'settings', id: 'authorization.sharing-rules' },
         action: 'read',
       });
     }
+    expect((await call('/sharing-rules/subjects/user'))?.status).toBe(404);
   });
-  it('serves CRUD and options with no main authorization router mounted', async () => {
-    const { router, list } = await fixture();
-    expect(
-      (await router.request('/portal/api/authz/sharing-rules')).status,
-    ).toBe(200);
-    expect(list).toHaveBeenCalledOnce();
-    expect(
-      (await router.request('/portal/api/authz/sharing-rules/options')).status,
-    ).toBe(200);
+
+  it('answers 403 when the settings check fails', async () => {
+    const { call } = fixture(false);
+    expect((await call('/sharing-rules'))?.status).toBe(403);
+    expect((await call('/sharing-rules/options'))?.status).toBe(403);
   });
-  it('registers no endpoints when the rule engine is absent', async () => {
-    const { router } = await fixture(false);
-    expect(
-      (await router.request('/portal/api/authz/sharing-rules')).status,
-    ).toBe(404);
-    expect(
-      (await router.request('/portal/api/authz/sharing-rules/options')).status,
-    ).toBe(404);
+
+  it('refuses a rule that selects all records', async () => {
+    const { authz, call } = fixture();
+    authz.database.collections.add({ name: 'orders', title: 'Orders' });
+    const response = await call('/sharing-rules', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        key: 'everything',
+        resource: { type: 'database.collection', id: 'orders' },
+        subjects: [{ type: 'user', id: 'alice' }],
+        actions: [{ action: 'read', selection: { type: 'all' } }],
+      }),
+    });
+    expect(response?.status).toBe(400);
   });
 });

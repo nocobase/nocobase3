@@ -1,77 +1,135 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  businessPlugin,
+  createAuthorization,
+  selection,
+  type AuthorizationContext,
+} from '@nocobase/authorization/core';
+import {
+  databasePlugin,
+  settingsPlugin,
+} from '@nocobase/app-plugin-authorization/server';
+import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
 import { createRestrictionRulesHandler } from '../server/handler.js';
 
-const rule = {
-  key: 'orders-rule',
+const rule: RestrictionRule = {
+  key: 'orders-default',
   title: 'Orders rule',
-  resource: { type: 'database.collection', id: 'main.orders' },
+  resource: { type: 'database.collection', id: 'orders' },
   subjects: [{ type: 'user', id: 'alice' }],
-  actions: [{ action: 'read', scope: { type: 'ids', ids: ['1'] } }],
+  actions: [{ action: 'read', selection: selection.records(['o1']) }],
 };
 
-const json = (method: string, body: unknown): RequestInit => ({
-  method,
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
-});
+function host() {
+  const database = databasePlugin();
+  const authz = createAuthorization({
+    plugins: [
+      {
+        id: 'grants',
+        grants: { resolve: async () => [], resolveAll: async () => [] },
+      },
+      settingsPlugin(),
+      businessPlugin(),
+      database,
+    ],
+  });
+  authz.database.collections.add({ name: 'orders', title: 'Orders' });
+  return authz;
+}
 
-describe('Restriction Rules management handler', () => {
-  it('creates, lists, updates, and deletes a rule with settings checks', async () => {
-    const rules = new Map<string, typeof rule>();
+describe('RestrictionRules management handler', () => {
+  it('creates, lists, updates and deletes a rule with settings checks', async () => {
+    const rules = new Map<string, RestrictionRule>();
     const api = {
       list: async () => [...rules.values()],
       get: async (key: string) => rules.get(key),
-      create: async (value: typeof rule) => {
+      create: async (value: RestrictionRule) => {
         rules.set(value.key, value);
         return value;
       },
-      update: async (key: string, value: typeof rule) => {
-        rules.set(key, value);
+      update: async (key: string, value: RestrictionRule) => {
+        rules.delete(key);
+        rules.set(value.key, value);
         return value;
       },
       delete: async (key: string) => {
         rules.delete(key);
       },
-    } as unknown as Parameters<typeof createRestrictionRulesHandler>[0];
-    const handler = createRestrictionRulesHandler(api);
+    };
+    const handler = createRestrictionRulesHandler(host(), api);
     const require = vi.fn(async () => {});
-    const call = (suffix = '', init?: RequestInit) =>
+    const call = (path: string, init?: RequestInit) =>
       handler({
-        request: new Request(
-          `http://app/api/authz/restriction-rules${suffix}`,
-          init,
-        ),
-        path: '/restriction-rules' + suffix,
-        authorization: { require },
+        request: new Request(`http://app/api/authz${path}`, init),
+        path,
+        authorization: { require } as unknown as AuthorizationContext,
       });
+    const json = (method: string, body: unknown): RequestInit => ({
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
 
-    const created = await call('', json('POST', rule));
-    expect(created.status).toBe(201);
-    expect(await created.json()).toEqual({ data: rule });
+    expect((await call('/restriction-rules', json('POST', rule))).status).toBe(
+      201,
+    );
     expect(require).toHaveBeenCalledWith({
       resource: { type: 'settings', id: 'authorization.restriction-rules' },
       action: 'create',
     });
-    expect(await (await call()).json()).toEqual({ data: [rule] });
-    const updated = { ...rule, title: 'Renamed' };
-    expect((await call('/orders-rule', json('PUT', updated))).status).toBe(200);
-    expect(rules.get('orders-rule')).toEqual(updated);
-    expect((await call('/orders-rule', { method: 'DELETE' })).status).toBe(204);
+    expect(await (await call('/restriction-rules')).json()).toEqual({
+      data: [rule],
+    });
+    const updated = {
+      ...rule,
+      actions: [{ action: 'read', selection: selection.records(['o1']) }],
+    };
+    expect(
+      (await call('/restriction-rules/orders-default', json('PUT', updated)))
+        .status,
+    ).toBe(200);
+    expect(require).toHaveBeenCalledWith({
+      resource: { type: 'settings', id: 'authorization.restriction-rules' },
+      action: 'update',
+    });
+    expect(
+      (await call('/restriction-rules/missing', json('PUT', updated))).status,
+    ).toBe(404);
+    expect(
+      (await call('/restriction-rules/orders-default', { method: 'DELETE' }))
+        .status,
+    ).toBe(204);
     expect(rules.size).toBe(0);
   });
 
-  it('rejects malformed rules', async () => {
-    const handler = createRestrictionRulesHandler(
-      {} as Parameters<typeof createRestrictionRulesHandler>[0],
-    );
-    const response = await handler({
-      request: new Request(
-        'http://app/api/authz/restriction-rules',
-        json('POST', { key: 'broken', resource: { type: 'x', id: 'y' } }),
-      ),
-      path: '/restriction-rules',
-      authorization: { require: vi.fn(async () => {}) },
+  it('rejects malformed rules and rules outside the model', async () => {
+    const handler = createRestrictionRulesHandler(host(), {
+      list: async () => [],
+      get: async () => undefined,
+      create: async (value) => value,
+      update: async (_key, value) => value,
+      delete: async () => {},
     });
-    expect(response.status).toBe(400);
+    const post = (body: unknown) =>
+      handler({
+        request: new Request('http://app/api/authz/restriction-rules', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        path: '/restriction-rules',
+        authorization: {
+          require: vi.fn(async () => {}),
+        } as unknown as AuthorizationContext,
+      });
+    expect((await post({ resource: { type: 'x', id: 'y' } })).status).toBe(400);
+    expect(
+      (
+        await post({
+          ...rule,
+          resource: { type: 'database.collection', id: 'invoices' },
+        })
+      ).status,
+    ).toBe(400);
   });
 });

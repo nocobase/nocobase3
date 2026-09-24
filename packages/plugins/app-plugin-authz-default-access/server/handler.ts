@@ -1,61 +1,78 @@
 import type { AuthorizationRouteHandler } from '@nocobase/authorization/core';
+import type {
+  DefaultAccessApi,
+  DefaultAccessRule,
+} from '@nocobase/authorization/default-access';
 import {
   createRouteHandler,
+  createRuleSupportRoutes,
   createSettingsRouter,
+  parse,
   requireSettings,
-} from '@nocobase/app-plugin-authorization/server/management';
-import {
-  actionScopes,
-  object,
-  resource,
-} from '@nocobase/app-plugin-authorization/server/management';
-import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
-import type { DefaultAccessApi } from '@nocobase/authorization/default-access';
+  validateDataScopeRule,
+  type AuthorizationExtensionHost,
+} from '@nocobase/app-plugin-authorization/server/extension';
 
-/** Where the plugin registers its routes, and the prefix every path below carries. */
-export const DEFAULT_ACCESS_ROUTE_PATH = '/default-access';
+/** The rule name, route prefix and settings item suffix. */
+export const DEFAULT_ACCESS_RULE = 'default-access';
+export const DEFAULT_ACCESS_SETTINGS: string = `authorization.${DEFAULT_ACCESS_RULE}`;
+const PATH = `/${DEFAULT_ACCESS_RULE}`;
 
 type DefaultAccessAdministrationApi = Omit<DefaultAccessApi, 'withTransaction'>;
 
+/** Every `/default-access` route, gated by `settings:authorization.default-access`. */
 export function createDefaultAccessHandler(
+  authz: AuthorizationExtensionHost,
   api: DefaultAccessAdministrationApi,
-  validate: (rule: DefaultAccessRule) => void = () => {},
 ): AuthorizationRouteHandler {
   const routes = createSettingsRouter();
-
-  routes.get(DEFAULT_ACCESS_ROUTE_PATH, async (context) => {
-    await requireSettings(context.env.authorization, 'default-access', 'read');
+  const checked = (value: unknown): DefaultAccessRule => {
+    const { key, resource, actions } = parse.rule(value);
+    const rule = { key, resource, actions };
+    validateDataScopeRule(authz, rule);
+    return rule;
+  };
+  routes.route('/', createRuleSupportRoutes(authz, DEFAULT_ACCESS_RULE));
+  routes.get(PATH, async (context) => {
+    await requireSettings(
+      context.env.authorization,
+      DEFAULT_ACCESS_SETTINGS,
+      'read',
+    );
     return context.json({ data: await api.list() });
   });
-
-  routes.put(DEFAULT_ACCESS_ROUTE_PATH, async (context) => {
-    const rule = parseDefaultAccessRule(await context.req.json());
+  routes.post(PATH, async (context) => {
     await requireSettings(
       context.env.authorization,
-      'default-access',
-      'configure',
+      DEFAULT_ACCESS_SETTINGS,
+      'create',
     );
-    validate(rule);
-    return context.json({ data: await api.set(rule) });
+    return context.json(
+      { data: await api.create(checked(await context.req.json())) },
+      201,
+    );
   });
-
-  routes.delete(`${DEFAULT_ACCESS_ROUTE_PATH}/:type/:id`, async (context) => {
+  routes.put(`${PATH}/:key`, async (context) => {
     await requireSettings(
       context.env.authorization,
-      'default-access',
-      'configure',
+      DEFAULT_ACCESS_SETTINGS,
+      'update',
     );
-    await api.delete(context.req.param('type'), context.req.param('id'));
+    const key = context.req.param('key');
+    if (!(await api.get(key)))
+      return context.json({ code: 'RULE_NOT_FOUND' }, 404);
+    return context.json({
+      data: await api.update(key, checked(await context.req.json())),
+    });
+  });
+  routes.delete(`${PATH}/:key`, async (context) => {
+    await requireSettings(
+      context.env.authorization,
+      DEFAULT_ACCESS_SETTINGS,
+      'delete',
+    );
+    await api.delete(context.req.param('key'));
     return context.body(null, 204);
   });
-
   return createRouteHandler(routes);
-}
-
-function parseDefaultAccessRule(value: unknown): DefaultAccessRule {
-  const input = object(value, 'Default Access Rule');
-  return {
-    resource: resource(input.resource),
-    actions: actionScopes(input.actions),
-  };
 }

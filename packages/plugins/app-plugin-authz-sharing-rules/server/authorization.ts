@@ -1,85 +1,63 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type { AuthorizationPlugin } from '@nocobase/authorization/core';
+import type {
+  AuthorizationPlugin,
+  BusinessAuthorizationApi,
+} from '@nocobase/authorization/core';
 import {
-  sharingRules as rulePlugin,
+  sharingRulesPlugin,
   type SharingRulesAuthorizationApi,
   type SharingRuleStore,
 } from '@nocobase/authorization/sharing-rules';
+import type {
+  DatabaseAuthorizationApi,
+  SettingsAuthorizationApi,
+} from '@nocobase/app-plugin-authorization/server';
+import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/extension';
 import {
-  DatabaseConnectionHandle,
-  settingsApi,
-} from '@nocobase/app-plugin-authorization/server/management';
+  createSharingRulesHandler,
+  SHARING_RULES_RULE,
+  SHARING_RULES_SETTINGS,
+} from './handler.js';
 import { DatabaseSharingRuleStore } from './stores/sharing-rules.js';
+
+const NAMESPACE = '@nocobase/app-plugin-authz-sharing-rules';
+const APP_NAMESPACE = '@nocobase/app-plugin-authorization';
 
 export interface SharingRulesOptions {
   store?: SharingRuleStore<DatabaseConnection>;
 }
 
+/** The configuration factory: sharing rules with their settings item and routes. */
 export function sharingRules(
   options: SharingRulesOptions = {},
 ): AuthorizationPlugin<
   SharingRulesAuthorizationApi<DatabaseConnection>,
-  DatabaseConnection
+  DatabaseConnection,
+  SettingsAuthorizationApi & DatabaseAuthorizationApi & BusinessAuthorizationApi
 > {
-  const connection = new DatabaseConnectionHandle('SharingRules');
-  const plugin = rulePlugin<DatabaseConnection>({
+  const connection = new DatabaseConnectionHandle('Sharing Rules');
+  const plugin = sharingRulesPlugin<DatabaseConnection>({
     store: options.store ?? new DatabaseSharingRuleStore(connection.resolve),
   });
   return {
     ...plugin,
+    dependencies: ['settings', 'database', 'business'],
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);
-      authz.resources.add({
-        name: 'authorization.sharing-rules',
+      authz.settings.add({
+        id: SHARING_RULES_SETTINGS,
+        title: { key: 'resourceTitle', ns: NAMESPACE },
         group: 'authorization',
-        title: {
-          key: 'resourceTitle',
-          ns: '@nocobase/app-plugin-authz-sharing-rules',
-        },
-        actions: [
-          {
-            name: 'read',
-            title: {
-              key: 'options.actions.read',
-              ns: '@nocobase/app-plugin-authorization',
-            },
-            grants: [
-              settingsApi.grant('authorization.sharing-rules', ['read']),
-            ],
-          },
-          {
-            name: 'create',
-            title: {
-              key: 'options.actions.create',
-              ns: '@nocobase/app-plugin-authorization',
-            },
-            grants: [
-              settingsApi.grant('authorization.sharing-rules', ['create']),
-            ],
-          },
-          {
-            name: 'update',
-            title: {
-              key: 'options.actions.update',
-              ns: '@nocobase/app-plugin-authorization',
-            },
-            grants: [
-              settingsApi.grant('authorization.sharing-rules', ['update']),
-            ],
-          },
-          {
-            name: 'delete',
-            title: {
-              key: 'options.actions.delete',
-              ns: '@nocobase/app-plugin-authorization',
-            },
-            grants: [
-              settingsApi.grant('authorization.sharing-rules', ['delete']),
-            ],
-          },
-        ],
+        actions: ['read', 'create', 'update', 'delete'].map((name) => ({
+          name,
+          title: { key: `options.actions.${name}`, ns: APP_NAMESPACE },
+        })),
       });
+      authz.routes.add(
+        `/${SHARING_RULES_RULE}`,
+        createSharingRulesHandler(authz, plugin.authorizationApi!.sharingRules),
+      );
     },
   };
 }

@@ -1,96 +1,79 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Hono } from 'hono';
-import { ServiceContainer } from '@nocobase/service-provider';
-import { createAppPaths } from '@nocobase/app-server/config';
 import {
-  authenticationToken,
-  type Auth,
-} from '@nocobase/app-plugin-authentication';
-import {
-  createAppAuthorization,
-  authorizationToken,
-} from '@nocobase/app-plugin-authorization/server';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import contributions from '../server/routes.js';
+  AuthorizationDeniedError,
+  type AuthorizationContext,
+} from '@nocobase/authorization/core';
+import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
+import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import { defaultAccess } from '../server/authorization.js';
 
-async function fixture(installed = true, signedIn = true, permitted = true) {
-  const authorization = createAppAuthorization({});
-  const list = vi.fn(async () => []);
-  if (installed) Object.assign(authorization, { defaultAccess: { list } });
+class MemoryStore {
+  rules: DefaultAccessRule[] = [];
+  list = async () => this.rules;
+  get = async (key: string) => this.rules.find((rule) => rule.key === key);
+  create = async (rule: DefaultAccessRule) => {
+    this.rules.push(rule);
+    return rule;
+  };
+  update = async (_key: string, rule: DefaultAccessRule) => rule;
+  delete = async () => {};
+  withTransaction = () => this;
+}
+
+function fixture(permitted = true) {
+  const authz = createAppAuthorization({
+    config: { plugins: [defaultAccess({ store: new MemoryStore() })] },
+  });
   const require = vi.fn(async () => {
     if (!permitted)
       throw new AuthorizationDeniedError({ effect: 'deny', reasons: [] });
   });
-  const scope = authorization.for({ principal: { type: 'user', id: 'admin' } });
-  scope.require = require;
-  authorization.middleware = () => async (context, next) => {
-    context.set('authz', scope);
-    await next();
-  };
-  const container = new ServiceContainer();
-  container.instance(authorizationToken, authorization);
-  container.instance(authenticationToken, {
-    required: () => async (context, next) => {
-      if (!signedIn) return context.json({ code: 'UNAUTHENTICATED' }, 401);
-      await next();
-    },
-  } as Auth);
-  const router = new Hono();
-  for (const route of contributions)
-    router.route(
-      '/',
-      await route.createRouter({
-        container,
-        appName: 'test',
-        publicBasePath: '',
-        config: { app: { name: 'test', publicBasePath: '' } },
-        paths: createAppPaths({ rootDir: '/missing' }),
-        router,
-      }),
-    );
-  return { router: new Hono().route('/portal/api', router), require, list };
+  const call = (path: string, init?: RequestInit) =>
+    authz.routes.handle({
+      request: new Request(`http://app/api/authz${path}`, init),
+      path,
+      authorization: { require } as unknown as AuthorizationContext,
+    });
+  return { authz, require, call };
 }
-describe('independent rule management routes', () => {
-  it('owns authentication and authorization, including options', async () => {
+
+describe('default access through the authorization dispatcher', () => {
+  it('registers its settings item and route', () => {
+    const { authz } = fixture();
+    expect(
+      authz.resourceTypes
+        .get('settings')
+        .items?.get('authorization.default-access'),
+    ).toMatchObject({
+      group: 'authorization',
+      actions: ['read', 'create', 'update', 'delete'].map((name) =>
+        expect.objectContaining({ name }),
+      ),
+    });
+    expect(authz.routes.list()).toContain('/default-access');
+    expect('defaultAccess' in authz).toBe(true);
+  });
+
+  it('gates every route on its own settings item', async () => {
+    const { call, require } = fixture();
     for (const path of [
-      '/authz/default-access',
-      '/authz/default-access/options',
-      '/authz/default-access/records/orders',
-      '/authz/default-access/subjects/user',
+      '/default-access',
+      '/default-access/options',
+      '/default-access/records/orders',
     ]) {
-      const anonymous = await fixture(true, false);
-      expect(
-        (await anonymous.router.request('/portal/api' + path)).status,
-      ).toBe(401);
-      expect(anonymous.list).not.toHaveBeenCalled();
-      const denied = await fixture(true, true, false);
-      expect((await denied.router.request('/portal/api' + path)).status).toBe(
-        403,
-      );
-      expect(denied.list).not.toHaveBeenCalled();
-      expect(denied.require).toHaveBeenCalledWith({
+      const response = await call(path);
+      expect(response?.status).toBe(200);
+      expect(require).toHaveBeenLastCalledWith({
         resource: { type: 'settings', id: 'authorization.default-access' },
         action: 'read',
       });
     }
+    expect((await call('/default-access/subjects/user'))?.status).toBe(404);
   });
-  it('serves CRUD and options with no main authorization router mounted', async () => {
-    const { router, list } = await fixture();
-    expect(
-      (await router.request('/portal/api/authz/default-access')).status,
-    ).toBe(200);
-    expect(list).toHaveBeenCalledOnce();
-    expect(
-      (await router.request('/portal/api/authz/default-access/options')).status,
-    ).toBe(200);
-  });
-  it('registers no endpoints when the rule engine is absent', async () => {
-    const { router } = await fixture(false);
-    expect(
-      (await router.request('/portal/api/authz/default-access')).status,
-    ).toBe(404);
-    expect(
-      (await router.request('/portal/api/authz/default-access/options')).status,
-    ).toBe(404);
+
+  it('answers 403 when the settings check fails', async () => {
+    const { call } = fixture(false);
+    expect((await call('/default-access'))?.status).toBe(403);
+    expect((await call('/default-access/options'))?.status).toBe(403);
   });
 });

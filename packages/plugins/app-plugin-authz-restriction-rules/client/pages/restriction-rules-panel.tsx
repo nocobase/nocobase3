@@ -1,13 +1,12 @@
-import { accessScopeLabel } from '@nocobase/app-plugin-authorization/client/management';
+import { selectionLabel } from '@nocobase/app-plugin-authorization/client/management';
 import { humanize } from '@nocobase/app-plugin-authorization/client/management';
 import { resourceLabel } from '@nocobase/app-plugin-authorization/client/management';
 import { collectionFields } from '@nocobase/app-plugin-authorization/client/management';
 import { titleText } from '@nocobase/app-plugin-authorization/client/management';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
-import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
-import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
+import { DataScopesEditor } from '@nocobase/app-plugin-authorization/client/management';
 import type { RestrictionRule } from '../api.js';
-import { incompleteScope } from '@nocobase/app-plugin-authorization/client/management';
+import { incompleteSelection } from '@nocobase/app-plugin-authorization/client/management';
 import {
   useSubjectNames,
   subjectKey,
@@ -35,10 +34,13 @@ import {
   useState,
   type ReactElement,
 } from 'react';
-import type { AuthorizationOptions } from '@nocobase/app-plugin-authorization/client/management';
+import type {
+  AuthorizationOptions,
+  AuthorizationRecordOption,
+} from '@nocobase/app-plugin-authorization/client/management';
 import { ConfirmDialog } from '@nocobase/app-plugin-authorization/client/management';
 import {
-  ActionScopesEditor,
+  RuleActionsEditor,
   Field,
   ResourceEditor,
   SubjectsEditor,
@@ -56,10 +58,12 @@ import { TablePager } from '@nocobase/app-plugin-authorization/client/management
 import { useAuthorizationTranslation } from '../i18n.js';
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import {
-  defaultScope,
+  defaultSelection,
   firstActions,
 } from '@nocobase/app-plugin-authorization/client/management';
 import { useRestrictionRulesClient } from '../api.js';
+
+const BUSINESS = 'business';
 
 export function RestrictionRulesPanel({
   options,
@@ -84,18 +88,23 @@ export function RestrictionRulesPanel({
   );
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
-  const [sectionKey, setSectionKey] = useState('');
-  const sections = useMemo(() => resourceSections(options), [options]);
-  const hasResources = sections.some((section) => section.resources.length > 0);
+  const [groupKey, setGroupKey] = useState('');
+  const groups = useMemo(
+    () => options.resourceTypes.flatMap((type) => type.groups ?? []),
+    [options],
+  );
+  const hasResources = options.resourceTypes.some(
+    (type) => type.resources.length > 0,
+  );
   const [page, setPage] = useState(1);
   const [errorCause, setErrorCause] = useState<unknown>();
   const error = errorCause === undefined ? undefined : message(t, errorCause);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [records, setRecords] = useState<
-    readonly import('@nocobase/app-plugin-authorization/client/management').AuthorizationRecordOption[]
-  >([]);
+  const [records, setRecords] = useState<readonly AuthorizationRecordOption[]>(
+    [],
+  );
   useEffect(() => {
-    if (!draft?.resource.id || draft.resource.type === 'resource') return;
+    if (!draft?.resource.id || draft.resource.type === BUSINESS) return;
     let active = true;
     void authz.listRestrictionRecords(draft.resource.id).then(
       (items) => {
@@ -121,12 +130,13 @@ export function RestrictionRulesPanel({
   }, [load]);
   const visibleRules = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const section = sections.find((item) => item.key === sectionKey);
-    const selectedRules = section
+    const selectedRules = groupKey
       ? rules.filter(
           (rule) =>
-            rule.resource.type === section.value &&
-            section.resources.some((item) => item.value === rule.resource.id),
+            options.resourceTypes
+              .find((type) => type.value === rule.resource.type)
+              ?.resources.find((item) => item.value === rule.resource.id)
+              ?.group === groupKey,
         )
       : rules;
     return query
@@ -136,7 +146,7 @@ export function RestrictionRulesPanel({
           ),
         )
       : selectedRules;
-  }, [rules, search, sections, sectionKey, t]);
+  }, [rules, search, options, groupKey, t]);
   const pagedRules = pageSlice(visibleRules, page);
   // Narrowing the search can leave the current page past the end of the list.
   function changeSearch(value: string): void {
@@ -152,7 +162,7 @@ export function RestrictionRulesPanel({
         !draft.key ||
         !draft.resource.id ||
         draft.actions.length === 0 ||
-        draft.actions.some((item) => incompleteScope(item.scope)) ||
+        draft.actions.some((item) => incompleteSelection(item.selection)) ||
         draft.subjects.length === 0 ||
         draft.subjects.some((item) => !item.id)
       )
@@ -186,19 +196,19 @@ export function RestrictionRulesPanel({
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
         filters={
-          options.resourceGroups?.length ? (
+          groups.length ? (
             <SelectField
               aria-label={t('editors.resourceGroup')}
-              value={sectionKey}
+              value={groupKey}
               onValueChange={(value) => {
-                setSectionKey(value);
+                setGroupKey(value);
                 setPage(1);
               }}
               options={[
                 { value: '', label: t('common.all') },
-                ...sections.map((section) => ({
-                  value: section.key,
-                  label: section.label,
+                ...groups.map((group) => ({
+                  value: group.value,
+                  label: group.label,
                 })),
               ]}
             />
@@ -289,11 +299,9 @@ export function RestrictionRulesPanel({
                           .find((type) => type.value === rule.resource.type)
                           ?.resources.find(
                             (resource) => resource.value === rule.resource.id,
-                          )?.ruleScopes;
+                          )?.dataScopes?.[action];
                         const grouped =
-                          (declared?.filter(
-                            (target) => target.action === action,
-                          ).length ?? entries.length) > 1;
+                          (declared?.length ?? entries.length) > 1;
                         return (
                           <div key={action}>
                             {grouped && (
@@ -319,16 +327,11 @@ export function RestrictionRulesPanel({
                                   ?.resources.find(
                                     (resource) =>
                                       resource.value === rule.resource.id,
-                                  )?.ruleScopes;
+                                  )?.dataScopes?.[item.action];
                                 const scopeLabel = targets?.find(
-                                  (target) =>
-                                    target.action === item.action &&
-                                    target.scopeKey === item.scopeKey,
+                                  (target) => target.key === item.scopeKey,
                                 )?.label;
-                                const multiple =
-                                  (targets?.filter(
-                                    (target) => target.action === item.action,
-                                  ).length ?? 0) > 1;
+                                const multiple = (targets?.length ?? 0) > 1;
                                 return (
                                   <div
                                     key={JSON.stringify([
@@ -354,7 +357,11 @@ export function RestrictionRulesPanel({
                                       →
                                     </span>
                                     <span>
-                                      {accessScopeLabel(t, item.scope, options)}
+                                      {selectionLabel(
+                                        t,
+                                        item.selection,
+                                        options,
+                                      )}
                                     </span>
                                   </div>
                                 );
@@ -479,7 +486,7 @@ export function RestrictionRulesPanel({
                         ...draft,
                         resource,
                         actions:
-                          resource.type === 'resource'
+                          resource.type === BUSINESS
                             ? []
                             : firstActions(
                                 options,
@@ -487,7 +494,7 @@ export function RestrictionRulesPanel({
                                 resource.id,
                               ).map((action) => ({
                                 action,
-                                scope: defaultScope(options),
+                                selection: defaultSelection(options),
                               })),
                       })
                     }
@@ -531,8 +538,8 @@ export function RestrictionRulesPanel({
                     {t('restrictionRules.accessDescription')}
                   </p>
                 </div>
-                {draft.resource.type === 'resource' ? (
-                  <BusinessRuleScopes
+                {draft.resource.type === BUSINESS ? (
+                  <DataScopesEditor
                     options={options}
                     resourceId={draft.resource.id}
                     value={draft.actions}
@@ -540,7 +547,7 @@ export function RestrictionRulesPanel({
                     loadRecords={loadBusinessRecords}
                   />
                 ) : (
-                  <ActionScopesEditor
+                  <RuleActionsEditor
                     options={options}
                     resourceType={draft.resource.type}
                     resourceId={draft.resource.id}
@@ -561,23 +568,26 @@ export function RestrictionRulesPanel({
 
 function fresh(options: AuthorizationOptions): RestrictionRule {
   const type =
-    options.resourceTypes.find((item) => item.value === 'resource') ??
+    options.resourceTypes.find((item) => item.value === BUSINESS) ??
     options.resourceTypes[0];
   return {
     key: '',
     title: '',
     resource: {
-      type: type?.value ?? 'resource',
+      type: type?.value ?? BUSINESS,
       id: type?.resources[0]?.value ?? '',
     },
     actions:
-      type?.value === 'resource'
+      type?.value === BUSINESS
         ? []
         : firstActions(
             options,
             type?.value ?? '',
             type?.resources[0]?.value,
-          ).map((action) => ({ action, scope: defaultScope(options) })),
+          ).map((action) => ({
+            action,
+            selection: defaultSelection(options),
+          })),
     subjects: [],
     reason: '',
   };

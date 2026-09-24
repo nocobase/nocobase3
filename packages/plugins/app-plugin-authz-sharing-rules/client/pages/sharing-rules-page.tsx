@@ -9,7 +9,7 @@ import {
 
 export default function SharingRulesPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/sharing-rules/options');
+  const page = useAuthorizationPageData('sharing-rules');
   return (
     <PermissionsPage
       title={t('sharingRules.page.title')}

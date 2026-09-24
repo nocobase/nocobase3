@@ -1,70 +1,133 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  businessPlugin,
+  createAuthorization,
+  selection,
+  type AuthorizationContext,
+} from '@nocobase/authorization/core';
+import {
+  databasePlugin,
+  settingsPlugin,
+} from '@nocobase/app-plugin-authorization/server';
+import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
 import { createDefaultAccessHandler } from '../server/handler.js';
 
-const rule = {
-  resource: { type: 'database.collection', id: 'main.orders' },
-  actions: [{ action: 'read', scope: { type: 'all' } }],
+const rule: DefaultAccessRule = {
+  key: 'orders-default',
+  resource: { type: 'database.collection', id: 'orders' },
+  actions: [{ action: 'read', selection: selection.all() }],
 };
 
+function host() {
+  const database = databasePlugin();
+  const authz = createAuthorization({
+    plugins: [
+      {
+        id: 'grants',
+        grants: { resolve: async () => [], resolveAll: async () => [] },
+      },
+      settingsPlugin(),
+      businessPlugin(),
+      database,
+    ],
+  });
+  authz.database.collections.add({ name: 'orders', title: 'Orders' });
+  return authz;
+}
+
 describe('Default Access management handler', () => {
-  it('sets, lists, and deletes a rule with settings checks', async () => {
-    const rules = new Map<string, typeof rule>();
+  it('creates, lists, updates and deletes a rule with settings checks', async () => {
+    const rules = new Map<string, DefaultAccessRule>();
     const api = {
       list: async () => [...rules.values()],
-      get: async (_type: string, id: string) => rules.get(id),
-      set: async (value: typeof rule) => {
-        rules.set(value.resource.id, value);
+      get: async (key: string) => rules.get(key),
+      create: async (value: DefaultAccessRule) => {
+        rules.set(value.key, value);
         return value;
       },
-      delete: async (_type: string, id: string) => {
-        rules.delete(id);
+      update: async (key: string, value: DefaultAccessRule) => {
+        rules.delete(key);
+        rules.set(value.key, value);
+        return value;
       },
-    } as unknown as Parameters<typeof createDefaultAccessHandler>[0];
-    const handler = createDefaultAccessHandler(api);
+      delete: async (key: string) => {
+        rules.delete(key);
+      },
+    };
+    const handler = createDefaultAccessHandler(host(), api);
     const require = vi.fn(async () => {});
     const call = (path: string, init?: RequestInit) =>
       handler({
         request: new Request(`http://app/api/authz${path}`, init),
         path,
-        authorization: { require },
+        authorization: { require } as unknown as AuthorizationContext,
       });
-
-    const created = await call('/default-access', {
-      method: 'PUT',
+    const json = (method: string, body: unknown): RequestInit => ({
+      method,
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(rule),
+      body: JSON.stringify(body),
     });
-    expect(created.status).toBe(200);
+
+    expect((await call('/default-access', json('POST', rule))).status).toBe(
+      201,
+    );
     expect(require).toHaveBeenCalledWith({
       resource: { type: 'settings', id: 'authorization.default-access' },
-      action: 'configure',
+      action: 'create',
     });
     expect(await (await call('/default-access')).json()).toEqual({
       data: [rule],
     });
+    const updated = {
+      ...rule,
+      actions: [{ action: 'read', selection: selection.records(['o1']) }],
+    };
     expect(
-      (
-        await call('/default-access/database.collection/main.orders', {
-          method: 'DELETE',
-        })
-      ).status,
+      (await call('/default-access/orders-default', json('PUT', updated)))
+        .status,
+    ).toBe(200);
+    expect(require).toHaveBeenCalledWith({
+      resource: { type: 'settings', id: 'authorization.default-access' },
+      action: 'update',
+    });
+    expect(
+      (await call('/default-access/missing', json('PUT', updated))).status,
+    ).toBe(404);
+    expect(
+      (await call('/default-access/orders-default', { method: 'DELETE' }))
+        .status,
     ).toBe(204);
     expect(rules.size).toBe(0);
   });
 
-  it('rejects malformed rules', async () => {
-    const handler = createDefaultAccessHandler(
-      {} as Parameters<typeof createDefaultAccessHandler>[0],
-    );
-    const response = await handler({
-      request: new Request('http://app/api/authz/default-access', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ resource: { type: 'x', id: 'y' } }),
-      }),
-      path: '/default-access',
-      authorization: { require: vi.fn(async () => {}) },
+  it('rejects malformed rules and rules outside the model', async () => {
+    const handler = createDefaultAccessHandler(host(), {
+      list: async () => [],
+      get: async () => undefined,
+      create: async (value) => value,
+      update: async (_key, value) => value,
+      delete: async () => {},
     });
-    expect(response.status).toBe(400);
+    const post = (body: unknown) =>
+      handler({
+        request: new Request('http://app/api/authz/default-access', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        path: '/default-access',
+        authorization: {
+          require: vi.fn(async () => {}),
+        } as unknown as AuthorizationContext,
+      });
+    expect((await post({ resource: { type: 'x', id: 'y' } })).status).toBe(400);
+    expect(
+      (
+        await post({
+          ...rule,
+          resource: { type: 'database.collection', id: 'invoices' },
+        })
+      ).status,
+    ).toBe(400);
   });
 });

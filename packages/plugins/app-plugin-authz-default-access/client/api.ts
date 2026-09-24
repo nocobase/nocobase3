@@ -1,27 +1,39 @@
 import { useApiClient, type ApiClient } from '@nocobase/app-client';
 import { useMemo } from 'react';
 import type {
-  AccessScope,
   AuthorizationRecordOption,
+  RecordSelection,
 } from '@nocobase/app-plugin-authorization/client/management';
 export interface DefaultAccessRule {
+  key: string;
   resource: { type: string; id: string };
-  actions: readonly { action: string; scopeKey?: string; scope: AccessScope }[];
+  actions: readonly {
+    action: string;
+    scopeKey?: string;
+    selection: RecordSelection;
+  }[];
 }
 class DefaultAccessClient {
   constructor(private readonly api: ApiClient) {}
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
     return this.get<readonly DefaultAccessRule[]>('authz/default-access');
   }
-  setDefaultAccess(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
-    return this.send<DefaultAccessRule>('authz/default-access', 'PUT', rule);
+  createDefaultAccess(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
+    return this.send<DefaultAccessRule>('authz/default-access', 'POST', rule);
   }
-  async deleteDefaultAccess(resource: {
-    type: string;
-    id: string;
-  }): Promise<void> {
+  updateDefaultAccess(
+    key: string,
+    rule: DefaultAccessRule,
+  ): Promise<DefaultAccessRule> {
+    return this.send<DefaultAccessRule>(
+      `authz/default-access/${encodeURIComponent(key)}`,
+      'PUT',
+      rule,
+    );
+  }
+  async deleteDefaultAccess(key: string): Promise<void> {
     await this.api.request({
-      path: `authz/default-access/${encodeURIComponent(resource.type)}/${encodeURIComponent(resource.id)}`,
+      path: `authz/default-access/${encodeURIComponent(key)}`,
       method: 'DELETE',
     });
   }

@@ -3,7 +3,7 @@ import {
   decodeAuthorizationTitle,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
-import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/management';
+import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/extension';
 import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
 import type { RestrictionRuleStore } from '@nocobase/authorization/restriction-rules';
 
