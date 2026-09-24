@@ -8,6 +8,11 @@ type SettingsShellProps = {
   readonly title: string;
   readonly description: string;
   readonly children: ReactNode;
+  /**
+   * Fill the host's scroll viewport on large screens so a page with its own
+   * scroll regions does not also scroll the page around them.
+   */
+  readonly fill?: boolean;
 } & (
   | {
       readonly navigationLabel: string;
@@ -30,11 +35,14 @@ export function SettingsShell({
   tabs,
   activeTabKey,
   onTabChange,
+  fill = false,
   children,
 }: SettingsShellProps): ReactElement {
   const t = useT();
   return (
-    <PageContainer>
+    <PageContainer
+      className={fill ? 'lg:flex lg:h-full lg:flex-col' : undefined}
+    >
       <PageHeader title={t(title)} description={t(description)} />
       {tabs && tabs.length > 1 ? (
         <nav
@@ -59,7 +67,13 @@ export function SettingsShell({
           })}
         </nav>
       ) : null}
-      <div>{children}</div>
+      <div
+        className={
+          fill ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : undefined
+        }
+      >
+        {children}
+      </div>
     </PageContainer>
   );
 }

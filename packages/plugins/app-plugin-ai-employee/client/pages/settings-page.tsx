@@ -58,7 +58,7 @@ export default function AISettingsPage(): ReactElement {
   }
 
   return (
-    <AISettingsShell>
+    <AISettingsShell fill={Boolean(isParentEntry)}>
       {isParentEntry ? <AIEmployeePage /> : <Outlet />}
     </AISettingsShell>
   );
