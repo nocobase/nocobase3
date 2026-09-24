@@ -92,6 +92,15 @@ describe('Authorization Core', () => {
       ],
     });
     expect(order).toEqual(['permissions', 'database']);
+
+    const grantOrder: string[] = [];
+    createAuthorization({
+      plugins: [
+        plugin('consumer', { requiresGrants: true, order: grantOrder }),
+        plugin('roles', { providesGrants: true, order: grantOrder }),
+      ],
+    });
+    expect(grantOrder).toEqual(['roles', 'consumer']);
   });
 
   it('collects access constraints from installed plugins', async () => {
@@ -147,17 +156,6 @@ describe('Authorization Core', () => {
         ],
       }),
     ).toThrow(/Circular/);
-  });
-
-  it('sets the Grant Provider up before its consumers', () => {
-    const order: string[] = [];
-    createAuthorization({
-      plugins: [
-        plugin('consumer', { requiresGrants: true, order }),
-        plugin('roles', { providesGrants: true, order }),
-      ],
-    });
-    expect(order).toEqual(['roles', 'consumer']);
   });
 
   it('fails fast for missing and multiple Grant Providers', () => {
@@ -232,9 +230,13 @@ describe('Authorization Core', () => {
   });
 
   it('exposes the request context through middleware', async () => {
+    let setupMiddleware: ReturnType<
+      ReturnType<typeof createAuthorization>['middleware']
+    > = () => Promise.resolve();
     const identityPlugin: AuthorizationPlugin = {
       id: 'identity',
       setup(authz): void {
+        setupMiddleware = authz.middleware();
         authz.use(async (request, next) => {
           request.principal = { type: 'user', id: 'alice' };
           await next();
@@ -275,33 +277,15 @@ describe('Authorization Core', () => {
       principal: 'alice',
       subjects: [{ type: 'role', id: 'editor' }],
     });
-  });
 
-  it('gives plugins the same middleware through setup', async () => {
-    let middleware: ReturnType<
-      ReturnType<typeof createAuthorization>['middleware']
-    > = () => Promise.resolve();
-    const authorization = createAuthorization({
-      plugins: [
-        {
-          id: 'routes',
-          setup(authz): void {
-            middleware = authz.middleware();
-          },
-        },
-      ],
-    });
-    authorization.use(async (request, next) => {
-      request.principal = { type: 'user', id: 'alice' };
-      await next();
-    });
-    const router = new Hono<AuthorizationEnv>();
-    router.use('*', middleware);
-    router.get('/', (context) =>
+    const pluginRouter = new Hono<AuthorizationEnv>();
+    pluginRouter.use('*', setupMiddleware);
+    pluginRouter.get('/', (context) =>
       context.text(context.get('authz').identity.principal.id),
     );
-
-    await expect((await router.request('/')).text()).resolves.toBe('alice');
+    await expect((await pluginRouter.request('/')).text()).resolves.toBe(
+      'alice',
+    );
   });
 
   it('fails when middleware does not resolve a principal', async () => {
@@ -324,13 +308,19 @@ describe('Authorization Core', () => {
     const authorization = createAuthorization({
       plugins: [plugin('reports')],
     });
-    authorization.routes.add('/reports', async ({ authorization: authz }) => {
+    const handler: Parameters<typeof authorization.routes.add>[1] = async ({
+      authorization: authz,
+    }) => {
       await authz.require({
         resource: { type: 'reports', id: 'sales' },
         action: 'read',
       });
       return Response.json({ ok: true });
-    });
+    };
+    authorization.routes.add('/reports', handler);
+    expect(() => authorization.routes.add('/reports', handler)).toThrow(
+      'Authorization route already registered: /reports',
+    );
     const response = await authorization.routes.handle({
       request: new Request('http://localhost/reports/sales'),
       path: '/reports/sales',
@@ -362,30 +352,7 @@ describe('the subject types an application declares', () => {
     ]);
   });
 
-  it('asks a declared type for its own ids and keeps the rest', async () => {
-    const authorization = createAuthorization({ plugins: [] });
-    const asked: (readonly string[])[] = [];
-    authorization.subjects.add('user', {
-      filterActive: (ids) => {
-        asked.push(ids);
-        return Promise.resolve(ids.filter((id) => id !== 'retired'));
-      },
-    });
-
-    await expect(
-      authorization.subjects.filterActive([
-        { type: 'user', id: 'root' },
-        { type: 'user', id: 'retired' },
-        { type: 'authenticated', id: '*' },
-      ]),
-    ).resolves.toEqual([
-      { type: 'user', id: 'root' },
-      { type: 'authenticated', id: '*' },
-    ]);
-    expect(asked).toEqual([['root', 'retired']]);
-  });
-
-  it('groups a mixed list by type and hands each its own ids', async () => {
+  it('groups a mixed list by type, hands each its own ids and keeps the rest', async () => {
     const authorization = createAuthorization({ plugins: [] });
     const asked = new Map<string, readonly string[]>();
     for (const type of ['user', 'team']) {
@@ -416,10 +383,10 @@ describe('the subject types an application declares', () => {
     ]);
   });
 
-  it('rejects a second registration of one type', () => {
+  it('rejects a second registration and releases one so the type passes through again', async () => {
     const authorization = createAuthorization({ plugins: [] });
-    authorization.subjects.add('user', {
-      filterActive: (ids) => Promise.resolve(ids),
+    const release = authorization.subjects.add('user', {
+      filterActive: () => Promise.resolve([]),
     });
     expect(() =>
       authorization.subjects.add('user', {
@@ -427,13 +394,6 @@ describe('the subject types an application declares', () => {
       }),
     ).toThrow(/already registered/);
     expect(authorization.subjects.list()).toEqual(['user']);
-  });
-
-  it('releases a registration so the type passes through again', async () => {
-    const authorization = createAuthorization({ plugins: [] });
-    const release = authorization.subjects.add('user', {
-      filterActive: () => Promise.resolve([]),
-    });
 
     await expect(
       authorization.subjects.filterActive([{ type: 'user', id: 'root' }]),

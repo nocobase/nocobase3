@@ -6,7 +6,6 @@ import {
   selection,
   type AccessConstraint,
   type AuthorizationGrant,
-  type AuthorizationGrantService,
   type AuthorizationPlugin,
   type BindableCompositePermission,
   type CompositeContribution,
@@ -14,6 +13,7 @@ import {
   type PermissionGrant,
   type ResolveAccessConstraintsInput,
 } from '../src/core/index.js';
+import { flattenGrants, grantProvider } from './helpers/grant-provider.js';
 
 type Access = 'recordsIOwn' | 'allRecords';
 
@@ -114,47 +114,35 @@ const quotesObject: Composite = {
   ],
 };
 
-const source = { plugin: 'test', id: 'set' };
 const alice = { principal: { type: 'user', id: 'alice' } };
-
-function provider(
-  grants: readonly PermissionGrant[],
-): AuthorizationGrantService {
-  const all: AuthorizationGrant[] = grants.flatMap((grant) =>
-    grant.actions.map((entry) => ({
-      source,
-      resource: grant.resource,
-      action: entry.action,
-      ...(entry.policy ? { policy: entry.policy } : {}),
-    })),
-  );
-  return {
-    resolveAll: () => Promise.resolve(all),
-    resolve: (input) =>
-      Promise.resolve(
-        all.filter(
-          (grant) =>
-            grant.resource.type === input.resource.type &&
-            grant.resource.id === input.resource.id &&
-            grant.action === input.action,
-        ),
-      ),
-  };
-}
 
 function setup(
   grants: readonly PermissionGrant[] = [],
   extra: readonly AuthorizationPlugin[] = [],
 ) {
   const authz = createAuthorization({
-    plugins: [{ id: 'grants', grants: provider(grants) }, ...extra],
+    plugins: [
+      { id: 'grants', grants: grantProvider(flattenGrants(grants)) },
+      ...extra,
+    ],
   });
   return authz;
 }
 
 describe('composites', () => {
-  it('are built in: available without any plugin', () => {
-    const authz = createAuthorization({ plugins: [] });
+  it('are built in: available without any plugin, and handed to every plugin setup', () => {
+    let seen: unknown;
+    const authz = createAuthorization({
+      plugins: [
+        {
+          id: 'reader',
+          setup(host) {
+            seen = host.composites;
+          },
+        },
+      ],
+    });
+    expect(seen).toBe(authz.composites);
     const reference = authz.composites.define(quotes);
     expect(reference.name).toBe('sales.quotes');
     expect(authz.composites.list().map((item) => item.name)).toEqual([
@@ -169,21 +157,6 @@ describe('composites', () => {
     expect(
       authz.resourceTypes.get('composite').items?.has('sales.quotes'),
     ).toBe(true);
-  });
-
-  it('are handed to every plugin setup', () => {
-    let seen: unknown;
-    const authz = createAuthorization({
-      plugins: [
-        {
-          id: 'reader',
-          setup(host) {
-            seen = host.composites;
-          },
-        },
-      ],
-    });
-    expect(seen).toBe(authz.composites);
   });
 
   it('builds the same definition in object and builder form', () => {

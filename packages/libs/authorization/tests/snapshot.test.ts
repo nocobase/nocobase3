@@ -10,7 +10,7 @@ import {
   type PermissionGrant,
 } from '../src/core/index.js';
 import { permissionSetsPlugin } from '../src/plugins/permission-sets/index.js';
-import { MockPermissionSetStore } from './mock-permission-set-store.js';
+import { MockPermissionSetStore } from './helpers/mock-permission-set-store.js';
 
 const quotesScope: CompositeContribution<{ quotes: string }> = {
   build: () => ({
@@ -118,17 +118,9 @@ const grants: readonly PermissionGrant[] = [
 ];
 
 describe('the snapshot', () => {
-  it('lists a scoped composite grant', async () => {
+  it('lists a scoped composite grant and omits record-scoped collection grants and unregistered items or actions', async () => {
     const snapshot = await setup(grants).for(alice).snapshot();
     expect(snapshot.unrestricted).toBe(false);
-    expect(snapshot.permissions).toContainEqual({
-      resource: { type: 'composite', id: 'sales.quotes' },
-      actions: ['submit'],
-    });
-  });
-
-  it('omits record-scoped collection grants and unregistered items or actions', async () => {
-    const snapshot = await setup(grants).for(alice).snapshot();
     expect(snapshot.permissions).toEqual([
       {
         resource: { type: 'composite', id: 'sales.quotes' },

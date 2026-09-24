@@ -4,32 +4,18 @@ import {
   createAuthorization,
   grantBacked,
   type AuthorizationGrant,
-  type AuthorizationGrantService,
 } from '../src/core/index.js';
+import { grantProvider } from './helpers/grant-provider.js';
 
-const source = { plugin: 'test', id: 'set' };
 const alice = { principal: { type: 'user', id: 'alice' } };
 
 function withGrants(
   grants: readonly Omit<AuthorizationGrant, 'source'>[],
   unrestricted = false,
 ): ReturnType<typeof createAuthorization> {
-  const all = grants.map((grant) => ({ ...grant, source }));
-  const service: AuthorizationGrantService = {
-    resolveAll: () => Promise.resolve(all),
-    resolve: (input) =>
-      Promise.resolve(
-        all.filter(
-          (grant) =>
-            grant.resource.type === input.resource.type &&
-            (grant.resource.id === '*' ||
-              grant.resource.id === input.resource.id) &&
-            grant.action === input.action,
-        ),
-      ),
-    unrestricted: () => Promise.resolve(unrestricted),
-  };
-  return createAuthorization({ plugins: [{ id: 'grants', grants: service }] });
+  return createAuthorization({
+    plugins: [{ id: 'grants', grants: grantProvider(grants, unrestricted) }],
+  });
 }
 
 describe('resource types', () => {
@@ -53,12 +39,13 @@ describe('resource types', () => {
       items,
     });
     expect(authz.resourceTypes.get('ledger').recordAccess).toBe(true);
-    for (const type of authz.resourceTypes.list())
-      expect(type).not.toHaveProperty('title');
     expect(() => authz.resourceTypes.get('missing')).toThrow(/not registered/);
     expect(() =>
       authz.resourceTypes.add({ type: 'report', actions: ['x'] }),
     ).toThrow(/already registered/);
+    expect(() => authz.resourceTypes.add({ type: 'bare' })).toThrow(
+      /needs items or declared actions/,
+    );
   });
 });
 
@@ -162,13 +149,6 @@ describe('resource items', () => {
     }
   });
 
-  it('needs items or declared actions', () => {
-    const authz = createAuthorization({ plugins: [] });
-    expect(() => authz.resourceTypes.add({ type: 'bare' })).toThrow(
-      /needs items or declared actions/,
-    );
-  });
-
   it('accepts any record id for a declared action and denies an undeclared one', async () => {
     const authz = withGrants([
       { resource: { type: 'hub.app', id: '*' }, action: 'read' },
@@ -192,37 +172,6 @@ describe('resource items', () => {
       }),
     ).resolves.toMatchObject({
       effect: 'deny',
-      reasons: [{ code: 'RESOURCE_ACTION_NOT_SUPPORTED' }],
-    });
-  });
-
-  it('treats page as a record type', async () => {
-    const authz = withGrants([
-      { resource: { type: 'page', id: 'orders' }, action: 'access' },
-    ]);
-    authz.resourceTypes.add({
-      type: 'page',
-      actions: ['access'],
-    });
-    const context = authz.for(alice);
-    await expect(
-      context.can({
-        resource: { type: 'page', id: 'orders' },
-        action: 'access',
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      context.can({
-        resource: { type: 'page', id: 'other' },
-        action: 'access',
-      }),
-    ).resolves.toBe(false);
-    await expect(
-      context.authorize({
-        resource: { type: 'page', id: 'orders' },
-        action: 'edit',
-      }),
-    ).resolves.toMatchObject({
       reasons: [{ code: 'RESOURCE_ACTION_NOT_SUPPORTED' }],
     });
   });

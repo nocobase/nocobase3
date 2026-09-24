@@ -3,7 +3,7 @@ import type {
   PermissionSetAssignment,
   PermissionSetStore,
   PermissionSetSubject,
-} from '../src/plugins/permission-sets/index.js';
+} from '../../src/plugins/permission-sets/index.js';
 
 export interface MockPermissionSetStoreOptions {
   permissionSets?: readonly PermissionSet[];

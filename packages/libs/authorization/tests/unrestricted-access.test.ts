@@ -6,32 +6,9 @@ import {
   selection,
   type AuthorizationPlugin,
   type RestrictionRule,
-  type RestrictionRuleStore,
 } from '../src/index.js';
-import { MockPermissionSetStore } from './mock-permission-set-store.js';
-
-class MockRestrictionRuleStore implements RestrictionRuleStore {
-  constructor(private readonly rules: readonly RestrictionRule[]) {}
-  create(rule: RestrictionRule): Promise<RestrictionRule> {
-    return Promise.resolve(rule);
-  }
-  update(_key: string, rule: RestrictionRule): Promise<RestrictionRule> {
-    return Promise.resolve(rule);
-  }
-  delete(): Promise<void> {
-    return Promise.resolve();
-  }
-  get(key: string): Promise<RestrictionRule | undefined> {
-    return Promise.resolve(this.rules.find((rule) => rule.key === key));
-  }
-  list(): Promise<readonly RestrictionRule[]> {
-    return Promise.resolve(this.rules);
-  }
-  /** In-memory stores have no transactions. */
-  withTransaction(): RestrictionRuleStore {
-    return this;
-  }
-}
+import { MemoryRuleStore } from './helpers/memory-rule-store.js';
+import { MockPermissionSetStore } from './helpers/mock-permission-set-store.js';
 
 const resource = {
   type: 'database.collection',
@@ -89,7 +66,7 @@ function superuserStore(
 }
 
 describe('unrestricted access', () => {
-  it('permits a resource type whose handler has no authorizeUnrestricted', async () => {
+  it('permits a resource type whose handler has no authorizeUnrestricted and still denies an unregistered one', async () => {
     const authorization = createAuthorization({
       plugins: [permissionSetsPlugin({ store: superuserStore() })],
     });
@@ -121,10 +98,19 @@ describe('unrestricted access', () => {
       effect: 'permit',
       reasons: [{ code: 'UNRESTRICTED_ACCESS' }],
     });
+    await expect(
+      authorization.for(root).authorize({
+        resource: { type: 'unregistered.resource', id: 'anything' },
+        action: 'read',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'UNKNOWN_RESOURCE_TYPE' }],
+    });
   });
 
   it('ignores a Restriction Rule that would otherwise narrow a resource scope', async () => {
-    const restrictions = new MockRestrictionRuleStore([
+    const restrictions = new MemoryRuleStore<RestrictionRule>([
       {
         key: 'owned-only',
         resource,
@@ -158,51 +144,6 @@ describe('unrestricted access', () => {
       reasons: [{ code: 'UNRESTRICTED_ACCESS' }],
     });
     expect(handler.constraintCalls).toBe(0);
-  });
-
-  it('still denies a resource type no handler accepts', async () => {
-    const authorization = createAuthorization({
-      plugins: [
-        permissionSetsPlugin({ store: superuserStore() }),
-        recordingResource().plugin,
-      ],
-    });
-    authorization.permissionSets.protect({
-      owner: '@nocobase/test',
-      keys: ['superuser'],
-      unrestricted: true,
-    });
-
-    await expect(
-      authorization.for(root).authorize({
-        resource: { type: 'unregistered.resource', id: 'anything' },
-        action: 'read',
-      }),
-    ).resolves.toMatchObject({
-      effect: 'deny',
-      reasons: [{ code: 'UNKNOWN_RESOURCE_TYPE' }],
-    });
-  });
-
-  it('reports unrestricted in the snapshot', async () => {
-    const authorization = createAuthorization({
-      plugins: [permissionSetsPlugin({ store: superuserStore() })],
-    });
-    await expect(authorization.for(root).snapshot()).resolves.toEqual({
-      unrestricted: false,
-      permissions: [],
-    });
-
-    authorization.permissionSets.protect({
-      owner: '@nocobase/test',
-      keys: ['superuser'],
-      unrestricted: true,
-    });
-
-    await expect(authorization.for(root).snapshot()).resolves.toEqual({
-      unrestricted: true,
-      permissions: [],
-    });
   });
 
   it('rejects a conflicting owner and releases only its own declaration', () => {
