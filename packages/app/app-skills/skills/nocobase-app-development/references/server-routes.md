@@ -83,7 +83,7 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
   });
 ```
 
-Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions. The pair must be registered: `settings`, `business` and `database.collection` deny an item or action nobody added, so this route's owner calls `authz.settings.add({ id: 'orders-admin', title, group, actions: [{ name: 'read' }] })` in its provider's `boot`. `can` is true only for an unconditional permit; a check that depends on records, such as a `database.collection` grant with record access, is conditional and needs the policy flow below.
+Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions. The pair must be registered: `settings`, `business` and `database.collection` deny an item or action nobody added, so this route's owner calls `authz.settings.add({ id: 'orders-admin', title, section, actions: [{ name: 'read' }] })`, where the optional `section` is an administration subsection added with `authz.sections.add` in its provider's `boot`. `can` is true only for an unconditional permit; a check that depends on records, such as a `database.collection` grant with record access, is conditional and needs the policy flow below.
 
 ### Enforce record, field and relation policies
 

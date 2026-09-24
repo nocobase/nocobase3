@@ -33,6 +33,29 @@ menu entry, as the App page in this example does. Pages with children must place
 `<Outlet />` at the intended content location; pure navigation groups have no
 `componentLoader`. Refine resources serve CRUD configuration, not menus.
 
+Every page route declares `authz`; nothing is inferred from the route name, and a page without it is rejected at registration. The App page checks a page grant, the Settings page names the check it requires, and the development page declares `'skip'`, which checks nothing beyond sign-in and parent routes:
+
+```ts
+defineAppRoutes([
+  {
+    name: 'index',
+    path: '/routes-example',
+    auth: 'required',
+    authz: { resource: { type: 'page', id: 'index' }, action: 'access' },
+    componentLoader: () => import('./pages/routes-example-page.js'),
+  },
+]);
+defineDevRoutes([
+  {
+    name: 'routes-example',
+    path: '/routes-example',
+    navigation: { title: 'title' },
+    authz: 'skip',
+    componentLoader: () => import('./pages/routes-example-dev-page.js'),
+  },
+]);
+```
+
 The Root Route and API Route each resolve the public Authentication Token and
 install `auth.required()` on their own router. Neither depends on App
 middleware, the other Route, or Server contribution order. The App Route guard

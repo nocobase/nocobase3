@@ -24,7 +24,7 @@ Keep portable declarations free of database queries so seeds and provisioning ca
 
 ## 3. Register record access
 
-Resolve `authorizationToken` and the database in the owning provider. Register the display group, collections and business resources there, and record access with `authz.recordAccess.define`.
+Resolve `authorizationToken` and the database in the owning provider. Register the display subsection (`authz.sections.add`), collections and business resources there, and record access with `authz.recordAccess.define`.
 
 The following application-owned `server/sales-record-access.ts` implements the two selections the engineer set needs. Its migrations must define `quotes.preparedById`, `projects.region` and a trusted `salesMembers` table with user id and region; membership is maintained by authorized business code. A resolver receives `{ principal, collection, action, params }` and returns `true`, `false` or a filter on the collection's own columns. Answer no memberships with `false`, never with all records. Declare `.collections(...)` accurately and type optional parameters with `.params<P>(schema)`.
 

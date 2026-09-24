@@ -128,7 +128,7 @@ Code-owned sets can declare `authz.permissionSets.protect({ owner, keys, allow, 
 
 ## Settings development
 
-An administration surface is a settings item: register it with `authz.settings.add({ id, title, group, actions })`, grant it with `authz.settings.grant(id, actions)`, declare `authz: { resource: { type: 'settings', id }, action }` on its settings route and check the matching action on every endpoint. Separate read from create, update, delete and other write actions according to actual operations. Registration makes the item grantable; a permission-set assignment grants it.
+An administration surface is a settings item: register it with `authz.settings.add({ id, title, section?, actions })`, grant it with `authz.settings.grant(id, actions)`, declare `authz: { resource: { type: 'settings', id }, action }` on its settings route and check the matching action on every endpoint. Separate read from create, update, delete and other write actions according to actual operations. Registration makes the item grantable; a permission-set assignment grants it.
 
 When building an authorization extension, such as a rule plugin, use the exported `@nocobase/app-plugin-authorization/client/management` components and `@nocobase/app-plugin-authorization/server/extension` helpers: `requireSettings(authorization, id, action)` with the full settings id, `createRuleSupportRoutes(authz, rule)` for options, subjects and records, and `authz.routes.add(path, createRouteHandler(router))`. Resolve the application API client inside hooks and components; never create a module-level fallback client. Keep the owner responsible for validation, translations, transactions and persistence.
 
