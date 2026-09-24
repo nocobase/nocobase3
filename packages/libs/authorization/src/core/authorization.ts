@@ -6,6 +6,7 @@ import {
   type CompositeApi,
   type CompositeCheck,
   type CompositeConditions,
+  type InvalidGrant,
 } from './composite.js';
 import {
   AccessConstraintRegistry,
@@ -88,11 +89,18 @@ export interface CreateAuthorizationOptions<
   /** Passed through to every plugin's setup; the library never inspects it. */
   connection?: TConnection;
   plugins: TPlugins;
+  /**
+   * Called once per distinct stored composite grant that no longer expands
+   * against the current definitions. The grant is skipped, so it permits
+   * nothing while the identity's other grants keep working.
+   */
+  onInvalidGrant?: (grant: InvalidGrant) => void;
 }
 
 interface AuthorizationOptions {
   connection?: unknown;
   plugins: readonly AuthorizationPlugin[];
+  onInvalidGrant?: (grant: InvalidGrant) => void;
 }
 
 export class Authorization {
@@ -115,7 +123,10 @@ export class Authorization {
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
     this.provider = grantProvider?.grants ?? missingGrantService();
-    this.compositeRegistry = new CompositeRegistry(this.resourceTypes);
+    this.compositeRegistry = new CompositeRegistry(
+      this.resourceTypes,
+      options.onInvalidGrant,
+    );
     this.composites = this.compositeRegistry;
     this.installApis();
     const apis: Record<string, unknown> = {};

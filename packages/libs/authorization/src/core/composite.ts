@@ -1,6 +1,7 @@
 import type { AccessConstraintService } from './constraints.js';
 import type {
   AuthorizationGrant,
+  AuthorizationGrantSource,
   AuthorizationGrantService,
   AuthorizationPolicy,
   PermissionGrant,
@@ -445,6 +446,27 @@ export interface CompositeApi {
    * use.
    */
   validate(): readonly string[];
+  /**
+   * Why a stored composite grant cannot be expanded against the current
+   * definitions — an unknown action, an unknown or invalid data scope, or a
+   * malformed policy — or `undefined` when it is valid.
+   */
+  validateGrant(grant: CompositeGrantInput): string | undefined;
+}
+
+/** A composite grant as a Permission Set stores it: one action and its policy. */
+export interface CompositeGrantInput {
+  readonly resource: ResourceRef;
+  readonly action: string;
+  readonly policy?: AuthorizationPolicy;
+}
+
+/** A stored grant that was skipped because it no longer expands. */
+export interface InvalidGrant {
+  readonly source: AuthorizationGrantSource;
+  readonly resource: ResourceRef;
+  readonly action: string;
+  readonly reason: string;
 }
 
 /**
@@ -457,11 +479,17 @@ export class CompositeRegistry implements CompositeApi {
   private readonly verified = new Set<string>();
   private readonly items: ResourceItems = new ResourceItems();
 
-  constructor(private readonly resourceTypes: ResourceTypeRegistry) {
+  private readonly reported = new Set<string>();
+
+  constructor(
+    private readonly resourceTypes: ResourceTypeRegistry,
+    private readonly onInvalidGrant?: (grant: InvalidGrant) => void,
+  ) {
     addReservedResourceType(resourceTypes, {
       type: COMPOSITE_RESOURCE_TYPE,
       items: this.items,
-      authorize: authorizeComposite,
+      authorize: (request, context) =>
+        authorizeComposite(this, request, context),
     });
   }
 
@@ -538,6 +566,46 @@ export class CompositeRegistry implements CompositeApi {
     return this.definitions.size;
   }
 
+  validateGrant(grant: CompositeGrantInput): string | undefined {
+    if (grant.resource.type !== COMPOSITE_RESOURCE_TYPE) return undefined;
+    try {
+      this.expand({ ...grant, source: { plugin: '', id: '' } });
+      return undefined;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /**
+   * `expand`, with a grant that no longer expands skipped and reported rather
+   * than failing every check of the identity that holds it.
+   */
+  expandOrSkip(grant: AuthorizationGrant): readonly AuthorizationGrant[] {
+    const reason = this.validateGrant(grant);
+    if (reason === undefined) return this.expand(grant);
+    this.report(grant, reason);
+    return [];
+  }
+
+  /** Tells `onInvalidGrant` once per distinct grant and reason. */
+  report(grant: AuthorizationGrant, reason: string): void {
+    const key = JSON.stringify([
+      grant.source.plugin,
+      grant.source.id,
+      grant.resource,
+      grant.action,
+      reason,
+    ]);
+    if (this.reported.has(key)) return;
+    this.reported.add(key);
+    this.onInvalidGrant?.({
+      source: grant.source,
+      resource: grant.resource,
+      action: grant.action,
+      reason,
+    });
+  }
+
   /** A composite grant followed by the grants it composes. */
   expand(grant: AuthorizationGrant): readonly AuthorizationGrant[] {
     if (grant.resource.type !== COMPOSITE_RESOURCE_TYPE) return [grant];
@@ -600,9 +668,13 @@ function compositeScopes(
   return scopes as Readonly<Record<string, unknown>>;
 }
 
-/** A composite action is permitted by any grant on it; its branches are checked separately. */
+/**
+ * A composite action is permitted by any valid grant on it; its branches are
+ * checked separately. A stored grant that no longer expands permits nothing.
+ */
 async function authorizeComposite(
-  request: AuthorizationRequest<undefined>,
+  registry: CompositeRegistry,
+  request: AuthorizationRequest<unknown>,
   context: AuthorizationRuntimeContext,
 ): Promise<AuthorizationDecision> {
   const grants = await context.grants.resolve({
@@ -611,24 +683,39 @@ async function authorizeComposite(
     resource: request.resource,
     action: request.action,
   });
-  return grants.length
-    ? {
-        effect: 'permit',
-        reasons: grants.map((grant) => ({
-          code: 'GRANT_MATCHED',
-          message: `${grant.source.plugin}:${grant.source.id} allows ${request.resource.id}.${request.action}`,
-          details: { source: grant.source, policy: grant.policy },
-        })),
-      }
-    : {
-        effect: 'deny',
-        reasons: [
-          {
-            code: 'NO_MATCHING_GRANT',
-            message: `No grant allows ${request.resource.id}.${request.action}`,
-          },
-        ],
-      };
+  const invalid = new Map<AuthorizationGrant, string>();
+  for (const grant of grants) {
+    const reason = registry.validateGrant(grant);
+    if (reason !== undefined) invalid.set(grant, reason);
+  }
+  const valid = grants.filter((grant) => !invalid.has(grant));
+  if (valid.length)
+    return {
+      effect: 'permit',
+      reasons: valid.map((grant) => ({
+        code: 'GRANT_MATCHED',
+        message: `${grant.source.plugin}:${grant.source.id} allows ${request.resource.id}.${request.action}`,
+        details: { source: grant.source, policy: grant.policy },
+      })),
+    };
+  if (invalid.size)
+    return {
+      effect: 'deny',
+      reasons: [...invalid].map(([grant, reason]) => ({
+        code: 'INVALID_GRANT',
+        message: `${grant.source.plugin}:${grant.source.id} grants ${request.resource.id}.${request.action} with a grant that no longer applies: ${reason}`,
+        details: { source: grant.source, policy: grant.policy, reason },
+      })),
+    };
+  return {
+    effect: 'deny',
+    reasons: [
+      {
+        code: 'NO_MATCHING_GRANT',
+        message: `No grant allows ${request.resource.id}.${request.action}`,
+      },
+    ],
+  };
 }
 
 /** Wraps a Grant Provider so composite grants resolve with what they compose. */
@@ -643,7 +730,7 @@ export function composedGrants(
   ): Promise<AuthorizationGrant[]> =>
     Promise.all(
       grants
-        .flatMap((grant) => registry.expand(grant))
+        .flatMap((grant) => registry.expandOrSkip(grant))
         .map(async (grant) => {
           if (grant.origin?.scopeKey === undefined) return grant;
           const branch = await constraints.resolve({
@@ -661,8 +748,11 @@ export function composedGrants(
     resolve: async (input) => {
       const direct = await provider.resolve(input);
       if (input.resource.type === COMPOSITE_RESOURCE_TYPE) {
-        // Checking the feature alone still validates its stored policies.
-        direct.forEach((grant) => registry.expand(grant));
+        // The composite handler denies a grant that no longer expands.
+        for (const grant of direct) {
+          const reason = registry.validateGrant(grant);
+          if (reason !== undefined) registry.report(grant, reason);
+        }
         return direct;
       }
       if (!registry.size) return direct;

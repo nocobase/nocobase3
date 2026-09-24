@@ -4,6 +4,7 @@ import {
   createAuthorization,
   type Authorization,
   type AuthorizationPlugin,
+  type InvalidGrant,
 } from '@nocobase/authorization/core';
 import {
   permissionSetsPlugin,
@@ -40,6 +41,8 @@ export interface CreateAppAuthorizationOptions {
   connection?: DatabaseConnection;
   onUserPermissionsChanged?(userId: string): void | Promise<void>;
   onAuthenticatedPermissionsChanged?(): void | Promise<void>;
+  /** Told once per stored composite grant that no longer expands; see `createAuthorization`. */
+  onInvalidGrant?(grant: InvalidGrant): void;
   config?: AuthorizationConfig;
 }
 
@@ -66,6 +69,7 @@ export function createAppAuthorization(
   );
   const authz: AppAuthorization = createAuthorization({
     connection: options.connection,
+    onInvalidGrant: (grant) => options.onInvalidGrant?.(grant),
     plugins: [
       permissionSetsPlugin<DatabaseConnection>({
         store: new DatabasePermissionSetStore(connection.resolve),

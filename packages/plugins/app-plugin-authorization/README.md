@@ -113,7 +113,7 @@ authz.database.collections.add({
 });
 ```
 
-Registration is the opt-in: an unregistered collection is outside the permission model and is denied even to an unrestricted identity. Fields, primary key and relations are read from the database at check time. `actions` defaults to the four CRUD actions; re-adding an identical registration is a no-op and a conflicting one throws.
+Registration is the opt-in: an unregistered collection is outside the permission model and is denied even to an unrestricted identity. Fields, primary key and relations are read from the database at check time. `actions` defaults to the four CRUD actions. Re-adding a collection with the same actions is a no-op, including when two modules register it with a different `title` or `description`: the first registration is kept and startup logs a warning, which `authz.database.collections.warnings()` also lists. Re-adding it with different actions throws, naming the collection and both action lists.
 
 ### Composite resource with data scopes
 
@@ -272,6 +272,8 @@ await authz.permissionSets.assign({
 ```
 
 `authz.pages.grant(id)` builds a page `access` grant and registers nothing. A page grant does not open data, and a composite grant does not open a page.
+
+The Permission Set routes reject a composite grant its definition does not accept. A grant stored some other way — a seed, or a definition that changed after the grant was saved — is skipped for that grant alone: it permits nothing, a direct check of its action denies with `INVALID_GRANT`, the person's other grants keep working, and the application logs a warning naming the source, resource, action and problem. At startup the plugin also scans every stored Permission Set against the current composite definitions and names each set, resource, action and problem; like the workspace check, this throws in development and warns in production.
 
 ### Rules
 
@@ -457,7 +459,7 @@ The root entry `@nocobase/app-plugin-authorization` exports exactly the same nam
 | ------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `default`                             | plugin   | `defineServerPlugin(...)`                                                                                                                                                   | The server plugin to register.                                                                            |
 | `createAppAuthorization`              | function | `createAppAuthorization(options: CreateAppAuthorizationOptions): AppAuthorization`                                                                                          | Builds the application's instance.                                                                        |
-| `CreateAppAuthorizationOptions`       | type     | `{ database?, connection?, config?, onUserPermissionsChanged?, onAuthenticatedPermissionsChanged? }`                                                                        | Options of `createAppAuthorization`.                                                                      |
+| `CreateAppAuthorizationOptions`       | type     | `{ database?, connection?, config?, onUserPermissionsChanged?, onAuthenticatedPermissionsChanged?, onInvalidGrant? }`                                                       | Options of `createAppAuthorization`.                                                                      |
 | `AuthorizationConfig`                 | type     | `{ permissionSets?: AppPermissionSetsConfig; plugins?: readonly AuthorizationPlugin[] }`                                                                                    | The application's authorization configuration.                                                            |
 | `AppPermissionSetsConfig`             | type     | `{ rootSet?: string; defaultSet?: string }`                                                                                                                                 | Names of the unrestricted and default sets.                                                               |
 | `authorizationToken`                  | const    | `ServiceToken<AppAuthorization>`                                                                                                                                            | The only service token.                                                                                   |

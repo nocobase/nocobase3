@@ -18,6 +18,7 @@ import {
 } from '../authorization.js';
 import { authorizationToken } from '../tokens.js';
 import { reportAuthorizationUi } from '../ui.js';
+import { reportStoredGrants, storedGrantProblems } from '../stored-grants.js';
 import {
   AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
   AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
@@ -63,8 +64,21 @@ export class AuthorizationProvider<
           type: 'permissions-changed',
         });
       },
+      onInvalidGrant: (grant) =>
+        this.warn(
+          `Authorization: skipped a grant from ${grant.source.plugin}:${grant.source.id} on ${grant.resource.type}:${grant.resource.id}.${grant.action}, which no longer applies: ${grant.reason}`,
+        ),
     });
     return this.instance;
+  }
+
+  private warn(message: string): void {
+    if (this.app.container.has(loggingToken))
+      this.app.container
+        .resolve(loggingToken)
+        .getLogger('authorization')
+        .warn(message);
+    else console.warn(message);
   }
 
   public override boot(): Promise<void> {
@@ -91,16 +105,24 @@ export class AuthorizationProvider<
   public override async start(): Promise<void> {
     if (!this.app.container.has(authorizationToken)) return;
     const authz = this.app.container.resolve(authorizationToken);
-    const logger = this.app.container.has(loggingToken)
-      ? this.app.container.resolve(loggingToken).getLogger('authorization')
-      : undefined;
-    reportAuthorizationUi(authz.ui.validate(authz), {
+    const options = {
       production: process.env.NODE_ENV === 'production',
-      warn: (message) => {
-        if (logger) logger.warn(message);
-        else console.warn(message);
+      warn: (message: string) => this.warn(message),
+    };
+    const report = authz.ui.validate(authz);
+    reportAuthorizationUi(
+      {
+        errors: report.errors,
+        warnings: [
+          ...report.warnings,
+          ...authz.database.collections.warnings(),
+        ],
       },
-    });
+      options,
+    );
+    // Stored grants live in the database; without one there is nothing to scan.
+    if (this.app.container.has(databaseManagerToken))
+      reportStoredGrants(await storedGrantProblems(authz), options);
   }
 
   public override shutdown(): Promise<void> {

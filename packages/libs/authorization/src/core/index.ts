@@ -27,10 +27,12 @@ export {
   type CompositeContributionData,
   type CompositeGrant,
   type CompositeGrantAction,
+  type CompositeGrantInput,
   type CompositePolicy,
   type CompositeScopeTarget,
   type DataScope,
   type DataScopeValue,
+  type InvalidGrant,
 } from './composite.js';
 export {
   AccessConstraintRegistry,

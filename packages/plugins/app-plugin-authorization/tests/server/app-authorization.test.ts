@@ -230,4 +230,77 @@ describe('the authorization provider', () => {
       await database.destroy();
     }
   });
+
+  it('reports a stored grant that no longer applies at startup: throws in development and warns in production', async () => {
+    const database = createSqliteDatabase();
+    await migratePlugins(database, 'app-plugin-authorization');
+    const container = new ServiceContainer();
+    container.instance(databaseManagerToken, database);
+    const provider = new AuthorizationProvider({
+      container,
+      config: { get: () => undefined },
+    } as unknown as AppPluginApplication);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      provider.register();
+      await provider.boot();
+      const authorization = container.resolve(authorizationToken);
+      authorization.composites.define({
+        name: 'sales.quotes',
+        title: 'Quotes',
+        actions: [
+          {
+            name: 'submit',
+            title: 'Submit',
+            grants: [
+              {
+                resource: { type: 'settings', id: 'authorization.inspector' },
+                actions: [{ action: 'inspect' }],
+              },
+            ],
+          },
+        ],
+      });
+      // A seed wrote a scope the definition does not declare; the
+      // Permission Set routes would have refused it.
+      const now = new Date();
+      await database
+        .connection()
+        .query.insertInto('authorizationPermissionSets')
+        .values({
+          id: 'broken-set',
+          key: 'broken',
+          title: JSON.stringify('Broken'),
+          grants: JSON.stringify([
+            {
+              resource: { type: 'composite', id: 'sales.quotes' },
+              actions: [
+                {
+                  action: 'submit',
+                  policy: {
+                    type: 'composite',
+                    scopes: { extra: 'allRecords' },
+                  },
+                },
+              ],
+            },
+          ]),
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+      const problem =
+        'Permission set broken grants composite:sales.quotes.submit, which no longer applies: Unknown data scope: submit.extra';
+
+      vi.stubEnv('NODE_ENV', 'development');
+      await expect(provider.start()).rejects.toThrow(problem);
+      vi.stubEnv('NODE_ENV', 'production');
+      await expect(provider.start()).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(`Authorization: ${problem}`);
+    } finally {
+      vi.unstubAllEnvs();
+      warn.mockRestore();
+      await database.destroy();
+    }
+  });
 });

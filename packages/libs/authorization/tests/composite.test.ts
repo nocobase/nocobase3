@@ -380,7 +380,7 @@ describe('data scopes', () => {
       effect: 'deny',
       reasons: [
         {
-          code: 'AUTHORIZATION_HANDLER_FAILED',
+          code: 'INVALID_GRANT',
           message: expect.stringContaining('unregistered resource type ledger'),
         },
       ],
@@ -519,7 +519,7 @@ describe('composite authorization', () => {
     },
   );
 
-  it('denies a stored composite policy the definition does not accept', async () => {
+  it('denies a stored composite policy the definition does not accept as an invalid grant', async () => {
     const authz = setup([
       {
         resource: { type: 'composite', id: 'sales.quotes' },
@@ -539,7 +539,13 @@ describe('composite authorization', () => {
       }),
     ).resolves.toMatchObject({
       effect: 'deny',
-      reasons: [{ code: 'AUTHORIZATION_HANDLER_FAILED' }],
+      reasons: [
+        {
+          code: 'INVALID_GRANT',
+          message: expect.stringContaining('no longer applies'),
+          details: { source: { plugin: 'test', id: 'set' } },
+        },
+      ],
     });
   });
 

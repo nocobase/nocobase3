@@ -240,9 +240,10 @@ describe('the Collection registry', () => {
     );
   });
 
-  // Boot runs more than once in some hosts, so the same declaration twice is
-  // not a mistake; two declarations that disagree are.
-  it('tolerates an identical repeat and refuses a conflicting one', () => {
+  // Boot runs more than once in some hosts, and two modules may register one
+  // collection under different titles; only a conflict about what it allows
+  // is a mistake.
+  it('treats a repeat as a no-op, keeps the first title of a display-only repeat, and refuses different actions', () => {
     const { collections } = createAuthorization({
       plugins: [
         permissionSetsPlugin({ store: new MockPermissionSetStore() }),
@@ -251,11 +252,19 @@ describe('the Collection registry', () => {
     }).database;
     collections.add({ name: 'orders', title: 'Orders' });
     collections.add({ name: 'orders', title: 'Orders' });
+    expect(collections.warnings()).toEqual([]);
 
+    collections.add({ name: 'orders', title: { key: 'orders', ns: 'sales' } });
     expect(collections.list()).toEqual([{ name: 'orders', title: 'Orders' }]);
+    expect(collections.warnings()).toEqual([
+      'Database collection orders was registered again with a different title or description; the first registration is kept',
+    ]);
+
     expect(() =>
-      collections.add({ name: 'orders', title: 'Sales orders' }),
-    ).toThrow(/already registered/);
+      collections.add({ name: 'orders', title: 'Orders', actions: ['read'] }),
+    ).toThrow(
+      'Database collection orders is already registered with actions [read, create, update, delete]; another registration declares [read]',
+    );
   });
 
   // `orders` is in db and a Permission Set grants on it; registration is what

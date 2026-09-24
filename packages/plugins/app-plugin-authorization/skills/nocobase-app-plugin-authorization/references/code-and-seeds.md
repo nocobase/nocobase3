@@ -100,6 +100,8 @@ This example lives in `database/main/seeds/202609190001_sales_jobs.ts` and impor
 
 Use the actual existing user/team IDs. Check logical uniqueness before inserting missing rows; a random row ID alone does not make reruns idempotent. Do not re-add an administrator-removed assignment during every startup. A one-time seed's execution history handles when it runs; a provisioning routine that may be retried needs its own explicit completion/idempotency boundary.
 
+A seed writes composite grants in the stored shape the definition accepts: the action names and data-scope keys its composite declares, as `{ type: 'composite', scopes }`. The Permission Set HTTP routes reject anything else, but a seed bypasses that check. Such a grant is skipped at runtime — it permits nothing while the person's other grants keep working, and a warning names it — and the startup scan of stored Permission Sets throws in development, naming the set, resource, action and problem. Fix the seed or migrate the stored grant; do not widen the composite to accept it.
+
 | Table                                   | Row shape in addition to `id`                                            |
 | --------------------------------------- | ------------------------------------------------------------------------ |
 | `authorizationPermissionSets`           | `key`, encoded `title`, JSON `grants`, `createdAt`, `updatedAt`          |

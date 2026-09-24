@@ -168,3 +168,97 @@ describe('the snapshot', () => {
     });
   });
 });
+
+describe('a stored composite grant that no longer expands', () => {
+  it('is skipped and reported while the identity’s other grants keep working', async () => {
+    const reported: unknown[] = [];
+    const authz = createAuthorization({
+      plugins: [
+        permissionSetsPlugin({
+          store: new MockPermissionSetStore({
+            permissionSets: [
+              { key: 'sales', grants },
+              {
+                key: 'broken',
+                grants: [
+                  {
+                    resource: { type: 'composite', id: 'sales.quotes' },
+                    actions: [
+                      {
+                        action: 'submit',
+                        policy: {
+                          type: 'composite',
+                          scopes: { quotes: 'allRecords', extra: 'allRecords' },
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            assignments: ['sales', 'broken'].map((key) => ({
+              id: `alice-${key}`,
+              subject: { type: 'user', id: key === 'sales' ? 'alice' : 'bob' },
+              permissionSet: key,
+            })),
+          }),
+        }),
+        database,
+      ],
+      onInvalidGrant: (grant) => reported.push(grant),
+    });
+    authz.composites.define(quotes);
+    const bob = authz.for({ principal: { type: 'user', id: 'bob' } });
+    const both = authz.for({
+      principal: { type: 'user', id: 'bob' },
+      subjects: [{ type: 'user', id: 'alice' }],
+    });
+
+    // The good grants still permit, alongside the bad one.
+    await expect(
+      both.can({
+        resource: { type: 'settings', id: 'workflow' },
+        action: 'manage',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      both.can({
+        resource: { type: 'composite', id: 'sales.quotes' },
+        action: 'submit',
+      }),
+    ).resolves.toBe(true);
+    expect((await both.snapshot()).permissions).toContainEqual({
+      resource: { type: 'settings', id: 'workflow' },
+      actions: ['manage'],
+    });
+
+    // Alone, the bad grant permits nothing and says why.
+    await expect(bob.snapshot()).resolves.toEqual({
+      unrestricted: false,
+      permissions: [],
+    });
+    await expect(
+      bob.authorize({
+        resource: { type: 'composite', id: 'sales.quotes' },
+        action: 'submit',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'INVALID_GRANT' }],
+    });
+    await expect(
+      bob.can({
+        resource: { type: 'database.collection', id: 'quotes' },
+        action: 'read',
+      }),
+    ).resolves.toBe(false);
+    expect(reported).toEqual([
+      {
+        source: { plugin: 'permission-sets', id: 'broken' },
+        resource: { type: 'composite', id: 'sales.quotes' },
+        action: 'submit',
+        reason: 'Unknown data scope: submit.extra',
+      },
+    ]);
+  });
+});
