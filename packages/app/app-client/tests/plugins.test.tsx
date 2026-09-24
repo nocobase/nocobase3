@@ -59,6 +59,7 @@ describe('client plugin definitions', () => {
       {
         name: 'index',
         path: '/example',
+        authz: { resource: { type: 'page', id: 'index' }, action: 'access' },
         componentLoader: async () => ({ default: () => null }),
       },
     ]);
@@ -139,6 +140,10 @@ describe('client plugin definitions', () => {
           {
             name: 'reports',
             path: '/feature/reports',
+            authz: {
+              resource: { type: 'page', id: 'reports' },
+              action: 'access',
+            },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -161,12 +166,14 @@ describe('client plugin definitions', () => {
             name: 'login',
             path: '/login',
             auth: 'guest',
+            authz: 'skip',
             componentLoader: async () => ({ default: () => null }),
           },
           {
             name: 'help',
             path: '/help',
             auth: 'optional',
+            authz: 'skip',
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -185,6 +192,10 @@ describe('client plugin definitions', () => {
             {
               name: 'login',
               path: '/login',
+              authz: {
+                resource: { type: 'page', id: 'login' },
+                action: 'access',
+              },
               componentLoader: async () => ({ default: () => null }),
             },
           ]),
@@ -200,6 +211,7 @@ describe('client plugin definitions', () => {
           {
             name: 'home',
             path: '/',
+            authz: { resource: { type: 'page', id: 'home' }, action: 'access' },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -223,6 +235,7 @@ describe('client plugin definitions', () => {
             name: 'login',
             path: '/login',
             auth: 'guest',
+            authz: 'skip',
             componentLoader: async () => ({ default: PluginPage }),
           },
         ]),
@@ -260,6 +273,10 @@ describe('client plugin definitions', () => {
           {
             name: 'index',
             path: '/example',
+            authz: {
+              resource: { type: 'page', id: 'index' },
+              action: 'access',
+            },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -456,7 +473,12 @@ describe('client plugin definitions', () => {
 describe('client modules', () => {
   const loadComponent = async () => ({ default: () => null });
   const routes = defineAppRoutes([
-    { name: 'index', path: '/example', componentLoader: loadComponent },
+    {
+      name: 'index',
+      path: '/example',
+      authz: { resource: { type: 'page', id: 'index' }, action: 'access' },
+      componentLoader: loadComponent,
+    },
   ]);
 
   it('forwards options and exposes the declared entries', () => {
@@ -592,6 +614,7 @@ describe('client settings', () => {
                 name: 'default-access',
                 path: '/default-access',
                 navigation: { title: 'Default Access' },
+                authz: 'skip',
                 componentLoader: page,
               },
             ],
@@ -642,6 +665,7 @@ describe('client settings', () => {
             name: 'general',
             path: '/general',
             navigation: { title: 'General' },
+            authz: 'skip',
             componentLoader: page,
           },
         ]),
@@ -670,12 +694,14 @@ describe('client settings', () => {
                 name: 'child',
                 path: '/child',
                 navigation: { title: 'Child', icon: Icon },
+                authz: 'skip',
                 componentLoader: page,
               },
               {
                 name: 'plain',
                 path: '/plain',
                 navigation: { title: 'Plain' },
+                authz: 'skip',
                 componentLoader: page,
               },
             ],
@@ -696,6 +722,7 @@ describe('client settings', () => {
           name: 'general',
           path: '/general',
           navigation: { title: 'General' },
+          authz: 'skip',
           componentLoader: page,
         },
         ...(options.advanced
@@ -704,6 +731,7 @@ describe('client settings', () => {
                 name: 'advanced',
                 path: '/advanced',
                 navigation: { title: 'Advanced' },
+                authz: 'skip',
                 componentLoader: page,
               },
             ]
@@ -738,6 +766,7 @@ describe('client settings', () => {
               name: 'general',
               path: '/general',
               navigation: { title: 'General' },
+              authz: 'skip',
               componentLoader: page,
             },
           ]),
@@ -749,6 +778,7 @@ describe('client settings', () => {
               name: 'general',
               path: '/general',
               navigation: { title: 'Général' },
+              authz: 'skip',
               componentLoader: page,
             },
           ]),
@@ -772,6 +802,7 @@ describe('client settings', () => {
               name: packageName.slice(-5),
               path: `/${packageName.slice(-5)}`,
               navigation: { title: 'Child' },
+              authz: 'skip',
               componentLoader: page,
             },
           ],
@@ -802,6 +833,7 @@ describe('client settings', () => {
               name: 'workflows',
               path: '/workflows',
               navigation: { title: 'Workflows' },
+              authz: 'skip',
               componentLoader: page,
             },
           ],
@@ -821,6 +853,7 @@ describe('client settings', () => {
               name: 'schedules',
               path: '/schedules',
               navigation: { title: 'Schedules' },
+              authz: 'skip',
               componentLoader: page,
             },
           ],
@@ -864,6 +897,7 @@ describe('client settings', () => {
               {
                 name: 'schedules',
                 path: '/schedules',
+                authz: 'skip',
                 componentLoader: page,
               },
             ],
@@ -901,12 +935,14 @@ describe('client settings', () => {
                   name: 'child',
                   path: '/child',
                   navigation: { title: 'First' },
+                  authz: 'skip',
                   componentLoader: page,
                 },
                 {
                   name: 'child',
                   path: '/child',
                   navigation: { title: 'Second' },
+                  authz: 'skip',
                   componentLoader: page,
                 },
               ],
@@ -943,6 +979,7 @@ describe('client settings', () => {
           name: 'general',
           path: '/general',
           navigation: { title: 'General' },
+          authz: 'skip',
           componentLoader: page,
         },
       ]),
@@ -950,7 +987,15 @@ describe('client settings', () => {
     const route = {
       packageName: '@nocobase/app-plugin-second',
       routes: defineAppRoutes([
-        { name: 'general', path: '/settings/general', componentLoader: page },
+        {
+          name: 'general',
+          path: '/settings/general',
+          authz: {
+            resource: { type: 'page', id: 'general' },
+            action: 'access',
+          },
+          componentLoader: page,
+        },
       ]),
     };
 
@@ -987,6 +1032,7 @@ describe('client settings', () => {
           name,
           path,
           navigation: { title: 'Title' },
+          authz: 'skip',
           componentLoader: page,
         }),
       ).toThrow(reason);
@@ -1023,6 +1069,7 @@ describe('client settings', () => {
             name: 'general',
             path: '/general',
             navigation: { title: 'General' },
+            authz: 'skip',
             componentLoader: async () => ({ default: undefined as never }),
           },
         ]),
@@ -1060,6 +1107,7 @@ describe('client dev routes', () => {
             name: 'playground',
             path: '/playground',
             navigation: { title: 'Playground' },
+            authz: 'skip',
             componentLoader: page,
           },
         ]),
@@ -1094,12 +1142,14 @@ describe('client dev routes', () => {
                 name: 'routes',
                 path: '/routes',
                 navigation: { title: 'Routes' },
+                authz: 'skip',
                 componentLoader: page,
               },
               {
                 name: 'cache',
                 path: '/cache',
                 navigation: { title: 'Cache' },
+                authz: 'skip',
                 componentLoader: page,
               },
             ],
@@ -1127,6 +1177,7 @@ describe('client dev routes', () => {
               name: 'shared',
               path: '/shared',
               navigation: { title: 'Shared' },
+              authz: 'skip',
               componentLoader: page,
             },
           ]),
@@ -1135,6 +1186,7 @@ describe('client dev routes', () => {
               name: 'shared',
               path: '/shared',
               navigation: { title: 'Shared' },
+              authz: 'skip',
               componentLoader: page,
             },
           ]),
@@ -1156,12 +1208,14 @@ describe('client dev routes', () => {
               name: 'tools',
               path: '/tools',
               navigation: { title: 'Tools' },
+              authz: 'skip',
               componentLoader: page,
             },
             {
               name: 'tools',
               path: '/tools',
               navigation: { title: 'Tools again' },
+              authz: 'skip',
               componentLoader: page,
             },
           ]),
@@ -1209,6 +1263,7 @@ describe('client dev routes', () => {
           name: 'playground',
           path: '/playground',
           navigation: { title: 'Playground' },
+          authz: 'skip',
           componentLoader: page,
         },
       ]).routes,
