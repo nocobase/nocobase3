@@ -1,65 +1,154 @@
 # @nocobase/app-plugin-authz-restriction-rules
 
-Intersects an already granted record range with the records still allowed for selected subjects. The scope is an allow-condition, not a list of records to deny. Multiple matching restrictions narrow access; none can grant an action or widen a range.
+Adds restriction rules: for the subjects a rule lists, the records an action reaches are intersected with the rule's selection. The selection describes the records still allowed, not the records to hide. Several matching restrictions all apply; none can grant an action or widen a range.
+
+## Terminology
+
+| Term             | Meaning                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Restriction rule | `RestrictionRule { key, resource, actions, title?, subjects, reason? }`, stored by this plugin.                              |
+| Rule action      | `RuleAction { action, scopeKey?, selection }`: one action of the rule and the records still allowed.                         |
+| Record selection | `all`, `records` with ids, or `recordAccess` with a key and params. Every kind is accepted.                                  |
+| Data scope       | A named slot on a business action; `scopeKey` names it when the rule targets a business resource.                            |
+| Subject          | Who the rule applies to, `{ type, id }`.                                                                                     |
+| Settings item    | `settings:authorization.restriction-rules`, whose `read`, `create`, `update` and `delete` actions gate this plugin's routes. |
+
+## Layers
+
+```text
+ storage                       judgement                                                    use
+ ────────────────────────      ────────────────────────────────────────────────────         ────────────────────────────
+ restriction rules ──────────▶ `restrict` constraint for the rule's subjects ─┐             context.authorize(...)
+                                grants, default access, sharing ──────────────┴▶ type       authz.database.policyFor(...)
+ display: the "Restriction rules" settings page, under the authorization group
+```
+
+## Entry points
+
+| Import                                                       | Contents                                          |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| `@nocobase/app-plugin-authz-restriction-rules/server`        | Server plugin and the `restrictionRules` factory. |
+| `@nocobase/app-plugin-authz-restriction-rules/client`        | Client plugin.                                    |
+| `@nocobase/app-plugin-authz-restriction-rules/client/plugin` | The client plugin factory alone.                  |
+| `@nocobase/app-plugin-authz-restriction-rules/client/routes` | The settings route contribution.                  |
+| `@nocobase/app-plugin-authz-restriction-rules/package.json`  | The package manifest.                             |
 
 ## Install
 
-Register the default export from `@nocobase/app-plugin-authz-restriction-rules/client` in `client/plugins.ts` and from `@nocobase/app-plugin-authz-restriction-rules/server` in `server/plugins.ts`. Register the main authorization plugin on both sides and run the application's migrations. Add the rule factory to `server/config/authorization.ts`:
+Register the default exports of `./client` and `./server` beside the main authorization plugin and run the application's migrations. Then add the factory to the application's authorization configuration:
 
 ```ts
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+
 export default { plugins: [restrictionRules()] };
 ```
 
-Merge this factory with the application's other authorization factories. `restrictionRules({ store? })` uses the bundled database Store by default; a replacement must implement `RestrictionRuleStore` from `@nocobase/authorization/restriction-rules` with the application's transaction type. The pure library factory requires a Store and does not install UI or HTTP management. If the config factory is absent, this plugin installs no management endpoints.
+`restrictionRules({ store? })` wraps `restrictionRulesPlugin` from `@nocobase/authorization/restriction-rules` with the bundled database store; a replacement store implements `RestrictionRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.restriction-rules` in group `authorization` with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/restriction-rules', handler)`. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 
-Resolve the main `authorizationToken`. Optional APIs are present only when configured; narrow the service before using one:
-
 ```ts
-import type { RestrictionRulesAuthorizationApi } from '@nocobase/authorization/restriction-rules';
+import { selection } from '@nocobase/authorization/core';
+import {
+  defineRestrictionRule,
+  type RestrictionRulesAuthorizationApi,
+} from '@nocobase/authorization/restriction-rules';
 import type { DatabaseConnection } from '@nocobase/db';
-import { restrictionRule } from '@nocobase/authorization/restriction-rules';
-import { databaseScope } from '@nocobase/app-plugin-authorization';
 
 if (!('restrictionRules' in authz))
   throw new Error('Restriction rules is not configured');
 const rules = (
   authz as typeof authz & RestrictionRulesAuthorizationApi<DatabaseConnection>
 ).restrictionRules;
-// quotes is a declared resource; sales.* strategies and team subjects are registered by its owner.
+
 await rules.create(
-  restrictionRule('public-proposals', quotes.reference())
+  defineRestrictionRule('public-proposals', quotes.reference())
     .title('Exclude confidential proposals')
     .subjects({ type: 'sales.team', id: 'proposal' })
-    .scope('submit', 'quotes', databaseScope('sales.public'))
+    .scope('submit', 'quotes', selection.recordAccess('sales.public'))
     .reason('Proposal collaboration excludes confidential work')
     .build(),
 );
-const saved = await rules.get('public-proposals');
-await rules.delete('public-proposals');
+await rules.create({
+  key: 'interns-orders',
+  resource: { type: 'database.collection', id: 'orders' },
+  subjects: [{ type: 'team', id: 'interns' }],
+  actions: [
+    { action: 'update', selection: selection.records(['order-1', 'order-2']) },
+  ],
+});
 ```
 
-`create(rule)`, `update(key, rule)` (complete definition), `get(key)`, `list()`, `delete(key)` and `withTransaction(connection)`. A rule contains `{ key, title?, resource, subjects, reason?, actions: [{ action, scopeKey?, scope }] }`. Database scope values use `databaseScope(recordAccess)`; the strategy describes records still allowed.
+| `authz.restrictionRules` method     | Contract                                                        |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `create(rule)`                      | Stores a new rule after validating it.                          |
+| `update(key, rule)`                 | Replaces a rule with a complete definition; the key may change. |
+| `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                          |
+| `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                     |
 
-Builders return immutable declarations and do not save/register anything. Titles accept strings or `{ key, ns }`. Business references infer action/scope keys; the scope registration determines which collection supplies fields and record IDs. Service writes are trusted provisioning APIs: custom HTTP callers must enforce settings authorization and validate resource/action/scope applicability, as this plugin's handlers do. Bound transactions are committed by their caller.
+A rule on a business resource names the data scope in `scopeKey` and narrows that business action's branch only. A rule on a `database.collection` omits `scopeKey` and narrows every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule with `validateDataScopeRule`, as this plugin's handler does.
 
-## Management HTTP API
+## Check access
 
-Paths are relative to the application's `/api` prefix. Requests require authentication and `{ resource: { type: 'settings', id: 'authorization.restriction-rules' }, action }`. Write bodies are complete rule definitions matching the service model.
+Rules take effect through the ordinary checks; nothing calls them directly.
 
-| Method | Path                            | Action   |
-| ------ | ------------------------------- | -------- |
-| GET    | `/authz/restriction-rules`      | `read`   |
-| POST   | `/authz/restriction-rules`      | `create` |
-| PUT    | `/authz/restriction-rules/:key` | `update` |
-| DELETE | `/authz/restriction-rules/:key` | `delete` |
+```ts
+const policy = await authz.database.policyFor('orders', c.get('authz')); // interns update order-1 and order-2 at most
+```
 
-`GET /authz/restriction-rules/options` and record/subject selection subroutes require `read`; subject selectors additionally enforce any independent directory restrictions. List/write responses wrap results in `{ data }`; deletes return 204. POST creation returns 201. There is no single-rule GET endpoint; use the list or server service. The settings page is `/settings/authorization/restriction-rules`, under the authorization group.
+An unrestricted identity skips every rule.
 
-## Scope boundaries
+## HTTP API
 
-Business rules target `{ type: 'resource', id: businessResourceName }` and an `action` plus `scopeKey`. They affect only the matching business grant branch. Underlying collection rules target `database.collection` with CRUD actions; collection restrictions apply across branches. Neither form shares related records implicitly or replaces field/relation capabilities. Unrestricted identities bypass rule constraints.
+Paths are under `/api/authz` and require a signed-in user. Every route checks `{ resource: { type: 'settings', id: 'authorization.restriction-rules' }, action }`. Responses wrap results in `{ data }`; creation answers `201` and deletion `204`. Errors answer `403 { code: 'FORBIDDEN' }`, `400 { code: 'INVALID_AUTHORIZATION_INPUT' }` and `404` for an unknown key.
 
-See the [development Skill](skills/nocobase-app-plugin-authz-restriction-rules/SKILL.md), [main API](../app-plugin-authorization/README.md), and [user guide](../../../docs/docs/en/capabilities/authorization/restriction-rules.md).
+| Method and path                                  | Required action | Request                             | Response `data`                     |
+| ------------------------------------------------ | --------------- | ----------------------------------- | ----------------------------------- |
+| `GET /restriction-rules`                         | `read`          |                                     | `RestrictionRule[]`                 |
+| `POST /restriction-rules`                        | `create`        | a complete `RestrictionRule`        | the rule                            |
+| `PUT /restriction-rules/:key`                    | `update`        | a complete `RestrictionRule`        | the rule                            |
+| `DELETE /restriction-rules/:key`                 | `delete`        |                                     | none                                |
+| `GET /restriction-rules/options`                 | `read`          |                                     | `AuthorizationOptions`              |
+| `GET /restriction-rules/subjects/:type`          | `read`          | query `search?`, `page`, `pageSize` | `{ items: SubjectOption[], total }` |
+| `POST /restriction-rules/subjects/:type/resolve` | `read`          | `{ ids: string[] }`                 | `SubjectOption[]`                   |
+| `GET /restriction-rules/records/:collection`     | `read`          |                                     | `[{ id, label, description? }]`     |
+
+The settings page is `/settings/authorization/restriction-rules`; its route declares `authz: { resource: { type: 'settings', id: 'authorization.restriction-rules' }, action: 'read' }`.
+
+## `@nocobase/app-plugin-authz-restriction-rules/server`
+
+### Exports
+
+| Export                    | Kind     | Signature                                                                                                                                            | Purpose                        |
+| ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `default`                 | plugin   | `defineServerPlugin(...)`                                                                                                                            | The server plugin to register. |
+| `restrictionRules`        | function | `restrictionRules(options?: RestrictionRulesOptions): AuthorizationPlugin<RestrictionRulesAuthorizationApi<DatabaseConnection>, DatabaseConnection>` | The configuration factory.     |
+| `RestrictionRulesOptions` | type     | `{ store?: RestrictionRuleStore<DatabaseConnection> }`                                                                                               | Replaces the bundled store.    |
+
+## `@nocobase/app-plugin-authz-restriction-rules/client`
+
+### Exports
+
+| Export    | Kind   | Signature                 | Purpose                        |
+| --------- | ------ | ------------------------- | ------------------------------ |
+| `default` | plugin | `defineClientPlugin(...)` | The client plugin to register. |
+
+## `@nocobase/app-plugin-authz-restriction-rules/client/plugin`
+
+### Exports
+
+| Export    | Kind   | Signature                | Purpose                    |
+| --------- | ------ | ------------------------ | -------------------------- |
+| `default` | plugin | `AppClientPluginFactory` | The client plugin factory. |
+
+## `@nocobase/app-plugin-authz-restriction-rules/client/routes`
+
+### Exports
+
+| Export    | Kind  | Signature                    | Purpose                                           |
+| --------- | ----- | ---------------------------- | ------------------------------------------------- |
+| `default` | const | `AppClientRouteContribution` | The settings route of the restriction-rules page. |
+
+## `@nocobase/app-plugin-authz-restriction-rules/package.json`
+
+The package manifest.

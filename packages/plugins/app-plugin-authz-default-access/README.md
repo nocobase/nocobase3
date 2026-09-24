@@ -1,61 +1,153 @@
 # @nocobase/app-plugin-authz-default-access
 
-Adds a shared record baseline for holders of an already granted business action. It does not grant the action, page access or additional fields. A baseline combines with permission-set scope and sharing, so choose it as an intentional minimum accessible range rather than a fallback used only when no role scope exists.
+Adds default access: records every identity that already holds an action reaches, in addition to what its own grants select. A default-access rule never grants an action, a page or a field; it widens the records of an action some grant already allows, and restriction rules still narrow the result. Choose it as an intentional baseline, not as a fallback for identities without a selection of their own.
+
+## Terminology
+
+| Term                | Meaning                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Default-access rule | `DefaultAccessRule { key, resource, actions }`, stored by this plugin.                                                    |
+| Rule action         | `RuleAction { action, scopeKey?, selection }`: one action of the rule and the records it adds.                            |
+| Record selection    | `all`, `records` with ids, or `recordAccess` with a key and params.                                                       |
+| Data scope          | A named slot on a business action; `scopeKey` names it when the rule targets a business resource.                         |
+| Settings item       | `settings:authorization.default-access`, whose `read`, `create`, `update` and `delete` actions gate this plugin's routes. |
+
+## Layers
+
+```text
+ storage                         judgement                                        use
+ ─────────────────────────       ────────────────────────────────────────         ────────────────────────────
+ default-access rules ─────────▶ `expand` constraint for every identity ─┐        context.authorize(...)
+                                  Permission Set grants ─────────────────┴▶ type  authz.database.policyFor(...)
+ display: the "Default access" settings page, under the authorization group
+```
+
+## Entry points
+
+| Import                                                    | Contents                                       |
+| --------------------------------------------------------- | ---------------------------------------------- |
+| `@nocobase/app-plugin-authz-default-access/server`        | Server plugin and the `defaultAccess` factory. |
+| `@nocobase/app-plugin-authz-default-access/client`        | Client plugin.                                 |
+| `@nocobase/app-plugin-authz-default-access/client/plugin` | The client plugin factory alone.               |
+| `@nocobase/app-plugin-authz-default-access/client/routes` | The settings route contribution.               |
+| `@nocobase/app-plugin-authz-default-access/package.json`  | The package manifest.                          |
 
 ## Install
 
-Register the default export from `@nocobase/app-plugin-authz-default-access/client` in `client/plugins.ts` and from `@nocobase/app-plugin-authz-default-access/server` in `server/plugins.ts`. Register the main authorization plugin on both sides and run the application's migrations. Add the rule factory to `server/config/authorization.ts`:
+Register the default exports of `./client` and `./server` beside the main authorization plugin and run the application's migrations. Then add the factory to the application's authorization configuration:
 
 ```ts
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
+
 export default { plugins: [defaultAccess()] };
 ```
 
-Merge this factory with the application's other authorization factories. `defaultAccess({ store? })` uses the bundled database Store by default; a replacement must implement `DefaultAccessStore` from `@nocobase/authorization/default-access` with the application's transaction type. The pure library factory requires a Store and does not install UI or HTTP management. If the config factory is absent, this plugin installs no management endpoints.
+`defaultAccess({ store? })` wraps `defaultAccessPlugin` from `@nocobase/authorization/default-access` with the bundled database store; a replacement store implements `DefaultAccessStore<DatabaseConnection>`. During setup it registers the settings item `authorization.default-access` in group `authorization` with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/default-access', handler)`. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 
-Resolve the main `authorizationToken`. Optional APIs are present only when configured; narrow the service before using one:
-
 ```ts
-import type { DefaultAccessAuthorizationApi } from '@nocobase/authorization/default-access';
+import { selection } from '@nocobase/authorization/core';
+import {
+  defineDefaultAccessRule,
+  type DefaultAccessAuthorizationApi,
+} from '@nocobase/authorization/default-access';
 import type { DatabaseConnection } from '@nocobase/db';
-import { defaultAccessRule } from '@nocobase/authorization/default-access';
-import { databaseScope } from '@nocobase/app-plugin-authorization';
 
 if (!('defaultAccess' in authz))
   throw new Error('Default access is not configured');
 const rules = (
   authz as typeof authz & DefaultAccessAuthorizationApi<DatabaseConnection>
 ).defaultAccess;
-// quotes is a declared resource; sales.* strategies and team subjects are registered by its owner.
-await rules.set(
-  defaultAccessRule(quotes.reference())
-    .scope('view', 'quotes', databaseScope('sales.public'))
+
+await rules.create(
+  defineDefaultAccessRule('quotes-baseline', quotes.reference())
+    .scope('view', 'quotes', selection.recordAccess('sales.public'))
     .build(),
 );
-const saved = await rules.get('resource', 'sales.quotes');
-await rules.delete('resource', 'sales.quotes');
+await rules.create({
+  key: 'orders-baseline',
+  resource: { type: 'database.collection', id: 'orders' },
+  actions: [
+    { action: 'read', selection: selection.recordAccess('recordsIOwn') },
+  ],
+});
 ```
 
-`set(rule)` replaces the definition for a resource; `get(resourceType, resourceId)` reads it; `list()` lists definitions; `delete(resourceType, resourceId)` clears it; `withTransaction(connection)` binds to a caller-owned transaction. A definition is `{ resource, actions: [{ action, scopeKey?, scope }] }`.
+| `authz.defaultAccess` method        | Contract                                                        |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `create(rule)`                      | Stores a new rule after validating it.                          |
+| `update(key, rule)`                 | Replaces a rule with a complete definition; the key may change. |
+| `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                          |
+| `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                     |
 
-Builders return immutable declarations and do not save/register anything. Business references infer action/scope keys; the scope registration determines which collection supplies fields and record IDs. Service writes are trusted provisioning APIs: custom HTTP callers must enforce settings authorization and validate resource/action/scope applicability, as this plugin's handlers do. Bound transactions are committed by their caller.
+A rule on a business resource names the data scope in `scopeKey` and applies to that business action's branch only. A rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule against the registered model with `validateDataScopeRule`, as this plugin's handler does.
 
-## Management HTTP API
+## Check access
 
-Paths are relative to the application's `/api` prefix. Requests require authentication and `{ resource: { type: 'settings', id: 'authorization.default-access' }, action }`. Write bodies are complete rule definitions matching the service model.
+Rules take effect through the ordinary checks; nothing calls them directly.
 
-| Method | Path                              | Action      |
-| ------ | --------------------------------- | ----------- |
-| GET    | `/authz/default-access`           | `read`      |
-| PUT    | `/authz/default-access`           | `configure` |
-| DELETE | `/authz/default-access/:type/:id` | `configure` |
+```ts
+const decision = await c.get('authz').authorize({
+  resource: { type: 'business', id: 'sales.quotes' },
+  action: 'view',
+});
+const policy = decision.conditions?.database?.quotes; // includes the baseline records
+```
 
-`GET /authz/default-access/options` and record/subject selection subroutes require `read`; subject selectors additionally enforce any independent directory restrictions. List/write responses wrap results in `{ data }`; deletes return 204. There is no single-rule GET endpoint; use the list or server service. The settings page is `/settings/authorization/default-access`, under the authorization group.
+An unrestricted identity skips every rule.
 
-## Scope boundaries
+## HTTP API
 
-Business rules target `{ type: 'resource', id: businessResourceName }` and an `action` plus `scopeKey`. They affect only the matching business grant branch. Underlying collection rules target `database.collection` with CRUD actions; collection restrictions apply across branches. Neither form shares related records implicitly or replaces field/relation capabilities. Unrestricted identities bypass rule constraints.
+Paths are under `/api/authz` and require a signed-in user. Every route checks `{ resource: { type: 'settings', id: 'authorization.default-access' }, action }`. Responses wrap results in `{ data }`; creation answers `201` and deletion `204`. Errors answer `403 { code: 'FORBIDDEN' }`, `400 { code: 'INVALID_AUTHORIZATION_INPUT' }` and `404` for an unknown key.
 
-See the [development Skill](skills/nocobase-app-plugin-authz-default-access/SKILL.md), [main API](../app-plugin-authorization/README.md), and [user guide](../../../docs/docs/en/capabilities/authorization/default-access.md).
+| Method and path                               | Required action | Request                             | Response `data`                     |
+| --------------------------------------------- | --------------- | ----------------------------------- | ----------------------------------- |
+| `GET /default-access`                         | `read`          |                                     | `DefaultAccessRule[]`               |
+| `POST /default-access`                        | `create`        | a complete `DefaultAccessRule`      | the rule                            |
+| `PUT /default-access/:key`                    | `update`        | a complete `DefaultAccessRule`      | the rule                            |
+| `DELETE /default-access/:key`                 | `delete`        |                                     | none                                |
+| `GET /default-access/options`                 | `read`          |                                     | `AuthorizationOptions`              |
+| `GET /default-access/subjects/:type`          | `read`          | query `search?`, `page`, `pageSize` | `{ items: SubjectOption[], total }` |
+| `POST /default-access/subjects/:type/resolve` | `read`          | `{ ids: string[] }`                 | `SubjectOption[]`                   |
+| `GET /default-access/records/:collection`     | `read`          |                                     | `[{ id, label, description? }]`     |
+
+The settings page is `/settings/authorization/default-access`; its route declares `authz: { resource: { type: 'settings', id: 'authorization.default-access' }, action: 'read' }`.
+
+## `@nocobase/app-plugin-authz-default-access/server`
+
+### Exports
+
+| Export                 | Kind     | Signature                                                                                                                                   | Purpose                        |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `default`              | plugin   | `defineServerPlugin(...)`                                                                                                                   | The server plugin to register. |
+| `defaultAccess`        | function | `defaultAccess(options?: DefaultAccessOptions): AuthorizationPlugin<DefaultAccessAuthorizationApi<DatabaseConnection>, DatabaseConnection>` | The configuration factory.     |
+| `DefaultAccessOptions` | type     | `{ store?: DefaultAccessStore<DatabaseConnection> }`                                                                                        | Replaces the bundled store.    |
+
+## `@nocobase/app-plugin-authz-default-access/client`
+
+### Exports
+
+| Export    | Kind   | Signature                 | Purpose                        |
+| --------- | ------ | ------------------------- | ------------------------------ |
+| `default` | plugin | `defineClientPlugin(...)` | The client plugin to register. |
+
+## `@nocobase/app-plugin-authz-default-access/client/plugin`
+
+### Exports
+
+| Export    | Kind   | Signature                | Purpose                    |
+| --------- | ------ | ------------------------ | -------------------------- |
+| `default` | plugin | `AppClientPluginFactory` | The client plugin factory. |
+
+## `@nocobase/app-plugin-authz-default-access/client/routes`
+
+### Exports
+
+| Export    | Kind  | Signature                    | Purpose                                        |
+| --------- | ----- | ---------------------------- | ---------------------------------------------- |
+| `default` | const | `AppClientRouteContribution` | The settings route of the default-access page. |
+
+## `@nocobase/app-plugin-authz-default-access/package.json`
+
+The package manifest.
