@@ -1,3 +1,5 @@
+import type { EnvironmentMapping } from '@nocobase/config/providers/env';
+
 import type { AppRuntimeContext } from '../runtime/definition.js';
 
 /** A problem a validator found, with its path relative to the section it validated. */
@@ -32,12 +34,19 @@ export interface AppConfigDefinition<T extends object> {
    * never sent.
    */
   readonly public?: readonly string[];
+  /**
+   * Environment variables that set fields of this section, with paths relative to it, such as
+   * `{ AUTH_SECRET: envString('secret') }`. The owner of the section declares them here so that whoever reads a
+   * setting also maps it; an application's own `server/environment.ts` then carries only its deployment keys.
+   */
+  readonly env?: Readonly<Record<string, EnvironmentMapping>>;
 }
 
 /** What a section declares beyond its defaults, as the runtime reads it. */
 export interface AppConfigRules {
   readonly validators: readonly ConfigValidator<never>[];
   readonly public: readonly string[];
+  readonly env?: Readonly<Record<string, EnvironmentMapping>>;
 }
 
 export interface AppConfigFactory<T extends object = object> {
@@ -67,13 +76,19 @@ export function defineAppConfig<T extends object>(
     typeof defaults === 'function' ? defaults(runtime) : defaults;
   const validators = toArray(definition.validate);
   const publicPaths = [...(definition.public ?? [])];
-  if (validators.length === 0 && publicPaths.length === 0) {
+  const env = { ...definition.env };
+  if (
+    validators.length === 0 &&
+    publicPaths.length === 0 &&
+    Object.keys(env).length === 0
+  ) {
     return factory;
   }
   return Object.assign(factory, {
     rules: Object.freeze({
       validators: Object.freeze(validators),
       public: Object.freeze(publicPaths),
+      env: Object.freeze(env),
     }),
   });
 }

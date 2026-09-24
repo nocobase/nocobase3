@@ -87,6 +87,7 @@ export function defineAppDatabaseConfig(
         validateAppDatabaseConfig,
       ] as readonly ConfigValidator<never>[],
       public: factory.rules?.public ?? [],
+      env: factory.rules?.env ?? {},
     },
   });
 }

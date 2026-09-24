@@ -7,8 +7,7 @@ import {
 
 export const environmentMappings: Readonly<Record<string, EnvironmentMapping>> =
   {
-    // Secrets
-    AUTH_SECRET: envString('auth.secret'),
+    // Secrets. AUTH_SECRET is declared by defineAuthConfig in server/config/auth.ts.
     SESSION_SECRET: envString('session.secret'),
 
     // Deployment
