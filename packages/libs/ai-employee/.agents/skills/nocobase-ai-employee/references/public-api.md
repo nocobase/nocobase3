@@ -84,8 +84,9 @@ Useful exports:
 - `DynamicToolsProvider<TContext>`
 - `ToolsRuntime`
 - `Scope`, `Permission`, `From`
+- `buildTool(entity, ctx?)`, `buildAgentTools(entities, runtime?)`, `createToolContext(entity, base, container?)`, `ToolRuntimeContext`
 
-Use for static manager registration, contextual dynamic tools, listing, lookup, and removal.
+Use for static manager registration, contextual dynamic tools, listing, lookup, and removal. `buildAgentTools()` builds tools the way an agent does: each bound to the call's `agentContext` plus the `deps` its `dependencies` resolve to from `container`.
 
 ### Skills
 

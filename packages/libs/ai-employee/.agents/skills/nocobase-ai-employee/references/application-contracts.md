@@ -664,6 +664,11 @@ abstract class LLMProvider {
 }
 ```
 
+Tools on a direct call:
+
+- `prepareChain()`, and so `invoke()` and `stream()`, build `context.tools` with `buildAgentTools()`. Pass `context.toolContext` — `{ agentContext, container? }` — to give each tool the context and declared dependencies an agent would; without it a tool is built with no context, and one that requires a context fails when it is called.
+- Built-in web search is meant for a call without tools. When it is on and `context.tools` is not empty, the provider logs a warning and binds as it always has: only the built-in tools where `isToolConflict()` is true, both together otherwise.
+
 Provider constructor behavior:
 
 - `serviceOptions` defaults to `{}` and configured `baseURL` is normalized/validated.

@@ -17,7 +17,7 @@ import {
   AIChatContext,
   AIMessageInput,
 } from '../types/ai-chat-conversation.type.js';
-import { buildTool } from '../utils/tools.js';
+import { buildAgentTools } from '../utils/tools.js';
 import { encodeReadableStream } from '../utils/streams.js';
 import { parseResponseMessage, stripToolCallTags } from '../utils/messages.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
@@ -164,9 +164,24 @@ export abstract class LLMProvider {
 
   prepareChain(context: AIChatContext) {
     let chain = this.chatModel;
-    const toolDefinitions = context.tools?.map(buildTool);
+    const toolDefinitions = context.tools?.length
+      ? buildAgentTools(context.tools, context.toolContext)
+      : undefined;
 
     if (this.builtInTools()?.length) {
+      if (toolDefinitions?.length) {
+        // Built-in search is meant for a call of its own; an agent searches
+        // through a tool instead. Say so rather than bind something surprising.
+        console.warn(
+          `Built-in web search was requested together with tools (${context.tools
+            ?.map((entity) => entity?.definition?.name)
+            .join(', ')}). ${
+            this.isToolConflict()
+              ? 'This provider cannot combine them, so the tools are not bound.'
+              : 'They are bound together.'
+          } Run web search in a call without tools.`,
+        );
+      }
       const tools = [...this.builtInTools()];
       if (!this.isToolConflict() && toolDefinitions?.length) {
         tools.push(...toolDefinitions);

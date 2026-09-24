@@ -499,7 +499,10 @@ describe('fixed AgentService contracts', () => {
     const providers = read('agent/context/ai-employee/context.ts');
     // Each tool is built with its own context; a request-supplied one is
     // dropped rather than forwarded.
-    expect(service).toContain('this.toolContext(entity, context.agentContext)');
+    expect(service).toContain(
+      'buildAgentTools([...discoveredTools.tools.values()], {',
+    );
+    expect(service).toContain('agentContext: context.agentContext,');
     expect(service).toContain('agentContext: _requestAgentContext');
     expect(service).not.toContain('context.ctx');
     expect(providers).not.toContain('ctx: options.ctx');

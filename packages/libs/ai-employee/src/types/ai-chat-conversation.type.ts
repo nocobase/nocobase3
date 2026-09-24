@@ -8,6 +8,7 @@
  */
 
 import { AIMessage, AIToolCall, UserDecision } from './ai-message.type.js';
+import type { ToolRuntimeContext } from '../utils/tools.js';
 
 export interface AgentThread {
   sessionId: string;
@@ -46,6 +47,8 @@ export type AIChatContext = {
     decisions: UserDecision[];
   };
   tools?: any[];
+  /** The context `tools` run with; without it a tool that needs one fails when called. */
+  toolContext?: ToolRuntimeContext;
   middleware?: any[];
   structuredOutput?: {
     name: string;
