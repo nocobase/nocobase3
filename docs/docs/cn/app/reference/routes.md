@@ -79,7 +79,7 @@ export default routes;
 
 `defineRootRoutes()` 的写法相同，只是路由会挂在应用根路径。例如，Webhook 可以声明为 `router.post('/callbacks/payment', ...)`。
 
-需要登录的接口在自己的 Hono router 中使用 `auth.required()`；允许匿名访问但需要读取会话时使用 `auth.optional()`。详细用法见 [服务端路由](../app/server-routes)。
+需要登录的接口在自己的 Hono router 中使用 `auth.required()`；允许匿名访问但需要读取会话时使用 `auth.optional()`。详细用法见 [服务端路由](../server-routes)。
 
 ## 客户端路由
 
@@ -172,11 +172,11 @@ defineAppRoutes([
 
 `breadcrumb` 与 `navigation` 独立，不会互相回退。动态参数路径可以声明 `breadcrumb`，但不能声明需要固定链接的 `navigation`。省略 `breadcrumb` 的路由不会出现在面包屑中。
 
-声明本身不渲染界面；页面需要放置 `<Breadcrumbs />`。显示条件、子页面展示和完整示例见[页面和菜单](../app/pages-and-routes)。
+声明本身不渲染界面；页面需要放置 `<Breadcrumbs />`。显示条件、子页面展示和完整示例见[页面和菜单](../pages-and-routes)。
 
 ### 页面、菜单和访问控制
 
-客户端页面的 `navigation`、`breadcrumb`、`auth`、`authz`、路由分组和子路由用法见 [页面和菜单](../app/pages-and-routes)。
+客户端页面的 `navigation`、`breadcrumb`、`auth`、`authz`、路由分组和子路由用法见 [页面和菜单](../pages-and-routes)。
 
 ### 设置页
 
@@ -227,6 +227,6 @@ defineDevRoutes([
 
 ## 相关链接
 
-- [页面和菜单](../app/pages-and-routes) — 声明客户端页面、菜单和访问控制
-- [服务端路由](../app/server-routes) — 编写服务端接口和安全校验
-- [界面和样式](../app/components-and-styling) — 使用组件、主题变量和状态反馈
+- [页面和菜单](../pages-and-routes) — 声明客户端页面、菜单和访问控制
+- [服务端路由](../server-routes) — 编写服务端接口和安全校验
+- [界面和样式](../components-and-styling) — 使用组件、主题变量和状态反馈

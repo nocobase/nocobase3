@@ -20,14 +20,6 @@
     "link": "/capabilities/"
   },
   {
-    "text": "部署",
-    "link": "/deployment/"
-  },
-  {
-    "text": "参考",
-    "link": "/reference/"
-  },
-  {
     "text": "插件",
     "link": "/plugin-development/"
   },

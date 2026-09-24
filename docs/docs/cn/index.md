@@ -91,10 +91,7 @@ features:
         link: /tutorials/
       - title: '部署'
         details: '怎么打包，怎么发到服务器上。'
-        link: /deployment/
-      - title: '参考'
-        details: '命令、配置项、主题变量、名词解释。'
-        link: /reference/
+        link: /app/deployment/
       - title: '插件开发'
         details: '想做一个能给别人用的功能包时才看。'
         link: /plugin-development/
