@@ -10,13 +10,12 @@ import {
   type RealtimeUserTopic,
 } from '@nocobase/app-server/realtime';
 
-import { createAppAuthorization } from '../authorization.js';
-import type { AuthorizationConfig } from '../authorization.js';
 import {
-  authorizationToken,
-  permissionSetsToken,
-  type AppAuthorizationService,
-} from '../tokens.js';
+  createAppAuthorization,
+  type AppAuthorization,
+  type AuthorizationConfig,
+} from '../authorization.js';
+import { authorizationToken } from '../tokens.js';
 import {
   AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
   AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
@@ -29,7 +28,7 @@ export class AuthorizationProvider<
     AuthorizationProviderApplication,
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-authorization';
-  private instance?: AppAuthorizationService;
+  private instance?: AppAuthorization;
   private permissionsChangedTopic?: RealtimeUserTopic<{
     readonly type: 'permissions-changed';
   }>;
@@ -41,14 +40,9 @@ export class AuthorizationProvider<
     this.app.container.singleton(authorizationToken, (container) =>
       this.authorization(container),
     );
-    this.app.container.singleton(
-      permissionSetsToken,
-      (container) => this.authorization(container).permissionSets,
-    );
   }
 
-  /** Both tokens name one instance, so the provider owns it rather than a binding. */
-  private authorization(container: ServiceResolver): AppAuthorizationService {
+  private authorization(container: ServiceResolver): AppAuthorization {
     this.instance ??= createAppAuthorization({
       database: container.has(databaseManagerToken)
         ? container.resolve(databaseManagerToken)

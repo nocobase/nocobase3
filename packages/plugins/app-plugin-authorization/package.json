@@ -39,9 +39,9 @@
       "types": "./client/management.ts",
       "import": "./client/management.ts"
     },
-    "./server/management": {
-      "types": "./server/management/index.ts",
-      "import": "./server/management/index.ts"
+    "./server/extension": {
+      "types": "./server/extension/index.ts",
+      "import": "./server/extension/index.ts"
     }
   },
   "files": [
@@ -81,9 +81,9 @@
         "types": "./dist/client/management.d.ts",
         "import": "./dist/client/management.js"
       },
-      "./server/management": {
-        "types": "./dist/server/management/index.d.ts",
-        "import": "./dist/server/management/index.js"
+      "./server/extension": {
+        "types": "./dist/server/extension/index.d.ts",
+        "import": "./dist/server/extension/index.js"
       }
     }
   },

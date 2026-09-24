@@ -1,9 +1,9 @@
 import { createAuthorization } from './authorization-fixture.js';
-import { createPermissionSetHandler } from '../server/management/permission-sets.js';
+import { createPermissionSetHandler } from '../server/routes/permission-sets.js';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  permissionSets,
+  permissionSetsPlugin,
   PermissionSetLastAssignmentError,
   PermissionSetProtectedError,
   PermissionSetSubjectNotAllowedError,
@@ -58,11 +58,11 @@ function createProtectedAuthorization(options: {
   disabledUsers?: readonly string[];
 }) {
   const authorization = createAuthorization({
-    plugins: [permissionSets({ store: options.store })],
+    plugins: [permissionSetsPlugin({ store: options.store })],
   });
   if (options.disabledUsers) {
     const disabled = new Set(options.disabledUsers);
-    authorization.subjects.define('user', {
+    authorization.subjects.add('user', {
       filterActive: (ids) =>
         Promise.resolve(ids.filter((id) => !disabled.has(id))),
     });
@@ -172,7 +172,7 @@ describe('Permission Sets that require an active assignment', () => {
     const store = new MockPermissionSetStore(
       administratorOptions(['root', 'second']),
     );
-    await store.assignPermissionSet({
+    await store.assign({
       id: 'viewer-viewer',
       subject: { type: 'user', id: 'viewer' },
       permissionSet: 'viewer',
@@ -222,7 +222,10 @@ describe('Permission Sets that require an active assignment', () => {
       ['GET', 'POST', 'PUT', 'DELETE'],
       ['/authz/permission-sets', '/authz/permission-sets/*'],
       (context) =>
-        createPermissionSetHandler(authorization.permissionSets)({
+        createPermissionSetHandler(
+          authorization as never,
+          authorization.permissionSets,
+        )({
           request: context.req.raw,
           authorization: authorization.for({
             principal: { type: 'user', id: 'root' },
@@ -232,7 +235,7 @@ describe('Permission Sets that require an active assignment', () => {
     );
 
     const response = await router.request(
-      '/authz/permission-sets/assignments/root-administrator',
+      '/authz/permission-sets/administrator/assignments/root-administrator',
       { method: 'DELETE' },
     );
     expect(response.status).toBe(409);
@@ -246,7 +249,7 @@ describe('the Permission Set the library protects as the root set', () => {
   it('protects it exactly as an explicit protect call did', () => {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
           rootSet: 'administrator',
         }),
@@ -259,15 +262,15 @@ describe('the Permission Set the library protects as the root set', () => {
       requireActiveAssignment: true,
       unrestricted: true,
     });
-    expect(authorization.permissionSets.isUnrestricted('administrator')).toBe(
-      true,
-    );
+    expect(
+      authorization.permissionSets.protection('administrator')?.unrestricted,
+    ).toBe(true);
   });
 
   it('lets the application keep the set empty', async () => {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
           rootSet: { key: 'administrator', requireActiveAssignment: false },
         }),
@@ -287,7 +290,7 @@ describe('the Permission Set the library protects as the root set', () => {
   it('protects nothing when the application declares no root set', () => {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
         }),
       ],
@@ -303,7 +306,7 @@ describe('the Permission Set the library protects as the default set', () => {
   it('keeps its grants editable while the set and its binding are not', () => {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
           defaultSet: 'member',
         }),
@@ -314,7 +317,9 @@ describe('the Permission Set the library protects as the default set', () => {
       owner: PERMISSION_SETS_PROTECTION_OWNER,
       allow: ['update'],
     });
-    expect(authorization.permissionSets.isUnrestricted('member')).toBe(false);
+    expect(
+      authorization.permissionSets.protection('member')?.unrestricted,
+    ).toBeUndefined();
     expect(() =>
       authorization.permissionSets.assertWritable('member', 'update'),
     ).not.toThrow();
@@ -328,7 +333,7 @@ describe('the Permission Set the library protects as the default set', () => {
   it('protects nothing when the application declares no default set', () => {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
         }),
       ],
@@ -344,7 +349,7 @@ describe('the subject types a Permission Set may be assigned to', () => {
   ): ReturnType<typeof createAuthorization> {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions([])),
         }),
       ],
@@ -431,7 +436,10 @@ describe('the subject types a Permission Set may be assigned to', () => {
       ['GET', 'POST', 'PUT', 'DELETE'],
       ['/authz/permission-sets', '/authz/permission-sets/*'],
       (context) =>
-        createPermissionSetHandler(authorization.permissionSets)({
+        createPermissionSetHandler(
+          authorization as never,
+          authorization.permissionSets,
+        )({
           request: context.req.raw,
           authorization: authorization.for({
             principal: { type: 'user', id: 'root' },
@@ -458,7 +466,7 @@ describe('the subject types a Permission Set may be assigned to', () => {
   it('carries the root set restriction only when the application declares it', () => {
     const restricted = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
           rootSet: { key: 'administrator', assignableTo: ['user'] },
         }),
@@ -466,7 +474,7 @@ describe('the subject types a Permission Set may be assigned to', () => {
     });
     const unrestricted = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
           rootSet: 'administrator',
         }),
@@ -488,7 +496,7 @@ describe('subscribing to assignment changes', () => {
   > {
     return createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(administratorOptions(['root'])),
         }),
       ],

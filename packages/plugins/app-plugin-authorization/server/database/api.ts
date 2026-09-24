@@ -1,95 +1,85 @@
+import type { MiddlewareHandler } from 'hono';
+import type {
+  AuthorizationContext,
+  AuthorizationDecision,
+  AuthorizationEnv,
+  BusinessActions,
+  BusinessApi,
+  BusinessCheck,
+} from '@nocobase/authorization/core';
+import type { DatabaseConnection, RepositoryPolicy } from '@nocobase/db';
 import {
   createBusinessRepositoryAuthorization,
   type AuthorizeRepositoryOptions,
 } from '../authorize-repository.js';
-import type { MiddlewareHandler } from 'hono';
-import {
-  databaseGrant,
-  databaseScope,
-  type DatabaseOperation,
-} from './builders.js';
-import { DatabaseCollectionRegistry } from './collection-registry.js';
-import type {
-  Authorization,
-  AuthorizationActions,
-  AuthorizationEnv,
-  ResourceAuthorizationCheck,
-  AuthorizationDecision,
-  AuthorizationScope,
-} from '@nocobase/authorization/core';
-import type { PermissionGrant } from '@nocobase/authorization/permissions';
-import type { RepositoryPolicy } from '@nocobase/db';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
+import type { DatabaseOperation } from './builders.js';
+import {
+  DatabaseCollectionRegistry,
+  type DatabaseCollections,
+} from './collection-registry.js';
 import type {
-  DatabaseAccessScope,
-  DatabaseAuthorizationParams,
+  AuthorizationCollection,
   DatabaseAuthorizationConditions,
-  DatabaseGrantDefinition,
-  DatabaseRecordAccess,
+  DatabaseAuthorizationParams,
 } from './model.js';
 
+/** `authz.database`. */
 export interface DatabaseApi {
-  readonly collections: DatabaseCollectionRegistry;
-  grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
-  scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope;
+  readonly collections: DatabaseCollections;
+  /** Folds the four CRUD decisions of one context into one Repository Policy. */
   policyFor(
     collection: string,
-    scope: AuthorizationScope,
+    context: AuthorizationContext,
     operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy>;
-  authorizeRepository<A extends AuthorizationActions>(
+  /** Binds generated Repository routes to business actions. */
+  authorizeRepository<A extends BusinessActions>(
     options: AuthorizeRepositoryOptions<A>,
   ): MiddlewareHandler<AuthorizationEnv>;
 }
 
 export interface DatabaseAuthorizationApi {
-  db: DatabaseApi;
+  database: DatabaseApi;
+}
+
+/** What the plugin learns during setup; read by the extension routes. */
+export interface DatabaseHost {
+  readonly business: BusinessApi;
+  middleware(): MiddlewareHandler<AuthorizationEnv>;
+  readonly connection?: DatabaseConnection;
+  describe(name: string): Promise<AuthorizationCollection | undefined>;
+}
+
+const hosts = new WeakMap<DatabaseApi, DatabaseHost>();
+
+/** Package-internal: the setup-time host of an installed database API. */
+export function databaseHost(api: DatabaseApi): DatabaseHost | undefined {
+  return hosts.get(api);
 }
 
 export class DatabaseAuthorizationService implements DatabaseApi {
   readonly collections: DatabaseCollectionRegistry =
     new DatabaseCollectionRegistry();
-  private host: Authorization | undefined;
 
-  /**
-   * The Authorization this api was installed into. A plugin's `setup` is not
-   * handed the instance, so the host binds it once the instance exists.
-   */
-  installInto(authz: Authorization): void {
-    this.host = authz;
+  attach(host: DatabaseHost): void {
+    hosts.set(this, host);
   }
 
-  authorizeRepository<A extends AuthorizationActions>(
+  authorizeRepository<A extends BusinessActions>(
     options: AuthorizeRepositoryOptions<A>,
   ): MiddlewareHandler<AuthorizationEnv> {
-    if (!this.host)
+    const host = hosts.get(this);
+    if (!host)
       throw new Error(
-        'Database authorization was not installed into an Authorization',
+        'The database plugin is not installed in an Authorization',
       );
-    return createBusinessRepositoryAuthorization(this.host, options);
+    return createBusinessRepositoryAuthorization(host, options);
   }
 
-  grant(
-    resource: string,
-    definition: DatabaseGrantDefinition,
-  ): PermissionGrant {
-    return databaseGrant(resource, definition);
-  }
-
-  scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope {
-    return databaseScope(recordAccess);
-  }
-
-  /**
-   * Folds this request's four decisions into one Repository Policy.
-   *
-   * The calls share the scope's grant and constraint caches, so authorizing
-   * four actions costs one resolution each. Every node is complete, including
-   * an explicit relation allowlist; binding and narrowing have identical defaults.
-   */
   async policyFor(
     collection: string,
-    scope: AuthorizationScope,
+    context: AuthorizationContext,
     operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy> {
     const resource = { type: 'database.collection', id: collection };
@@ -98,7 +88,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     ): Promise<RepositoryPolicy[A]> =>
       foldDecision(
         action,
-        await scope.authorize<DatabaseAuthorizationParams>({
+        await context.authorize<DatabaseAuthorizationParams>({
           resource,
           action,
           params: operation ? { operation } : {},
@@ -116,7 +106,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
 
 /** Translate resolved checks only; this never runs authorization again. */
 export function composeDatabasePolicies(
-  checks: readonly ResourceAuthorizationCheck[],
+  checks: readonly BusinessCheck[],
 ): Readonly<Record<string, RepositoryPolicy>> {
   type MutablePolicy = {
     -readonly [K in keyof RepositoryPolicy]: RepositoryPolicy[K];
@@ -152,7 +142,7 @@ export function composeDatabasePolicies(
 }
 
 declare module '@nocobase/authorization/core' {
-  interface ResourceAuthorizationConditions {
+  interface BusinessConditions {
     /** Policies for the tables used by this operation; other operations remain denied. */
     database?: Readonly<Record<string, RepositoryPolicy>>;
   }

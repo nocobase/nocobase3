@@ -1,5 +1,5 @@
 import { createAuthorization } from './authorization-fixture.js';
-import { createPermissionSetHandler } from '../server/management/permission-sets.js';
+import { createPermissionSetHandler } from '../server/routes/permission-sets.js';
 import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
@@ -16,7 +16,7 @@ import {
   type Auth,
 } from '@nocobase/app-plugin-authentication';
 
-import { permissionSets } from '@nocobase/authorization';
+import { permissionSetsPlugin } from '@nocobase/authorization';
 import { type AuthorizationPlugin } from '@nocobase/authorization/core';
 
 import {
@@ -83,7 +83,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
         }),
       }),
       router.request(
-        '/api/authz/permission-sets/assignments/hub-viewer-alice',
+        '/api/authz/permission-sets/hub-viewer/assignments/hub-viewer-alice',
         {
           method: 'DELETE',
         },
@@ -131,13 +131,13 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     });
 
     const revoked = await router.request(
-      '/api/authz/permission-sets/assignments/user:alice:root',
+      '/api/authz/permission-sets/root/assignments/user:alice:root',
       { method: 'DELETE' },
     );
     expect(revoked.status).toBe(204);
 
     const last = await router.request(
-      '/api/authz/permission-sets/assignments/user:admin:root',
+      '/api/authz/permission-sets/root/assignments/user:admin:root',
       { method: 'DELETE' },
     );
     expect(last.status).toBe(409);
@@ -174,7 +174,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     const authorization = createAuthorization({
       plugins: [
         identity,
-        permissionSets({ store: new MockPermissionSetStore() }),
+        permissionSetsPlugin({ store: new MockPermissionSetStore() }),
       ],
     }) as unknown as Authorization;
     // Exactly what the seed writes: the superuser set carries no grants.
@@ -307,7 +307,10 @@ async function protectedRouter(container: ServiceContainer): Promise<Hono> {
   )
     authorization.routes.add(
       '/permission-sets',
-      createPermissionSetHandler(authorization.permissionSets),
+      createPermissionSetHandler(
+        authorization as never,
+        authorization.permissionSets,
+      ),
     );
   const routes = await apiRoutes.createRouter({
     appName: 'main',
@@ -337,7 +340,7 @@ async function protectedFixture(): Promise<{
   const authorization = createAuthorization({
     plugins: [
       identity,
-      permissionSets({ store: new MockPermissionSetStore() }),
+      permissionSetsPlugin({ store: new MockPermissionSetStore() }),
     ],
   }) as unknown as Authorization;
   await authorization.permissionSets.create({

@@ -12,7 +12,7 @@ import {
   createAuthorizationAdministration,
   type AuthorizationAdministration,
 } from '../server/administration.js';
-import { describeCollection } from '../server/database/index.js';
+import { describeCollection } from '../server/database/collections.js';
 
 describe('the records an application offers to a settings page', () => {
   let database: DatabaseManager;

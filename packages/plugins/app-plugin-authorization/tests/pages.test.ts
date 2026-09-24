@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createAuthorization, permissionSets } from '@nocobase/authorization';
-import { pages } from '../server/pages-authorization.js';
+import {
+  createAuthorization,
+  permissionSetsPlugin,
+} from '@nocobase/authorization';
+import { pagesPlugin } from '../server/pages-authorization.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 function setup() {
@@ -18,16 +21,8 @@ function setup() {
             actions: [{ action: 'access' }],
           },
           {
-            resource: { type: 'database.collection', id: 'orders' },
-            actions: [
-              {
-                action: 'read',
-                policy: {
-                  type: 'database',
-                  recordAccess: ['recordsIOwn'],
-                },
-              },
-            ],
+            resource: { type: 'page', id: 'reports' },
+            actions: [{ action: 'export' }],
           },
         ],
       },
@@ -41,25 +36,17 @@ function setup() {
     ],
   });
   const authorization = createAuthorization({
-    plugins: [permissionSets({ store }), pages()],
+    plugins: [permissionSetsPlugin({ store }), pagesPlugin()],
   });
-  return {
-    authorization,
-    authz: authorization.for({
-      principal: { type: 'user', id: 'alice' },
-    }),
-  };
+  return authorization.for({ principal: { type: 'user', id: 'alice' } });
 }
 
 describe('Pages', () => {
-  it('authorizes page access through the installed Grant Provider', async () => {
-    const { authz } = setup();
+  it('is a record type: any page id, only the access action', async () => {
+    const authz = setup();
 
     await expect(
-      authz.can({
-        resource: { type: 'page', id: 'orders' },
-        action: 'access',
-      }),
+      authz.can({ resource: { type: 'page', id: 'orders' }, action: 'access' }),
     ).resolves.toBe(true);
     await expect(
       authz.can({
@@ -68,17 +55,18 @@ describe('Pages', () => {
       }),
     ).resolves.toBe(false);
     await expect(
-      authz.can({
+      authz.authorize({
         resource: { type: 'page', id: 'orders' },
         action: 'update',
       }),
-    ).resolves.toBe(false);
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'RESOURCE_ACTION_NOT_SUPPORTED' }],
+    });
   });
 
-  it('returns static permissions for the current identity', async () => {
-    const { authz } = setup();
-
-    await expect(authz.permissions()).resolves.toEqual({
+  it('lists exactly the pages can() permits in the snapshot', async () => {
+    await expect(setup().snapshot()).resolves.toEqual({
       unrestricted: false,
       permissions: [
         { resource: { type: 'page', id: 'home' }, actions: ['access'] },
@@ -87,22 +75,10 @@ describe('Pages', () => {
     });
   });
 
-  it('serves the current identity permissions through the Core handler', async () => {
-    const { authorization, authz } = setup();
-    const response = await authorization.permissions.handler({
-      request: new Request('http://localhost/authorization/permissions'),
-      authorization: authz,
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      data: {
-        unrestricted: false,
-        permissions: [
-          { resource: { type: 'page', id: 'home' }, actions: ['access'] },
-          { resource: { type: 'page', id: 'orders' }, actions: ['access'] },
-        ],
-      },
+  it('builds access grants', () => {
+    expect(pagesPlugin().authorizationApi?.pages.grant('orders')).toEqual({
+      resource: { type: 'page', id: 'orders' },
+      actions: [{ action: 'access' }],
     });
   });
 });

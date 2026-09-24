@@ -1,11 +1,13 @@
-import { databaseAuthorization } from '../server/database/index.js';
+import { databasePlugin } from '../server/database/plugin.js';
+import { createInspectorHandler } from '../server/routes/inspector.js';
+import { createPermissionSetHandler } from '../server/routes/permission-sets.js';
 import { createAuthorization } from './authorization-fixture.js';
 import { createAppPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import { permissionSets } from '@nocobase/authorization';
+import { permissionSetsPlugin } from '@nocobase/authorization';
 import type {
   AuthorizationDecision,
   AuthorizationPlugin,
@@ -15,7 +17,10 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import { apiRoutes } from '../server/routes/index.js';
-import { authorizationToken, type Authorization } from '../server/index.js';
+import {
+  authorizationToken,
+  type AppAuthorization as Authorization,
+} from '../server/index.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 /**
@@ -26,7 +31,9 @@ const decisions: AuthorizationPlugin = {
   id: 'test-decisions',
   setup(authz) {
     authz.resourceTypes.add({
-      resourceType: 'test.resource',
+      type: 'test.resource',
+      title: 'Test',
+      actions: ['read'],
       authorize: (request): Promise<AuthorizationDecision> =>
         Promise.resolve(
           request.resource.id === 'conditional'
@@ -71,7 +78,7 @@ describe('the permission inspector endpoint', () => {
       })),
     };
     const send = (router: Hono, value: unknown) =>
-      router.request('/api/authz/inspect/batch', {
+      router.request('/api/authz/inspector/batch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(value),
@@ -109,7 +116,9 @@ describe('the permission inspector endpoint', () => {
     const authz = await authorization({ settings: true });
     const seen: unknown[] = [];
     authz.resourceTypes.add({
-      resourceType: 'subject-check',
+      type: 'subject-check',
+      title: 'Subject check',
+      actions: ['read'],
       authorize(request) {
         seen.push({ principal: request.principal, subjects: request.subjects });
         return Promise.resolve({ effect: 'permit', reasons: [] });
@@ -121,7 +130,7 @@ describe('the permission inspector endpoint', () => {
       { type: 'authenticated', id: '*' },
       { type: 'user', id: 'alice' },
     ]) {
-      const response = await router.request('/api/authz/inspect/batch', {
+      const response = await router.request('/api/authz/inspector/batch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -145,7 +154,7 @@ describe('the permission inspector endpoint', () => {
 
   it('summarizes configured types including policy grants and enforces settings access', async () => {
     const send = (router: Hono) =>
-      router.request('/api/authz/inspect/configured', {
+      router.request('/api/authz/inspector/configured', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ subject: { type: 'department', id: 'sales' } }),
@@ -187,7 +196,10 @@ describe('the permission inspector endpoint', () => {
       await authorization({ settings: false }),
     );
 
-    const response = await router.request('/api/authz/inspect', inspect());
+    const response = await router.request(
+      '/api/authz/inspector/decision',
+      inspect(),
+    );
 
     expect(response.status).toBe(403);
   });
@@ -198,7 +210,7 @@ describe('the permission inspector endpoint', () => {
     const [permitted, denied, conditional] = await Promise.all(
       ['permitted', 'denied', 'conditional'].map(async (id) => {
         const response = await router.request(
-          '/api/authz/inspect',
+          '/api/authz/inspector/decision',
           inspect(id),
         );
         expect(response.status).toBe(200);
@@ -242,7 +254,7 @@ describe('the permission inspector endpoint', () => {
           action: '',
         },
       ].map((body) =>
-        router.request('/api/authz/inspect', {
+        router.request('/api/authz/inspector/decision', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
@@ -257,7 +269,10 @@ describe('the permission inspector endpoint', () => {
     const authz = await authorization({ settings: true });
     const router = await mountedRouter(authz);
 
-    const response = await router.request('/api/authz/inspect', inspect());
+    const response = await router.request(
+      '/api/authz/inspector/decision',
+      inspect(),
+    );
     const { data } = (await response.json()) as {
       data: AuthorizationDecision & { subject?: unknown };
     };
@@ -298,10 +313,18 @@ async function authorization({
     plugins: [
       identity,
       decisions,
-      databaseAuthorization(),
-      permissionSets({ store: new MockPermissionSetStore() }),
+      databasePlugin(),
+      permissionSetsPlugin({ store: new MockPermissionSetStore() }),
     ],
   }) as unknown as Authorization;
+  authz.routes.add(
+    '/permission-sets',
+    createPermissionSetHandler(authz, authz.permissionSets),
+  );
+  authz.routes.add(
+    '/inspector',
+    createInspectorHandler(authz, authz.permissionSets),
+  );
   await authz.permissionSets.create({
     key: 'root',
     grants: settings

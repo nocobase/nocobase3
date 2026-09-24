@@ -1,61 +1,66 @@
-import type {
-  AuthorizationOptions,
-  LocalizedText,
-} from '../client/authorization-client.js';
 import { expect, it } from 'vitest';
+import { ResourceItems } from '@nocobase/authorization/core';
 import { createAppAuthorization } from '../server/index.js';
-import {
-  permissionSetOptions,
-  databaseScopeRuleOptions,
-} from '../server/routes/options.js';
+import { authorizationOptions } from '../server/options.js';
 
-it('exposes pages independently while keeping raw collections and custom handlers internal', async () => {
+it('lists sections in order and every displayed type, but no hidden type', async () => {
   const authz = createAppAuthorization({});
-  authz.pages.add({ name: 'orders', title: 'Orders', actions: ['access'] });
-  authz.db.collections.add('orders');
+  authz.database.collections.add({ name: 'orders', title: 'Orders' });
+  const custom = new ResourceItems();
+  authz.resourceTypes.add({ type: 'custom', title: 'Custom', items: custom });
+  custom.add({ id: 'one', title: 'One', actions: ['read'] });
   authz.resourceTypes.add({
-    resourceType: 'custom',
-    authorize: async () => ({ effect: 'deny', reasons: [] }),
+    type: 'hub.app',
+    title: 'Apps',
+    section: 'administration',
+    actions: ['read'],
   });
-  authz.getResource('custom').items.add({ id: 'one', actions: ['read'] });
+  const options = await authorizationOptions(authz);
+  expect(options.sections.map((section) => section.name)).toEqual([
+    'pages',
+    'business',
+    'administration',
+  ]);
+  expect(options.resourceTypes.map((type) => type.type)).toEqual([
+    'business',
+    'hub.app',
+    'page',
+    'settings',
+  ]);
+  expect(
+    options.resourceTypes.find((type) => type.type === 'page'),
+  ).toMatchObject({
+    section: 'pages',
+    items: [],
+    actions: [{ name: 'access' }],
+  });
+  expect(
+    options.resourceTypes
+      .find((type) => type.type === 'settings')
+      ?.items.map((item) => item.id),
+  ).toEqual(['authorization.permission-sets', 'authorization.inspector']);
+  expect(
+    options.resourceTypes.find((type) => type.type === 'settings')?.groups,
+  ).toEqual([
+    {
+      name: 'authorization',
+      title: expect.objectContaining({
+        key: 'options.settingsModules.authorization',
+      }),
+    },
+  ]);
+});
+
+it('describes business data scopes and narrows rule options to them', async () => {
+  const authz = createAppAuthorization({});
+  authz.database.collections.add({ name: 'orders', title: 'Orders' });
+  authz.groups.add({ name: 'sales', title: 'Sales' });
+  expect(
+    (await authorizationOptions(authz, { rules: true })).resourceTypes,
+  ).toEqual([]);
   const title = { key: 'sales.title', ns: 'example' };
   const actionTitle = { key: 'sales.view', ns: 'example' };
-  const assertSeparated = async () => {
-    const options = (await permissionSetOptions(
-      authz,
-      undefined,
-    )) as AuthorizationOptions<LocalizedText>;
-    expect(options.resourceTypes.map((type) => type.value)).toEqual([
-      'resource',
-      'page',
-    ]);
-    expect(
-      options.resourceTypes.find((type) => type.value === 'page')?.resources,
-    ).toEqual([
-      expect.objectContaining({
-        value: 'orders',
-        actions: [{ value: 'access', label: expect.anything() }],
-      }),
-    ]);
-    expect(options.resourceTypes.map((type) => type.value)).not.toContain(
-      'database.collection',
-    );
-    expect(options.resourceTypes.map((type) => type.value)).not.toContain(
-      'custom',
-    );
-  };
-  await assertSeparated();
-  expect(
-    (
-      (await databaseScopeRuleOptions(
-        authz,
-        undefined,
-      )) as AuthorizationOptions<LocalizedText>
-    ).resourceTypes,
-  ).toEqual([]);
-  authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
-  await assertSeparated();
-  authz.resources.add({
+  authz.business.define({
     name: 'sales.orders',
     title,
     group: 'sales',
@@ -63,48 +68,70 @@ it('exposes pages independently while keeping raw collections and custom handler
       {
         name: 'view',
         title: actionTitle,
-        scopes: {
-          orders: {
+        dataScopes: [
+          {
+            key: 'orders',
             title: 'Orders',
-            resource: { type: 'database.collection', id: 'orders' },
+            collection: 'orders',
+            options: ['recordsIOwn', 'allRecords'],
           },
-        },
-        grants: [authz.db.grant('orders', { read: { scope: 'orders' } })],
+        ],
+        grants: [
+          {
+            resource: { type: 'database.collection', id: 'orders' },
+            actions: [
+              {
+                action: 'read',
+                policy: { type: 'database' },
+                scopeKey: 'orders',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'export',
+        title: 'Export',
+        grants: [
+          {
+            resource: { type: 'database.collection', id: 'orders' },
+            actions: [{ action: 'read', policy: { type: 'database' } }],
+          },
+        ],
       },
     ],
   });
-  const options = (await permissionSetOptions(
-    authz,
-    undefined,
-  )) as AuthorizationOptions<LocalizedText>;
-  expect(
-    options.resourceTypes[0].resources.find(
-      (item) => item.value === 'sales.orders',
-    ),
-  ).toMatchObject({
-    label: expect.objectContaining(title),
-    actions: [{ value: 'view', label: expect.objectContaining(actionTitle) }],
+  const options = await authorizationOptions(authz);
+  const business = options.resourceTypes.find(
+    (type) => type.type === 'business',
+  );
+  expect(business).toMatchObject({
+    section: 'business',
+    groups: [{ name: 'sales', title: 'Sales' }],
+    items: [
+      {
+        id: 'sales.orders',
+        title: expect.objectContaining(title),
+        group: 'sales',
+        actions: [
+          { name: 'view', title: expect.objectContaining(actionTitle) },
+          { name: 'export', title: 'Export' },
+        ],
+        dataScopes: {
+          view: [
+            {
+              key: 'orders',
+              title: 'Orders',
+              collection: 'orders',
+              fields: [],
+              recordAccess: ['allRecords'],
+            },
+          ],
+        },
+      },
+    ],
   });
-  expect(
-    (
-      (await databaseScopeRuleOptions(
-        authz,
-        undefined,
-      )) as AuthorizationOptions<LocalizedText>
-    ).resourceTypes[0].resources.map((item) => item.value),
-  ).toEqual(['sales.orders']);
-});
-
-it('keeps an empty page catalog available for client-declared pages', async () => {
-  const options = (await permissionSetOptions(
-    createAppAuthorization({}),
-    undefined,
-  )) as AuthorizationOptions<LocalizedText>;
-  expect(
-    options.resourceTypes.find((type) => type.value === 'page'),
-  ).toMatchObject({
-    category: 'pages',
-    resources: [],
-    actions: [{ value: 'access' }],
-  });
+  const rules = await authorizationOptions(authz, { rules: true });
+  expect(rules.resourceTypes.map((type) => type.type)).toEqual(['business']);
+  expect(rules.recordAccess.map((entry) => entry.key)).toContain('recordsIOwn');
 });

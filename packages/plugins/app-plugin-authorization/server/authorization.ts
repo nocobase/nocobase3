@@ -1,27 +1,25 @@
-import { settingsApi } from './management/settings-resource.js';
-import { installPermissionSetAdministration } from './management/authorization.js';
 import './subjects.js';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
+  businessPlugin,
   createAuthorization,
   type Authorization,
   type AuthorizationPlugin,
+  type BusinessAuthorizationApi,
 } from '@nocobase/authorization/core';
 import {
-  databaseAuthorization,
-  type DatabaseAuthorizationApi,
-  type DatabaseAuthorizationPlugin,
-} from './database/index.js';
-import {
-  permissionSets,
+  permissionSetsPlugin,
   type PermissionSetsAuthorizationApi,
-  type PermissionSetsPlugin,
-} from '@nocobase/authorization/permissions';
+} from '@nocobase/authorization/permission-sets';
+import { AUTHORIZATION_NAMESPACE } from '../shared.js';
+import type { DatabaseAuthorizationApi } from './database/api.js';
+import { databasePlugin } from './database/plugin.js';
 import {
-  pages,
-  type PagesApi,
-  type PagesPlugin,
+  pagesPlugin,
+  type PagesAuthorizationApi,
 } from './pages-authorization.js';
+import { installAuthorizationAdministration } from './routes/administration.js';
+import { settingsPlugin, type SettingsAuthorizationApi } from './settings.js';
 import { DatabaseConnectionHandle } from './stores/connection.js';
 import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
@@ -34,22 +32,8 @@ export interface AppPermissionSetsConfig {
 
 export interface AuthorizationConfig {
   permissionSets?: AppPermissionSetsConfig;
-  /**
-   * Plugins the application chooses to install. Permission Sets, page and database
-   * authorization are built in and are not among them.
-   */
+  /** Plugins added after the built-in ones, such as the rule plugins. */
   plugins?: readonly AuthorizationPlugin[];
-}
-
-const DEFAULT_ROOT_SET = 'root';
-const DEFAULT_DEFAULT_SET = 'member';
-
-interface AuthSessionUser {
-  id: string;
-}
-
-interface AuthSession {
-  user: AuthSessionUser;
 }
 
 export interface CreateAppAuthorizationOptions {
@@ -60,93 +44,78 @@ export interface CreateAppAuthorizationOptions {
   config?: AuthorizationConfig;
 }
 
+/** The application's Authorization with its built-in APIs. */
+export type AppAuthorization = Authorization &
+  PermissionSetsAuthorizationApi<DatabaseConnection> &
+  DatabaseAuthorizationApi &
+  PagesAuthorizationApi &
+  SettingsAuthorizationApi &
+  BusinessAuthorizationApi;
+
+const DEFAULT_ROOT_SET = 'root';
+const DEFAULT_DEFAULT_SET = 'member';
+
+const text = (key: string) => ({ key, ns: AUTHORIZATION_NAMESPACE });
+
 export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
-): Authorization &
-  PermissionSetsAuthorizationApi<DatabaseConnection> &
-  DatabaseAuthorizationApi & {
-    pages: PagesApi;
-  } {
+): AppAuthorization {
   const sets = options.config?.permissionSets;
-  const database = databaseAuthorization(options.database);
   const connection = new DatabaseConnectionHandle(
     'Permission Sets',
     options.connection,
   );
-  const permissionSetPlugin = permissionSets<DatabaseConnection>({
-    store: new DatabasePermissionSetStore(connection.resolve),
-    rootSet: {
-      key: sets?.rootSet ?? DEFAULT_ROOT_SET,
-      // The identity middleware below makes `user` this host's principal
-      // type: a superuser is an account, never an audience or a group.
-      assignableTo: ['user'],
-    },
-    defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
-  });
-  // The built-in plugins lead the tuple so their apis are inferred rather
-  // than asserted: `authz.permissionSets`, `authz.db` and `authz.pages` are statically typed.
-  const plugins: readonly [
-    PermissionSetsPlugin<DatabaseConnection>,
-    DatabaseAuthorizationPlugin,
-    PagesPlugin,
-    ...AuthorizationPlugin[],
-  ] = [
-    {
-      ...permissionSetPlugin,
-      setup(authz) {
-        permissionSetPlugin.setup?.(authz);
-        installPermissionSetAdministration(
-          authz,
-          permissionSetPlugin.authorizationApi!.permissionSets,
-        );
-      },
-    },
-    database,
-    pages(),
-    ...(options.config?.plugins ?? []),
-  ];
-  const authz = createAuthorization({
+  const authz: AppAuthorization = createAuthorization({
     connection: options.connection,
-    plugins,
+    plugins: [
+      permissionSetsPlugin<DatabaseConnection>({
+        store: new DatabasePermissionSetStore(connection.resolve),
+        rootSet: {
+          key: sets?.rootSet ?? DEFAULT_ROOT_SET,
+          // `user` is this host's principal type: a superuser is an account.
+          assignableTo: ['user'],
+        },
+        defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
+      }),
+      databasePlugin(options.database),
+      pagesPlugin(),
+      settingsPlugin(),
+      businessPlugin(),
+      ...(options.config?.plugins ?? []),
+    ],
   });
-  authz.subjects.define('authenticated', {
+  authz.subjects.add('authenticated', {
     filterActive: async (ids) => ids.filter((id) => id === '*'),
     administration: {
-      title: { key: 'options.subjectTypes.authenticated' },
+      title: text('options.subjectTypes.authenticated'),
       selection: { type: 'fixed', id: '*' },
     },
   });
   authz.use(async (request, next) => {
-    const session = readAuthSession(request.http.var.auth);
-    request.principal = { type: 'user', id: session.user.id };
+    const userId = readSessionUserId(request.http.var.auth);
+    request.principal = { type: 'user', id: userId };
     request.subjects.add({ type: 'authenticated', id: '*' });
     for (const subject of await authz.subjects.resolveFor(request.principal))
       request.subjects.add(subject);
     await next();
   });
   authz.onGrantsChanged(async (subject) => {
-    if (subject.type === 'user') {
+    if (subject.type === 'user')
       await options.onUserPermissionsChanged?.(subject.id);
-    } else if (subject.type === 'authenticated') {
+    else if (subject.type === 'authenticated')
       await options.onAuthenticatedPermissionsChanged?.();
-    }
   });
-  database.authorizationApi.db.installInto(authz);
-  Object.assign(authz, { settings: settingsApi });
+  installAuthorizationAdministration(authz);
   return authz;
 }
 
-function readAuthSession(value: unknown): AuthSession {
-  if (!isRecord(value) || !isRecord(value.user)) {
+function readSessionUserId(value: unknown): string {
+  const user: unknown =
+    value && typeof value === 'object' ? Reflect.get(value, 'user') : undefined;
+  if (!user || typeof user !== 'object')
     throw new Error('Authorization requires an authenticated session');
-  }
-  const id = value.user.id;
-  if (typeof id !== 'string' || id.length === 0) {
+  const id: unknown = Reflect.get(user, 'id');
+  if (typeof id !== 'string' || id.length === 0)
     throw new Error('Authorization session user must have an id');
-  }
-  return { user: { id } };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return id;
 }

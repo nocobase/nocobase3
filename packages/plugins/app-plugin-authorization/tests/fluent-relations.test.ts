@@ -80,10 +80,8 @@ void typeChecks;
 it('serializes only the reference when a relation receives a record access definition', async () => {
   const { defineRecordAccess } = await import('@nocobase/authorization/core');
   const policy = defineRecordAccess('activeTeams', (access) =>
-    access
-      .resources({ type: 'database.collection', id: 'teams' })
-      .resolve(() => true),
-  );
+    access.collections('teams').resolver(() => true),
+  ).reference();
   const permission = new WritePermissionBuilder()
     .relation('team', (team) => team.recordAccess(policy).connect())
     .build();

@@ -7,12 +7,12 @@ import {
   type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/db';
-import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permission-sets';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createAppAuthorization } from '../server/authorization.js';
 import type { Authorization } from '@nocobase/authorization/core';
-import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permissions';
+import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permission-sets';
 
 type AppAuthorizationWithPermissionSets = Authorization &
   PermissionSetsAuthorizationApi;
@@ -36,7 +36,7 @@ function defineEnabledUsers(
   authorization: Authorization,
   database: DatabaseManager,
 ): void {
-  authorization.subjects.define('user', {
+  authorization.subjects.add('user', {
     filterActive: async (ids, connection) => {
       const rows = await (connection ?? database.connection()).query
         .selectFrom('user')

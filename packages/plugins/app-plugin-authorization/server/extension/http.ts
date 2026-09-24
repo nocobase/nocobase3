@@ -1,16 +1,19 @@
 import { Hono } from 'hono';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import type { AuthorizationRouteRequest } from '@nocobase/authorization/core';
+import {
+  AuthorizationDeniedError,
+  type AuthorizationContext,
+  type AuthorizationRouteHandler,
+} from '@nocobase/authorization/core';
 
 export interface SettingsRouterEnv {
   Bindings: {
-    authorization: AuthorizationRouteRequest['authorization'];
+    authorization: AuthorizationContext;
   };
 }
 
 /**
- * A router for one Authorization settings surface. Denied requests answer
- * `403 FORBIDDEN` and malformed bodies `400 INVALID_AUTHORIZATION_INPUT`.
+ * A router for one authorization settings surface. Denied requests answer
+ * `403 FORBIDDEN` and malformed input `400 INVALID_AUTHORIZATION_INPUT`.
  */
 export function createSettingsRouter(): Hono<SettingsRouterEnv> {
   const routes = new Hono<SettingsRouterEnv>();
@@ -27,20 +30,22 @@ export function createSettingsRouter(): Hono<SettingsRouterEnv> {
   return routes;
 }
 
+/** The one settings check: `settings:<id>` `<action>`, or `AuthorizationDeniedError`. */
 export function requireSettings(
-  authorization: AuthorizationRouteRequest['authorization'],
-  settings: string,
+  authorization: AuthorizationContext,
+  id: string,
   action: string,
 ): Promise<void> {
   return authorization.require({
-    resource: { type: 'settings', id: `authorization.${settings}` },
+    resource: { type: 'settings', id },
     action,
   });
 }
 
+/** Adapts a settings router to `authz.routes.add`. */
 export function createRouteHandler(
   routes: Hono<SettingsRouterEnv>,
-): (input: AuthorizationRouteRequest) => Promise<Response> {
+): AuthorizationRouteHandler {
   return (input) =>
     Promise.resolve(
       routes.fetch(atPath(input.request, input.path), {
@@ -49,8 +54,8 @@ export function createRouteHandler(
     );
 }
 
-/** The request as the plugin's own router sees it: mounted at the root. */
-export function atPath(request: Request, path: string): Request {
+/** The request as the router sees it: at the dispatcher-relative path. */
+function atPath(request: Request, path: string): Request {
   const url = new URL(request.url);
   if (url.pathname === path) return request;
   url.pathname = path;
@@ -59,4 +64,15 @@ export function atPath(request: Request, path: string): Request {
     headers: request.headers,
     ...(request.body ? { body: request.body, duplex: 'half' } : {}),
   });
+}
+
+/** A JSON body, or `undefined` when there is none. */
+export async function jsonBody(request: {
+  json(): Promise<unknown>;
+}): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return undefined;
+  }
 }

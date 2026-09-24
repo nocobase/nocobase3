@@ -6,7 +6,7 @@ import {
   condition,
   idsScope,
   scopeAst,
-} from '../server/database/index.js';
+} from '../server/database/scope.js';
 
 describe('database scope construction', () => {
   it('builds a literal condition for every operator it accepts', () => {

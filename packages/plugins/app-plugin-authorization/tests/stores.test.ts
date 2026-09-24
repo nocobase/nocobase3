@@ -4,10 +4,11 @@ import { createDatabaseManager } from '@nocobase/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import permissionSetMigration from '../database/migrations/202608210001_create_permission_set_tables.js';
 import {
-  permissionSets,
+  permissionSetsPlugin,
   PermissionSetLastAssignmentError,
-} from '@nocobase/authorization/permissions';
-import { databaseAuthorization } from '../server/database/index.js';
+} from '@nocobase/authorization/permission-sets';
+import { databasePlugin } from '../server/database/plugin.js';
+import { defineDatabasePermission } from '../server/database/builders.js';
 import { DatabasePermissionSetStore } from '../server/stores/permission-sets.js';
 
 describe('authorization plugin database stores', () => {
@@ -39,7 +40,7 @@ describe('authorization plugin database stores', () => {
       const key = `concurrent-${operation}`;
       const authorization = createAuthorization({
         plugins: [
-          permissionSets({
+          permissionSetsPlugin({
             store: new DatabasePermissionSetStore(() => database.connection()),
             rootSet: key,
           }),
@@ -54,7 +55,7 @@ describe('authorization plugin database stores', () => {
         });
       }
       const notifications: string[] = [];
-      authorization.permissionSets.onChange(async (subject) => {
+      authorization.onGrantsChanged(async (subject) => {
         // An independent connection read can complete only after the writer
         // commits and releases SQLite's single pooled connection.
         expect(
@@ -97,7 +98,7 @@ describe('authorization plugin database stores', () => {
     const key = 'rollback-assignment';
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new DatabasePermissionSetStore(() => database.connection()),
         }),
       ],
@@ -119,7 +120,7 @@ describe('authorization plugin database stores', () => {
       permissionSet: `${key}-other`,
     });
     const notifications: string[] = [];
-    authorization.permissionSets.onChange((subject) => {
+    authorization.onGrantsChanged((subject) => {
       notifications.push(subject.id);
     });
     await expect(
@@ -141,7 +142,7 @@ describe('authorization plugin database stores', () => {
     const key = 'outer-transaction';
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new DatabasePermissionSetStore(() => database.connection()),
         }),
       ],
@@ -153,7 +154,7 @@ describe('authorization plugin database stores', () => {
       permissionSet: key,
     });
     const notifications: string[] = [];
-    authorization.permissionSets.onChange((subject) => {
+    authorization.onGrantsChanged((subject) => {
       notifications.push(subject.id);
     });
     await expect(
@@ -172,24 +173,23 @@ describe('authorization plugin database stores', () => {
   });
 
   it('persists Permission Sets independently from database access rules', async () => {
-    const databasePlugin = databaseAuthorization();
     const connection = database.connection();
     const authorization = createAuthorization({
       connection,
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new DatabasePermissionSetStore(() => connection),
         }),
-        databasePlugin,
+        databasePlugin(),
       ],
     });
 
     await authorization.permissionSets.create({
       key: 'order-reader',
       grants: [
-        authorization.db.grant('orders', {
-          read: { fields: ['id', 'amount'] },
-        }),
+        defineDatabasePermission((permission) =>
+          permission.collection('orders').read(['id', 'amount']),
+        ).build(),
       ],
     });
     await authorization.permissionSets.assign({

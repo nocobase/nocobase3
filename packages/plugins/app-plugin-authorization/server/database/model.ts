@@ -1,5 +1,7 @@
-import type { ResourceAccessScope } from '@nocobase/authorization/core';
-import type { AuthorizationConditions } from '@nocobase/authorization/core';
+import type {
+  AccessConstraint,
+  AuthorizationConditions,
+} from '@nocobase/authorization/core';
 import type { FilterAst } from '@nocobase/db';
 import type {
   PermissionFields,
@@ -39,11 +41,6 @@ export type DatabaseRecordAccess =
       params?: unknown;
     };
 
-export interface DatabaseAccessScope extends ResourceAccessScope {
-  type: 'database';
-  recordAccess: DatabaseRecordAccess;
-}
-
 export interface DatabaseRecordAccessConfig {
   key: string;
   params?: unknown;
@@ -55,8 +52,6 @@ export interface DatabasePermissionFields {
 }
 
 export interface DatabaseActionGrant {
-  scope?: string;
-  branchConstraints?: readonly import('@nocobase/authorization/core').AccessConstraint[];
   fields?: PermissionFields;
   relations?:
     false | Readonly<Record<string, ReadPermission | RelationWritePermission>>;
@@ -66,6 +61,11 @@ export interface DatabaseActionGrant {
 export type DatabaseAuthorizationPolicy = DatabaseActionGrant & {
   type: 'database';
 };
+
+/** One grant as the authorizer evaluates it, with its business branch's rules. */
+export interface DatabaseGrantConfig extends DatabaseActionGrant {
+  branchConstraints?: readonly AccessConstraint[];
+}
 
 export type DatabaseGrantDefinition = Readonly<
   Record<string, DatabaseActionGrant>

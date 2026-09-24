@@ -1,5 +1,5 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type { AuthorizationScope } from '@nocobase/authorization/core';
+import type { AuthorizationContext } from '@nocobase/authorization/core';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
@@ -11,7 +11,7 @@ const connection = { query: {} } as unknown as DatabaseConnection;
 interface TestEnv {
   Variables: {
     auth?: { user: { id: string } };
-    authz: AuthorizationScope;
+    authz: AuthorizationContext;
   };
 }
 
@@ -36,15 +36,13 @@ describe('the identity an application resolves for a request', () => {
   });
 
   // The identity step is middleware on the instance, so the plugin list holds
-  // the two built-in plugins and whatever the application declared.
+  // only the built-in plugins and whatever the application declared.
   it('installs no identity plugin to do it', () => {
     const authorization = createAppAuthorization({ connection });
 
-    expect(authorization.describe().plugins).toEqual([
-      'permission-sets',
-      'database',
-      'pages',
-    ]);
+    expect(authorization.resourceTypes.list().map((type) => type.type)).toEqual(
+      ['business', 'database.collection', 'page', 'settings'],
+    );
   });
 });
 

@@ -1,15 +1,15 @@
 import { createAuthorization } from './authorization-fixture.js';
-import { createPermissionSetHandler } from '../server/management/permission-sets.js';
+import { createPermissionSetHandler } from '../server/routes/permission-sets.js';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
-import { permissionSets } from '@nocobase/authorization';
+import { permissionSetsPlugin } from '@nocobase/authorization';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 describe('Permission Set handler', () => {
   it('keeps protected keys fixed while allowing default permissions and titles to change', async () => {
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new MockPermissionSetStore(),
           rootSet: 'root',
           defaultSet: 'member',
@@ -27,7 +27,7 @@ describe('Permission Set handler', () => {
       subject: { type: 'authenticated', id: '*' },
       permissionSet: 'member',
     });
-    const handler = createPermissionSetHandler(api);
+    const handler = createPermissionSetHandler(authorization as never, api);
     const update = (
       key: string,
       input: { key: string; title?: string; grants: readonly unknown[] },
@@ -91,7 +91,7 @@ describe('Permission Set handler', () => {
 
   it('checks the scoped authorization and manages Permission Sets', async () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+      plugins: [permissionSetsPlugin({ store: new MockPermissionSetStore() })],
     });
     await authorization.permissionSets.create({
       key: 'permission-administrator',
@@ -121,7 +121,10 @@ describe('Permission Set handler', () => {
       ['GET', 'POST', 'PUT', 'DELETE'],
       ['/authz/permission-sets', '/authz/permission-sets/*'],
       (context) =>
-        createPermissionSetHandler(authorization.permissionSets)({
+        createPermissionSetHandler(
+          authorization as never,
+          authorization.permissionSets,
+        )({
           request: context.req.raw,
           authorization: authorization.for({
             principal: {
@@ -226,7 +229,7 @@ describe('Permission Set handler', () => {
 
   it('refuses generic writes to protected Permission Sets', async () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+      plugins: [permissionSetsPlugin({ store: new MockPermissionSetStore() })],
     });
     await authorization.permissionSets.create({
       key: 'administrator',
@@ -272,7 +275,10 @@ describe('Permission Set handler', () => {
       ['GET', 'POST', 'PUT', 'DELETE'],
       ['/permission-sets', '/permission-sets/*'],
       (context) =>
-        createPermissionSetHandler(authorization.permissionSets)({
+        createPermissionSetHandler(
+          authorization as never,
+          authorization.permissionSets,
+        )({
           request: context.req.raw,
           authorization: authorization.for({
             principal: { type: 'user', id: 'admin' },
@@ -309,7 +315,7 @@ describe('Permission Set handler', () => {
     );
     await protectedResponse(
       await router.request(
-        '/permission-sets/assignments/user:admin:administrator',
+        '/permission-sets/administrator/assignments/user:admin:administrator',
         { method: 'DELETE', headers: admin },
       ),
     );
@@ -354,7 +360,7 @@ describe('Permission Set handler', () => {
   });
   it('reports protection and unrestricted access from the read endpoints', async () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+      plugins: [permissionSetsPlugin({ store: new MockPermissionSetStore() })],
     });
     await authorization.permissionSets.create({
       key: 'administrator',
@@ -383,7 +389,10 @@ describe('Permission Set handler', () => {
       ['GET', 'POST', 'PUT', 'DELETE'],
       ['/permission-sets', '/permission-sets/*'],
       (context) =>
-        createPermissionSetHandler(authorization.permissionSets)({
+        createPermissionSetHandler(
+          authorization as never,
+          authorization.permissionSets,
+        )({
           request: context.req.raw,
           authorization: authorization.for({
             principal: { type: 'user', id: 'admin' },
@@ -440,7 +449,7 @@ describe('Permission Set handler', () => {
 
 it('separates editing permission sets from managing assignments', async () => {
   const authorization = createAuthorization({
-    plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+    plugins: [permissionSetsPlugin({ store: new MockPermissionSetStore() })],
   });
   await authorization.permissionSets.create({ key: 'target', grants: [] });
   for (const action of ['update', 'assign']) {
@@ -458,7 +467,10 @@ it('separates editing permission sets from managing assignments', async () => {
       subject: { type: 'user', id: action },
     });
   }
-  const handler = createPermissionSetHandler(authorization.permissionSets);
+  const handler = createPermissionSetHandler(
+    authorization as never,
+    authorization.permissionSets,
+  );
   const call = (user: string, path: string, method: string, body: unknown) =>
     handler({
       request: new Request(`http://test${path}`, {
@@ -515,7 +527,7 @@ it('separates editing permission sets from managing assignments', async () => {
     (
       await call(
         'assign',
-        `/permission-sets/assignments/${created.id}`,
+        `/permission-sets/target/assignments/${created.id}`,
         'DELETE',
         null,
       )

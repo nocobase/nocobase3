@@ -1,8 +1,8 @@
 import type {
-  Authorization,
   AuthorizationEnv,
-  AuthorizationActions,
-  AuthorizationResourceReference,
+  BusinessActions,
+  BusinessApi,
+  BusinessResourceReference,
 } from '@nocobase/authorization/core';
 import {
   addRepositoryRequestConstraint,
@@ -10,9 +10,9 @@ import {
 } from '@nocobase/app-server/router';
 import type { MiddlewareHandler } from 'hono';
 
-export interface AuthorizeRepositoryOptions<A extends AuthorizationActions> {
+export interface AuthorizeRepositoryOptions<A extends BusinessActions> {
   readonly repository: string;
-  readonly resource: AuthorizationResourceReference<A>;
+  readonly resource: BusinessResourceReference<A>;
   readonly actions: Partial<
     Record<RepositoryApiAction, NoInfer<keyof A & string>>
   >;
@@ -30,10 +30,15 @@ const operations: Readonly<Record<RepositoryApiAction, string>> = {
   deleteOne: 'delete',
 };
 
+export interface RepositoryAuthorizationHost {
+  readonly business: BusinessApi;
+  middleware(): MiddlewareHandler<AuthorizationEnv>;
+}
+
 export function createBusinessRepositoryAuthorization<
-  A extends AuthorizationActions,
+  A extends BusinessActions,
 >(
-  authz: Authorization,
+  authz: RepositoryAuthorizationHost,
   options: AuthorizeRepositoryOptions<A>,
 ): MiddlewareHandler<AuthorizationEnv> {
   if (!options.repository || options.repository.includes('*'))
@@ -49,14 +54,13 @@ export function createBusinessRepositoryAuthorization<
     if (!Object.hasOwn(operations, method) || typeof action !== 'string')
       throw new TypeError('Invalid Repository action binding');
 
-    const definition = authz.resources.operation(resource, action);
-    const scopes = Object.values(definition?.scopes ?? {});
-    const collection = scopes[0]?.resource.id;
+    const definition = authz.business.getAction(resource, action);
+    const scopes = definition?.dataScopes ?? [];
+    const collection = scopes[0]?.collection;
     if (
       !definition ||
       scopes.length !== 1 ||
       !collection ||
-      scopes[0].resource.type !== 'database.collection' ||
       definition.grants.some(
         (grant) =>
           grant.resource.type !== 'database.collection' ||
@@ -90,7 +94,7 @@ export function createBusinessRepositoryAuthorization<
 
     const authorize = async (): Promise<void> => {
       const decision = await context.var.authz.authorize({
-        resource: { type: 'resource', id: resource },
+        resource: { type: 'business', id: resource },
         action: binding.action,
       });
       const policies = decision.conditions?.database;

@@ -1,4 +1,4 @@
-import { defineAuthorizationResource } from '@nocobase/authorization/core';
+import { defineBusinessResource } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '../server/index.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
@@ -71,7 +71,10 @@ afterEach(async () => {
 describe('collection policy enforcement', () => {
   it('does not move a relation capability from an owned-record grant onto all records', async () => {
     const authorization = createAuthorization();
-    authorization.db.collections.add('authzOrders');
+    authorization.database.collections.add({
+      name: 'authzOrders',
+      title: 'Orders',
+    });
     await createSet('own-connection', [
       {
         resource: { type: 'database.collection', id: 'authzOrders' },
@@ -113,7 +116,7 @@ describe('collection policy enforcement', () => {
     ]);
     await assign('own-connection', 'alice');
     await assign('all-amounts', 'alice');
-    const policy = await authorization.db.policyFor(
+    const policy = await authorization.database.policyFor(
       'authzOrders',
       authorization.for({ principal: { type: 'user', id: 'alice' } }),
     );
@@ -208,7 +211,7 @@ async function assign(key: string, userId: string): Promise<void> {
 const quoteAccess = defineDatabasePermission((permission) =>
   permission.collection('authzOrders').read(['id', 'ownerId', 'amount']),
 );
-const businessOrders = defineAuthorizationResource('sales.orders', (resource) =>
+const businessOrders = defineBusinessResource('sales.orders', (resource) =>
   resource
     .group('sales')
     .title('Orders')
@@ -222,9 +225,12 @@ async function businessRoutes(
   options: { collection?: string; authorize?: boolean } = {},
 ) {
   const authorization = createAuthorization();
-  authorization.resourceGroups.add({ name: 'sales', title: 'Sales' });
-  authorization.db.collections.add({ name: 'authzOrders' });
-  businessOrders.register(authorization.resources);
+  authorization.groups.add({ name: 'sales', title: 'Sales' });
+  authorization.database.collections.add({
+    name: 'authzOrders',
+    title: 'Orders',
+  });
+  authorization.business.define(businessOrders);
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
   const router = new Hono();
@@ -235,7 +241,7 @@ async function businessRoutes(
   if (options.authorize !== false)
     router.use(
       '*',
-      authorization.db.authorizeRepository({
+      authorization.database.authorizeRepository({
         repository: 'salesOrders',
         resource: businessOrders.reference(),
         actions: { findMany: 'view', count: 'view', updateOne: 'edit' },
@@ -343,23 +349,19 @@ describe('business operation Repository middleware', () => {
 
   it('rejects multi-scope operations, including two scopes of the same collection', () => {
     const authorization = createAuthorization();
-    authorization.resourceGroups.add({ name: 'sales', title: 'Sales' });
+    authorization.groups.add({ name: 'sales', title: 'Sales' });
     for (const target of ['authzOrders', 'authzCustomers']) {
-      const complex = defineAuthorizationResource(
-        `complex.${target}`,
-        (resource) =>
-          resource.group('sales').action('submit', (action) =>
-            action.grant('orders', quoteAccess.update(['amount'])).grant(
-              'parent',
-              defineDatabasePermission((p) =>
-                p.collection(target).read(['id']),
-              ),
-            ),
+      const complex = defineBusinessResource(`complex.${target}`, (resource) =>
+        resource.group('sales').action('submit', (action) =>
+          action.grant('orders', quoteAccess.update(['amount'])).grant(
+            'parent',
+            defineDatabasePermission((p) => p.collection(target).read(['id'])),
           ),
+        ),
       );
-      complex.register(authorization.resources);
+      authorization.business.define(complex);
       expect(() =>
-        authorization.db.authorizeRepository({
+        authorization.database.authorizeRepository({
           repository: 'orders',
           resource: complex.reference(),
           actions: { updateOne: 'submit' },
@@ -370,10 +372,10 @@ describe('business operation Repository middleware', () => {
 
   it('rejects an unknown action or a binding without the required database operation', () => {
     const authorization = createAuthorization();
-    authorization.resourceGroups.add({ name: 'sales', title: 'Sales' });
-    businessOrders.register(authorization.resources);
+    authorization.groups.add({ name: 'sales', title: 'Sales' });
+    authorization.business.define(businessOrders);
     expect(() =>
-      authorization.db.authorizeRepository({
+      authorization.database.authorizeRepository({
         repository: 'orders',
         resource: businessOrders.reference(),
         actions: { updateOne: 'view' },
