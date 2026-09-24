@@ -39,10 +39,10 @@ Open the agent in an empty directory and ask for an application, for example:
 The Skill then:
 
 1. Runs `pnpm create @nocobase/app <name> --json` from the parent directory, so the files land in the directory you opened.
-2. Follows the `nextCommands` that creation returns: `pnpm config:init`, then `pnpm config:set` for any `requiredSettings` of a database other than SQLite, then `pnpm config:check`, and finally `pnpm dev` in the background.
+2. Follows the `nextCommands` that creation returns: `pnpm config:init`, then `pnpm config:set` for any `requiredSettings` of a database other than SQLite, then asks whether to keep the default administrator or set your own username, email and password, then `pnpm config:check`, and finally `pnpm dev` in the background.
 3. Reports the URL and the first sign-in account, and recommends starting a new session in the application directory, where the application's own Skills are loaded reliably. If you keep working in the same session, it reads the application's `AGENTS.md` and Skills directly instead.
 
-It never asks for a database password in the conversation. For a database other than SQLite it asks you to put the password in an environment variable, then reads it with `pnpm config:set --from-env`.
+It never asks for a password in the conversation. For a database password or your own administrator password it asks you to put the password in an environment variable, then reads it with `pnpm config:set --from-env`.
 
 ### Where the packages come from
 

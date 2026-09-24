@@ -57,7 +57,8 @@ The result's `nextCommands` configure the application for SQLite and then start 
    - An application that is already configured is reported `unchanged`, so re-running the sequence is safe.
    - Its result lists `requiredSettings`: the connection settings still at a placeholder.
 3. **`pnpm config:set key=value … --json`** sets each of the `requiredSettings`, for example `database.connections.main.host=db.internal`. A password is always set from an environment variable; see Secrets below.
-4. **`pnpm config:check --json`** must pass before the application is started. It loads the configuration without starting the application and connects to the database. Each finding names its key and, where there is one, a `fix` to run; apply the fixes and run it again.
+4. **Set the first administrator.** Ask whether to keep the default account — username `nocobase`, email `admin@nocobase.com`, password `admin123` — or use the user's own. Do this before the first start: the account is created once, when the user table is empty, and changing `users.initialAdmin` afterwards does not reset it. For the user's own account, set `users.initialAdmin.username` (3–30 letters, digits, underscores or dots) and `users.initialAdmin.email` with `pnpm config:set … --json`, and the password with `pnpm config:set --from-env users.initialAdmin.password=<VARIABLE> --json`. A field left unset keeps the value `config.yml` was generated with, so replace the default password whenever the user wants their own account.
+5. **`pnpm config:check --json`** must pass before the application is started. It loads the configuration without starting the application and connects to the database. Each finding names its key and, where there is one, a `fix` to run; apply the fixes and run it again.
 
 For the details of a particular database, read `.agents/skills/nocobase-app-development/references/database-connections.md` in the application.
 
@@ -69,7 +70,7 @@ The last of the `nextCommands`, `pnpm dev`, does not exit. Run it in the backgro
 
 ## Secrets
 
-- Never ask for a password in the conversation, and never put one on a command line. Ask the user to set it in an environment variable, then run `pnpm config:set --from-env database.connections.main.password=<VARIABLE> --json`.
+- Never ask for a password in the conversation, and never put one on a command line. This covers the database password and the first administrator's alike. Ask the user to set it in an environment variable, then run `pnpm config:set --from-env <key>=<VARIABLE> --json`, for example with `database.connections.main.password` or `users.initialAdmin.password`.
 - Never print `config.yml` or any secret it contains.
 - Do not pass `--force`, delete `config.yml` or drop a database to make a step pass. `config:init --force` replaces an existing configuration and is only for when the user asks for exactly that.
 
@@ -78,7 +79,7 @@ The last of the `nextCommands`, `pnpm dev`, does not exit. Run it in the backgro
 Tell the user:
 
 - The application directory and the URL.
-- The first sign-in account. It comes from `users.initialAdmin` in the configuration: by default the username `nocobase` (email `admin@nocobase.com`) with the password `admin123`. Read that key rather than assuming the defaults, never repeat a password the user chose, and remind them to change the default one after signing in.
+- The first sign-in account: the username and email from `users.initialAdmin`, either of which signs in. Read that key rather than assuming the defaults. Never repeat a password the user chose; when the default `admin123` is in use, say so and remind them to change it after signing in.
 - That the service was started by this session and stops when the session ends, and how to start it again: `pnpm dev` in the application directory, run in their own terminal or by the next session.
 - Where to continue. The application's `AGENTS.md` and Skills appeared after this session started. Some agents pick them up without a restart; others load them only when a session starts. Check which case applies instead of assuming:
   - **They are loaded here** (for example, the application's `nocobase-app-development` Skill is among your available Skills, and the application directory is this session's working directory): tell the user they can continue in this session. No new session is needed.
