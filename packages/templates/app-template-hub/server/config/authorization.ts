@@ -7,7 +7,7 @@ import {
 } from '@nocobase/app-server/config';
 import { type AuthorizationConfig } from '@nocobase/app-plugin-authorization/server';
 
-// Permission sets, page and database authorization are built in.
+// Permission sets, database, pages, settings, composites and workspace placement are built in.
 const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
   (_runtime) => ({
     permissionSets: { rootSet: 'root', defaultSet: 'member' },

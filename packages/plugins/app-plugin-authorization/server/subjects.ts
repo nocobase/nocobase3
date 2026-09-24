@@ -1,4 +1,4 @@
-import type { AuthorizationScope } from '@nocobase/authorization/core';
+import type { AuthorizationContext } from '@nocobase/authorization/core';
 import type { OptionText } from './i18n.js';
 
 export interface SubjectOption {
@@ -8,7 +8,7 @@ export interface SubjectOption {
 }
 
 export interface SubjectSelectionContext {
-  authz: AuthorizationScope;
+  authz: AuthorizationContext;
 }
 
 export interface SubjectAdministration {

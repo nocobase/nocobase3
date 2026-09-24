@@ -1,13 +1,11 @@
 import {
   encodeAuthorizationTitle,
   decodeAuthorizationTitle,
+  type RuleAction,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
-import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/management';
-import type {
-  SharingRule,
-  SharingRuleAction,
-} from '@nocobase/authorization/sharing-rules';
+import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/extension';
+import type { SharingRule } from '@nocobase/authorization/sharing-rules';
 import type { SharingRuleStore } from '@nocobase/authorization/sharing-rules';
 
 const RULES = 'authorizationSharingRules';
@@ -185,7 +183,7 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
     const value = row as Record<string, unknown>;
     const title = decodeAuthorizationTitle(value.title);
     const reason = optionalString(value.reason, 'sharing rule reason');
-    const actions = parseJson<readonly SharingRuleAction[]>(value.actions, []);
+    const actions = parseJson<readonly RuleAction[]>(value.actions, []);
     return {
       key: String(value.key),
       ...(title === undefined ? {} : { title }),

@@ -12,7 +12,7 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import type { DatabaseConnection } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthorizationScope } from '@nocobase/app-plugin-authorization';
+import type { AuthorizationContext } from '@nocobase/app-plugin-authorization';
 
 import { UsersProvider } from '../server/providers/users.js';
 
@@ -23,7 +23,9 @@ function provider(container: ServiceContainer): UsersProvider {
   return new UsersProvider({
     appName: 'test',
     publicBasePath: '',
-    config: {} as AppPluginApplication['config'],
+    config: {
+      get: () => ({ permissionSets: false }),
+    } as unknown as AppPluginApplication['config'],
     paths: {} as AppPluginApplication['paths'],
     router: {} as AppPluginApplication['router'],
     container,
@@ -101,7 +103,7 @@ describe('the user subject type this plugin declares', () => {
       authorization.subjects.get('user')?.administration?.selection;
     if (selection?.type !== 'collection') throw new Error('Missing selector');
     const require = vi.fn().mockRejectedValue(new Error('Forbidden'));
-    const context = { authz: { require } as unknown as AuthorizationScope };
+    const context = { authz: { require } as unknown as AuthorizationContext };
     await expect(
       selection.list({ search: 'abc', page: 2, pageSize: 30 }, context),
     ).rejects.toThrow('Forbidden');

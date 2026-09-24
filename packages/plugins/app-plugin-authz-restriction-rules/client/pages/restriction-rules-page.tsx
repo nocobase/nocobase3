@@ -9,7 +9,7 @@ import {
 
 export default function RestrictionRulesPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/restriction-rules/options');
+  const page = useAuthorizationPageData('restriction-rules');
   return (
     <PermissionsPage
       title={t('restrictionRules.page.title')}

@@ -1,6 +1,6 @@
 import {
   defineRecordAccess,
-  type RecordAccessPolicy,
+  type RecordAccessBuilder,
 } from '@nocobase/authorization/core';
 import { buildFilter } from '@nocobase/repository-input';
 import type { DatabaseManager } from '@nocobase/db';
@@ -14,13 +14,13 @@ import {
 /** Construct declarations with application-owned dependencies; registration stays in the Provider. */
 export function createSalesRecordAccess(
   database: DatabaseManager,
-): readonly RecordAccessPolicy[] {
+): readonly RecordAccessBuilder<string>[] {
   return [
     defineRecordAccess('example.sales.prepared', (access) =>
       access
         .title(label('sales.scope.prepared'))
-        .resources({ type: 'database.collection', id: QUOTES })
-        .resolve(({ principal }) =>
+        .collections(QUOTES)
+        .resolver(({ principal }) =>
           buildFilter((filter) =>
             filter.string('preparedById').eq(principal.id),
           ),
@@ -29,35 +29,20 @@ export function createSalesRecordAccess(
     defineRecordAccess('example.sales.own', (access) =>
       access
         .title(label('sales.scope.own'))
-        .resources(
-          ...[QUOTES, ORDERS].map((id) => ({
-            type: 'database.collection',
-            id,
-          })),
-        )
-        .resolve((context) => resolveOwnedSalesRecords(database, context)),
+        .collections(QUOTES, ORDERS)
+        .resolver((context) => resolveOwnedSalesRecords(database, context)),
     ),
     defineRecordAccess('example.sales.region', (access) =>
       access
         .title(label('sales.scope.region'))
-        .resources(
-          ...[PROJECTS, QUOTES, ORDERS].map((id) => ({
-            type: 'database.collection',
-            id,
-          })),
-        )
-        .resolve((context) => resolveRegionalSalesRecords(database, context)),
+        .collections(PROJECTS, QUOTES, ORDERS)
+        .resolver((context) => resolveRegionalSalesRecords(database, context)),
     ),
     defineRecordAccess('example.sales.public', (access) =>
       access
         .title(label('sales.scope.public'))
-        .resources(
-          ...[PROJECTS, QUOTES, ORDERS].map((id) => ({
-            type: 'database.collection',
-            id,
-          })),
-        )
-        .resolve((context) => resolvePublicSalesRecords(database, context)),
+        .collections(PROJECTS, QUOTES, ORDERS)
+        .resolver((context) => resolvePublicSalesRecords(database, context)),
     ),
   ];
 }

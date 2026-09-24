@@ -163,10 +163,18 @@ A public component's contract includes props, render semantics, accessibility, t
 
 ## Keep page modules lazy
 
-Route declarations load page modules instead of statically importing them in `client/plugin.ts`:
+Route declarations load page modules instead of statically importing them in `client/plugin.ts`. Every page route also declares `authz`, either a check or `'skip'`:
 
 ```ts
-componentLoader: () => import('./pages/audit-log-page.js');
+defineSettingsRoutes([
+  {
+    name: 'audit-log',
+    path: '/audit-log',
+    navigation: { title: 'auditLog.title' },
+    authz: { resource: { type: 'settings', id: 'audit-log' }, action: 'read' },
+    componentLoader: () => import('./pages/audit-log-page.js'),
+  },
+]);
 ```
 
 The page module must default-export a React component. Use a route component override when an App changes only the page UI; do not redeclare the plugin-owned route identity, path, authentication, or access metadata.

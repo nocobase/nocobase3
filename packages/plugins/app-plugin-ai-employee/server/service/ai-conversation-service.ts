@@ -1,6 +1,6 @@
 /** Conversation actions: the resource layer over agents and their history. */
 
-import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import type { ConversationTransport } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type {
@@ -280,7 +280,7 @@ export interface AIConversationServiceOptions {
   readonly ai: AIManager;
   readonly database: DatabaseConnection;
   readonly databaseManager: DatabaseManager;
-  readonly authorization?: AppAuthorizationService;
+  readonly authorization?: AppAuthorization;
   readonly logger: Logger;
   readonly caching: Caching;
   readonly fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;

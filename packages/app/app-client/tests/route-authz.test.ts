@@ -10,7 +10,8 @@ import {
 const componentLoader = async () => ({ default: () => null });
 const check = { resource: { type: 'report', id: 'orders' }, action: 'read' };
 
-it('normalizes default checks once and preserves parent guards when a child skips', () => {
+it('keeps declared checks and preserves parent guards when a child skips', () => {
+  const page = { resource: { type: 'page', id: 'orders' }, action: 'access' };
   const result = resolveAppClientContributions([
     {
       packageName: 'example',
@@ -22,9 +23,9 @@ it('normalizes default checks once and preserves parent guards when a child skip
             {
               name: 'orders',
               path: '/orders',
+              authz: page,
               componentLoader,
               children: [
-                { name: 'detail', path: ':id', componentLoader },
                 { name: 'skip', path: 'skip', authz: 'skip', componentLoader },
                 {
                   name: 'report',
@@ -40,31 +41,53 @@ it('normalizes default checks once and preserves parent guards when a child skip
     },
   ]);
   const group = result.routes[0]!;
-  const page = group.children![0]!;
+  const orders = group.children![0]!;
   expect(group.authz).toBe('skip');
-  expect(page.authz).toEqual({
-    resource: { type: 'page', id: 'orders' },
-    action: 'access',
-  });
-  expect(page.children!.map((child) => child.authz)).toEqual([
-    'skip',
-    'skip',
-    check,
-  ]);
-  expect(Object.isFrozen(page.children![2]!.authz)).toBe(true);
+  expect(orders.authz).toEqual(page);
+  expect(orders.children!.map((child) => child.authz)).toEqual(['skip', check]);
+  expect(Object.isFrozen(orders.children![1]!.authz)).toBe(true);
 });
 
-it('uses skip for undeclared Settings, Dev, guest and optional pages', () => {
+it('infers nothing: every page on every surface must declare authz', () => {
+  const surfaces = [
+    () =>
+      defineAppRoutes([
+        { name: 'orders', path: '/orders', componentLoader } as never,
+      ]),
+    () =>
+      defineAppRoutes([
+        {
+          name: 'guest',
+          path: '/guest',
+          auth: 'guest',
+          componentLoader,
+        } as never,
+      ]),
+    () =>
+      defineSettingsRoutes([
+        { name: 'settings', path: '/example', componentLoader } as never,
+      ]),
+    () =>
+      defineDevRoutes([
+        { name: 'dev', path: '/example', componentLoader } as never,
+      ]),
+  ];
+  for (const routes of surfaces)
+    expect(() =>
+      resolveAppClientContributions([
+        { packageName: 'example', routes: routes() },
+      ]),
+    ).toThrow(/must declare authz/);
   const result = resolveAppClientContributions([
     {
       packageName: 'example',
       routes: [
         defineAppRoutes([
-          { name: 'guest', path: '/guest', auth: 'guest', componentLoader },
           {
-            name: 'optional',
-            path: '/optional',
-            auth: 'optional',
+            name: 'guest',
+            path: '/guest',
+            auth: 'guest',
+            authz: 'skip',
             componentLoader,
           },
           {
@@ -76,20 +99,22 @@ it('uses skip for undeclared Settings, Dev, guest and optional pages', () => {
           },
         ]),
         defineSettingsRoutes([
-          { name: 'settings', path: '/example', componentLoader },
+          {
+            name: 'settings',
+            path: '/example',
+            authz: 'skip',
+            componentLoader,
+          },
         ]),
-        defineDevRoutes([{ name: 'dev', path: '/example', componentLoader }]),
+        defineDevRoutes([
+          { name: 'dev', path: '/example', authz: check, componentLoader },
+        ]),
       ],
     },
   ]);
-  expect(result.routes.map((route) => route.authz)).toEqual([
-    'skip',
-    'skip',
-    check,
-  ]);
+  expect(result.routes.map((route) => route.authz)).toEqual(['skip', check]);
   expect(result.settings[0]!.authz).toBe('skip');
-  expect(result.settingsRouteTree[0]!.authz).toBe('skip');
-  expect(result.devRouteTree[0]!.authz).toBe('skip');
+  expect(result.devRouteTree[0]!.authz).toEqual(check);
 });
 
 it.each([

@@ -56,7 +56,7 @@ export function useCan(
     };
   }, [request]);
   const fresh = result?.request === request;
-  const retry = useCallback(() => client.invalidatePermissions(), [client]);
+  const retry = useCallback(() => client.invalidate(), [client]);
   return {
     can: active && fresh && result.can,
     isPending: active && !fresh,

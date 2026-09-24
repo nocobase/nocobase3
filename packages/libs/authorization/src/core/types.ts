@@ -50,13 +50,6 @@ export interface AuthorizationDecision<
   reasons: readonly AuthorizationReason[];
 }
 
-export interface AuthorizationDescription {
-  plugins: readonly string[];
-  grantProvider?: string;
-  resourceTypes: readonly string[];
-  constraintResolvers: readonly string[];
-}
-
 export class AuthorizationDeniedError extends Error {
   readonly decision: AuthorizationDecision;
 

@@ -284,20 +284,26 @@ export function CustomFilterEditor({
   onChange,
 }: {
   fields: readonly string[];
-  value: string | { key: string; params?: unknown };
-  onChange: (value: { key: string; params: unknown }) => void;
+  /** A `customFilter` record access selection. */
+  value: unknown;
+  onChange: (value: {
+    type: 'recordAccess';
+    key: 'customFilter';
+    params: unknown;
+  }) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const filter = policyFilter(value);
+  const params: unknown =
+    value && typeof value === 'object'
+      ? Reflect.get(value, 'params')
+      : undefined;
   const update = (filter: FilterNode): void =>
     onChange({
+      type: 'recordAccess',
       key: 'customFilter',
       params: {
-        ...(typeof value !== 'string' &&
-        value.params &&
-        typeof value.params === 'object'
-          ? value.params
-          : {}),
+        ...(params && typeof params === 'object' ? params : {}),
         filter,
       },
     });

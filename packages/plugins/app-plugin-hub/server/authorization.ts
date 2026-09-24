@@ -3,10 +3,12 @@ import { HUB_API_KEY_CONFIG_ID } from './api-key-auth.js';
 import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { DatabaseConnection } from '@nocobase/db';
-import type {
-  Authorization,
-  PermissionSetsApi,
+import {
+  grantBacked,
+  type Authorization,
+  type PermissionSetsApi,
 } from '@nocobase/app-plugin-authorization';
+import type { AuthorizationGrant } from '@nocobase/authorization/core';
 import {
   UserManagementError,
   UserRoleScopeError,
@@ -72,91 +74,46 @@ export function registerHubResources(
   authorization: Pick<Authorization, 'resourceTypes'>,
   connection: DatabaseConnection,
 ): void {
-  registerGrantBackedResource(
-    authorization,
-    'hub.app',
-    HUB_APP_ACTIONS,
-    connection,
-  );
-  registerGrantBackedResource(
-    authorization,
-    'hub.host',
-    new Set(['read']),
-    connection,
-  );
-}
-
-function registerGrantBackedResource(
-  authorization: Pick<Authorization, 'resourceTypes'>,
-  resourceType: 'hub.app' | 'hub.host',
-  actions: ReadonlySet<string>,
-  connection: DatabaseConnection,
-): void {
+  const administrator = (grants: readonly AuthorizationGrant[]): boolean =>
+    grants.some(
+      (grant) =>
+        grant.source.plugin === 'permission-sets' &&
+        grant.source.id === HUB_ADMINISTRATOR,
+    );
+  // Record types: the ids are app and host ids, judged per record.
   authorization.resourceTypes.add({
-    resourceType,
-    async authorize(request, context) {
-      if (!actions.has(request.action)) {
-        return {
-          effect: 'deny',
-          reasons: [
-            {
-              code: 'HUB_ACTION_NOT_SUPPORTED',
-              message: `${resourceType} does not support action "${request.action}"`,
-              plugin: '@nocobase/app-plugin-hub',
-            },
-          ],
-        };
-      }
-      // read-all is a catalog scope check, derived only from the Hub Administrator's read grant.
-      const grants = await context.grants.resolve({
-        principal: request.principal,
-        subjects: request.subjects,
-        resource: request.resource,
-        action: request.action === 'read-all' ? 'read' : request.action,
-      });
-      const staticGrants = grants.filter((grant) => grant.policy === undefined);
-      const administrator = staticGrants.some(
-        (grant) =>
-          grant.source.plugin === 'permission-sets' &&
-          grant.source.id === HUB_ADMINISTRATOR,
-      );
-      let ownsApp = true;
-      if (resourceType === 'hub.app' && !administrator) {
-        if (
-          request.action === 'read-all' ||
-          request.principal.type !== 'user'
-        ) {
-          ownsApp = false;
-        } else if (request.resource.id !== '*') {
-          const app = await connection.query
+    type: 'hub.app',
+    actions: [
+      ...[...HUB_APP_ACTIONS].filter((action) => action !== 'read-all'),
+      {
+        // A catalog-wide read, derived only from the administrator's read grant.
+        name: 'read-all',
+        authorize: (request, context) =>
+          grantBacked({
+            also: async (_request, grants) => administrator(grants),
+          })({ ...request, action: 'read' }, context),
+      },
+    ],
+    authorize: grantBacked({
+      also: async (request, grants) => {
+        if (administrator(grants)) return true;
+        if (request.principal.type !== 'user') return false;
+        if (request.resource.id === '*') return true;
+        return Boolean(
+          await connection.query
             .selectFrom('hubApps')
             .select('id')
             .where('id', '=', request.resource.id)
             .where('createdBy', '=', request.principal.id)
-            .executeTakeFirst();
-          ownsApp = Boolean(app);
-        }
-      }
-      return staticGrants.length && ownsApp
-        ? {
-            effect: 'permit',
-            reasons: staticGrants.map((grant) => ({
-              code: 'HUB_ACCESS_GRANTED',
-              message: `${grant.source.plugin}:${grant.source.id} allows Hub access`,
-              plugin: '@nocobase/app-plugin-hub',
-            })),
-          }
-        : {
-            effect: 'deny',
-            reasons: [
-              {
-                code: 'HUB_ACCESS_DENIED',
-                message: 'Hub access is not allowed',
-                plugin: '@nocobase/app-plugin-hub',
-              },
-            ],
-          };
-    },
+            .executeTakeFirst(),
+        );
+      },
+    }),
+  });
+  authorization.resourceTypes.add({
+    type: 'hub.host',
+    actions: ['read'],
+    authorize: grantBacked(),
   });
 }
 

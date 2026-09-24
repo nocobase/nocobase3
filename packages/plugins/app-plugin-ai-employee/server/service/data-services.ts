@@ -3,7 +3,7 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 import type {
-  AppAuthorizationService,
+  AppAuthorization,
   DatabaseAuthorizationConditions,
   DatabaseAuthorizationParams,
 } from '@nocobase/app-plugin-authorization/server';
@@ -80,7 +80,7 @@ const scalarTypes = new Set([
 ]);
 
 /** The identity `for()` evaluates, as the authorization service declares it. */
-type ActorIdentity = Parameters<AppAuthorizationService['for']>[0];
+type ActorIdentity = Parameters<AppAuthorization['for']>[0];
 
 /** Bind identity once. Roles, root flags, resources, and scopes never come from tool arguments. */
 export function createDataServices(
@@ -95,7 +95,7 @@ export const dataServicesFactoryToken: ServiceToken<DataServicesFactory> =
   );
 
 class ActorDataServices implements DataServices {
-  private readonly authorization?: AppAuthorizationService;
+  private readonly authorization?: AppAuthorization;
   private resolvedIdentity?: Promise<ActorIdentity>;
   private readonly principalId: string;
   private get timezone(): string {
@@ -110,7 +110,7 @@ class ActorDataServices implements DataServices {
         : String(options.actor.id);
   }
 
-  private requireAuthorization(): AppAuthorizationService {
+  private requireAuthorization(): AppAuthorization {
     if (
       !this.authorization ||
       !this.principalId.trim() ||
@@ -125,7 +125,7 @@ class ActorDataServices implements DataServices {
    * inherited subjects, such as team memberships, from the authorization
    * middleware; a tool call has no request, so it resolves them the same way.
    */
-  private identity(authz: AppAuthorizationService): Promise<ActorIdentity> {
+  private identity(authz: AppAuthorization): Promise<ActorIdentity> {
     this.resolvedIdentity ??= (async () => {
       const principal = { type: 'user', id: this.principalId };
       return {
@@ -140,7 +140,8 @@ class ActorDataServices implements DataServices {
   }
 
   private mappings(): Array<{ source: string; name: string }> {
-    const registered = this.requireAuthorization().db.collections.list();
+    const authz = this.requireAuthorization();
+    const registered = authz.database.collections.list();
     if (registered.length > 1000)
       throw new DataAccessError('Data catalog exceeds the supported size');
     return registered
@@ -150,10 +151,7 @@ class ActorDataServices implements DataServices {
           parts.every(
             (part) => safeName.test(part) && !unsupportedNames.has(part),
           ) &&
-          this.requireAuthorization().db.collections.actionRegistry.resolve(
-            item.name,
-            'read',
-          )
+          readable(authz, item.name)
           ? [{ source: parts[0], name: parts[1] }]
           : [];
       })
@@ -171,13 +169,13 @@ class ActorDataServices implements DataServices {
   ): Promise<Access> {
     const authz = this.requireAuthorization();
     const resourceId = `${source}.${name}`;
-    const registered = authz.db.collections
+    const registered = authz.database.collections
       .list()
       .find((item) => item.name === resourceId);
     if (
       !registered ||
       registered.name !== resourceId ||
-      !authz.db.collections.actionRegistry.resolve(resourceId, 'read')
+      !readable(authz, resourceId)
     )
       throw new DataAccessError();
     const decision = await authz
@@ -617,4 +615,14 @@ function descriptions(value: { title?: string; description?: string }): {
       ? { description: value.description.slice(0, 512) }
       : {}),
   };
+}
+
+/** Whether a registered collection exposes `read`. */
+function readable(authz: AppAuthorization, collection: string): boolean {
+  return (
+    authz.resourceTypes
+      .get('database.collection')
+      .items?.get(collection)
+      ?.actions.some((action) => action.name === 'read') ?? false
+  );
 }

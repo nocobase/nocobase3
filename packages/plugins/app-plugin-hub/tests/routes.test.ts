@@ -4,7 +4,6 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  permissionSetsToken,
   type Authorization,
   type PermissionSetsApi,
 } from '@nocobase/app-plugin-authorization';
@@ -499,10 +498,10 @@ function createApplication(
       await next();
     },
   } as Auth);
-  container.instance(permissionSetsToken, {
-    list: () => Promise.resolve(permissionSets),
-  } as unknown as PermissionSetsApi);
   container.instance(authorizationToken, {
+    permissionSets: {
+      list: () => Promise.resolve(permissionSets),
+    } as unknown as PermissionSetsApi,
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },

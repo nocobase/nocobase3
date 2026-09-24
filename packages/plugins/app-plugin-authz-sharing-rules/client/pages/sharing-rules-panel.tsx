@@ -1,14 +1,17 @@
-import { accessScopeLabel } from '@nocobase/app-plugin-authorization/client/management';
+import { selectionLabel } from '@nocobase/app-plugin-authorization/client/management';
 import { humanize } from '@nocobase/app-plugin-authorization/client/management';
-import { resourceLabel } from '@nocobase/app-plugin-authorization/client/management';
+import {
+  findResource,
+  resourceLabel,
+  workspaceSubsections,
+} from '@nocobase/app-plugin-authorization/client/management';
 import { collectionFields } from '@nocobase/app-plugin-authorization/client/management';
 import { titleText } from '@nocobase/app-plugin-authorization/client/management';
-import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
-import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
+import { DataScopesEditor } from '@nocobase/app-plugin-authorization/client/management';
 import type { SharingRule } from '../api.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
-import { incompleteScope } from '@nocobase/app-plugin-authorization/client/management';
+import { incompleteSelection } from '@nocobase/app-plugin-authorization/client/management';
 import {
   useSubjectNames,
   subjectKey,
@@ -37,8 +40,9 @@ import {
   type ReactElement,
 } from 'react';
 import type {
-  AccessScope,
   AuthorizationOptions,
+  AuthorizationRecordOption,
+  RecordSelection,
 } from '@nocobase/app-plugin-authorization/client/management';
 import { ConfirmDialog } from '@nocobase/app-plugin-authorization/client/management';
 import { SearchField } from '@nocobase/app-plugin-authorization/client/management';
@@ -46,7 +50,7 @@ import {
   ActionsEditor,
   Field,
   ResourceEditor,
-  ScopeEditor,
+  SelectionEditor,
   SubjectsEditor,
 } from '@nocobase/app-plugin-authorization/client/management';
 import {
@@ -62,10 +66,12 @@ import { TablePager } from '@nocobase/app-plugin-authorization/client/management
 import { useAuthorizationTranslation } from '../i18n.js';
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import {
-  defaultScope,
+  defaultSelection,
   firstActions,
 } from '@nocobase/app-plugin-authorization/client/management';
 import { useSharingRulesClient } from '../api.js';
+
+const COMPOSITE = 'composite';
 
 export function SharingRulesPanel({
   options,
@@ -73,7 +79,7 @@ export function SharingRulesPanel({
   options: AuthorizationOptions;
 }): ReactElement {
   const authz = useSharingRulesClient();
-  const loadBusinessRecords = useCallback(
+  const loadCompositeRecords = useCallback(
     (collection: string) => authz.listSharingRecords(collection),
     [authz],
   );
@@ -91,8 +97,12 @@ export function SharingRulesPanel({
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [sectionKey, setSectionKey] = useState('');
-  const sections = useMemo(() => resourceSections(options), [options]);
-  const hasResources = sections.some((section) => section.resources.length > 0);
+  const subsections = useMemo(
+    () =>
+      workspaceSubsections(options).filter((item) => item.resources.length > 0),
+    [options],
+  );
+  const hasResources = subsections.length > 0;
   const [page, setPage] = useState(1);
   const [errorCause, setErrorCause] = useState<unknown>();
   const error = errorCause === undefined ? undefined : message(t, errorCause);
@@ -109,12 +119,14 @@ export function SharingRulesPanel({
   }, [load]);
   const visibleRules = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const section = sections.find((item) => item.key === sectionKey);
+    const section = subsections.find((item) => item.value === sectionKey);
     const selectedRules = section
-      ? rules.filter(
-          (rule) =>
-            rule.resource.type === section.value &&
-            section.resources.some((item) => item.value === rule.resource.id),
+      ? rules.filter((rule) =>
+          section.resources.some(
+            (item) =>
+              item.type === rule.resource.type &&
+              item.value === rule.resource.id,
+          ),
         )
       : rules;
     return query
@@ -124,7 +136,7 @@ export function SharingRulesPanel({
           ),
         )
       : selectedRules;
-  }, [rules, search, sections, sectionKey, t]);
+  }, [rules, search, subsections, sectionKey, t]);
   const pagedRules = pageSlice(visibleRules, page);
   // Narrowing the search can leave the current page past the end of the list.
   function changeSearch(value: string): void {
@@ -142,8 +154,8 @@ export function SharingRulesPanel({
         draft.actions.length === 0 ||
         draft.actions.some(
           (item) =>
-            item.selection.type === 'policy' &&
-            incompleteScope(item.selection.policy),
+            item.selection.type === 'all' ||
+            incompleteSelection(item.selection),
         ) ||
         draft.actions.some(
           (item) =>
@@ -183,7 +195,7 @@ export function SharingRulesPanel({
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
         filters={
-          options.resourceGroups?.length ? (
+          subsections.length > 1 ? (
             <SelectField
               aria-label={t('editors.resourceGroup')}
               value={sectionKey}
@@ -193,9 +205,9 @@ export function SharingRulesPanel({
               }}
               options={[
                 { value: '', label: t('common.all') },
-                ...sections.map((section) => ({
-                  value: section.key,
-                  label: section.label,
+                ...subsections.map((item) => ({
+                  value: item.value,
+                  label: item.label,
                 })),
               ]}
             />
@@ -277,15 +289,10 @@ export function SharingRulesPanel({
                         const entries = rule.actions.filter(
                           (item) => item.action === action,
                         );
-                        const declared = options.resourceTypes
-                          .find((type) => type.value === rule.resource.type)
-                          ?.resources.find(
-                            (resource) => resource.value === rule.resource.id,
-                          )?.ruleScopes;
+                        const declared = findResource(options, rule.resource)
+                          ?.dataScopes?.[action];
                         const grouped =
-                          (declared?.filter(
-                            (target) => target.action === action,
-                          ).length ?? entries.length) > 1;
+                          (declared?.length ?? entries.length) > 1;
                         return (
                           <div key={action}>
                             {grouped && (
@@ -304,23 +311,14 @@ export function SharingRulesPanel({
                               }
                             >
                               {entries.map((item) => {
-                                const targets = options.resourceTypes
-                                  .find(
-                                    (type) => type.value === rule.resource.type,
-                                  )
-                                  ?.resources.find(
-                                    (resource) =>
-                                      resource.value === rule.resource.id,
-                                  )?.ruleScopes;
+                                const targets = findResource(
+                                  options,
+                                  rule.resource,
+                                )?.dataScopes?.[item.action];
                                 const scopeLabel = targets?.find(
-                                  (target) =>
-                                    target.action === item.action &&
-                                    target.scopeKey === item.scopeKey,
+                                  (target) => target.key === item.scopeKey,
                                 )?.label;
-                                const multiple =
-                                  (targets?.filter(
-                                    (target) => target.action === item.action,
-                                  ).length ?? 0) > 1;
+                                const multiple = (targets?.length ?? 0) > 1;
                                 return (
                                   <div
                                     key={JSON.stringify([
@@ -346,15 +344,11 @@ export function SharingRulesPanel({
                                       →
                                     </span>
                                     <span>
-                                      {item.selection.type === 'records'
-                                        ? t('labels.selectedRecords', {
-                                            count: item.selection.ids.length,
-                                          })
-                                        : accessScopeLabel(
-                                            t,
-                                            item.selection.policy,
-                                            options,
-                                          )}
+                                      {selectionLabel(
+                                        t,
+                                        item.selection,
+                                        options,
+                                      )}
                                     </span>
                                   </div>
                                 );
@@ -477,7 +471,7 @@ export function SharingRulesPanel({
                         ...draft,
                         resource,
                         actions:
-                          resource.type === 'resource'
+                          resource.type === COMPOSITE
                             ? []
                             : firstActions(
                                 options,
@@ -532,32 +526,14 @@ export function SharingRulesPanel({
                     {t('sharingRules.accessDescription')}
                   </p>
                 </div>
-                {draft.resource.type === 'resource' ? (
-                  <BusinessRuleScopes
+                {draft.resource.type === COMPOSITE ? (
+                  <DataScopesEditor
                     options={options}
                     resourceId={draft.resource.id}
-                    value={draft.actions.map((item) => ({
-                      action: item.action,
-                      scopeKey: item.scopeKey,
-                      scope:
-                        item.selection.type === 'records'
-                          ? { type: 'ids', ids: item.selection.ids }
-                          : item.selection.policy,
-                    }))}
-                    onChange={(actions) =>
-                      setDraft({
-                        ...draft,
-                        actions: actions.map((item) => ({
-                          action: item.action,
-                          scopeKey: item.scopeKey,
-                          selection:
-                            item.scope.type === 'ids'
-                              ? { type: 'records', ids: item.scope.ids }
-                              : { type: 'policy', policy: item.scope },
-                        })),
-                      })
-                    }
-                    loadRecords={loadBusinessRecords}
+                    allowAll={false}
+                    value={draft.actions}
+                    onChange={(actions) => setDraft({ ...draft, actions })}
+                    loadRecords={loadCompositeRecords}
                   />
                 ) : (
                   <SharingActionsEditor
@@ -578,27 +554,27 @@ export function SharingRulesPanel({
 }
 
 function fresh(options: AuthorizationOptions): SharingRule {
-  const type =
-    options.resourceTypes.find((item) => item.value === 'resource') ??
-    options.resourceTypes[0];
+  const resources = workspaceSubsections(options).flatMap(
+    (item) => item.resources,
+  );
+  const first =
+    resources.find((item) => item.type === COMPOSITE) ?? resources[0];
   return {
     key: '',
     title: '',
     resource: {
-      type: type?.value ?? 'resource',
-      id: type?.resources[0]?.value ?? '',
+      type: first?.type ?? COMPOSITE,
+      id: first?.value ?? '',
     },
     actions:
-      type?.value === 'resource'
+      first?.type === COMPOSITE
         ? []
-        : firstActions(
-            options,
-            type?.value ?? '',
-            type?.resources[0]?.value,
-          ).map((action) => ({
-            action,
-            selection: { type: 'records' as const, ids: [] },
-          })),
+        : firstActions(options, first?.type ?? '', first?.value).map(
+            (action) => ({
+              action,
+              selection: { type: 'records' as const, ids: [] },
+            }),
+          ),
     subjects: [],
     reason: '',
   };
@@ -619,9 +595,9 @@ function SharingActionsEditor({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const authz = useSharingRulesClient();
-  const [records, setRecords] = useState<
-    readonly import('@nocobase/app-plugin-authorization/client/management').AuthorizationRecordOption[]
-  >([]);
+  const [records, setRecords] = useState<readonly AuthorizationRecordOption[]>(
+    [],
+  );
   const [recordSearch, setRecordSearch] = useState('');
   useEffect(() => {
     let active = true;
@@ -669,7 +645,9 @@ function SharingActionsEditor({
               <SelectField
                 aria-label={t('sharingRules.recordsToShare')}
                 className='h-8 w-full rounded-lg border bg-transparent px-3 text-sm'
-                value={current.selection.type}
+                value={
+                  current.selection.type === 'records' ? 'records' : 'policy'
+                }
                 onValueChange={(selectedValue) =>
                   changeSharingAction(
                     value,
@@ -677,7 +655,7 @@ function SharingActionsEditor({
                     onChange,
                     selectedValue === 'records'
                       ? { type: 'records', ids: [] }
-                      : { type: 'policy', policy: defaultPolicy(options) },
+                      : defaultPolicy(options),
                   )
                 }
                 options={[
@@ -689,12 +667,16 @@ function SharingActionsEditor({
                 ]}
               />
             </Field>
-            {current.selection.type === 'records' ? (
+            {current.selection.type !== 'recordAccess' ? (
               <RecordPicker
                 records={records}
                 search={recordSearch}
                 onSearch={setRecordSearch}
-                value={current.selection.ids}
+                value={
+                  current.selection.type === 'records'
+                    ? current.selection.ids
+                    : []
+                }
                 onChange={(ids) =>
                   changeSharingAction(value, current.action, onChange, {
                     type: 'records',
@@ -706,12 +688,14 @@ function SharingActionsEditor({
               <PolicyEditor
                 options={options}
                 fields={collectionFields(options, collection)}
-                value={current.selection.policy}
-                onChange={(policy) =>
-                  changeSharingAction(value, current.action, onChange, {
-                    type: 'policy',
-                    policy,
-                  })
+                value={current.selection}
+                onChange={(selection) =>
+                  changeSharingAction(
+                    value,
+                    current.action,
+                    onChange,
+                    selection,
+                  )
                 }
               />
             )}
@@ -729,7 +713,7 @@ function RecordPicker({
   value,
   onChange,
 }: {
-  records: readonly import('@nocobase/app-plugin-authorization/client/management').AuthorizationRecordOption[];
+  records: readonly AuthorizationRecordOption[];
   search: string;
   onSearch: (value: string) => void;
   value: readonly string[];
@@ -818,21 +802,25 @@ function PolicyEditor({
 }: {
   options: AuthorizationOptions;
   fields: readonly string[];
-  value: AccessScope;
-  onChange: (value: AccessScope) => void;
+  value: RecordSelection;
+  onChange: (value: RecordSelection) => void;
 }): ReactElement {
   return (
-    <ScopeEditor
+    <SelectionEditor
       options={options}
       fields={fields}
-      allowIds={false}
+      allowRecords={false}
+      allowAll={false}
       value={value}
       onChange={onChange}
     />
   );
 }
 
-function defaultPolicy(options: AuthorizationOptions): AccessScope {
-  const scope = defaultScope(options);
-  return scope.type === 'ids' ? { type: 'all' } : scope;
+/** Sharing never selects every record, so a policy starts at record access. */
+function defaultPolicy(options: AuthorizationOptions): RecordSelection {
+  const selection = defaultSelection(options);
+  return selection.type === 'recordAccess'
+    ? selection
+    : { type: 'records', ids: [] };
 }

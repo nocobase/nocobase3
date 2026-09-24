@@ -1,58 +1,56 @@
-# Request scopes and permission-set services
+# Request checks and permission-set services
 
-Resolve the existing `authorizationToken` in the application. This reference covers request evaluation and runtime assignment; use [runtime setup](runtime-api.md) for installation and [code versus seeds](code-and-seeds.md) for initial configuration. Do not construct a separate authorization engine for a business feature.
+Resolve the existing `authorizationToken` in the application. This reference covers request evaluation and runtime assignment; use [runtime setup](runtime-api.md) for installation and [code versus seeds](code-and-seeds.md) for initial configuration. Do not construct a separate authorization instance for a business feature.
 
 ## Evaluate a request
 
-The principal is the authenticated actor; `subjects` adds verified memberships such as teams. The principal also participates in grant matching. Subject IDs are literals, including the `*` in `authenticated:*`; resource IDs can use `*` as a wildcard. A manually constructed `for(identity)` uses the supplied identity: resolve and include memberships yourself.
+`authz.middleware()` sets the request's `authz` variable to an `AuthorizationContext` for the signed-in identity. The principal is the authenticated actor; subjects add verified memberships such as teams, and the principal itself also matches grants. Subject ids are literals, including the `*` in `authenticated:*`. A context built by hand with `authz.for(identity)` uses exactly the identity it is given: resolve and include memberships yourself.
 
-| Request-scope API                          | Result and use                                                                                        |
+| `AuthorizationContext` member              | Result and use                                                                                        |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `authorize({ resource, action, params? })` | Full decision: `permit`, `deny`, or `conditional` with `conditions`                                   |
-| `explain(request)`                         | Full decision with reasons and contributing sources                                                   |
-| `can(request)`                             | Boolean; composed resource checks report feature availability, not record access                      |
-| `require(request)`                         | Throws `AuthorizationDeniedError` on denied or conditional access; use for unconditional capabilities |
-| `permissions()`                            | Client visibility snapshot with `unrestricted` and permissions; not an executable data policy         |
+| `authorize({ resource, action, params? })` | The full decision: `permit`, `deny`, or `conditional` with `conditions`, and `reasons`                |
+| `can(request)`                             | `true` only for `permit`; a business check reports feature availability, not record access            |
+| `require(request)`                         | Throws `AuthorizationDeniedError` unless the decision is `permit`; use for unconditional capabilities |
+| `snapshot()`                               | `{ unrestricted, permissions }` for the client; not an executable data policy                         |
 
-Create one scope per request. Its grant and constraint caches are shared by underlying composed checks; reuse that scope within the request, never across identities or requests. Execute conditional decisions only through the resource adapter that understands their conditions. Unknown types, invalid conditional decisions and handler failures deny access.
+Create one context per request and reuse it within that request only, never across identities. Its grant and rule reads are shared by the underlying checks of a business action. Execute a conditional decision only through the adapter that understands its conditions. Unknown types, unregistered catalog items or actions, conditional decisions without conditions and handler failures deny.
 
 ## Permission sets
 
-`permissionSet(key).title(title).grant(grant).build()` returns `{ key, title?, grants }`. Each grant is `{ resource: { type, id }, actions: [{ action, policy? }] }`. Policies are interpreted by their resource type. Titles accept strings or `{ key, ns }` descriptors.
+`definePermissionSet(key).title(title).grant(...grants).build()` from `@nocobase/authorization/permission-sets` returns `{ key, title?, grants }`. Each grant is `{ resource: { type, id }, actions: [{ action, policy? }] }`; build them with `authz.pages.grant(id)`, `authz.settings.grant(id, actions)` and a composite reference's `grant(...)` rather than by hand. A composite grant stores `policy: { type: 'composite', scopes }`, one value per data scope: a record access key such as `'recordsIOwn'`, or a record selection. An empty value `''` selects nothing. Titles accept strings or `{ key, ns }`.
 
-| `authz.permissionSets`                                                                     | Contract                                                                  |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `create(input)`, `update(key, input)`                                                      | Complete `{ key, title?, grants }` definition, not a partial patch        |
-| `get(key)`, `list()`, `delete(key)`                                                        | Read/manage definitions                                                   |
-| `assign({ id?, permissionSet, subject })`, `revoke(id)`                                    | Create/remove an assignment                                               |
-| `listAssignments(permissionSet?)`                                                          | List all assignments or those of one set                                  |
-| `replaceSubjectAssignments({ subject, managedPermissionSets, permissionSets })`            | Replace only the specified managed subset; preserve unrelated assignments |
-| `getEffective({ principal, subjects? })`                                                   | Sets matching supplied identity                                           |
-| `protect({ owner, keys, allow?, requireActiveAssignment?, assignableTo?, unrestricted? })` | Register code ownership and invariants; returns cleanup                   |
-| `protection(key)`, `assertWritable(key, operation)`                                        | Read/enforce generic-management protection                                |
-| `isUnrestricted(key)`, `unrestricted(identity)`                                            | Check declaration/identity unrestricted status                            |
-| `assertSubjectRemovable(subject)`                                                          | Ensure disabling/removing a subject leaves protected sets usable          |
-| `withTransaction(transaction)`                                                             | Bind all Store operations to a caller-owned transaction                   |
-| `onChange(listener)`, `notifyAssignmentsChanged(subject)`                                  | Subscribe/publish assignment invalidation                                 |
+| `authz.permissionSets`                                                                     | Contract                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `create(input)`, `update(key, input)`                                                      | A complete `{ key, title?, grants }` definition, not a partial patch    |
+| `get(key)`, `list()`, `delete(key)`                                                        | Read and remove definitions                                             |
+| `assign({ id?, permissionSet, subject })`, `revoke(id)`                                    | Create or remove an assignment                                          |
+| `listAssignments(permissionSet?)`                                                          | Every assignment, or those of one set                                   |
+| `replaceSubjectAssignments({ subject, managedPermissionSets, permissionSets })`            | Replace only the managed subset; preserve unrelated assignments         |
+| `getEffective({ principal, subjects? })`                                                   | The sets an identity holds                                              |
+| `protect({ owner, keys, allow?, requireActiveAssignment?, assignableTo?, unrestricted? })` | Declare code ownership and invariants; returns a release function       |
+| `protection(key)`, `assertWritable(key, operation)`                                        | Read and enforce protection; `protection(key)?.unrestricted` marks root |
+| `assertSubjectRemovable(subject)`                                                          | Ensure disabling or removing a subject leaves protected sets usable     |
+| `withTransaction(transaction)`                                                             | Bind every store operation to a caller-owned transaction                |
+| `notifyAssignmentsChanged(subject)`                                                        | Announce a change; subscribe through `authz.onGrantsChanged(listener)`  |
 
-The App's platform integration protects root and member sets. Root grants unrestricted access, accepts user assignments and requires a remaining active assignment; member permits content updates. Business features create their own editable sets and leave platform protection and audience assignments to their owner.
+The platform protects the root and default sets. Root grants unrestricted access, accepts user assignments and requires a remaining active assignment; the default set's grants may be edited. Business features create their own editable sets and leave platform protection and audience assignments to their owner. Whether the current identity is unrestricted is `snapshot().unrestricted`.
 
-Generic HTTP management rejects changes to a protected key, even if content updates are allowed. Owner-side service calls are trusted and bypass generic `assertWritable` checks. `requireActiveAssignment` and `assignableTo` are enforced by assignment APIs. Relevant failures include `PermissionSetProtectedError`, `PermissionSetLastAssignmentError` and `PermissionSetSubjectNotAllowedError`.
+Generic HTTP management rejects changes to a protected key. Owner-side service calls are trusted and bypass `assertWritable`. `requireActiveAssignment` and `assignableTo` are enforced by the assignment APIs. Relevant failures include `PermissionSetProtectedError`, `PermissionSetLastAssignmentError` and `PermissionSetSubjectNotAllowedError`.
 
-The application's permission-set service runs protected assignment changes in a database transaction and locks the protected set before checking remaining active assignments. Custom subject `filterActive` callbacks must use the supplied transaction. When a business mutation owns the transaction, bind the service to that connection and notify after commit:
+Protected assignment changes run in a database transaction that locks the protected set before checking remaining active assignments. Custom subject `filterActive` callbacks must use the supplied transaction. When a business mutation owns the transaction, bind the service to that connection and notify after commit:
 
 ```ts
 const subject = { type: 'user', id: userId };
 await database.transaction(async (connection) => {
-  const sets = authorization.permissionSets.withTransaction(connection);
+  const sets = authz.permissionSets.withTransaction(connection);
   await sets.assertSubjectRemovable(subject);
   await disableUser(connection, userId); // Application-owned mutation.
 });
-await authorization.permissionSets.notifyAssignmentsChanged(subject);
+await authz.permissionSets.notifyAssignmentsChanged(subject);
 ```
 
-Never separate the removal check from the user mutation's transaction. Use the App service's existing Store; replacing persistence is outside ordinary business feature development.
+Never separate the removal check from the user mutation's transaction. Use the application's existing store; replacing persistence is outside ordinary feature development.
 
-## Optional record-scope rules
+## Optional record rules
 
-Default access, sharing and restrictions require separate App plugins. Follow [capability discovery](optional-capabilities.md) and the owning installed Skill for implementation, APIs and seeds. Core library exports alone do not establish an installed App capability.
+Default access, sharing and restriction rules require separate App plugins. Follow [capability discovery](optional-capabilities.md) and the owning installed Skill for implementation, APIs and seeds. Library exports alone do not establish an installed App capability.

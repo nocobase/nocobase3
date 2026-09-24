@@ -51,8 +51,8 @@ export function Decision({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const status = inspectionStatus(value, fields);
-  const business =
-    value.conditions?.type === 'resource' || !!value.checks?.length;
+  const composite =
+    value.conditions?.type === 'composite' || !!value.checks?.length;
   const checks =
     value.checks?.filter(
       (check) => check.resource.type === 'database.collection',
@@ -60,10 +60,8 @@ export function Decision({
   const reasons = uniqueReasons(
     value.reasons.filter(
       (reason) =>
-        !business ||
-        !['PAGE_ACCESS_GRANTED', 'SCOPE_EXPANDED', 'SCOPE_RESTRICTED'].includes(
-          reason.code,
-        ),
+        !composite ||
+        !['SELECTION_EXPANDED', 'SELECTION_RESTRICTED'].includes(reason.code),
     ),
   );
   return (
@@ -95,17 +93,16 @@ export function Decision({
           </p>
         )}
       </section>
-      {business && checks.length > 0 && (
+      {composite && checks.length > 0 && (
         <section className='space-y-3'>
           <h3 className='text-sm font-medium'>{t('inspector.dataAccess')}</h3>
           <p className='text-sm text-muted-foreground'>
             {t('inspector.subjectHint')}
           </p>
           {checks.map((check) => {
-            const scope = resource?.ruleScopes?.find(
-              (item) =>
-                item.action === action && item.collection === check.resource.id,
-            );
+            const scope = Object.entries(resource?.dataScopes ?? {})
+              .flatMap(([name, scopes]) => (name === action ? scopes : []))
+              .find((item) => item.collection === check.resource.id);
             const scopeReasons = uniqueReasons(
               check.decision.reasons.filter(
                 (reason) =>
@@ -151,7 +148,7 @@ export function Decision({
           })}
         </section>
       )}
-      {!business && value.conditions?.type === 'database' && (
+      {!composite && value.conditions?.type === 'database' && (
         <InspectionConditions value={value.conditions} />
       )}
       <details className='border-t pt-3 text-xs text-muted-foreground'>
@@ -176,12 +173,12 @@ function Reason({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const source = object(value.details?.source);
-  const scope = object(value.details?.scope);
-  const access = scope?.recordAccess;
-  const policy = typeof access === 'string' ? access : object(access)?.key;
-  const label = options?.recordAccessPolicies.find(
-    (item) => item.value === policy,
-  )?.label;
+  const selection = object(value.details?.selection);
+  const label =
+    selection?.type === 'recordAccess'
+      ? options?.recordAccess.find((item) => item.value === selection.key)
+          ?.label
+      : undefined;
   const title = source?.title;
   const descriptor = object(title);
   const sourceTitle =
@@ -192,11 +189,11 @@ function Reason({
         : undefined;
   const scopeLabel =
     label ??
-    (scope?.type === 'all'
+    (selection?.type === 'all'
       ? t('labels.allRecords')
-      : scope?.type === 'ids'
+      : selection?.type === 'records'
         ? t('inspector.selectedRecords', {
-            count: Array.isArray(scope.ids) ? scope.ids.length : 0,
+            count: Array.isArray(selection.ids) ? selection.ids.length : 0,
           })
         : undefined);
   return (

@@ -31,12 +31,14 @@ export function createHubRoutes(
         {
           name: 'hub-app-detail',
           path: ':appId',
+          authz: 'skip',
           componentLoader: () => import('./pages/hub/app-page.js'),
           children: [
             {
               name: 'hub-app-deployments',
               path: 'deployments',
               // The combined page gates each section by its own capability.
+              authz: 'skip',
               componentLoader: () =>
                 import('./pages/hub/tabs/deployments-page.js'),
               children: [
@@ -104,6 +106,7 @@ export function createHubRoutes(
             {
               name: 'hub-app-settings',
               path: 'settings',
+              authz: 'skip',
               componentLoader: () =>
                 import('./pages/hub/tabs/settings-page.js'),
             },

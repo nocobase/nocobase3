@@ -1,13 +1,16 @@
-import { accessScopeLabel } from '@nocobase/app-plugin-authorization/client/management';
-import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
-import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
+import {
+  findResource,
+  selectionLabel,
+  workspaceSubsections,
+} from '@nocobase/app-plugin-authorization/client/management';
+import { DataScopesEditor } from '@nocobase/app-plugin-authorization/client/management';
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 import type { DefaultAccessRule } from '../api.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
-import { incompleteScope } from '@nocobase/app-plugin-authorization/client/management';
+import { incompleteSelection } from '@nocobase/app-plugin-authorization/client/management';
 import { Menu } from '@base-ui/react/menu';
-import { ScopeMark } from '@nocobase/app-plugin-authorization/client/management';
+import { SelectionMark } from '@nocobase/app-plugin-authorization/client/management';
 import { useSearchParams } from 'react-router';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -20,7 +23,7 @@ import {
 } from 'react';
 import type {
   AuthorizationOptions,
-  AccessScope,
+  RecordSelection,
   AuthorizationRecordOption,
   ResourceGroupOption,
 } from '@nocobase/app-plugin-authorization/client/management';
@@ -43,7 +46,7 @@ import {
   ErrorBox,
   errorMessage,
 } from '@nocobase/app-plugin-authorization/client/management';
-import { ScopeEditor } from '@nocobase/app-plugin-authorization/client/management';
+import { SelectionEditor } from '@nocobase/app-plugin-authorization/client/management';
 import {
   RuleDrawer,
   RuleForm,
@@ -57,7 +60,14 @@ import { TablePager } from '@nocobase/app-plugin-authorization/client/management
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import { ConfirmDialog } from '@nocobase/app-plugin-authorization/client/management';
 
-type Row = DefaultAccessRule & { key: string; label: string };
+/** One resource's row; `ruleKey` is the stored rule's key once one exists. */
+type Row = Omit<DefaultAccessRule, 'key'> & {
+  key: string;
+  ruleKey?: string;
+  label: string;
+};
+
+const COMPOSITE = 'composite';
 
 export function DefaultAccessPanel({
   options,
@@ -65,24 +75,36 @@ export function DefaultAccessPanel({
   options: AuthorizationOptions;
 }): ReactElement {
   const authz = useDefaultAccessClient();
-  const loadBusinessRecords = useCallback(
+  const loadCompositeRecords = useCallback(
     (collection: string) => authz.listDefaultAccessRecords(collection),
     [authz],
   );
   const t = useAuthorizationTranslation();
-  const { can: canConfigure } = useCan({
-    resource: { type: 'settings', id: 'authorization.default-access' },
-    action: 'configure',
-  });
+  const settings = { type: 'settings', id: 'authorization.default-access' };
+  const { can: canCreate } = useCan({ resource: settings, action: 'create' });
+  const { can: canUpdate } = useCan({ resource: settings, action: 'update' });
+  const { can: canDelete } = useCan({ resource: settings, action: 'delete' });
   const [loaded, setLoaded] = useState(false);
   const [rules, setRules] = useState<readonly DefaultAccessRule[]>([]);
   const [params, setParams] = useSearchParams();
   const search = params.get('search') ?? '';
   const configured = params.get('configured') === '1';
   const groupFilter = params.get('group') ?? '';
-  const sections = resourceSections(options);
-  const resourceType =
-    sections.find((item) => item.key === params.get('type')) ?? sections[0];
+  const sections = workspaceSubsections(options).filter(
+    (item) => item.resources.length > 0,
+  );
+  const subsection =
+    sections.find((item) => item.value === params.get('section')) ??
+    sections[0];
+  const compositeSection = Boolean(
+    subsection?.resources.every((item) => item.type === COMPOSITE),
+  );
+  const inSubsection = (resource: { type: string; id: string }): boolean =>
+    Boolean(
+      subsection?.resources.some(
+        (item) => item.type === resource.type && item.value === resource.id,
+      ),
+    );
   const page = Math.max(1, Number(params.get('page')) || 1);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -120,19 +142,25 @@ export function DefaultAccessPanel({
     void Promise.resolve().then(load);
   }, [load]);
   const rows = useMemo(() => {
-    const result: Row[] = options.resourceTypes.flatMap((type) =>
-      type.resources.map((resource) => ({
-        key: JSON.stringify([type.value, resource.value]),
+    const result: Row[] = [];
+    for (const resource of workspaceSubsections(options).flatMap(
+      (item) => item.resources,
+    )) {
+      const key = JSON.stringify([resource.type, resource.value]);
+      if (result.some((row) => row.key === key)) continue;
+      const rule = rules.find(
+        (item) =>
+          item.resource.type === resource.type &&
+          item.resource.id === resource.value,
+      );
+      result.push({
+        key,
+        ...(rule ? { ruleKey: rule.key } : {}),
         label: resource.label,
-        resource: { type: type.value, id: resource.value },
-        actions:
-          rules.find(
-            (rule) =>
-              rule.resource.type === type.value &&
-              rule.resource.id === resource.value,
-          )?.actions ?? [],
-      })),
-    );
+        resource: { type: resource.type, id: resource.value },
+        actions: rule?.actions ?? [],
+      });
+    }
     for (const rule of rules) {
       if (
         !result.some(
@@ -144,6 +172,7 @@ export function DefaultAccessPanel({
         result.push({
           ...rule,
           key: JSON.stringify([rule.resource.type, rule.resource.id]),
+          ruleKey: rule.key,
           label: rule.resource.id,
         });
     }
@@ -160,7 +189,7 @@ export function DefaultAccessPanel({
   );
   useEffect(() => {
     let active = true;
-    if (!draft?.resource.id || draft.resource.type === 'resource') return;
+    if (!draft?.resource.id || draft.resource.type === COMPOSITE) return;
     void authz.listDefaultAccessRecords(draft.resource.id).then(
       (items) => {
         if (active) setRecords(items);
@@ -175,39 +204,53 @@ export function DefaultAccessPanel({
   }, [authz, draft?.resource.id, draft?.resource.type]);
   const actions = [
     ...new Map(
-      (resourceType ? [resourceType] : []).flatMap((type) =>
-        type.actions
-          .filter((action) => action.value !== 'create')
-          .map((action) => [action.value, action] as const),
-      ),
+      (subsection?.actions ?? [])
+        .filter((action) => action.value !== 'create')
+        .map((action) => [action.value, action] as const),
     ).values(),
   ];
   const visible = rows.filter(
     (row) =>
-      row.resource.type === resourceType?.value &&
-      Boolean(
-        resourceType?.resources.some((item) => item.value === row.resource.id),
-      ) &&
+      inSubsection(row.resource) &&
       (!configured || row.actions.length > 0) &&
       (!groupFilter || resourcePath(options, row) === groupFilter) &&
       `${row.label} ${row.resource.id} ${resourcePath(options, row)}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  /** Writes a row's actions: create, update, or delete its rule. */
+  async function persist(
+    row: Row,
+    actions: DefaultAccessRule['actions'],
+  ): Promise<void> {
+    if (!actions.length) {
+      if (row.ruleKey) await authz.deleteDefaultAccess(row.ruleKey);
+      return;
+    }
+    const key = row.ruleKey ?? `${row.resource.type}.${row.resource.id}`;
+    const rule = { key, resource: row.resource, actions };
+    if (row.ruleKey) await authz.updateDefaultAccess(key, rule);
+    else await authz.createDefaultAccess(rule);
+  }
+  /** Whether the current user may write this change to a row. */
+  function canWrite(row: Row, actions: readonly unknown[]): boolean {
+    if (!row.ruleKey) return canCreate;
+    return actions.length ? canUpdate : canDelete;
+  }
+  const canConfigure = canCreate || canUpdate || canDelete;
   async function save(clear = false) {
-    if (!draft || busy || !canConfigure) return;
+    if (!draft || busy) return;
+    const actions = clear ? [] : draft.actions;
+    if (!canWrite(draft, actions)) return;
     setBusy(true);
     setErrorCause(undefined);
     try {
-      if (!clear && draft.actions.some((item) => incompleteScope(item.scope)))
+      if (
+        !clear &&
+        draft.actions.some((item) => incompleteSelection(item.selection))
+      )
         throw new Error(t('databasePolicy.conditionRequired'));
-      if (clear || !draft.actions.length)
-        await authz.deleteDefaultAccess(draft.resource);
-      else
-        await authz.setDefaultAccess({
-          resource: draft.resource,
-          actions: draft.actions,
-        });
+      await persist(draft, actions);
       close();
       await load();
     } catch (cause) {
@@ -219,7 +262,7 @@ export function DefaultAccessPanel({
   const groupPaths = [
     ...new Set(
       rows
-        .filter((row) => row.resource.type === resourceType?.value)
+        .filter((row) => inSubsection(row.resource))
         .map((row) => resourcePath(options, row)),
     ),
   ];
@@ -233,19 +276,18 @@ export function DefaultAccessPanel({
     mode: string,
   ): Promise<void> {
     if (busy || !canConfigure) return;
-    if (mode === 'custom' || row.resource.type === 'resource') {
+    if (mode === 'custom' || row.resource.type === COMPOSITE) {
       edit(row);
       return;
     }
+    const next = row.actions.filter((item) => item.action !== action);
+    if (mode === 'all') next.push({ action, selection: { type: 'all' } });
+    if (!canWrite(row, next)) return;
     setBusy(true);
     setSaved(false);
     setErrorCause(undefined);
-    const next = row.actions.filter((item) => item.action !== action);
-    if (mode === 'all') next.push({ action, scope: { type: 'all' } });
     try {
-      if (next.length)
-        await authz.setDefaultAccess({ resource: row.resource, actions: next });
-      else await authz.deleteDefaultAccess(row.resource);
+      await persist(row, next);
       await load();
       setSaved(true);
     } catch (cause) {
@@ -263,18 +305,18 @@ export function DefaultAccessPanel({
             aria-label={t('editors.resourceGroup')}
             className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2 lg:overflow-y-auto'
           >
-            {sections.map((type) => (
+            {sections.map((item) => (
               <button
-                key={type.key}
+                key={item.value}
                 aria-current={
-                  type.key === resourceType?.key ? 'page' : undefined
+                  item.value === subsection?.value ? 'page' : undefined
                 }
                 className='flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary aria-[current=page]:font-medium'
                 onClick={() => {
                   setParams(
                     (current) => {
                       const next = new URLSearchParams(current);
-                      next.set('type', type.key);
+                      next.set('section', item.value);
                       next.delete('group');
                       next.delete('page');
                       return next;
@@ -283,9 +325,9 @@ export function DefaultAccessPanel({
                   );
                 }}
               >
-                <span>{type.label}</span>
+                <span>{item.label}</span>
                 <span className='text-xs text-muted-foreground'>
-                  {type.resources.length}
+                  {item.resources.length}
                 </span>
               </button>
             ))}
@@ -298,7 +340,7 @@ export function DefaultAccessPanel({
                 value={search}
                 onChange={(value) => filter('search', value)}
               />
-              {resourceType?.groups?.length ? (
+              {subsection?.groups.length ? (
                 <SelectField
                   aria-label={t('defaultAccess.groupFilter')}
                   className='h-9 max-w-64 rounded-md border bg-transparent px-3 text-sm'
@@ -338,7 +380,7 @@ export function DefaultAccessPanel({
                       <TableHead className='w-[32%] px-5 py-3'>
                         {t('common.resource')}
                       </TableHead>
-                      {resourceType?.value === 'resource' ? (
+                      {compositeSection ? (
                         <TableHead className='px-2 py-3'>
                           {t('editors.actions')}
                         </TableHead>
@@ -360,18 +402,14 @@ export function DefaultAccessPanel({
                         (row) => resourcePath(options, row) === path,
                       );
                       if (!groupRows.length) return null;
-                      const grouped =
-                        path !== resourceType?.label &&
-                        path !== resourceType?.value;
+                      const grouped = path !== '';
                       return (
                         <Fragment key={path}>
                           {grouped ? (
                             <TableRow className='bg-muted/40'>
                               <TableCell
                                 colSpan={
-                                  resourceType?.value === 'resource'
-                                    ? 2
-                                    : actions.length + 1
+                                  compositeSection ? 2 : actions.length + 1
                                 }
                                 className='p-0'
                               >
@@ -411,68 +449,55 @@ export function DefaultAccessPanel({
                                       {row.resource.id}
                                     </p>
                                   </TableCell>
-                                  {row.resource.type === 'resource' ? (
+                                  {row.resource.type === COMPOSITE ? (
                                     <TableCell className='px-2 py-2'>
                                       <div className='flex flex-wrap gap-x-3 gap-y-1'>
-                                        {options.resourceTypes
-                                          .find(
-                                            (type) =>
-                                              type.value === row.resource.type,
-                                          )
-                                          ?.resources.find(
+                                        {findResource(
+                                          options,
+                                          row.resource,
+                                        )?.actions?.map((action) => {
+                                          const scopes = row.actions.filter(
                                             (item) =>
-                                              item.value === row.resource.id,
-                                          )
-                                          ?.actions?.map((action) => {
-                                            const scopes = row.actions.filter(
-                                              (item) =>
-                                                item.action === action.value,
-                                            );
-                                            return (
-                                              <button
-                                                key={action.value}
-                                                type='button'
-                                                aria-label={`${row.label}: ${action.label}`}
-                                                disabled={
-                                                  busy ||
-                                                  !loaded ||
-                                                  !canConfigure
+                                              item.action === action.value,
+                                          );
+                                          return (
+                                            <button
+                                              key={action.value}
+                                              type='button'
+                                              aria-label={`${row.label}: ${action.label}`}
+                                              disabled={
+                                                busy || !loaded || !canConfigure
+                                              }
+                                              onClick={() => edit(row)}
+                                              className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-sm hover:bg-muted'
+                                            >
+                                              <SelectionMark
+                                                value={
+                                                  !scopes.length
+                                                    ? 'none'
+                                                    : scopes.every(
+                                                          (item) =>
+                                                            item.selection
+                                                              .type === 'all',
+                                                        )
+                                                      ? 'all'
+                                                      : 'scoped'
                                                 }
-                                                onClick={() => edit(row)}
-                                                className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-sm hover:bg-muted'
-                                              >
-                                                <ScopeMark
-                                                  value={
-                                                    !scopes.length
-                                                      ? 'none'
-                                                      : scopes.every(
-                                                            (item) =>
-                                                              item.scope
-                                                                .type === 'all',
-                                                          )
-                                                        ? 'all'
-                                                        : 'scoped'
-                                                  }
-                                                />
-                                                <span>{action.label}</span>
-                                              </button>
-                                            );
-                                          })}
+                                              />
+                                              <span>{action.label}</span>
+                                            </button>
+                                          );
+                                        })}
                                       </div>
                                     </TableCell>
                                   ) : (
                                     actions.map((action) => {
-                                      const type = options.resourceTypes.find(
-                                        (item) =>
-                                          item.value === row.resource.type,
+                                      const resource = findResource(
+                                        options,
+                                        row.resource,
                                       );
                                       const supported = (
-                                        type?.resources.find(
-                                          (item) =>
-                                            item.value === row.resource.id,
-                                        )?.actions ??
-                                        type?.actions ??
-                                        []
+                                        resource?.actions ?? actions
                                       ).some(
                                         (item) => item.value === action.value,
                                       );
@@ -484,7 +509,7 @@ export function DefaultAccessPanel({
                                           key={action.value}
                                           className='px-2 py-2 text-center'
                                         >
-                                          {row.resource.type === 'resource' &&
+                                          {row.resource.type === COMPOSITE &&
                                           supported ? (
                                             <button
                                               type='button'
@@ -495,7 +520,7 @@ export function DefaultAccessPanel({
                                               onClick={() => edit(row)}
                                               className='inline-flex items-center gap-1 rounded-md border bg-muted/30 p-1 hover:bg-muted'
                                             >
-                                              <ScopeMark
+                                              <SelectionMark
                                                 value={
                                                   current ? 'scoped' : 'none'
                                                 }
@@ -508,22 +533,14 @@ export function DefaultAccessPanel({
                                                 ).length
                                               }
                                               /
-                                              {type?.resources
-                                                .find(
-                                                  (item) =>
-                                                    item.value ===
-                                                    row.resource.id,
-                                                )
-                                                ?.ruleScopes?.filter(
-                                                  (scope) =>
-                                                    scope.action ===
-                                                    action.value,
-                                                ).length ?? 0}
+                                              {resource?.dataScopes?.[
+                                                action.value
+                                              ]?.length ?? 0}
                                             </button>
                                           ) : supported || current ? (
                                             <DefaultScopeControl
                                               label={`${row.label}: ${action.label}`}
-                                              scope={current?.scope}
+                                              selection={current?.selection}
                                               options={options}
                                               disabled={
                                                 busy || !loaded || !canConfigure
@@ -553,11 +570,7 @@ export function DefaultAccessPanel({
                     })}
                     {!paged.length ? (
                       <EmptyTableRow
-                        colSpan={
-                          resourceType?.value === 'resource'
-                            ? 2
-                            : actions.length + 1
-                        }
+                        colSpan={compositeSection ? 2 : actions.length + 1}
                       >
                         {!loaded
                           ? t('common.loading')
@@ -585,7 +598,7 @@ export function DefaultAccessPanel({
                 );
                 return (
                   <span key={mark} className='flex items-center gap-1'>
-                    <ScopeMark value={mark} label={label} legend />
+                    <SelectionMark value={mark} label={label} legend />
                     {label}
                   </span>
                 );
@@ -597,7 +610,7 @@ export function DefaultAccessPanel({
       {draft ? (
         <RuleDrawer
           title={draft.label}
-          description={`${resourcePath(options, draft)} · ${t('defaultAccess.editorDescription')}`}
+          description={`${[subsectionLabel(options, draft), resourcePath(options, draft)].filter(Boolean).join(' / ')} · ${t('defaultAccess.editorDescription')}`}
           dirty={dirty}
           busy={busy}
           onClose={close}
@@ -614,7 +627,7 @@ export function DefaultAccessPanel({
                     variant='ghost'
                     disabled={
                       busy ||
-                      !canConfigure ||
+                      !canDelete ||
                       !rows.find((row) => row.key === draft.key)?.actions.length
                     }
                     onClick={() => setConfirmClear(true)}
@@ -622,7 +635,7 @@ export function DefaultAccessPanel({
                     {t('ruleWorkspace.clearDefaults')}
                   </Button>
                   <Button
-                    disabled={busy || !dirty || !canConfigure}
+                    disabled={busy || !dirty || !canWrite(draft, draft.actions)}
                     onClick={() => void save()}
                   >
                     {t('defaultAccess.save')}
@@ -631,27 +644,21 @@ export function DefaultAccessPanel({
               }
             >
               {error ? <ErrorBox value={error} /> : null}
-              {draft.resource.type === 'resource' ? (
-                <BusinessRuleScopes
+              {draft.resource.type === COMPOSITE ? (
+                <DataScopesEditor
                   options={options}
                   resourceId={draft.resource.id}
                   value={draft.actions}
                   onChange={(actions) => setDraft({ ...draft, actions })}
-                  loadRecords={loadBusinessRecords}
+                  loadRecords={loadCompositeRecords}
                 />
               ) : (
                 actions
                   .filter((action) => {
-                    const type = options.resourceTypes.find(
-                      (item) => item.value === draft.resource.type,
-                    );
                     return (
                       (
-                        type?.resources.find(
-                          (item) => item.value === draft.resource.id,
-                        )?.actions ??
-                        type?.actions ??
-                        []
+                        findResource(options, draft.resource)?.actions ??
+                        actions
                       ).some((item) => item.value === action.value) ||
                       draft.actions.some((item) => item.action === action.value)
                     );
@@ -660,19 +667,19 @@ export function DefaultAccessPanel({
                     const current = draft.actions.find(
                       (item) => item.action === action.value,
                     );
-                    const change = (scope?: AccessScope) =>
+                    const change = (selection?: RecordSelection) =>
                       setDraft({
                         ...draft,
-                        actions: scope
+                        actions: selection
                           ? current
                             ? draft.actions.map((item) =>
                                 item.action === action.value
-                                  ? { ...item, scope }
+                                  ? { ...item, selection }
                                   : item,
                               )
                             : [
                                 ...draft.actions,
-                                { action: action.value, scope },
+                                { action: action.value, selection },
                               ]
                           : draft.actions.filter(
                               (item) => item.action !== action.value,
@@ -688,7 +695,7 @@ export function DefaultAccessPanel({
                             value={
                               !current
                                 ? 'unset'
-                                : current.scope.type === 'all'
+                                : current.selection.type === 'all'
                                   ? 'all'
                                   : 'custom'
                             }
@@ -699,9 +706,9 @@ export function DefaultAccessPanel({
                                   : selectedValue === 'all'
                                     ? { type: 'all' }
                                     : {
-                                        type: 'database',
-                                        recordAccess:
-                                          options.recordAccessPolicies.find(
+                                        type: 'recordAccess',
+                                        key:
+                                          options.recordAccess.find(
                                             (item) =>
                                               item.value !== 'allRecords',
                                           )?.value ?? 'customFilter',
@@ -721,8 +728,8 @@ export function DefaultAccessPanel({
                             ]}
                           />
                         </label>
-                        {current && current.scope.type !== 'all' ? (
-                          <ScopeEditor
+                        {current && current.selection.type !== 'all' ? (
+                          <SelectionEditor
                             options={options}
                             fields={
                               options.collections.find(
@@ -730,7 +737,7 @@ export function DefaultAccessPanel({
                               )?.fields
                             }
                             records={records}
-                            value={current.scope}
+                            value={current.selection}
                             onChange={change}
                           />
                         ) : !current ? (
@@ -762,13 +769,24 @@ export function DefaultAccessPanel({
   );
 }
 
-function resourcePath(options: AuthorizationOptions, row: Row): string {
-  const type = options.resourceTypes.find(
-    (item) => item.value === row.resource.type,
+/** The subsection that lists the row's resource. */
+function subsectionOf(options: AuthorizationOptions, row: Row) {
+  return workspaceSubsections(options).find((item) =>
+    item.resources.some(
+      (resource) =>
+        resource.type === row.resource.type &&
+        resource.value === row.resource.id,
+    ),
   );
-  const groupId = type?.resources.find(
-    (item) => item.value === row.resource.id,
-  )?.group;
+}
+
+function subsectionLabel(options: AuthorizationOptions, row: Row): string {
+  return subsectionOf(options, row)?.label ?? '';
+}
+
+/** The row's resource-group trail; empty when ungrouped. */
+function resourcePath(options: AuthorizationOptions, row: Row): string {
+  const groupId = findResource(options, row.resource)?.group;
   function find(
     groups: readonly ResourceGroupOption[],
     ancestors: string[],
@@ -781,29 +799,28 @@ function resourcePath(options: AuthorizationOptions, row: Row): string {
     }
     return undefined;
   }
-  return [
-    ...(row.resource.type === 'resource'
-      ? []
-      : [type?.label ?? row.resource.type]),
-    ...(find(type?.groups ?? [], []) ?? []),
-  ].join(' / ');
+  return (find(subsectionOf(options, row)?.groups ?? [], []) ?? []).join(' / ');
 }
 
 function DefaultScopeControl({
   label,
-  scope,
+  selection,
   options,
   disabled,
   onChange,
 }: {
   label: string;
-  scope?: AccessScope;
+  selection?: RecordSelection;
   options: AuthorizationOptions;
   disabled: boolean;
   onChange: (mode: string) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const mode = !scope ? 'unset' : scope.type === 'all' ? 'all' : 'custom';
+  const mode = !selection
+    ? 'unset'
+    : selection.type === 'all'
+      ? 'all'
+      : 'custom';
   const choices = [
     {
       value: 'unset',
@@ -823,10 +840,12 @@ function DefaultScopeControl({
       <Menu.Trigger
         disabled={disabled}
         aria-label={label}
-        title={scope ? accessScopeLabel(t, scope, options) : selected.label}
+        title={
+          selection ? selectionLabel(t, selection, options) : selected.label
+        }
         className='inline-flex cursor-pointer items-center gap-1 rounded-md border bg-muted/30 p-1 hover:bg-muted disabled:opacity-50'
       >
-        <ScopeMark value={selected.mark} label={selected.label} />
+        <SelectionMark value={selected.mark} label={selected.label} />
         <ChevronDown className='size-3 text-muted-foreground' />
       </Menu.Trigger>
       <Menu.Portal>
@@ -839,7 +858,7 @@ function DefaultScopeControl({
                 className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none data-[highlighted]:bg-muted ${item.value === mode ? 'bg-primary/10 text-primary' : ''}`}
                 onClick={() => onChange(item.value)}
               >
-                <ScopeMark value={item.mark} label={item.label} />
+                <SelectionMark value={item.mark} label={item.label} />
                 {item.label}
               </Menu.Item>
             ))}

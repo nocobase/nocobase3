@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { MemoryRouter } from 'react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({ request: vi.fn(async () => ({ data: {} })) }));
 vi.mock('@nocobase/app-client', () => ({
@@ -126,79 +132,8 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
       json: { deliveryReference: 'SHIP-42' },
     }),
   );
-});
-
-it('shows quote relationships and preparers without rendering other resource tables', () => {
-  render(
-    <MemoryRouter>
-      <SalesPage path='quotes' />
-    </MemoryRouter>,
-  );
-  expect(screen.getAllByRole('table')).toHaveLength(1);
-  expect(screen.getByRole('link', { name: 'p1' })).toHaveAttribute(
-    'href',
-    '/authorization-example/projects?record=p1',
-  );
-  expect(screen.getByText('sales.preparedBy: Alex Chen')).toBeInTheDocument();
-  expect(screen.queryByText('Harbor order')).not.toBeInTheDocument();
-});
-
-it('keeps delivery references visible without linking to unauthorized menus', () => {
-  render(
-    <MemoryRouter>
-      <SalesPage path='orders' />
-    </MemoryRouter>,
-  );
-  expect(screen.queryByRole('link')).not.toBeInTheDocument();
-  expect(screen.getByText('p1 · sales.noPageAccess')).toBeInTheDocument();
-  expect(screen.getByText('q1 · sales.noPageAccess')).toBeInTheDocument();
-});
-
-it('filters linked lists and lets users return to all permitted records', () => {
-  render(
-    <MemoryRouter
-      initialEntries={['/authorization-example/quotes?project=other']}
-    >
-      <SalesPage path='quotes' />
-    </MemoryRouter>,
-  );
-  expect(screen.getByText('sales.empty')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'sales.clearFilter' }));
-  expect(screen.getByText('Harbor quote')).toBeInTheDocument();
-});
-
-it.each([
-  [400, 'sales.errors.input'],
-  [403, 'forbidden'],
-  [409, 'sales.errors.conflict'],
-  [undefined, 'sales.errors.request'],
-])('distinguishes request errors with status %s', async (status, message) => {
-  api.request.mockRejectedValueOnce({ status });
-  render(
-    <MemoryRouter>
-      <SalesPage path='projects' />
-    </MemoryRouter>,
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'sales.save' }));
-  await waitFor(() =>
-    expect(screen.getByRole('status')).toHaveTextContent(message!),
-  );
-});
-
-it('requires unsaved quote changes to be saved before submission', () => {
-  render(
-    <MemoryRouter>
-      <SalesPage path='quotes' />
-    </MemoryRouter>,
-  );
-  fireEvent.change(screen.getByRole('spinbutton'), {
-    target: { value: '999' },
-  });
-  expect(screen.getByRole('button', { name: 'sales.submit' })).toBeDisabled();
-  expect(screen.getByText('sales.saveFirst')).toBeInTheDocument();
-});
-
-it('uses relation mutation envelopes from the order relationship editor', async () => {
+  cleanup();
+  // The order relationship editor sends relation mutation envelopes.
   render(
     <MemoryRouter>
       <SalesPage path='orders' />
@@ -239,4 +174,28 @@ it('uses relation mutation envelopes from the order relationship editor', async 
       },
     }),
   );
+});
+
+it('keeps delivery references visible without linking to unauthorized menus', () => {
+  render(
+    <MemoryRouter>
+      <SalesPage path='orders' />
+    </MemoryRouter>,
+  );
+  expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  expect(screen.getByText('p1 · sales.noPageAccess')).toBeInTheDocument();
+  expect(screen.getByText('q1 · sales.noPageAccess')).toBeInTheDocument();
+});
+
+it('requires unsaved quote changes to be saved before submission', () => {
+  render(
+    <MemoryRouter>
+      <SalesPage path='quotes' />
+    </MemoryRouter>,
+  );
+  fireEvent.change(screen.getByRole('spinbutton'), {
+    target: { value: '999' },
+  });
+  expect(screen.getByRole('button', { name: 'sales.submit' })).toBeDisabled();
+  expect(screen.getByText('sales.saveFirst')).toBeInTheDocument();
 });

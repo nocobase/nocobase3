@@ -56,18 +56,32 @@ async function build(resourceName: string, grantee: Grantee = 'user') {
     .createOne({ values: { id: 'a1', ownerId: 'alice' } });
 
   // The one variable: what name the resource is registered and granted under.
-  authorization.db.collections.add({ name: resourceName, actions: ['read'] });
+  authorization.database.collections.add({
+    name: resourceName,
+    title: 'Orders',
+    actions: ['read'],
+  });
   const permission = await authorization.permissionSets.create({
     key: 'orders-read',
     grants: [
-      authorization.db.grant(resourceName, {
-        read: { fields: ['id', 'ownerId'], recordAccess: ['allRecords'] },
-      }),
+      {
+        resource: { type: 'database.collection', id: resourceName },
+        actions: [
+          {
+            action: 'read',
+            policy: {
+              type: 'database',
+              fields: ['id', 'ownerId'],
+              recordAccess: ['allRecords'],
+            },
+          },
+        ],
+      },
     ],
   });
   if (grantee === 'team') {
     // A membership the authorization middleware would resolve for an HTTP request.
-    authorization.subjects.define('team', {
+    authorization.subjects.add('team', {
       resolveFor: async (principal) =>
         principal.type === 'user' && principal.id === 'alice' ? ['sales'] : [],
       filterActive: async (ids) => ids,

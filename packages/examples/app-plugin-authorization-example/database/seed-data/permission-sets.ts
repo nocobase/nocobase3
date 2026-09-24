@@ -1,21 +1,21 @@
-import { permissionSet } from '@nocobase/authorization/permissions';
+import { definePermissionSet } from '@nocobase/authorization/permission-sets';
 import { encodeAuthorizationTitle } from '@nocobase/authorization/core';
 import {
   projectPage,
   quotePage,
   orderPage,
-  projectResource,
+  projectReference,
   quoteResource,
   orderResource,
 } from '../../server/sales-resources.js';
 import { label } from '../../catalog.js';
 import { timestamps, type SalesSeedContext } from './context.js';
-const projects = projectResource.reference();
+const projects = projectReference;
 const quotes = quoteResource.reference();
 const orders = orderResource.reference();
 
 export const permissionSets = [
-  permissionSet('example-sales-assistant')
+  definePermissionSet('example-sales-assistant')
     .title(label('roles.assistant'))
     .grant(
       {
@@ -33,7 +33,7 @@ export const permissionSets = [
     )
     .grant(projects.grant('view'), quotes.grant('view'), orders.grant('view'))
     .build(),
-  permissionSet('example-sales-engineer')
+  definePermissionSet('example-sales-engineer')
     .title(label('roles.engineer'))
     .grant(
       {
@@ -65,7 +65,7 @@ export const permissionSets = [
       orders.grant('view'),
     )
     .build(),
-  permissionSet('example-sales-manager')
+  definePermissionSet('example-sales-manager')
     .title(label('roles.manager'))
     .grant(
       {
@@ -90,7 +90,7 @@ export const permissionSets = [
       orders.grant('view'),
     )
     .build(),
-  permissionSet('example-sales-delivery')
+  definePermissionSet('example-sales-delivery')
     .title(label('roles.delivery'))
     .grant({
       resource: { type: 'page', id: orderPage.name },

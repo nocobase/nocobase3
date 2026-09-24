@@ -4,6 +4,14 @@ import type { LocaleResource } from '@nocobase/i18n';
  * Display vocabulary shared by the client and server locale catalogues.
  */
 const enUS = {
+  // Workspace sections this plugin registers through `authz.ui`.
+  sections: {
+    pages: 'Page permissions',
+    page: 'Pages',
+    business: 'Business permissions',
+    administration: 'Administration',
+    other: 'Other',
+  },
   options: {
     defaultAndSharing: 'Use default data scope',
     actions: {
@@ -16,11 +24,6 @@ const enUS = {
       update: 'Update',
       delete: 'Delete',
       access: 'Access',
-    },
-    resourceTypes: {
-      page: 'Pages',
-      collection: 'Database collections',
-      settings: 'Admin settings',
     },
     settingsModules: { authorization: 'Authorization' },
     pages: {

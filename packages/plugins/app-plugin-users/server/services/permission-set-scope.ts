@@ -16,7 +16,7 @@ export function createApplicationUserRoleScope(
   permissionSets: PermissionSetsApi,
 ): UserRoleScope {
   const isUnrestricted = (key: string): boolean =>
-    permissionSets.isUnrestricted(key);
+    permissionSets.protection(key)?.unrestricted === true;
   return {
     key: 'app',
     label: 'Permission sets',
@@ -154,7 +154,7 @@ async function directRoleState(
     permissionSets: sets.filter(
       ({ key }) =>
         !authenticatedDefaults.has(key) &&
-        (permissionSets.isUnrestricted(key) ||
+        (permissionSets.protection(key)?.unrestricted === true ||
           permissionSets.protection(key) === undefined),
     ),
     assignments,

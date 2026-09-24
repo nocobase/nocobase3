@@ -8,42 +8,45 @@ import { SchedulerAuthorizationProvider } from '../server/authorization.js';
 import routes from '../client/routes.js';
 
 it.each([false, true])(
-  'adds a read resource to Automation (group exists: %s)',
-  async (exists) => {
+  'extends the Automation subsection (workflow booted first: %s)',
+  async (workflowFirst) => {
     const authz = createAppAuthorization({});
-    if (exists)
-      authz.resourceGroups.add({
-        name: 'automation',
-        title: 'Automation',
-        category: 'administration',
-      });
+    const workflow = {
+      name: 'automation',
+      title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
+      parent: 'administration',
+    };
+    if (workflowFirst) authz.ui.sections.add(workflow);
+    const automation = workflowFirst
+      ? workflow
+      : {
+          ...workflow,
+          title: {
+            key: 'nav.automation',
+            ns: '@nocobase/app-plugin-scheduler',
+          },
+        };
     const container = new ServiceContainer();
     container.instance(authorizationToken, authz);
     await new SchedulerAuthorizationProvider({
       container,
     } as AppPluginApplication).boot();
+    expect(authz.ui.sections.get('automation')).toEqual(automation);
     expect(
-      authz.resourceGroups
-        .list()
-        .filter((group) => group.name === 'automation'),
-    ).toHaveLength(1);
-    expect(authz.resources.definitionsList()).toContainEqual(
-      expect.objectContaining({
-        name: 'scheduler.schedules',
-        group: 'automation',
-      }),
-    );
+      authz.resourceTypes.get('settings').items?.get('scheduler.schedules'),
+    ).toMatchObject({
+      actions: [expect.objectContaining({ name: 'read' })],
+    });
     expect(
-      authz.resources.operation('scheduler.schedules', 'read')?.grants,
-    ).toEqual([
-      {
-        resource: { type: 'settings', id: 'scheduler.schedules' },
-        actions: [{ action: 'read' }],
-      },
-    ]);
-    expect(
-      authz.resources.operation('scheduler.schedules', 'configure'),
-    ).toBeUndefined();
+      authz.ui.placementOf({ type: 'settings', id: 'scheduler.schedules' }),
+    ).toEqual({ section: 'automation' });
+    expect(authz.settings.grant('scheduler.schedules', ['read'])).toEqual({
+      resource: { type: 'settings', id: 'scheduler.schedules' },
+      actions: [{ action: 'read' }],
+    });
+    expect(() =>
+      authz.settings.grant('scheduler.schedules', ['configure']),
+    ).toThrow();
   },
 );
 

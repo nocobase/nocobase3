@@ -98,6 +98,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/orders',
     auth: 'required',
     navigation: { title: 'navigation.orders' },
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
 ]);
@@ -130,11 +131,13 @@ defineAppRoutes([
     name: 'orders',
     path: '/orders',
     navigation: { title: 'Orders' },
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders/index.js'),
     children: [
       {
         name: 'detail',
         path: ':orderId',
+        authz: 'skip',
         componentLoader: () => import('./pages/orders/detail.js'),
       },
     ],
@@ -157,6 +160,7 @@ defineAppRoutes([
         name: 'orders',
         path: '/orders',
         navigation: { title: 'Orders' },
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
         componentLoader: () => import('./pages/orders.js'),
       },
     ],
@@ -194,9 +198,9 @@ defineSettingsRoutes([
 ]);
 ```
 
-`authz` 的值是 `'skip'` 或一个 `{ resource: { type, id }, action }` 对象，用来指定要检查的资源和操作。例如，`{ resource: { type: 'settings', id: 'orders' }, action: 'read' }` 表示检查当前用户是否有读取订单设置页的权限。设置页声明权限请求后，客户端会在加载页面组件前执行这项检查；`authz: 'skip'` 仅跳过当前页面的权限检查，不跳过登录和父级检查。
+每个页面路由都必须声明 `authz`，值是 `'skip'` 或一个 `{ resource: { type, id }, action }` 对象，用来指定要检查的资源和操作；系统不会根据路由名称推断，缺少 `authz` 的页面在注册时报错。例如，`{ resource: { type: 'settings', id: 'orders' }, action: 'read' }` 表示检查当前用户是否有读取订单设置页的权限。客户端会在加载页面组件前执行这项检查；`authz: 'skip'` 仅跳过当前页面的权限检查，不跳过登录和父级检查。
 
-检查被拒绝时，页面不会出现在设置导航中，直接访问它的 URL 也不会加载页面组件。没有声明 `authz` 的设置页不执行这项客户端权限检查，对所有能进入设置区域的登录用户开放。`authz` 只控制客户端页面，页面调用的服务端接口仍需自行完成认证和权限校验。
+检查被拒绝时，页面不会出现在设置导航中，直接访问它的 URL 也不会加载页面组件。设置页没有默认权限：声明它所属的设置项，或者对所有登录用户都可打开的页面显式声明 `'skip'`。`authz` 只控制客户端页面，页面调用的服务端接口仍需自行完成认证和权限校验。
 
 ### 开发页
 
@@ -208,6 +212,7 @@ defineDevRoutes([
     name: 'inspect',
     path: '/inspect',
     navigation: { title: 'navigation.inspect' },
+    authz: 'skip',
     componentLoader: () => import('./pages/inspect.js'),
   },
 ]);
@@ -215,7 +220,7 @@ defineDevRoutes([
 
 开发页在生产环境中会被移除，也不会被包含进构建产物。
 
-开发页也可以声明 `authz: { resource: { type, id }, action }`。在开发环境中，客户端会在加载页面前检查这项权限；没有权限时，页面不会出现在开发导航中，直接访问 URL 也不会加载组件。
+开发页同样必须声明 `authz`，可以是 `'skip'` 或 `{ resource: { type, id }, action }`。声明权限请求时，客户端会在开发环境中加载页面前检查这项权限；没有权限时，页面不会出现在开发导航中，直接访问 URL 也不会加载组件。
 
 ## 路由之间不会自动配对
 

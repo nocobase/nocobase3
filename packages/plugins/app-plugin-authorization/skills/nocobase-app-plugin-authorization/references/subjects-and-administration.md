@@ -2,10 +2,10 @@
 
 ## Inherited teams or departments
 
-Register the type through `authz.subjects.define('sales.team', { resolveFor, filterActive, administration })` in provider boot and release it on shutdown. `resolveFor(principal)` returns membership IDs from the authoritative team service; `filterActive(ids, transaction?)` excludes inactive/deleted teams. Use the passed transaction when reading validity during protected assignment changes. The complete registration below follows the current sales example. It assumes the feature owns `salesTeams` (id, title, active) and `salesTeamMembers` (userId, teamId); adapt those table names to the customer model.
+Register the type through `authz.subjects.add('sales.team', { resolveFor, filterActive, administration })` in provider boot and call the function it returns on shutdown. `resolveFor(principal)` returns membership IDs from the authoritative team service; `filterActive(ids, transaction?)` excludes inactive/deleted teams. Use the passed transaction when reading validity during protected assignment changes. The complete registration below follows the current sales example. It assumes the feature owns `salesTeams` (id, title, active) and `salesTeamMembers` (userId, teamId); adapt those table names to the customer model.
 
 ```ts
-import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization';
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import { buildFilter } from '@nocobase/repository-input';
 
@@ -13,10 +13,10 @@ export const TEAM_SUBJECT = 'sales.team';
 const TEAMS = 'salesTeams';
 
 export function registerSalesTeams(
-  authz: AppAuthorizationService,
+  authz: AppAuthorization,
   database: DatabaseManager,
 ): () => void {
-  return authz.subjects.define<DatabaseConnection>(TEAM_SUBJECT, {
+  return authz.subjects.add<DatabaseConnection>(TEAM_SUBJECT, {
     async resolveFor(principal) {
       if (principal.type !== 'user') return [];
       const memberships = await database
@@ -112,9 +112,9 @@ The rule mechanisms below are optional. Follow [capability discovery](optional-c
 | Every holder can consult public reference records  | Default access                 | Baseline does not unintentionally widen write scope                      |
 | A selected team collaborates on a delegated record | Sharing rule                   | Grant each necessary action/scope, including parent access               |
 | Confidential records must remain excluded          | Restriction rule               | Sharing and additional sets cannot reopen them at the protected boundary |
-| A record's ownership follows its project           | Custom record-access strategy  | Actual parent/membership data determines scope                           |
+| A record's ownership follows its project           | Custom record access           | Actual parent/membership data determines scope                           |
 
-Positive scopes from permission sets, defaults and sharing combine; restrictions intersect them. An empty configured scope can still obtain defaults/sharing. A restriction is the set of records still allowed, not a list of records to deny. Business rules match resource/action/scope branches; collection restrictions cover all branches. Relation targets do not automatically inherit standalone target restrictions. Root/unrestricted users bypass these constraints, so they are unsuitable for testing ordinary boundaries.
+Positive selections from permission sets, default access and sharing combine; restrictions intersect them. A grant whose data scope selects nothing can still obtain default access and sharing. A restriction is the set of records still allowed, not a list of records to deny. A rule on a composite matches one action and data scope branch; a rule on a `database.collection` covers every branch. Relation targets do not automatically inherit standalone target restrictions. Root/unrestricted users bypass these constraints, so they are unsuitable for testing ordinary boundaries.
 
 Use each installed rule Skill for integration, APIs and initialization. Runtime routes use these services, not direct table writes. Controlled installation seeds follow [code and seeds](code-and-seeds.md). Do not add a parallel roles implementation or silently enable an absent plugin.
 
@@ -122,24 +122,24 @@ Use each installed rule Skill for integration, APIs and initialization. Runtime 
 
 Use `create`, `update`, `assign`, `revoke` and `replaceSubjectAssignments`; updates contain the complete definition. For user-management editors, pass the explicit `managedPermissionSets` subset so unrelated assignments survive. Let ordinary administrators use the existing permission workspace rather than creating a second editor.
 
-Code-owned sets can declare `protect({ owner, keys, allow, requireActiveAssignment, assignableTo, unrestricted })`. Generic management enforces protection and forbids changing protected keys, including renaming another set onto a protected key. Default-set title and grant edits remain available when allowed. Trusted owner APIs intentionally bypass generic write protection; explicitly call `assertWritable` when exposing another management surface. Root is unrestricted and assignable only to user accounts in the App integration.
+Code-owned sets can declare `authz.permissionSets.protect({ owner, keys, allow, requireActiveAssignment, assignableTo, unrestricted })`. Generic management enforces protection and forbids changing protected keys, including renaming another set onto a protected key. Default-set title and grant edits remain available when allowed. Trusted owner APIs intentionally bypass generic write protection; explicitly call `assertWritable` when exposing another management surface. Root is unrestricted and assignable only to user accounts in the App integration.
 
-`revoke` and `replaceSubjectAssignments` automatically transact with the database Store. For disabling/deleting a user, bind `permissionSets.withTransaction(connection)`, call `assertSubjectRemovable(subject)`, and perform the user mutation in that same transaction. Publish `notifyAssignmentsChanged(subject)` only after successful commit. The bound API does not notify for you. Test simultaneous removals as well as the single remaining administrator; the invariant is at least one active assignment, not merely one stored row.
+`revoke` and `replaceSubjectAssignments` run in the database store's transaction. For disabling or deleting a user, bind `authz.permissionSets.withTransaction(connection)`, call `assertSubjectRemovable(subject)`, and perform the user mutation in that same transaction. Publish `notifyAssignmentsChanged(subject)` only after successful commit. The bound API does not notify for you. Test simultaneous removals as well as the single remaining administrator; the invariant is at least one active assignment, not merely one stored row.
 
 ## Settings development
 
-Administration resources belong to a flat `administration` group and compose `authz.settings.grant(id, actions)`. Separate read from configure/create/update/delete/assign capabilities according to actual operations. Client settings route checks and each server endpoint must use the matching `settings` ID/action. Registration exposes configuration; a permission-set assignment grants it.
+An administration surface is a settings item: register it with `authz.settings.add({ id, title, section?, actions })`, grant it with `authz.settings.grant(id, actions)`, declare `authz: { resource: { type: 'settings', id }, action }` on its settings route and check the matching action on every endpoint. Separate read from create, update, delete and other write actions according to actual operations. Registration makes the item grantable; a permission-set assignment grants it.
 
-Use the existing shared client/management and server/management exports for option and subject selection when building an authorization extension. Resolve the application API client inside hooks/components; never create a module-level fallback client. Keep the resource owner responsible for validation, translations, transactions and persistence.
+When building an authorization extension, such as a rule plugin, use the exported `@nocobase/app-plugin-authorization/client/management` components and `@nocobase/app-plugin-authorization/server/extension` helpers: `requireSettings(authorization, id, action)` with the full settings id, `createRuleSupportRoutes(authz, rule)` for options, subjects and records, and `authz.routes.add(path, createRouteHandler(router))`. Resolve the application API client inside hooks and components; never create a module-level fallback client. Keep the owner responsible for validation, translations, transactions and persistence.
 
-Follow the bundled [client and settings workflow](client-development.md#settings-screens) and [administration API](runtime-api.md#administration-resources). These instructions are available in the installed App without repository-only documentation.
+Follow the bundled [client and settings workflow](client-development.md#settings-screens) and [settings items](runtime-api.md#settings-items).
 
 ## Diagnose and accept
 
-1. Check installed plugins, resource/collection registration and action/scope spelling.
+1. Check installed plugins, collection and composite registration, and action and data scope spelling. A catalog item or action nobody registered is denied with `RESOURCE_ACTION_NOT_SUPPORTED`.
 2. Inspect the verified principal, authenticated audience, active memberships and effective permission-set assignments.
-3. Evaluate the same resource/action as the endpoint with the request scope's `explain`/`authorize`, including params when required.
-4. Inspect each table's policy and the applied default/sharing/restriction sources. Confirm the endpoint binds those policies rather than recomputing broader ones.
+3. Evaluate the same resource and action as the endpoint with the request context's `authorize`, including params when required, and read its `reasons`.
+4. Inspect each collection's policy and the applied default/sharing/restriction sources. Confirm the endpoint binds those policies rather than recomputing broader ones.
 5. Inspect workflow state and relation target constraints separately from the grant decision.
 
-The Settings inspector requires `settings/authorization.inspector/inspect`. It reports decisions and sources, not accessible-record counts. Client snapshots and configured-permission shields indicate visibility/configuration, not proof that a particular record can be changed. Include direct API denials, revocation, rollback, session switching and pending checks in acceptance evidence.
+The Settings inspector requires `settings:authorization.inspector` `inspect`. It reports decisions and sources, not accessible-record counts. Client snapshots and configured-permission shields indicate visibility/configuration, not proof that a particular record can be changed. Include direct API denials, revocation, rollback, session switching and pending checks in acceptance evidence.

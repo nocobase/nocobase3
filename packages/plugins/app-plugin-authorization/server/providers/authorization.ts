@@ -1,4 +1,5 @@
 import { databaseManagerToken } from '@nocobase/db';
+import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   ServiceProvider,
@@ -10,13 +11,14 @@ import {
   type RealtimeUserTopic,
 } from '@nocobase/app-server/realtime';
 
-import { createAppAuthorization } from '../authorization.js';
-import type { AuthorizationConfig } from '../authorization.js';
 import {
-  authorizationToken,
-  permissionSetsToken,
-  type AppAuthorizationService,
-} from '../tokens.js';
+  createAppAuthorization,
+  type AppAuthorization,
+  type AuthorizationConfig,
+} from '../authorization.js';
+import { authorizationToken } from '../tokens.js';
+import { reportAuthorizationUi } from '../ui.js';
+import { reportStoredGrants, storedGrantProblems } from '../stored-grants.js';
 import {
   AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
   AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
@@ -29,7 +31,7 @@ export class AuthorizationProvider<
     AuthorizationProviderApplication,
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-authorization';
-  private instance?: AppAuthorizationService;
+  private instance?: AppAuthorization;
   private permissionsChangedTopic?: RealtimeUserTopic<{
     readonly type: 'permissions-changed';
   }>;
@@ -41,14 +43,9 @@ export class AuthorizationProvider<
     this.app.container.singleton(authorizationToken, (container) =>
       this.authorization(container),
     );
-    this.app.container.singleton(
-      permissionSetsToken,
-      (container) => this.authorization(container).permissionSets,
-    );
   }
 
-  /** Both tokens name one instance, so the provider owns it rather than a binding. */
-  private authorization(container: ServiceResolver): AppAuthorizationService {
+  private authorization(container: ServiceResolver): AppAuthorization {
     this.instance ??= createAppAuthorization({
       database: container.has(databaseManagerToken)
         ? container.resolve(databaseManagerToken)
@@ -67,8 +64,21 @@ export class AuthorizationProvider<
           type: 'permissions-changed',
         });
       },
+      onInvalidGrant: (grant) =>
+        this.warn(
+          `Authorization: skipped a grant from ${grant.source.plugin}:${grant.source.id} on ${grant.resource.type}:${grant.resource.id}.${grant.action}, which no longer applies: ${grant.reason}`,
+        ),
     });
     return this.instance;
+  }
+
+  private warn(message: string): void {
+    if (this.app.container.has(loggingToken))
+      this.app.container
+        .resolve(loggingToken)
+        .getLogger('authorization')
+        .warn(message);
+    else console.warn(message);
   }
 
   public override boot(): Promise<void> {
@@ -85,6 +95,34 @@ export class AuthorizationProvider<
         });
     }
     return Promise.resolve();
+  }
+
+  /**
+   * Every provider has booted, so every plugin has placed its resources:
+   * check the workspace placements once. Errors throw in development and are
+   * logged in production.
+   */
+  public override async start(): Promise<void> {
+    if (!this.app.container.has(authorizationToken)) return;
+    const authz = this.app.container.resolve(authorizationToken);
+    const options = {
+      production: process.env.NODE_ENV === 'production',
+      warn: (message: string) => this.warn(message),
+    };
+    const report = authz.ui.validate(authz);
+    reportAuthorizationUi(
+      {
+        errors: report.errors,
+        warnings: [
+          ...report.warnings,
+          ...authz.database.collections.warnings(),
+        ],
+      },
+      options,
+    );
+    // Stored grants live in the database; without one there is nothing to scan.
+    if (this.app.container.has(databaseManagerToken))
+      reportStoredGrants(await storedGrantProblems(authz), options);
   }
 
   public override shutdown(): Promise<void> {

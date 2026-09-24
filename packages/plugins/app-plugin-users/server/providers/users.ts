@@ -2,7 +2,7 @@ import { createApplicationUserRoleScope } from '../services/permission-set-scope
 import { databaseManagerToken } from '@nocobase/db';
 import {
   authorizationToken,
-  permissionSetsToken,
+  grantBacked,
 } from '@nocobase/app-plugin-authorization';
 import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
@@ -46,8 +46,8 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
     this.app.container.singleton(userManagementServiceToken, (resolver) => {
       // An application may be assembled without authorization; user
       // management still works, it just has no assignments to protect.
-      const permissionSets = resolver.has(permissionSetsToken)
-        ? resolver.resolve(permissionSetsToken)
+      const permissionSets = resolver.has(authorizationToken)
+        ? resolver.resolve(authorizationToken).permissionSets
         : undefined;
       return createUserManagementService({
         database: resolver.resolve(databaseManagerToken),
@@ -66,22 +66,23 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   public override boot(): Promise<void> {
     if (
       !this.releasePermissionSetScope &&
-      this.app.container.has(permissionSetsToken) &&
+      this.app.container.has(authorizationToken) &&
       this.app.config.get<UsersConfig>('users')?.permissionSets !== false
     ) {
       this.releasePermissionSetScope = this.app.container
         .resolve(userRoleScopeRegistryToken)
         .register(
           createApplicationUserRoleScope(
-            this.app.container.resolve(permissionSetsToken),
+            this.app.container.resolve(authorizationToken).permissionSets,
           ),
         );
     }
-    // An application may be assembled without authorization.
-    if (!this.app.container.has(authorizationToken)) return Promise.resolve();
+    // An application may be assembled without authorization, and boot may run twice.
+    if (!this.app.container.has(authorizationToken) || this.releaseSubjectType)
+      return Promise.resolve();
     const authorization = this.app.container.resolve(authorizationToken);
     // A disabled account can no longer act, so it holds nothing any more.
-    this.releaseSubjectType = authorization.subjects.define<DatabaseConnection>(
+    this.releaseSubjectType = authorization.subjects.add<DatabaseConnection>(
       'user',
       {
         filterActive: (ids, connection) => this.enabledUserIds(ids, connection),
@@ -132,60 +133,23 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
     const scopes = this.app.container.has(userRoleScopeRegistryToken)
       ? this.app.container.resolve(userRoleScopeRegistryToken)
       : undefined;
+    // A record type: the id is a user, and `delete` exists only while a role
+    // scope can clean a deleted user up.
     authorization.resourceTypes.add({
-      resourceType: 'user',
-      async authorize(request, context) {
-        if (
-          !USER_ACTIONS.has(request.action) ||
-          (request.action === 'delete' &&
-            !scopes
-              ?.list()
-              .some(
-                (scope) =>
-                  typeof scope.assertCanDelete === 'function' &&
-                  typeof scope.onDelete === 'function',
-              ))
-        ) {
-          return {
-            effect: 'deny',
-            reasons: [
-              {
-                code: 'USER_ACTION_NOT_SUPPORTED',
-                message: `User authorization does not support action "${request.action}"`,
-                plugin: '@nocobase/app-plugin-users',
-              },
-            ],
-          };
-        }
-        const grants = await context.grants.resolve({
-          principal: request.principal,
-          subjects: request.subjects,
-          resource: request.resource,
-          action: request.action,
-        });
-        const staticGrants = grants.filter(
-          (grant) => grant.policy === undefined,
-        );
-        return staticGrants.length > 0
-          ? {
-              effect: 'permit',
-              reasons: staticGrants.map((grant) => ({
-                code: 'USER_ACCESS_GRANTED',
-                message: `${grant.source.plugin}:${grant.source.id} allows user access`,
-                plugin: '@nocobase/app-plugin-users',
-              })),
-            }
-          : {
-              effect: 'deny',
-              reasons: [
-                {
-                  code: 'USER_ACCESS_DENIED',
-                  message: 'User access is not allowed',
-                  plugin: '@nocobase/app-plugin-users',
-                },
-              ],
-            };
-      },
+      type: 'user',
+      actions: [...USER_ACTIONS],
+      authorize: grantBacked({
+        also: async (request) =>
+          request.action !== 'delete' ||
+          (scopes
+            ?.list()
+            .some(
+              (scope) =>
+                typeof scope.assertCanDelete === 'function' &&
+                typeof scope.onDelete === 'function',
+            ) ??
+            false),
+      }),
     });
     return Promise.resolve();
   }

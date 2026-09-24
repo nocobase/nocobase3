@@ -14,7 +14,6 @@ import {
 import {
   createAppAuthorization,
   authorizationToken,
-  permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
 import usersPlugin, {
   userManagementServiceToken,
@@ -332,7 +331,7 @@ describe('Hub role API permissions', () => {
     async (role) => {
       const snapshot = await authorization
         .for({ principal: { type: 'user', id: role } })
-        .permissions();
+        .snapshot();
       const container = new ServiceContainer();
       container.instance(apiClientToken, {
         request: vi.fn().mockResolvedValue({ data: snapshot }),
@@ -541,7 +540,6 @@ function createRoleApplication(
     },
   } as unknown as Auth);
   container.instance(authorizationToken, authorization);
-  container.instance(permissionSetsToken, authorization.permissionSets);
   container.instance(hubServiceToken, hub);
   container.instance(userManagementServiceToken, users);
   return createApplication(container);
@@ -551,7 +549,10 @@ function createApplication(container: ServiceContainer): AppPluginApplication {
   return {
     appName: 'hub',
     publicBasePath: '',
-    config: {} as AppPluginApplication['config'],
+    // As the Hub template configures it: the Hub owns role assignment.
+    config: {
+      get: () => ({ permissionSets: false }),
+    } as unknown as AppPluginApplication['config'],
     paths: {} as AppPluginApplication['paths'],
     router: {} as AppPluginApplication['router'],
     container,

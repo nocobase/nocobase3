@@ -91,6 +91,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'orders',
     path: '/orders',
     auth: 'required',
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
 ]);
@@ -106,7 +107,7 @@ Use `defineSettingsRoutes()` for administrative pages, which mount under `/setti
 
 Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For URL-addressable dialogs and drawers, declare the child in `defineAppRoutes()` in `client/routes.ts`, place the owning page's `Outlet`, then render `RouteDialog` or `RouteDrawer`. Call `useRouteOverlay()` only from a descendant rendered inside the overlay, including its footer, never from the page returning the wrapper. Read `.agents/skills/nocobase-app-development/references/frontend/references/overlay.md` before implementing overlays or close guards.
 
-`authz` controls page authorization: use `{ resource: { type: 'page', id: 'orders' }, action: 'access' }` or `'skip'`. Without an explicit rule, authenticated App pages with no page ancestor check their route name as a page resource; child pages, Settings, Dev, guest and optional pages add no check. Parent guards still apply when a child skips. Menus and loaders use the same normalized rule; endpoints enforce authorization independently. Route names identify stored page grants, so renaming one requires migrating grants that reference it.
+Every page route, on every surface and at every depth, declares `authz`: `{ resource: { type: 'page', id: 'orders' }, action: 'access' }` for a product page, the page's `settings` item for a settings page, or `'skip'`. Nothing is inferred from the route name, and registration rejects a page without it. Parent guards still apply when a child skips. Menus and loaders read the declared rule; endpoints enforce authorization independently. The page id identifies stored page grants, so changing it requires migrating the grants that reference it.
 
 ### Components and styling
 

@@ -60,7 +60,7 @@ Write the logic a page needs (loading data, the search box, error checks) direct
 - **Calling `useRouteOverlay()` in the component that renders the overlay**: it can be called only from a child component inside `RouteDialog`/`RouteDrawer` (see `references/overlay.md`).
 - **Overwriting the routes file**: append to the existing array in `client/routes.ts`; do not replace the whole file, or the home page and the sign-in page disappear with it.
 - **Forgetting to update the route test**: `tests/logic/client-routes.test.ts` pins the route names of pages that require sign-in. After adding such a page (including a child route), add its name there, or the test fails (see section 12 of `references/page.md`).
-- **Regular users cannot see the page**: a route without `authz` requires an access grant on `page:<name>` by default; for a page every signed-in user can use, write `authz: 'skip'` (see `references/page.md`).
+- **Missing `authz`**: every page, including child routes, declares `authz`; registration rejects one without it. For a page every signed-in user can use, write `authz: 'skip'`; otherwise check `{ resource: { type: 'page', id }, action: 'access' }` (see `references/page.md`).
 - **Hard-coded colors or copy**: see `references/styling.md` and `references/i18n.md`.
 - **Prefixes in endpoint paths**: the `path` passed to `api.request` includes neither `/api` nor `/main`.
 - **Type errors from `useForm`**: do not write `useForm<z.infer<typeof schema>>`; let it infer the type from `zodResolver(schema)` (see `references/form.md`).

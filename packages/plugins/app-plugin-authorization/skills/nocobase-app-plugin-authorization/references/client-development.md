@@ -1,12 +1,12 @@
 # Client routes, action visibility and record eligibility
 
-Use the sales example's three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. The overview is an authenticated demonstration guide; its `authz: 'skip'` is not a pattern for business pages.
+Use the sales example's three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. Every client route declares `authz`; nothing is inferred from the route name. The overview is an authenticated demonstration guide that declares `authz: 'skip'`, which is not a pattern for business pages.
 
 ## Register the runtime first
 
 Register the main authorization client factory and server plugin alongside authentication. The authorization React provider depends on the authentication provider; retain their normal composition order. A package dependency alone does not activate either side. Optional rule screens require their owning installed Skills; follow [capability discovery](optional-capabilities.md) before using them. See [runtime setup](runtime-api.md).
 
-Application-owned pages belong in the App's `client/routes.ts` and page modules. A reusable plugin contributes routes through its client declaration. Use stable page IDs that match server registration and the permission-set page grant:
+Application-owned pages belong in the App's `client/routes.ts` and page modules. A reusable plugin contributes routes through its client declaration. Use stable page ids that match the permission-set page grant:
 
 ```ts
 import { defineAppRoutes } from '@nocobase/app-client/plugins';
@@ -23,7 +23,7 @@ export default defineAppRoutes([
 ]);
 ```
 
-The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. The management UI discovers grantable pages from the client's normalized route declarations. Registering the same stable page ID server-side with `authz.pages.add({ name: 'sales.quotes', title, actions: ['access'] })` also supplies metadata to server consumers; server registration is not required for client page discovery. The page and business permission categories remain visible when empty and explain how to ask AI to develop their resources; those placeholders grant no access. Page navigation groups come from client navigation, whereas business and administration groups come from `resourceGroups`. A page grant opens an entry; business data needs its own action grants.
+The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. A page route without `authz` is rejected at registration; declare `'skip'` explicitly for a page that needs no check beyond sign-in, and remember that `'skip'` does not bypass parent guards. The permission workspace lists every route whose `authz` checks `page` `access`, under the Pages entry with its navigation groups as resource groups, from the client route tree in menu order; there is no server page registration. `authz.pages.grant('sales.quotes')` builds the matching grant for seeds and provisioning. Composites and settings items are listed under the subsections the server places them in with `authz.ui.place` (subsections are added with `authz.ui.sections.add`), or under their default section's "Other". A page grant opens an entry; business data needs its own action grants, and renaming a page id orphans the grants that reference it.
 
 ## Check feature visibility
 
@@ -31,7 +31,7 @@ The page module default-exports a React component. Translate the navigation key 
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 
 const permission = useCan({
-  resource: { type: 'resource', id: 'sales.quotes' },
+  resource: { type: 'composite', id: 'sales.quotes' },
   action: 'submit',
 });
 // permission: { can, isPending, error, retry }
@@ -39,7 +39,7 @@ const permission = useCan({
 
 Call Hooks inside a component or custom Hook. While pending or failed, `can` is false; show a loading state or retryable permission error without exposing stale actions. `{ enabled: false }` as the second argument skips a check. Never call Hooks conditionally. A successful check means the feature is granted, not that a particular quote can be submitted.
 
-React code can obtain the shared client with `useAuthorizationClient()`. Outside React, resolve `authorizationClientToken` from the App container and call `client.can({ resource, action })`. `useAuthorizationRevision()` supports custom state that must reload on invalidation. Avoid a module-global client or permission response surviving an identity change. The standard provider and `useCan` already handle session invalidation; do not duplicate snapshot caching.
+React code can obtain the shared client with `useAuthorizationClient()`. Outside React, resolve `authorizationClientToken` from the App container and call `client.can({ resource, action })`. `useAuthorizationRevision()` supports custom state that must reload on invalidation. Avoid a module-global client or permission response surviving an identity change. The standard provider and `useCan` already handle session invalidation; do not duplicate snapshot caching. After a change that affects permissions, call `client.invalidate()` so the next check reloads `snapshot()`.
 
 ## Obtain row eligibility from the server
 
@@ -61,7 +61,7 @@ export function SubmitQuote({
 }) {
   const api = useApiClient();
   const access = useCan({
-    resource: { type: 'resource', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     action: 'submit',
   });
   const [pending, setPending] = useState(false);
@@ -140,10 +140,10 @@ These are demonstration IDs; fetch actual options in a customer App. Never expos
 
 ## Settings screens
 
-Use `defineSettingsRoutes` with a stable `settings` resource ID/action, a lazy page module and navigation keys. Do not put `/settings` in its declared path. Register corresponding administration actions on the server and check read/mutation capabilities separately in endpoints. Existing permission-set and rule screens already provide assignment and scope editing; reuse them rather than building another editor.
+Use `defineSettingsRoutes` with a lazy page module, navigation keys and `authz: { resource: { type: 'settings', id }, action: 'read' }` naming a settings item registered on the server with `authz.settings.add`. Every settings route states `authz`; there is no default. Do not put `/settings` in its declared path. Check read and each write action separately in the endpoints. Existing permission-set and rule screens already provide assignment and data scope editing; reuse them rather than building another editor.
 
-For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save/error states. Read-only access should render data without writable controls. Options/search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; the example's team authorization picker relies on existing management permissions.
+For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save and error states. Read-only access renders data without writable controls. Options and search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; the example's team picker relies on existing management permissions.
 
-Verify menu and direct URL behavior, no-grant/page-only/action-only cases, pending/failed checks, session switching, out-of-scope rows, stale transitions, relation target constraints and post-save refresh. Perform actual API requests as ordinary users in addition to UI checks.
+Verify menu and direct URL behavior, no-grant, page-only and action-only cases, pending and failed checks, session switching, out-of-scope rows, stale transitions, relation target constraints and post-save refresh. Perform actual API requests as ordinary users in addition to UI checks.
 
-Settings routes and their standalone detail routes use the relevant `settings` capability, never `page/access`. Their grants belong to composed administration resources. Do not add the Settings route tree to ordinary page discovery, and do not infer authorization ownership solely from whether a route was declared with `defineAppRoutes`.
+Settings routes and their standalone detail routes check the relevant `settings` item, never `page` `access`, so they are not listed as pages in the permission workspace.

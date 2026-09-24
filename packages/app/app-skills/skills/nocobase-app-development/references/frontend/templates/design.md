@@ -5,7 +5,7 @@
 | Status        | Draft / Pending review / Confirmed                                                     |
 | Routes        | `/<path>`; child routes: `/<path>/:id` (detail drawer) …                               |
 | Navigation    | Sidebar menu "[name]", icon `<LucideIcon>`; or: not shown in navigation                |
-| Permissions   | All signed-in users (`authz: 'skip'`) / requires the page grant `page:<name>`          |
+| Permissions   | All signed-in users (`authz: 'skip'`) / requires the page grant `page:<id>`            |
 | Page template | `ui-guidelines.md` T1 list page / T2 detail view / T3 form / T4 settings page          |
 | Confirmation  | Confirmed by the user on [date] / the user authorized skipping confirmation in advance |
 

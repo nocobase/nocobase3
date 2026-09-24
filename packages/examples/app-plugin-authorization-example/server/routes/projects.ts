@@ -7,7 +7,7 @@ import { defineRepositoryApiRoutes } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
 import { PROJECTS } from '../sales-authorization.js';
-import { projectResource } from '../sales-resources.js';
+import { projectReference } from '../sales-resources.js';
 import { editableValues } from './mutations.js';
 
 const repositoryRoutes = defineRepositoryApiRoutes({
@@ -43,9 +43,9 @@ export async function createProjectRoutes(
 
   router.use(
     '*',
-    authz.db.authorizeRepository({
+    authz.database.authorizeRepository({
       repository: 'salesProjects',
-      resource: projectResource.reference(),
+      resource: projectReference,
       actions: {
         findMany: 'view',
         findOne: 'view',

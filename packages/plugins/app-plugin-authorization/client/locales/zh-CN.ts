@@ -3,6 +3,7 @@ import type { AuthorizationResource } from './en-US.js';
 
 const zhCN: AuthorizationResource = {
   options: optionMessages.options,
+  sections: optionMessages.sections,
   navigation: {
     authorization: '权限管理',
     permissionSets: '权限集',
@@ -150,11 +151,6 @@ const zhCN: AuthorizationResource = {
   },
   permissionWorkspace: {
     pageAccessHint: '页面权限控制能否进入页面，数据操作由业务权限控制。',
-    categories: {
-      business: '业务权限',
-      pages: '页面权限',
-      administration: '系统管理',
-    },
     specifyScope: '指定{{scope}}的范围',
     inheritScope: '未指定时，仍遵循已配置的默认数据范围、共享及限制规则。',
     configurePermission: '配置权限',
@@ -240,12 +236,12 @@ const zhCN: AuthorizationResource = {
       error: '检查失败',
     },
     reasonCodes: {
-      PAGE_ACCESS_GRANTED: '已授予页面访问权限',
-      PAGE_ACCESS_DENIED: '尚未授予页面访问权限',
+      NO_MATCHING_GRANT: '尚未授予此操作',
+      RESOURCE_ACTION_NOT_SUPPORTED: '该资源不提供此操作',
       USER_CONTEXT_REQUIRED: '此范围依赖具体用户，无法仅根据授权对象计算。',
       GRANT_MATCHED: '已授予此操作',
-      SCOPE_EXPANDED: '扩展可访问记录范围',
-      SCOPE_RESTRICTED: '限制可访问记录范围',
+      SELECTION_EXPANDED: '扩展可访问记录范围',
+      SELECTION_RESTRICTED: '限制可访问记录范围',
       NO_OBJECT_PERMISSION: '尚未授予此操作',
       NO_RECORD_ACCESS: '没有可访问的记录范围',
       UNRESTRICTED_ACCESS: '拥有不受限的访问权限',

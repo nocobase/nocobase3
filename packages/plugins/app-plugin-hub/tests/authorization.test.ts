@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PermissionSetLastAssignmentError,
   type PermissionSetsAuthorizationApi,
-} from '@nocobase/authorization/permissions';
+} from '@nocobase/authorization/permission-sets';
 
 import {
   createHubUserRoleScope,

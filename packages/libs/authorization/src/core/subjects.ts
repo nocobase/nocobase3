@@ -47,12 +47,13 @@ export interface AuthorizationSubjectType<
 export class AuthorizationSubjectRegistry {
   private readonly types = new Map<string, AuthorizationSubjectType<unknown>>();
 
-  define<TTransaction = unknown>(
+  /** Returns a function that removes the type again. */
+  add<TTransaction = unknown>(
     type: string,
     definition: AuthorizationSubjectType<TTransaction>,
   ): () => void {
     if (this.types.has(type)) {
-      throw new Error(`Authorization subject type already defined: ${type}`);
+      throw new Error(`Authorization subject type already registered: ${type}`);
     }
     this.types.set(type, definition);
     return (): void => {

@@ -1,65 +1,68 @@
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import {
-  defaultAccess as rulePlugin,
+  defaultAccessPlugin,
   type DefaultAccessAuthorizationApi,
   type DefaultAccessStore,
 } from '@nocobase/authorization/default-access';
 import {
-  DatabaseConnectionHandle,
-  settingsApi,
-} from '@nocobase/app-plugin-authorization/server/management';
+  AUTHORIZATION_SETTINGS_SECTION,
+  type DatabaseAuthorizationApi,
+  type SettingsAuthorizationApi,
+  type UiAuthorizationApi,
+} from '@nocobase/app-plugin-authorization/server';
+import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/extension';
+import {
+  createDefaultAccessHandler,
+  DEFAULT_ACCESS_RULE,
+  DEFAULT_ACCESS_SETTINGS,
+} from './handler.js';
 import { DatabaseDefaultAccessStore } from './stores/default-access.js';
+
+const NAMESPACE = '@nocobase/app-plugin-authz-default-access';
+const APP_NAMESPACE = '@nocobase/app-plugin-authorization';
 
 export interface DefaultAccessOptions {
   store?: DefaultAccessStore<DatabaseConnection>;
 }
 
+/** The configuration factory: default access with its settings item and routes. */
 export function defaultAccess(
   options: DefaultAccessOptions = {},
 ): AuthorizationPlugin<
   DefaultAccessAuthorizationApi<DatabaseConnection>,
-  DatabaseConnection
+  DatabaseConnection,
+  SettingsAuthorizationApi & DatabaseAuthorizationApi & UiAuthorizationApi
 > {
-  const connection = new DatabaseConnectionHandle('DefaultAccess');
-  const plugin = rulePlugin<DatabaseConnection>({
+  const connection = new DatabaseConnectionHandle('Default Access');
+  const plugin = defaultAccessPlugin<DatabaseConnection>({
     store: options.store ?? new DatabaseDefaultAccessStore(connection.resolve),
   });
   return {
     ...plugin,
+    dependencies: ['settings', 'database', 'ui'],
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);
-      authz.resources.add({
-        name: 'authorization.default-access',
-        group: 'authorization',
-        title: {
-          key: 'resourceTitle',
-          ns: '@nocobase/app-plugin-authz-default-access',
-        },
-        actions: [
-          {
-            name: 'read',
-            title: {
-              key: 'options.actions.read',
-              ns: '@nocobase/app-plugin-authorization',
-            },
-            grants: [
-              settingsApi.grant('authorization.default-access', ['read']),
-            ],
-          },
-          {
-            name: 'configure',
-            title: {
-              key: 'options.actions.configure',
-              ns: '@nocobase/app-plugin-authorization',
-            },
-            grants: [
-              settingsApi.grant('authorization.default-access', ['configure']),
-            ],
-          },
-        ],
+      authz.settings.add({
+        id: DEFAULT_ACCESS_SETTINGS,
+        title: { key: 'resourceTitle', ns: NAMESPACE },
+        actions: ['read', 'create', 'update', 'delete'].map((name) => ({
+          name,
+          title: { key: `options.actions.${name}`, ns: APP_NAMESPACE },
+        })),
       });
+      authz.ui.place(
+        { type: 'settings', id: DEFAULT_ACCESS_SETTINGS },
+        { section: AUTHORIZATION_SETTINGS_SECTION },
+      );
+      authz.routes.add(
+        `/${DEFAULT_ACCESS_RULE}`,
+        createDefaultAccessHandler(
+          authz,
+          plugin.authorizationApi!.defaultAccess,
+        ),
+      );
     },
   };
 }

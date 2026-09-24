@@ -9,7 +9,7 @@ For the basic rules on route fields, `auth`, `authz`, menus and breadcrumbs, see
 - **Child routes go in the parent route's `children`**, declared in `client/routes.ts`, not in page component files.
 - A child route's `path` is relative to its parent and is appended to the parent's path. A leading `/` is stripped before joining, so `new` and `/new` behave the same; this handbook writes the form without `/`.
 - **The parent page must place `<Outlet />` itself**, where the child content should appear. Pages do not insert an Outlet automatically, and neither do `RouteChildPage`, `RouteDialog` or `RouteDrawer`; only a plain navigation group gets its Outlet from the route renderer.
-- Child routes inherit the entry route's `auth` and cannot change it. A child page renders only after the parent page's authorization check passes; a child page gets an extra check only when it declares `authz` explicitly.
+- Child routes inherit the entry route's `auth` and cannot change it. Every child page declares `authz` like any page: `'skip'` when the parent page's check is enough, or its own request. A child page renders only after the parent page's check passes.
 - Link to a child route with a relative path and keep the current query parameters: `<Link to={{ pathname: String(id), search: location.search }}>`.
 - Route declarations have no `index` field. Do not invent an index route, and do not register a child route at the parent's own path; when "opening the parent URL shows a particular child page" is needed, use the redirect in section 4.
 - Do not change the shell, the route renderer or the ServiceProvider to add a menu entry. Keep the CRUD resources that business code uses, but they produce no menu entries.
@@ -113,11 +113,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
             // Tab: no navigation and no breadcrumb.
             name: 'project-reports-summary',
             path: 'summary',
+            authz: 'skip',
             componentLoader: () => import('./pages/project-reports/summary.js'),
           },
           {
             name: 'project-reports-owners',
             path: 'owners',
+            authz: 'skip',
             componentLoader: () => import('./pages/project-reports/owners.js'),
           },
         ],
@@ -261,7 +263,7 @@ Tabs are implemented as links because they are page navigation. To borrow the bu
 
 ### When tabs have their own permissions
 
-Child pages get no page authorization check by default. When a tab is only for people who have been granted access, declare `authz` explicitly on its route:
+A tab that the parent page's check covers declares `authz: 'skip'`. When a tab is only for people who have been granted access, declare its own request:
 
 ```ts
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
@@ -274,10 +276,11 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       {
         name: 'project-reports-summary',
         path: 'summary',
+        authz: 'skip',
         componentLoader: () => import('./pages/project-reports/summary.js'),
       },
       {
-        // Child pages get no page authorization check by default; declare authz explicitly when a page is only for people who have been granted access.
+        // Only for people who have been granted access.
         name: 'project-reports-owners',
         path: 'owners',
         authz: {
@@ -383,6 +386,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         name: 'project-import',
         path: 'import',
         breadcrumb: { title: 'projects.import.title' },
+        authz: 'skip',
         componentLoader: () => import('./pages/projects/import.js'),
       },
     ],
@@ -436,7 +440,7 @@ The list page's `<Outlet />` is already at the end of `PageContainer` (see secti
 ## 6. Navigation groups and clickable parents
 
 - **Group**: only `name`, `navigation` and `children`, with no `componentLoader`. `path` is optional; when present, it becomes the prefix of the child routes' paths; when absent, the group is only a set of entries in the menu.
-- A group renders no business component (the route renderer provides its Outlet), cannot declare `authz`, and carries no page permission of its own. A group does not count as "a page above": a root page inside a group that does not declare `authz` is still checked against `page:<name>` by default.
+- A group renders no business component (the route renderer provides its Outlet), cannot declare `authz`, and carries no page permission of its own. Each page inside a group declares its own `authz`.
 - Groups can contain groups. A group's `name` must be unique, like a route name; settings group names are unique across the whole settings area.
 - **Clickable parent**: a page can also have `navigation` and child pages with `navigation`. In the menu it is then both a link and expandable: the link and the expand button are two separate controls. Choose how the child pages are presented according to section 3.
 - Pages that should not appear in the menu, such as details and tab content, have no `navigation`. A descendant can still declare `navigation` when its ancestor does not.
@@ -448,7 +452,7 @@ The list page's `<Outlet />` is already at the end of `PageContainer` (see secti
 
 - Use `defineSettingsRoutes()` and `defineDevRoutes()`; pages, groups and `children` are written the same way as in App routes. Do not write `/settings` or `/dev` in the path.
 - Tabs in settings pages also use child routes (section 4); nested details and tabs usually have no `navigation`.
-- Settings pages and dev pages both require sign-in. Without `authz`, no page permission is checked, but the parent page's check still comes before the child page; when a child page needs a different permission, it declares its own `authz`.
+- Settings pages and dev pages both require sign-in and, like App pages, each declares `authz` (`'skip'` or a request). The parent page's check still comes before the child page; a child page that needs a different permission declares its own request.
 - Dev pages, and modules imported only by them, are left out of the production build.
 - Navigation groups carry no page permission. Access checks in the browser do not replace server authorization.
 

@@ -68,7 +68,7 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
     routes.use('*', auth.required(), authorization.middleware());
     routes.get('/', async (context) => {
       const allowed = await context.get('authz').can({
-        resource: { type: 'database.collection', id: 'orders' },
+        resource: { type: 'settings', id: 'orders-admin' },
         action: 'read',
       });
       if (!allowed) {
@@ -83,28 +83,31 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
   });
 ```
 
-Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions.
+Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions. The pair must be registered: `settings`, `composite` and `database.collection` deny an item or action nobody added, so this route's owner calls `authz.settings.add({ id: 'orders-admin', title, actions: [{ name: 'read' }] })` in its provider's `boot` and may list it in an administration subsection with `authz.ui.place({ type: 'settings', id: 'orders-admin' }, { section })`; an unplaced item is listed under Administration's "Other". `can` is true only for an unconditional permit; a check that depends on records, such as a `database.collection` grant with record access, is conditional and needs the policy flow below.
 
 ### Enforce record, field and relation policies
 
-Read [application permission development](authorization.md) and the installed `nocobase-app-plugin-authorization` Skill before building data access. Register each governed collection explicitly in the owning provider with `authz.db.collections.add({ name, title, actions? })`; DB supplies field/relation metadata. Unregistered collections are denied even to unrestricted users.
+Read [application permission development](authorization.md) and the installed `nocobase-app-plugin-authorization` Skill before building data access. Register each governed collection explicitly in the owning provider with `authz.database.collections.add({ name, title, actions? })`; the database supplies field/relation metadata. Unregistered collections are denied even to unrestricted users.
 
 For ordinary collection CRUD, resolve and bind the policy:
 
 ```ts
-const policy = await authz.db.policyFor('customers', context.get('authz'));
+const policy = await authz.database.policyFor(
+  'customers',
+  context.get('authz'),
+);
 if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
 const customers = database.repository('customers').withPolicy(policy);
 return context.json({ data: await customers.findMany() });
 ```
 
-For a composed business operation, call the request scope's `authorize()` once, reject denied or missing policies, and bind each table's `decision.conditions.database[collection]` policy. Do not replace it with aggregate collection authorization: grants from another business operation could widen the result. `require` rejects conditional decisions; `can` reports feature visibility rather than access to a specific record.
+For a business operation, call the request context's `authorize({ resource: { type: 'composite', id }, action })` once, reject denied or missing policies, and bind each table's `decision.conditions.database[collection]` policy. Do not replace it with aggregate collection authorization: grants from another business operation could widen the result. `require` rejects conditional decisions; `can` reports feature visibility rather than access to a specific record.
 
 Bound repositories enforce rows, fields and relations together. Keep multi-table writes transactional and business-state predicates in the update. Map out-of-scope `RECORD_NOT_FOUND` errors consistently without exposing hidden records. Never fetch unrestricted rows and filter them in the browser.
 
 ### Repository API endpoints
 
-Keep `defineRepositoryApiRoutes` and its static policies. For business authorization, follow the installed authorization Skill’s `references/repository-routes.md`: `authz.db.authorizeRepository({ repository, resource, actions })` binds Repository methods to typed business actions and narrows the existing policy through middleware. Authenticate first and cover every action of the protected exposure. Use the shortcut when one Repository operation and one database scope complete the action with standard input/output; independent type/length validation can remain middleware. Persisted-state checks, side effects, multiple scopes and enriched responses require custom handlers: project title/notes editing fits the shortcut, while draft quote editing, quote submission and order delivery do not. One resource can use both styles for different actions. Do not substitute collection-aggregated grants for a business-action decision.
+Keep `defineRepositoryApiRoutes` and its static policies. For business authorization, follow the installed authorization Skill’s `references/repository-routes.md`: `authz.database.authorizeRepository({ repository, resource, actions })` binds Repository methods to typed business actions and narrows the existing policy through middleware. Authenticate first and cover every action of the protected exposure. Use the shortcut when one Repository operation and one data scope complete the action with standard input/output; independent type/length validation can remain middleware. Persisted-state checks, side effects, multiple scopes and enriched responses require custom handlers: project title/notes editing fits the shortcut, while draft quote editing, quote submission and order delivery do not. One resource can use both styles for different actions. Do not substitute collection-aggregated grants for a business-action decision.
 
 Static endpoint policies only narrow user grants. Read/write relation capabilities must be explicitly granted; a relation in the static shape does not create permission. Use the authorization Skill's `references/business-module.md` for the full workflow and `references/fluent-registration.md` for field/relation declarations. The installable authorization example demonstrates quote submission and delivery responsibilities.
 

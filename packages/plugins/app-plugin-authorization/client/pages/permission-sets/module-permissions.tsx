@@ -10,7 +10,7 @@ import type {
   SelectOption,
 } from '../../authorization-client.js';
 import { ScopedOperation } from './scoped-operation.js';
-import { ScopeMark } from '../../components/scope-marks.js';
+import { SelectionMark } from '../../components/selection-marks.js';
 import { useAuthorizationTranslation } from '../../i18n.js';
 import { BulkPermissionToggle } from './bulk-permissions.js';
 import { newGrantForResource, resourceKey } from './drafts.js';
@@ -19,7 +19,7 @@ import type { Draft, GrantDraft } from './types.js';
 
 export function ModulePermissions({
   container,
-  type,
+  pages,
   label,
   rows,
   items,
@@ -33,7 +33,8 @@ export function ModulePermissions({
   onToggle,
 }: {
   container?: RefObject<HTMLDivElement | null>;
-  type: string;
+  /** Pages show a single access mark per row. */
+  pages: boolean;
   label: string;
   rows: readonly ResourceRow[];
   items: readonly ResourceOption[];
@@ -56,10 +57,9 @@ export function ModulePermissions({
   );
   const rowStyle: CSSProperties = {
     display: 'grid',
-    gridTemplateColumns:
-      type === 'page'
-        ? 'minmax(0, 1fr) auto 2rem'
-        : 'minmax(12rem, 32%) minmax(0, 1fr) 2rem',
+    gridTemplateColumns: pages
+      ? 'minmax(0, 1fr) auto 2rem'
+      : 'minmax(12rem, 32%) minmax(0, 1fr) 2rem',
     alignItems: 'center',
     columnGap: '0.75rem',
     paddingRight: '1rem',
@@ -69,13 +69,10 @@ export function ModulePermissions({
       <BulkPermissionToggle
         items={targets}
         actions={actions}
-        type={type}
         draft={draft}
         disabled={disabled}
         label={
-          type === 'page' && actions.length === 1
-            ? `${actions[0].label}: ${name}`
-            : name
+          pages && actions.length === 1 ? `${actions[0].label}: ${name}` : name
         }
         onChange={onChange}
       />
@@ -140,11 +137,11 @@ export function ModulePermissions({
         }
         const item = row.item;
         const grant =
-          grants.get(resourceKey(type, item.value)) ??
-          newGrantForResource(type, item.value);
+          grants.get(resourceKey(item.type, item.value)) ??
+          newGrantForResource(item.type, item.value);
         return (
           <div
-            key={`item:${item.value}`}
+            key={`item:${item.type}:${item.value}`}
             role='group'
             aria-label={item.label}
             className='items-center gap-3 border-b py-2 pr-4 hover:bg-muted/20'
@@ -157,7 +154,7 @@ export function ModulePermissions({
               <span className='min-w-0 truncate font-medium' title={item.value}>
                 {item.label}
               </span>
-              {type !== 'page' && (
+              {!pages && (
                 <span
                   className='truncate text-xs text-muted-foreground'
                   title={item.value}
@@ -169,15 +166,15 @@ export function ModulePermissions({
             <div
               className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'
               style={
-                type === 'page'
+                pages
                   ? { gridColumn: '3', justifyContent: 'center' }
                   : undefined
               }
             >
               {(item.actions ?? actions).map((action) => {
                 const granted = grant.actions.includes(action.value);
-                const config = item.actionScopes?.[action.value];
-                if (config)
+                const config = item.dataScopes?.[action.value];
+                if (config?.length)
                   return (
                     <ScopedOperation
                       key={action.value}
@@ -206,12 +203,12 @@ export function ModulePermissions({
                     aria-label={`${item.label}: ${action.label}`}
                     title={`${item.label}: ${action.label}`}
                     aria-pressed={granted}
-                    className={`inline-flex items-center gap-1 rounded-md text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${type === 'page' ? 'p-1' : 'py-1 pl-1 pr-2'}`}
+                    className={`inline-flex items-center gap-1 rounded-md text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${pages ? 'p-1' : 'py-1 pl-1 pr-2'}`}
                     onClick={() =>
                       onToggle(grant, action.value, granted ? 'none' : 'all')
                     }
                   >
-                    <ScopeMark
+                    <SelectionMark
                       value={granted ? 'all' : 'none'}
                       label={t(
                         granted
@@ -219,12 +216,12 @@ export function ModulePermissions({
                           : 'permissionWorkspace.moduleNotGranted',
                       )}
                     />
-                    {type !== 'page' && <span>{action.label}</span>}
+                    {!pages && <span>{action.label}</span>}
                   </button>
                 );
               })}
             </div>
-            {type !== 'page' &&
+            {!pages &&
               bulk(
                 [item],
                 t('permissionWorkspace.selectGroup', { group: item.label }),

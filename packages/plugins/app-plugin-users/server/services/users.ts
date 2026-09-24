@@ -1,6 +1,6 @@
 import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
-import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
+import type { PermissionSetsApi } from '@nocobase/authorization/permission-sets';
 import type {
   AdministratedUser,
   UserAdministrationService,

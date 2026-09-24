@@ -1,21 +1,10 @@
 import type { AuthorizationTitle } from '../../core/titles.js';
-import type {
-  AccessConstraintValue,
-  AuthorizationSubject,
-  ResourceRef,
-} from '../../core/index.js';
+import type { AuthorizationSubject } from '../../core/types.js';
+import type { DefaultAccessRule } from '../default-access/model.js';
 
-export interface RestrictionRule {
-  key: string;
+/** Narrows what the listed subjects reach; intersects every other source. */
+export interface RestrictionRule extends DefaultAccessRule {
   title?: AuthorizationTitle;
-  resource: ResourceRef;
-  actions: readonly RestrictionRuleAction[];
   subjects: readonly AuthorizationSubject[];
   reason?: string;
-}
-
-export interface RestrictionRuleAction {
-  action: string;
-  scopeKey?: string;
-  scope: AccessConstraintValue;
 }

@@ -3,59 +3,73 @@ import {
   WritePermissionBuilder,
 } from './permission-builders.js';
 import type {
-  AuthorizationContribution,
-  ResourceTitle,
+  AuthorizationTitle,
+  BindableCompositeResourcePermission,
+  CompositeResourceContribution,
+  DataScope,
+  PermissionGrant,
+  RecordAccessReference,
+  RecordSelection,
 } from '@nocobase/authorization/core';
-import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { DatabaseGrantDefinition, DatabaseActionGrant } from './model.js';
 
 export type DatabaseOperation = 'read' | 'create' | 'update' | 'delete';
 type Fields<Row> = '*' | readonly (keyof Row & string)[];
-export interface RecordAccessReference<K extends string = string> {
-  readonly key: K;
-  readonly resources: readonly { type: string; id: string }[];
+
+interface DataScopeChoices {
+  options?: readonly string[];
+  defaultValue?: string;
 }
 
+/** The permission-set grant of one collection. */
 export function databaseGrant(
-  resource: string,
+  collection: string,
   definition: DatabaseGrantDefinition,
 ): PermissionGrant {
   return {
-    resource: { type: 'database.collection', id: resource },
+    resource: { type: 'database.collection', id: collection },
     actions: Object.entries(definition).map(([action, config]) => ({
       action,
       policy: { type: 'database', ...config },
     })),
   };
 }
-export function databaseScope(
-  recordAccess: import('./model.js').DatabaseRecordAccess,
-): import('./model.js').DatabaseAccessScope {
-  return { type: 'database', recordAccess };
+
+function applies(
+  reference: RecordAccessReference,
+  collection: string,
+): boolean {
+  return reference.collections.some(
+    (name) => name === '*' || name === collection,
+  );
 }
 
-/** Reusable data permissions, independent of registration and action scope keys. */
+/**
+ * A collection's fields and relations per operation. Binding it to a key makes
+ * it a data scope of a composite action.
+ */
 export class DatabasePermissionBuilder<
   Row = Record<string, unknown>,
   O extends string = string,
-> {
-  declare readonly recordAccessSelection?:
-    O | { readonly key: O; readonly params?: unknown };
+> implements BindableCompositeResourcePermission {
+  declare readonly recordAccessSelection?: O | '' | RecordSelection;
+  private readonly operations: DatabaseGrantDefinition;
+  private readonly label: AuthorizationTitle | undefined;
+  private readonly choices: DataScopeChoices;
+
   constructor(
     private readonly name: string,
-    private readonly operations: DatabaseGrantDefinition = {},
-    private readonly label: ResourceTitle | undefined = undefined,
-    private readonly choices: {
-      options?: readonly string[];
-      defaultValue?: string;
-    } = {},
+    operations: DatabaseGrantDefinition = {},
+    label: AuthorizationTitle | undefined = undefined,
+    choices: DataScopeChoices = {},
   ) {
     if (!name) throw new TypeError('A collection name is required');
     this.operations = structuredClone(operations);
     this.label = structuredClone(label);
     this.choices = structuredClone(choices);
   }
-  title(title: ResourceTitle): DatabasePermissionBuilder<Row, O> {
+
+  title(title: AuthorizationTitle): DatabasePermissionBuilder<Row, O> {
     return new DatabasePermissionBuilder(
       this.name,
       this.operations,
@@ -63,23 +77,16 @@ export class DatabasePermissionBuilder<
       this.choices,
     );
   }
+
+  /** The record access a grant may choose for the bound data scope. */
   options<const R extends readonly RecordAccessReference[]>(
     ...options: R
   ): DatabasePermissionBuilder<Row, R[number]['key']> {
     if (
       !options.length ||
-      options.some(
-        (option) =>
-          !option.resources.some(
-            (resource) =>
-              resource.type === 'database.collection' &&
-              (resource.id === '*' || resource.id === this.name),
-          ),
-      )
+      options.some((option) => !applies(option, this.name))
     )
-      throw new TypeError(
-        'Record access policy does not apply to this collection',
-      );
+      throw new TypeError(`Record access does not apply to ${this.name}`);
     const keys = options.map((option) => option.key);
     if (
       new Set(keys).size !== keys.length ||
@@ -90,26 +97,31 @@ export class DatabasePermissionBuilder<
       this.name,
       this.operations,
       this.label,
-      { ...this.choices, options: keys },
+      {
+        ...this.choices,
+        options: keys,
+      },
     );
   }
+
+  /** The record access used when a grant chooses nothing. */
   default(option: RecordAccessReference<O>): DatabasePermissionBuilder<Row, O> {
     if (
-      !option.resources.some(
-        (resource) =>
-          resource.type === 'database.collection' &&
-          (resource.id === '*' || resource.id === this.name),
-      ) ||
+      !applies(option, this.name) ||
       (this.choices.options && !this.choices.options.includes(option.key))
     )
-      throw new TypeError('Invalid default record access policy');
+      throw new TypeError('Invalid default record access');
     return new DatabasePermissionBuilder(
       this.name,
       this.operations,
       this.label,
-      { ...this.choices, defaultValue: option.key },
+      {
+        ...this.choices,
+        defaultValue: option.key,
+      },
     );
   }
+
   read(
     fields:
       | Fields<Row>
@@ -122,6 +134,7 @@ export class DatabasePermissionBuilder<
         : { fields },
     );
   }
+
   create(
     fields:
       | Fields<Row>
@@ -136,6 +149,7 @@ export class DatabasePermissionBuilder<
         : { fields },
     );
   }
+
   update(
     fields:
       | Fields<Row>
@@ -150,6 +164,7 @@ export class DatabasePermissionBuilder<
         : { fields },
     );
   }
+
   delete(): DatabasePermissionBuilder<Row, O> {
     return this.operation('delete', {});
   }
@@ -167,37 +182,36 @@ export class DatabasePermissionBuilder<
       this.choices,
     );
   }
+
+  /** The collection grant a Permission Set stores. */
   build(): PermissionGrant {
     if (!Object.keys(this.operations).length)
       throw new TypeError('A database permission needs at least one action');
     return structuredClone(databaseGrant(this.name, this.operations));
   }
+
   bind<const K extends string>(
     key: K,
-    metadata?: { title?: ResourceTitle },
-  ): AuthorizationContribution<
-    Record<K, O | { readonly key: O; readonly params?: unknown }>
-  > {
-    if (!key || key === 'type')
-      throw new TypeError('Invalid action permission key');
+    metadata?: { title?: AuthorizationTitle },
+  ): CompositeResourceContribution<Record<K, O | '' | RecordSelection>> {
+    if (!key) throw new TypeError('A data scope needs a key');
     const grant = this.build();
+    const scope: DataScope = {
+      key,
+      title: metadata?.title ?? this.label ?? this.name,
+      ...this.choices,
+    };
     const contribution = {
       grants: [
         {
-          ...grant,
+          resource: grant.resource,
           actions: grant.actions.map((action) => ({
             ...action,
-            policy: { ...action.policy, type: 'database', scope: key },
+            scopeKey: key,
           })),
         },
       ],
-      scopes: {
-        [key]: {
-          ...this.choices,
-          title: metadata?.title ?? this.label ?? this.name,
-          resource: grant.resource,
-        },
-      },
+      dataScopes: [scope],
     };
     return { build: () => structuredClone(contribution) };
   }

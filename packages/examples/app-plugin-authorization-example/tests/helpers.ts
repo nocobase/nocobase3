@@ -1,13 +1,16 @@
-import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
-import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
-import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
-import defaultRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
-import sharingRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
-import restrictionRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
-import { apiRoutes as authorizationRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
+import defaultAccessPlugin, {
+  defaultAccess,
+} from '@nocobase/app-plugin-authz-default-access/server';
+import sharingRulesPlugin, {
+  sharingRules,
+} from '@nocobase/app-plugin-authz-sharing-rules/server';
+import restrictionRulesPlugin, {
+  restrictionRules,
+} from '@nocobase/app-plugin-authz-restriction-rules/server';
+import authenticationPlugin from '@nocobase/app-plugin-authentication/server';
 import path from 'node:path';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
-import {
+import authorizationPlugin, {
   authorizationToken,
   createAppAuthorization,
 } from '@nocobase/app-plugin-authorization';
@@ -16,7 +19,7 @@ import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import setupSeed from '../database/seeds/202609220002_sales_permissions.js';
 import { AuthorizationExampleProvider } from '../server/providers/authorization-example.js';
 import { apiRoutes } from '../server/routes/index.js';
@@ -25,21 +28,19 @@ export async function createFixture() {
     drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
-  for (const name of [
-    'authentication',
-    'authorization',
-    'authz-default-access',
-    'authz-sharing-rules',
-    'authz-restriction-rules',
+  // Each plugin's own migrations, located through its published server plugin.
+  for (const plugin of [
+    authenticationPlugin,
+    authorizationPlugin,
+    defaultAccessPlugin,
+    sharingRulesPlugin,
+    restrictionRulesPlugin,
   ])
     await database
       .createMigrator({
-        directory: path.resolve(
-          import.meta.dirname,
-          `../../../plugins/app-plugin-${name}/database/migrations`,
-        ),
-        packageName: `@nocobase/app-plugin-${name}`,
-        tableName: `${name}Migrations`,
+        directory: path.resolve(plugin.baseDir!, plugin.database!.migrations!),
+        packageName: plugin.packageName,
+        tableName: `${plugin.packageName.replace('@nocobase/app-plugin-', '')}Migrations`,
       })
       .latest();
   await database
@@ -108,13 +109,8 @@ export async function createFixture() {
   };
   await new AuthorizationExampleProvider(app).boot();
   router.route('/api', await apiRoutes.createRouter(app));
-  router.route('/api', await authorizationRoutes.createRouter(app));
-  for (const route of [
-    ...defaultRoutes,
-    ...sharingRoutes,
-    ...restrictionRoutes,
-  ])
-    router.route('/api', await route.createRouter(app));
+  for (const routes of authorizationPlugin.routes ?? [])
+    router.route('/api', await routes.createRouter(app));
   return {
     database,
     authorization,
@@ -130,4 +126,35 @@ export async function createFixture() {
         ...(body ? { body: JSON.stringify(body) } : {}),
       }),
   };
+}
+
+export type SalesFixture = Awaited<ReturnType<typeof createFixture>>;
+
+/** A request to `/api/authz/<path>` as the seeded administrator. */
+export function adminRequest(
+  fixture: SalesFixture,
+  path: string,
+  method = 'GET',
+  body?: unknown,
+): Promise<Response> {
+  return fixture.router.request(`/api/authz/${path}`, {
+    method,
+    headers: {
+      'x-test-user': fixture.users.admin,
+      'content-type': 'application/json',
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+/** The ids a sales list answers `user` with, once it has answered 200. */
+export async function listIds(
+  fixture: SalesFixture,
+  user: string,
+  path = 'projects',
+): Promise<string[]> {
+  const response = await fixture.request(user, `sales/${path}`);
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  return body.data.items.map((item: { id: string }) => item.id);
 }

@@ -1,41 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   createAuthorization,
-  permissionSets,
-  restrictionRules,
+  permissionSetsPlugin,
+  restrictionRulesPlugin,
+  selection,
   type AuthorizationPlugin,
   type RestrictionRule,
-  type RestrictionRuleStore,
 } from '../src/index.js';
-import { MockPermissionSetStore } from './mock-permission-set-store.js';
-
-class MockRestrictionRuleStore implements RestrictionRuleStore {
-  constructor(private readonly rules: readonly RestrictionRule[]) {}
-  create(rule: RestrictionRule): Promise<RestrictionRule> {
-    return Promise.resolve(rule);
-  }
-  update(_key: string, rule: RestrictionRule): Promise<RestrictionRule> {
-    return Promise.resolve(rule);
-  }
-  delete(): Promise<void> {
-    return Promise.resolve();
-  }
-  get(key: string): Promise<RestrictionRule | undefined> {
-    return Promise.resolve(this.rules.find((rule) => rule.key === key));
-  }
-  list(): Promise<readonly RestrictionRule[]> {
-    return Promise.resolve(this.rules);
-  }
-  /** In-memory stores have no transactions. */
-  withTransaction(): RestrictionRuleStore {
-    return this;
-  }
-}
+import { MemoryRuleStore } from './helpers/memory-rule-store.js';
+import { MockPermissionSetStore } from './helpers/mock-permission-set-store.js';
 
 const resource = {
   type: 'database.collection',
   id: 'main.orders',
 } as const;
+const root = { principal: { type: 'user', id: 'root' } };
 
 /** Records whether the handler was ever asked to resolve constraints. */
 function recordingResource(): {
@@ -52,7 +31,8 @@ function recordingResource(): {
       requiresGrants: true,
       setup(authz): void {
         authz.resourceTypes.add({
-          resourceType: 'database.collection',
+          type: 'database.collection',
+          actions: ['read', 'create', 'update', 'delete'],
           async authorize(request, context) {
             await context.constraints.resolve(request);
             state.constraintCalls += 1;
@@ -86,21 +66,23 @@ function superuserStore(
 }
 
 describe('unrestricted access', () => {
-  it('permits a resource type whose handler has no authorizeUnrestricted', async () => {
+  it('permits a resource type whose handler has no authorizeUnrestricted and still denies an unregistered one', async () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: superuserStore() })],
+      plugins: [permissionSetsPlugin({ store: superuserStore() })],
     });
     authorization.resourceTypes.add({
-      resourceType: 'test-resource',
+      type: 'test-resource',
+      actions: ['read', 'delete'],
       authorize: async () => ({ effect: 'deny', reasons: [] }),
     });
     const request = {
-      principal: { type: 'user', id: 'root' },
       resource: { type: 'test-resource', id: 'first' },
       action: 'delete',
     } as const;
 
-    await expect(authorization.authorize(request)).resolves.toMatchObject({
+    await expect(
+      authorization.for(root).authorize(request),
+    ).resolves.toMatchObject({
       effect: 'deny',
     });
 
@@ -110,21 +92,32 @@ describe('unrestricted access', () => {
       unrestricted: true,
     });
 
-    await expect(authorization.authorize(request)).resolves.toMatchObject({
+    await expect(
+      authorization.for(root).authorize(request),
+    ).resolves.toMatchObject({
       effect: 'permit',
       reasons: [{ code: 'UNRESTRICTED_ACCESS' }],
+    });
+    await expect(
+      authorization.for(root).authorize({
+        resource: { type: 'unregistered.resource', id: 'anything' },
+        action: 'read',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'UNKNOWN_RESOURCE_TYPE' }],
     });
   });
 
   it('ignores a Restriction Rule that would otherwise narrow a resource scope', async () => {
-    const restrictions = new MockRestrictionRuleStore([
+    const restrictions = new MemoryRuleStore<RestrictionRule>([
       {
         key: 'owned-only',
         resource,
         actions: [
           {
             action: 'read',
-            scope: { type: 'database', recordAccess: 'recordsIOwn' },
+            selection: selection.recordAccess('recordsIOwn'),
           },
         ],
         subjects: [{ type: 'user', id: 'root' }],
@@ -133,8 +126,8 @@ describe('unrestricted access', () => {
     const handler = recordingResource();
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({ store: superuserStore() }),
-        restrictionRules({ store: restrictions }),
+        permissionSetsPlugin({ store: superuserStore() }),
+        restrictionRulesPlugin({ store: restrictions }),
         handler.plugin,
       ],
     });
@@ -145,11 +138,7 @@ describe('unrestricted access', () => {
     });
 
     await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'root' },
-        resource,
-        action: 'read',
-      }),
+      authorization.for(root).authorize({ resource, action: 'read' }),
     ).resolves.toMatchObject({
       effect: 'permit',
       reasons: [{ code: 'UNRESTRICTED_ACCESS' }],
@@ -157,60 +146,9 @@ describe('unrestricted access', () => {
     expect(handler.constraintCalls).toBe(0);
   });
 
-  it('still denies a resource type no handler accepts', async () => {
-    const authorization = createAuthorization({
-      plugins: [
-        permissionSets({ store: superuserStore() }),
-        recordingResource().plugin,
-      ],
-    });
-    authorization.permissionSets.protect({
-      owner: '@nocobase/test',
-      keys: ['superuser'],
-      unrestricted: true,
-    });
-
-    await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'root' },
-        resource: { type: 'unregistered.resource', id: 'anything' },
-        action: 'read',
-      }),
-    ).resolves.toMatchObject({
-      effect: 'deny',
-      reasons: [{ code: 'UNKNOWN_RESOURCE_TYPE' }],
-    });
-  });
-
-  it('reports unrestricted in the permissions snapshot', async () => {
-    const authorization = createAuthorization({
-      plugins: [permissionSets({ store: superuserStore() })],
-    });
-    const scope = authorization.for({
-      principal: { type: 'user', id: 'root' },
-    });
-
-    await expect(scope.permissions()).resolves.toEqual({
-      unrestricted: false,
-      permissions: [],
-    });
-
-    authorization.permissionSets.protect({
-      owner: '@nocobase/test',
-      keys: ['superuser'],
-      unrestricted: true,
-    });
-
-    await expect(
-      authorization
-        .for({ principal: { type: 'user', id: 'root' } })
-        .permissions(),
-    ).resolves.toEqual({ unrestricted: true, permissions: [] });
-  });
-
   it('rejects a conflicting owner and releases only its own declaration', () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: superuserStore() })],
+      plugins: [permissionSetsPlugin({ store: superuserStore() })],
     });
     const release = authorization.permissionSets.protect({
       owner: '@nocobase/first',
@@ -218,7 +156,9 @@ describe('unrestricted access', () => {
       unrestricted: true,
     });
 
-    expect(authorization.permissionSets.isUnrestricted('superuser')).toBe(true);
+    expect(authorization.permissionSets.protection('superuser')).toMatchObject({
+      unrestricted: true,
+    });
     expect(() =>
       authorization.permissionSets.protect({
         owner: '@nocobase/second',
@@ -233,12 +173,14 @@ describe('unrestricted access', () => {
       unrestricted: true,
     });
     other();
-    expect(authorization.permissionSets.isUnrestricted('another')).toBe(false);
-    expect(authorization.permissionSets.isUnrestricted('superuser')).toBe(true);
+    expect(authorization.permissionSets.protection('another')).toBeUndefined();
+    expect(
+      authorization.permissionSets.protection('superuser')?.unrestricted,
+    ).toBe(true);
 
     release();
-    expect(authorization.permissionSets.isUnrestricted('superuser')).toBe(
-      false,
-    );
+    expect(
+      authorization.permissionSets.protection('superuser'),
+    ).toBeUndefined();
   });
 });

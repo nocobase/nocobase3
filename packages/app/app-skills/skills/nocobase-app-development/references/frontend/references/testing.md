@@ -11,11 +11,11 @@ Tests never go beside the source. Name test files `*.test.ts` or `*.test.tsx`; `
 
 ## What to test
 
-| What changed       | Test at least                                                                                                                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page or component  | What it renders and what happens after an interaction (state changes, submission, error handling)                                                                                                   |
-| Route declarations | `tests/logic/client-routes.test.ts` already checks that every page loads; when you add a page that requires sign-in, add its route name to the test's page grant list (see section 12 of `page.md`) |
-| Copy               | Both languages show real text, not keys                                                                                                                                                             |
+| What changed       | Test at least                                                                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Page or component  | What it renders and what happens after an interaction (state changes, submission, error handling)                                                                                                            |
+| Route declarations | `tests/logic/client-routes.test.ts` already checks that every page loads and declares `authz`; when you add a page that requires sign-in, add it to the test's page grant list (see section 12 of `page.md`) |
+| Copy               | Both languages show real text, not keys                                                                                                                                                                      |
 
 ## Writing component tests
 

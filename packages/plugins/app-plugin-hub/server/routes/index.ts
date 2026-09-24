@@ -7,7 +7,6 @@ import { HUB_RELEASE_ACTIONS } from '../../shared/permissions.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  permissionSetsToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
@@ -51,7 +50,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const routes = new Hono<AuthorizationEnv>();
     const authentication = container.resolve(authenticationToken);
     const authorization = container.resolve(authorizationToken);
-    const permissionSets = container.resolve(permissionSetsToken);
+    const { permissionSets } = authorization;
     const hub = container.resolve(hubServiceToken);
     const securityLogger = container.has(loggingToken)
       ? container.resolve(loggingToken).getLogger('security')

@@ -4,42 +4,42 @@ Use the current sales example as the model: four job permission sets, three busi
 
 ## Permission model versus editable configuration
 
-Code defines resources, pages, actions, readable/writable fields, relation capabilities and available record-access strategies. These declarations describe what the business supports and how its server enforces access. For example, code defines that submitting a quote updates its status and checks its parent project; backend configuration cannot redefine that operation to write arbitrary fields.
+Code defines composite resources, page routes, actions, readable and writable fields, relation capabilities, settings items and the available record access. These declarations describe what the business supports and how its server enforces access. For example, code defines that submitting a quote updates its status and checks its parent project; backend configuration cannot redefine that operation to write arbitrary fields.
 
-Seeds help the user configure that model initially: create business permission sets, choose page/action grants and data scopes, initialize default/sharing/restriction rules, and assign them to intended users or teams where identities are known. These are ordinary persisted configurations, editable through the authorization backend after installation. Being declared in a seed does not make a permission set or rule code-owned, protected or resettable on startup. Preserve subsequent administrator changes.
+Seeds help the user configure that model initially: create business permission sets, choose page and action grants and data scopes, initialize default/sharing/restriction rules, and assign them to intended users or teams where identities are known. These are ordinary persisted configurations, editable through the authorization backend after installation. Being declared in a seed does not make a permission set or rule code-owned, protected or resettable on startup. Preserve subsequent administrator changes.
 
-Application feature development registers and configures its own business resources. Leave platform/system permission configuration to the owning system plugins: do not modify root/member sets, their protection rules, authorization management capabilities or other system settings merely to make an App feature accessible. A business configuration page can live under Settings without becoming platform configuration; declare and configure only the business capability it owns. System-plugin development is a separate, explicitly scoped task.
+Application feature development registers and configures its own composites. Leave platform/system permission configuration to the owning system plugins: do not modify root/member sets, their protection rules, authorization management capabilities or other system settings merely to make an App feature accessible. A business configuration page can live under Settings without becoming platform configuration; declare and configure only the business capability it owns. System-plugin development is a separate, explicitly scoped task.
 
-For example, code declares Quote View/Edit/Submit and the preparer/region strategies. A seed creates the initial Sales engineer set and selects its pages, actions and scopes. An administrator can later change those grants, scopes and assignments in the backend without editing the seed. Changing what Submit does or which fields it may write requires a code change.
+For example, code declares Quote View, Edit and Submit and the preparer and region record access. A seed creates the initial Sales engineer set and selects its pages, actions and scopes. An administrator can later change those grants, scopes and assignments in the backend without editing the seed. Changing what Submit does or which fields it may write requires a code change.
 
 ## Classify changes and deliver both parts
 
-| Change                                                                | Where it belongs                              | When it runs                         |
-| --------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------ |
-| Table, owner/preparer field, team membership relation                 | Self-contained migration                      | Schema installation/upgrade          |
-| Supported action, fields, relation capabilities, page ID, named scope | Portable TypeScript declarations              | Imported by owning feature           |
-| Register resources/pages/collections and custom scope resolvers       | Owning service provider                       | Application boot                     |
-| Resolve membership, enforce policies, validate workflow state         | Server services/routes                        | Each request                         |
-| Route visibility, buttons, row eligibility, refresh                   | Client routes/components                      | Current session                      |
-| Required initial jobs or baseline rules for a fresh product           | Transactional seed or controlled provisioning | Once, after schema prerequisites     |
-| Assign an existing user, delegate a live quote, tune regional access  | Settings UI or authorized runtime service     | Administrator/business decision      |
-| Correct configuration in an existing installation                     | Explicit, versioned data-change workflow      | Upgrade with stated affected records |
+| Change                                                                         | Where it belongs                              | When it runs                         |
+| ------------------------------------------------------------------------------ | --------------------------------------------- | ------------------------------------ |
+| Table, owner/preparer field, team membership relation                          | Self-contained migration                      | Schema installation/upgrade          |
+| Supported action, fields, relation capabilities, data scope                    | Portable TypeScript declarations              | Imported by owning feature           |
+| Register collections, composites, settings, workspace placement, record access | Owning service provider                       | Application boot                     |
+| Resolve membership, enforce policies, validate workflow state                  | Server services/routes                        | Each request                         |
+| Page ids in route `authz`, buttons, row eligibility, refresh                   | Client routes and components                  | Current session                      |
+| Required initial jobs or baseline rules for a fresh product                    | Transactional seed or controlled provisioning | Once, after schema prerequisites     |
+| Assign an existing user, delegate a live quote, tune regional access           | Settings UI or authorized runtime service     | Administrator/business decision      |
+| Correct configuration in an existing installation                              | Explicit, versioned data-change workflow      | Upgrade with stated affected records |
 
 A resource declaration registers what the product can do; it grants nobody access. A permission-set declaration is a value; `.build()` does not save it. A seed persists initial configuration; it does not replace provider registration. Never create or overwrite permission sets on every provider boot.
 
-Classify new and existing features by the requested behavior. Changing which records an existing strategy resolves, which fields an action can write, or how an endpoint enforces permission changes the model. Selecting an existing strategy and its supported parameters, granting an action to a job, or assigning a job to a user changes configuration. An existing action name does not prove its model already satisfies the requirement.
+Classify new and existing features by the requested behavior. Changing which records an existing record access resolves, which fields an action can write, or how an endpoint enforces permission changes the model. Selecting an existing record access and its supported parameters, granting an action to a job, or assigning a job to a user changes configuration. An existing action name does not prove its model already satisfies the requirement.
 
 When developing or changing the model, also complete its initial or adjusted permission configuration from the business responsibility matrix. For a fresh installation, provide seeds for the intended jobs, page/action grants, scopes, supported rules and known assignments, and apply them when installing that App. For an existing installation, use authorized services or a controlled data-change workflow to make the intended changes while preserving unrelated configuration. Do not leave this configuration as future administrator work unless the user explicitly requests model-only delivery. User assignments need known identities and intended responsibility; clarify missing recipients rather than assigning everyone or changing `member`/`root`.
 
 ## Share declarations, not runtime instances
 
-Keep a portable feature module such as `server/sales-resources.ts` with `defineAuthorizationResource` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
+Keep a portable feature module such as `server/sales-resources.ts` with `defineCompositeResource` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
 
 ```ts
-import { permissionSet } from '@nocobase/authorization/permissions';
+import { definePermissionSet } from '@nocobase/authorization/permission-sets';
 import { quotes } from '../../server/sales-resources.js';
 
-export const engineer = permissionSet('sales-engineer')
+export const engineer = definePermissionSet('sales-engineer')
   .title('Sales engineer')
   .grant({
     resource: { type: 'page', id: 'sales.quotes' },
@@ -55,7 +55,7 @@ export const engineer = permissionSet('sales-engineer')
   .build();
 ```
 
-The declarations used here are in [the sales workflow](business-module.md). Register `sales.prepared` and `sales.region` before serving requests. Use `{ key, ns }` titles and matching client translations in a localized product; plain titles here keep the snippets small. Store policy references and parameters, never resolver functions.
+The declarations used here are in [the sales workflow](business-module.md). Register `sales.prepared` and `sales.region` before serving requests. A page grant can equally be written as `authz.pages.grant('sales.quotes')` where the service is available; a seed has no service, so it writes the plain grant. Use `{ key, ns }` titles and matching client translations in a localized product; plain titles here keep the snippets small. Grants store record access keys and parameters, never resolver functions. Each business data scope value is a record access key or a record selection; `''` selects nothing.
 
 ## A normal App seed has a database context
 
@@ -100,6 +100,8 @@ This example lives in `database/main/seeds/202609190001_sales_jobs.ts` and impor
 
 Use the actual existing user/team IDs. Check logical uniqueness before inserting missing rows; a random row ID alone does not make reruns idempotent. Do not re-add an administrator-removed assignment during every startup. A one-time seed's execution history handles when it runs; a provisioning routine that may be retried needs its own explicit completion/idempotency boundary.
 
+A seed writes composite grants in the stored shape the definition accepts: the action names and data-scope keys its composite declares, as `{ type: 'composite', scopes }`. The Permission Set HTTP routes reject anything else, but a seed bypasses that check. Such a grant is skipped at runtime — it permits nothing while the person's other grants keep working, and a warning names it — and the startup scan of stored Permission Sets throws in development, naming the set, resource, action and problem. Fix the seed or migrate the stored grant; do not widen the composite to accept it.
+
 | Table                                   | Row shape in addition to `id`                                            |
 | --------------------------------------- | ------------------------------------------------------------------------ |
 | `authorizationPermissionSets`           | `key`, encoded `title`, JSON `grants`, `createdAt`, `updatedAt`          |
@@ -135,4 +137,4 @@ Use `withTransaction(connection)` for changes that must commit with another runt
 
 ## Existing installations
 
-Adding or changing a scope implementation or field capability is a model change. Selecting its supported scope parameters or assigning its actions is a configuration change. Deliver both when the requirement needs both. Do not assume editing a seed will update deployed installations, and do not reinterpret a persisted action/scope key for a different purpose. For a required upgrade, identify affected business configuration keys, preserve administrator choices and unrelated assignments, perform only the explicitly intended update and verify with ordinary users. Do not treat seed-created records as code-owned defaults that can be reapplied automatically.
+Adding or changing a record access implementation or field capability is a model change. Selecting its supported parameters or assigning its actions is a configuration change. Deliver both when the requirement needs both. Do not assume editing a seed will update deployed installations, and do not reinterpret a persisted action or data scope key for a different purpose. For a required upgrade, identify affected business configuration keys, preserve administrator choices and unrelated assignments, perform only the explicitly intended update and verify with ordinary users. Do not treat seed-created records as code-owned defaults that can be reapplied automatically.

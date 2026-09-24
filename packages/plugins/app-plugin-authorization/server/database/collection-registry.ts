@@ -1,82 +1,93 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
-  ResourceActionRegistry,
-  type ResourceActionDeclaration,
+  ResourceItems,
+  type AuthorizationTitle,
 } from '@nocobase/authorization/core';
-import { sameOptionText, type OptionText } from '../i18n.js';
 
 /**
- * A Collection an application declared part of the permission model.
- *
- * Intent only: no fields, no primary key. db owns that metadata and is read at
- * authorize time, so the two can never disagree.
+ * A collection an application declared part of the permission model. Intent
+ * only: fields, primary key and relations are read from db at check time.
  */
-export interface DatabaseCollectionRegistration {
+export interface DatabaseCollectionDefinition {
   readonly name: string;
-  readonly title?: OptionText;
-  readonly description?: OptionText;
-  readonly actions?: readonly ResourceActionDeclaration[];
+  readonly title: AuthorizationTitle;
+  readonly description?: AuthorizationTitle;
+  /** Defaults to `read`, `create`, `update` and `delete`. */
+  readonly actions?: readonly string[];
 }
 
-/**
- * Which Collections can be granted on. Registration is the opt-in: a table db
- * happens to hold is not part of the model until an application says so, which
- * keeps system and bookkeeping tables out of the permission UI and out of
- * every grant.
- */
-export class DatabaseCollectionRegistry {
-  readonly actionRegistry: ResourceActionRegistry =
-    new ResourceActionRegistry();
-  private readonly registrations = new Map<
-    string,
-    DatabaseCollectionRegistration
-  >();
+export interface DatabaseCollections {
+  /**
+   * Re-adding a collection with the same actions is a no-op. A different
+   * title or description keeps the first registration and is reported by
+   * `warnings()`; different actions throw.
+   */
+  add(definition: DatabaseCollectionDefinition): void;
+  has(name: string): boolean;
+  list(): readonly DatabaseCollectionDefinition[];
+  /** Re-registrations that differed only in display data, one message each. */
+  warnings(): readonly string[];
+}
 
-  /** Runs at boot, before a connection is usable, so it never reaches db. */
-  add(collection: string | DatabaseCollectionRegistration): void {
-    const registration =
-      typeof collection === 'string' ? { name: collection } : collection;
-    if (!registration.name) {
-      throw new Error('A database Collection registration needs a name');
-    }
-    const existing = this.registrations.get(registration.name);
+const DEFAULT_ACTIONS: readonly string[] = [
+  'read',
+  'create',
+  'update',
+  'delete',
+];
+
+const actionsOf = (definition: DatabaseCollectionDefinition): string[] => [
+  ...(definition.actions ?? DEFAULT_ACTIONS),
+];
+
+/** The `database.collection` items. Registration is the opt-in. */
+export class DatabaseCollectionRegistry implements DatabaseCollections {
+  readonly items: ResourceItems = new ResourceItems();
+  private readonly definitions = new Map<
+    string,
+    DatabaseCollectionDefinition
+  >();
+  private readonly reported: string[] = [];
+
+  add(definition: DatabaseCollectionDefinition): void {
+    if (!definition.name)
+      throw new TypeError('A database collection registration needs a name');
+    const existing = this.definitions.get(definition.name);
     if (existing) {
-      // Boot runs more than once in some hosts, so repeating the same
-      // declaration is not a mistake; disagreeing about it is.
+      const [before, after] = [actionsOf(existing), actionsOf(definition)];
+      if (!isDeepStrictEqual([...before].sort(), [...after].sort()))
+        throw new Error(
+          `Database collection ${definition.name} is already registered with actions [${before.join(', ')}]; another registration declares [${after.join(', ')}]`,
+        );
       if (
-        sameOptionText(existing.title, registration.title) &&
-        sameOptionText(existing.description, registration.description) &&
-        (existing.actions ?? []).length ===
-          (registration.actions ?? []).length &&
-        (existing.actions ?? []).every(
-          (action, index) => action === registration.actions?.[index],
-        )
+        !isDeepStrictEqual(existing.title, definition.title) ||
+        !isDeepStrictEqual(existing.description, definition.description)
       )
-        return;
-      throw new Error(
-        `Database Collection already registered: ${registration.name}`,
-      );
+        this.reported.push(
+          `Database collection ${definition.name} was registered again with a different title or description; the first registration is kept`,
+        );
+      return;
     }
-    const actions = registration.actions ?? [
-      'read',
-      'create',
-      'update',
-      'delete',
-    ];
-    this.actionRegistry.add(registration.name, actions);
-    this.registrations.set(registration.name, {
-      ...registration,
-      ...(registration.actions ? { actions: [...registration.actions] } : {}),
+    this.items.add({
+      id: definition.name,
+      title: definition.title,
+      ...(definition.description === undefined
+        ? {}
+        : { description: definition.description }),
+      ...(definition.actions ? { actions: definition.actions } : {}),
     });
+    this.definitions.set(definition.name, structuredClone({ ...definition }));
   }
 
   has(name: string): boolean {
-    return this.registrations.has(name);
+    return this.definitions.has(name);
   }
 
-  list(): readonly DatabaseCollectionRegistration[] {
-    return [...this.registrations.values()].map((registration) => ({
-      ...registration,
-      ...(registration.actions ? { actions: [...registration.actions] } : {}),
-    }));
+  list(): readonly DatabaseCollectionDefinition[] {
+    return structuredClone([...this.definitions.values()]);
+  }
+
+  warnings(): readonly string[] {
+    return [...this.reported];
   }
 }

@@ -1,6 +1,6 @@
 import type { Actor } from '../types.js';
 import type { DatabaseManager } from '@nocobase/db';
-import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
 
 export type DataScalar = string | number | boolean | null;
 export interface DataPageInput {
@@ -142,7 +142,7 @@ export type DataServicesFactory = (scope: {
 
 export interface CreateDataServicesOptions {
   database: DatabaseManager;
-  authorization?: AppAuthorizationService;
+  authorization?: AppAuthorization;
   actor: Actor;
   /** Trusted IANA execution timezone; predicates still require explicit date/instant values. */
   timezone?: string;
