@@ -120,7 +120,7 @@ App code imports `@nocobase/ai-employee` from its public root only:
 import { defineAIEmployee, defineTools } from '@nocobase/ai-employee';
 ```
 
-The root also covers employee and tool managers, `AgentContext`, resource loaders, repositories, LLM providers and helpers, and the knowledge/vector contracts. Inspect the installed declarations under `node_modules/@nocobase/ai-employee` when a shape is in doubt.
+The root also covers employee and tool managers, `AgentContext`, resource loaders, repositories, LLM providers and helpers, and the knowledge/vector contracts. Inspect the installed declarations under `node_modules/@nocobase/ai-employee` when a shape is in doubt. What an App does with the managers and provider classes directly is in [runtime-extensions.md](runtime-extensions.md).
 
 Two exports look useful and are not. `createAIManager()` builds a second manager; it is only for an isolated worker, CLI, or test that deliberately wants no App runtime. `defineMCP()` belongs to the loader, not to an App: configure MCP in `config.yml` `ai.mcpServers`, which is the one supported path.
 
