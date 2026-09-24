@@ -17,7 +17,7 @@ The permissions of a set are organized in three sections:
 | Business permissions | Business operations such as View, Edit or Submit quotes, each with its record scopes                                    |
 | Administration       | Settings pages and their actions, such as reading or changing permission sets, rules and other module settings          |
 
-Only pages, operations and settings that the application declares appear; a section is empty until developers add them. Plugins may add further sections.
+Under Business permissions and Administration, the left side lists one entry per module the application declares, such as Sales, Automation or Authorization; anything that names no module is listed under Other. Only pages, operations and settings that the application declares appear; a section is empty until developers add them. Plugins may add further sections.
 
 | Setting       | Sales engineer example                                                  |
 | ------------- | ----------------------------------------------------------------------- |

@@ -12,18 +12,22 @@ Put validation, persistence and transactions in the owning service. Routes authe
 
 A settings page is a settings item, not a page resource. Its entry, children and standalone detail routes check the item's `settings` actions, including details declared with `defineAppRoutes`. Do not declare `page` `access` on these routes; the permission workspace lists as pages only routes that check `page` `access`. Route declaration helpers and URL paths do not decide authorization ownership; the function of the page does.
 
-Group related settings items by the user's management area with a display group. For example, `automation` is the group, while Workflow and Schedules are settings items inside it; each item exposes its own `read` action and any management actions its plugin implements. Re-adding an identical group is a no-op, so plugins contributing to a shared group may each add it with the same title; a different title throws. Keep page entry checks separate from the server operation checks described below.
+Group related settings items by the user's management area with a subsection of the `administration` section. For example, `automation` is the subsection, while Workflow and Schedules are settings items inside it; each item exposes its own `read` action and any management actions its plugin implements. Re-adding an identical subsection is a no-op, so plugins contributing to a shared subsection may each add it with the same title; a different title throws. An item that names no subsection is listed under Other. Keep page entry checks separate from the server operation checks described below.
 
 ## Register administration capabilities
 
 Resolve `authorizationToken` in provider boot and register the item with `authz.settings.add`. Registration makes its actions grantable; an assigned permission set activates them. `settings` is a catalog type: a check or grant on an item or action nobody registered is denied.
 
 ```ts
-authz.groups.add({ name: 'delivery-admin', title: 'Delivery administration' });
+authz.sections.add({
+  name: 'delivery-admin',
+  title: 'Delivery administration',
+  parent: 'administration',
+});
 authz.settings.add({
   id: 'delivery.configuration',
   title: 'Delivery configuration',
-  group: 'delivery-admin',
+  section: 'delivery-admin',
   actions: [{ name: 'read' }, { name: 'configure' }],
 });
 ```

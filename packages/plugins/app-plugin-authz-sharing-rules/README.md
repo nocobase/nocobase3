@@ -20,7 +20,7 @@ Adds sharing rules: selected records, or a record access selection, for the subj
  ──────────────────────      ─────────────────────────────────────────────────        ────────────────────────────
  sharing rules ────────────▶ `expand` constraint for the rule's subjects ─┐           context.authorize(...)
                               Permission Set grants ──────────────────────┴▶ type     authz.database.policyFor(...)
- display: the "Sharing rules" settings page, under the authorization group
+ display: the "Sharing rules" settings page; its settings item sits in the authorization subsection
 ```
 
 ## Entry points
@@ -43,7 +43,7 @@ import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 export default { plugins: [sharingRules()] };
 ```
 
-`sharingRules({ store? })` wraps `sharingRulesPlugin` from `@nocobase/authorization/sharing-rules` with the bundled database store; a replacement store implements `SharingRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.sharing-rules` in group `authorization` with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/sharing-rules', handler)`. Without the factory in the configuration the plugin adds no API and no route.
+`sharingRules({ store? })` wraps `sharingRulesPlugin` from `@nocobase/authorization/sharing-rules` with the bundled database store; a replacement store implements `SharingRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.sharing-rules` in the `authorization` subsection with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/sharing-rules', handler)`. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 

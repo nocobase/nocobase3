@@ -22,7 +22,7 @@ For custom endpoints, install authentication and `authz.middleware()`, call `c.v
 
 ## Complete example
 
-The application-owned declaration can be defined as follows in `server/sales-resources.ts`; use the customer's real collection name and translated labels. Register the `sales` group, the collection and `projectResource` (with `authz.groups.add`, `authz.database.collections.add` and `authz.business.define`) in the provider before router creation. Use the same collection name in the route module.
+The application-owned declaration can be defined as follows in `server/sales-resources.ts`; use the customer's real collection name and translated labels. Register the `sales` subsection, the collection and `projectResource` (with `authz.sections.add`, `authz.database.collections.add` and `authz.business.define`) in the provider before router creation. Use the same collection name in the route module.
 
 ```ts
 import { defineBusinessResource } from '@nocobase/authorization/core';
@@ -38,7 +38,7 @@ export const projectResource = defineBusinessResource(
   'sales.projects',
   (resource) =>
     resource
-      .group('sales')
+      .section('sales')
       .title('Projects')
       .action('view', (action) => action.grant('projects', projectData))
       .action('edit', (action) =>

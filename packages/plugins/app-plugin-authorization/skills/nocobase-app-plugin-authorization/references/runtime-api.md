@@ -40,7 +40,7 @@ export default defineServerPlugins([authentication, authorization]);
 | `@nocobase/authorization/core`: `defineBusinessResource`, `defineRecordAccess`, `selection`            | Business resources, custom record access and rule selections                                              |
 | `authz.middleware()`, `authz.for(identity)`                                                            | The request's `AuthorizationContext`; see [request checks](core-api.md)                                   |
 | `authz.permissionSets`                                                                                 | Definitions, assignments, protection and transactions; see [permission sets](core-api.md#permission-sets) |
-| `authz.groups.add`, `authz.sections.add`                                                               | Display headings and workspace areas; display only                                                        |
+| `authz.sections.add`, `authz.resourceGroups.add`                                                       | Sections and subsections on the left, resource groups on the right; display only                          |
 | `authz.business.define(resource)`                                                                      | Register a business resource; returns a `BusinessResourceReference`                                       |
 | `authz.recordAccess.define(access)`                                                                    | Register a named way to select records                                                                    |
 | `authz.database.collections.add(definition)`                                                           | Opt a collection into the permission model                                                                |
@@ -83,7 +83,7 @@ const projectData = defineDatabasePermission((p) =>
 export const quotes = defineBusinessResource('sales.quotes', (r) =>
   r
     .title('Quotes')
-    .group('sales')
+    .section('sales')
     .action('view', (a) => a.title('View').grant('quotes', quoteData))
     .action('edit', (a) =>
       a.title('Edit').grant('quotes', quoteData.update(['amount', 'notes'])),
@@ -97,7 +97,7 @@ export const quotes = defineBusinessResource('sales.quotes', (r) =>
 );
 
 // In the owning provider's boot method:
-authz.groups.add({ name: 'sales', title: 'Sales' });
+authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
 authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
 authz.database.collections.add({ name: 'projects', title: 'Projects' });
 authz.business.define(quotes);
@@ -150,11 +150,11 @@ For generated Repository APIs, keep the `defineRepositoryApiRoutes` declaration 
 An administration surface is a settings item, not a business resource. Register it in the owning provider, declare the same id on its settings route and check it on every endpoint:
 
 ```ts
-authz.groups.add({ name: 'sales', title: 'Sales' });
+authz.sections.add({ name: 'sales', title: 'Sales', parent: 'administration' });
 authz.settings.add({
   id: 'sales.pricing',
   title: 'Pricing settings',
-  group: 'sales',
+  section: 'sales',
   actions: [{ name: 'read' }, { name: 'update' }],
 });
 
