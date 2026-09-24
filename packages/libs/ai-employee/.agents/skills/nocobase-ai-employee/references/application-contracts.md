@@ -664,6 +664,8 @@ abstract class LLMProvider {
 }
 ```
 
+A direct call sends `context.messages` as they are. Its system prompt is a `role: 'system'` message at the start of `messages`; `AIChatContext` has no separate field for it.
+
 Tools on a direct call:
 
 - `prepareChain()`, and so `invoke()` and `stream()`, build `context.tools` with `buildAgentTools()`. Pass `context.toolContext` — `{ agentContext, container? }` — to give each tool the context and declared dependencies an agent would; without it a tool is built with no context, and one that requires a context fails when it is called.

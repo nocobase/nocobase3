@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { AIMessage, AIToolCall, UserDecision } from './ai-message.type.js';
+import { AIMessage, AIToolCall } from './ai-message.type.js';
 import type { ToolRuntimeContext } from '../utils/tools.js';
 
 export interface AgentThread {
@@ -35,7 +35,6 @@ export interface TransactionSupported<T> {
 }
 
 export type AIChatContext = {
-  systemPrompt?: string;
   messages?: {
     role: 'user' | 'assistant' | 'tool' | 'system';
     content: any;
@@ -62,15 +61,3 @@ export type AIMessageQuery = {
 export type AIMessageRemoveOptions = {
   messageId?: string;
 };
-
-export type AIChatContextOptions = {
-  userMessages?: AIMessageInput[];
-  userDecisions?: {
-    interruptId?: string;
-    decisions: UserDecision[];
-  };
-  tools?: any[];
-  middleware?: any[];
-  getSystemPrompt?: (userMessages: AIMessageInput[]) => Promise<string>;
-  formatMessages?: (messages: AIMessageInput[]) => Promise<any[]>;
-} & AIMessageQuery;
