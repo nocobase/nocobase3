@@ -3,7 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
+import {
+  AppConfig,
+  createAppPaths,
+  defaultAppConfigs,
+  defineAppConfig,
+} from '@nocobase/app-server/config';
 import { MissingDatabaseDriversError } from '@nocobase/app-server/database';
 import sqliteDriver from '@nocobase/db-sqlite';
 
@@ -32,6 +37,8 @@ interface Setup {
   readonly file?: string;
   /** What the application declares in code, merged below the file. */
   readonly defaults?: Record<string, unknown>;
+  /** Sections declared with defineAppConfig, whose rules the check enforces. */
+  readonly sections?: Parameters<typeof defaultAppConfigs>[0];
 }
 
 /**
@@ -68,6 +75,11 @@ async function createRuntime(setup: Setup): Promise<{
     },
     ...setup.defaults,
   });
+  if (setup.sections) {
+    const sections = defaultAppConfigs(setup.sections);
+    config.mergeDefaults(sections({} as never));
+    config.defineSections(sections.sections!);
+  }
 
   let destroyed = false;
   const runtime = {
@@ -100,6 +112,35 @@ async function check(
 }
 
 describe('runConfigCheck', () => {
+  it('reports what the sections declare and what the browser receives', async () => {
+    const { result } = await check({
+      file: `${SECRETS}billing:\n  trialDays: -1\n`,
+      sections: {
+        billing: defineAppConfig({
+          defaults: { currency: 'USD', trialDays: 14 },
+          validate(value, context) {
+            if (value.trialDays < 0) {
+              context.error('trialDays', 'must not be negative.', {
+                fix: 'Set billing.trialDays to 0 or more.',
+              });
+            }
+          },
+          public: ['currency'],
+        }),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.findings).toContainEqual({
+      level: 'error',
+      code: 'invalid',
+      key: 'billing.trialDays',
+      message: 'billing.trialDays must not be negative.',
+      fix: 'Set billing.trialDays to 0 or more.',
+    });
+    expect(result.public).toEqual({ billing: { currency: 'USD' } });
+  });
+
   it('passes a complete configuration and releases the runtime', async () => {
     const { result, destroyed, rootDir } = await check({ file: SECRETS });
 

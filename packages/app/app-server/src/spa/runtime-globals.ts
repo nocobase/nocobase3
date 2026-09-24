@@ -55,20 +55,24 @@ export function injectSpaRuntimeHtml(
   html: string,
   options: {
     readonly clientConfig?: SpaClientConfigMap;
+    readonly publicConfig?: SpaClientConfigMap;
     readonly runtimeGlobals?: SpaRuntimeGlobals;
   } = {},
 ): string {
   // SPA templates provide this stable pre-runtime marker. The client keeps `lang` synchronized after it starts.
   const withLocale = html.replace(
     defaultHtmlLocaleMarker,
-    `<html lang="${escapeHtmlAttribute(readHtmlLocale(options.clientConfig))}">`,
+    `<html lang="${escapeHtmlAttribute(readHtmlLocale(options.publicConfig ?? options.clientConfig))}">`,
   );
   const withGlobals = injectSpaRuntimeGlobals(
     withLocale,
     options.runtimeGlobals,
   );
   const cleanHtml = stripExistingRuntimeConfig(withGlobals);
-  const configHtml = createSpaRuntimeConfigHtml(options.clientConfig ?? {});
+  const configHtml = createSpaRuntimeConfigHtml(
+    options.clientConfig ?? {},
+    options.publicConfig,
+  );
   const moduleScriptPattern = /<script\s+[^>]*type=["']module["'][^>]*>/i;
   const moduleScriptMatch = cleanHtml.match(moduleScriptPattern);
   if (moduleScriptMatch?.index === undefined) {
@@ -183,9 +187,16 @@ function stripExistingRuntimeConfig(html: string): string {
   return html.replace(pattern, '');
 }
 
-function createSpaRuntimeConfigHtml(config: SpaClientConfigMap): string {
+function createSpaRuntimeConfigHtml(
+  config: SpaClientConfigMap,
+  publicConfig: SpaClientConfigMap | undefined,
+): string {
   return `<script id="${runtimeConfigElementId}" type="application/json">${escapeScriptJson(
-    JSON.stringify({ version: 1, config }),
+    JSON.stringify(
+      publicConfig === undefined
+        ? { version: 1, config }
+        : { version: 1, config, public: publicConfig },
+    ),
   )}</script>\n`;
 }
 

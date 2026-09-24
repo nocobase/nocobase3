@@ -12,8 +12,14 @@ const passwordLoginAction = vi.hoisted(() => ({
   submit: vi.fn(),
 }));
 
+const signUpAvailable = vi.hoisted(() => ({ value: true }));
+
 vi.mock('@nocobase/app-plugin-authentication/client/actions', () => ({
   usePasswordLogin: () => passwordLoginAction,
+}));
+
+vi.mock('@nocobase/app-plugin-authentication/client', () => ({
+  useSignUpAvailable: () => signUpAvailable.value,
 }));
 
 describe('application authentication UI', () => {
@@ -83,5 +89,21 @@ describe('application authentication UI', () => {
         password: 'password',
       });
     });
+  });
+
+  it('offers sign-up only while the server accepts it', () => {
+    signUpAvailable.value = false;
+    const { unmount } = render(<PasswordLoginForm />);
+    expect(
+      screen.queryByRole('link', { name: 'Sign up' }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    signUpAvailable.value = true;
+    render(<PasswordLoginForm />);
+    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute(
+      'href',
+      'register',
+    );
   });
 });

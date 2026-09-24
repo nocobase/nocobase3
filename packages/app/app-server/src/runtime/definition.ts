@@ -107,6 +107,9 @@ export async function resolveAppRuntime(
   };
   if (definition.defaultConfigs) {
     runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
+    if (definition.defaultConfigs.sections) {
+      runtime.config.defineSections(definition.defaultConfigs.sections);
+    }
   }
   const database = runtime.config.get<AppDatabaseConfig>('database');
   if (database && database.default !== 'none') {
