@@ -157,6 +157,26 @@ function sharedFrameworkSource(template, file) {
     );
   }
 
+  // The image recipe is shared. Only the template's own directory, named in the usage comment, and Hub's `/hub` mount
+  // path differ; both appear once per stage that needs them and are normalized to Default's before comparing.
+  if (file === 'Dockerfile') {
+    source = source.replaceAll(
+      `packages/templates/app-template-${template.kind}`,
+      'packages/templates/app-template-default',
+    );
+    if (template.kind === 'hub') {
+      assert.equal(
+        [...source.matchAll(/^ARG APP_BASE_PATH=\/hub$/gmu)].length,
+        2,
+        'Hub Dockerfile must default APP_BASE_PATH to /hub in both stages',
+      );
+      source = source.replaceAll(
+        'ARG APP_BASE_PATH=/hub',
+        'ARG APP_BASE_PATH=/main',
+      );
+    }
+  }
+
   // Keep product identity and Hub's deliberate menu order local while comparing the shared layout.
   if (file === 'client/layouts/components/sidebar-footer.tsx') {
     source = source
@@ -267,6 +287,8 @@ for (const template of templates) {
       'vitest.config.ts',
       'vite.config.ts',
       'ecosystem.config.js',
+      'Dockerfile',
+      'Dockerfile.dockerignore',
       'server/app.ts',
       'server/embedded.ts',
       'server/standalone.ts',
@@ -307,6 +329,17 @@ for (const template of templates) {
       } else {
         assert.equal(Object.hasOwn(template.manifest.scripts, command), false);
       }
+    }
+  });
+
+  test(`${template.kind} publishes its Dockerfile to generated applications`, () => {
+    // BuildKit reads `Dockerfile.dockerignore` only beside the Dockerfile it belongs to. Shipping one without the
+    // other builds an image from a context that includes config.yml, .env, and storage/.
+    for (const entry of ['Dockerfile', 'Dockerfile.dockerignore']) {
+      assert.ok(
+        template.manifest.files.includes(entry),
+        `${template.kind}: files must list ${entry}`,
+      );
     }
   });
 

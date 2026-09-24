@@ -32,7 +32,7 @@ Hub 提供管理界面，负责记录应用、版本、配置和部署操作。A
 | Docker（推荐） | 直接部署和使用 Hub，使用镜像管理版本           | [通过 Docker 部署](#通过-docker-部署) |
 | 应用模板       | 需要修改 Hub 源码，或已有 Node.js 服务运维流程 | [通过应用模板部署](#通过应用模板部署) |
 
-Docker 方式需要 Docker 与 Compose；应用模板方式需要 Node.js 24 和项目指定的 pnpm 版本。目标版本尚无可用镜像时，可使用应用模板构建部署。
+Docker 方式需要 Docker 与 Compose；应用模板方式需要 Node.js 24 和项目指定的 pnpm 版本。目标版本尚无可用镜像时，可使用应用模板构建部署。官方镜像由 Hub 模板自带的 `Dockerfile` 从源码构建；修改过 Hub 源码时，也可以在项目根目录用同一个 `Dockerfile` 自行构建镜像，用法见[独立部署：Docker](./docker#1-构建镜像)，它默认使用 `APP_BASE_PATH=/hub`。
 
 ## 平台规划
 

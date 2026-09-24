@@ -455,6 +455,29 @@ Combine it with `--target` when the archive is for another machine:
 pnpm build --target linux-x64 --tar
 ```
 
+#### Building a Docker image
+
+`Dockerfile` builds this application from its sources into a production image. From the project root:
+
+```bash
+docker build -t my-app .
+```
+
+The build runs `pnpm build` inside the container, and the image holds only `dist/` and `config.example.yml`. `Dockerfile.dockerignore` keeps `config.yml`, `.env`, `storage/`, and `node_modules` out of the build context; keep the two files together. Settings in `.env` do not reach the image, so pass them to the container as environment variables.
+
+`APP_BASE_PATH` is compiled into the client, so set it when building, `--build-arg APP_BASE_PATH=/crm`; it defaults to `/main`. The build runs on the builder's own architecture and cross-targets native modules, so `docker buildx build --platform linux/amd64,linux/arm64` compiles nothing under emulation.
+
+Run it with the configuration and data mounted, never copied in:
+
+```bash
+docker run -d --init -p 13000:13000 \
+  -v ./config.yml:/app/config.yml:ro \
+  -v ./storage:/app/storage \
+  my-app
+```
+
+The image runs as the `node` user without pnpm, so `storage/` must be writable by UID 1000, and application commands run through `node dist/cli/index.js`, as in `docker run --rm -v ./config.yml:/app/config.yml:ro my-app node dist/cli/index.js app config check`.
+
 #### Adding a dependency
 
 Where a package goes depends on which half of your application imports it.

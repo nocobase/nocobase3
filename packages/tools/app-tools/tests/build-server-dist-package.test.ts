@@ -223,6 +223,39 @@ describe('server package generation', () => {
     expect(workspace).toMatch(/ {2}tesseract\.js: false/);
   });
 
+  it("carries the application's registry settings, and nothing else, into dist/.npmrc", () => {
+    const { root } = createWorkspace();
+    writeFileSync(
+      path.join(root, '.npmrc'),
+      [
+        '@nocobase:registry=https://npm.example.test',
+        'strict-peer-dependencies=false',
+        '//npm.example.test/:_authToken=secret-token',
+        '  registry = https://registry.example.test/',
+        '',
+      ].join('\n'),
+    );
+
+    expect(generate(root).status).toBe(0);
+
+    const npmrc = readFileSync(path.join(root, 'dist', '.npmrc'), 'utf8');
+    expect(npmrc).toContain('@nocobase:registry=https://npm.example.test');
+    expect(npmrc).toContain('registry = https://registry.example.test/');
+    expect(npmrc).not.toContain('secret-token');
+    expect(npmrc).not.toContain('strict-peer-dependencies');
+  });
+
+  it('writes no dist/.npmrc when the application names no registry', () => {
+    const { root } = createWorkspace();
+    writeFileSync(
+      path.join(root, '.npmrc'),
+      'strict-peer-dependencies=false\n',
+    );
+
+    expect(generate(root).status).toBe(0);
+    expect(existsSync(path.join(root, 'dist', '.npmrc'))).toBe(false);
+  });
+
   it('adds only the database drivers the application declares', () => {
     const { root } = createWorkspace();
     const manifestPath = path.join(root, 'package.json');

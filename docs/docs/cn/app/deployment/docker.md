@@ -1,31 +1,35 @@
 ---
 title: 独立部署：Docker
-description: 不使用 Hub，将业务应用构建为镜像并持久化运行。
+description: 不使用 Hub，用应用自带的 Dockerfile 构建镜像并持久化运行。
 ---
 
 # 独立部署：Docker
 
-部署 Hub 容器请阅读[部署 Hub 平台](./hub)。本页使用业务应用的构建产物制作镜像，数据库与持久目录配置见[运行配置](./configuration)。
+部署 Hub 容器请阅读[部署 Hub 平台](./hub)。本页使用应用自带的 Dockerfile 从源码构建镜像，数据库与持久目录配置见[运行配置](./configuration)。
 
 ## 1. 构建镜像
 
-先[构建部署包](./standalone#构建部署包)，将包解压到一个独立镜像构建目录，目录内只有 `dist`、`config.example.yml` 和以下 Dockerfile。不要把真实配置或数据库放入镜像构建上下文。
+应用根目录自带 `Dockerfile` 和 `Dockerfile.dockerignore`。镜像在容器内从源码执行 `pnpm build`，运行层只包含 `dist/` 和 `config.example.yml`；`config.yml`、`.env`、`storage/` 和 `node_modules` 不会进入构建上下文。在应用根目录执行：
 
-```dockerfile
-FROM node:24.15.0-bookworm-slim
-ENV NODE_ENV=production
-WORKDIR /app
-COPY --chown=node:node dist/ /app/dist/
-RUN mkdir -p /app/storage && chown node:node /app/storage
-USER node
-CMD ["node", "/app/dist/server/standalone.js"]
+```bash
+docker build --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
 ```
 
-构建机为 x64、目标为 Linux x64 时执行 `docker build --platform linux/amd64 -t crm:release-001 .`。跨架构构建需要可用的 Buildx/模拟环境；业务包与镜像架构必须一致。运行镜像无需重新安装 dist 依赖。
+`APP_BASE_PATH` 会编译进前端资源，必须在构建时指定，运行时不能再改成其他路径；省略时使用 `/main`。`.env` 中的设置不会带入镜像，需要的变量在运行时通过容器环境变量提供。
+
+构建阶段运行在构建机自身的架构上，通过 `pnpm build --target` 获取目标平台的原生模块，因此构建其他架构的镜像不需要在模拟环境中编译，例如 `docker buildx build --platform linux/amd64,linux/arm64 ...`。运行镜像基于 Debian bookworm 与 Node 24，不能换成 Alpine 基础镜像。
+
+应用原来通过 `pnpm create @nocobase/app` 创建、根目录没有这两个文件时，从同一模板新版本中复制 `Dockerfile` 和 `Dockerfile.dockerignore`。两个文件必须一起使用：缺少 `Dockerfile.dockerignore` 时，本地配置和数据会进入构建上下文。
 
 ## 2. 准备运行配置
 
-在服务器创建专用目录，放入 `compose.yml`、目标环境 `config.yml` 和 `storage/`。按[认证与会话密钥](./configuration#配置认证与会话密钥)中的说明配置密钥，但 SQLite 路径改为容器内的 `/app/storage/database.sqlite`。确保运行用户有 storage 写权限；上面官方 Node 镜像的 node 用户通常为 UID/GID 1000，应以选定镜像的 `id` 输出为准。
+在服务器创建专用目录，放入 `compose.yml`、目标环境 `config.yml` 和 `storage/`。按[认证与会话密钥](./configuration#配置认证与会话密钥)中的说明配置密钥，但 SQLite 路径改为容器内的 `/app/storage/database.sqlite`。确保运行用户有 storage 写权限；镜像以 `node` 用户运行，可用 `docker run --rm --entrypoint id crm:release-001` 确认 UID 和 GID。
+
+镜像不包含 pnpm。需要在容器中运行应用命令时，直接调用 `node dist/cli/index.js`，例如检查配置：
+
+```bash
+docker run --rm -v ./config.yml:/app/config.yml:ro crm:release-001 node dist/cli/index.js app config check
+```
 
 ## 3. 创建 Compose 配置
 
@@ -41,31 +45,14 @@ services:
     ports:
       - '127.0.0.1:13000:13000'
     environment:
-      NODE_ENV: production
-      APP_CONFIG_FILE: /app/config.yml
-      APP_BASE_PATH: /crm
       APP_PUBLIC_ORIGIN: https://apps.example.com
-      APP_SERVER_HOST: 0.0.0.0
-      APP_SERVER_PORT: '13000'
       NOCOBASE_STRICT_STARTUP: 'true'
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://127.0.0.1:13000/crm/api/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      start_period: 60s
-      retries: 3
     volumes:
       - ./config.yml:/app/config.yml:ro
       - ./storage:/app/storage
 ```
 
-`NOCOBASE_STRICT_STARTUP` 让启动失败的容器退出，配合 `restart: unless-stopped` 自动重试；`healthcheck` 使用应用的 `/crm/api/healthz` 端点，镜像中没有 curl，因此用 Node 发起请求。
+镜像已设置 `NODE_ENV=production`、`APP_CONFIG_FILE=/app/config.yml`、`APP_SERVER_HOST=0.0.0.0`、`APP_SERVER_PORT=13000`，以及构建时的 `APP_BASE_PATH`，并内置请求 `<APP_BASE_PATH>/api/healthz` 的健康检查。`init: true` 让停止信号传递给 Node 进程；`NOCOBASE_STRICT_STARTUP` 让启动失败的容器退出，配合 `restart: unless-stopped` 自动重试。
 
 ## 4. 启动服务
 

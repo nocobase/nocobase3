@@ -44,7 +44,7 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 tar -tzf storage/exports/dist.tar.gz | head -30
 ```
 
-For a direct server deployment, transfer the archive and extract it into the deployment root. Nothing needs installing there: `pnpm build` already ran `pnpm install --prod` inside `dist/`, and the archive carries the resulting `dist/node_modules`. `dist/package.json` stays in the tree so that the same command can be rerun inside `dist/` on the server if `node_modules` was left out of a copy; that is a repair, not a step of a normal deployment, and it is never run in the application source tree. For Docker, build the image from the production `dist` tree and keep configuration and storage outside the image. Ensure the build target matches the server or image architecture, libc, and Node ABI.
+For a direct server deployment, transfer the archive and extract it into the deployment root. Nothing needs installing there: `pnpm build` already ran `pnpm install --prod` inside `dist/`, and the archive carries the resulting `dist/node_modules`. `dist/package.json` stays in the tree so that the same command can be rerun inside `dist/` on the server if `node_modules` was left out of a copy; that is a repair, not a step of a normal deployment, and it is never run in the application source tree. For Docker, build with the application's own `Dockerfile` instead, which runs `pnpm build` inside the image; keep configuration and storage outside the image. Otherwise ensure the build target matches the server's architecture, libc, and Node ABI.
 
 ## Decide the data operation
 
@@ -75,7 +75,9 @@ Extract the archive as the service user or transfer ownership to that user. Writ
 
 ### Standalone Docker
 
-Build or transfer the image, bind-mount the complete runtime configuration read-only, and bind-mount the persistent storage. Validate the Compose file before starting. For a configuration file replacement, recreate the container so the process reads the new file. Keep the image, config, storage, and proxy changes separately identifiable.
+Build the image from the application root with its own `Dockerfile`: `docker build --build-arg APP_BASE_PATH=/crm -t crm:<release> .`. The mount path is compiled into the client, so pass the path the deployment serves; it cannot be changed at runtime. `Dockerfile.dockerignore` must sit beside the `Dockerfile` — without it `config.yml`, `.env` and `storage/` enter the build context — and an application created before the template shipped them copies both from a newer template version. For another architecture use `docker buildx build --platform`; the build stage cross-targets native modules itself. `.env` is not carried into the image, so pass its settings as container environment variables.
+
+Bind-mount the complete runtime configuration read-only at `/app/config.yml` and the persistent storage at `/app/storage`, writable by the image's `node` user (UID 1000), and run the container with `init: true`. The image has no pnpm: run application commands as `node dist/cli/index.js <command>`, for example `docker run --rm -v ./config.yml:/app/config.yml:ro <image> node dist/cli/index.js app config check` before the first start. Validate the Compose file before starting. For a configuration file replacement, recreate the container so the process reads the new file. Keep the image, config, storage, and proxy changes separately identifiable.
 
 ### Hub platform
 
