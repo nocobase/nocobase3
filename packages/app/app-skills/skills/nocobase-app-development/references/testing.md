@@ -16,15 +16,15 @@ Templates ship their tests into generated applications. Keep them runnable from 
 
 ## What to test, by change
 
-| You changed      | Test at least                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload      |
-| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                   |
-| A migration      | `up` produces the expected schema; `down` reverses it; against a real database              |
-| A seed           | First run, run against existing data, repeat run                                            |
-| A service        | Its domain behavior, with its dependencies supplied directly                                |
-| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended |
-| Frontend code    | See [frontend tests](frontend/testing.md): pages, components, route declarations, copy      |
+| You changed      | Test at least                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload            |
+| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                         |
+| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                    |
+| A seed           | First run, run against existing data, repeat run                                                  |
+| A service        | Its domain behavior, with its dependencies supplied directly                                      |
+| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended       |
+| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy |
 
 ## Testing a route
 
@@ -51,7 +51,7 @@ Do not add a `registerRoutes(router, ...)` helper just to make a route testable.
 
 ## Testing the frontend
 
-Component tests, the route test and translation checks are described in [frontend tests](frontend/testing.md).
+Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md).
 
 ## Testing migrations
 
