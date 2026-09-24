@@ -22,6 +22,19 @@
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
+    "@playwright/test": "catalog:",
     "prettier": "catalog:"
+  },
+  "peerDependencies": {
+    "@playwright/test": "catalog:",
+    "prettier": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    },
+    "prettier": {
+      "optional": true
+    }
   }
 }
