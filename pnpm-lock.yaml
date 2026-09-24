@@ -651,6 +651,9 @@ importers:
       '@nocobase/realtime':
         specifier: workspace:^
         version: link:../../libs/realtime
+      '@nocobase/schedule':
+        specifier: workspace:^
+        version: link:../../libs/schedule
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
