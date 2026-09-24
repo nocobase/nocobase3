@@ -50,7 +50,7 @@ After resolving the conflict, rerun `pnpm skills:sync` and all Finish checks. Co
 
 ## Generated configuration and committed examples
 
-`config.yml` holds real settings and generated secrets. A template may also generate `.env` for build-time deployment facts. These live files are gitignored, were written by the generator rather than copied from the template, and are absent from the release diff. Never print or replace them as part of the merge.
+`config.yml` holds real settings and generated secrets. A template may also generate `.env` for build-time deployment facts. These live files are gitignored, were written by `pnpm config:init` and the generator rather than copied from the template, and are absent from the release diff. Never print or replace them as part of the merge. `config:init` refuses to overwrite an existing configuration, so it is safe to run during an upgrade; `--force` replaces one and is never part of a merge.
 
 `config.example.yml` ships with every current official template and merges normally. A template may also ship `.env.example`. Changes to these examples are the signal that a corresponding live file may need a manual edit:
 
@@ -62,6 +62,10 @@ fi
 ```
 
 A new key with a working default needs nothing. One without a default is a startup failure waiting for the next restart: tell the user what to add and let them edit the live file. Preserve application identity, public paths, ports, credentials, and other deployment facts rather than copying values from an example.
+
+### A removed plugin the diff cannot remove for you
+
+A target release that drops `@nocobase/app-plugin-install` leaves an upgrading application still importing it. Remove the dependency from `package.json` and its entries from `client/plugins.ts` and `server/plugins.ts`; there is nothing to migrate, because the installation page only ever appeared for an application that had no configuration file, and a configured one never reached it. An application that did rely on that page configures itself with `pnpm config:init` instead.
 
 ## `client/plugins.ts`, `server/plugins.ts`, `cli/plugins.ts`
 
@@ -108,7 +112,7 @@ Older releases may include `MIGRATION.md`. Treat it as historical context and ve
 
 `.agents/skills/` is generated and gitignored. `pnpm skills:sync` replaces each synchronized package-owned Skill directory wholesale, so never merge into or edit it. Local custom guidance belongs in committed application-owned files outside this generated directory.
 
-`config.yml`, optional generated `.env`, `.gitignore`, and `pnpm-workspace.yaml` were written by the generator and appear in no diff at all.
+`config.yml`, optional generated `.env`, `.gitignore`, `.npmrc`, and `pnpm-workspace.yaml` were written by the generator or by `pnpm config:init` and appear in no diff at all.
 
 ## Where the user's code lives
 

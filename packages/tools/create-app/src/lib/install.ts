@@ -53,8 +53,8 @@ export interface DriverVerification {
  *
  * It arrives transitively rather than being installed by name: each template depends on `@nocobase/db-sqlite`, which
  * depends on `better-sqlite3`. That makes it the one native addon a generated project is guaranteed to need, and the
- * only addon this verifier checks. Selecting another dialect may add other drivers; their runtime readiness and
- * database connectivity are not verified here. Creation reports that limitation for non-SQLite dialects.
+ * only addon this verifier checks. An application that adds another driver later, for another dialect, is on its own
+ * for that driver's runtime readiness; database connectivity is never verified here.
  */
 export const DEFAULT_NATIVE_DRIVER = 'better-sqlite3';
 

@@ -59,6 +59,15 @@ describe('app client routes', () => {
     }
   });
 
+  it('keeps notifications out of the application navigation', () => {
+    // The inbox is reached from the header bell, so it deliberately declares no menu entry.
+    expect(
+      applicationRoutes[0].routes.find(
+        (route) => route.name === 'notifications',
+      ),
+    ).not.toHaveProperty('navigation');
+  });
+
   it('never imports or routes a reference page', () => {
     // The reference pages are worked source to read while building a page, not screens this application serves. A
     // route reaches one through an `import()` its page loader names, so scanning specifiers catches the route as well
@@ -110,11 +119,6 @@ describe('app client routes', () => {
       { name: 'numeric-examples', authorizedAs: 'numeric-examples' },
       { name: 'i18n-examples', authorizedAs: 'i18n-examples' },
       { name: 'external-crm', authorizedAs: 'external-crm' },
-    ]);
-    // A settings page carries no rule by default. This one asks for a page grant, so it stays invisible until an
-    // administrator is granted it — which is the whole reason its name is pinned here.
-    expect(pageAuthorizations(resolved.settingsRouteTree)).toEqual([
-      { name: 'theme', authorizedAs: 'theme' },
     ]);
   });
 });

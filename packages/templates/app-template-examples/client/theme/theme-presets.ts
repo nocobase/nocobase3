@@ -1,36 +1,7 @@
 export const themePresets = [
+  { id: 'compact', labelKey: 'appearance.themes.compact' },
   { id: 'default', labelKey: 'appearance.themes.default' },
-  { id: 'modern-minimal', labelKey: 'appearance.themes.modern-minimal' },
-  { id: 'violet-bloom', labelKey: 'appearance.themes.violet-bloom' },
-  { id: 'mocha-mousse', labelKey: 'appearance.themes.mocha-mousse' },
-  { id: 'bubblegum', labelKey: 'appearance.themes.bubblegum' },
-  { id: 'amethyst-haze', labelKey: 'appearance.themes.amethyst-haze' },
-  { id: 'notebook', labelKey: 'appearance.themes.notebook' },
-  { id: 'graphite', labelKey: 'appearance.themes.graphite' },
-  { id: 'perpetuity', labelKey: 'appearance.themes.perpetuity' },
-  { id: 'kodama-grove', labelKey: 'appearance.themes.kodama-grove' },
-  { id: 'cosmic-night', labelKey: 'appearance.themes.cosmic-night' },
-  { id: 'tangerine', labelKey: 'appearance.themes.tangerine' },
-  { id: 'quantum-rose', labelKey: 'appearance.themes.quantum-rose' },
-  { id: 'nature', labelKey: 'appearance.themes.nature' },
-  { id: 'bold-tech', labelKey: 'appearance.themes.bold-tech' },
-  { id: 'elegant-luxury', labelKey: 'appearance.themes.elegant-luxury' },
-  { id: 'amber-minimal', labelKey: 'appearance.themes.amber-minimal' },
-  { id: 'neo-brutalism', labelKey: 'appearance.themes.neo-brutalism' },
-  { id: 'solar-dusk', labelKey: 'appearance.themes.solar-dusk' },
-  { id: 'claymorphism', labelKey: 'appearance.themes.claymorphism' },
-  { id: 'cyberpunk', labelKey: 'appearance.themes.cyberpunk' },
-  { id: 'pastel-dreams', labelKey: 'appearance.themes.pastel-dreams' },
-  { id: 'clean-slate', labelKey: 'appearance.themes.clean-slate' },
-  { id: 'caffeine', labelKey: 'appearance.themes.caffeine' },
-  { id: 'ocean-breeze', labelKey: 'appearance.themes.ocean-breeze' },
-  { id: 'retro-arcade', labelKey: 'appearance.themes.retro-arcade' },
-  { id: 'midnight-bloom', labelKey: 'appearance.themes.midnight-bloom' },
-  { id: 'candyland', labelKey: 'appearance.themes.candyland' },
-  { id: 'northern-lights', labelKey: 'appearance.themes.northern-lights' },
-  { id: 'vintage-paper', labelKey: 'appearance.themes.vintage-paper' },
-  { id: 'sunset-horizon', labelKey: 'appearance.themes.sunset-horizon' },
 ] as const;
 
 export type ThemePresetId = (typeof themePresets)[number]['id'];
-export const defaultThemePreset: ThemePresetId = 'default';
+export const defaultThemePreset: ThemePresetId = 'compact';

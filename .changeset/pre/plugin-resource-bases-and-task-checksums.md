@@ -9,7 +9,6 @@
 '@nocobase/app-plugin-file-example': patch
 '@nocobase/app-plugin-hub': patch
 '@nocobase/app-plugin-i18n': patch
-'@nocobase/app-plugin-install': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-in-app': patch
 '@nocobase/app-plugin-notification-providers': patch

@@ -40,8 +40,9 @@ export async function assertTargetIsUsable(directory: string): Promise<void> {
 }
 
 /**
- * The minimum a generated project must ignore. `config.yml` carries the generated `auth.secret` and `.env` carries a
- * hub's settings, so committing either would publish local configuration; the rest are build output and local state.
+ * The minimum a generated project must ignore. `config.yml` carries the `auth.secret` that `config:init` generates
+ * and `.env` carries a hub's settings, so committing either would publish local configuration; the rest are build
+ * output and local state.
  */
 const FALLBACK_GITIGNORE = [
   'node_modules/',
@@ -193,7 +194,6 @@ export interface ScaffoldOptions {
   name: string;
   /** Extra files to write once the template is in place, keyed by path relative to the target. */
   extraFiles?: Record<string, string>;
-  additionalDependencies?: Record<string, string>;
 }
 
 /**
@@ -223,15 +223,6 @@ export async function scaffoldFromTemplate(
   const templateName = typeof manifest.name === 'string' ? manifest.name : '';
 
   manifest.name = name;
-  if (
-    options.additionalDependencies &&
-    Object.keys(options.additionalDependencies).length
-  ) {
-    manifest.dependencies = {
-      ...(manifest.dependencies as Record<string, string> | undefined),
-      ...options.additionalDependencies,
-    };
-  }
 
   // Records which template this application was generated from, because nothing else left in the manifest can say.
   // `name` has just become the application's own, and `nocobase.templateKind` is `app` for both Default and Examples,
@@ -281,20 +272,6 @@ export async function scaffoldFromTemplate(
 
 export async function removeDirectory(directory: string): Promise<void> {
   await rm(directory, { force: true, recursive: true });
-}
-
-/**
- * Reads the template's `config.example.yml`, which becomes the generated `config.yml`. A template is not required to
- * ship one, so the caller falls back rather than failing.
- */
-export async function readConfigExample(
-  directory: string,
-): Promise<string | undefined> {
-  try {
-    return await readFile(path.join(directory, 'config.example.yml'), 'utf8');
-  } catch {
-    return undefined;
-  }
 }
 
 /**

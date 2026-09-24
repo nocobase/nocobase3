@@ -136,6 +136,11 @@ const writeDistWorkspace = () => {
       '# unaffected: everything the server actually loads is declared there and installs normally.',
       'autoInstallPeers: false',
       '',
+      '# A deployment runs its own scripts — pnpm start, pnpm config:init, pnpm config:check — against the tree the',
+      '# build installed, so pnpm must not decide to install before running one. The application and the Hub image',
+      '# make the same choice.',
+      'verifyDepsBeforeRun: false',
+      '',
       '# Which dependencies may run install scripts: true compiles a native addon, false skips a script',
       '# this application does not need. A package left out here installs without building and fails at runtime.',
       'allowBuilds:',
@@ -275,6 +280,11 @@ const distPackage = {
     migrate: 'node ./cli/index.js app migrate',
     seed: 'node ./cli/index.js app seed',
     nocobase: 'node ./cli/index.js',
+    // The same command the source checkout runs, so a deployment is configured with the step its documentation
+    // already gave for development. It writes beside `dist/`, where this build's runtime reads configuration from.
+    'config:init': 'node ./cli/index.js app config init',
+    'config:check': 'node ./cli/index.js app config check',
+    'config:set': 'node ./cli/index.js app config set',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',

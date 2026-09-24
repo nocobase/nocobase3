@@ -1,5 +1,35 @@
 # @nocobase/app-plugin-authentication
 
+## 1.0.0-beta.21
+
+### Major Changes
+
+- 4e58fe3: Remove `@nocobase/app-plugin-install` and the install mode it existed for. Configuration is written by `nocobase app config init` before an application is started.
+
+  The plugin redirected an application to `/install` whenever the authentication secret was the temporary one the runtime invented for an application with no configuration file. That page could never be reached from an application made by `create-app`, which always wrote a `config.yml` and so never entered install mode; it was undocumented, and a Hub-hosted application receives its configuration from the Hub instead. With the templates no longer shipping a configuration file at all, an unconfigured application has no database driver decision made either, and nothing left to serve the page with.
+
+  `resolveAuthSecret` no longer takes the application root and no longer invents a secret. A secret generated at boot is different on every restart, which silently invalidates every session; a missing one is now an error that names the command which writes it. Applications upgrading from an earlier version remove `@nocobase/app-plugin-install` from `package.json` and drop its entries from `client/plugins.ts` and `server/plugins.ts`; applications that had come to rely on the installation page configure themselves with `pnpm config:init` instead.
+
+### Patch Changes
+
+- cda1175: Allow an administrator to submit a user's existing username during an identity update without triggering a false username conflict.
+- e286e0d: Check trusted request origins for cookie-authenticated business writes in the authentication middleware, and name newly seeded administrators "Super Admin".
+- 80ef702: Match the user search as literal text, and stop reporting server faults as invalid input.
+
+  `UserAdministrationService.list` now reads through the Repository, whose `includes` treats the search term as literal text: `%` and `_` typed into the user search box mean themselves instead of acting as SQL wildcards, where `%` previously listed every account. The page is ordered by creation time with `id` as a tiebreaker, so accounts created in the same instant cannot repeat or disappear between pages.
+
+  The `/api/users` routes answer `400 INVALID_USER_INPUT` only for their own request parsing. A `TypeError` raised anywhere else, such as a defect in a registered `UserRoleScope`, is no longer returned to the caller as invalid input carrying an internal message; it surfaces as a server error.
+
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+  - @nocobase/app-server@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.15
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.20
 
 ### Patch Changes

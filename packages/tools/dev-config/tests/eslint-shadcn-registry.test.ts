@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createClientLibraryConfig,
   createPortalConfig,
+  createShadcnRegistryConfig,
 } from '../eslint/index.ts';
 
 const named = (configs: Linter.Config[], name: string): Linter.Config => {
@@ -56,6 +57,23 @@ describe('shadcn/ui registry exceptions', () => {
     );
 
     expect(overrideIndex).toBeGreaterThan(registryIndex);
+  });
+
+  it('scopes the same relaxation to another primitives directory', () => {
+    const configs = createShadcnRegistryConfig('website');
+
+    expect(
+      named(configs, '@nocobase/dev-config/shadcn-registry').files,
+    ).toEqual([
+      'website/components/ui/**/*.tsx',
+      'website/hooks/use-mobile.ts',
+    ]);
+    expect(
+      named(configs, '@nocobase/dev-config/shadcn-registry-chart').files,
+    ).toEqual(['website/components/ui/chart.tsx']);
+    expect(configs.map((config) => config.rules)).toEqual(
+      createShadcnRegistryConfig().map((config) => config.rules),
+    );
   });
 
   it('does not reach library packages, which have no registry directory', () => {

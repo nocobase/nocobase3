@@ -55,6 +55,25 @@ Hub 需要一个持久目录，保存平台管理数据、上传的应用部署�
 
 如果使用外部数据库或对象存储，这些数据保存在对应服务中，需要另外纳入备份，参阅[备份恢复与排障](./operations)。
 
+### 运行环境
+
+业务应用包含原生模块，构建时通过 `--target` 和 `--node-version` 指定平台、libc 和 Node 大版本。这些参数要匹配 **Hub 进程实际运行的环境**，而不是服务器本身。使用 Docker 部署时，Hub 运行在容器内，宿主机安装的 Node 版本、宿主机是不是 Alpine，都不影响构建参数。
+
+| 部署方式 | 平台       | libc                              | Node 大版本   | 架构                             |
+| -------- | ---------- | --------------------------------- | ------------- | -------------------------------- |
+| Docker   | `linux`    | glibc（镜像基于 Debian bookworm） | 24            | 取决于所用镜像，通常与服务器一致 |
+| 应用模板 | 服务器决定 | 服务器决定                        | 环境要求为 24 | 服务器决定                       |
+
+应用模板方式在运行 Hub 的服务器上执行以下命令确认：
+
+```bash
+uname -sm
+node -p "process.versions.node + ' ABI ' + process.versions.modules"
+ldd --version 2>&1 | head -1   # 输出包含 musl 时为 Alpine 一类环境
+```
+
+发布业务应用时如何使用这些值，见[使用 Hub 发布应用](./hub-publishing)。
+
 ## 通过 Docker 部署
 
 以下步骤使用 Docker Compose，默认数据库为 SQLite。示例通过同机反向代理提供 HTTPS 访问。
@@ -108,7 +127,7 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 
 首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名和密码。
 
-`database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像，或改用应用模板方式并在创建时指定 `--dialect`。
+`database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像——驱动要在构建前进入应用的 `dependencies`，镜像构建完成后无法补装。
 
 镜像以 `node` 用户运行。可用以下命令确认 UID 和 GID，并为该用户设置 `config.yml` 的读取权限及 `storage` 的写入权限：
 
@@ -197,9 +216,9 @@ pnpm create @nocobase/app hub --template=hub
 cd hub
 ```
 
-创建命令会下载 Hub 模板、安装依赖，并生成 `config.yml` 和 `.env`。`config.yml` 已包含随机认证与会话密钥，默认主数据库为 SQLite。
+创建命令会下载 Hub 模板、安装依赖，并生成 `.env`。它不生成 `config.yml`——在应用目录里运行 `pnpm config:init` 来生成，其中包含随机认证与会话密钥，默认主数据库为 SQLite。
 
-使用其他主数据库时，在创建命令中追加 `--dialect`，例如 `--dialect postgres`。固定版本时，将创建命令中的包名改为 `@nocobase/app@<CREATE_APP_VERSION>`，模板改为 `--template @nocobase/app-template-hub@<HUB_TEMPLATE_VERSION>`，替换为实际发布版本。
+使用其他主数据库时，先安装驱动再配置，例如 `pnpm add @nocobase/db-postgres` 后运行 `pnpm config:init --dialect postgres`。固定版本时，将创建命令中的包名改为 `@nocobase/app@<CREATE_APP_VERSION>`，模板改为 `--template @nocobase/app-template-hub@<HUB_TEMPLATE_VERSION>`，替换为实际发布版本。
 
 ### 2. 配置运行环境
 
@@ -310,6 +329,8 @@ docker compose logs --tail=100 hub
 ### 升级后检查
 
 登录 Hub，确认应用列表和运行状态正常，并访问业务应用检查功能。如果升级中断了应用部署任务，该任务会标记为失败；检查部署记录后再重新发起。
+
+确认 Hub 的 Node 大版本是否发生变化，变化时[运行环境](#运行环境)一节中的构建参数随之改变。已发布的业务应用需要按新的 `--node-version` 重新构建并重新发布；沿用原参数构建的部署包仍可上传和部署，但应用启动时会因原生模块 ABI 不匹配而失败。
 
 若需回退，先确认旧版本是否兼容升级后的数据库。涉及不兼容的数据库变更时，应按备份恢复流程处理，不能仅切回旧镜像或旧构建。
 

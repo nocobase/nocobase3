@@ -3,6 +3,7 @@ import path from 'node:path';
 import { loadStandaloneAppEnv } from '@nocobase/app-server/node';
 
 import { readCliHooks, runHookStage } from '../utils/cli-hooks.mjs';
+import { assertConfigurationPresent } from '../utils/config-presence.mjs';
 import { resolvePluginWatchIncludes } from './plugin-watches.mjs';
 import { resolveConfigWatch, watchConfigFiles } from './config-watch.mjs';
 import {
@@ -139,6 +140,9 @@ process.on('SIGTERM', () => shutdown(0));
 
 progress('Loading application environment');
 const env = loadEnv();
+// Checked before anything is spawned: the server runs under a watcher that will not exit on a startup error, so a
+// missing configuration would otherwise surface as a Vite URL that serves a page with no API behind it.
+assertConfigurationPresent(rootDir, env, 'dev');
 const strictStartup = env.NOCOBASE_STRICT_STARTUP === 'true';
 const watchEnv = await resolveWatchEnvironment(env);
 progress('Selecting development ports');

@@ -28,7 +28,7 @@ const messages = {
       'Assign a small task to another user. The assignee receives an in-app notification with the task summary and can edit the task from the detail page.',
     listTitle: 'All tasks',
     listDescription: 'All tasks you created or were assigned to.',
-    count: '{{count}} total',
+    count: '{{count}} records',
     empty: 'No tasks yet.',
     assignee: 'Assigned to',
     columns: {
@@ -42,6 +42,9 @@ const messages = {
     },
     view: 'View details',
     refresh: 'Refresh',
+    previous: 'Previous',
+    next: 'Next',
+    page: 'Page {{page}}',
     add: 'New task',
     drawerTitle: 'New task',
     drawerDescription:
@@ -51,7 +54,6 @@ const messages = {
   },
   taskDetail: {
     title: 'Task details',
-    description: 'The creator and assignee can update the task details.',
     summary: 'Task details',
     createdAt: 'Created',
     updatedAt: 'Last updated',

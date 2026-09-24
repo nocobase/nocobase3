@@ -1,11 +1,4 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { buildConfigFile } from './lib/config-file.ts';
-import {
-  configureDatabase,
-  resolveDialectDependency,
-  type Dialect,
-} from './lib/dialects.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import {
   installDependencies,
@@ -25,7 +18,6 @@ import {
 import {
   assertTargetIsUsable,
   assertValidAppName,
-  readConfigExample,
   removeDirectory,
   scaffoldFromTemplate,
 } from './lib/scaffold.ts';
@@ -36,6 +28,7 @@ import {
   resolveTemplateSource,
 } from './lib/template.ts';
 import { buildHubEnvFile, readEnvExample } from './lib/hub.ts';
+import { buildNpmrcFile } from './lib/npmrc.ts';
 
 export interface CreateAppOptions {
   argv: string[];
@@ -47,13 +40,9 @@ interface CreateResult {
   status: 'success' | 'error';
   stage: 'input' | 'download' | 'scaffold' | 'install' | 'verify' | 'complete';
   directory?: string;
-  dialect?: Dialect;
   projectCreated: boolean;
   dependenciesInstalled: boolean;
-  databaseConnectionVerified: false;
-  configurationRequired?: boolean;
-  configFile?: string;
-  configPath?: string;
+  configured: false;
   nextCommands?: string[];
   message?: string;
   warnings: string[];
@@ -71,7 +60,7 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
     stage: 'input',
     projectCreated: false,
     dependenciesInstalled: false,
-    databaseConnectionVerified: false,
+    configured: false,
     warnings: [],
   };
   try {
@@ -94,7 +83,6 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
     else process.stdout.write(`${value}\n`);
     return 0;
   }
-  result.dialect = input.flags.dialect;
   const progress = (message: string): void => {
     if (input.flags.json) process.stderr.write(`${message}\n`);
     else log.info(message);
@@ -111,11 +99,6 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
       note(
         [
           `cd ${input.directory ?? path.basename(result.directory ?? '')}`,
-          ...(result.configurationRequired
-            ? [
-                'Edit database.connections.main in config.yml with actual connection settings; prepare the target database.',
-              ]
-            : []),
           ...(result.nextCommands ?? []),
         ].join('\n'),
         'Next steps',
@@ -164,46 +147,32 @@ async function run(
       name: template.name,
       nocobase: { templateKind: template.kind },
     });
-    const example = await readConfigExample(template.directory);
-    const configured = configureDatabase(
-      example ?? '',
-      input.flags.dialect,
-      name,
-    );
     const extraFiles: Record<string, string> = {
-      'config.yml': buildConfigFile({ example: configured }),
+      '.npmrc': buildNpmrcFile({ registry }),
     };
     if (kind === 'hub')
       extraFiles['.env'] = buildHubEnvFile({
         example: await readEnvExample(template.directory),
         name,
       });
-    const manifest = JSON.parse(
-      await readFile(path.join(template.directory, 'package.json'), 'utf8'),
-    ) as { dependencies?: Record<string, string> };
-    const additionalDependencies = await resolveDialectDependency(
-      manifest.dependencies ?? {},
-      input.flags.dialect,
-      registry,
-    );
     await scaffoldFromTemplate({
       name,
       targetDirectory,
       templateDirectory: template.directory,
       extraFiles,
-      additionalDependencies,
     });
     result.projectCreated = true;
     await ensureAllowBuilds(targetDirectory);
-    result.configurationRequired = input.flags.dialect !== 'sqlite';
-    result.configFile = path.join(targetDirectory, 'config.yml');
-    result.configPath = 'database.connections.main';
+    // Creation stops at a project that can be configured, not at one that can run. Which database an application uses
+    // is decided by the driver it depends on, and configuring it is `config:init`'s job — so the next steps name it
+    // rather than this command writing a configuration nobody asked for.
     result.nextCommands =
-      kind === 'hub' ? ['pnpm build', 'pnpm start'] : ['pnpm dev'];
-    result.message = result.configurationRequired
-      ? 'Edit database.connections.main in config.yml with actual connection settings and prepare the target database before starting.'
-      : 'SQLite is ready to use after dependencies are installed.';
-    progress(`Created ${name} using ${input.flags.dialect}. ${result.message}`);
+      kind === 'hub'
+        ? ['pnpm config:init', 'pnpm config:check', 'pnpm build', 'pnpm start']
+        : ['pnpm config:init', 'pnpm config:check', 'pnpm dev'];
+    result.message =
+      'Configure the application with pnpm config:init before starting it. That uses SQLite; for another database, install its driver and name the dialect, for example: pnpm add @nocobase/db-postgres, then pnpm config:init --dialect postgres';
+    progress(`Created ${name}. ${result.message}`);
   } finally {
     await removeDirectory(template.directory);
   }
@@ -229,11 +198,6 @@ async function run(
     throw new Error(
       verification.reason ?? 'Database driver verification failed.',
     );
-  if (input.flags.dialect !== 'sqlite') {
-    const warning = `Post-install native dependency verification only checks better-sqlite3 when present. The selected ${input.flags.dialect} driver and database connection have not been verified; configure config.yml and verify startup against your database.`;
-    result.warnings.push(warning);
-    progress(warning);
-  }
   progress('Synchronizing NocoBase package skills');
   const synchronized = await syncSkills(targetDirectory);
   if (!synchronized.ok) {

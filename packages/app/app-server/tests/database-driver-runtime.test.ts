@@ -56,6 +56,17 @@ it('reports absent optional packages, supports async ESM, and preserves transiti
           `await assert.rejects(resolveDatabaseConfig(config), error => error.message.includes('connection "reporting"') && error.message.includes('pnpm add @nocobase/db-mysql')); console.log('missing');`,
       ).trim(),
     ).toBe('missing');
+    // Every connection missing its driver is reported in one error, with one command that installs them all — a
+    // driver shared by two connections is listed once.
+    expect(
+      run(
+        `import assert from 'node:assert/strict'; import {resolveDatabaseConfig} from './resolver.mjs';` +
+          `const config = {connections:{main:{dialect:'postgres'},reporting:{dialect:'mysql'},archive:{dialect:'mysql'}}};` +
+          `await assert.rejects(resolveDatabaseConfig(config), error => error.name === 'MissingDatabaseDriversError'` +
+          ` && error.missing.map(entry => entry.connection).join() === 'main,reporting,archive'` +
+          ` && error.message.includes('"pnpm add @nocobase/db-postgres @nocobase/db-mysql"')); console.log('all missing');`,
+      ).trim(),
+    ).toBe('all missing');
     const mysql = path.join(root, 'node_modules/@nocobase/db-mysql');
     mkdirSync(mysql);
     writeFileSync(

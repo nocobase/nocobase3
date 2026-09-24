@@ -38,7 +38,7 @@
     "pack:check": "node ./scripts/pack-check.mjs",
     "peers:check": "node ./scripts/check-peer-deps.mjs",
     "deps:check": "node ./scripts/check-runtime-deps.mjs",
-    "postinstall": "node ./scripts/link-claude-skills.mjs",
+    "postinstall": "node ./scripts/sync-skills.mjs",
     "prepare": "pnpm dev-config:build && husky",
     "examples:dev": "pnpm --filter @nocobase/app-template-examples dev",
     "examples:build": "pnpm --filter @nocobase/app-template-examples build",
@@ -62,10 +62,11 @@
     "db:typecheck": "tsc -p dev/db/tsconfig.json --noEmit",
     "db:test": "cd dev/db && vitest run",
     "db:check": "pnpm db:lint && pnpm db:typecheck && pnpm db:test",
-    "local-registry:prepare": "node ./scripts/local-registry.mjs prepare",
-    "local-registry:verify": "node ./scripts/local-registry.mjs verify",
-    "local-registry:stop": "node ./scripts/local-registry.mjs stop",
-    "local-registry:create": "node ./scripts/local-registry.mjs create"
+    "unreleased:prepare": "node ./scripts/unreleased.mjs prepare",
+    "unreleased:create": "node ./scripts/unreleased.mjs create",
+    "unreleased:smoke": "node ./scripts/unreleased.mjs smoke",
+    "unreleased:env": "node ./scripts/unreleased.mjs env",
+    "unreleased:clean": "node ./scripts/unreleased.mjs clean"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",

@@ -11,6 +11,8 @@ Hub manages Releases, deployments, configuration and runtime operations. The cur
 
 The repository provides `Dockerfile.hub` and an image publishing workflow for `ghcr.io/nocobase/hub` and `registry.cn-beijing.aliyuncs.com/nocobase/hub`, targeting amd64 and arm64. Verify an available tag or digest before use; workflow configuration alone does not prove a tag was published. Alternatively, scaffold the Hub template and build for the target platform with Node 24.
 
+Applications are built for the environment Hub itself runs in, not for the server around it. The published image is based on Debian bookworm with Node 24, so a Docker deployment builds with `--target linux-x64` (or `linux-arm64`) and `--node-version 24` whatever the host runs; the Node version installed on the host, and whether the host is Alpine, do not apply. For a template deployment, read the values on the server that runs Hub with `uname -sm`, `node -p "process.versions.node + ' ABI ' + process.versions.modules"` and `ldd --version`. A Hub upgrade that changes the Node major version changes these flags, and already published applications must be rebuilt.
+
 Configure a persistent storage directory, database and stable authentication/session secrets before starting. Set `APP_CONFIG_FILE` to the runtime configuration file and `HUB_STORAGE_DIR` to a writable persistent directory. With Docker, mount both explicitly and set the SQLite `database` path to a location inside the persistent mount. The image contains `/app/config.example.yml` as a configuration reference. Do not replace an existing runtime configuration with the template on upgrade.
 
 ## Public access

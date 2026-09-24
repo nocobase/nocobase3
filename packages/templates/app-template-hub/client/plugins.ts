@@ -9,7 +9,6 @@ import apiKeys from '@nocobase/app-plugin-api-keys/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
 import users from '@nocobase/app-plugin-users/client';
-import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import i18n from '@nocobase/app-plugin-i18n/client';
 import hub from '@nocobase/app-plugin-hub/client';
@@ -32,7 +31,6 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   }),
   apiKeys({ path: '/api-keys' }),
   i18n(),
-  install(),
   notificationProvider({ demo: false }),
 ]);
 

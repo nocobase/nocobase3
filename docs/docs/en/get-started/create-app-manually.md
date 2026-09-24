@@ -41,20 +41,42 @@ Once the package is officially published to the public npm registry, the creatio
 pnpm create @nocobase/app my-app
 ```
 
-The generated `config.yml` contains application configuration and secrets. Keep it local and out of version control.
+Creation stops at a project that is ready to configure. It writes no `config.yml`; the next step does.
 
-## Check database configuration
-
-Before startup, check the drivers registered in `server/config/database.ts` and the connection settings in `config.yml`. If you keep the generated database configuration, you do not need to configure it again.
-
-To use another database, install the matching `@nocobase/db-*` package, register it in `drivers`, and configure the connection address, database name, and account details. Keep connection passwords in local configuration.
-
-## Start the application
-
-Enter the new directory and start development:
+## Configure the application
 
 ```bash
 cd my-app
+pnpm config:init
+```
+
+This writes `config.yml` from `config.example.yml`, keeping its comments, and fills in the authentication and session secrets. It contains application configuration and secrets, so keep it local and out of version control.
+
+It uses SQLite, which the templates already depend on and which needs no server. To use another database, install its driver first and name it when configuring:
+
+```bash
+pnpm add @nocobase/db-postgres
+pnpm config:init --dialect postgres
+```
+
+`pnpm config:init` installs nothing: a dialect whose driver is missing is reported with the command that installs it, and nothing is written, so you can simply run it again afterwards. For anything other than SQLite it asks for the connection settings when run in a terminal, and tries the connection before writing. You can also set them afterwards — the password read from an environment variable, so it stays out of your shell history:
+
+```bash
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD
+```
+
+## Check the configuration
+
+```bash
+pnpm config:check
+```
+
+This loads the configuration the way the application will, connects to the database unless it is SQLite, and reports anything that would stop the application from starting — a missing driver, a missing secret, a database it cannot reach — with the command that fixes it.
+
+## Start the application
+
+```bash
 pnpm dev
 ```
 

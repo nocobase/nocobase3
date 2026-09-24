@@ -14,6 +14,8 @@ import {
 } from '../client/routes.js';
 
 describe('@nocobase/app-plugin-api-keys Client', () => {
+  // Loading a page module transforms its whole import graph on first use, which can outlast the default 5 s timeout
+  // when a release runner runs every package's tests at once.
   it('mounts one Settings page at a relative path', async () => {
     const registration = apiKeys({});
 
@@ -36,7 +38,7 @@ describe('@nocobase/app-plugin-api-keys Client', () => {
     await expect(
       registration.routes[0]?.routes[0]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
-  });
+  }, 30_000);
 
   it('lets an application choose the path and the menu label', () => {
     expect(

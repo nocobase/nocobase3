@@ -30,20 +30,29 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '../components/ui/sheet.js';
 import { Input } from '../components/ui/input.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select.js';
 import { Textarea } from '../components/ui/textarea.js';
 import {
   createTask,
   errorMessage,
   listTasks,
   listUsers,
+  type TaskPage,
   type Task,
   type User,
 } from '../lib/api.js';
+
+const TASK_PAGE_SIZE = 10;
 
 export default function TasksPage(): ReactElement {
   const { i18n, t } = useTranslation(
@@ -57,17 +66,19 @@ export default function TasksPage(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const load = useCallback(async (): Promise<{
-    tasks: Task[];
+    page: TaskPage;
     users: User[];
   }> => {
-    const [loadedTasks, loadedUsers] = await Promise.all([
-      listTasks(api),
+    const [loadedPage, loadedUsers] = await Promise.all([
+      listTasks(api, { page, pageSize: TASK_PAGE_SIZE }),
       listUsers(api),
     ]);
-    return { tasks: loadedTasks, users: loadedUsers };
-  }, [api]);
+    return { page: loadedPage, users: loadedUsers };
+  }, [api, page]);
 
   function refresh(): void {
     setLoading(true);
@@ -75,12 +86,21 @@ export default function TasksPage(): ReactElement {
     setRevision((value) => value + 1);
   }
 
+  function changePage(nextPage: number): void {
+    if (nextPage === page) return;
+    setLoading(true);
+    setError('');
+    setPage(nextPage);
+  }
+
   useEffect(() => {
     let active = true;
     void load().then(
-      ({ tasks: loadedTasks, users: loadedUsers }) => {
+      ({ page: loadedPage, users: loadedUsers }) => {
         if (!active) return;
-        setTasks(loadedTasks);
+        setTasks(loadedPage.data);
+        setTotal(loadedPage.total);
+        if (loadedPage.page !== page) setPage(loadedPage.page);
         setUsers(loadedUsers);
         setLoading(false);
       },
@@ -93,7 +113,7 @@ export default function TasksPage(): ReactElement {
     return () => {
       active = false;
     };
-  }, [load, revision]);
+  }, [load, page, revision]);
 
   function handleCreated(task: Task): void {
     setTasks((current) => [
@@ -129,7 +149,7 @@ export default function TasksPage(): ReactElement {
               <CardTitle>
                 {t('tasks.listTitle')}
                 <span className='ml-2 text-sm font-normal text-muted-foreground'>
-                  {t('tasks.count', { count: tasks.length })}
+                  {t('tasks.count', { count: total })}
                 </span>
               </CardTitle>
               <div className='flex gap-2'>
@@ -239,6 +259,25 @@ export default function TasksPage(): ReactElement {
                 </Table>
               </div>
             )}
+            <div className='flex items-center justify-end gap-3'>
+              <Button
+                size='sm'
+                variant='outline'
+                disabled={loading || page <= 1}
+                onClick={() => changePage(Math.max(1, page - 1))}
+              >
+                {t('tasks.previous')}
+              </Button>
+              <span className='text-sm'>{t('tasks.page', { page })}</span>
+              <Button
+                size='sm'
+                variant='outline'
+                disabled={loading || page * TASK_PAGE_SIZE >= total}
+                onClick={() => changePage(page + 1)}
+              >
+                {t('tasks.next')}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </section>
@@ -275,6 +314,10 @@ function CreateTaskSheet({
   const [assigneeId, setAssigneeId] = useState(() => users[0]?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const assigneeItems = users.map((user) => ({
+    value: user.id,
+    label: user.name || user.email,
+  }));
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -292,69 +335,93 @@ function CreateTaskSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className='w-full sm:max-w-lg'>
+      <SheetContent
+        showCloseButton={false}
+        className='overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl'
+        aria-describedby={undefined}
+      >
         <SheetHeader>
           <SheetTitle>{t('tasks.drawerTitle')}</SheetTitle>
           <SheetDescription>{t('tasks.drawerDescription')}</SheetDescription>
         </SheetHeader>
-        <form
-          id='notification-example-create-task'
-          className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5'
-          onSubmit={(event) => void submit(event)}
-        >
-          {error ? (
-            <p role='alert' className='text-sm text-destructive'>
-              {error}
-            </p>
-          ) : null}
-          <label className='block space-y-2'>
-            <span className='text-sm font-medium'>{t('fields.title')}</span>
-            <Input
-              required
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </label>
-          <label className='block space-y-2'>
-            <span className='text-sm font-medium'>
-              {t('fields.description')}
-            </span>
-            <Textarea
-              required
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
-          <label className='block space-y-2'>
-            <span className='text-sm font-medium'>{t('fields.assignee')}</span>
-            <select
-              required
-              className='h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-              value={assigneeId}
-              onChange={(event) => setAssigneeId(event.target.value)}
+        {error ? (
+          <p role='alert' className='px-4 text-sm text-destructive'>
+            {error}
+          </p>
+        ) : null}
+        <Card>
+          <CardContent>
+            <form
+              id='notification-example-create-task'
+              className='space-y-4'
+              onSubmit={(event) => void submit(event)}
             >
-              <option value=''>{t('fields.chooseAssignee')}</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name || user.email}
-                </option>
-              ))}
-            </select>
-          </label>
-          <SheetFooter className='-mx-5 mt-auto px-5'>
-            <Button type='submit' disabled={saving || !assigneeId}>
-              {saving ? t('common.saving') : t('tasks.create')}
-            </Button>
-            <Button
-              type='button'
-              variant='outline'
-              disabled={saving}
-              onClick={() => onOpenChange(false)}
-            >
-              {t('tasks.cancel')}
-            </Button>
-          </SheetFooter>
-        </form>
+              <div className='grid gap-4 sm:grid-cols-2'>
+                <label className='space-y-2 text-sm font-medium'>
+                  <span>{t('fields.title')}</span>
+                  <Input
+                    required
+                    autoFocus
+                    disabled={saving}
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                  />
+                </label>
+                <div className='space-y-2 text-sm font-medium'>
+                  <span
+                    id='notification-example-assignee-label'
+                    className='block'
+                  >
+                    {t('fields.assignee')}
+                  </span>
+                  <Select
+                    disabled={saving}
+                    items={assigneeItems}
+                    required
+                    value={assigneeId}
+                    onValueChange={(value) => setAssigneeId(value ?? '')}
+                  >
+                    <SelectTrigger
+                      aria-labelledby='notification-example-assignee-label'
+                      className='w-full'
+                    >
+                      <SelectValue placeholder={t('fields.chooseAssignee')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name || user.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <label className='space-y-2 text-sm font-medium sm:col-span-2'>
+                  <span>{t('fields.description')}</span>
+                  <Textarea
+                    required
+                    disabled={saving}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className='flex gap-2'>
+                <Button type='submit' disabled={saving || !assigneeId}>
+                  {saving ? t('common.saving') : t('tasks.create')}
+                </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  disabled={saving}
+                  onClick={() => onOpenChange(false)}
+                >
+                  {t('tasks.cancel')}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </SheetContent>
     </Sheet>
   );

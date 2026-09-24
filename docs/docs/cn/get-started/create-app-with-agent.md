@@ -15,22 +15,21 @@ description: '供 AI Agent 读取的 NocoBase 3 单应用创建、配置与启�
 
 ## 二、检查环境并创建项目
 
-检查 Node.js 24 和 pnpm 11。缺少环境或版本不符时，说明需要准备的工具，按用户的操作系统完成环境准备后再继续。生成项目后，以其 `package.json` 指定的包管理器版本为准。
+检查 Node.js 24 和 pnpm 11。缺少环境或版本不符时，先停下，不要开始创建。告诉用户检测到的版本和要求的版本，给出适合其操作系统的安装命令（优先使用用户已有的版本管理工具，例如 `nvm install 24`；pnpm 可用 `corepack enable && corepack prepare pnpm@11 --activate`），并提醒安装后重新打开终端。只有用户要求时才代为安装；继续之前重新检查两个版本。生成项目后，以其 `package.json` 指定的包管理器版本为准。
 
-以下命令适用于 Linux / WSL 的 Bash 终端。假设当前会话目录为 `/work/my-app`，目标目录已经存在且为空：先检查环境并配置包源，再将创建命令的执行目录设为 `/work`，目标名称设为 `my-app`。路径与名称按实际目录替换。
+以下命令适用于 Linux / WSL 的 Bash 终端。假设当前会话目录为 `/work/my-app`，目标目录已经存在且为空：先检查环境，再将创建命令的执行目录设为 `/work`，目标名称设为 `my-app`。路径与名称按实际目录替换。
 
 创建工具不接受 `.` 作为应用名称；从父目录指定当前目录名称，可以将文件直接生成到已有空目录。不要先在当前目录创建子项目再搬动文件。
 
 ```bash
 node --version
 pnpm --version
-pnpm config set @nocobase:registry https://npm.nocobase.ai/
-(cd /work && PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm create @nocobase/app my-app)
+(cd /work && PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm create @nocobase/app my-app --json)
 ```
 
-当前 `@nocobase` 包使用内部包源。`PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` 对此次命令及其子进程生效，允许下载刚发布的版本。配置 registry 时使用上面的作用域设置；如果采用环境变量形式，pnpm 11 使用 `pnpm_config_registry`，不要使用 `npm_config_registry`。
+`@nocobase/create-app` 来自公共 npm。它自己从 `https://npm.nocobase.ai/` 下载模板、安装依赖，并把这个包源写进项目的 `.npmrc`，所以不要修改用户的 pnpm 配置，例如不要执行 `pnpm config set @nocobase:registry`。`PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` 对此次命令及其子进程生效，允许下载刚发布的版本。`--json` 不会交互提问，只在 stdout 输出一个 JSON 结果，其中的 `nextCommands` 就是接下来要执行的配置与启动命令。
 
-正式发布到公共 npm 包源后，可以使用通用命令 `pnpm create @nocobase/app my-app`。不要因为公共包源暂时无法下载而改用 NocoBase 2 的安装方式。
+不要因为找不到某个包而改用 NocoBase 2 的安装方式。
 
 等待创建命令结束，检查项目是否生成、依赖是否安装、开发指引是否同步。失败时说明失败步骤并修复，不以目录存在作为创建完成的依据，也不要重复创建同一个项目。
 
@@ -38,17 +37,34 @@ pnpm config set @nocobase:registry https://npm.nocobase.ai/
 
 命令中的子 shell 只改变创建命令的执行目录，会话工作目录仍为原来的应用目录。创建成功后，主动读取新生成的 `AGENTS.md` 及相关开发指引，再继续配置；不要假定新指引已自动加载。
 
-创建和启动完成后，告知用户在应用目录重新开启会话，再继续开发。NocoBase 会把开发用的 Skills 同步到项目目录的 `.agents/skills/`，AI Agent 只在会话开始时加载它们；停留在当前会话会让后续开发缺少这部分项目指引。用户选择了其他应用目录时，同时给出实际路径，提示结束当前会话、进入那个目录并开启新会话；桌面客户端基于那个目录创建或打开项目，再新建会话。
+创建和启动完成后，建议用户在应用目录重新开启会话，再继续开发。NocoBase 会把开发用的 Skills 同步到项目目录的 `.agents/skills/`，它们是在当前会话开始之后才出现的，当前会话未必已经加载；新会话能可靠加载。用户坚持在当前会话继续时，按 `AGENTS.md` 的指引直接读取相关的 `.agents/skills/<name>/SKILL.md`，不要假定它们已经加载。应用就在当前会话目录时，结束会话后在同一目录重新开启即可。用户选择了其他应用目录时，给出实际路径和在那里启动 Agent 的命令，例如 `cd /work/my-app && claude`，并提示先结束当前会话；桌面客户端基于那个目录创建或打开项目，再新建会话。
 
 ## 四、确认数据库和配置
 
 确认当前工作目录就是应用根目录，先读取 `AGENTS.md`、`package.json` 以及任务相关的本地开发指引。检查已有配置，继续完成尚未完成的操作。
 
-询问用户希望使用什么数据库，不在首次创建提示词中替用户指定。常见选项包括 SQLite、PostgreSQL 和 MySQL：SQLite 使用本地文件；PostgreSQL 和 MySQL 需要可连接的数据库服务。用户需要其他数据库时，依据当前项目的数据库指引核对对应驱动和连接方式。
+用户已经指定数据库时直接使用；否则询问用户希望使用什么数据库，不替用户决定。常见选项包括 SQLite、PostgreSQL 和 MySQL：SQLite 使用本地文件；PostgreSQL 和 MySQL 需要可连接的数据库服务。用户需要其他数据库时，依据当前项目的数据库指引核对对应驱动和连接方式。
 
-数据库类型由用户决定后，检查 `server/config/database.ts` 中已注册的驱动和 `config.yml` 的连接配置。使用其他数据库时，按项目指引安装对应驱动、注册并配置连接。配置文件中的方言名称不能代替驱动注册。保留已有业务数据，不通过删除数据库或配置文件来触发重新安装。
+数据库类型由用户决定后，在应用目录中完成配置。使用 SQLite 无需安装任何东西，模板已依赖它的驱动：
 
-让用户在本地配置或实际提供的安装界面中填写数据库密码，不要求将密码粘贴到聊天中，也不打印完整配置。若应用进入安装界面，按界面提供的字段继续操作，并遵循完成后的重启提示。不要假定所有生成项目都会出现相同的数据库选择或管理员设置界面，也不要自行编造 `install` 命令。
+```bash
+pnpm config:init --dialect sqlite --json
+```
+
+其他数据库需要先安装驱动，例如 `pnpm add @nocobase/db-postgres`，再用同样的命令指定该方言。`pnpm config:init` 不安装任何东西，驱动缺失时它不写入任何文件，只在结果里给出 `suggestedCommand`，也就是对应的 `pnpm add`；执行它之后重新运行 `config:init` 即可。配置文件中的方言名称不能代替驱动。结果里的 `requiredSettings` 列出还是占位值的连接字段，接着用 `config:set` 设置：
+
+```bash
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm --json
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD --json
+```
+
+请用户把密码放进环境变量，再用 `--from-env` 传入变量名。不要在对话里索要密码，不要把密码写在命令行上，也不要打印完整配置。然后检查配置，这一步会实际连一次数据库：
+
+```bash
+pnpm config:check --json
+```
+
+检查失败时，每个问题都附带可以直接执行的 `fix`。保留已有业务数据，不要通过删除数据库或配置文件来触发重新配置：对已配置的应用运行 `config:init` 会报告 `unchanged`，只有用户明确要求替换配置时才使用 `--force`。生成的应用没有安装页面，配置完成之前 `pnpm dev` 会拒绝启动。
 
 ## 五、启动并给出登录方式
 
@@ -58,13 +74,13 @@ pnpm config set @nocobase:registry https://npm.nocobase.ai/
 pnpm dev
 ```
 
-保持服务运行，检查实际输出的访问地址，并确认页面可打开。若需要安装或配置，先帮助用户完成，再检查登录页；不要将安装页面可打开报告为应用已经初始化完成。
+`pnpm dev` 不会退出，需要在后台运行。检查实际输出的访问地址，并请求该地址确认页面可打开，例如用 `curl -I` 并期望得到成功响应。若需要安装或配置，先帮助用户完成，再检查登录页；不要将安装页面可打开报告为应用已经初始化完成。
 
 完成后直接向用户提供：
 
 - 应用目录和实际访问地址
 - 首次登录使用的账号，以及密码从哪里获取
-- 如何停止服务、下次如何启动
+- 服务由 Agent 会话启动，会话结束后会随之停止；之后在应用目录执行 `pnpm dev` 重新启动
 - 是否还存在未完成的配置或启动错误
 
 如果模板使用初始管理员，账号为 `admin@nocobase.com`、密码为 `admin123`；核对生成项目的账号说明后再告知用户。若用户设置了自己的管理员，或使用已有数据库，按实际账号说明，不把模板默认值当成当前凭据。用户自设密码无需复述到对话中。

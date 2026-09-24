@@ -100,7 +100,7 @@ export class AuthenticationProvider<
     const configuredAuth = this.app.config.get<AuthConfig>('auth') ?? {};
     const authConfig = {
       ...configuredAuth,
-      secret: resolveAuthSecret(configuredAuth.secret, this.app.paths.root()),
+      secret: resolveAuthSecret(configuredAuth.secret),
     };
     const caching = container.resolve(cachingToken);
     const idGenerator = container.resolve(idGeneratorToken);

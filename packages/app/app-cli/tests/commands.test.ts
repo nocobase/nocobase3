@@ -16,6 +16,9 @@ describe('application command factories', () => {
     expect(loadRuntime).not.toHaveBeenCalled();
     expect(Object.keys(first)).toEqual([
       'info',
+      'config:init',
+      'config:check',
+      'config:set',
       'db:apply',
       'db:reset',
       'db:repair',

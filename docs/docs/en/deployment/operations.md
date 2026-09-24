@@ -15,17 +15,17 @@ Use a consistent database backup mechanism. Do not copy only a live SQLite main 
 
 ## Troubleshooting
 
-| Symptom                         | Check                                                               |
-| ------------------------------- | ------------------------------------------------------------------- |
-| Missing artifact                | Current build output is storage/exports/dist.tar.gz                 |
-| Native module failure           | CPU architecture, libc and Node ABI                                 |
-| Empty database after deployment | SQLite database path and persistent mounts                          |
-| Static assets or callbacks fail | Build/runtime base paths, public origin and forwarded headers       |
-| Hub root returns 404            | Use the configured Hub path, commonly /hub/                         |
-| Hosted App returns 503 or 502   | Host readiness, connectivity and runtime logs                       |
-| Upload returns 413              | Proxy limit and Hub's 256 MiB artifact limit                        |
-| Publishing returns 401 or 403   | Key scope, expiry, App binding and creator permissions              |
-| Timeout or conflict             | Inspect the original deployment before submitting another operation |
+| Symptom                                                            | Check                                                                                                                                                              |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Missing artifact                                                   | Current build output is storage/exports/dist.tar.gz                                                                                                                |
+| Native module failure (`ERR_DLOPEN_FAILED`, `NODE_MODULE_VERSION`) | Compare `nocobase.buildTarget` in the artifact's `dist/package.json` with the environment that runs it, then rebuild with matching `--target` and `--node-version` |
+| Empty database after deployment                                    | SQLite database path and persistent mounts                                                                                                                         |
+| Static assets or callbacks fail                                    | Build/runtime base paths, public origin and forwarded headers                                                                                                      |
+| Hub root returns 404                                               | Use the configured Hub path, commonly /hub/                                                                                                                        |
+| Hosted App returns 503 or 502                                      | Host readiness, connectivity and runtime logs                                                                                                                      |
+| Upload returns 413                                                 | Proxy limit and Hub's 256 MiB artifact limit                                                                                                                       |
+| Publishing returns 401 or 403                                      | Key scope, expiry, App binding and creator permissions                                                                                                             |
+| Timeout or conflict                                                | Inspect the original deployment before submitting another operation                                                                                                |
 
 Read proxy logs, service/container output, deployment journals, Host logs and App runtime logs in that order. Under the configured Hub storage root, defaults include `hub/logs/deployments`, `host/logs/host` and `apps/volumes/<appId>/storage/logs`.
 

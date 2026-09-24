@@ -12,6 +12,7 @@ import { fileProvider } from '@nocobase/config/providers/file';
 import type {
   AppConfigChangeListener,
   AppConfigFileOptions,
+  AppConfigLayers,
   AppConfigReloadResult,
   AppConfigSource,
 } from './app-config-types.js';
@@ -97,6 +98,15 @@ export class AppConfig {
 
   public raw(): ConfigMap {
     return this.requireCurrent().raw();
+  }
+
+  /** The defaults and the values the application's own sources supply, kept apart. See {@link AppConfigLayers}. */
+  public layers(): AppConfigLayers {
+    this.requireCurrent();
+    return {
+      defaults: this.defaults.copy().raw(),
+      overrides: this.overrides.copy().raw(),
+    };
   }
 
   public subscribe<TValue>(

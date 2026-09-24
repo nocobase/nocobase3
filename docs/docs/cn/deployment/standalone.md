@@ -9,7 +9,15 @@ description: 不使用 Hub，构建部署包并在服务器独立运行应用。
 
 ## 环境与目录准备
 
-构建与运行采用 Node.js 24；构建工具版本参照项目 `packageManager`。确认服务器 CPU 架构、操作系统及 libc。本文采用 Linux x64、glibc；ARM64 选 `linux-arm64`，Alpine 等 musl 环境必须选择对应目标并核验原生依赖。
+构建与运行采用 Node.js 24；构建工具版本参照项目 `packageManager`。本文采用 Linux x64、glibc；ARM64 选 `linux-arm64`，Alpine 等 musl 环境必须选择对应目标并核验原生依赖。
+
+构建参数需要服务器的 CPU 架构、Node 大版本及 libc，在目标服务器上执行以下命令确认：
+
+```bash
+uname -sm
+node -p "process.versions.node + ' ABI ' + process.versions.modules"
+ldd --version 2>&1 | head -1   # 输出包含 musl 时为 Alpine 一类环境
+```
 
 区分三类内容：`dist` 是可替换代码，`config.yml` 是目标环境配置，`storage` 是需要保留的数据库、上传文件和日志等数据；默认会话保存在内存中，重启后需要重新登录。本文使用固定部署根目录，升级时仅替换 `dist`，不覆盖配置和 storage。
 

@@ -1,4 +1,3 @@
-import { DIALECTS, type Dialect } from './dialects.ts';
 import { Args, Flags } from '@oclif/core';
 import { parse } from '@oclif/core/parser';
 import {
@@ -21,11 +20,6 @@ export const CREATE_ARGS = {
 };
 
 export const CREATE_FLAGS = {
-  dialect: Flags.string({
-    options: [...DIALECTS],
-    default: 'sqlite',
-    description: `Main database dialect: ${DIALECTS.join(', ')} (default: sqlite). Edit connection settings in config.yml before starting.`,
-  }),
   json: Flags.boolean({
     default: false,
     description:
@@ -62,7 +56,6 @@ export const CREATE_FLAGS = {
 export interface ParsedInput {
   directory?: string;
   flags: {
-    dialect: Dialect;
     json: boolean;
     install: boolean;
     template: string;
@@ -106,7 +99,7 @@ export function formatHelp(binary: string): string {
     'EXAMPLES',
     `  $ ${binary} crm`,
     `  $ ${binary} crm --no-install`,
-    `  $ ${binary} crm --dialect postgres --json`,
+    `  $ ${binary} crm --json`,
     `  $ ${binary} crm --template=hub`,
     `  $ ${binary} crm --template-tag=beta`,
     '',
@@ -114,7 +107,12 @@ export function formatHelp(binary: string): string {
     '  The template is downloaded from https://npm.nocobase.ai by default.',
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
-    "  config.yml is generated from the template's config.example.yml, with generated secrets.",
-    '  Use --dialect to choose a database, then edit its connection settings in config.yml.',
+    '  The generated app is not configured yet. Configure it inside the app directory with:',
+    '    pnpm config:init',
+    '',
+    '  That writes config.yml with generated secrets for SQLite, whose driver the app already has.',
+    '  For another database, install its driver and name the dialect:',
+    '    pnpm add @nocobase/db-postgres',
+    '    pnpm config:init --dialect postgres',
   ].join('\n');
 }

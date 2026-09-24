@@ -10,7 +10,7 @@ keywords: 'NocoBase,AI 员工,快速开始,config.yml,LLM,全局对话'
 
 ## 前置条件
 
-- 已使用 `pnpm create @nocobase/app <目录名>` 创建应用
+- 已使用 `pnpm create @nocobase/app <目录名>` 创建应用，并在应用目录中运行过 `pnpm config:init`
 - 应用可以通过 `pnpm dev` 启动
 - `@nocobase/app-plugin-ai-employee` 已在应用的 Server 和 Client 插件列表中注册
 - 已准备 LLM 服务的 API Key
@@ -23,9 +23,10 @@ keywords: 'NocoBase,AI 员工,快速开始,config.yml,LLM,全局对话'
 ```bash
 pnpm create @nocobase/app ai-workspace
 cd ai-workspace
+pnpm config:init
 ```
 
-创建命令会询问数据库等基础信息，并生成包含 `config.yml` 的完整应用源码。确认初始应用能够通过 `pnpm dev` 启动，然后继续配置 AI。
+创建命令生成完整的应用源码并安装依赖，`pnpm config:init` 生成 `config.yml`（默认使用 SQLite，并填入随机密钥）。确认初始应用能够通过 `pnpm dev` 启动，然后继续配置 AI。
 
 ## 第一步：声明 LLM 服务
 

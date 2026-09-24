@@ -15,6 +15,8 @@ const TASKS = 'notificationExampleTasks';
 const USER_PATH = 'user';
 const ROUTE_PREFIX = '/notification-example';
 const STATUSES = ['open', 'in-progress', 'done'] as const;
+const DEFAULT_TASK_PAGE_SIZE = 10;
+const MAX_TASK_PAGE_SIZE = 100;
 
 type TaskStatus = (typeof STATUSES)[number];
 
@@ -75,8 +77,17 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
 
     router.get(`${ROUTE_PREFIX}/tasks`, async (context) => {
       const userId = context.get('auth')!.user.id;
-      const rows = await listTasks(database, userId);
-      return context.json({ data: await toTaskViews(database, rows) });
+      const { page, pageSize } = readTaskPage(
+        context.req.query('page'),
+        context.req.query('pageSize'),
+      );
+      const result = await listTasks(database, userId, page, pageSize);
+      return context.json({
+        data: await toTaskViews(database, result.rows),
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+      });
     });
 
     router.get(`${ROUTE_PREFIX}/tasks/:id`, async (context) => {
@@ -265,10 +276,32 @@ async function findTask(
 async function listTasks(
   database: DatabaseManager,
   userId: string,
-): Promise<TaskRow[]> {
-  const rows = await database
-    .connection()
-    .query.selectFrom(TASKS)
+  requestedPage: number,
+  pageSize: number,
+): Promise<{
+  readonly rows: TaskRow[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}> {
+  const query = database.connection().query;
+  const countRow = await query
+    .selectFrom(TASKS)
+    .select(({ fn }) => [fn.countAll<number>().as('count')])
+    .where((expression) =>
+      expression.or([
+        expression('creatorId', '=', userId),
+        expression('assigneeId', '=', userId),
+      ]),
+    )
+    .executeTakeFirst<{ count: number | string }>();
+  const total = Number(countRow?.count ?? 0);
+  const page = Math.min(
+    requestedPage,
+    Math.max(1, Math.ceil(total / pageSize)),
+  );
+  const rows = await query
+    .selectFrom(TASKS)
     .selectAll()
     .where((expression) =>
       expression.or([
@@ -277,8 +310,29 @@ async function listTasks(
       ]),
     )
     .orderBy('updatedAt', 'desc')
+    .orderBy('id', 'desc')
+    .limit(pageSize)
+    .offset((page - 1) * pageSize)
     .execute();
-  return rows as unknown as TaskRow[];
+  return { rows: rows as unknown as TaskRow[], total, page, pageSize };
+}
+
+function readTaskPage(
+  pageValue: string | undefined,
+  pageSizeValue: string | undefined,
+): { page: number; pageSize: number } {
+  const requestedPage = Number(pageValue ?? 1);
+  const requestedPageSize = Number(pageSizeValue ?? DEFAULT_TASK_PAGE_SIZE);
+  return {
+    page:
+      Number.isSafeInteger(requestedPage) && requestedPage > 0
+        ? requestedPage
+        : 1,
+    pageSize:
+      Number.isSafeInteger(requestedPageSize) && requestedPageSize > 0
+        ? Math.min(requestedPageSize, MAX_TASK_PAGE_SIZE)
+        : DEFAULT_TASK_PAGE_SIZE,
+  };
 }
 
 async function toTaskViews(

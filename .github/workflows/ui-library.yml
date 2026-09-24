@@ -55,8 +55,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The ESLint configuration imports the shared factories from @nocobase/dev-config, whose exports resolve to its
+      # compiled output.
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
+      - name: Lint UI Library
+        run: pnpm --filter @nocobase/ui-library lint
+
       # `build` is `shadcn build && vite build`, and Vite does not type-check, so this is the only step that would
-      # catch a TypeScript error before it is published.
+      # catch a TypeScript error before it is published. It also compiles the registry sources the way a plugin does,
+      # against the real workspace packages the items import.
       - name: Typecheck UI Library
         run: pnpm --filter @nocobase/ui-library typecheck
 

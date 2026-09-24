@@ -49,7 +49,7 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
 ## 曾经有过的命令
 
-`app create`、`app dev`、`app info`、`app config`、`app destroy`、`app deploy`、`app pull`、`app list` 和 `hub *` 全部已删除（当时 bin 还叫 `nb3`）。
+`app create`、`app dev`、`app info`、`app config`、`app destroy`、`app deploy`、`app pull`、`app list` 和 `hub *` 全部已删除（当时 bin 还叫 `nb3`）。今天的 `nocobase app config init` 与当年那个 `app config` 无关：它由应用自己的 `@nocobase/app-cli` 提供，作用范围是这一个应用的 `config.yml`。
 
 它们来自一个不同的设想：用户先全局安装这个 CLI，再用它创建和运行项目。实际走的是另一条路——项目由 `pnpm create @nocobase/app` 生成，之后用项目自己的 `pnpm dev`、`pnpm build`、`pnpm start` 运行，Hub 也一样。那批命令因此没有任何调用方，其中 `deploy`、`pull`、`list` 甚至从未实现，只会以退出码 3 报错。
 

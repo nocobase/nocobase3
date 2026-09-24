@@ -9,7 +9,6 @@ import authorizationExample from '@nocobase/app-plugin-authorization-example/ser
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
-import install from '@nocobase/app-plugin-install/server';
 import notification from '@nocobase/app-plugin-notification/server';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/server';
 import notificationProviders from '@nocobase/app-plugin-notification-providers/server';
@@ -43,7 +42,6 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   apiKeys,
   databaseExample,
   i18n,
-  install,
   notification,
   notificationInApp,
   notificationProviders,

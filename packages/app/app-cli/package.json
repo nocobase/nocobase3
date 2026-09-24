@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-cli",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Shared application runtime CLI commands.",
   "type": "module",
   "license": "Apache-2.0",
@@ -89,6 +89,8 @@
     "@nocobase/db": "workspace:^"
   },
   "dependencies": {
-    "@oclif/core": "catalog:"
+    "@clack/prompts": "catalog:",
+    "@oclif/core": "catalog:",
+    "yaml": "catalog:"
   }
 }
