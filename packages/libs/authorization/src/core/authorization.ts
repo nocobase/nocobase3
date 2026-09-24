@@ -100,7 +100,7 @@ const LIBRARY_NAMESPACE = '@nocobase/authorization';
 
 export class Authorization {
   readonly sections: SectionRegistry = new SectionRegistry();
-  readonly groups: ResourceGroupRegistry = new ResourceGroupRegistry();
+  readonly resourceGroups: ResourceGroupRegistry = new ResourceGroupRegistry();
   readonly resourceTypes: ResourceTypeRegistry;
   readonly recordAccess: RecordAccessRegistry = new RecordAccessRegistry();
   readonly constraints: AccessConstraintRegistry =
@@ -115,7 +115,10 @@ export class Authorization {
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
   constructor(options: AuthorizationOptions) {
-    this.resourceTypes = new ResourceTypeRegistry(this.sections, this.groups);
+    this.resourceTypes = new ResourceTypeRegistry(
+      this.sections,
+      this.resourceGroups,
+    );
     for (const [name, order] of [
       ['pages', 0],
       ['business', 100],
@@ -149,7 +152,7 @@ export class Authorization {
           return grantProvider.grants;
         },
         sections: this.sections,
-        groups: this.groups,
+        resourceGroups: this.resourceGroups,
         resourceTypes: this.resourceTypes,
         recordAccess: this.recordAccess,
         constraints: this.constraints,

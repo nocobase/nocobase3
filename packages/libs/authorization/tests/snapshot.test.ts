@@ -29,7 +29,7 @@ const quotesScope: BusinessContribution<{ quotes: string }> = {
 const quotes = defineBusinessResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .group('sales')
+    .section('sales')
     .action('submit', (action) => action.grant(quotesScope)),
 );
 
@@ -93,7 +93,7 @@ function setup(grants: readonly PermissionGrant[], unrestricted = false) {
       keys: ['sales'],
       unrestricted: true,
     });
-  authz.groups.add({ name: 'sales', title: 'Sales' });
+  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
   authz.business.define(quotes);
   return authz;
 }

@@ -54,7 +54,7 @@ class CollectionPermission implements BindableBusinessPermission {
 const quotes = defineBusinessResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .group('sales')
+    .section('sales')
     .action('submit', (action) =>
       action
         .title('Submit')
@@ -80,7 +80,7 @@ const quotes = defineBusinessResource('sales.quotes', (resource) =>
 const quotesObject: BusinessResource = {
   name: 'sales.quotes',
   title: 'Quotes',
-  group: 'sales',
+  section: 'sales',
   actions: [
     {
       name: 'submit',
@@ -157,7 +157,7 @@ function setup(
       ...extra,
     ],
   });
-  authz.groups.add({ name: 'sales', title: 'Sales' });
+  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
   return authz;
 }
 
@@ -179,12 +179,12 @@ describe('business resources', () => {
         quotesObject.actions[1],
       );
       const business = authz.resourceTypes.get('business');
-      expect(business.section).toBe('business');
+      expect(business.defaultSection).toBe('business');
       expect(business.items.list()).toEqual([
         {
           id: 'sales.quotes',
           title: 'Quotes',
-          group: 'sales',
+          section: 'sales',
           actions: [
             { name: 'submit', title: 'Submit' },
             { name: 'export', title: 'export' },
@@ -199,13 +199,17 @@ describe('business resources', () => {
 
   it('composes only collection grants', () => {
     const authz = setup();
-    authz.groups.add({ name: 'system', title: 'System' });
+    authz.sections.add({
+      name: 'system',
+      title: 'System',
+      parent: 'administration',
+    });
     for (const type of ['page', 'settings', 'workflow'])
       expect(() =>
         authz.business.define({
           ...quotesObject,
           name: `x.${type}`,
-          group: 'system',
+          section: 'system',
           actions: [
             {
               name: 'view',
@@ -222,19 +226,19 @@ describe('business resources', () => {
       ).toThrow('may only compose database.collection');
   });
 
-  it('rejects incomplete definitions and unknown groups', () => {
+  it('rejects incomplete definitions and unknown subsections', () => {
     const authz = setup();
     expect(() =>
-      defineBusinessResource('quotes', (resource) => resource.group('sales')),
+      defineBusinessResource('quotes', (resource) => resource.section('sales')),
     ).toThrow('needs unique, nonempty actions');
     expect(() =>
       defineBusinessResource('quotes', (resource) =>
-        resource.group('sales').action('view', (action) => action),
+        resource.section('sales').action('view', (action) => action),
       ),
     ).toThrow('grants nothing');
     expect(() =>
-      authz.business.define({ ...quotesObject, group: 'missing' }),
-    ).toThrow('unknown group');
+      authz.business.define({ ...quotesObject, section: 'missing' }),
+    ).toThrow('unknown subsection');
     const [submit] = quotesObject.actions;
     expect(() =>
       authz.business.define({

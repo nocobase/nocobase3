@@ -16,7 +16,7 @@ export interface AuthorizationPluginSetup<TConnection = unknown> {
   /** The Grant Provider; reading it without one installed throws. */
   readonly grants: AuthorizationGrantService;
   readonly sections: SectionRegistry;
-  readonly groups: ResourceGroupRegistry;
+  readonly resourceGroups: ResourceGroupRegistry;
   readonly resourceTypes: ResourceTypeRegistry;
   readonly recordAccess: RecordAccessRegistry;
   readonly constraints: AccessConstraintRegistry;

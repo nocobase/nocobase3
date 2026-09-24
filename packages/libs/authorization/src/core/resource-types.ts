@@ -22,7 +22,9 @@ export interface ResourceItem {
   readonly title: AuthorizationTitle;
   readonly description?: AuthorizationTitle;
   readonly actions: readonly ResourceItemAction[];
-  /** A name from `authz.groups`. Display only. */
+  /** The subsection the item is listed under; its type's "Other" when it names none. Display only. */
+  readonly section?: string;
+  /** A name from `authz.resourceGroups`. Display only. */
   readonly group?: string;
 }
 
@@ -32,13 +34,18 @@ export interface ResourceItemDefinition {
   readonly description?: AuthorizationTitle;
   /** Omit to inherit every action the resource type declares. */
   readonly actions?: readonly (string | ResourceItemAction)[];
+  /** A subsection from `authz.sections`. */
+  readonly section?: string;
+  /** A name from `authz.resourceGroups`. */
   readonly group?: string;
 }
 
 interface ItemBinding {
   readonly type: string;
   readonly actions?: readonly ResourceItemAction[];
-  readonly groups: ResourceGroupRegistry;
+  readonly sections: SectionRegistry;
+  readonly resourceGroups: ResourceGroupRegistry;
+  readonly defaultSection?: string;
 }
 
 const itemBindings = new WeakMap<ResourceItems, ItemBinding>();
@@ -107,9 +114,18 @@ function validateItem(
   item: ResourceItemDefinition,
   binding: ItemBinding,
 ): void {
-  if (item.group !== undefined && !binding.groups.has(item.group))
+  if (
+    item.section !== undefined &&
+    !binding.sections.isSubsection(item.section)
+  )
     throw new Error(
-      `Resource item ${binding.type}:${item.id} names an unknown group: ${item.group}`,
+      `Resource item ${binding.type}:${item.id} names an unknown subsection: ${item.section}`,
+    );
+  if (item.section === undefined && binding.defaultSection !== undefined)
+    binding.sections.other(binding.defaultSection);
+  if (item.group !== undefined && !binding.resourceGroups.has(item.group))
+    throw new Error(
+      `Resource item ${binding.type}:${item.id} names an unknown resource group: ${item.group}`,
     );
   if (!item.actions && !binding.actions)
     throw new TypeError(
@@ -139,7 +155,16 @@ function resolveItem(
       return title === undefined ? { name: value.name } : { ...value, title };
     },
   );
-  return structuredClone({ ...item, actions });
+  const section =
+    item.section ??
+    (binding?.defaultSection === undefined
+      ? undefined
+      : `${binding.defaultSection}.other`);
+  return structuredClone({
+    ...item,
+    ...(section === undefined ? {} : { section }),
+    actions,
+  });
 }
 
 export interface AuthorizationRuntimeContext {
@@ -167,8 +192,11 @@ export interface ResourceTypeAction<TParams = undefined> {
 export interface ResourceTypeDefinition<TParams = undefined> {
   readonly type: string;
   readonly title: AuthorizationTitle;
-  /** A name from `authz.sections`; omit to keep the type out of the workspace. */
-  readonly section?: string;
+  /**
+   * The top-level section whose "Other" subsection lists items that name no
+   * subsection; omit to keep the type out of the workspace.
+   */
+  readonly defaultSection?: string;
   /** A record type must declare its actions; a catalog type's items inherit them. */
   readonly actions?: readonly (string | ResourceTypeAction<TParams>)[];
   /** Makes this a catalog type: only registered items and their actions pass. */
@@ -182,7 +210,7 @@ export interface ResourceTypeDefinition<TParams = undefined> {
 export interface RegisteredResourceType {
   readonly type: string;
   readonly title: AuthorizationTitle;
-  readonly section?: string;
+  readonly defaultSection?: string;
   /** The declared type-level actions. */
   readonly actions: readonly ResourceItemAction[];
   /** Present on a catalog type; a record type has none. */
@@ -274,7 +302,7 @@ export class ResourceTypeRegistry {
 
   constructor(
     private readonly sections: SectionRegistry,
-    private readonly groups: ResourceGroupRegistry,
+    private readonly resourceGroups: ResourceGroupRegistry,
   ) {
     handlers.set(this, new Map());
   }
@@ -287,11 +315,12 @@ export class ResourceTypeRegistry {
     if (this.registered.has(type))
       throw new Error(`Resource type already registered: ${type}`);
     if (
-      definition.section !== undefined &&
-      !this.sections.has(definition.section)
+      definition.defaultSection !== undefined &&
+      (!this.sections.has(definition.defaultSection) ||
+        this.sections.isSubsection(definition.defaultSection))
     )
       throw new Error(
-        `Resource type ${type} names an unknown section: ${definition.section}`,
+        `Resource type ${type} names an unknown top-level section: ${definition.defaultSection}`,
       );
     const actions = definition.actions?.map(
       (action): ResourceTypeAction<TParams> =>
@@ -315,7 +344,11 @@ export class ResourceTypeRegistry {
         throw new Error(`Resource items already belong to a type: ${type}`);
       const binding: ItemBinding = {
         type,
-        groups: this.groups,
+        sections: this.sections,
+        resourceGroups: this.resourceGroups,
+        ...(definition.defaultSection === undefined
+          ? {}
+          : { defaultSection: definition.defaultSection }),
         ...(declared ? { actions: declared } : {}),
       };
       for (const item of itemEntries.get(items)?.values() ?? [])
@@ -384,9 +417,9 @@ export class ResourceTypeRegistry {
     const registered: RegisteredResourceType = {
       type,
       title: structuredClone(definition.title),
-      ...(definition.section === undefined
+      ...(definition.defaultSection === undefined
         ? {}
-        : { section: definition.section }),
+        : { defaultSection: definition.defaultSection }),
       actions: structuredClone(declared ?? []),
       ...(items ? { items } : {}),
     };

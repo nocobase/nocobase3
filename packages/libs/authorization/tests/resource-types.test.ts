@@ -32,21 +32,47 @@ function withGrants(
   return createAuthorization({ plugins: [{ id: 'grants', grants: service }] });
 }
 
-describe('sections and groups', () => {
+describe('sections, subsections and resource groups', () => {
+  const names = (authz: ReturnType<typeof createAuthorization>) =>
+    authz.sections
+      .tree()
+      .map((section) => [
+        section.name,
+        section.subsections.map((subsection) => subsection.name),
+      ]);
+
   it('registers the built-in sections through the same API', () => {
     const authz = createAuthorization({ plugins: [] });
-    expect(authz.sections.list().map((section) => section.name)).toEqual([
-      'pages',
-      'business',
-      'administration',
+    expect(names(authz)).toEqual([
+      ['pages', []],
+      ['business', []],
+      ['administration', []],
     ]);
     authz.sections.add({ name: 'reports', title: 'Reports', order: 50 });
-    expect(authz.sections.list().map((section) => section.name)).toEqual([
-      'pages',
-      'reports',
-      'business',
-      'administration',
+    authz.sections.add({ name: 'b', title: 'B', parent: 'business' });
+    authz.sections.add({ name: 'a', title: 'A', parent: 'business', order: 1 });
+    expect(names(authz)).toEqual([
+      ['pages', []],
+      ['reports', []],
+      ['business', ['a', 'b']],
+      ['administration', []],
     ]);
+  });
+
+  it('nests exactly one level under a known top-level section', () => {
+    const authz = createAuthorization({ plugins: [] });
+    expect(() =>
+      authz.sections.add({ name: 'x', title: 'X', parent: 'missing' }),
+    ).toThrow(/unknown parent/);
+    authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
+    expect(() =>
+      authz.sections.add({ name: 'deals', title: 'Deals', parent: 'sales' }),
+    ).toThrow(/cannot nest/);
+    expect(() => authz.sections.add({ name: 'top', title: 'Top' })).toThrow(
+      /needs an order/,
+    );
+    expect(authz.sections.isSubsection('sales')).toBe(true);
+    expect(authz.sections.isSubsection('business')).toBe(false);
   });
 
   it('accepts an identical re-add and rejects any other', () => {
@@ -57,6 +83,16 @@ describe('sections and groups', () => {
     expect(() => authz.sections.add({ ...reports, order: 60 })).toThrow(
       /already registered/,
     );
+    const automation = {
+      name: 'automation',
+      title: 'Automation',
+      parent: 'administration',
+    };
+    authz.sections.add(automation);
+    authz.sections.add({ ...automation });
+    expect(() =>
+      authz.sections.add({ ...automation, parent: 'business' }),
+    ).toThrow(/already registered/);
     expect(() =>
       authz.sections.add({
         name: 'pages',
@@ -65,39 +101,107 @@ describe('sections and groups', () => {
       }),
     ).toThrow(/already registered/);
 
-    authz.groups.add({ name: 'sales', title: 'Sales' });
-    authz.groups.add({ name: 'sales', title: 'Sales' });
-    expect(() => authz.groups.add({ name: 'sales', title: 'Selling' })).toThrow(
-      /already registered/,
-    );
-    expect(authz.groups.list()).toEqual([{ name: 'sales', title: 'Sales' }]);
+    authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
+    authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
+    authz.resourceGroups.add({
+      name: 'deals',
+      title: 'Deals',
+      parent: 'sales',
+    });
+    expect(() =>
+      authz.resourceGroups.add({ name: 'sales', title: 'Selling' }),
+    ).toThrow(/already registered/);
+    expect(() =>
+      authz.resourceGroups.add({ name: 'x', title: 'X', parent: 'missing' }),
+    ).toThrow(/unknown parent/);
+    expect(authz.resourceGroups.list()).toEqual([
+      { name: 'sales', title: 'Sales' },
+      { name: 'deals', title: 'Deals', parent: 'sales' },
+    ]);
   });
 
-  it('validates the section of a type and the group of an item', () => {
+  it('validates the default section of a type and the subsection and group of an item', () => {
     const authz = createAuthorization({ plugins: [] });
     expect(() =>
-      authz.resourceTypes.add({ type: 'report', title: 'R', section: 'nope' }),
-    ).toThrow(/unknown section/);
+      authz.resourceTypes.add({
+        type: 'report',
+        title: 'R',
+        defaultSection: 'nope',
+        actions: ['read'],
+      }),
+    ).toThrow(/unknown top-level section/);
+    authz.sections.add({
+      name: 'finance',
+      title: 'Finance',
+      parent: 'administration',
+    });
+    expect(() =>
+      authz.resourceTypes.add({
+        type: 'report',
+        title: 'R',
+        defaultSection: 'finance',
+        actions: ['read'],
+      }),
+    ).toThrow(/unknown top-level section/);
     const items = new ResourceItems();
     authz.resourceTypes.add({
       type: 'report',
       title: 'Reports',
-      section: 'administration',
+      defaultSection: 'administration',
       actions: ['read'],
       items,
     });
     expect(() =>
+      items.add({ id: 'sales', title: 'Sales', section: 'administration' }),
+    ).toThrow(/unknown subsection/);
+    expect(() =>
       items.add({ id: 'sales', title: 'Sales', group: 'missing' }),
-    ).toThrow(/unknown group/);
-    authz.groups.add({ name: 'finance', title: 'Finance' });
-    items.add({ id: 'sales', title: 'Sales', group: 'finance' });
+    ).toThrow(/unknown resource group/);
+    authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
+    items.add({
+      id: 'sales',
+      title: 'Sales',
+      section: 'finance',
+      group: 'ledgers',
+    });
     expect(authz.resourceTypes.get('report')).toMatchObject({
       type: 'report',
       title: 'Reports',
-      section: 'administration',
+      defaultSection: 'administration',
     });
     expect(authz.resourceTypes.get('report').items).toBe(items);
     expect(() => authz.resourceTypes.get('missing')).toThrow(/not registered/);
+  });
+
+  it('lists an item without a subsection under the default section Other', () => {
+    const authz = createAuthorization({ plugins: [] });
+    const items = new ResourceItems();
+    items.add({ id: 'costs', title: 'Costs' });
+    authz.resourceTypes.add({
+      type: 'report',
+      title: 'Reports',
+      defaultSection: 'administration',
+      actions: ['read'],
+      items,
+    });
+    expect(items.get('costs')?.section).toBe('administration.other');
+    expect(authz.sections.get('administration.other')).toEqual({
+      name: 'administration.other',
+      title: { key: 'sections.other', ns: '@nocobase/authorization' },
+      parent: 'administration',
+      order: Number.MAX_SAFE_INTEGER,
+    });
+    authz.sections.add({
+      name: 'sales',
+      title: 'Sales',
+      parent: 'administration',
+    });
+    expect(
+      authz.sections
+        .tree()
+        .find((section) => section.name === 'administration')
+        ?.subsections.map((subsection) => subsection.name),
+    ).toEqual(['sales', 'administration.other']);
   });
 });
 

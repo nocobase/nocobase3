@@ -99,6 +99,7 @@ export {
   SectionRegistry,
   type ResourceGroup,
   type Section,
+  type SectionTreeNode,
 } from './sections.js';
 export {
   parseRecordSelection,

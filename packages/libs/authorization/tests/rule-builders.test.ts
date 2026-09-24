@@ -23,7 +23,7 @@ const contribution: BusinessContribution<{ quotes: string }> = {
 const resource = defineBusinessResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .group('sales')
+    .section('sales')
     .action('view', (action) => action.title('View').grant(contribution)),
 ).reference();
 

@@ -8,7 +8,6 @@ import type {
 } from './grants.js';
 import type { AuthorizationPlugin } from './plugin.js';
 import { ResourceItems } from './resource-types.js';
-import type { ResourceGroupRegistry } from './sections.js';
 import { parseRecordSelection, type RecordSelection } from './selection.js';
 import type { AuthorizationTitle } from './titles.js';
 import type {
@@ -59,7 +58,8 @@ export interface BusinessAction {
 export interface BusinessResource {
   name: string;
   title: AuthorizationTitle;
-  group: string;
+  /** The subsection it is listed under; omitted, it lands in the business section's "Other". */
+  section?: string;
   actions: readonly BusinessAction[];
 }
 
@@ -273,8 +273,8 @@ export class BusinessResourceBuilder<
     return new BusinessResourceBuilder({ ...this.definition, title });
   }
 
-  group(group: string): BusinessResourceBuilder<A> {
-    return new BusinessResourceBuilder({ ...this.definition, group });
+  section(section: string): BusinessResourceBuilder<A> {
+    return new BusinessResourceBuilder({ ...this.definition, section });
   }
 
   action<const N extends string, C extends BusinessContribution>(
@@ -316,7 +316,7 @@ export function defineBusinessResource<A extends BusinessActions>(
 ): BusinessResourceBuilder<A> {
   if (!name) throw new TypeError('A business resource needs a name');
   const result = configure(
-    new BusinessResourceBuilder({ name, title: name, group: '', actions: [] }),
+    new BusinessResourceBuilder({ name, title: name, actions: [] }),
   );
   return new BusinessResourceBuilder<A>(result.build());
 }
@@ -325,8 +325,6 @@ function validateBusinessResource(
   definition: BusinessResource,
 ): BusinessResource {
   if (!definition.name) throw new TypeError('A business resource needs a name');
-  if (!definition.group)
-    throw new TypeError(`Business resource ${definition.name} needs a group`);
   const names = definition.actions.map((action) => action.name);
   if (
     !names.length ||
@@ -424,10 +422,10 @@ export interface BusinessApi {
 
 export class BusinessResourceRegistry implements BusinessApi {
   private readonly definitions = new Map<string, BusinessResource>();
-  private host?: { groups: ResourceGroupRegistry; items: ResourceItems };
+  private host?: { items: ResourceItems };
 
-  attach(groups: ResourceGroupRegistry, items: ResourceItems): void {
-    this.host = { groups, items };
+  attach(items: ResourceItems): void {
+    this.host = { items };
   }
 
   define<A extends BusinessActions = BusinessActions>(
@@ -444,14 +442,10 @@ export class BusinessResourceRegistry implements BusinessApi {
     );
     if (this.definitions.has(resource.name))
       throw new Error(`Business resource already defined: ${resource.name}`);
-    if (!this.host.groups.has(resource.group))
-      throw new Error(
-        `Business resource ${resource.name} names an unknown group: ${resource.group}`,
-      );
     this.host.items.add({
       id: resource.name,
       title: resource.title,
-      group: resource.group,
+      ...(resource.section === undefined ? {} : { section: resource.section }),
       actions: resource.actions.map(({ name, title }) => ({ name, title })),
     });
     this.definitions.set(resource.name, resource);
@@ -564,7 +558,7 @@ export function businessPlugin(): BusinessPlugin {
         type: BUSINESS_RESOURCE_TYPE,
         items,
         title: { key: 'resourceTypes.business', ns: '@nocobase/authorization' },
-        section: 'business',
+        defaultSection: 'business',
         async authorize(request, context) {
           const grants = await context.grants.resolve({
             principal: request.principal,
@@ -596,7 +590,7 @@ export function businessPlugin(): BusinessPlugin {
               };
         },
       });
-      registry.attach(authz.groups, items);
+      registry.attach(items);
     },
   };
   registries.set(plugin, registry);

@@ -6,21 +6,22 @@ Authorization decisions, resource types, business resources, Permission Sets and
 
 Every word below has exactly one meaning in this package.
 
-| Term                  | Meaning                                                                                                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Resource ref          | `{ type, id }`: the target of a check or a grant. Every grant states its type; there is no default type.                                                           |
-| Resource type         | The only unit of judgement: an optional item registry, declared actions, an authorize function and an optional section. Registered with `authz.resourceTypes.add`. |
-| Item                  | One grantable thing of a resource type, `{ id, title, actions, group? }`. Only a catalog type has items; there an unregistered `(type, id, action)` is denied.     |
-| Business resource     | A user-facing feature, stored under type `business`, whose actions compose `database.collection` grants. Registered with `authz.business.define`.                  |
-| Data scope            | A named slot on a business action, `{ key, title, collection, options?, defaultValue? }`, that a grant or rule fills with a record selection.                      |
-| Record selection      | `{ type: 'all' } \| { type: 'records', ids } \| { type: 'recordAccess', key, params? }`: which records of a collection an action reaches.                          |
-| Record access         | A named, code-defined way to select records, such as "records I own". Registered with `authz.recordAccess.define`.                                                 |
-| Section               | A display area of the permission workspace, `{ name, title, order }`. Display only.                                                                                |
-| Group                 | A display heading for items, `{ name, title }`. Display only.                                                                                                      |
-| Grant                 | One `(resource, action, policy?)` a Grant Provider resolves for an identity. A Permission Set stores grants.                                                       |
-| Constraint            | A rule's `expand` or `restrict` contribution of a record selection to one action.                                                                                  |
-| Authorization context | `authz.for(identity)`: every check for one identity, sharing grant and rule reads between them.                                                                    |
-| Snapshot              | `context.snapshot()`: what the client may show, `{ unrestricted, permissions }`.                                                                                   |
+| Term                  | Meaning                                                                                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resource ref          | `{ type, id }`: the target of a check or a grant. Every grant states its type; there is no default type.                                                                                     |
+| Resource type         | The only unit of judgement, never displayed: an optional item registry, declared actions, an authorize function and an optional `defaultSection`. Registered with `authz.resourceTypes.add`. |
+| Item                  | One grantable thing of a resource type, `{ id, title, actions, section?, group? }`. Only a catalog type has items; there an unregistered `(type, id, action)` is denied.                     |
+| Business resource     | A user-facing feature, stored under type `business`, whose actions compose `database.collection` grants. Registered with `authz.business.define`.                                            |
+| Data scope            | A named slot on a business action, `{ key, title, collection, options?, defaultValue? }`, that a grant or rule fills with a record selection.                                                |
+| Record selection      | `{ type: 'all' } \| { type: 'records', ids } \| { type: 'recordAccess', key, params? }`: which records of a collection an action reaches.                                                    |
+| Record access         | A named, code-defined way to select records, such as "records I own". Registered with `authz.recordAccess.define`.                                                                           |
+| Section               | A top-level heading on the left of the permission workspace, `{ name, title, order }`. Display only.                                                                                         |
+| Subsection            | A left-side entry under a section, `{ name, title, parent, order? }`; items name one with `section`. Display only.                                                                           |
+| Resource group        | A right-side heading items are listed under, `{ name, title, parent?, order? }`, nested to any depth. Display only.                                                                          |
+| Grant                 | One `(resource, action, policy?)` a Grant Provider resolves for an identity. A Permission Set stores grants.                                                                                 |
+| Constraint            | A rule's `expand` or `restrict` contribution of a record selection to one action.                                                                                                            |
+| Authorization context | `authz.for(identity)`: every check for one identity, sharing grant and rule reads between them.                                                                                              |
+| Snapshot              | `context.snapshot()`: what the client may show, `{ unrestricted, permissions }`.                                                                                                             |
 
 ## Layers
 
@@ -34,7 +35,7 @@ Every word below has exactly one meaning in this package.
  Restriction     ─┘                              (items + authorize)      └ snapshot()
                              record access ──▶ resolved by the adapter   authz.middleware(), authz.routes
 
- display (separate, never read by authorize): sections ─▶ resource types ─▶ groups ─▶ items
+ display (separate, never read by authorize): sections ─▶ subsections ─▶ resource groups ─▶ items
 ```
 
 ## Entry points
@@ -69,7 +70,7 @@ const reports = new ResourceItems();
 authz.resourceTypes.add({
   type: 'report',
   title: 'Reports',
-  section: 'administration',
+  defaultSection: 'administration',
   items: reports,
 });
 reports.add({ id: 'sales', title: 'Sales report', actions: ['view'] });
@@ -144,7 +145,7 @@ A resource type comes in one of two shapes, told apart only by whether it has an
 - A **catalog type** passes `items`. A check passes only for a registered item and one of its actions; anything else is denied with `RESOURCE_ACTION_NOT_SUPPORTED`. `settings`, `business` and `database.collection` are catalog types.
 - A **record type** declares only type-level `actions`. Only the action is validated: an undeclared action is denied, while the id is a runtime record id that the type's `authorize` judges per record. `page`, `hub.app`, `user` and `notification` are record types, and their grants use `id: '*'` to mean every record.
 
-`resourceTypes.add` returns `{ type, title, section?, actions, items? }`. The default judgement is `grantBacked()`: permit when a grant without a policy matches. Pass `also` for a further check once a grant matches.
+`resourceTypes.add` returns `{ type, title, defaultSection?, actions, items? }`. The default judgement is `grantBacked()`: permit when a grant without a policy matches. Pass `also` for a further check once a grant matches.
 
 ```ts
 import { ResourceItems, grantBacked } from '@nocobase/authorization/core';
@@ -152,31 +153,35 @@ import { ResourceItems, grantBacked } from '@nocobase/authorization/core';
 authz.resourceTypes.add({
   type: 'hub.app',
   title: 'Applications',
-  section: 'administration',
   actions: ['read', { name: 'deploy', title: 'Deploy' }],
   authorize: grantBacked({
     also: async (request) => ownsApp(request.principal.id, request.resource.id),
   }),
 });
 
-authz.groups.add({ name: 'automation', title: 'Automation' });
+authz.sections.add({
+  name: 'automation',
+  title: 'Automation',
+  parent: 'administration',
+});
 const settings = new ResourceItems();
 authz.resourceTypes.add({
   type: 'settings',
   title: 'Settings',
+  defaultSection: 'administration',
   items: settings,
 });
 settings.add({
   id: 'workflow',
   title: 'Workflow',
-  group: 'automation',
+  section: 'automation',
   actions: ['manage'],
 });
 ```
 
 In a catalog type an item that omits `actions` inherits the type's declared actions and their titles; a catalog type that declares none requires actions on every item. A type action may carry its own `authorize` and `authorizeUnrestricted`. Unsupported items and actions stay denied even for unrestricted identities.
 
-## Sections and groups
+## Sections, subsections and resource groups
 
 ```ts
 authz.sections.add({
@@ -184,14 +189,22 @@ authz.sections.add({
   title: { key: 'sections.reports', ns: 'my-plugin' },
   order: 50,
 });
-authz.groups.add({ name: 'sales', title: 'Sales' });
+authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
+authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
+authz.resourceGroups.add({
+  name: 'payables',
+  title: 'Payables',
+  parent: 'ledgers',
+});
 ```
 
-`createAuthorization` registers `pages` (order 0), `business` (100) and `administration` (200) through the same `sections.add`, with titles in the `@nocobase/authorization` namespace. Re-adding a section with a deep-equal title and order is a no-op, and a group with a deep-equal title likewise; any other re-add throws. A resource type names its section when added, and an item names its group when added; both are validated then. Sections and groups affect display only, never a decision.
+The workspace lists sections on the left, each with its subsections as entries, and the selected subsection's items on the right, under their resource groups. `createAuthorization` registers the top-level sections `pages` (order 0), `business` (100) and `administration` (200) through the same `sections.add`, with titles in the `@nocobase/authorization` namespace. A top-level section needs an `order`; a subsection names a top-level `parent`, may omit `order` to follow the ordered ones, and cannot have subsections of its own. Resource groups nest to any depth. Re-adding a deep-equal section or resource group is a no-op; any other re-add throws, as does an unknown parent.
+
+An item names its subsection with `section` and its resource group with `group`; both are validated when the item is added. An item that names no subsection is listed under the "Other" subsection of its type's `defaultSection`, which `sections.other(parent)` creates on first use as `<parent>.other`. A type without `defaultSection` is never displayed. Resource types themselves are never displayed, and none of this affects a decision.
 
 ## Business resources and data scopes
 
-`businessPlugin()` registers the `business` resource type in section `business` and adds `authz.business`. A business action composes `database.collection` grants only; `page`, `settings` and every other type are rejected. Each grant action may name a data scope with `scopeKey`, and each data scope must be used by a grant on its collection.
+`businessPlugin()` registers the `business` resource type with default section `business` and adds `authz.business`. A business action composes `database.collection` grants only; `page`, `settings` and every other type are rejected. Each grant action may name a data scope with `scopeKey`, and each data scope must be used by a grant on its collection.
 
 Object form:
 
@@ -204,11 +217,11 @@ import {
 const authz = createAuthorization({
   plugins: [permissionSetsPlugin({ store }), businessPlugin()],
 });
-authz.groups.add({ name: 'sales', title: 'Sales' });
+authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
 authz.business.define({
   name: 'sales.quotes',
   title: 'Quotes',
-  group: 'sales',
+  section: 'sales',
   actions: [
     {
       name: 'submit',
@@ -247,7 +260,7 @@ import { defineBusinessResource } from '@nocobase/authorization/core';
 export const quotes = defineBusinessResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .group('sales')
+    .section('sales')
     .action('submit', (action) =>
       action.title('Submit').grant('quotes', quoteData, { title: 'Quotes' }),
     ),
@@ -340,7 +353,7 @@ The library defines no HTTP route. `authz.routes` only dispatches the routes plu
 | Export                               | Kind     | Signature                                                                                                                                                                              | Purpose                                                                  |
 | ------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `createAuthorization`                | function | `createAuthorization({ connection?, plugins }): Authorization & AuthorizationPluginApis<plugins>`                                                                                      | Creates an instance and runs every plugin's `setup` in dependency order. |
-| `Authorization`                      | class    | `sections`, `groups`, `resourceTypes`, `recordAccess`, `constraints`, `subjects`, `routes`; `use(m)`, `middleware()`, `for(identity)`, `onGrantsChanged(listener)`                     | The instance; plugin APIs such as `permissionSets` are added to it.      |
+| `Authorization`                      | class    | `sections`, `resourceGroups`, `resourceTypes`, `recordAccess`, `constraints`, `subjects`, `routes`; `use(m)`, `middleware()`, `for(identity)`, `onGrantsChanged(listener)`             | The instance; plugin APIs such as `permissionSets` are added to it.      |
 | `AuthorizationContext`               | type     | `{ identity, authorize(request), can(request), require(request), snapshot() }`                                                                                                         | Checks for one identity.                                                 |
 | `AuthorizationCheckRequest`          | type     | `{ resource: ResourceRef; action: string; params? }`                                                                                                                                   | A request made through a context, which supplies the identity.           |
 | `AuthorizationSnapshot`              | type     | `{ unrestricted: boolean; permissions: readonly AuthorizationPermission[] }`                                                                                                           | What the client may show.                                                |
@@ -348,7 +361,7 @@ The library defines no HTTP route. `authz.routes` only dispatches the routes plu
 | `AuthorizationEnv`                   | type     | `{ Variables: { authz: AuthorizationContext } }`                                                                                                                                       | Hono environment of `middleware()`.                                      |
 | `CreateAuthorizationOptions`         | type     | `{ connection?: TConnection; plugins: TPlugins }`                                                                                                                                      | Options of `createAuthorization`.                                        |
 | `AuthorizationPlugin`                | type     | `AuthorizationPlugin<TApi, TConnection, TRequiredApi>`: `{ id, dependencies?, grants?, requiresGrants?, authorizationApi?, composeConditions?(checks), setup?(setup & TRequiredApi) }` | A plugin; `setup` also receives every installed plugin's API.            |
-| `AuthorizationPluginSetup`           | type     | `{ connection?, grants, sections, groups, resourceTypes, recordAccess, constraints, subjects, routes, use(m), middleware() }`                                                          | What `setup` receives.                                                   |
+| `AuthorizationPluginSetup`           | type     | `{ connection?, grants, sections, resourceGroups, resourceTypes, recordAccess, constraints, subjects, routes, use(m), middleware() }`                                                  | What `setup` receives.                                                   |
 | `AuthorizationPluginApi`             | type     | `AuthorizationPluginApi<TPlugin>`                                                                                                                                                      | The `authorizationApi` type of one plugin.                               |
 | `AuthorizationPluginApis`            | type     | `AuthorizationPluginApis<TPlugins>`                                                                                                                                                    | The intersection of every plugin API.                                    |
 | `AuthorizationMiddleware`            | type     | `(request: AuthorizationMiddlewareRequest, next) => Promise<void>`                                                                                                                     | One identity step registered with `use`.                                 |
@@ -358,17 +371,18 @@ The library defines no HTTP route. `authz.routes` only dispatches the routes plu
 | `AuthorizationRouteRegistry`         | class    | `add(path, handler)`, `list()`, `handle(input): Promise<Response> \| undefined`                                                                                                        | Plugin HTTP handlers under one dispatcher.                               |
 | `AuthorizationRouteHandler`          | type     | `(input: AuthorizationRouteRequest) => Promise<Response>`                                                                                                                              | A plugin HTTP handler.                                                   |
 | `AuthorizationRouteRequest`          | type     | `{ request: Request; path: string; authorization: AuthorizationContext }`                                                                                                              | What a route handler receives; `path` is relative to the mount.          |
-| `SectionRegistry`                    | class    | `add(section)`, `has(name)`, `get(name)`, `list()`                                                                                                                                     | Add-only workspace sections, listed by `order`.                          |
-| `Section`                            | type     | `{ name: string; title: AuthorizationTitle; order: number }`                                                                                                                           | A workspace section.                                                     |
-| `ResourceGroupRegistry`              | class    | `add(group)`, `has(name)`, `get(name)`, `list()`                                                                                                                                       | Add-only display groups.                                                 |
-| `ResourceGroup`                      | type     | `{ name: string; title: AuthorizationTitle }`                                                                                                                                          | A display group.                                                         |
+| `SectionRegistry`                    | class    | `add(section)`, `has(name)`, `isSubsection(name)`, `get(name)`, `other(parent)`, `tree()`                                                                                              | Sections and one level of subsections.                                   |
+| `Section`                            | type     | `{ name: string; title: AuthorizationTitle; order?: number; parent?: string }`                                                                                                         | A section, or a subsection when `parent` is set.                         |
+| `SectionTreeNode`                    | type     | `Section & { order: number; subsections: readonly Section[] }`                                                                                                                         | A top-level section with its subsections.                                |
+| `ResourceGroupRegistry`              | class    | `add(group)`, `has(name)`, `get(name)`, `list()`                                                                                                                                       | Add-only resource groups, nested to any depth.                           |
+| `ResourceGroup`                      | type     | `{ name: string; title: AuthorizationTitle; parent?: string; order?: number }`                                                                                                         | A right-side display heading.                                            |
 | `ResourceTypeRegistry`               | class    | `add(definition): RegisteredResourceType`, `has(type)`, `get(type)`, `list()`                                                                                                          | Every resource type; `get` throws for an unregistered type.              |
-| `ResourceTypeDefinition`             | type     | `{ type, title, section?, actions?, items?, authorize?, authorizeUnrestricted? }`                                                                                                      | What `resourceTypes.add` takes.                                          |
+| `ResourceTypeDefinition`             | type     | `{ type, title, defaultSection?, actions?, items?, authorize?, authorizeUnrestricted? }`                                                                                               | What `resourceTypes.add` takes.                                          |
 | `ResourceTypeAction`                 | type     | `{ name, title?, authorize?, authorizeUnrestricted? }`                                                                                                                                 | A declared action, optionally with its own judgement.                    |
-| `RegisteredResourceType`             | type     | `{ type, title, section?, actions, items? }`                                                                                                                                           | A registered type.                                                       |
+| `RegisteredResourceType`             | type     | `{ type, title, defaultSection?, actions, items? }`                                                                                                                                    | A registered type.                                                       |
 | `ResourceItems`                      | class    | `add(definition)`, `has(id)`, `get(id)`, `list()`                                                                                                                                      | The items of one type.                                                   |
-| `ResourceItem`                       | type     | `{ id, title, description?, actions: readonly ResourceItemAction[], group? }`                                                                                                          | A registered item with resolved action titles.                           |
-| `ResourceItemDefinition`             | type     | `{ id, title, description?, actions?: (string \| ResourceItemAction)[], group? }`                                                                                                      | What `items.add` takes.                                                  |
+| `ResourceItem`                       | type     | `{ id, title, description?, actions: readonly ResourceItemAction[], section?, group? }`                                                                                                | A registered item with resolved action titles and subsection.            |
+| `ResourceItemDefinition`             | type     | `{ id, title, description?, actions?: (string \| ResourceItemAction)[], section?, group? }`                                                                                            | What `items.add` takes.                                                  |
 | `ResourceItemAction`                 | type     | `{ name: string; title?: AuthorizationTitle }`                                                                                                                                         | One action of an item.                                                   |
 | `ResourceAuthorize`                  | type     | `(request: AuthorizationRequest<TParams>, context: AuthorizationRuntimeContext) => Promise<AuthorizationDecision>`                                                                     | A type's judgement.                                                      |
 | `ResourceAuthorizeUnrestricted`      | type     | `(request: AuthorizationRequest<TParams>) => Promise<AuthorizationDecision>`                                                                                                           | A type's decision for an unrestricted identity.                          |
@@ -380,10 +394,10 @@ The library defines no HTTP route. `authz.routes` only dispatches the routes plu
 | `BusinessAuthorizationApi`           | type     | `{ business: BusinessApi }`                                                                                                                                                            | What the plugin adds to the instance.                                    |
 | `BusinessApi`                        | type     | `define(objectOrBuilder): BusinessResourceReference`, `getAction(id, action)`, `list()`                                                                                                | The business resource registry.                                          |
 | `defineBusinessResource`             | function | `defineBusinessResource(name, configure): BusinessResourceBuilder`                                                                                                                     | Builds a business resource without registering it.                       |
-| `BusinessResourceBuilder`            | class    | `title(t)`, `group(name)`, `action(name, configure)`, `build()`, `reference()`                                                                                                         | Immutable business resource builder.                                     |
+| `BusinessResourceBuilder`            | class    | `title(t)`, `section(name)`, `action(name, configure)`, `build()`, `reference()`                                                                                                       | Immutable business resource builder.                                     |
 | `BusinessActionBuilder`              | class    | `title(t)`, `grant(key, permission, { title? })`, `grant(contribution)`, `build()`                                                                                                     | Immutable business action builder.                                       |
 | `BusinessResourceReference`          | class    | `name`, `grant(...actions)`, `grant({ action: { scopeKey: value } })`, `scope(action, scopeKey)`                                                                                       | Type-safe grants and rule targets.                                       |
-| `BusinessResource`                   | type     | `{ name, title, group, actions: readonly BusinessAction[] }`                                                                                                                           | A business resource definition.                                          |
+| `BusinessResource`                   | type     | `{ name, title, section?, actions: readonly BusinessAction[] }`                                                                                                                        | A business resource definition.                                          |
 | `BusinessAction`                     | type     | `{ name, title, dataScopes?, grants: readonly BusinessGrant[] }`                                                                                                                       | One business action.                                                     |
 | `BusinessActionData`                 | type     | `{ title?, grants, dataScopes }`                                                                                                                                                       | What `BusinessActionBuilder.build` returns.                              |
 | `BusinessGrant`                      | type     | `{ resource: ResourceRef; actions: readonly BusinessGrantAction[] }`                                                                                                                   | A composed collection grant.                                             |
