@@ -12,8 +12,13 @@ export function useConversationCatalog({
   onChange: (conversations: AIConversation[]) => void;
   onError: (error?: Error) => void;
 }) {
-  const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [search, setSearch] = useState('');
+  // Derived rather than toggled from the effect below: the catalog is loading
+  // from the moment the configuration is ready until the first list resolves.
+  const loading =
+    searching || (configurationStatus === 'ready' && !initialLoaded);
   const searchRef = useRef('');
   const requestRef = useRef(0);
   const catalogRef = useRef<AIConversation[]>([]);
@@ -38,7 +43,6 @@ export function useConversationCatalog({
   useEffect(() => {
     if (configurationStatus !== 'ready') return;
     let active = true;
-    setLoading(true);
     onError(undefined);
     void listConversations()
       .then((conversations) => {
@@ -54,7 +58,7 @@ export function useConversationCatalog({
         );
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setInitialLoaded(true);
       });
     return () => {
       active = false;
@@ -69,7 +73,7 @@ export function useConversationCatalog({
 
       const requestId = requestRef.current + 1;
       requestRef.current = requestId;
-      setLoading(true);
+      setSearching(true);
       onError(undefined);
       try {
         const conversations = await listConversations(normalizedKeyword);
@@ -84,7 +88,7 @@ export function useConversationCatalog({
         onError(resolvedError);
         throw resolvedError;
       } finally {
-        if (requestRef.current === requestId) setLoading(false);
+        if (requestRef.current === requestId) setSearching(false);
       }
     },
     [apply, listConversations, onError],

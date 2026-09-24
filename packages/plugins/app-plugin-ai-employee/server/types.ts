@@ -125,9 +125,6 @@ export type LLMServiceDto = {
   modelOptions?: Record<string, unknown>;
   sort: number;
 };
-export type LLMServiceResourceInput = Partial<LLMServiceDto> & {
-  name?: string;
-};
 export type ProviderModelListRequest = {
   llmService: string;
   search?: string;
@@ -310,11 +307,12 @@ export function sendStreamError(
   target: ConversationStreamTarget,
   error: Error | string,
   errorName?: string,
+  code?: string,
 ): void {
   const body =
     typeof error === 'string' ? error : error.message || 'Unknown error';
   target.write(
-    `data: ${JSON.stringify({ type: 'error', body, errorName })}\n\n`,
+    `data: ${JSON.stringify({ type: 'error', body, errorName, ...(code ? { code } : {}) })}\n\n`,
   );
   target.end();
 }

@@ -7,7 +7,6 @@ import {
 import { NocoBaseAIChatIcon } from '../../shared/icons/nocobase-ai-chat-icon.js';
 import { cn } from '../../shared/utils.js';
 import {
-  useAI,
   useAIChatControllerState,
   useGlobalAIChatController,
 } from '../../providers/index.js';
@@ -35,11 +34,7 @@ type VerticalDragSession = {
   moved: boolean;
 };
 
-export function clampFloatingTriggerTop(
-  top: number,
-  minTop: number,
-  maxTop: number,
-) {
+function clampFloatingTriggerTop(top: number, minTop: number, maxTop: number) {
   return Math.min(Math.max(top, minTop), Math.max(minTop, maxTop));
 }
 
@@ -74,7 +69,6 @@ export function AIChatFloatingTrigger({
   className,
 }: AIChatFloatingTriggerProps) {
   const t = useAITranslate();
-  const ai = useAI();
   const globalController = useGlobalAIChatController();
   const controller = providedController ?? globalController;
   const { open } = useAIChatControllerState(controller);
@@ -103,13 +97,12 @@ export function AIChatFloatingTrigger({
 
   if (hideWhenOpen && open) return null;
 
+  // Without an explicit employee the chat it opens decides, from its own
+  // `defaultEmployee`, so that is set in one place.
   const openChat = () => {
-    const employee = aiEmployee ?? ai.employees[0]?.username;
-    if (employee) {
-      controller.triggerTask({ aiEmployee: employee, open: true });
-      return;
-    }
-    controller.open();
+    controller.triggerTask(
+      aiEmployee ? { aiEmployee, open: true } : { open: true },
+    );
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

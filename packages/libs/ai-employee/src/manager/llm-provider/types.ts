@@ -18,7 +18,12 @@ import type {
 export type LLMProviderMeta = {
   title: string;
   supportedModel?: SupportedModel[];
-  models?: Partial<Record<SupportedModel, string[]>>;
+  /**
+   * Suggested embedding model ids for the `ai:listModels?model=EMBEDDING` picker,
+   * which is the only consumer. Chat models are never listed from here — they are
+   * fetched live from the provider's own API through `ai:listProviderModels`.
+   */
+  models?: Partial<Record<SupportedModel.EMBEDDING, string[]>>;
   provider: new (opts: LLMProviderOptions) => LLMProvider;
   embedding?: new (opts: EmbeddingProviderOptions) => EmbeddingProvider;
   supportWebSearch?: boolean;

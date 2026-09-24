@@ -1,15 +1,16 @@
-/**
- * Conversation actions for the flattened App Context.
- *
- * Each exported function mirrors the original action behaviour including
- * middleware semantics, SSE error envelopes, parallel-limit checks and the
- * `AIEmployee` streaming / invocation flows.
- */
+/** Conversation actions: the resource layer over agents and their history. */
 
 import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
-import type { ConversationExecution } from '../agent/contracts.js';
+import type { ConversationTransport } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
-import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
+import type {
+  AgentContext,
+  AgentRuntime,
+  AgentState,
+  AIEmployeeEntity,
+  AIMessageInput,
+  UserDecision,
+} from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
 import type {
   DatabaseConnection,
@@ -28,19 +29,28 @@ import type {
   ConversationManagementActor,
   Translate,
 } from '../types.js';
-import { ResourceActionError, sendStreamError } from '../types.js';
+import {
+  AI_API_BASE_PATH,
+  ResourceActionError,
+  sendStreamError,
+} from '../types.js';
+import { withAIFilePreviews } from './file-service.js';
+import {
+  AgentServiceError,
+  type AgentRequest,
+  type AgentServiceErrorCode,
+  type AgentStreamEvent,
+} from '../agent/types.js';
 import type {
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
 import { AgentSSEAdapter } from '../agent/transport/sse.js';
-import {
-  createAgentContext,
-  type AppAgentContext,
-  type CreateAgentContextOptions,
-} from '../agent/context.js';
+import { createAgentContext } from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
 import { findCurrentFrontendTool } from '../agent/context/ai-employee/frontend-tools.js';
+import type { CreateEmployeeOptions } from '../agent/service/agent-service-factory.js';
+import type { AIEmployeeSkillSettings } from '../agent/context/ai-employee/options.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
@@ -122,16 +132,31 @@ function isAIEmployeeEnabled(
 function sendErrorResponse(
   target: ConversationStreamTarget,
   errorMessage: string,
+  code?: string,
 ) {
-  sendStreamError(target, errorMessage);
+  sendStreamError(target, errorMessage, undefined, code);
 }
 
+/**
+ * The HTTP status each agent failure reports. A configuration failure is the
+ * server's, not the request's, and retrying it changes nothing.
+ */
+const AGENT_ERROR_STATUS: Record<AgentServiceErrorCode, number> = {
+  CONFIGURATION_ERROR: 503,
+  PROVIDER_ERROR: 502,
+  MODEL_RESPONSE_ERROR: 502,
+  EMPTY_RESPONSE: 502,
+  GRAPH_RECURSION_ERROR: 422,
+  PERSISTENCE_ERROR: 500,
+  ABORTED: 499,
+};
+
 function streamTarget(
-  execution: ConversationExecution,
+  transport: ConversationTransport,
 ): ConversationStreamTarget {
-  if (!execution.streamTarget)
+  if (!transport.streamTarget)
     throw new ResourceActionError(500, 'SSE target is required');
-  return execution.streamTarget;
+  return transport.streamTarget;
 }
 
 function loginInCheck(actorId: string | number): void {
@@ -231,6 +256,26 @@ function normalizeIncomingMessageAttachments(
   }
 }
 
+/**
+ * The configuration a conversation record holds for its agent. `options.tools`
+ * is deliberately absent: nothing writes one, and what an employee may use is
+ * decided by its own `skillSettings` and the per-conversation filter.
+ */
+function conversationAgentOptions(
+  conversation: AIConversationEntity,
+): Pick<CreateEmployeeOptions, 'systemPrompt' | 'skillSettings'> {
+  const options = conversation.options;
+  return {
+    systemPrompt:
+      typeof options?.systemMessage === 'string'
+        ? options.systemMessage
+        : undefined,
+    skillSettings: isRecord(options?.skillSettings)
+      ? (options.skillSettings as AIEmployeeSkillSettings)
+      : undefined,
+  };
+}
+
 export interface AIConversationServiceOptions {
   readonly ai: AIManager;
   readonly database: DatabaseConnection;
@@ -255,79 +300,77 @@ export interface AIConversationServiceOptions {
 export class AIConversationService {
   private readonly ai: AIManager;
   private readonly database: DatabaseConnection;
-  private readonly databaseManager: DatabaseManager;
-  private readonly authorization?: AppAuthorizationService;
   private readonly logger: Logger;
   private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;
   private readonly aiEmployeesManager: AIEmployeesManager;
   private readonly aiConversationsManager: AIConversationsManager;
-  private readonly builtInManager: BuiltInManager;
   private readonly llmStreamCachedManager: LLMStreamCachedManager;
   private readonly subAgentsDispatcher: SubAgentsDispatcher;
-  private readonly knowledgeBaseManager: KnowledgeBaseManager;
   private readonly agentServiceFactory: import('../agent/service/agent-service-factory.js').AgentServiceFactory;
 
   public constructor(options: AIConversationServiceOptions) {
     this.ai = options.ai;
     this.database = options.database;
-    this.databaseManager = options.databaseManager;
-    this.authorization = options.authorization;
     this.logger = options.logger;
     this.snowflake = options.snowflake;
     this.repositories = options.repositories;
     this.aiEmployeesManager = options.aiEmployeesManager;
     this.aiConversationsManager = options.aiConversationsManager;
-    this.builtInManager = options.builtInManager;
     this.llmStreamCachedManager = options.llmStreamCachedManager;
     this.subAgentsDispatcher = options.subAgentsDispatcher;
-    this.knowledgeBaseManager = options.knowledgeBaseManager;
     this.agentServiceFactory = options.agentServiceFactory;
   }
+  private agentRuntime(transport: ConversationTransport): AgentRuntime {
+    return {
+      logger: this.logger,
+      translate: transport.translate,
+      getHeader: transport.getHeader,
+    };
+  }
+
   private createAgentContext({
     actor,
-    execution,
     state,
-    translate,
-    getHeader,
+    runtime,
   }: {
     actor: Actor;
-    execution?: ConversationExecution;
-    state?: CreateAgentContextOptions['state'];
-    translate?: Translate;
-    getHeader?: (name: string) => string | undefined;
-  }): AppAgentContext {
-    return createAgentContext({
-      actor,
-      state: {
-        sessionId: execution?.sessionId,
-        messageId: execution?.messageId,
-        messages: execution?.messages ? [...execution.messages] : undefined,
-        model: execution?.model ? { ...execution.model } : undefined,
-        webSearch: execution?.webSearch,
-        important: execution?.important,
-        frontendTools: execution?.frontendTools
-          ? [...execution.frontendTools]
-          : undefined,
-        toolCallResults: execution?.toolCallResults
-          ? [...execution.toolCallResults]
-          : undefined,
-        timezone: execution?.timezone,
-        ...state,
-      },
-      ai: this.ai,
-      database: this.databaseManager,
-      authorization: this.authorization,
-      logger: this.logger,
-      repositories: this.repositories,
-      aiEmployeesManager: this.aiEmployeesManager,
-      aiConversationsManager: this.aiConversationsManager,
-      builtInManager: this.builtInManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      subAgentsDispatcher: this.subAgentsDispatcher,
-      translate,
-      getHeader,
-    });
+    state: AgentState;
+    runtime: AgentRuntime;
+  }): AgentContext {
+    return createAgentContext({ actor, state, runtime });
+  }
+
+  /** Writes one agent run to the caller's SSE target and the resume cache. */
+  private async consumeAgentStream(
+    sessionId: string,
+    transport: ConversationTransport,
+    events: AsyncIterable<AgentStreamEvent>,
+  ): Promise<void> {
+    const target = streamTarget(transport);
+    await new AgentSSEAdapter(
+      (chunk) => target.write(chunk),
+      (chunk) => this.llmStreamCachedManager.getCached(sessionId).append(chunk),
+    ).consume(events);
+    target.end();
+  }
+
+  /** The status and message one agent failure reports to the caller. */
+  private describeFailure(
+    error: unknown,
+    translate: Translate,
+  ): { status: number; message: string; code?: AgentServiceErrorCode } {
+    this.logger.error?.(error);
+    if (error instanceof ResourceActionError)
+      return { status: error.status, message: error.message };
+    if (error instanceof AgentServiceError)
+      return {
+        status: AGENT_ERROR_STATUS[error.code] ?? 500,
+        message: error.rootMessage,
+        code: error.code,
+      };
+    if (error instanceof Error) return { status: 500, message: error.message };
+    return { status: 500, message: translate('Server unexpected error occur') };
   }
 
   async getActiveState({
@@ -496,10 +539,13 @@ export class AIConversationService {
       throw new ResourceActionError(400, 'Invalid cursor');
     }
     try {
-      return await this.aiConversationsManager.getAllMessages({
-        sessionId,
-        cursor,
-      });
+      return withAIFilePreviews(
+        await this.aiConversationsManager.getAllMessages({
+          sessionId,
+          cursor,
+        }),
+        AI_API_BASE_PATH,
+      );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'invalid sessionId') {
         throw new ResourceActionError(404, 'Conversation not found');
@@ -687,13 +733,16 @@ export class AIConversationService {
     const paginate = options.paginate !== false;
     const updateRead = options.updateRead === true;
     try {
-      return await this.aiConversationsManager.getMessages({
-        userId,
-        sessionId,
-        cursor,
-        paginate,
-        updateRead,
-      });
+      return withAIFilePreviews(
+        await this.aiConversationsManager.getMessages({
+          userId,
+          sessionId,
+          cursor,
+          paginate,
+          updateRead,
+        }),
+        AI_API_BASE_PATH,
+      );
     } catch (error: any) {
       if (error.message === 'invalid sessionId') {
         throw new ResourceActionError(400, 'Invalid request');
@@ -745,45 +794,36 @@ export class AIConversationService {
 
   async sendMessages({
     actor,
-    input,
-    execution = {},
-    translate,
-    getHeader,
+    aiEmployee,
+    messages: incomingMessages,
+    stream = true,
+    state,
+    transport,
   }: {
     actor: Actor;
-    input: Record<string, any>;
-    execution?: ConversationExecution;
-    translate: Translate;
-    getHeader?: (name: string) => string | undefined;
+    aiEmployee: string;
+    messages?: readonly AIMessageInput[];
+    stream?: boolean;
+    state: AgentState;
+    transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const {
-      sessionId,
-      aiEmployee: employeeName,
-      messages,
-      editingMessageId,
-      model,
-      webSearch,
-      stream = true,
-    } = input;
-
-    const shouldStream = stream !== false;
-    if (shouldStream) {
-    }
+    const { sessionId } = state;
+    const { translate } = transport;
 
     try {
-      if (!sessionId) {
-        throw new ResourceActionError(400, translate('sessionId is required'));
-      }
-      if (!Array.isArray(messages)) {
+      if (!incomingMessages) {
         throw new ResourceActionError(
           400,
           translate('messages must be an array'),
         );
       }
+      // The caller's array is not this action's to mutate, and it mutates twice:
+      // attachment normalization and the cancelled-tool continuation.
+      const messages = [...incomingMessages];
       normalizeIncomingMessageAttachments(translate, messages);
       const userMessage = messages.find(
-        (message: any) => message.role === 'user',
+        (message: AIMessageInput) => message.role === 'user',
       );
       if (!userMessage) {
         throw new ResourceActionError(
@@ -799,8 +839,10 @@ export class AIConversationService {
       if (!conversation) {
         throw new ResourceActionError(400, translate('conversation not found'));
       }
+      const { systemPrompt, skillSettings } =
+        conversationAgentOptions(conversation);
 
-      const employee = await getAIEmployee(this.repositories, employeeName);
+      const employee = await getAIEmployee(this.repositories, aiEmployee);
       if (!employee) {
         throw new ResourceActionError(400, translate('AI employee not found'));
       }
@@ -813,7 +855,8 @@ export class AIConversationService {
             message.content?.content,
         );
         if (textUserMessage) {
-          const content = textUserMessage.content.content;
+          const content = (textUserMessage.content as { content: string })
+            .content;
           const title = content.substring(0, 30);
           await this.repositories.aiConversations.update({
             filter: { sessionId, userId },
@@ -830,7 +873,7 @@ export class AIConversationService {
           this.snowflake,
           sessionId,
           messages,
-          editingMessageId,
+          state.messageId,
         );
         throw new ResourceActionError(
           400,
@@ -839,148 +882,76 @@ export class AIConversationService {
           ),
         );
       }
-      const resolvedModel = await this.aiEmployeesManager.resolveModel(
-        employee,
-        model,
-      );
-      const agentContext = this.createAgentContext({
-        actor,
-        execution,
-        state: {
-          sessionId,
-          messages,
-          model: { ...resolvedModel },
-          webSearch,
-        },
-        translate,
-        getHeader,
-      });
-      const agentOptions = {
-        username: employee.username,
-        actor,
-        translate,
-        getHeader,
-        sessionId,
-        frontendTools: execution.frontendTools,
-        from: (execution.sessionId === sessionId
-          ? 'main-agent'
-          : 'sub-agent') as 'main-agent' | 'sub-agent',
-        systemPrompt:
-          typeof conversation.options?.systemMessage === 'string'
-            ? conversation.options.systemMessage
-            : undefined,
-        skillSettings: isRecord(conversation.options?.skillSettings)
-          ? conversation.options.skillSettings
-          : undefined,
-        tools: Array.isArray(conversation.options?.tools)
-          ? conversation.options.tools
-          : undefined,
-        webSearch,
-      };
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      const agent =
-        await this.agentServiceFactory.createAIEmployee(agentOptions);
-      const runStream = async (request: any) => {
-        const agentRequest = {
-          ...request,
-          model: resolvedModel,
-          context: {
-            ...(request.context ?? {}),
-            agentContext,
-            important: execution.important,
-            timezone: execution.timezone,
-          },
-        };
-        const adapter = new AgentSSEAdapter(
-          (chunk) => streamTarget(execution).write(chunk),
-          (chunk) =>
-            this.llmStreamCachedManager.getCached(sessionId).append(chunk),
+      // Resolved before the agent exists, because the answer decides what its
+      // state carries. Both calls are repository work and need no agent.
+      const interrupted =
+        !state.messageId &&
+        (await this.subAgentsDispatcher.isInterrupted(sessionId));
+      const userDecisions = interrupted
+        ? await this.subAgentsDispatcher.reject(sessionId, actor.id)
+        : undefined;
+      const agent = await this.agentServiceFactory.createAIEmployee({
+        username: employee.username,
+        from: 'main-agent',
+        actor,
+        systemPrompt,
+        skillSettings,
+        // They answer the sub-agent's pending question, so they are handed
+        // over rather than sent to this model.
+        state: {
+          ...state,
+          handoffMessages: userDecisions ? messages : undefined,
+        },
+        runtime: this.agentRuntime(transport),
+      });
+      const runStream = (request: AgentRequest) =>
+        this.consumeAgentStream(
+          sessionId,
+          transport,
+          request.messageId ? agent.forkStream(request) : agent.stream(request),
         );
-        await adapter.consume(
-          request?.messageId
-            ? agent.forkStream(agentRequest)
-            : agent.stream(agentRequest),
-        );
-        streamTarget(execution).end();
-        return true;
-      };
-      const runInvoke = (request: any) => {
-        const agentRequest = {
-          ...request,
-          model: resolvedModel,
-          context: {
-            ...(request.context ?? {}),
-            agentContext,
-            important: execution.important,
-            timezone: execution.timezone,
-          },
-        };
-        return request?.messageId
-          ? agent.forkInvoke(agentRequest)
-          : agent.invoke(agentRequest);
-      };
-      const cancelToolCall = () => {
-        return agent.cancelToolCall();
-      };
-      if (!editingMessageId) {
-        if (await this.subAgentsDispatcher.isInterrupted(sessionId)) {
-          const userDecisions = await this.subAgentsDispatcher.reject(
+      const runInvoke = (request: AgentRequest) =>
+        request.messageId ? agent.forkInvoke(request) : agent.invoke(request);
+      if (userDecisions) {
+        if (stream) {
+          await runStream({ userDecisions });
+          return undefined;
+        }
+        return await runInvoke({ userDecisions });
+      }
+      if (!state.messageId && !interrupted) {
+        const toolMessages = await agent.cancelToolCall();
+        if (toolMessages?.length) {
+          await prependCancelledToolContinuation(
+            this.repositories,
             sessionId,
-            actor.id,
+            messages,
+            toolMessages,
           );
-          if (userDecisions) {
-            if (shouldStream) {
-              await runStream({ userDecisions });
-            } else {
-              return await runInvoke({ userDecisions });
-            }
-            return undefined;
-          }
-        } else {
-          const toolMessages = await cancelToolCall();
-          if (toolMessages?.length) {
-            await prependCancelledToolContinuation(
-              this.repositories,
-              sessionId,
-              messages,
-              toolMessages,
-            );
-          }
         }
       }
 
-      if (shouldStream) {
-        await runStream({
-          userMessages: messages,
-          messageId: editingMessageId,
-        });
-      } else {
-        return await runInvoke({
-          userMessages: messages,
-          messageId: editingMessageId,
-        });
+      const request: AgentRequest = {
+        userMessages: messages,
+        messageId: state.messageId,
+      };
+      if (stream) {
+        await runStream(request);
+        return undefined;
       }
+      return await runInvoke(request);
+    } catch (err: unknown) {
+      const { status, message, code } = this.describeFailure(err, translate);
+      if (!stream) {
+        throw new ResourceActionError(status, message, { cause: err });
+      }
+      const target = streamTarget(transport);
+      sendErrorResponse(target, message, code);
+      if (!target.writableEnded) target.end();
       return undefined;
-    } catch (err: any) {
-      this.logger.error?.(err);
-      let status = 500;
-      let message = translate('Server unexpected error occur');
-      if (err instanceof ResourceActionError) {
-        status = err.status;
-        message = err.message;
-      } else if (err instanceof Error) {
-        status = 500;
-        message = err.message;
-      }
-      if (shouldStream) {
-        sendErrorResponse(streamTarget(execution), message);
-        if (!streamTarget(execution).writableEnded)
-          streamTarget(execution).end();
-      } else {
-        throw new ResourceActionError(status, message);
-      }
     }
   }
 
@@ -1009,29 +980,23 @@ export class AIConversationService {
 
   async resumeStream({
     actorId,
-    input,
-    execution = {},
+    sessionId,
+    transport,
   }: {
     actorId: string | number;
-    input: { sessionId: string };
-    execution?: ConversationExecution;
+    sessionId: string;
+    transport: ConversationTransport;
   }) {
     const userId = String(actorId);
     const abortController = new AbortController();
     const abortStream = () => abortController.abort();
-    const target = streamTarget(execution);
+    const target = streamTarget(transport);
     const shouldStopStream = () =>
       abortController.signal.aborted ||
       target.destroyed ||
       target.writableEnded;
 
-    const { sessionId } = input;
-    if (!sessionId) {
-      sendErrorResponse(streamTarget(execution), 'sessionId is required');
-      return;
-    }
-
-    execution.abortSignal?.addEventListener('abort', abortStream, {
+    transport.abortSignal?.addEventListener('abort', abortStream, {
       once: true,
     });
 
@@ -1044,7 +1009,7 @@ export class AIConversationService {
         return;
       }
       if (!conversation) {
-        sendErrorResponse(streamTarget(execution), 'conversation not found');
+        sendErrorResponse(target, 'conversation not found');
         return;
       }
       const reachLimit = await isReachParallelLimit(this.repositories, actorId);
@@ -1061,7 +1026,7 @@ export class AIConversationService {
             break;
           }
           hasChunks = true;
-          streamTarget(execution).write(chunk);
+          target.write(chunk);
         }
       }
 
@@ -1073,7 +1038,7 @@ export class AIConversationService {
           });
         const llmActiveState = currentConversation?.llmActiveState;
         if (llmActiveState && llmActiveState !== 'idle') {
-          streamTarget(execution).write(
+          target.write(
             `data: ${JSON.stringify({ type: 'chunks_cache_missing', body: { llmActiveState } })}\n\n`,
           );
         }
@@ -1083,44 +1048,32 @@ export class AIConversationService {
         return;
       }
       this.logger.error?.(err);
-      sendErrorResponse(
-        streamTarget(execution),
-        err.message || 'Resume stream error',
-      );
+      sendErrorResponse(target, err.message || 'Resume stream error');
       return;
     } finally {
-      execution.abortSignal?.removeEventListener('abort', abortStream);
+      transport.abortSignal?.removeEventListener('abort', abortStream);
       if (!shouldStopStream()) {
-        streamTarget(execution).end();
+        target.end();
       }
     }
   }
 
   async resendMessages({
     actor,
-    input,
-    execution = {},
-    translate,
-    getHeader,
+    stream = true,
+    state,
+    transport,
   }: {
     actor: Actor;
-    input: Record<string, any>;
-    execution?: ConversationExecution;
-    translate: Translate;
-    getHeader?: (name: string) => string | undefined;
+    stream?: boolean;
+    state: AgentState;
+    transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const { sessionId, webSearch, model, stream = true } = input;
-    let { messageId } = input;
-
-    const shouldStream = stream !== false;
-    if (shouldStream) {
-    }
+    const { sessionId } = state;
+    const { translate } = transport;
 
     try {
-      if (!sessionId) {
-        throw new ResourceActionError(400, translate('sessionId is required'));
-      }
       const conversation = await this.aiConversationsManager.getConversation({
         sessionId,
         userId,
@@ -1128,6 +1081,8 @@ export class AIConversationService {
       if (!conversation) {
         throw new ResourceActionError(400, translate('conversation not found'));
       }
+      const { systemPrompt, skillSettings } =
+        conversationAgentOptions(conversation);
       const employee = await getAIEmployee(
         this.repositories,
         conversation.aiEmployeeUsername ?? '',
@@ -1137,6 +1092,7 @@ export class AIConversationService {
       }
 
       const resendMessages: AIMessageInput[] = [];
+      let { messageId } = state;
       if (messageId) {
         const message = await this.repositories.aiMessages.findOne({
           filter: { sessionId, messageId },
@@ -1173,130 +1129,66 @@ export class AIConversationService {
           ),
         );
       }
-      const resolvedModel = await this.aiEmployeesManager.resolveModel(
-        employee,
-        model,
-      );
-      const agentContext = this.createAgentContext({
-        actor,
-        execution,
-        state: {
-          sessionId,
-          messageId,
-          messages: resendMessages.length ? resendMessages : undefined,
-          model: { ...resolvedModel },
-          webSearch,
-        },
-        translate,
-        getHeader,
-      });
-      const agentOptions = {
-        username: employee.username,
-        actor,
-        translate,
-        getHeader,
-        sessionId,
-        frontendTools: execution.frontendTools,
-        from: (execution.sessionId === sessionId
-          ? 'main-agent'
-          : 'sub-agent') as 'main-agent' | 'sub-agent',
-        systemPrompt:
-          typeof conversation.options?.systemMessage === 'string'
-            ? conversation.options.systemMessage
-            : undefined,
-        skillSettings: isRecord(conversation.options?.skillSettings)
-          ? conversation.options.skillSettings
-          : undefined,
-        tools: Array.isArray(conversation.options?.tools)
-          ? conversation.options.tools
-          : undefined,
-        webSearch,
-      };
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      if (shouldStream) {
-        {
-          const service =
-            await this.agentServiceFactory.createAIEmployee(agentOptions);
-          await new AgentSSEAdapter(
-            (chunk) => streamTarget(execution).write(chunk),
-            (chunk) =>
-              this.llmStreamCachedManager.getCached(sessionId).append(chunk),
-          ).consume(
-            service.forkStream({
-              messageId,
-              model: resolvedModel,
-              userMessages: resendMessages.length ? resendMessages : undefined,
-              context: {
-                agentContext,
-                important: execution.important,
-                timezone: execution.timezone,
-              },
-            }),
-          );
-          streamTarget(execution).end();
-        }
-      } else {
-        const service =
-          await this.agentServiceFactory.createAIEmployee(agentOptions);
-        return service.forkInvoke({
-          messageId,
-          model: resolvedModel,
-          userMessages: resendMessages.length ? resendMessages : undefined,
-          context: {
-            agentContext,
-            important: execution.important,
-            timezone: execution.timezone,
-          },
-        });
+      const agent = await this.agentServiceFactory.createAIEmployee({
+        username: employee.username,
+        from: 'main-agent',
+        actor,
+        systemPrompt,
+        skillSettings,
+        state: { ...state, messageId },
+        runtime: this.agentRuntime(transport),
+      });
+      const request: AgentRequest = {
+        messageId,
+        userMessages: resendMessages.length ? resendMessages : undefined,
+      };
+      if (stream) {
+        await this.consumeAgentStream(
+          sessionId,
+          transport,
+          agent.forkStream(request),
+        );
+        return undefined;
       }
+      return await agent.forkInvoke(request);
+    } catch (err: unknown) {
+      const { status, message, code } = this.describeFailure(err, translate);
+      if (!stream) {
+        throw new ResourceActionError(status, message, { cause: err });
+      }
+      const target = streamTarget(transport);
+      sendErrorResponse(target, message, code);
+      if (!target.writableEnded) target.end();
       return undefined;
-    } catch (err: any) {
-      this.logger.error?.(err);
-      let status = 500;
-      let message = translate('Server unexpected error occur');
-      if (err instanceof ResourceActionError) {
-        status = err.status;
-        message = err.message;
-      } else if (err instanceof Error) {
-        status = 500;
-        message = err.message;
-      }
-      if (shouldStream) {
-        sendErrorResponse(streamTarget(execution), message);
-        if (!streamTarget(execution).writableEnded)
-          streamTarget(execution).end();
-      } else {
-        throw new ResourceActionError(status, message);
-      }
     }
   }
 
   async updateUserDecision({
     actor,
-    input,
-    execution = {},
-    translate,
-    getHeader,
+    messageId,
+    toolCallId,
+    userDecision,
+    state,
+    transport,
   }: {
     actor: Actor;
-    input: Record<string, any>;
-    execution?: ConversationExecution;
-    translate: Translate;
-    getHeader?: (name: string) => string | undefined;
+    messageId: string;
+    toolCallId: string;
+    userDecision: UserDecision;
+    state: AgentState;
+    transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
+    const { sessionId } = state;
+    const { translate } = transport;
     const agentContext = this.createAgentContext({
       actor,
-      execution,
-      translate,
-      getHeader,
+      state,
+      runtime: this.agentRuntime(transport),
     });
-    const { sessionId, messageId, toolCallId, userDecision } = input;
-    if (!sessionId) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
     const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
       userId,
@@ -1408,54 +1300,46 @@ export class AIConversationService {
 
   async resumeToolCall({
     actor,
-    input,
-    execution = {},
-    translate,
-    getHeader,
+    state,
+    transport,
   }: {
     actor: Actor;
-    input: Record<string, any>;
-    execution?: ConversationExecution;
-    translate: Translate;
-    getHeader?: (name: string) => string | undefined;
+    state: AgentState;
+    transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const { sessionId, messageId, model, webSearch } = input;
-    if (!sessionId) {
-      sendErrorResponse(streamTarget(execution), 'sessionId is required');
-      return;
-    }
+    const { sessionId } = state;
+    const target = streamTarget(transport);
     try {
       const conversation = await this.aiConversationsManager.getConversation({
         sessionId,
         userId,
       });
       if (!conversation) {
-        sendErrorResponse(streamTarget(execution), 'conversation not found');
+        sendErrorResponse(target, 'conversation not found');
         return;
       }
+      const { systemPrompt, skillSettings } =
+        conversationAgentOptions(conversation);
       const employee = await getAIEmployee(
         this.repositories,
         conversation.aiEmployeeUsername ?? '',
       );
       if (!employee) {
-        sendErrorResponse(streamTarget(execution), 'AI employee not found');
+        sendErrorResponse(target, 'AI employee not found');
         return;
       }
 
-      let message: AIMessageEntity | null;
-      if (messageId) {
-        message = await this.repositories.aiMessages.findOne({
-          filter: { sessionId, messageId },
-        });
-      } else {
-        message = await this.repositories.aiMessages.findOne({
-          filter: { sessionId },
-          sort: ['-messageId'],
-        });
-      }
+      const message: AIMessageEntity | null = state.messageId
+        ? await this.repositories.aiMessages.findOne({
+            filter: { sessionId, messageId: state.messageId },
+          })
+        : await this.repositories.aiMessages.findOne({
+            filter: { sessionId },
+            sort: ['-messageId'],
+          });
       if (!message) {
-        sendErrorResponse(streamTarget(execution), 'message not found');
+        sendErrorResponse(target, 'message not found');
         return;
       }
       const messageConversation =
@@ -1464,81 +1348,38 @@ export class AIConversationService {
           userId,
         });
       if (!messageConversation) {
-        sendErrorResponse(streamTarget(execution), 'conversation not found');
+        sendErrorResponse(target, 'conversation not found');
         return;
       }
-      const tools = message.toolCalls;
-      if (!tools?.length) {
-        sendErrorResponse(streamTarget(execution), 'No tool calls found');
+      if (!message.toolCalls?.length) {
+        sendErrorResponse(target, 'No tool calls found');
         return;
       }
-      const resolvedModel = await this.aiEmployeesManager.resolveModel(
-        employee,
-        model,
-      );
-      const agentContext = this.createAgentContext({
-        actor,
-        execution,
-        state: {
-          sessionId,
-          messageId: message.messageId,
-          model: { ...resolvedModel },
-          webSearch,
-        },
-        translate,
-        getHeader,
-      });
-      const agentOptions = {
-        username: employee.username,
-        actor,
-        translate,
-        getHeader,
-        sessionId,
-        frontendTools: execution.frontendTools,
-        from: (execution.sessionId === sessionId
-          ? 'main-agent'
-          : 'sub-agent') as 'main-agent' | 'sub-agent',
-        systemPrompt:
-          typeof conversation.options?.systemMessage === 'string'
-            ? conversation.options.systemMessage
-            : undefined,
-        skillSettings: isRecord(conversation.options?.skillSettings)
-          ? conversation.options.skillSettings
-          : undefined,
-        tools: Array.isArray(conversation.options?.tools)
-          ? conversation.options.tools
-          : undefined,
-        webSearch,
-      };
       const userDecisions = await this.aiConversationsManager.getUserDecisions(
         message.messageId,
       );
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      {
-        const service =
-          await this.agentServiceFactory.createAIEmployee(agentOptions);
-        await new AgentSSEAdapter(
-          (chunk) => streamTarget(execution).write(chunk),
-          (chunk) =>
-            this.llmStreamCachedManager.getCached(sessionId).append(chunk),
-        ).consume(
-          service.resumeStream({
-            model: resolvedModel,
-            userDecisions,
-            context: { agentContext },
-          }),
-        );
-        streamTarget(execution).end();
-      }
-    } catch (err: any) {
-      this.logger.error?.(err);
-      sendErrorResponse(
-        streamTarget(execution),
-        err.message || 'Tool call error',
+      const agent = await this.agentServiceFactory.createAIEmployee({
+        username: employee.username,
+        from: 'main-agent',
+        actor,
+        systemPrompt,
+        skillSettings,
+        state: { ...state, messageId: message.messageId },
+        runtime: this.agentRuntime(transport),
+      });
+      await this.consumeAgentStream(
+        sessionId,
+        transport,
+        agent.resumeStream({ userDecisions }),
       );
-      if (!streamTarget(execution).writableEnded) streamTarget(execution).end();
+    } catch (err: unknown) {
+      // The resumed run is an agent run, so it reports as a send does.
+      const { message, code } = this.describeFailure(err, transport.translate);
+      sendErrorResponse(target, message || 'Tool call error', code);
+      if (!target.writableEnded) target.end();
     }
   }
 }

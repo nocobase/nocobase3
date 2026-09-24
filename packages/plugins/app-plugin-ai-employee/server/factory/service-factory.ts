@@ -1,26 +1,19 @@
 import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
-import { type AIManager } from '@nocobase/ai-employee';
+import type { AIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
-import {
-  createServiceToken,
-  type ServiceContainer,
-  type ServiceToken,
-} from '@nocobase/service-provider';
+import type { ServiceContainer } from '@nocobase/service-provider';
 
 import type {
   AIEmployeeLLMServiceConfig,
   AIApplicationConfig,
 } from '../config.js';
 import type { AIResourceRegistrar } from '../ai/index.js';
-import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
-import { repositoryFactoryToken } from './repository-factory.js';
+import type { ManagerFactory } from './manager-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
 import { AI_API_BASE_PATH } from '../types.js';
-import { aiManagerToken } from '../provider/ai-employee.js';
-import { agentServiceFactoryToken } from '../agent/service/agent-service-factory.js';
 import { AgentServiceFactory } from '../agent/service/agent-service-factory.js';
 import { AIConversationService } from '../service/ai-conversation-service.js';
 import { AIEmployeeService } from '../service/ai-employee-service.js';
@@ -28,13 +21,18 @@ import { AIMCPServerService } from '../service/ai-mcp-server-service.js';
 import { AISkillService } from '../service/ai-skill-service.js';
 import { AIToolService } from '../service/ai-tool-service.js';
 import { AIFileService } from '../service/file-service.js';
+import { AIFileMetadataRepository } from '../repository/file-storage/ai-file-metadata-repository.js';
 import { LLMService } from '../service/llm-service.js';
 import { ModelService } from '../service/model-service.js';
 import { loadResources } from '../service/resource-loader.js';
-export const serviceFactoryToken: ServiceToken<ServiceFactory> =
-  createServiceToken<ServiceFactory>(
-    '@nocobase/app-plugin-ai-employee/internal/services',
-  );
+import {
+  agentServiceFactoryToken,
+  aiManagerToken,
+  managerFactoryToken,
+  repositoryFactoryToken,
+  serviceFactoryToken,
+} from '../tokens.js';
+export { serviceFactoryToken };
 
 export interface ServiceFactoryOptions {
   readonly container: ServiceContainer;
@@ -110,6 +108,7 @@ export class ServiceFactory {
   public get fileService(): AIFileService {
     return (this.fileServiceValue ??= new AIFileService({
       fileStorage: this.managers.fileStorage,
+      fileMetadata: new AIFileMetadataRepository(this.repositories.aiFiles),
       snowflake: this.container.resolve(idGeneratorToken),
       apiBasePath: AI_API_BASE_PATH,
     }));
@@ -166,12 +165,19 @@ export class ServiceFactory {
       this.repositories.aiEmployees,
     );
     await this.llmServiceConfigSynchronizer.enqueue(initialization.llmServices);
+    // Before the sync, so it reconciles against what an administrator saved.
+    await this.ai.mcpServerManager.switchRepository(
+      this.repositories.aiMcpClients,
+    );
     await this.mcpServerService.syncConfiguredMCPServers(
       initialization.mcpServers,
     );
     await this.ai.llmServiceManager.switchRepository(
       this.repositories.llmServices,
     );
+    // The switch keeps every stored model list, so a service that overrides its
+    // list has it reapplied against the stored rows, as a config reload does.
+    await this.llmServiceConfigSynchronizer.enqueue(initialization.llmServices);
     await loadResources({
       ai: this.ai,
       logger: this.logger,

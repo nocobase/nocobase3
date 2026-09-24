@@ -1,9 +1,5 @@
-export {
-  AIProvider,
-  useAI,
-  useGlobalAIChatController,
-  type AIProviderProps,
-} from './ai-provider.js';
+export { AIProvider, type AIProviderProps } from './ai-provider.js';
+export { useAI, useGlobalAIChatController } from './ai-context.js';
 export { AIChatProvider, type AIChatProviderProps } from './chat-provider.js';
 export {
   useAIChat,
@@ -28,7 +24,6 @@ export { findAIModel, getAIModelKey, groupAIModels } from './model.js';
 export type { AIModelGroup } from './model.js';
 export {
   AIFormRegistry,
-  AIFormRegistryProvider,
   createFormFillerInvoker,
   useAIFormRegistry,
   type AIFormField,
@@ -36,9 +31,9 @@ export {
   type AIFormFillSkippedField,
   type AIFormTarget,
 } from './form-registry.js';
+export { AIFormRegistryProvider } from './form-registry-provider.js';
 export {
   AIFrontendToolRegistry,
-  AIFrontendToolRegistryProvider,
   createFrontendToolInvokers,
   defineAIFrontendTool,
   useAIFrontendToolRegistry,
@@ -47,15 +42,20 @@ export {
   type AIFrontendToolPermission,
   type AIFrontendToolRegistration,
 } from './frontend-tool-registry.js';
+export { AIFrontendToolRegistryProvider } from './frontend-tool-registry-provider.js';
 export {
   AIPageContextResolverProvider,
   AIPageContextScope,
+} from './page-context.js';
+export {
+  useAIPageContextResolver,
+  useAIPageContextScope,
+  type AIPageContextResolver,
+} from './page-context-store.js';
+export {
   createAIPageContextReference,
   getAIWorkContextRequiredTools,
   getAIWorkContextToolScope,
   mergeAIRequiredTools,
-  useAIPageContextScope,
-  useAIPageContextResolver,
-  type AIPageContextResolver,
-} from './page-context.js';
+} from './page-context-utils.js';
 export type * from './types.js';

@@ -23,12 +23,12 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./index.ts",
+      "import": "./index.ts"
     },
     "./server": {
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
     },
     "./package.json": "./package.json",
     "./client": {
@@ -149,7 +149,6 @@
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "ai": "^5.0.0",
-    "better-auth": "catalog:",
     "eventsource-parser": "^3.0.0",
     "hono": "catalog:",
     "langchain": "1.2.39",

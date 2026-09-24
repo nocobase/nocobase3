@@ -7,24 +7,18 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import {
-  defineTools,
-  type AgentContext,
-  type AIEmployeeRepository,
-} from '@nocobase/ai-employee';
-import type { AgentBuiltInService } from '../../../agent/contracts.js';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
 import {
   getAccessibleAIEmployee,
   serializeEmployeeDetail,
 } from '../../sub-agents/shared.js';
+import {
+  managerFactoryToken,
+  repositoryFactoryToken,
+} from '../../../tokens.js';
 
-type AIEmployeeContext = AgentContext<
-  { aiEmployees: AIEmployeeRepository },
-  { builtIn: AgentBuiltInService }
->;
-
-export default defineTools<AIEmployeeContext>({
+export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
@@ -39,6 +33,10 @@ export default defineTools<AIEmployeeContext>({
     schema: z.object({
       username: z.string().describe('The username of the AI employee.'),
     }),
+  },
+  dependencies: {
+    repositories: repositoryFactoryToken,
+    managers: managerFactoryToken,
   },
   async invoke(ctx, args) {
     const employee = await getAccessibleAIEmployee(ctx, args.username);

@@ -152,13 +152,15 @@ export class DriveFileStorage<TEntity, TCreateContext> implements FileStorage<
   public async write(
     input: WriteFileInput<TCreateContext>,
   ): Promise<FileMetadata<TEntity>> {
-    const filename = normalizeFilename(input.filename);
+    // The name a person sees keeps what they called the file, in any script;
+    // only the storage key is reduced to characters every disk accepts.
+    const filename = normalizeDisplayFilename(input.filename);
     const extname = path.extname(filename).toLowerCase();
     const content = await readFileStorageContent(input.content);
     const objectId = normalizeObjectId(
       input.objectId ?? (input.id == null ? randomUUID() : String(input.id)),
     );
-    const key = [this.prefix, `${objectId}-${filename}`]
+    const key = [this.prefix, `${objectId}-${normalizeFilename(filename)}`]
       .filter(Boolean)
       .join('/');
     const mimeType = input.mimeType?.trim() || 'application/octet-stream';
@@ -285,6 +287,32 @@ export function requireDisk(disk: string): string {
   return normalized;
 }
 
+/**
+ * The name a file is shown and downloaded under: its basename as given, in any
+ * script, without path separators or control characters, at most 128
+ * characters with its extension kept.
+ */
+export function normalizeDisplayFilename(filename: string): string {
+  const basename = filename.split(/[/\\]/).pop() ?? '';
+  // eslint-disable-next-line no-control-regex
+  const cleaned = basename.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  const name = cleaned || 'file';
+  const characters = [...name];
+  if (characters.length <= 128) return name;
+
+  const extname = path.extname(name);
+  const extnameLength = [...extname].length;
+  if (extname && extnameLength < 128) {
+    const stem = characters.slice(0, characters.length - extnameLength);
+    return `${stem.slice(0, 128 - extnameLength).join('')}${extname}`;
+  }
+  return characters.slice(0, 128).join('');
+}
+
+/**
+ * A name safe in any storage key: ASCII letters, digits, `_`, `.`, and `-`
+ * only, at most 128 characters with its extension kept.
+ */
 export function normalizeFilename(filename: string): string {
   const basename = filename.split(/[/\\]/).pop()?.trim() || 'file';
   const normalized =

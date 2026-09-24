@@ -144,19 +144,13 @@ describe('package AI resources', () => {
     });
   });
 
-  it('executes Tool, MCP, Skill, Employee in order', async () => {
+  it('executes Tool, Skill, Employee in order', async () => {
     const order: string[] = [];
     class OrderedRegistrar extends AIResourceRegistrar {
       protected override async registerTools(
         _toolsManager: ToolsManager,
       ): Promise<void> {
         order.push('tools');
-      }
-
-      protected override async loadMCP(
-        _ai: import('@nocobase/ai-employee').AIManager,
-      ): Promise<void> {
-        order.push('mcp');
       }
 
       protected override async loadSkills(
@@ -174,7 +168,7 @@ describe('package AI resources', () => {
 
     const fixture = await createMockServer();
     await new OrderedRegistrar().registerAIResources(fixture.aiManager);
-    expect(order).toEqual(['tools', 'mcp', 'skills', 'employees']);
+    expect(order).toEqual(['tools', 'skills', 'employees']);
   });
 
   it('normalizes configured Skill paths relative to the App root', () => {

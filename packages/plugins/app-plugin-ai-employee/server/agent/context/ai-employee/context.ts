@@ -1,11 +1,12 @@
 import type {
-  AgentRequest,
   AgentContextProvider,
   CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
 } from '../../types.js';
 import type {
+  AgentActor,
+  AgentContext,
   AIEmployee as AIEmployeeType,
   AIMessageInput,
   LLMProviderManager,
@@ -18,8 +19,8 @@ import type {
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
-import type { AppAgentContext } from '../../context.js';
-import type { Actor, Translate } from '../../../types.js';
+import type { Translate } from '../../../types.js';
+import type { AIEmployeesManager } from '../../../manager/ai-employees-manager.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
 import type {
@@ -48,11 +49,10 @@ import {
 
 export interface AIEmployeeAgentContextProviderOptions {
   readonly employee: AIEmployeeType;
-  readonly sessionId: string;
   readonly currentConversation: CurrentConversation;
-  readonly actor: Actor;
-  readonly translate?: Translate;
-  readonly toolRuntimeContext: AppAgentContext;
+  /** Nothing below restates what this already carries. */
+  readonly agentContext: AgentContext;
+  readonly aiEmployeesManager: AIEmployeesManager;
   readonly llmProviderManager: LLMProviderManager;
   readonly toolsManager: ToolsManager;
   readonly skillsManager: SkillsManager;
@@ -62,21 +62,15 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly employees: AIEmployeeRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly usersAiEmployees: UserAIEmployeeRepository;
-  readonly frontendTools?: readonly unknown[];
-  readonly getHeader?: (name: string) => string | undefined;
   readonly systemMessage?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  readonly webSearch?: boolean;
-  readonly tools?: { name: string }[];
 }
 
 export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly employee: AIEmployeeType;
-  private readonly sessionId: string;
   private readonly conversation: CurrentConversation;
-  private readonly actor: Actor;
-  private readonly translate?: Translate;
-  private readonly toolRuntimeContext: AppAgentContext;
+  public readonly agentContext: AgentContext;
+  private readonly aiEmployeesManager: AIEmployeesManager;
   private readonly llmProviderManager: LLMProviderManager;
   private readonly toolsManager: ToolsManager;
   private readonly skillsManager: SkillsManager;
@@ -86,20 +80,31 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly employees: AIEmployeeRepository;
   private readonly toolMessages: AIToolMessageRepository;
   private readonly usersAiEmployees: UserAIEmployeeRepository;
-  private readonly frontendTools: readonly unknown[];
-  private readonly getHeader: (name: string) => string | undefined;
   private readonly systemMessage: string;
   private readonly skillSettings?: AIEmployeeSkillSettings;
-  private readonly webSearch: boolean;
-  private readonly tools: { name: string }[];
+
+  // Derived, never copied, so the two cannot come apart.
+  private get sessionId(): string {
+    return this.agentContext.state.sessionId;
+  }
+  private get actor(): AgentActor {
+    return this.agentContext.actor;
+  }
+  private get translate(): Translate | undefined {
+    return this.agentContext.runtime.translate;
+  }
+  private get frontendTools(): readonly unknown[] {
+    return this.agentContext.state.frontendTools ?? [];
+  }
+  private get webSearch(): boolean {
+    return this.agentContext.state.webSearch ?? false;
+  }
 
   public constructor(options: AIEmployeeAgentContextProviderOptions) {
     this.employee = options.employee;
-    this.sessionId = options.sessionId;
     this.conversation = options.currentConversation;
-    this.actor = options.actor;
-    this.translate = options.translate;
-    this.toolRuntimeContext = options.toolRuntimeContext;
+    this.agentContext = options.agentContext;
+    this.aiEmployeesManager = options.aiEmployeesManager;
     this.llmProviderManager = options.llmProviderManager;
     this.toolsManager = options.toolsManager;
     this.skillsManager = options.skillsManager;
@@ -109,12 +114,8 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.employees = options.employees;
     this.toolMessages = options.toolMessages;
     this.usersAiEmployees = options.usersAiEmployees;
-    this.frontendTools = options.frontendTools ?? [];
-    this.getHeader = options.getHeader ?? (() => undefined);
     this.systemMessage = options.systemMessage ?? '';
     this.skillSettings = options.skillSettings;
-    this.webSearch = options.webSearch ?? false;
-    this.tools = options.tools ?? [];
     this.builtInManager.setupBuiltInInfo({
       employee: this.employee,
       translate: this.translate,
@@ -125,9 +126,15 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     return this.conversation;
   }
 
-  public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    if (!request.model) throw new Error('AI employee model is required');
-    const resolved = await this.llmProviderManager.getLLMService(request.model);
+  public async resolveLLM(): Promise<ResolvedAgentLLM> {
+    // The employee's own configuration decides the model. The turn may ask for
+    // one, but only a model the employee allows is honoured, and a turn that
+    // asks for none is resolved rather than rejected.
+    const model = await this.aiEmployeesManager.resolveModel(
+      this.employee,
+      this.agentContext.state.model,
+    );
+    const resolved = await this.llmProviderManager.getLLMService(model);
     return {
       providerName: resolved.service.provider,
       llmService: resolved.service.name,
@@ -221,7 +228,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
 
     const availableSkills = await this.getAvailableSkills();
     const availableAIEmployees = await this.getAvailableAIEmployees();
-    const timezone = this.getHeader('x-timezone') ?? undefined;
+    const timezone = this.agentContext.state.timezone;
     const systemPrompt = getSystemPrompt({
       aiEmployee: {
         nickname: employee.nickname ?? employee.username,
@@ -281,14 +288,14 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     )
       return undefined;
     return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
-      ctx: this.toolRuntimeContext,
+      ctx: this.agentContext,
     });
   }
 
   private listTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
     return this.toolsManager.listTools({
       ...filter,
-      ctx: this.toolRuntimeContext,
+      ctx: this.agentContext,
     });
   }
 
@@ -322,7 +329,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
             ) =>
               tool.invoke(
                 {
-                  ...(ctx as AppAgentContext),
+                  ...(ctx as AgentContext),
                   availableSkills: () => this.getAvailableSkills(),
                 },
                 args,
@@ -343,14 +350,14 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     );
     const tools = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
-      ctx: this.toolRuntimeContext,
+      ctx: this.agentContext,
     });
     if (getSkill) tools.push(getSkill);
     if (this.webSearch === true) {
       const webSearch = await this.toolsManager.getTools(
         SYSTEM_TOOLS.WEB_SEARCH,
         {
-          ctx: this.toolRuntimeContext,
+          ctx: this.agentContext,
         },
       );
       if (webSearch) tools.push(webSearch);
@@ -362,7 +369,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
       ...(this.employee.skillSettings?.enabledTools ?? []).map((name) => ({
         name,
       })),
-      ...(this.tools ?? []),
     ];
     if (await this.getKnowledgeBaseRetrieveTool())
       configured.push({ name: SYSTEM_TOOLS.KNOWLEDGE_BASE });
@@ -387,10 +393,9 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     const eligible = new Set(names.filter((name) => this.isToolSelected(name)));
     // A selection is not a capability grant. Preserve deliberately configured
     // legacy web search, but not web search inherited into enabledTools.
-    const configuredWebSearch = [
-      ...(this.employee.skillSettings?.tools ?? []),
-      ...this.tools,
-    ].some(({ name }) => name === SYSTEM_TOOLS.WEB_SEARCH);
+    const configuredWebSearch = (this.employee.skillSettings?.tools ?? []).some(
+      ({ name }: { name: string }) => name === SYSTEM_TOOLS.WEB_SEARCH,
+    );
     if (!this.webSearch && !configuredWebSearch) {
       eligible.delete(SYSTEM_TOOLS.WEB_SEARCH);
     }

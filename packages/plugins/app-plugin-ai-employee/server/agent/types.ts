@@ -6,10 +6,13 @@ import type {
 } from '@langchain/core/messages';
 import type { BaseCheckpointSaver, Command } from '@langchain/langgraph';
 import type { CreateAgentParams } from 'langchain';
+import type { ZodType } from 'zod';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
+  AgentContext,
   AgentThread,
   AIMessage,
   AIMessageInput,
@@ -19,7 +22,6 @@ import type {
 } from '@nocobase/ai-employee';
 export type { AgentThread } from '@nocobase/ai-employee';
 import type { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
-import type { ModelRef } from '../types.js';
 export type AgentExecutionSource = 'main-agent' | 'sub-agent' | (string & {});
 export type AgentExecutionMode = 'streaming' | 'invoking';
 export type AgentOperation = 'stream' | 'invoke' | 'resume' | 'fork';
@@ -31,17 +33,54 @@ export interface CurrentConversation {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * What one call to an already-created agent supplies. Whatever is fixed for the
+ * agent's lifetime is in `AgentState`, so a request cannot swap it.
+ */
 export interface AgentRequest {
-  model?: ModelRef;
+  /** The message this operation forks from, where it forks from one. */
   messageId?: string;
   userMessages?: AIMessageInput[];
   userDecisions?: {
     interruptId?: string;
     decisions: UserDecision[];
   };
-  context?: Record<string, unknown>;
+  /** Per-call channel for the middleware pipeline, such as `appendMessages`. */
+  runtime?: Record<string, unknown>;
   writer?: (chunk: unknown) => void;
   signal?: AbortSignal;
+}
+
+/**
+ * A request that may ask the final answer to match a schema. Only `invoke()`
+ * accepts one, because only it reports the structured value back; `stream()`
+ * reports the answer as content events and has nowhere to put it.
+ */
+export interface AgentInvokeRequest<TStructured = never> extends AgentRequest {
+  responseFormat?: ZodType<TStructured>;
+}
+
+/**
+ * A human-in-the-loop pause an `invoke()` stopped at. The paused tool calls
+ * have already been recorded as `interrupted`, so a decision can be attached to
+ * each and the execution resumed with `resumeInvoke()` or `resumeStream()`.
+ */
+export interface AgentInvokeInterrupt {
+  id: string;
+  actions: AgentInterruptAction[];
+}
+
+/**
+ * What one `invoke()` produced, in this package's own message shape rather
+ * than the underlying graph state. `structuredResponse` is present only when
+ * the request supplied a `responseFormat`; `interrupt` only when the execution
+ * paused for a human decision instead of finishing, in which case `message` is
+ * the assistant turn that requested the paused tool calls.
+ */
+export interface AgentInvokeResult<TStructured = never> {
+  message: AIMessageInput | null;
+  structuredResponse?: TStructured;
+  interrupt?: AgentInvokeInterrupt;
 }
 
 export interface AgentMessageIndex {
@@ -83,6 +122,7 @@ export type AgentMessageConversionContext = Pick<
  */
 export interface PreparedAgentContext extends AgentMessageConversionContext {
   input: PreparedAgentInput;
+  responseFormat?: ZodType<unknown>;
   systemPrompt?: CreateAgentParams['systemPrompt'];
   tools: CreateAgentParams['tools'];
   discoveredTools: DiscoveredTools;
@@ -204,6 +244,8 @@ export type AgentStreamEvent =
   | { type: 'sub_agent_completed'; conversation: CurrentConversation };
 
 export type AgentServiceErrorCode =
+  /** The model, LLM service, or provider is not configured or not resolvable. */
+  | 'CONFIGURATION_ERROR'
   | 'MODEL_RESPONSE_ERROR'
   | 'GRAPH_RECURSION_ERROR'
   | 'EMPTY_RESPONSE'
@@ -234,6 +276,23 @@ export class AgentServiceError extends Error {
     this.cause = options.cause;
     this.aborted = options.aborted ?? code === 'ABORTED';
     this.retryable = options.retryable ?? false;
+  }
+
+  /**
+   * The deepest message in the cause chain, falling back to this error's own.
+   * A consumer reporting the failure reads this instead of walking `cause`.
+   */
+  get rootMessage(): string {
+    let current: unknown = this.cause;
+    let message = this.message;
+    const seen = new Set<unknown>();
+    while (current && typeof current === 'object' && !seen.has(current)) {
+      seen.add(current);
+      const candidate = (current as { message?: unknown }).message;
+      if (typeof candidate === 'string' && candidate) message = candidate;
+      current = (current as { cause?: unknown }).cause;
+    }
+    return message;
   }
 }
 
@@ -326,11 +385,21 @@ export interface ConversationProvider {
 
 export interface AgentContextProvider {
   currentConversation(): CurrentConversation;
-  resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
+  /**
+   * The LLM this agent runs on. It follows from the agent's own state and the
+   * employee's model policy, never from the request being served.
+   */
+  resolveLLM(): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
     messages: readonly AIMessageInput[],
   ): Promise<string | undefined>;
   discoveredTools(): Promise<DiscoveredTools>;
+  /**
+   * The context every discovered tool receives when it executes. It is fixed
+   * when the AgentService is created and is never taken from a request, so a
+   * caller cannot swap the actor, session, or services a tool runs with.
+   */
+  readonly agentContext: AgentContext;
 }
 
 export interface ChatMessageConverter<TSource, TResult> {
@@ -365,6 +434,11 @@ export interface AgentProviders {
   checkpointer?: BaseCheckpointSaver | boolean;
   logger: Logger;
   features: AgentFeatureOptions;
+  /**
+   * Resolves the container tokens a tool declared. Absent only where no tool
+   * declares anything, such as a service assembled directly in a test.
+   */
+  container?: ServiceResolver;
 }
 
 export interface CreateAgentProvidersOptions {
@@ -374,6 +448,7 @@ export interface CreateAgentProvidersOptions {
   logger?: Logger;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
+  container?: ServiceResolver;
 }
 export type AIEmployeeProviderOptions = {
   username?: string;

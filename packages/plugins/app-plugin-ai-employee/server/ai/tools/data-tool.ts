@@ -1,33 +1,39 @@
-import {
-  defineTools,
-  type AgentContext,
-  type ToolsOptions,
-} from '@nocobase/ai-employee';
+import { defineTools, type ToolsOptions } from '@nocobase/ai-employee';
 import type { z } from 'zod';
 import { ZodError } from 'zod';
 import type { DataServices } from '../../service/data-contracts.js';
+import { dataServicesFactoryToken } from '../../service/data-services.js';
 import { DataAccessError } from '../../service/data-query-policy.js';
 
-type DataToolContext = AgentContext<object, { data: DataServices }>;
+const dataToolDependencies = { dataServices: dataServicesFactoryToken };
 
-/** Tools receive only an actor-bound capability, never an unscoped Repository. */
+/**
+ * Tools receive only an actor-bound capability, never an unscoped Repository.
+ * The declared factory builds that capability for this execution's actor; no
+ * tool in this package declares the database itself.
+ */
 export function defineDataTool<T>(
   name: string,
   title: string,
   description: string,
   schema: z.ZodType<T>,
   invoke: (service: DataServices, input: T) => Promise<unknown>,
-): ToolsOptions<DataToolContext> {
-  return defineTools<DataToolContext>({
+): ToolsOptions<typeof dataToolDependencies> {
+  return defineTools({
     scope: 'SPECIFIED',
     defaultPermission: 'ALLOW',
     i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
     introduction: { title, about: description },
     definition: { name, description, schema },
+    dependencies: dataToolDependencies,
     async invoke(ctx, args) {
       try {
         const input = schema.parse(args);
-        const content = await invoke(ctx.services.data, input);
+        const service = ctx.deps.dataServices({
+          actor: ctx.actor,
+          timezone: ctx.state.timezone,
+        });
+        const content = await invoke(service, input);
         return { status: 'success', content };
       } catch (error) {
         // Driver errors can contain SQL or connection details. Never expose them to a model.

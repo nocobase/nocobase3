@@ -23,6 +23,7 @@ import {
 } from '@nocobase/ai-employee';
 import { parseResponseMessage } from '@nocobase/ai-employee';
 import type { FrontendToolManifest } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
+import type { AIConversationEntity } from '../repository/ai-conversation.js';
 
 export type AIConversationsOptions = {
   systemMessage?: unknown;
@@ -47,6 +48,11 @@ export type CreateAIConversationParams = {
   from?: 'main-agent' | 'sub-agent';
   scope?: string;
   transaction?: DatabaseConnection;
+};
+
+/** A conversation just created: its `sessionId` is always assigned. */
+export type CreatedAIConversation = AIConversationEntity & {
+  sessionId: string;
 };
 
 export type UpdateAIConversationParams = {
@@ -105,8 +111,8 @@ export class AIConversationsManager {
     from = 'main-agent',
     scope,
     transaction,
-  }: CreateAIConversationParams) {
-    return await this.aiConversationsRepo.create(
+  }: CreateAIConversationParams): Promise<CreatedAIConversation> {
+    const conversation = await this.aiConversationsRepo.create(
       {
         values: {
           userId,
@@ -121,6 +127,11 @@ export class AIConversationsManager {
       },
       transaction ? { connection: transaction } : undefined,
     );
+    const { sessionId } = conversation;
+    if (typeof sessionId !== 'string' || !sessionId) {
+      throw new Error('The created conversation has no sessionId');
+    }
+    return { ...conversation, sessionId };
   }
 
   async update({

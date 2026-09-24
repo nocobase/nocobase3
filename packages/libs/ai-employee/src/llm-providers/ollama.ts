@@ -15,6 +15,7 @@ import {
 } from '../manager/llm-provider/types.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { serverRequest } from '../utils/server-request.js';
+import type { AIFileAttachment } from '../types/ai-file-attachment.js';
 
 type OllamaModel = { name: string };
 const OLLAMA_DEFAULT_URL = 'http://localhost:11434';
@@ -42,6 +43,12 @@ export class OllamaProvider extends LLMProvider {
       format: undefined,
       keepAlive: '5m',
     });
+  }
+
+  protected isApiSupportedAttachment(attachment: AIFileAttachment): boolean {
+    // The Ollama client converts only text and images, and throws on a `file`
+    // block, so a document goes through the loader and arrives as text.
+    return attachment.mimetype?.startsWith('image/') ?? false;
   }
 
   async listModels(): Promise<{
@@ -98,10 +105,6 @@ export class OllamaEmbeddingProvider extends EmbeddingProvider {
 export const ollamaProviderOptions: LLMProviderMeta = {
   title: 'Ollama',
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
-  models: {
-    [SupportedModel.LLM]: [],
-    [SupportedModel.EMBEDDING]: [],
-  },
   provider: OllamaProvider,
   embedding: OllamaEmbeddingProvider,
 };

@@ -16,6 +16,7 @@ import type {
   ToolsOptions,
   ToolsRegistration,
 } from './types.js';
+import type { ToolsDependencies } from '../../repository/tool.js';
 import _ from 'lodash';
 
 export class DefaultToolsManager<
@@ -67,7 +68,7 @@ export class DefaultToolsManager<
   }
 
   async registerTools(
-    options: ToolsOptions<TContext> | ToolsOptions<TContext>[],
+    options: ToolsOptions<any> | ToolsOptions<any>[],
   ): Promise<void> {
     const list = _.isArray(options) ? options : [options];
     for (const option of list) {
@@ -122,7 +123,7 @@ export class DefaultToolsManager<
 }
 
 export function normalizeToolsEntity<TContext = unknown>(
-  options: ToolsOptions<TContext>,
+  options: ToolsOptions<any>,
 ): ToolsEntity<TContext> {
   const entry = {
     ...options,
@@ -136,9 +137,13 @@ export function normalizeToolsEntity<TContext = unknown>(
   return entry;
 }
 
-export function defineTools<TContext = unknown>(
-  options: ToolsOptions<TContext>,
-): ToolsOptions<TContext> {
+/**
+ * Writes a tool. `TTokens` is inferred from `dependencies`, so `ctx.deps` in
+ * `invoke` is typed from the tokens without repeating their service types.
+ */
+export function defineTools<
+  TTokens extends ToolsDependencies = Record<string, never>,
+>(options: ToolsOptions<TTokens>): ToolsOptions<TTokens> {
   return options;
 }
 

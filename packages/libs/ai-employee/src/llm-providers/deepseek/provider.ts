@@ -51,6 +51,7 @@ import {
 } from './reasoning.js';
 import { stripToolCallTags } from '../../utils/messages.js';
 import type { AIMessageInput } from '../../types/index.js';
+import { AIFileAttachment } from '../../types/ai-file-attachment.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -455,23 +456,16 @@ export class DeepSeekProvider extends LLMProvider {
     return false;
   }
 
-  protected isApiSupportedAttachment(): boolean {
-    return false;
+  protected isApiSupportedAttachment(attachment: AIFileAttachment): boolean {
+    // Images go to the model; a document keeps going through the loader, which
+    // is where this provider's text extraction already works.
+    return attachment.mimetype?.startsWith('image/') ?? false;
   }
 }
 
 export const deepseekProviderOptions: LLMProviderMeta = {
   title: 'DeepSeek',
   supportedModel: [SupportedModel.LLM],
-  models: {
-    [SupportedModel.LLM]: [
-      'deepseek-flash',
-      'deepseek-v4-pro',
-      'deepseek-v4-flash',
-      'deepseek-chat',
-      'deepseek-reasoner',
-    ],
-  },
   supportWebSearch: true,
   webSearchModels: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'],
   provider: DeepSeekProvider,

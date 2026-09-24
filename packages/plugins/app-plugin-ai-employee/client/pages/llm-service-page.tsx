@@ -13,7 +13,8 @@ import {
   listProviderModels,
   normalizeEnabledModels,
   prepareEnabledModels,
-  updateLLMService,
+  updateLLMServiceEnabled,
+  updateLLMServiceEnabledModels,
   type EnabledModel,
   type EnabledModelsConfig,
   type LLMService,
@@ -64,7 +65,7 @@ export default function LLMServicePage(): ReactElement {
       ),
     );
     try {
-      await updateLLMService(service.name, { enabled }, api);
+      await updateLLMServiceEnabled(service.name, enabled, api);
     } catch (e) {
       setServices((items) =>
         items.map((item) => (item.name === service.name ? service : item)),
@@ -416,7 +417,9 @@ function ModelEditor({
   const save = async (): Promise<void> => {
     try {
       const enabledModels = prepareEnabledModels(config);
-      onSaved(await updateLLMService(service.name, { enabledModels }, api));
+      onSaved(
+        await updateLLMServiceEnabledModels(service.name, enabledModels, api),
+      );
     } catch (saveError) {
       setError(String(saveError));
     }

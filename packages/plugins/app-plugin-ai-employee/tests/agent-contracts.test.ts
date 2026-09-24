@@ -13,6 +13,8 @@ import {
 } from '../server/agent/types.js';
 import { AIEmployeesManager } from '../server/manager/ai-employees-manager.js';
 import { createAgentProviders } from '../server/agent/providers.js';
+import { createAgentService } from '../server/agent/service/agent-service.js';
+import { normalizeAgentError } from '../server/agent/errors.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
 import {
@@ -132,27 +134,85 @@ describe('fixed AgentService contracts', () => {
       'context.getSystemPrompt(allMessages)',
     );
     expect(read('agent/service/agent-service.ts')).toContain(
-      '...(request.context ?? {})',
+      'request.runtime ?? {}',
     );
   });
 
-  it('resolves the AI employee model from each AgentRequest', () => {
+  it('resolves the AI employee model once, when the agent is created', () => {
     const types = read('agent/types.ts');
     const options = read('agent/context/ai-employee/options.ts');
     const providers = read('agent/context/ai-employee/context.ts');
+    const factory = read('agent/service/agent-service-factory.ts');
     const conversationService = read('service/ai-conversation-service.ts');
     const subAgentDispatcher = read('manager/sub-agents/dispatcher.ts');
 
-    expect(types).toContain('model?: ModelRef');
+    // A request carries no model, so no caller resolves one of its own: the
+    // factory resolves it against the employee's policy and puts it in state.
+    expect(types).not.toContain('model?: ModelRef');
     expect(options).not.toContain('model?: ModelRef');
     expect(providers).not.toContain('private readonly model');
     expect(providers).not.toContain('model: options.model');
-    expect(providers).toContain('getLLMService(request.model)');
-    expect(conversationService).toContain('const agentRequest = {');
-    expect(conversationService).toContain('model: resolvedModel,');
-    expect(conversationService).toContain('userDecisions');
-    expect(subAgentDispatcher).toMatch(
-      /agent\.invoke\(\s*\{\s*userDecisions:[\s\S]*?model: resolvedModel,/,
+    expect(providers).toContain('this.agentContext.state.model');
+    expect(providers).toContain('getLLMService(model)');
+    expect(factory).toMatch(/managers\.aiEmployeesManager\s*\.resolveModel\(/);
+    expect(conversationService).not.toContain('resolveModel(');
+    expect(conversationService).not.toContain('const agentRequest = {');
+    expect(subAgentDispatcher).not.toContain('resolveModel(');
+  });
+
+  it('carries one AgentState from the route, replaced only where decided', () => {
+    const contracts = read('agent/contracts.ts');
+    const context = read('agent/context.ts');
+    const factory = read('agent/service/agent-service-factory.ts');
+    const types = read('agent/types.ts');
+    const route = read('route/ai-conversations.ts');
+    const dispatcher = read('manager/sub-agents/dispatcher.ts');
+
+    // One state type travels end to end. There is no second request-shaped
+    // type beside it and nothing folds one into the other.
+    expect(contracts).not.toContain('ConversationTurn');
+    expect(context).not.toContain('toAgentState');
+    expect(route).toContain('function parseAgentState(');
+    expect(route).not.toContain('function parseTurn(');
+    expect(route).not.toContain('function execution(');
+
+    // Each field it replaces is replaced in exactly one place: the model where
+    // the employee's policy is, the session where a sub-agent is started.
+    expect(factory).toContain('options.state.sessionId');
+    // A fixed agent still names its own session; an employee agent takes the
+    // one its state already carries.
+    const employeeOptions = factory.slice(
+      factory.indexOf('export interface CreateEmployeeOptions'),
+      factory.indexOf('export interface CreateAgentOptions'),
+    );
+    expect(employeeOptions).toContain('readonly state: AgentState;');
+    expect(employeeOptions).not.toContain('sessionId');
+    expect(dispatcher).toMatch(
+      /state: \{\s*\.\.\.options\.state,\s*sessionId,/,
+    );
+
+    // The transport stops at the conversation service, and a request carries
+    // no turn data of its own.
+    expect(contracts).toContain('export interface ConversationTransport');
+    expect(read('service/ai-conversation-service.ts')).not.toContain(
+      'streamTarget?',
+    );
+    expect(factory).not.toContain('readonly execution?:');
+    expect(factory).not.toContain('readonly webSearch?:');
+    expect(factory).not.toContain('readonly frontendTools?:');
+    expect(factory).not.toContain('private resolveState(');
+    expect(types).not.toContain('context?: Record<string, unknown>;');
+    expect(types).toContain('runtime?: Record<string, unknown>;');
+
+    // A conversation cannot inject a tool list of its own. Nothing ever wrote
+    // `options.tools`, so what an employee may use is decided by its own
+    // `skillSettings` and narrowed by the per-conversation filter.
+    expect(factory).not.toContain('readonly tools?: { name: string }[]');
+    expect(read('agent/context/ai-employee/context.ts')).not.toContain(
+      'private readonly tools:',
+    );
+    expect(read('service/ai-conversation-service.ts')).not.toMatch(
+      /options\?\.tools/,
     );
   });
 
@@ -437,7 +497,13 @@ describe('fixed AgentService contracts', () => {
     expect(aiToolSources).not.toMatch(/ctx\.subAgentsDispatcher/);
     const service = read('agent/service/agent-service.ts');
     const providers = read('agent/context/ai-employee/context.ts');
-    expect(service).toContain('agentContext');
+    // Each tool is built with its own context; a request-supplied one is
+    // dropped rather than forwarded.
+    expect(service).toContain(
+      'buildAgentTools([...discoveredTools.tools.values()], {',
+    );
+    expect(service).toContain('agentContext: context.agentContext,');
+    expect(service).toContain('agentContext: _requestAgentContext');
     expect(service).not.toContain('context.ctx');
     expect(providers).not.toContain('ctx: options.ctx');
   });
@@ -471,6 +537,7 @@ describe('fixed AgentService contracts', () => {
       currentConversation(): CurrentConversation {
         return { sessionId: 'contract' };
       }
+      readonly agentContext = { state: { sessionId: 'contract' } } as never;
       resolveLLM(): Promise<ResolvedAgentLLM> {
         return Promise.resolve({
           providerName: 'test',
@@ -595,6 +662,100 @@ describe('fixed AgentService contracts', () => {
     const error = new AgentServiceError('ABORTED', 'stopped');
     expect(error.aborted).toBe(true);
     expect(error.retryable).toBe(false);
+  });
+
+  it('reads the deepest cause message instead of making a consumer walk the chain', () => {
+    const error = new AgentServiceError(
+      'PROVIDER_ERROR',
+      'Agent execution failed',
+      {
+        cause: new Error('wrapped', {
+          cause: new Error('LLM service not found'),
+        }),
+      },
+    );
+    expect(error.rootMessage).toBe('LLM service not found');
+    expect(new AgentServiceError('ABORTED', 'stopped').rootMessage).toBe(
+      'stopped',
+    );
+  });
+
+  it('keeps the original message when normalizing an unclassified failure', () => {
+    const normalized = normalizeAgentError(
+      new Error('LLM service not configured'),
+      'Agent execution failed',
+    );
+    expect(normalized.code).toBe('PROVIDER_ERROR');
+    expect(normalized.message).toBe('LLM service not configured');
+  });
+});
+
+describe('Agent execution failure classification', () => {
+  const failingContext = (failure: Error): AgentContextProvider => ({
+    currentConversation(): CurrentConversation {
+      return { sessionId: 'configuration' };
+    },
+    agentContext: { state: { sessionId: 'configuration' } } as never,
+    resolveLLM(): Promise<ResolvedAgentLLM> {
+      return Promise.reject(failure);
+    },
+    async getSystemPrompt(): Promise<string> {
+      return '';
+    },
+    discoveredTools(): Promise<DiscoveredTools> {
+      return Promise.resolve({
+        tools: new Map(),
+        activeTools: async () => new Set(),
+      });
+    },
+  });
+
+  const serviceThatCannotResolveItsModel = (failure: Error) =>
+    createAgentService(
+      createAgentProviders({
+        conversation: createTestConversationProvider({
+          sessionId: 'configuration',
+        }),
+        context: failingContext(failure),
+        converters: new DefaultChatMessageConverters(),
+      }),
+    );
+
+  it('reports a model that cannot be resolved as a configuration failure on invoke', async () => {
+    const agent = serviceThatCannotResolveItsModel(
+      new Error('LLM service not found'),
+    );
+    const error = await agent
+      .invoke({ userMessages: [{ role: 'user', content: 'hi' }] })
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+    expect(error).toBeInstanceOf(AgentServiceError);
+    expect((error as AgentServiceError).code).toBe('CONFIGURATION_ERROR');
+    expect((error as AgentServiceError).message).toBe('LLM service not found');
+    expect((error as AgentServiceError).retryable).toBe(false);
+  });
+
+  it('classifies the same failure the same way on stream', async () => {
+    const agent = serviceThatCannotResolveItsModel(
+      new Error('LLM service not configured'),
+    );
+    let caught: unknown;
+    try {
+      for await (const _event of agent.stream({
+        userMessages: [{ role: 'user', content: 'hi' }],
+      })) {
+        // The failure happens before any event is produced.
+      }
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AgentServiceError);
+    expect((caught as AgentServiceError).code).toBe('CONFIGURATION_ERROR');
+    expect((caught as AgentServiceError).message).toBe(
+      'LLM service not configured',
+    );
   });
 });
 

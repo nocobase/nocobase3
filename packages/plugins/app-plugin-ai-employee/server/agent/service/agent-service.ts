@@ -1,30 +1,35 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { LLMResult } from '@langchain/core/outputs';
 import { concat } from '@langchain/core/utils/stream';
-import { Command } from '@langchain/langgraph';
+import { Command, getConfig, isGraphInterrupt } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
-import { buildTool } from '@nocobase/ai-employee';
+import { buildAgentTools } from '@nocobase/ai-employee';
 import type {
   AIMessage,
   AIMessageInput,
   LLMProvider,
   ToolsEntity,
 } from '@nocobase/ai-employee';
+import type { AIMessage as LangChainAIMessage } from '@langchain/core/messages';
 import type {
   AgentGraphState,
   AgentContextProvider,
   AgentThread,
   AgentInterruptAction,
+  AgentInvokeInterrupt,
+  AgentInvokeRequest,
+  AgentInvokeResult,
   AgentOperation,
   AgentProviders,
   AgentRequest,
   AgentStreamEvent,
+  CurrentConversation,
   PreparedAgentContext,
   ResolvedAgentLLM,
 } from '../types.js';
 import { AgentServiceError } from '../types.js';
-import { normalizeAgentError } from '../errors.js';
+import { normalizeAgentError, toConfigurationError } from '../errors.js';
 import { buildStandardAgentMiddleware } from '../middleware/pipeline.js';
 
 const mergeSignals = (
@@ -61,7 +66,29 @@ type InterruptValue = {
 };
 
 type Interrupt = {
+  id?: string;
   value?: InterruptValue;
+};
+
+/** An interrupt action recorded against a persisted tool call. */
+type RecordedInterruptAction = {
+  action: AgentInterruptAction;
+  toolCall: { id: string; name: string };
+  conversation: CurrentConversation;
+  messageId: string;
+};
+
+/**
+ * The interrupt a root graph reports from `invoke()`. A root graph returns it
+ * in the state under `__interrupt__` rather than throwing; only a graph nested
+ * in another graph's node throws `GraphInterrupt`, for its parent to handle.
+ */
+const readInvokeInterrupt = (result: unknown): Interrupt | undefined => {
+  const interrupts = (result as { __interrupt__?: unknown } | null)
+    ?.__interrupt__;
+  return Array.isArray(interrupts)
+    ? (interrupts[0] as Interrupt | undefined)
+    : undefined;
 };
 
 const toInterruptActions = (interrupt: Interrupt): AgentInterruptAction[] => {
@@ -107,6 +134,26 @@ const toInterruptActions = (interrupt: Interrupt): AgentInterruptAction[] => {
       return [];
     }
   });
+};
+
+/**
+ * Asks the provider to describe a failure. An error handler must not raise one
+ * of its own: a provider that does not implement this would otherwise replace
+ * the failure being reported with a TypeError.
+ */
+const describeProviderError = (
+  provider: LLMProvider | undefined,
+  error: unknown,
+): string | undefined =>
+  typeof provider?.parseResponseError === 'function'
+    ? provider.parseResponseError(error)
+    : undefined;
+
+const isLangChainAIMessage = (value: unknown): value is LangChainAIMessage => {
+  const candidate = value as { getType?: () => string } | null;
+  return (
+    typeof candidate?.getType === 'function' && candidate.getType() === 'ai'
+  );
 };
 
 type ResponseMetadata = Record<string, unknown>;
@@ -175,18 +222,24 @@ export class AgentService {
   forkStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
     return this.executeStream('fork', request);
   }
-  invoke(request: AgentRequest = {}): Promise<unknown> {
+  invoke<TStructured = never>(
+    request: AgentInvokeRequest<TStructured> = {},
+  ): Promise<AgentInvokeResult<TStructured>> {
     return this.executeInvoke('invoke', request);
   }
-  resumeInvoke(request: AgentRequest): Promise<unknown> {
+  resumeInvoke<TStructured = never>(
+    request: AgentInvokeRequest<TStructured>,
+  ): Promise<AgentInvokeResult<TStructured>> {
     return this.executeInvoke('resume', request);
   }
-  forkInvoke(request: AgentRequest): Promise<unknown> {
+  forkInvoke<TStructured = never>(
+    request: AgentInvokeRequest<TStructured>,
+  ): Promise<AgentInvokeResult<TStructured>> {
     return this.executeInvoke('fork', request);
   }
 
-  private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return this.agentContext.resolveLLM(request);
+  private resolveLLM(): Promise<ResolvedAgentLLM> {
+    return this.agentContext.resolveLLM();
   }
 
   private shouldFork(
@@ -254,7 +307,7 @@ export class AgentService {
   }
   private async prepare(
     operation: AgentOperation,
-    request: AgentRequest,
+    request: AgentInvokeRequest<unknown>,
     llm: ResolvedAgentLLM,
     responseMetadataCollector?: BaseCallbackHandler,
   ): Promise<PreparedAgentContext> {
@@ -278,7 +331,7 @@ export class AgentService {
       (message: any) => message?.role !== 'system',
     );
     const importantPrompt =
-      request.context?.important === 'GraphRecursionError'
+      context.agentContext.state.important === 'GraphRecursionError'
         ? `<Important>You have already called tools multiple times and gathered sufficient information.\nFirst, provide a summary based on the existing information. Do not call additional tools.\nIf information is missing, clearly state it in the summary.</Important>`
         : undefined;
     const systemPrompt = features.contextEnrichment
@@ -298,7 +351,10 @@ export class AgentService {
           activeTools: () => Promise.resolve(new Set<string>()),
         };
     const resolvedTools = llm.provider.resolveTools(
-      [...discoveredTools.tools.values()].map(buildTool),
+      buildAgentTools([...discoveredTools.tools.values()], {
+        agentContext: context.agentContext,
+        container: this.providers.container,
+      }),
     );
     let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
@@ -320,9 +376,13 @@ export class AgentService {
       : messages.length
         ? { messages, ...(state ?? {}) }
         : null;
+    // A tool's context is bound when the tool is built, never read back out of
+    // the invocation config, so `agentContext` on a request reaches nothing.
+    const { agentContext: _requestAgentContext, ...requestRuntime } =
+      request.runtime ?? {};
     const config = {
       context: {
-        ...(request.context ?? {}),
+        ...requestRuntime,
         agentRequest: request,
         decisions: request.userDecisions,
       },
@@ -341,6 +401,7 @@ export class AgentService {
     if (!config.configurable) delete config.configurable;
     return {
       input,
+      responseFormat: request.responseFormat,
       systemPrompt,
       tools: resolvedTools,
       discoveredTools,
@@ -368,6 +429,9 @@ export class AgentService {
       tools: prepared.tools,
       middleware: buildStandardAgentMiddleware(this.providers, prepared),
       systemPrompt: prepared.systemPrompt,
+      ...(prepared.responseFormat
+        ? { responseFormat: prepared.responseFormat as never }
+        : {}),
       ...(prepared.checkpointer ? { checkpointer: prepared.checkpointer } : {}),
     });
   }
@@ -389,33 +453,151 @@ export class AgentService {
     if (this.activeController === controller) this.activeController = undefined;
   }
 
-  private async executeInvoke(
+  /**
+   * Reads one execution's answer out of the graph state. The state also holds
+   * the keys this package's own middleware contributes; they stay internal, so
+   * a middleware added later is not a change to what a caller receives.
+   */
+  private async toInvokeResult<TStructured>(
+    result: unknown,
+    prepared: PreparedAgentContext,
+    interrupt?: AgentInvokeInterrupt,
+  ): Promise<AgentInvokeResult<TStructured>> {
+    const state = (result ?? {}) as {
+      messages?: unknown;
+      structuredResponse?: TStructured;
+    };
+    const messages = Array.isArray(state.messages) ? state.messages : [];
+    const answer = messages.filter(isLangChainAIMessage).at(-1);
+    const message = answer
+      ? await this.providers.converters.assistant.convert(answer, prepared)
+      : null;
+    return {
+      message,
+      ...('structuredResponse' in state
+        ? { structuredResponse: state.structuredResponse as TStructured }
+        : {}),
+      ...(interrupt ? { interrupt } : {}),
+    };
+  }
+
+  /**
+   * Marks the tool calls an interrupt paused as `interrupted` and records the
+   * interrupt on their assistant message. A reviewer's decision attaches only
+   * to an `interrupted` tool call, and a resume rebuilds its Command from the
+   * recorded `interruptId`, so an interrupt left unrecorded cannot be answered.
+   * An action is skipped when its conversation has no saved assistant message
+   * to record it against.
+   */
+  private async recordInterrupt(
+    interruptId: string,
+    actions: readonly AgentInterruptAction[],
+    messageIdFor: (sessionId: string) => string | undefined,
+  ): Promise<RecordedInterruptAction[]> {
+    const recorded: RecordedInterruptAction[] = [];
+    for (const action of actions) {
+      const { toolCall, currentConversation } = action;
+      if (!toolCall || !currentConversation) continue;
+      const messageId = messageIdFor(currentConversation.sessionId);
+      if (!messageId) continue;
+      await this.providers.conversation.messages.updateToolInterrupted(
+        currentConversation.sessionId,
+        messageId,
+        toolCall.id,
+        interruptId,
+        action,
+      );
+      recorded.push({
+        action,
+        toolCall,
+        conversation: currentConversation,
+        messageId,
+      });
+    }
+    return recorded;
+  }
+
+  private async executeInvoke<TStructured>(
     operation: AgentOperation,
-    request: AgentRequest,
-  ): Promise<unknown> {
+    request: AgentInvokeRequest<TStructured>,
+  ): Promise<AgentInvokeResult<TStructured>> {
     const { conversation } = this.providers;
+    const identity = this.agentContext.currentConversation();
     const { controller, signal, token } = this.begin(request);
+    let activeProvider: LLMProvider | undefined;
+    // An interrupt names the conversation it paused but not the message, and a
+    // sub-agent's saved messages are reported only through the writer, so the
+    // writer is observed. Events still reach whoever would have received them:
+    // the caller's writer, or, without one, the enclosing graph's.
+    const messageIds = new Map<string, string>();
+    const forward =
+      request.writer ??
+      (getConfig() as { writer?: (chunk: unknown) => void } | undefined)
+        ?.writer;
+    const writer = (chunk: unknown): void => {
+      const event = chunk as {
+        action?: unknown;
+        body?: { messageId?: unknown };
+        currentConversation?: { sessionId?: unknown };
+      } | null;
+      const messageId = event?.body?.messageId;
+      if (event?.action === 'AfterAIMessageSaved' && messageId) {
+        const sessionId = event.currentConversation?.sessionId;
+        messageIds.set(
+          typeof sessionId === 'string' ? sessionId : identity.sessionId,
+          String(messageId),
+        );
+      }
+      forward?.(chunk);
+    };
     await conversation.event.beforeExecution('invoking');
     try {
-      const llm = await this.resolveLLM(request);
+      const llm = await this.resolveLLM().catch((error: unknown) => {
+        throw toConfigurationError(error);
+      });
+      activeProvider = llm.provider;
       const prepared = await this.prepare(
         operation,
-        { ...request, signal },
+        { ...request, signal, writer },
         llm,
       );
       const result = await this.create(prepared).invoke(
         prepared.input as any,
         { ...prepared.config, signal } as any,
       );
-      return result;
+      const interrupt = readInvokeInterrupt(result);
+      if (!interrupt?.id)
+        return await this.toInvokeResult<TStructured>(result, prepared);
+      const actions = toInterruptActions(interrupt);
+      // The graph state carries the message this execution last saved, which is
+      // the one a resume re-enters when it saves nothing new.
+      const stateMessageId = (result as { messageId?: unknown }).messageId;
+      await this.recordInterrupt(
+        interrupt.id,
+        actions,
+        (sessionId) =>
+          messageIds.get(sessionId) ??
+          (sessionId === identity.sessionId && stateMessageId
+            ? String(stateMessageId)
+            : undefined),
+      );
+      return await this.toInvokeResult<TStructured>(result, prepared, {
+        id: interrupt.id,
+        actions,
+      });
     } catch (error) {
-      if ((error as any)?.name === 'GraphInterrupt') throw error;
+      // A graph nested in another graph's node throws its interrupt instead of
+      // returning it; the enclosing execution records it.
+      if (isGraphInterrupt(error)) throw error;
       if (signal.aborted)
         throw new AgentServiceError('ABORTED', 'Agent execution aborted', {
           cause: error,
           aborted: true,
         });
-      throw normalizeAgentError(error, 'Agent execution failed');
+      throw normalizeAgentError(
+        error,
+        describeProviderError(activeProvider, error),
+      );
     } finally {
       this.end(token, controller);
       await conversation.event.afterExecution('invoking', {
@@ -451,7 +633,9 @@ export class AgentService {
       await conversation.streamCache.clear();
       await conversation.event.beforeExecution('streaming');
       executionStarted = true;
-      const llm = await this.resolveLLM(request);
+      const llm = await this.resolveLLM().catch((error: unknown) => {
+        throw toConfigurationError(error);
+      });
       activeProvider = llm.provider;
       responseMetadata = new ExecutionResponseMetadata();
       const responseMetadataCollector = new ResponseMetadataCollector(
@@ -525,25 +709,23 @@ export class AgentService {
           const interrupt = chunks?.__interrupt__?.[0];
           if (interrupt?.id) {
             const actions = toInterruptActions(interrupt);
-            for (const action of actions) {
-              if (!action.toolCall || !action.currentConversation) continue;
-              const messageId = messageIds.get(
-                action.currentConversation.sessionId,
-              );
-              if (!messageId) continue;
-              await conversation.messages.updateToolInterrupted(
-                action.currentConversation.sessionId,
-                messageId,
-                action.toolCall.id,
-                interrupt.id,
-                action,
-              );
+            const recorded = await this.recordInterrupt(
+              interrupt.id,
+              actions,
+              (sessionId) => messageIds.get(sessionId),
+            );
+            for (const {
+              action,
+              toolCall,
+              conversation: target,
+              messageId,
+            } of recorded) {
               sent++;
               yield {
                 type: 'tool_call_status',
-                conversation: action.currentConversation,
+                conversation: target,
                 status: {
-                  toolCall: { ...action.toolCall, messageId },
+                  toolCall: { ...toolCall, messageId },
                   invokeStatus: 'interrupted',
                   interruptAction: action,
                 },
@@ -684,7 +866,7 @@ export class AgentService {
       }
       throw normalizeAgentError(
         error,
-        activeProvider?.parseResponseError(error),
+        describeProviderError(activeProvider, error),
       );
     } finally {
       try {

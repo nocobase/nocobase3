@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
 import LLMServiceSettingsPage from '../client/pages/llm-service-settings-page.js';
 import MCPServiceSettingsPage from '../client/pages/mcp-service-settings-page.js';
-import { updateLLMService } from '../client/llm-service-service.js';
+import { updateLLMServiceEnabled } from '../client/llm-service-service.js';
 import { updateMCPServerEnabled } from '../client/mcp-service.js';
 
 const api = {};
@@ -20,7 +20,7 @@ vi.mock('../client/llm-service-service.js', async (importOriginal) => ({
     { name: 'test-llm', title: 'Test LLM', provider: 'openai', enabled: true },
   ],
   listLLMProviders: async () => [{ name: 'openai', title: 'OpenAI' }],
-  updateLLMService: vi.fn().mockResolvedValue(undefined),
+  updateLLMServiceEnabled: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../client/mcp-service.js', () => ({
   listMCPServers: async () => [
@@ -88,9 +88,9 @@ describe('service settings table layout', () => {
       fireEvent.click(screen.getByRole('switch'));
       await waitFor(() => {
         if (name === 'test-llm') {
-          expect(updateLLMService).toHaveBeenCalledWith(
+          expect(updateLLMServiceEnabled).toHaveBeenCalledWith(
             name,
-            { enabled: false },
+            false,
             api,
           );
         } else {

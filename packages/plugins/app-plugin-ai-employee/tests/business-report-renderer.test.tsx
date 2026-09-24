@@ -32,11 +32,11 @@ const dialog = vi.hoisted(() => ({
   chartFailurePhase: 'mount' as 'render' | 'mount',
 }));
 vi.mock(
-  '../registry/nocobase-ai/components/tools/business-report-dialog.js',
+  '../registry/nocobase-ai/components/tools/business-report-dialog-context.js',
   async (importOriginal) => {
     const actual =
       await importOriginal<
-        typeof import('../registry/nocobase-ai/components/tools/business-report-dialog.js')
+        typeof import('../registry/nocobase-ai/components/tools/business-report-dialog-context.js')
       >();
     return {
       ...actual,
@@ -62,7 +62,7 @@ vi.mock('../registry/nocobase-ai/components/tools/echarts-preview.js', () => ({
     return <div>Rendered chart</div>;
   },
 }));
-vi.mock('../registry/nocobase-ai/components/chat/tool-call-card.js', () => ({
+vi.mock('../registry/nocobase-ai/components/chat/tool-call-utils.js', () => ({
   getNocoBaseToolCallMetadata: (part: {
     callProviderMetadata?: { nocobase?: unknown };
   }) => part.callProviderMetadata?.nocobase,

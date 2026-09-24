@@ -7,23 +7,11 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
-import type {
-  AIConversationRepository,
-  AIToolMessageRepository,
-} from '../../repository/index.js';
-import type { AgentKnowledgeBaseService } from '../../agent/contracts.js';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
+import { managerFactoryToken, repositoryFactoryToken } from '../../tokens.js';
 
-type KnowledgeBaseContext = AgentContext<
-  {
-    aiToolMessages: AIToolMessageRepository;
-    aiConversations: AIConversationRepository;
-  },
-  { knowledgeBase: AgentKnowledgeBaseService }
->;
-
-export default defineTools<KnowledgeBaseContext>({
+export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
@@ -43,13 +31,18 @@ export default defineTools<KnowledgeBaseContext>({
         ),
     }),
   },
+  dependencies: {
+    repositories: repositoryFactoryToken,
+    managers: managerFactoryToken,
+  },
   async invoke(ctx, { query }, runtime) {
+    const { repositories, managers } = ctx.deps;
     const toolCallId = runtime?.toolCallId;
     if (!toolCallId) {
       throw new Error('Missing tool call context');
     }
 
-    const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+    const aiToolMessage = await repositories.aiToolMessages.findOne({
       filter: {
         toolCallId,
       },
@@ -60,7 +53,7 @@ export default defineTools<KnowledgeBaseContext>({
       );
     }
 
-    const aiConversation = await ctx.repositories.aiConversations.findOne({
+    const aiConversation = await repositories.aiConversations.findOne({
       filter: {
         sessionId: aiToolMessage.sessionId,
       },
@@ -72,7 +65,7 @@ export default defineTools<KnowledgeBaseContext>({
       );
     }
 
-    const content = await ctx.services.knowledgeBase.retrievePrompt({
+    const content = await managers.knowledgeBaseManager.retrievePrompt({
       username,
       query,
     });

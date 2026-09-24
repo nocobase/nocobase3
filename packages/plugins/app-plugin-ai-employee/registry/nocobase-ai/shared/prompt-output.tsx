@@ -26,6 +26,16 @@ export function PromptOutput({
 }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopyError(false);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopyError(true);
+    }
+  };
 
   return (
     <Card className={cn('min-w-0 gap-0 overflow-hidden py-0', className)}>
@@ -38,16 +48,7 @@ export function PromptOutput({
           type='button'
           size='sm'
           className='shrink-0'
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(prompt);
-              setCopyError(false);
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1500);
-            } catch {
-              setCopyError(true);
-            }
-          }}
+          onClick={() => void copyPrompt()}
         >
           {copied ? <Check /> : <Copy />}
           {copied ? copiedLabel : copyLabel}

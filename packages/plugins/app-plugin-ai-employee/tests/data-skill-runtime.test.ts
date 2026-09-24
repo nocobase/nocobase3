@@ -3,7 +3,11 @@ import { dirname, join } from 'node:path';
 import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
-import { createDataServices } from '../server/service/data-services.js';
+import {
+  createDataServices,
+  dataServicesFactoryToken,
+} from '../server/service/data-services.js';
+import { aiManagerToken } from '../server/provider/ai-employee.js';
 import type { DataServices } from '../server/service/data-contracts.js';
 import {
   buildTool,
@@ -13,6 +17,7 @@ import getSkill from '../server/ai/tools/getSkill.js';
 import { ToolMessage } from 'langchain';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentContext } from '@nocobase/ai-employee';
 import { AIEmployeeResources } from '../server/ai/index.js';
 import { AIEmployeeAgentContextProvider } from '../server/agent/context/ai-employee/context.js';
 import type { AIEmployeeAgentContextProviderOptions } from '../server/agent/context/ai-employee/context.js';
@@ -20,7 +25,6 @@ import type { AIEmployeeSkillSettings } from '../server/agent/context/ai-employe
 import { ConversationMessageStoreImpl } from '../server/agent/conversation/message-store.js';
 import { skillToolBindingMiddleware } from '../server/agent/middleware/skill-tools.js';
 import { toolCallStatusMiddleware } from '../server/agent/middleware/tools.js';
-import type { AppAgentContext } from '../server/agent/context.js';
 import { createTestAgentContext } from './app/test-context.js';
 import { MemoryConversationPersistence } from './memory-conversation-persistence.js';
 import { createMockServer } from './mock-server.js';
@@ -116,20 +120,30 @@ async function createFixture(services?: DataServices) {
       timezone: 'UTC',
     })),
   };
-  const originalContext = createTestAgentContext();
-  const runtimeContext: AppAgentContext = {
-    ...originalContext,
-    ai: aiManager,
-    services: { ...originalContext.services, data: services ?? data },
-  };
+  const agentContext: AgentContext = createTestAgentContext();
+  // Stands in for the container: what each declared token resolves to here.
+  const resolved = new Map<unknown, unknown>([
+    [dataServicesFactoryToken, () => services ?? data],
+    [aiManagerToken, aiManager],
+  ]);
+  /** Resolves one tool's declaration the way AgentService does. */
+  const depsFor = (entry: {
+    dependencies?: Record<string, unknown>;
+  }): Record<string, unknown> =>
+    Object.fromEntries(
+      Object.entries(entry.dependencies ?? {}).map(([name, token]) => [
+        name,
+        resolved.get(token),
+      ]),
+    );
 
   async function runtime(
     settings?: AIEmployeeSkillSettings,
     sessionId = 'analysis',
     employeeSettings: Partial<EmployeeSkillSettings> = {},
   ) {
-    const context: AppAgentContext = {
-      ...runtimeContext,
+    const context: AgentContext = {
+      ...agentContext,
       state: { sessionId },
     };
     const currentConversation = { sessionId, username: 'atlas' };
@@ -142,7 +156,7 @@ async function createFixture(services?: DataServices) {
       sessionId,
       currentConversation,
       actor: context.actor,
-      toolRuntimeContext: context,
+      agentContext: context,
       llmProviderManager: aiManager.llmProviderManager,
       toolsManager: aiManager.toolsManager,
       skillsManager: aiManager.skillsManager,
@@ -168,7 +182,7 @@ async function createFixture(services?: DataServices) {
       toolCallStatusMiddleware(
         { messages },
         currentConversation,
-        context.logger,
+        context.runtime.logger,
       ),
       'wrapToolCall',
     );
@@ -177,11 +191,13 @@ async function createFixture(services?: DataServices) {
         const entry = discovered.tools.get(request.toolCall.name);
         if (!entry)
           throw new Error(`Unregistered tool: ${request.toolCall.name}`);
-        const built = buildTool(entry) as unknown as {
+        const built = buildTool(entry, {
+          ...context,
+          deps: depsFor(entry),
+        }) as unknown as {
           invoke(input: unknown, config: unknown): Promise<ToolMessage>;
         };
         return built.invoke(request.toolCall.args, {
-          context: { agentContext: context },
           toolCall: request.toolCall,
           writer: request.runtime.writer,
         });
@@ -270,6 +286,44 @@ describe('package-owned data skill runtime', () => {
     ).toMatchObject({ status: 'error', content: 'Tool unavailable.' });
   });
 
+  it('leaves out the tools that pause an unattended run when a session names its tools', async () => {
+    const fixture = await createFixture();
+    const unfiltered = await fixture.runtime();
+    // Every employee session gets these GENERAL tools: one asks, one runs in a
+    // browser, and either one pauses a run nobody is watching.
+    expect(unfiltered.discovered.tools.has('suggestions')).toBe(true);
+    expect(unfiltered.discovered.tools.has('formFiller')).toBe(true);
+
+    // data-query tells the model to load data-metadata first, so the list
+    // names both Skills' tools, not only the one the query runs on.
+    const unattended = await fixture.runtime({
+      toolsVersion: 1,
+      tools: [
+        'getSkill',
+        'getDataSources',
+        'getCollectionNames',
+        'getCollectionMetadata',
+        'searchFieldMetadata',
+        'dataSourceQuery',
+        'dataSourceCounting',
+        'dataQuery',
+      ],
+    });
+
+    expect(unattended.discovered.tools.has('suggestions')).toBe(false);
+    expect(unattended.discovered.tools.has('formFiller')).toBe(false);
+    await unattended.call('getSkill', { skillName: 'data-query' });
+    await unattended.call('getSkill', { skillName: 'data-metadata' });
+    expect(await unattended.visibleTools()).toEqual(
+      expect.arrayContaining(['getSkill', 'getCollectionNames', 'dataQuery']),
+    );
+    expect(await unattended.visibleTools()).not.toContain('suggestions');
+    expect(
+      (await unattended.call('getCollectionNames', { dataSource: 'main' }))
+        .result,
+    ).toMatchObject({ status: 'success' });
+  });
+
   it('does not activate selected skill tools until an available skill is loaded', async () => {
     const fixture = await createFixture();
     const settings = { enabledTools: ['getSkill', 'dataQuery'] };
@@ -293,7 +347,7 @@ describe('package-owned data skill runtime', () => {
 
   it('denies direct skill loads without host visibility and allows an explicit policy', async () => {
     const fixture = await createFixture();
-    const context = { ...createTestAgentContext(), ai: fixture.aiManager };
+    const context = createTestAgentContext();
     const runtime = { toolCallId: 'direct', writer: vi.fn() };
     expect(
       await getSkill.invoke(context, { skillName: 'data-query' }, runtime),

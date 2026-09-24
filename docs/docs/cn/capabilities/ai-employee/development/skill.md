@@ -15,11 +15,12 @@ keywords: 'AI Skill,SKILL.md,SkillsLoader,ai.skills.paths,NocoBase'
 ```md
 ---
 name: customer-follow-up
-description: Review customer context and prepare a practical follow-up plan.
+description: Prepare a follow-up plan when a customer record needs a next action.
 scope: SPECIFIED
+i18n:
+  namespace: '@acme/example-app'
 introduction:
   title: Customer follow-up
-  about: Review account context and prepare the next action.
 tools:
   - find-customer
 ---
@@ -37,6 +38,12 @@ tools:
 
 `name` 和 `description` 必填。`scope` 支持 `SPECIFIED`、`GENERAL` 和 `CUSTOM`，省略时默认是 `SPECIFIED`。`tools` 中填写 Tool 的注册名，不要填写文件路径。
 
+`description` 是给模型看的，模型根据它判断要不要加载这个 Skill，所以要写成触发条件，而不是标题。正文会在加载时交给模型。
+
+`i18n.namespace` 填拥有这个 Skill 的应用或插件 `package.json` 的真实 `name`。管理页显示 Skill 时用的是 `introduction.title` 和 `description`，这两段英文原文本身就是翻译键，在应用 `client/locales/` 的语言包里用同一段英文提供 `en-US` 和 `zh-CN` 的条目。不需要为显示再加一个 `about` 字段。翻译只影响显示，模型读到的内容保持不变。Skill 和它点名的 Tool 各自声明自己的 `i18n`，Tool 不会继承 Skill 的命名空间。
+
+**员工 Skill 只有一个文件。** 模型通过 `getSkill` 加载 Skill 时，拿到的只是 `SKILL.md` 的正文，而且没有能读文件的 Tool，所以正文里指向 `references/` 的链接，模型打不开。完成这项工作需要的内容都写进 `SKILL.md` 正文；`references/` 里的页面只给维护它的人看。
+
 ## Skill 怎样被加载
 
 AI 员工插件按下面的顺序加载 Skill 目录：
@@ -45,9 +52,11 @@ AI 员工插件按下面的顺序加载 Skill 目录：
 2. 应用根目录的 `ai/skills`
 3. `config.yml` 中 `ai.skills.paths` 指定的目录
 
-后加载的目录具有更晚的注册语义。配置路径可以是绝对路径，也可以相对于应用根目录；空路径和重复路径会被忽略，不存在的目录只记录 warning。
+后加载的目录具有更晚的注册语义。配置路径可以是绝对路径，也可以相对于应用根目录；空路径和重复路径会被忽略，不存在的目录会被跳过。
 
-如果 Skill 还带有只为自己服务的 Tool，可以放在同一目录的 `tools/**/*.ts` 或 `tools/**/*.js`。`SkillsLoader` 会发现这些文件，并把它们的名称合并到 Skill 的 `tools` 列表中。应用级共享 Tool 仍应放在 `server/ai/tools` 并显式注册。
+应用根目录在开发和部署时不是同一个目录：开发时是源码根目录，构建后的服务从 `dist/` 运行，相对路径会指向 `dist/` 里的目录，而构建不会复制它，于是这个目录被悄悄跳过。构建只会把应用自己的 `ai/skills` 里的 Markdown 复制到 `dist/ai/skills`。部署环境请在 `ai.skills.paths` 里写部署环境自己提供的绝对路径。
+
+Skill 目录不定义 Tool。`SkillsLoader` 会扫描 Skill 目录下的 `tools/**/*.ts` 和 `tools/**/*.js`，但只取文件名追加到 `tools` 列表里，文件本身不会被注册；构建也只复制 Markdown，这些名称到了部署环境就没有了。如果某个名称恰好和已注册的 Tool 同名，这个 Tool 在开发环境会被 Skill 屏蔽，在生产环境却不会。所以 Tool 一律放在 `server/ai/tools` 并在代码里注册，再在 frontmatter 的 `tools` 里写出它的名称。
 
 ## 绑定给员工
 
@@ -61,7 +70,7 @@ export default defineAIEmployee({
 });
 ```
 
-修改 `SKILL.md` 后重启开发服务。AI 配置重载只同步 LLM 和 MCP 配置，不会重新扫描静态 Skill 文件。
+修改 `SKILL.md` 后重启服务。
 
 ## 相关链接
 

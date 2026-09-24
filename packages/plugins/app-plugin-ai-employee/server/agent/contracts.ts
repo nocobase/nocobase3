@@ -1,87 +1,19 @@
-import type { DataServices } from '../service/data-contracts.js';
-import type {
-  AIEmployeeEntity,
-  AIMessageInput,
-  AgentToolCallResult,
-  UserDecision,
-} from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from './context/ai-employee/common/frontend-tool-contracts.js';
-import type { ModelRef } from '../types.js';
+import type { UserDecision } from '@nocobase/ai-employee';
+import type { Translate } from '../types.js';
 import type { ConversationStreamTarget } from '../types.js';
-import type { CreateAIConversationParams } from '../manager/ai-conversations-manager.js';
-import type { AIConversationEntity } from '../repository/ai-conversation.js';
 
-export interface ConversationExecution {
-  readonly sessionId?: string;
-  readonly messageId?: string;
-  readonly messages?: readonly AIMessageInput[];
-  readonly model?: ModelRef;
-  readonly webSearch?: boolean;
-  readonly important?: string;
-  readonly frontendTools?: readonly unknown[];
-  readonly toolCallResults?: readonly AgentToolCallResult[];
+/**
+ * How one execution's output reaches the caller, and how the caller cancels it.
+ * It stops at the conversation service: an agent never sees a stream target.
+ */
+export interface ConversationTransport {
   readonly streamTarget?: ConversationStreamTarget;
   readonly abortSignal?: AbortSignal;
-  readonly timezone?: string;
+  readonly translate: Translate;
+  readonly getHeader?: (name: string) => string | undefined;
 }
 
 export interface AgentUserDecisionResult {
   interruptId?: string;
   decisions: UserDecision[];
-}
-
-export interface AgentEmployeeService {
-  resolveModel(
-    employee: AIEmployeeEntity,
-    model?: ModelRef | null,
-  ): Promise<ModelRef>;
-}
-
-export interface AgentConversationService {
-  create(options: CreateAIConversationParams): Promise<AIConversationEntity>;
-  resolveSubAgentConversation(
-    sessionId?: string,
-    toolCallId?: string,
-  ): Promise<AIConversationEntity | null>;
-  getUserDecisions(messageId: string): Promise<AgentUserDecisionResult | null>;
-}
-
-export interface AgentBuiltInService {
-  localize(employee: AIEmployeeEntity): void;
-}
-
-export interface AgentKnowledgeBaseService {
-  retrievePrompt(options: { username: string; query: string }): Promise<string>;
-}
-
-export interface AgentSubAgentTask {
-  sessionId: string;
-  employee: AIEmployeeEntity;
-  model: ModelRef;
-  question: string;
-  skillSettings?: Record<string, unknown>;
-  webSearch?: boolean;
-  messages?: AIMessageInput[];
-  writer?: (chunk: unknown) => void;
-}
-
-export interface AgentSubAgentService {
-  run(task: AgentSubAgentTask): Promise<string>;
-}
-
-export interface AgentFrontendToolService {
-  find(toolId: string): Promise<FrontendToolManifest | undefined>;
-  readResult(
-    toolCallId: string,
-  ): { provided: true; value: unknown } | undefined;
-}
-
-export interface AppAgentServices {
-  data: DataServices;
-  aiEmployees: AgentEmployeeService;
-  aiConversations: AgentConversationService;
-  builtIn: AgentBuiltInService;
-  knowledgeBase: AgentKnowledgeBaseService;
-  subAgents: AgentSubAgentService;
-  frontendTools: AgentFrontendToolService;
 }

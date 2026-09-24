@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from '../../shared/ui/tooltip.js';
 import { MessageSquareText } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAIChatBase } from '../../providers/index.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
 
@@ -26,11 +26,20 @@ export function UserPromptEditor() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  useEffect(() => {
-    if (!open) return;
-    setPrompt(currentEmployee.userConfig?.prompt ?? '');
-    setError(undefined);
-  }, [currentEmployee.userConfig?.prompt, currentEmployee.username, open]);
+  // Seed the draft while rendering rather than in an effect: the popover would
+  // otherwise render once with the previous employee's prompt.
+  const savedPrompt = currentEmployee.userConfig?.prompt ?? '';
+  const promptSource = open
+    ? `${currentEmployee.username}:${savedPrompt}`
+    : undefined;
+  const [syncedPromptSource, setSyncedPromptSource] = useState(promptSource);
+  if (syncedPromptSource !== promptSource) {
+    setSyncedPromptSource(promptSource);
+    if (open) {
+      setPrompt(savedPrompt);
+      setError(undefined);
+    }
+  }
 
   const save = async () => {
     setSaving(true);
