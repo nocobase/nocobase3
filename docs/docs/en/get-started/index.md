@@ -51,4 +51,4 @@ Use that example as a starting point to imagine your own modules, collaboration 
 
 ## Turn your first idea into an application
 
-Review [Before you start](./overview), [create your application](./create-app), and build the first business feature with an AI Agent. Or explore the [order application tutorial](../tutorials/) to see a system take shape step by step.
+Review the [Overview](./overview), [create your application](./create-app), and build the first business feature with an AI Agent. Or explore the [order application tutorial](../tutorials/) to see a system take shape step by step.

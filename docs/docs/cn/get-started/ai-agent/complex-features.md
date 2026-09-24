@@ -52,4 +52,4 @@ description: '把跨数据、页面、权限和流程的需求拆成可以逐轮
 
 不要只依赖一段很长的聊天历史，也不要把临时进度全部写成永久规则。长期稳定的约定放到[团队规矩](./team-conventions.md)，某个功能的进度单独保存。
 
-需要一个连续案例时，可以从[订单系统教程](../tutorials/index.md)查看各章节的路线；每一轮仍按[检查 AI Agent 的产出](./reviewing-output.md)确认结果。
+需要一个连续案例时，可以从[订单系统教程](../../tutorials/index.md)查看各章节的路线；每一轮仍按[检查 AI Agent 的产出](./reviewing-output.md)确认结果。

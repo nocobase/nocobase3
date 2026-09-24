@@ -1,11 +1,6 @@
 [
   {
     "type": "file",
-    "name": "index",
-    "label": "Working with an AI Agent"
-  },
-  {
-    "type": "file",
     "name": "writing-requirements",
     "label": "Writing requirements"
   },

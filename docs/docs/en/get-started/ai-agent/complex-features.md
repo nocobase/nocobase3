@@ -52,4 +52,4 @@ Keep a project work record with the goal, agreed rules, completed steps, actual 
 
 Do not rely solely on a long chat history or turn temporary progress into permanent rules. Put stable conventions in [team instructions](./team-conventions.md) and keep feature progress separately.
 
-For a continuous example, see the [order tutorial](../tutorials/index.md). Continue [reviewing AI Agent output](./reviewing-output.md) at each step.
+For a continuous example, see the [order tutorial](../../tutorials/index.md). Continue [reviewing AI Agent output](./reviewing-output.md) at each step.

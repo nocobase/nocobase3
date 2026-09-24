@@ -9,15 +9,7 @@ When your AI Agent says it is done, walk through the requirement. A visible page
 
 ## Use it as a user
 
-For the [first order feature](../get-started/first-feature.md):
-
-1. Sign in and open the order list from the menu.
-2. Create an order and check the displayed values.
-3. Refresh and confirm it remains.
-4. Edit the amount, save, and refresh again.
-5. Try a duplicate order number and a negative amount; both should be rejected.
-
-![Persisted order after editing and refreshing; interface shown in Chinese](https://static-docs.nocobase.com/nb3-docs-20260916-orders-cn.png)
+The routine in [your first feature](../first-feature.md), creating, refreshing, editing, and then trying invalid input, is this kind of check: the normal path must work, data must actually be saved, and limits must hold when input is wrong.
 
 For permission requirements, switch accounts. Administrator access does not prove ordinary users have the correct data scope, and hidden buttons do not replace API authorization.
 
@@ -32,7 +24,7 @@ git diff
 
 `git diff` does not include untracked new files, so inspect both. Confirm that pages, APIs, and database changes fit together, unrelated features remain intact, and configuration secrets are not included in commits.
 
-For migrations, check that existing data is preserved. Do not rebuild a database just to fix a field. Correct merged migrations through new migrations; see [schema changes](../app/migrations.md).
+For migrations, check that existing data is preserved. Do not rebuild a database just to fix a field. Correct merged migrations through new migrations; see [schema changes](../../app/migrations.md).
 
 ## Run the project's checks
 
