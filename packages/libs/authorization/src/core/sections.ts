@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 import type { AuthorizationTitle } from './titles.js';
 
 /** A workspace area that lists resource types. Display only. */
@@ -24,7 +23,7 @@ export class SectionRegistry {
       throw new TypeError(`Section ${section.name} needs a finite order`);
     const existing = this.entries.get(section.name);
     if (existing) {
-      if (isDeepStrictEqual(existing, { ...section })) return;
+      if (samePlainData(existing, { ...section })) return;
       throw new Error(`Section already registered: ${section.name}`);
     }
     this.entries.set(section.name, structuredClone({ ...section }));
@@ -58,7 +57,7 @@ export class ResourceGroupRegistry {
     if (!group.name) throw new TypeError('A resource group needs a name');
     const existing = this.entries.get(group.name);
     if (existing) {
-      if (isDeepStrictEqual(existing, { ...group })) return;
+      if (samePlainData(existing, { ...group })) return;
       throw new Error(`Resource group already registered: ${group.name}`);
     }
     this.entries.set(group.name, structuredClone({ ...group }));
@@ -76,4 +75,33 @@ export class ResourceGroupRegistry {
   list(): readonly ResourceGroup[] {
     return structuredClone([...this.entries.values()]);
   }
+}
+
+/** Deep equality for the plain data registries hold; browser-safe, unlike `node:util`. */
+function samePlainData(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (
+    typeof left !== 'object' ||
+    typeof right !== 'object' ||
+    left === null ||
+    right === null ||
+    Array.isArray(left) !== Array.isArray(right)
+  )
+    return false;
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).filter(
+    (key) => leftRecord[key] !== undefined,
+  );
+  const rightKeys = Object.keys(rightRecord).filter(
+    (key) => rightRecord[key] !== undefined,
+  );
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.hasOwn(rightRecord, key) &&
+        samePlainData(leftRecord[key], rightRecord[key]),
+    )
+  );
 }
