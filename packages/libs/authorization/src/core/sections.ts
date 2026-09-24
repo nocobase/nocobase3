@@ -27,18 +27,36 @@ export interface ResourceGroup {
   readonly order?: number;
 }
 
+/** What `sections.add` takes. */
+export interface SectionDefinition extends Section {
+  /**
+   * Subsections only: extend a subsection another plugin owns, the way a
+   * client settings group is extended. Does nothing when the subsection
+   * exists, creates it otherwise, and yields to the owner's later add.
+   */
+  readonly extend?: boolean;
+}
+
 /**
  * Sections and their subsections, nested exactly one level. Re-adding a
- * deep-equal section is a no-op; anything else throws.
+ * deep-equal section is a no-op; anything else throws, unless one side of a
+ * subsection add is an `extend`.
  */
 export class SectionRegistry {
   private readonly entries = new Map<string, Section>();
+  /** Subsections created by an `extend` add and not yet claimed by an owner. */
+  private readonly extended = new Set<string>();
 
-  add(section: Section): void {
+  add(definition: SectionDefinition): void {
+    const { extend = false, ...section } = definition;
     if (!section.name) throw new TypeError('A section needs a name');
     if (section.order !== undefined && !Number.isFinite(section.order))
       throw new TypeError(`Section ${section.name} needs a finite order`);
     if (section.parent === undefined) {
+      if (extend)
+        throw new TypeError(
+          `Section ${section.name} can extend only as a subsection`,
+        );
       if (section.order === undefined)
         throw new TypeError(`Section ${section.name} needs an order`);
     } else {
@@ -54,10 +72,21 @@ export class SectionRegistry {
     }
     const existing = this.entries.get(section.name);
     if (existing) {
-      if (samePlainData(existing, { ...section })) return;
+      if (extend) return;
+      if (this.extended.has(section.name)) {
+        if (existing.parent !== section.parent)
+          throw new Error(
+            `Section ${section.name} is already registered under ${existing.parent}`,
+          );
+        this.extended.delete(section.name);
+        this.entries.set(section.name, structuredClone(section));
+        return;
+      }
+      if (samePlainData(existing, section)) return;
       throw new Error(`Section already registered: ${section.name}`);
     }
-    this.entries.set(section.name, structuredClone({ ...section }));
+    this.entries.set(section.name, structuredClone(section));
+    if (extend) this.extended.add(section.name);
   }
 
   has(name: string): boolean {

@@ -120,6 +120,65 @@ describe('sections, subsections and resource groups', () => {
     ]);
   });
 
+  describe('extending a subsection another plugin owns', () => {
+    const owner = {
+      name: 'automation',
+      title: { key: 'nav.automation', ns: 'workflow' },
+      parent: 'administration',
+    };
+    const extension = {
+      name: 'automation',
+      title: { key: 'nav.automation', ns: 'scheduler' },
+      parent: 'administration',
+      extend: true,
+    };
+
+    it('does nothing when the owner added it first', () => {
+      const authz = createAuthorization({ plugins: [] });
+      authz.sections.add(owner);
+      authz.sections.add(extension);
+      expect(authz.sections.get('automation')).toEqual(owner);
+    });
+
+    it('yields to an owner that arrives later', () => {
+      const authz = createAuthorization({ plugins: [] });
+      authz.sections.add({ ...extension, order: 5 });
+      authz.sections.add(owner);
+      expect(authz.sections.get('automation')).toEqual(owner);
+      expect(() =>
+        authz.sections.add({ ...owner, title: 'Automation' }),
+      ).toThrow(/already registered/);
+    });
+
+    it('creates the subsection when no owner exists', () => {
+      const authz = createAuthorization({ plugins: [] });
+      authz.sections.add(extension);
+      const { extend: _extend, ...created } = extension;
+      expect(authz.sections.get('automation')).toEqual(created);
+    });
+
+    it('still throws for two owners with different titles, or a different parent', () => {
+      const authz = createAuthorization({ plugins: [] });
+      authz.sections.add(owner);
+      expect(() =>
+        authz.sections.add({ ...owner, title: 'Automation' }),
+      ).toThrow(/already registered/);
+      const other = createAuthorization({ plugins: [] });
+      other.sections.add(extension);
+      expect(() =>
+        other.sections.add({ ...owner, parent: 'business' }),
+      ).toThrow(/already registered under administration/);
+      expect(() =>
+        other.sections.add({
+          name: 'top',
+          title: 'Top',
+          order: 1,
+          extend: true,
+        }),
+      ).toThrow(/only as a subsection/);
+    });
+  });
+
   it('validates the default section of a type and the subsection and group of an item', () => {
     const authz = createAuthorization({ plugins: [] });
     expect(() =>

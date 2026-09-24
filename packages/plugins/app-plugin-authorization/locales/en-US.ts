@@ -10,7 +10,6 @@ const enUS = {
     business: 'Business permissions',
     administration: 'Administration',
     other: 'Other',
-    automation: 'Automation',
   },
   resourceTypes: { business: 'Business features' },
   options: {

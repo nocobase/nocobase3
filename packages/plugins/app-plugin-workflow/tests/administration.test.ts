@@ -8,19 +8,21 @@ import { WorkflowAuthorizationProvider } from '../server/authorization.js';
 import routes from '../client/routes.js';
 
 it.each([false, true])(
-  'adds a settings item to the Automation subsection (already added: %s)',
-  async (exists) => {
+  'owns the Automation subsection (scheduler booted first: %s)',
+  async (schedulerFirst) => {
     const authz = createAppAuthorization({});
-    // Workflow and scheduler both add the same subsection.
     const automation = {
       name: 'automation',
-      title: {
-        key: 'sections.automation',
-        ns: '@nocobase/app-plugin-authorization',
-      },
+      title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
       parent: 'administration',
     };
-    if (exists) authz.sections.add(automation);
+    // Scheduler extends the subsection; the owner's title wins either way.
+    if (schedulerFirst)
+      authz.sections.add({
+        ...automation,
+        title: { key: 'nav.automation', ns: '@nocobase/app-plugin-scheduler' },
+        extend: true,
+      });
     const container = new ServiceContainer();
     container.instance(authorizationToken, authz);
     await new WorkflowAuthorizationProvider({

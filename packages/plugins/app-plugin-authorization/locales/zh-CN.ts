@@ -7,7 +7,6 @@ const zhCN: AuthorizationServerResource = {
     business: '业务权限',
     administration: '系统管理',
     other: '其他',
-    automation: '自动化',
   },
   resourceTypes: { business: '业务功能' },
   options: {

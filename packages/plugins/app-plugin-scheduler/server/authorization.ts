@@ -7,14 +7,12 @@ export class SchedulerAuthorizationProvider extends ServiceProvider<AppPluginApp
 
   public override async boot(): Promise<void> {
     const authz = this.app.container.resolve(authorizationToken);
-    // Workflow and scheduler both add it; an identical re-add is a no-op.
+    // Extends workflow's Automation subsection, as its settings route extends the group.
     authz.sections.add({
       name: 'automation',
-      title: {
-        key: 'sections.automation',
-        ns: '@nocobase/app-plugin-authorization',
-      },
+      title: { key: 'nav.automation', ns: '@nocobase/app-plugin-scheduler' },
       parent: 'administration',
+      extend: true,
     });
     authz.settings.add({
       id: 'scheduler.schedules',

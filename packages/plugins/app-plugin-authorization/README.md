@@ -81,10 +81,7 @@ All registration runs in a provider's `boot`, before the first request.
 ```ts
 authz.sections.add({
   name: 'automation',
-  title: {
-    key: 'sections.automation',
-    ns: '@nocobase/app-plugin-authorization',
-  },
+  title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
   parent: 'administration',
 });
 authz.settings.add({
@@ -217,7 +214,7 @@ authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
 authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
 ```
 
-The workspace lists the top-level sections `pages`, `business` and `administration` on the left, each with its subsections as entries, and the selected subsection's resources on the right, under their resource groups. A business resource or settings item names its subsection with `section`; one that names none is listed under the "Other" subsection of its type's default section. The Pages entry is filled on the client from the route tree, with navigation groups as resource groups in menu order. Resource types without a default section, such as `database.collection`, `hub.app` and `user`, are never listed. Re-adding a deep-equal section, subsection or resource group is a no-op, which is how workflow and scheduler share `automation`; anything else throws.
+The workspace lists the top-level sections `pages`, `business` and `administration` on the left, each with its subsections as entries, and the selected subsection's resources on the right, under their resource groups. A business resource or settings item names its subsection with `section`; one that names none is listed under the "Other" subsection of its type's default section. The Pages entry is filled on the client from the route tree, with navigation groups as resource groups in menu order. Resource types without a default section, such as `database.collection`, `hub.app` and `user`, are never listed. Re-adding a deep-equal section, subsection or resource group is a no-op and anything else throws, except that a plugin extending a subsection another plugin owns passes `extend: true`, as a client settings group does: workflow owns `automation` and scheduler extends it, and the owner's title wins whichever boots first.
 
 ### Record access
 

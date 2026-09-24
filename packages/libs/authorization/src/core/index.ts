@@ -99,6 +99,7 @@ export {
   SectionRegistry,
   type ResourceGroup,
   type Section,
+  type SectionDefinition,
   type SectionTreeNode,
 } from './sections.js';
 export {
