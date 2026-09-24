@@ -120,6 +120,8 @@
     "tsconfig.node.json",
     "tsconfig.server.json",
     "ecosystem.config.js",
+    "Dockerfile",
+    "Dockerfile.dockerignore",
     "docker-compose.yml",
     "config.example.yml",
     "README.MD",

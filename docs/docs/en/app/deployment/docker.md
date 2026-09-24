@@ -1,31 +1,44 @@
 ---
 title: 'Standalone: Docker'
-description: Build the application into an image and run it with persistent storage, without Hub.
+description: Build an image with the application's own Dockerfile and run it with persistent storage, without Hub.
 ---
 
 # Standalone: Docker
 
-To run Hub itself in a container, read [Deploy Hub](./hub). This page builds an image from an application's build output; database and persistent directory settings are in [Production configuration](./configuration).
+To run Hub itself in a container, read [Deploy Hub](./hub). This page builds an image from source with the application's own Dockerfile; database and persistent directory settings are in [Production configuration](./configuration).
 
 ## 1. Build the image
 
-First [build the deployment archive](./standalone#build-the-deployment-archive), then extract it into a separate image build directory that holds only `dist`, `config.example.yml` and the Dockerfile below. Never put the real configuration or a database into the image build context.
+The application root ships a `Dockerfile` and a `Dockerfile.dockerignore`. The image runs `pnpm build` from source inside the container, and its runtime layer holds only `dist/` and `config.example.yml`; `config.yml`, `.env`, `storage/` and `node_modules` never enter the build context. From the application root, run:
 
-```dockerfile
-FROM node:24.15.0-bookworm-slim
-ENV NODE_ENV=production
-WORKDIR /app
-COPY --chown=node:node dist/ /app/dist/
-RUN mkdir -p /app/storage && chown node:node /app/storage
-USER node
-CMD ["node", "/app/dist/server/standalone.js"]
+```bash
+docker build --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
 ```
 
-On an x64 build machine targeting Linux x64, run `docker build --platform linux/amd64 -t crm:release-001 .`. Building for another architecture needs a working Buildx or emulation setup, and the application archive must be built for the same architecture as the image. The image does not reinstall the dependencies in `dist`; they arrive with the archive.
+`APP_BASE_PATH` is compiled into the client assets, so it is fixed at build time and cannot be changed to another path at runtime; it defaults to `/main`. Settings in `.env` are not carried into the image; supply the variables you need as container environment variables at runtime.
+
+The build stage runs on the build machine's own architecture and fetches the target platform's native modules through `pnpm build --target`, so building for another architecture compiles nothing under emulation, for example `docker buildx build --platform linux/amd64,linux/arm64 ...`. The runtime image is based on Debian bookworm with Node 24 and cannot be swapped for an Alpine base.
+
+If `dist/` is already built on your machine, skip the build inside the image and package it directly. Build it for the image's platform, then pass `DIST=prebuilt`:
+
+```bash
+APP_BASE_PATH=/crm pnpm build --target linux-x64
+docker build --platform linux/amd64 --build-arg DIST=prebuilt --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
+```
+
+`--target` and `--platform` must name the same architecture: without `--platform`, Docker builds for the machine it runs on, which on Apple silicon is `linux/arm64`. The image build checks `dist/`: it must have been built for `linux`, glibc, the image's architecture and Node 24, and its client for the same `APP_BASE_PATH` as the build argument; otherwise the build fails and names the arguments to use. `pnpm build` writes server variables from local `.env` files into `dist/.env`, which can include `DB_PASSWORD`; that file never enters the image. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
+
+If the application was created with `pnpm create @nocobase/app` before these files existed, copy `Dockerfile` and `Dockerfile.dockerignore` from a newer version of the same template. Use them together: without `Dockerfile.dockerignore`, local configuration and data enter the build context.
 
 ## 2. Prepare the runtime configuration
 
-Create a dedicated directory on the server holding `compose.yml`, the target environment's `config.yml` and `storage/`. Configure the secrets as described in [authentication and session secrets](./configuration#configure-authentication-and-session-secrets), but point the SQLite path at `/app/storage/database.sqlite` inside the container. Make sure the runtime user can write to `storage`; the `node` user in the official Node image is usually UID/GID 1000, but go by the `id` output of the image you chose.
+Create a dedicated directory on the server holding `compose.yml`, the target environment's `config.yml` and `storage/`. Configure the secrets as described in [authentication and session secrets](./configuration#configure-authentication-and-session-secrets), but point the SQLite path at `/app/storage/database.sqlite` inside the container. Make sure the runtime user can write to `storage`; the image runs as the `node` user, and `docker run --rm --entrypoint id crm:release-001` prints its UID and GID.
+
+The image does not include pnpm. To run an application command in a container, call `node dist/cli/index.js` directly, for example to check the configuration:
+
+```bash
+docker run --rm -v ./config.yml:/app/config.yml:ro crm:release-001 node dist/cli/index.js app config check
+```
 
 ## 3. Write the Compose file
 
@@ -41,31 +54,14 @@ services:
     ports:
       - '127.0.0.1:13000:13000'
     environment:
-      NODE_ENV: production
-      APP_CONFIG_FILE: /app/config.yml
-      APP_BASE_PATH: /crm
       APP_PUBLIC_ORIGIN: https://apps.example.com
-      APP_SERVER_HOST: 0.0.0.0
-      APP_SERVER_PORT: '13000'
       NOCOBASE_STRICT_STARTUP: 'true'
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://127.0.0.1:13000/crm/api/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      start_period: 60s
-      retries: 3
     volumes:
       - ./config.yml:/app/config.yml:ro
       - ./storage:/app/storage
 ```
 
-`NOCOBASE_STRICT_STARTUP` makes a container that fails to start exit, so `restart: unless-stopped` retries it. The `healthcheck` calls the application's `/crm/api/healthz` endpoint; the image has no curl, so Node makes the request.
+The image already sets `NODE_ENV=production`, `APP_CONFIG_FILE=/app/config.yml`, `APP_SERVER_HOST=0.0.0.0`, `APP_SERVER_PORT=13000` and the build-time `APP_BASE_PATH`, and carries a health check against `<APP_BASE_PATH>/api/healthz`. `init: true` forwards stop signals to the Node process; `NOCOBASE_STRICT_STARTUP` makes a container that fails to start exit, so `restart: unless-stopped` retries it.
 
 ## 4. Start the service
 
