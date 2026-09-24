@@ -68,18 +68,48 @@ describe('AI Employee application client transport', () => {
     );
   });
 
-  it('keeps knowledge-base discovery on the application resource API', async () => {
+  it('discovers enabled knowledge bases through the plugin AI API mount', async () => {
     const { client, request } = createClient();
-    request.mockResolvedValueOnce([]);
+    const controller = new AbortController();
+    request.mockResolvedValueOnce({
+      data: {
+        data: [
+          { key: 'test-kb', name: 'Test1', enabled: true },
+          { key: 'disabled-kb', name: 'Disabled', enabled: false },
+          { key: 'default-enabled' },
+          { name: 'Missing key', enabled: true },
+        ],
+        meta: { count: 4 },
+      },
+    });
 
-    await listEnabledKnowledgeBases(undefined, client);
+    await expect(
+      listEnabledKnowledgeBases(controller.signal, client),
+    ).resolves.toEqual([
+      { key: 'test-kb', name: 'Test1', enabled: true },
+      { key: 'default-enabled', name: 'default-enabled', enabled: true },
+    ]);
 
     expect(request).toHaveBeenCalledWith({
-      path: 'aiKnowledgeBase:list',
+      path: 'ai/aiKnowledgeBase:list',
       method: 'GET',
       query: { paginate: false, 'filter[enabled]': true },
+      signal: controller.signal,
     });
   });
+  it.each([
+    { response: [] },
+    { response: { data: { data: [], meta: { count: 0 } } } },
+  ])(
+    'returns an empty option list for an empty knowledge-base response',
+    async ({ response }) => {
+      const { client, request } = createClient();
+      request.mockResolvedValueOnce(response);
+      await expect(
+        listEnabledKnowledgeBases(undefined, client),
+      ).resolves.toEqual([]);
+    },
+  );
 
   it('routes LLM settings through the plugin AI API mount', async () => {
     const { client, request } = createClient();

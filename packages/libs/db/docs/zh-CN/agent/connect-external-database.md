@@ -101,4 +101,4 @@ const rows = await connection.query
 - Query 已通过实际数据库账号权限验证。
 - 测试确认 Builder/Migration DDL 被拒绝。
 
-仓库中有可运行示例：`packages/libs/db/examples/external-module-metadata`。
+仓库中有可运行示例：`dev/db/examples/external-module-metadata`。

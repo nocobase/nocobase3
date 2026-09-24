@@ -48,6 +48,12 @@ export interface UserRoleScope {
     value: UserRoleValue,
     connection: DatabaseConnection,
   ): Promise<void>;
+  assertCanDelete?(
+    userId: string,
+    actorId: string,
+    connection: DatabaseConnection,
+  ): Promise<void>;
+  onDelete?(userId: string, connection: DatabaseConnection): Promise<void>;
   assertCanDisable?(
     userId: string,
     connection: DatabaseConnection,
@@ -114,11 +120,14 @@ export interface UserManagementService {
   ): Promise<ManagedUser>;
   resetPassword(userId: string, password: string): Promise<void>;
   revokeSessions(userId: string): Promise<void>;
+  remove(userId: string, actorId: string): Promise<void>;
 }
 
 export class UserManagementError extends Error {
   constructor(
     readonly code:
+      | 'USER_DELETION_NOT_CONFIGURED'
+      | 'SELF_DELETE_NOT_ALLOWED'
       | 'USER_NOT_FOUND'
       | 'ROLE_SCOPE_NOT_FOUND'
       | 'ROLE_SCOPE_REQUIRED'
@@ -152,3 +161,8 @@ export const userManagementServiceToken: ServiceToken<UserManagementService> =
   createServiceToken<UserManagementService>(
     '@nocobase/app-plugin-users/service',
   );
+
+export interface UsersConfig {
+  /** Disable when an application provides its own assignment scope, such as Hub. */
+  readonly permissionSets?: boolean;
+}

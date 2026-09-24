@@ -3,25 +3,27 @@ export {
   CollectionMetadataStoreRequiredError,
   createDatabaseManager,
 } from './database/manager.js';
+export { upsertPhysicalRow } from './database/upsert-physical-row.js';
+export type { UpsertPhysicalRowOptions } from './database/upsert-physical-row.js';
 export { databaseManagerToken } from './database/token.js';
+export { resolveDatabaseDriver } from './database/resolve-driver.js';
 export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
+  AnyConnectionConfig,
   BaseConnectionConfig,
   ConnectionConfig,
   DatabaseConfig,
+  DatabaseConfigFromDrivers,
+  ConnectionConfigFromDrivers,
+  DriverConnectionConfig,
   DatabaseDialect,
   DatabaseDriverDefinition,
   DatabaseDriverFactory,
   DatabaseDriverRegistration,
   DatabaseDriver,
   ExtensibleDatabaseConfig,
-  MssqlConnectionConfig,
-  MysqlConnectionConfig,
-  OracleConnectionConfig,
-  PostgresConnectionConfig,
   SchemaManagementMode,
-  SqliteConnectionConfig,
   CollectionMetadataStoreConfig,
   DirectoryCollectionMetadataStoreConfig,
 } from './database/config.js';
@@ -53,6 +55,12 @@ export type {
   OptimisticLockDefinition,
 } from './collection/types.js';
 export type { CollectionBuilder } from './collection/builder/builder.js';
+export type {
+  CollectionDiagnosis,
+  CollectionDiagnosisIssue,
+  CollectionDiagnosisIssueCode,
+  ConnectionCollections,
+} from './collection/registry/types.js';
 export type {
   CollectionResolutionResult,
   CollectionResolutionWarning,
@@ -97,14 +105,29 @@ export type {
 export { defineMigration } from './migration/define.js';
 export { loadMigrations, validateMigrations } from './migration/loader.js';
 export { createMigrator } from './migration/migrator.js';
+export {
+  TASK_LOCK_EXPIRY_MS,
+  TASK_LOCK_HEARTBEAT_INTERVAL_MS,
+} from './migration/internal/lock.js';
 export type { Migrator } from './migration/migrator.js';
+export type {
+  ChecksumMismatch,
+  ChecksumMismatchPolicy,
+} from './migration/checksum-history.js';
 export type {
   CreateMigratorOptions,
   DatabaseMigratorOptions,
   MigrationContext,
   MigrationHistoryRecord,
   MigrationDefinition,
+  MigrationRepairOptions,
+  MigrationRepairResult,
+  MigrationRollbackOptions,
   MigrationRollbackResult,
+  StaleTaskLockTakeover,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
   MigrationRunResult,
   MigrationSource,
   MigrationTransactionMode,
@@ -119,6 +142,8 @@ export type {
   DatabaseSeederOptions,
   SeedContext,
   SeedDefinition,
+  SeedRepairOptions,
+  SeedRepairResult,
   SeedRunResult,
   SeedSource,
   SeedTransactionMode,
@@ -408,3 +433,5 @@ export {
   type UpsertWritePolicyBuilder,
   type RelationWriteOperation,
 } from './repository/write-policy.js';
+
+export type { DatabaseTaskConfig } from './task-config.js';

@@ -33,7 +33,7 @@ import {
 export default class PluginRegister extends Command {
   static override summary = 'Install a plugin and wire it into this app.';
   static override description =
-    'Adds the plugin package as a dependency, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
+    'Adds the plugin package to dependencies, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> audit-log',
@@ -65,7 +65,7 @@ export default class PluginRegister extends Command {
     }),
     version: Flags.string({
       description:
-        'Version range to install. Defaults to workspace:^ in workspace mode and the latest published version otherwise.',
+        'Version range to install. Defaults to workspace:^ in workspace mode, otherwise the declared range or the latest published version for a new plugin.',
     }),
     disabled: Flags.boolean({
       default: false,
@@ -299,8 +299,10 @@ export default class PluginRegister extends Command {
       return existing;
     }
 
+    const range =
+      version ?? (await declaredDependencyRange(appRoot, packageName));
     const specifier =
-      version === undefined ? packageName : `${packageName}@${version}`;
+      range === undefined ? packageName : `${packageName}@${range}`;
     const { args, packageManager } = addDependencyCommand(
       await appPackageManager(appRoot),
       specifier,

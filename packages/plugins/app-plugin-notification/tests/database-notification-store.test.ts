@@ -31,7 +31,6 @@ describe('DatabaseNotificationStore', () => {
     ).resolves.toMatchObject([
       {
         id: 'delivery-1',
-        providerName: 'primary',
         status: 'pending',
       },
     ]);
@@ -302,7 +301,7 @@ describe('DatabaseNotificationStore', () => {
     ).resolves.toMatchObject({ outcome: 'conflict' });
   });
 
-  it('moves a terminal Delivery back to pending with an auditable retry resolution', async () => {
+  it('moves a terminal failed Delivery to retrying with an auditable retry resolution', async () => {
     await store.create(createBundle());
     const claimed = await store.claimDelivery(
       'delivery-1',
@@ -324,29 +323,26 @@ describe('DatabaseNotificationStore', () => {
     await store.finishAttemptAndDelivery(
       {
         ...attempt,
-        status: 'unknown',
+        status: 'failed',
         finishedAt: '2026-08-24T00:00:02.000Z',
       },
       started!,
-      'unknown',
+      'failed',
       { message: 'response lost' },
     );
 
     const resolution = {
-      type: 'safe_provider_idempotency' as const,
-      reason: 'Provider dashboard contains no matching request.',
+      type: 'terminal_failure' as const,
+      reason: 'Provider has recovered.',
       requestedAt: '2026-08-24T00:03:00.000Z',
     };
     await expect(
-      store.retryDelivery('delivery-1', 'unknown', resolution),
+      store.retryDelivery('delivery-1', resolution),
     ).resolves.toMatchObject({
-      status: 'pending',
-      retryResolution: { type: 'safe_provider_idempotency' },
+      status: 'retrying',
+      retryResolution: { type: 'terminal_failure' },
       lastError: undefined,
-      providerIdempotency: {
-        startedAt: '2026-08-24T00:00:01.000Z',
-        expiresAt: '2026-08-25T00:00:01.000Z',
-      },
+      providerIdempotency: undefined,
     });
     await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
       {
@@ -362,7 +358,7 @@ describe('DatabaseNotificationStore', () => {
     const retryClaim = await store.claimDelivery(
       'delivery-1',
       'lease-2',
-      '2026-08-24T00:04:00.000Z',
+      '2026-09-01T00:04:00.000Z',
     );
     const retryAttempt: NotificationAttemptRecord = {
       ...createAttempt(),
@@ -373,38 +369,18 @@ describe('DatabaseNotificationStore', () => {
     const retryStarted = await store.startAttempt(
       { ...retryClaim!, retryResolution: resolution },
       retryAttempt,
-      '2026-08-24T00:04:00.000Z',
+      '2026-09-01T00:04:00.000Z',
     );
     expect(retryStarted).toMatchObject({
       status: 'submitting',
       retryResolution: resolution,
     });
-
-    const actualResolution = {
-      ...resolution,
-      type: 'duplicate_risk_accepted' as const,
-    };
-    await expect(
-      store.updateAttemptRetryResolution(
-        { ...retryStarted!, retryResolution: actualResolution },
-        { ...retryAttempt, retryResolution: actualResolution },
-      ),
-    ).resolves.toMatchObject({
-      status: 'submitting',
-      retryResolution: actualResolution,
-    });
-    await expect(
-      store.updateAttemptRetryResolution(
-        { ...retryStarted!, leaseToken: 'stale-lease' },
-        { ...retryAttempt, retryResolution: actualResolution },
-      ),
-    ).resolves.toBeUndefined();
     await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
       { resolution },
     ]);
     await expect(store.listAttempts('delivery-1')).resolves.toMatchObject([
       { sequence: 1, retryResolution: undefined },
-      { sequence: 2, retryResolution: actualResolution },
+      { sequence: 2, retryResolution: resolution },
     ]);
   });
 });
@@ -425,10 +401,10 @@ function createBundle(): NotificationLogBundle {
   const delivery: NotificationDeliveryRecord = {
     id: 'delivery-1',
     notificationId: 'notification-1',
-    channel: 'email',
+    channelName: 'email',
+    channelType: 'email',
     recipientSnapshot: { address: 'test@example.com' },
     messageSnapshot: { subject: 'Hello' },
-    providerName: 'primary',
     providerType: 'fake',
     attemptCount: 0,
     status: 'pending',
@@ -453,7 +429,6 @@ function createAttempt(): NotificationAttemptRecord {
     id: 'attempt-1',
     deliveryId: 'delivery-1',
     sequence: 1,
-    providerName: 'primary',
     providerType: 'fake',
     status: 'submitting',
     startedAt: '2026-08-24T00:00:01.000Z',

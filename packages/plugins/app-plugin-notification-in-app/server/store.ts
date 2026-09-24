@@ -1,3 +1,7 @@
+import {
+  validateNotificationTarget,
+  type NotificationTarget,
+} from '@nocobase/app-plugin-notification';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseManager, Row } from '@nocobase/db';
 import type { InAppItem, InAppMessage } from './types.js';
@@ -50,7 +54,7 @@ export class MemoryInAppStore implements InAppStore {
       userId: input.userId,
       title: input.message.title,
       body: input.message.body,
-      actionUrl: input.message.actionUrl,
+      target: validateNotificationTarget(input.message.target),
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
     };
@@ -125,7 +129,7 @@ interface ItemRow extends Row {
   userId: string;
   title?: string;
   body: string;
-  actionUrl?: string;
+  target?: NotificationTarget | null;
   readAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -147,7 +151,7 @@ export class DatabaseInAppStore implements InAppStore {
       userId: input.userId,
       title: input.message.title,
       body: input.message.body,
-      actionUrl: input.message.actionUrl,
+      target: validateNotificationTarget(input.message.target),
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
     };
@@ -277,7 +281,7 @@ function fromRow(row: ItemRow): InAppItem {
     userId: row.userId,
     title: row.title,
     body: row.body,
-    actionUrl: row.actionUrl,
+    target: validateNotificationTarget(row.target),
     readAt: row.readAt ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -291,7 +295,7 @@ function toRow(item: InAppItem): ItemRow {
     userId: item.userId,
     title: item.title,
     body: item.body,
-    actionUrl: item.actionUrl,
+    target: item.target ?? null,
     readAt: item.readAt,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-ai-employee",
   "displayName": "AI Employee App Plugin",
   "description": "Database-backed AI employee runtime, routes, resources, and built-in employees for NocoBase Apps.",
-  "version": "0.1.0-beta.9",
+  "version": "0.1.0-beta.21",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -18,7 +18,8 @@
     "CHANGELOG.md",
     "registry",
     "registry.config.json",
-    "public/r"
+    "public/r",
+    "skills"
   ],
   "exports": {
     ".": {
@@ -123,7 +124,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "pnpm clean && tsc -p tsconfig.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && nocobase-db-manifests && node -e \"require('node:fs').cpSync('ai/skills', 'dist/ai/skills', { recursive: true })\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -142,9 +143,7 @@
     "@langchain/core": "1.1.49",
     "@langchain/langgraph": "1.4.4",
     "@langchain/langgraph-checkpoint": "1.1.2",
-    "@nocobase/ai-employee": "workspace:^",
     "@nocobase/ai-employee-avatars": "^1.0.2",
-    "@nocobase/caching": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
@@ -170,34 +169,38 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "better-sqlite3": "catalog:",
-    "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
-    "echarts": "^5.5.0",
-    "echarts-for-react": "^3.0.2",
     "eslint": "catalog:",
     "jsdom": "catalog:",
-    "next-themes": "^0.4.6",
     "prettier": "catalog:",
-    "react-markdown": "^10.1.0",
-    "tailwind-merge": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:*"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
     "@dicebear/core": "^9.4.3",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "echarts": "^5.5.0",
+    "echarts-for-react": "^3.0.2",
     "lucide-react": "catalog:",
+    "next-themes": "^0.4.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
-    "react-router": "^7.0.0"
+    "react-markdown": "^10.1.0",
+    "react-router": "^7.0.0",
+    "tailwind-merge": "catalog:",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/ai-employee": "workspace:^"
   }
 }

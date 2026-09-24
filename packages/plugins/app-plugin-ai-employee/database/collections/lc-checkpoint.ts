@@ -17,6 +17,6 @@ export function createLCCheckpointCollection(
         name: 'pk_lc_checkpoints',
       });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement, ReactNode } from 'react';
 
 export interface AuthSsoProvider {
@@ -14,10 +15,13 @@ export interface AuthSsoButtonsProps {
   readonly providers: readonly AuthSsoProvider[];
 }
 
-export function AuthSsoButtons({
-  label = 'Or continue with',
-  providers,
-}: AuthSsoButtonsProps): ReactElement {
+export function AuthSsoButtons(inputProps: AuthSsoButtonsProps): ReactElement {
+  const { t } = useTranslation();
+  const {
+    label = t('auth.continueWith', { defaultValue: 'Or continue with' }),
+    providers,
+  } = inputProps;
+
   return (
     <div className='space-y-4'>
       <div className='flex items-center gap-3 text-xs text-muted-foreground'>

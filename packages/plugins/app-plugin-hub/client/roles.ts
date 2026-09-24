@@ -10,13 +10,15 @@ export interface HubRoleDefinition {
 }
 
 export type HubRoleCapabilityKey =
+  | 'view-logs'
   | 'view-status'
   | 'view-resources'
   | 'create-release'
   | 'operate'
   | 'configure'
   | 'remove'
-  | 'manage-users';
+  | 'manage-users'
+  | 'manage-api-keys';
 
 export type HubRoleCapabilityGroupKey =
   'visibility' | 'operations' | 'user-management';
@@ -43,6 +45,11 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
       requirement('hub.app', 'read', 'read-release', 'read-deployment'),
       requirement('hub.host', 'read'),
     ],
+  },
+  {
+    key: 'view-logs',
+    group: 'visibility',
+    requirements: [requirement('hub.app', 'read-log')],
   },
   {
     key: 'view-resources',
@@ -80,6 +87,11 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
     requirements: [requirement('hub.app', 'remove')],
   },
   {
+    key: 'manage-api-keys',
+    group: 'operations',
+    requirements: [requirement('hub.app', 'manage-api-keys')],
+  },
+  {
     key: 'manage-users',
     group: 'user-management',
     requirements: [
@@ -93,6 +105,7 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
         'assign-role',
         'reset-password',
         'revoke-sessions',
+        'delete',
       ),
     ],
   },

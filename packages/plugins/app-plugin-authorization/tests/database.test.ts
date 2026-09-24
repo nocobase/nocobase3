@@ -1,10 +1,19 @@
+// @vitest-environment node
+
 import { fileURLToPath } from 'node:url';
 
-import { validateMigrations, validateSeeds } from '@nocobase/db';
+import {
+  createDatabaseManager,
+  createMigrator,
+  createSeeder,
+  validateMigrations,
+  validateSeeds,
+} from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it } from 'vitest';
 
 describe('@nocobase/app-plugin-authorization database', () => {
-  it('loads the permission set migration and administrator seed', async () => {
+  it('loads the permission set migrations and the built-in role seeds', async () => {
     const migrationsDirectory = fileURLToPath(
       new URL('../database/migrations', import.meta.url),
     );
@@ -16,16 +25,71 @@ describe('@nocobase/app-plugin-authorization database', () => {
       validateMigrations(migrationsDirectory),
     ).resolves.toMatchObject([
       { name: '202608210001_create_permission_set_tables' },
-      { name: '202608210002_create_default_access_rules' },
-      { name: '202608210003_create_sharing_rules' },
-      { name: '202608210004_create_restriction_rules' },
-      { name: '202608250001_repair_authorization_administrator' },
-      { name: '202608250002_create_default_pages_permission_set' },
     ]);
     await expect(validateSeeds(seedsDirectory)).resolves.toMatchObject([
       {
-        name: '202608240001_authorization_create_system_administrator',
+        name: '202608240001_authorization_create_root_set',
+      },
+      {
+        name: '202608250002_authorization_create_member_set',
       },
     ]);
+  });
+
+  it('assigns the root permission set to the configured initial administrator', async () => {
+    const database = createDatabaseManager({
+      drivers: { sqlite },
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    const source = (plugin: string, kind: 'migrations' | 'seeds') => ({
+      packageName: `@nocobase/${plugin}`,
+      directory: fileURLToPath(
+        new URL(`../../${plugin}/database/${kind}`, import.meta.url),
+      ),
+    });
+    try {
+      await createMigrator({
+        database,
+        sources: [
+          source('app-plugin-authentication', 'migrations'),
+          source('app-plugin-authorization', 'migrations'),
+        ],
+      }).latest();
+      const query = database.connection().query;
+      await query
+        .insertInto('user')
+        .values({
+          id: 'initial-admin',
+          name: 'Custom administrator',
+          username: 'custom.admin',
+          email: 'admin@example.com',
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .execute();
+      const seeder = createSeeder({
+        database,
+        sources: [source('app-plugin-authorization', 'seeds')],
+        config: {
+          get<T>(key: string): T | undefined {
+            return (
+              key === 'users.initialAdmin.username' ? 'Custom.Admin' : undefined
+            ) as T | undefined;
+          },
+        },
+      });
+      await seeder.run();
+      await seeder.run();
+      expect(
+        await query
+          .selectFrom('authorizationPermissionSetAssignments')
+          .select(['subjectId', 'permissionSetKey'])
+          .where('permissionSetKey', '=', 'root')
+          .execute(),
+      ).toEqual([{ subjectId: 'initial-admin', permissionSetKey: 'root' }]);
+    } finally {
+      await database.destroy();
+    }
   });
 });

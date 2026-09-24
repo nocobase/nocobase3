@@ -1,14 +1,16 @@
 import { createRequire } from 'node:module';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  OracleConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import type { Knex } from 'knex';
+import { preserveNestedTransaction } from './transactions.js';
 import { preciseIntegerClient } from './precise-integers.js';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
+
+import type { OracleConnectionConfig } from './config.js';
+export type { OracleConnectionConfig } from './config.js';
 
 const require = createRequire(import.meta.url);
 const Oracledb: unknown = require('oracledb') as unknown;
@@ -20,7 +22,10 @@ export type OracleOptions = Omit<
 const SPACE_DATETIME_PATTERN =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/;
 
-export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
+export const oracleDriver: DatabaseDriverDefinition<
+  'oracle',
+  OracleConnectionConfig
+> = {
   dialect: 'oracle',
   packageName: '@nocobase/db-oracle',
   nativeDriver: 'oracledb',
@@ -327,6 +332,15 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     const BaseClient = preciseIntegerClient(Oracledb);
     if (typeof BaseClient === 'string') return BaseClient;
     class NocobaseOracleClient extends BaseClient {
+      transaction(
+        container: (transaction: Knex.Transaction) => Promise<unknown>,
+        config: Knex.TransactionConfig,
+        outerTx?: Knex.Transaction,
+      ): Knex.Transaction {
+        const transaction = super.transaction(container, config, outerTx);
+        return outerTx ? preserveNestedTransaction(transaction) : transaction;
+      }
+
       prepBindings(bindings: readonly unknown[]): unknown[] {
         const prepared = super.prepBindings(
           bindings as Parameters<Knex.Client['prepBindings']>[0],
@@ -340,8 +354,7 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     }
     return NocobaseOracleClient;
   },
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as OracleConnectionConfig;
+  resolveConnection: (config: OracleConnectionConfig) => {
     assertDriverOptions(config.driverOptions, [
       'host',
       'port',
@@ -407,7 +420,7 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     };
   },
   normalizeConnection: (source) => {
-    const config = source as OracleConnectionConfig;
+    const config = source;
     return {
       ...config,
       host: config.host ?? '127.0.0.1',
@@ -418,7 +431,7 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     };
   },
   resolveOwnershipTarget: (source) => {
-    const config = source as OracleConnectionConfig;
+    const config = source;
     return [
       'oracle',
       config.host,

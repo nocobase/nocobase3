@@ -22,20 +22,24 @@ function assemble(...plugins: ReturnType<typeof plugin>[]) {
 }
 
 describe('assembly', () => {
-  it('keeps the built-in commands under the plugin topic', () => {
+  it('keeps the built-in commands under their documented topics', () => {
     const { commands, topics } = assembleCli({
       builtinCommands,
       builtinTopics,
     });
     expect(Object.keys(commands).sort()).toEqual([
+      'package:remove',
       'plugin:cli-hooks',
       'plugin:inspect',
       'plugin:register',
       'plugin:skills:sync',
       'plugin:unregister',
       'plugin:update',
+      'skills:sync',
     ]);
+    expect(topics.package).toBeDefined();
     expect(topics.plugin).toBeDefined();
+    expect(topics.skills).toBeDefined();
   });
 
   it('mounts app commands under the app topic', () => {
@@ -89,6 +93,12 @@ describe('topic collisions', () => {
 
   it('rejects a plugin claiming a built-in topic', () => {
     expect(() => assemble(plugin('@nocobase/app-plugin-a', 'plugin'))).toThrow(
+      /built-in/,
+    );
+    expect(() => assemble(plugin('@nocobase/app-plugin-a', 'package'))).toThrow(
+      /built-in/,
+    );
+    expect(() => assemble(plugin('@nocobase/app-plugin-a', 'skills'))).toThrow(
       /built-in/,
     );
   });

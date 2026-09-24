@@ -1,5 +1,35 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 9f0edf8: Tell a generated plugin how its migrations differ from an application's.
+
+  The template explained `baseDir` and the compiled manifests but never the layout the declaration points at, so the application shape was the only one an agent had seen. A plugin declares one `database/migrations` and `database/seeds` with no connection segment, because it contributes to the installing application's default connection alone.
+
+  Two consequences only appear in someone else's application, which is why they are worth stating here. Migration names must be unique across every source the application loads, so a collision with another plugin or with the application itself fails the whole run rather than one package's tasks; and ordering is by name across all sources, so a plugin's migrations interleave with the application's instead of applying as a block.
+
+- Updated dependencies [56613b2]
+- Updated dependencies [fc34a66]
+  - @nocobase/dev-config@0.1.0-beta.11
+
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- Updated dependencies [a60decd]
+  - @nocobase/dev-config@0.1.0-beta.7
+
 ## 0.1.0-beta.8
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
@@ -23,13 +23,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const provider = new NotificationProvider({
       config: {
         get: () => ({
-          channels: [
-            {
-              type: 'email',
-              enabled: true,
-              providers: [{ type: 'fake', name: 'primary' }],
-            },
-          ],
+          channels: { email: { provider: 'fake', enabled: true } },
         }),
       },
       container,
@@ -45,18 +39,22 @@ describe('@nocobase/app-plugin-notification provider', () => {
         async createChannel() {
           return {
             type: 'email',
+            validateMessage: (message: object) => ({
+              message,
+              recipients: [{}],
+            }),
             async prepare(input): Promise<object> {
               return input.message;
             },
           };
         },
       })
-      .registerProvider('email', {
+      .registerProvider({
+        messageType: 'email',
         type: 'fake',
         async createProvider(_context, config) {
           return {
-            name: config.name,
-            type: config.type,
+            type: config.provider,
             async send() {
               return { status: 'accepted' } as const;
             },
@@ -82,8 +80,8 @@ describe('@nocobase/app-plugin-notification provider', () => {
     expect(registerJob).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
     const authorization = container.resolve(authorizationToken);
-    expect(authorization.resources.add).toHaveBeenCalledOnce();
-    const add = authorization.resources.add as unknown as ReturnType<
+    expect(authorization.resourceTypes.add).toHaveBeenCalledOnce();
+    const add = authorization.resourceTypes.add as unknown as ReturnType<
       typeof vi.fn
     >;
     const handler = add.mock.calls[0]?.[0] as {
@@ -118,7 +116,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
   it('fails fast when the required database dependency is missing', () => {
     const container = createContainer(false);
     const provider = new NotificationProvider({
-      config: { get: () => ({ channels: [] }) },
+      config: { get: () => ({ channels: {} }) },
       container,
     });
 
@@ -140,7 +138,7 @@ function createContainer(withDatabase: boolean): ServiceContainer {
     registerJob: vi.fn(),
   } as unknown as NocoBaseQueueManager);
   container.instance(authorizationToken, {
-    resources: { add: vi.fn() },
-  } as unknown as AppAuthorization);
+    resourceTypes: { add: vi.fn() },
+  } as unknown as Authorization);
   return container;
 }

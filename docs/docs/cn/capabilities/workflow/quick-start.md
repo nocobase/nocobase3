@@ -32,7 +32,7 @@ keywords: 'NocoBase,工作流,快速开始,库存补货'
 如果应用的 `.agents/skills/` 中没有工作流 Skill，先在应用根目录运行：
 
 ```bash
-pnpm plugin:skills:sync
+pnpm skills:sync
 ```
 
 `.agents/skills/` 是同步生成的本地内容，不要直接修改。

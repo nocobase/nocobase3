@@ -33,18 +33,27 @@ it.each(['en-US', 'zh-CN'])(
       locale === 'zh-CN' ? '从可运行的示例开始' : 'Explore working examples',
     );
     expect(
+      screen.getByRole('link', {
+        name: locale === 'zh-CN' ? /^多语言示例/u : /^Internationalization/u,
+      }),
+    ).toHaveAttribute('href', '/demo/i18n-examples');
+    expect(
       screen.getAllByRole('link').map((link) => link.getAttribute('href')),
     ).toEqual([
+      '/demo/notifications',
+      '/demo/notification-example',
       '/demo/route-overlays',
       '/demo/articles',
       '/demo/numeric-examples',
+      '/demo/i18n-examples',
       '/demo/external-crm',
       '/demo/repository-example/find-many',
       '/demo/repository-example/crm',
       '/demo/repository-example/orders',
+      '/demo/authorization-example',
       '/demo/file-repository',
       '/demo/routes-example',
-      '/demo/settings/automation/workflows',
+      '/demo/settings/workflow/workflows',
     ]);
   },
 );

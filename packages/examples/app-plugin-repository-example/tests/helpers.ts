@@ -2,7 +2,7 @@ import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createApiClient } from '@nocobase/app-client';
 import { Hono } from 'hono';
@@ -54,7 +54,7 @@ export async function createFixture() {
     appName: 'example',
     publicBasePath: '/main',
     config: { app: { name: 'example', publicBasePath: '/main' } },
-    paths: createConfigPaths({ rootDir: '/tmp/repository-example' }),
+    paths: createAppPaths({ rootDir: '/tmp/repository-example' }),
     container,
     router,
   };

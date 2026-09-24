@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 
 import type { AppServer } from '../runtime/index.js';
+import type { NodeServerProxy } from './proxy.js';
 import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
@@ -14,10 +15,23 @@ import {
 export const DEFAULT_HTTP_DRAIN_TIMEOUT_MS: number = 30_000;
 export const DEFAULT_FORCE_EXIT_TIMEOUT_MS: number = 35_000;
 
+/**
+ * Total shutdown budget, when the host supplies one. A supervisor that kills
+ * the process after a fixed wait — `tsx watch` escalates to SIGKILL after five
+ * seconds — makes the 30 second default unreachable, and a hard kill during
+ * startup or shutdown leaves the migration lock held.
+ */
+export const SHUTDOWN_TIMEOUT_ENV = 'APP_SHUTDOWN_TIMEOUT_MS';
+
+/** How much of the budget is reserved for closing what the drain leaves. */
+const SHUTDOWN_FORCE_EXIT_MARGIN_MS = 1_000;
+const MIN_HTTP_DRAIN_TIMEOUT_MS = 250;
+
 export type NodeAppHttpServer = ServerType;
 
 export interface ClosableNodeAppServer extends AppServer {
   readonly signal?: AbortSignal;
+  readonly proxy?: NodeServerProxy;
   close(): Promise<void>;
 }
 
@@ -51,6 +65,25 @@ const defaultLogger: NodeAppServerLogger = {
     console.error(message, error);
   },
 };
+
+/**
+ * Reads the shutdown budget from the environment. An unset or unusable value
+ * keeps the defaults, which suit a deployment behind a load balancer.
+ */
+export function resolveNodeShutdownTimeouts(
+  env: Readonly<Record<string, string | undefined>>,
+): NodeShutdownOptions {
+  const budget = Number(env[SHUTDOWN_TIMEOUT_ENV]);
+  if (!Number.isFinite(budget) || budget <= 0) return {};
+
+  return {
+    forceExitTimeoutMs: budget,
+    httpDrainTimeoutMs: Math.max(
+      budget - SHUTDOWN_FORCE_EXIT_MARGIN_MS,
+      MIN_HTTP_DRAIN_TIMEOUT_MS,
+    ),
+  };
+}
 
 export function startNodeAppServer(
   app: ClosableNodeAppServer,
@@ -101,6 +134,7 @@ export function startNodeAppServer(
       process.exitCode = 1;
     });
     registerNodeWebSocketUpgradeHandler(app, server, { logger });
+    server.once('close', () => app.proxy?.close());
     if (options.registerProcessSignals !== false) {
       unregisterShutdownHandlers = registerNodeShutdownHandlers(
         app,
@@ -112,7 +146,7 @@ export function startNodeAppServer(
 }
 
 export function registerNodeWebSocketUpgradeHandler(
-  app: AppServer,
+  app: AppServer & { readonly proxy?: NodeServerProxy },
   server: NodeAppHttpServer,
   options: { readonly logger?: NodeAppServerLogger } = {},
 ): void {
@@ -170,6 +204,82 @@ export function registerNodeShutdownHandlers(
   return unregister;
 }
 
+export interface StartupSignalWatchOptions {
+  readonly logger?: NodeAppServerLogger;
+  readonly signals?: readonly NodeJS.Signals[];
+  /** Signal source; defaults to the process. Injected by tests. */
+  readonly emitter?: StartupSignalEmitter;
+  /** Escalation for a repeated signal; defaults to process.exit. */
+  readonly forceExit?: (code: number) => void;
+}
+
+export interface StartupSignalEmitter {
+  on(event: string, listener: () => void): unknown;
+  off(event: string, listener: () => void): unknown;
+}
+
+export interface StartupSignalWatch {
+  /** The first signal received while starting, if any. */
+  received(): NodeJS.Signals | undefined;
+  dispose(): void;
+}
+
+export const DEFAULT_STARTUP_SIGNALS: readonly NodeJS.Signals[] = [
+  'SIGINT',
+  'SIGTERM',
+];
+
+/**
+ * Covers the window before the HTTP server owns the signals, which is where
+ * startup runs migrations and seeds. Node's default disposition terminates the
+ * process on SIGTERM, so without this the task lock is abandoned held and the
+ * next start has to wait it out. Recording the signal and letting startup
+ * finish releases the lock the ordinary way; the caller then shuts down
+ * instead of listening.
+ */
+export function watchStartupShutdownSignals(
+  options: StartupSignalWatchOptions = {},
+): StartupSignalWatch {
+  const logger = options.logger ?? defaultLogger;
+  const emitter = options.emitter ?? process;
+  const forceExit =
+    options.forceExit ?? ((code: number): void => process.exit(code));
+  const signals = options.signals ?? DEFAULT_STARTUP_SIGNALS;
+  let received: NodeJS.Signals | undefined;
+  const listeners = new Map<NodeJS.Signals, () => void>();
+
+  const dispose = (): void => {
+    for (const [signal, listener] of listeners) {
+      emitter.off(signal, listener);
+    }
+    listeners.clear();
+  };
+
+  for (const signal of signals) {
+    const listener = (): void => {
+      if (received) {
+        logger.error(
+          `Received ${signal} again while the app server was still starting; forcing exit.`,
+        );
+        forceExit(1);
+        return;
+      }
+
+      received = signal;
+      logger.error(
+        `Received ${signal} while the app server was starting; finishing startup tasks before shutting down.`,
+      );
+    };
+    listeners.set(signal, listener);
+    emitter.on(signal, listener);
+  }
+
+  return {
+    received: (): NodeJS.Signals | undefined => received,
+    dispose,
+  };
+}
+
 export async function shutdownNodeAppServer(
   app: ClosableNodeAppServer,
   server: NodeAppHttpServer,
@@ -189,6 +299,7 @@ export async function shutdownNodeAppServer(
   forceExitTimer.unref();
 
   try {
+    app.proxy?.closeWebSockets();
     await closeNodeServerWithGracePeriod(
       server,
       options.httpDrainTimeoutMs ?? DEFAULT_HTTP_DRAIN_TIMEOUT_MS,
@@ -278,10 +389,17 @@ async function dispatchNodeWebSocket(
   req: IncomingMessage,
   socket: Duplex,
   head: Buffer,
-  app: AppServer,
+  app: AppServer & { readonly proxy?: NodeServerProxy },
 ): Promise<void> {
   if (!isWebSocketUpgrade(req)) {
     rejectWebSocketUpgrade(socket, 400);
+    return;
+  }
+
+  if (
+    app.proxy?.matches(new URL(createWebSocketUpgradeRequest(req).url).pathname)
+  ) {
+    await app.proxy.upgrade(req, socket, head);
     return;
   }
 

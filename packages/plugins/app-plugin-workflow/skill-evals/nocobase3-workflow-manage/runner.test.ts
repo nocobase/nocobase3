@@ -193,10 +193,12 @@ describe('workflow skill prompt fixtures', () => {
       trigger: async () => ({
         status: 'accepted' as const,
         eventKey: 'test-event',
+        runId: '1',
       }),
       triggerRevision: async () => ({
         status: 'accepted' as const,
         eventKey: 'test-event',
+        runId: '1',
       }),
       discoverArtifacts: async () => [],
       ensureArtifactMaterialized: async () => undefined,
@@ -249,10 +251,12 @@ describe('workflow skill prompt fixtures', () => {
       trigger: async () => ({
         status: 'accepted' as const,
         eventKey: 'test-event',
+        runId: '1',
       }),
       triggerRevision: async () => ({
         status: 'accepted' as const,
         eventKey: 'test-event',
+        runId: '1',
       }),
       discoverArtifacts: async () => [],
       ensureArtifactMaterialized: async () => undefined,

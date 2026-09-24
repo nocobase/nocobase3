@@ -6,10 +6,10 @@ import {
   databaseManagerToken,
   SchemaManagementNotAllowedError,
 } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   createAppDatabaseManager,
   type AppDatabaseConfig,
@@ -26,7 +26,7 @@ let database: NonNullable<ReturnType<typeof createAppDatabaseManager>>;
 // Resolving paths against the template root is what makes the default
 // metadata source database/externalCrm/collections/*/metadata.json — the
 // committed files — apply, exactly as it does for the running application.
-const paths = createConfigPaths({
+const paths = createAppPaths({
   rootDir: path.resolve(import.meta.dirname, '../..'),
 });
 
@@ -34,7 +34,7 @@ beforeEach(async () => {
   directory = mkdtempSync(
     path.join(tmpdir(), 'nocobase-examples-external-crm-'),
   );
-  const config: AppDatabaseConfig = {
+  const config: AppDatabaseConfig<SqliteConnectionConfig> = {
     default: 'main',
     drivers: { sqlite },
     connections: {

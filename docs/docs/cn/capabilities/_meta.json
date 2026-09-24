@@ -16,15 +16,21 @@
     "label": "认证"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "authorization",
-    "label": "权限"
+    "label": "权限",
+    "collapsed": true
   },
   {
     "type": "dir",
     "collapsed": true,
     "name": "workflow",
     "label": "工作流"
+  },
+  {
+    "type": "file",
+    "name": "scheduler",
+    "label": "定时任务"
   },
   {
     "type": "file",
@@ -41,6 +47,11 @@
     "type": "file",
     "name": "file",
     "label": "文件"
+  },
+  {
+    "type": "file",
+    "name": "template-print",
+    "label": "模板打印"
   },
   {
     "type": "file",

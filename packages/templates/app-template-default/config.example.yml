@@ -17,6 +17,12 @@ client:
     # defaultColorScheme: system # light | dark | system
     # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
+users:
+  # Used only when seeding an empty user table.
+  initialAdmin:
+    username: nocobase
+    password: admin123
+
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
   secret: replace-with-a-unique-secret
@@ -32,44 +38,29 @@ session:
 
 notification:
   channels:
-    - type: in-app
-      enabled: true
-      providers:
-        - type: database
-          name: default
+    inbox:
+      provider: in-app
 
-    # Uncomment and configure this channel to send email notifications.
-    # - type: email
-    #   enabled: true
-    #   providers:
-    #     - type: smtp
-    #       name: smtp
-    #       host: smtp.example.com
-    #       port: 587
-    #       secure: false
-    #       auth:
-    #         user: mailer@example.com
-    #         pass: replace-with-the-smtp-password
-    #       from: NocoBase <mailer@example.com>
-    #
-    #     - type: resend
-    #       name: resend
-    #       apiKey: replace-with-the-resend-api-key
-    #       from: NocoBase <notifications@example.com>
+    # Uncomment and configure independent email Channels.
+    # system-email:
+    #   provider: smtp
+    #   host: smtp.example.com
+    #   port: 587
+    #   auth:
+    #     user: ${SMTP_USER}
+    #     pass: ${SMTP_PASSWORD}
+    #   from: notifications@example.com
+    # marketing-email:
+    #   provider: resend
+    #   apiKey: ${RESEND_API_KEY}
+    #   from: marketing@example.com
 
-    # Uncomment and configure this channel to send IM notifications.
-    # - type: im
-    #   enabled: true
-    #   providers:
-    #     - type: feishu-webhook
-    #       name: feishu
-    #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
-    #       secret: replace-with-the-feishu-secret
-    #
-    #     - type: dingtalk-webhook
-    #       name: dingtalk
-    #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
-    #       secret: replace-with-the-dingtalk-secret
+    # ops-feishu:
+    #   provider: feishu-webhook
+    #   webhookUrl: ${FEISHU_WEBHOOK_URL}
+    # ops-dingtalk:
+    #   provider: dingtalk-webhook
+    #   webhookUrl: ${DINGTALK_WEBHOOK_URL}
 
 # Declarative LLM services are loaded from application config.
 # Reload application config after editing; no process restart or AI resource rescan is required.
@@ -118,3 +109,21 @@ snowflake:
   # Assign a unique worker ID to each concurrently running instance.
   workerId: 0
   epoch: 1605024000
+
+# File logging is independent of terminal formatting.
+logging:
+  level: info
+  file:
+    enabled: true
+    retentionDays: 7
+    name: app
+    maxFileSizeMB: 10
+    maxTotalSizeMB: 500
+  loggers:
+    request:
+      file:
+        name: request
+  console:
+    enabled: true
+    # Set true for human-readable terminal output.
+    pretty: false

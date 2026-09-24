@@ -1,4 +1,4 @@
-// Copies the skills a plugin ships into the application that registered it.
+// Copies skills from an application's direct NocoBase dependencies and registered plugins.
 //
 // Upstream is the single source of truth: every synchronized directory is
 // replaced wholesale, and a directory whose name does not start with
@@ -6,7 +6,7 @@
 // alongside the synchronized ones. The entire app-side `.agents/` tree is
 // ignored generated state, not a version-controlled source of truth.
 //
-// Where the plugins live differs by caller. Inside this repository they sit
+// Where the packages live differs by caller. Inside this repository they sit
 // under `packages/`; in a generated application they are installed into
 // `node_modules`. Everything except that lookup is shared, so the lookup is a
 // parameter rather than a branch.
@@ -20,13 +20,25 @@ import {
 } from './server-plugins.ts';
 
 import { createCliPluginsEditor, readCliPlugins } from './cli-plugins.ts';
-import { cp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
+import {
+  cp,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 
 const PACKAGE_SCOPE = '@nocobase/';
 const KEBAB_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const PLUGIN_PACKAGE_PREFIX = '@nocobase/app-plugin-';
+const OWNERSHIP_FILE = path.join('.agents', '.skills-sync.json');
 
-/** Directory, relative to a plugin package root, that holds its App-facing skills. */
+/** Directory, relative to a package root, that holds its App-facing skills. */
 export const PLUGIN_SKILLS_DIRECTORY = 'skills';
 
 /** Directory, relative to an application root, that receives synchronized skills. */
@@ -34,6 +46,18 @@ export const APP_SKILLS_DIRECTORY: string = path.join('.agents', 'skills');
 
 /** Every synchronized skill directory starts with this prefix. */
 export const SKILL_NAME_PREFIX = 'nocobase-';
+
+/**
+ * Directory, relative to an application root, that Claude Code reads skills from.
+ *
+ * `.agents/skills/` is the agent-neutral location this command owns, and Claude Code does not look there: it discovers
+ * skills only under `~/.claude/skills/` and `<project>/.claude/skills/`. An application that synchronized its skills
+ * would therefore still show none of them in Claude Code, while the globally installed NocoBase 2 skills its
+ * `AGENTS.md` tells agents to ignore stay available — exactly backwards. So every synchronized directory is mirrored
+ * here as a symbolic link. Links rather than copies because `.agents/skills/` is replaced wholesale on the next sync,
+ * and a copy taken from it silently becomes the stale second version of the same guidance.
+ */
+export const CLAUDE_SKILLS_DIRECTORY: string = path.join('.claude', 'skills');
 
 export interface PluginLocation {
   readonly packageName: string;
@@ -80,6 +104,7 @@ export interface SkillsSyncPlan {
   }[];
   readonly removals: readonly SkillRemoval[];
   readonly skillsRoot: string;
+  readonly ownership: Readonly<Record<string, string>>;
 }
 
 /**
@@ -108,8 +133,8 @@ export function isOwnedSkillName(prefix: string, skillName: string): boolean {
 }
 
 /**
- * The first-level skill directories a plugin ships, with their names validated.
- * A plugin without `skills/` yields an empty list: most plugins ship no
+ * The first-level skill directories a NocoBase package ships, with their names validated.
+ * A package without `skills/` yields an empty list: most packages ship no
  * skills and must not produce warnings.
  */
 export async function collectPluginSkills({
@@ -127,10 +152,13 @@ export async function collectPluginSkills({
     }
     if (
       !KEBAB_PATTERN.test(entry.name) ||
-      !isOwnedSkillName(prefix, entry.name)
+      !entry.name.startsWith(SKILL_NAME_PREFIX) ||
+      (packageName.startsWith(PLUGIN_PACKAGE_PREFIX)
+        ? !isOwnedSkillName(prefix, entry.name)
+        : entry.name.startsWith('nocobase-app-plugin-'))
     ) {
       throw new Error(
-        `Invalid skill directory ${entry.name} in ${skillsDirectory}: skills of ${packageName} must be named ${prefix} or ${prefix}-<suffix>.`,
+        `Invalid skill directory ${entry.name} in ${skillsDirectory}: use a nocobase- prefixed kebab-case name; plugin skills must use their package prefix ${prefix}, and nocobase-app-plugin-* names are reserved for their owning plugins.`,
       );
     }
     skills.push({
@@ -144,22 +172,27 @@ export async function collectPluginSkills({
 
 /**
  * The full-overwrite plan: which upstream skill directories to copy in, and
- * which app-side directories owned by these plugins no longer exist upstream.
+ * which tracked directories no longer exist upstream. A full application sync
+ * also prunes skills from removed packages; targeted syncs preserve other owners.
  */
 export async function planSkillsSync({
   appPackageName,
   appRoot,
   plugins,
+  pruneMissingPackages = false,
 }: {
   appPackageName: string;
   appRoot: string;
   plugins: readonly PluginLocation[];
+  pruneMissingPackages?: boolean;
 }): Promise<SkillsSyncPlan> {
   const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
+  const previousOwnership = await readSkillsOwnership(appRoot);
   const sources: PluginSkills[] = [];
   for (const plugin of plugins) {
     sources.push(await collectPluginSkills(plugin));
   }
+  const selectedPackages = new Set(sources.map((source) => source.packageName));
 
   const owners = new Map<string, string>();
   const copies: SkillCopy[] = [];
@@ -169,6 +202,17 @@ export async function planSkillsSync({
       if (previousOwner !== undefined) {
         throw new Error(
           `Skill name collision: ${skill.name} is provided by both ${previousOwner} and ${skill.packageName}.`,
+        );
+      }
+      const recordedOwner = previousOwnership[skill.name];
+      if (
+        recordedOwner !== undefined &&
+        recordedOwner !== skill.packageName &&
+        !selectedPackages.has(recordedOwner) &&
+        !pruneMissingPackages
+      ) {
+        throw new Error(
+          `Skill name collision: ${skill.name} is already synchronized from ${recordedOwner}. Run a full skills:sync to reconcile package ownership.`,
         );
       }
       owners.set(skill.name, skill.packageName);
@@ -190,14 +234,19 @@ export async function planSkillsSync({
     if (owners.has(entry.name)) {
       continue;
     }
-    const owner = findOwningPlugin(sources, entry.name);
-    if (owner === undefined) {
+    const recordedOwner = previousOwnership[entry.name];
+    const owner =
+      recordedOwner ?? findOwningPlugin(sources, entry.name)?.packageName;
+    if (
+      owner === undefined ||
+      (!selectedPackages.has(owner) && !pruneMissingPackages)
+    ) {
       continue;
     }
     const targetPath = path.join(skillsRoot, entry.name);
     removals.push({
       files: await listFiles(targetPath),
-      packageName: owner.packageName,
+      packageName: owner,
       skillName: entry.name,
       targetPath,
     });
@@ -217,6 +266,12 @@ export async function planSkillsSync({
     ),
     removals,
     skillsRoot,
+    ownership: Object.fromEntries([
+      ...Object.entries(previousOwnership).filter(
+        ([, owner]) => !pruneMissingPackages && !selectedPackages.has(owner),
+      ),
+      ...owners,
+    ]),
   };
 }
 
@@ -226,6 +281,7 @@ export async function applySkillsSync(
 ): Promise<SkillsSyncPlan> {
   for (const removal of plan.removals) {
     await rm(removal.targetPath, { force: true, recursive: true });
+    await unlinkClaudeSkill(plan.appRoot, removal.skillName);
   }
   if (plan.copies.length > 0) {
     await mkdir(plan.skillsRoot, { recursive: true });
@@ -233,20 +289,82 @@ export async function applySkillsSync(
   for (const copy of plan.copies) {
     await rm(copy.targetPath, { force: true, recursive: true });
     await cp(copy.sourcePath, copy.targetPath, { recursive: true });
+    await linkClaudeSkill(plan.appRoot, copy.skillName);
   }
+  await writeSkillsOwnership(plan.appRoot, plan.ownership);
   return plan;
 }
 
+/** Plans removal from recorded ownership even when the package has already been uninstalled. */
+export async function planPackageSkillRemovals(
+  appRoot: string,
+  packageName: string,
+): Promise<string[]> {
+  const prefix = pluginSkillPrefix(packageName);
+  const ownership = await readSkillsOwnership(appRoot);
+  const names = new Set(
+    Object.entries(ownership)
+      .filter(([, owner]) => owner === packageName)
+      .map(([name]) => name),
+  );
+
+  // Older CLI versions recorded plugin ownership through the package prefix.
+  // A recorded owner takes precedence, including when its prefix is longer.
+  if (packageName.startsWith(PLUGIN_PACKAGE_PREFIX)) {
+    for (const entry of await readDirectoryEntries(
+      path.join(appRoot, APP_SKILLS_DIRECTORY),
+    )) {
+      if (
+        entry.isDirectory() &&
+        isOwnedSkillName(prefix, entry.name) &&
+        (ownership[entry.name] === undefined ||
+          ownership[entry.name] === packageName)
+      ) {
+        names.add(entry.name);
+      }
+    }
+  }
+  return [...names].sort();
+}
+
+/** Removes only this package's synchronized skills and drops its ownership records. */
+export async function removePackageSkills(
+  appRoot: string,
+  packageName: string,
+): Promise<string[]> {
+  const names = await planPackageSkillRemovals(appRoot, packageName);
+  for (const name of names) {
+    await rm(path.join(appRoot, APP_SKILLS_DIRECTORY, name), {
+      force: true,
+      recursive: true,
+    });
+    await unlinkClaudeSkill(appRoot, name);
+  }
+  const ownership = await readSkillsOwnership(appRoot);
+  if (Object.values(ownership).includes(packageName)) {
+    await writeSkillsOwnership(
+      appRoot,
+      Object.fromEntries(
+        Object.entries(ownership).filter(([, owner]) => owner !== packageName),
+      ),
+    );
+  }
+  return names;
+}
+
 /**
- * Locates registered plugins in a generated application, where they are
- * installed dependencies rather than workspace directories.
+ * Locates direct NocoBase dependencies and registered plugins in an application.
+ * Optional dependencies may be absent; required dependencies must be installed.
+ * The legacy plugin filter and result keys remain compatible with plugin callers.
  */
 export async function resolveInstalledPlugins({
   appRoot,
   plugin,
+  packageName: selectedPackage,
 }: {
   appRoot: string;
   plugin?: string;
+  packageName?: string;
 }): Promise<{
   appPackageName: string;
   appRoot: string;
@@ -258,16 +376,48 @@ export async function resolveInstalledPlugins({
     typeof applicationPackage.name === 'string'
       ? applicationPackage.name
       : appRoot;
-  const packageNames =
-    plugin === undefined
+  if (plugin !== undefined && selectedPackage !== undefined) {
+    throw new Error('Specify either a package or a plugin, not both.');
+  }
+  const registeredPackages =
+    plugin === undefined && selectedPackage === undefined
       ? await resolveRegisteredPluginNames(appRoot)
-      : [normalizePluginPackageName(plugin)];
+      : [];
+  const dependencies = readDependencyNames(applicationPackage.dependencies);
+  const devDependencies = readDependencyNames(
+    applicationPackage.devDependencies,
+  );
+  const optionalDependencies = readDependencyNames(
+    applicationPackage.optionalDependencies,
+  );
+  const packageNames =
+    selectedPackage !== undefined
+      ? [selectedPackage]
+      : plugin !== undefined
+        ? [normalizePluginPackageName(plugin)]
+        : [
+            ...new Set([
+              ...dependencies,
+              ...devDependencies,
+              ...optionalDependencies,
+              ...registeredPackages,
+            ]),
+          ].sort();
 
   const plugins: PluginLocation[] = [];
   for (const packageName of packageNames) {
+    pluginSkillPrefix(packageName);
     const pluginDirectory = path.join(appRoot, 'node_modules', packageName);
     if (await isPackageDirectory(pluginDirectory, packageName)) {
       plugins.push({ packageName, pluginDirectory });
+      continue;
+    }
+    if (
+      plugin === undefined &&
+      selectedPackage === undefined &&
+      optionalDependencies.includes(packageName) &&
+      !registeredPackages.includes(packageName)
+    ) {
       continue;
     }
     throw new Error(
@@ -283,11 +433,11 @@ export function formatSkillsSyncSummary(
   { verbose = false }: { verbose?: boolean } = {},
 ): string {
   if (plan.copies.length === 0 && plan.removals.length === 0) {
-    return `No plugin skills to synchronize for ${plan.appPackageName}.`;
+    return `No NocoBase package skills to synchronize for ${plan.appPackageName}.`;
   }
 
   const lines: string[] = [
-    `${plan.dryRun ? 'Would synchronize' : 'Synchronized'} plugin skills for ${plan.appPackageName}`,
+    `${plan.dryRun ? 'Would synchronize' : 'Synchronized'} NocoBase package skills for ${plan.appPackageName}`,
   ];
   for (const copy of plan.copies) {
     lines.push(`  copy ${copy.skillName} (${copy.packageName})`);
@@ -362,6 +512,11 @@ function findOwningPlugin(
 ): PluginSkills | undefined {
   let owner: PluginSkills | undefined;
   for (const source of sources) {
+    // Only the legacy plugin contract grants ownership by prefix. Other packages
+    // own exactly the names recorded when they were synchronized.
+    if (!source.packageName.startsWith(PLUGIN_PACKAGE_PREFIX)) {
+      continue;
+    }
     if (!isOwnedSkillName(source.prefix, skillName)) {
       continue;
     }
@@ -370,6 +525,117 @@ function findOwningPlugin(
     }
   }
   return owner;
+}
+
+function readDependencyNames(value: unknown): string[] {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return [];
+  }
+  return Object.keys(value).filter((name) => name.startsWith(PACKAGE_SCOPE));
+}
+
+async function readSkillsOwnership(
+  appRoot: string,
+): Promise<Record<string, string>> {
+  const filePath = path.join(appRoot, OWNERSHIP_FILE);
+  let value: Record<string, unknown>;
+  try {
+    value = await readJson(filePath);
+  } catch (error) {
+    if (isNodeError(error, 'ENOENT')) return {};
+    throw error;
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Invalid skills ownership in ${filePath}.`);
+  }
+  for (const [name, owner] of Object.entries(value)) {
+    if (
+      !KEBAB_PATTERN.test(name) ||
+      !name.startsWith(SKILL_NAME_PREFIX) ||
+      typeof owner !== 'string'
+    ) {
+      throw new Error(`Invalid skills ownership in ${filePath}.`);
+    }
+    pluginSkillPrefix(owner);
+  }
+  return value as Record<string, string>;
+}
+
+async function writeSkillsOwnership(
+  appRoot: string,
+  ownership: Readonly<Record<string, string>>,
+): Promise<void> {
+  const filePath = path.join(appRoot, OWNERSHIP_FILE);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(ownership, null, 2)}\n`);
+}
+
+/**
+ * Mirrors one synchronized skill into `.claude/skills/` as a symbolic link.
+ *
+ * The link is relative so the application directory stays movable. Only a link is ever replaced: a real directory
+ * under a `nocobase-` name is something this command did not write, and removing it to make room would delete work it
+ * cannot restore, so it is reported instead.
+ */
+async function linkClaudeSkill(
+  appRoot: string,
+  skillName: string,
+): Promise<void> {
+  const linkPath = path.join(appRoot, CLAUDE_SKILLS_DIRECTORY, skillName);
+  if (!(await removeSymbolicLink(linkPath))) {
+    throw new Error(
+      `Cannot link ${skillName} into ${CLAUDE_SKILLS_DIRECTORY}: ${linkPath} exists and is not a symbolic link. Remove it and run the sync again.`,
+    );
+  }
+  await mkdir(path.dirname(linkPath), { recursive: true });
+  const relativeTarget = path.join('..', '..', APP_SKILLS_DIRECTORY, skillName);
+  try {
+    await symlink(relativeTarget, linkPath, 'dir');
+  } catch (error) {
+    if (process.platform !== 'win32') {
+      throw error;
+    }
+    // Windows refuses symbolic links without developer mode or elevation. A junction needs neither, but only accepts
+    // an absolute target, so on that platform alone the application directory stops being movable.
+    await symlink(
+      path.join(appRoot, APP_SKILLS_DIRECTORY, skillName),
+      linkPath,
+      'junction',
+    );
+  }
+}
+
+/** Drops the `.claude/skills/` mirror of a skill that is no longer synchronized. */
+async function unlinkClaudeSkill(
+  appRoot: string,
+  skillName: string,
+): Promise<void> {
+  await removeSymbolicLink(
+    path.join(appRoot, CLAUDE_SKILLS_DIRECTORY, skillName),
+  );
+}
+
+/**
+ * Removes `linkPath` when it is a symbolic link, reporting whether the path is now free.
+ *
+ * `lstat` rather than `stat` so a link to a missing target still reads as a link, and `unlink` rather than `rm` so a
+ * link to a directory is removed without following it.
+ */
+async function removeSymbolicLink(linkPath: string): Promise<boolean> {
+  let entry;
+  try {
+    entry = await lstat(linkPath);
+  } catch (error) {
+    if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR')) {
+      return true;
+    }
+    throw error;
+  }
+  if (!entry.isSymbolicLink()) {
+    return false;
+  }
+  await unlink(linkPath);
+  return true;
 }
 
 async function isPackageDirectory(

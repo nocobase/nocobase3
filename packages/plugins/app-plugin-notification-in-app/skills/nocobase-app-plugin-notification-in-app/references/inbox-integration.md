@@ -30,6 +30,10 @@ The package's Client plugin contributes this development-only App-relative route
 
 Register `@nocobase/app-plugin-notification-in-app/client` in the application Client composition root. The page mounts `NotificationInAppProvider` locally and cleans up its realtime and focus listeners when navigation leaves the page. The Dev Route and its exclusive dependencies are absent from production builds.
 
+## Final delivery validation
+
+The database Provider checks the recipient through Authentication’s user administration service immediately before writing the inbox item. A missing user returns a non-retryable `recipient` failure and creates no inbox item or realtime event. A lookup failure remains a retryable storage failure. Custom hosts calling `createDatabaseProviderDefinition` must supply `recipientExists(userId)` backed by their authoritative user directory; do not use a permissive fallback.
+
 ## HTTP and realtime behavior
 
 The authenticated inbox API is rooted at `notifications/in-app` relative to the injected `ApiClient` API base. Reads include list and unread-count. Writes include read/unread/delete and read-all, each preceded by an authenticated CSRF-token request.
@@ -55,3 +59,7 @@ The plugin owns the inbox components, Provider, Dev Route, authentication enforc
 7. Confirm cleanup removes the topic, connection-open, and window-focus listeners.
 
 Do not diagnose a missing UI update by manually changing the inbox table or publishing synthetic production events. Reproduce with an isolated test notification or inspect the durable route and subscription logs.
+
+Configure `notification.channels.inbox: { provider: 'in-app' }` and send `messages: { inbox: { to: 'user-id', title: 'Title', body: 'Body' } }`. Channel keys are names; multiple names using `in-app` are independent targets. `to` requires an application user ID or a non-empty readonly array, with one Delivery per user. No current user is inferred. The test form requires an explicit recipient.
+
+Use `target: { type: 'route', path: '/topics/123' }` for an internal route without the deployment prefix, or `target: { type: 'url', url: 'https://example.com/main/topics/123' }` for a complete HTTP(S) URL. The inbox adds the Router basename only for routes. Without a target, no Open link is shown. Legacy `actionUrl` is ignored; run the new target-column migration without converting old links.

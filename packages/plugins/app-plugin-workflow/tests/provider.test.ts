@@ -6,6 +6,14 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
+import {
+  schedulerServiceToken,
+  type SchedulerService,
+} from '@nocobase/app-plugin-scheduler/server/tokens';
+import type {
+  ScheduleTargetHandle,
+  ScheduleTargetType,
+} from '@nocobase/app-plugin-scheduler/server';
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 
 import { WorkflowProvider } from '../server/provider.js';
@@ -60,7 +68,49 @@ describe('WorkflowProvider', () => {
       'Workflow instruction "echo" is already registered.',
     );
   });
+
+  it('keeps Workflow available when Scheduler is not registered', async () => {
+    const { container, provider } =
+      createProviderWithDependencies('without-scheduler');
+    provider.register();
+
+    await expect(provider.boot()).resolves.toBeUndefined();
+    expect(container.resolve(workflowServiceToken)).toBeDefined();
+  });
+
+  it.each(['scheduler-first', 'workflow-first'] as const)(
+    'registers the Schedule target independently of plugin declaration order: %s',
+    async (order) => {
+      const { container, provider } = createProviderWithDependencies(order);
+      const scheduler = recordingScheduler();
+      if (order === 'scheduler-first')
+        container.instance(schedulerServiceToken, scheduler.service);
+      provider.register();
+      if (order === 'workflow-first')
+        container.instance(schedulerServiceToken, scheduler.service);
+
+      await provider.boot();
+
+      expect(scheduler.registered.map((target) => target.type)).toEqual([
+        'workflow',
+      ]);
+    },
+  );
 });
+
+function recordingScheduler(): {
+  service: SchedulerService;
+  registered: ScheduleTargetType[];
+} {
+  const registered: ScheduleTargetType[] = [];
+  const service: SchedulerService = {
+    registerTarget: (target): ScheduleTargetHandle => {
+      registered.push(target as ScheduleTargetType);
+      return { type: target.type, reportCompletion: async () => {} };
+    },
+  };
+  return { service, registered };
+}
 
 function createProviderWithDependencies(appName: string): {
   container: ServiceContainer;

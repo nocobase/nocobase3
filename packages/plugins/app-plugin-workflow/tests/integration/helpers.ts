@@ -1,3 +1,6 @@
+import type { SqliteConnectionConfig } from '@nocobase/db-sqlite';
+import type { PostgresConnectionConfig } from '@nocobase/db-postgres';
+import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
 import { fileURLToPath } from 'node:url';
 
 import type { Knex } from 'knex';
@@ -7,7 +10,6 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
   type CollectionMetadataStore,
-  type ConnectionConfig,
   type DatabaseManager,
   type Migrator,
 } from '@nocobase/db';
@@ -186,7 +188,9 @@ export function legacyTimestamp(instant: string): string {
  * part is overridable for a server started elsewhere. The defaults mirror
  * `packages/libs/db/docker-compose.yml`.
  */
-function connectionConfig(dialect: IntegrationDialect): ConnectionConfig {
+function connectionConfig(
+  dialect: IntegrationDialect,
+): SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig {
   if (dialect === 'sqlite')
     return {
       dialect: 'sqlite',

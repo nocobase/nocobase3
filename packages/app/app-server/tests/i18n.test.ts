@@ -10,7 +10,7 @@ import {
   Application,
   type ApplicationOptions,
 } from '../src/application/index.js';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import {
   type AppI18nConfig,
   i18nToken,
@@ -189,6 +189,7 @@ async function startApplication(
       plugins: [
         {
           definition: defineServerPlugin({
+            baseDir: import.meta.dirname,
             packageName: '@nocobase/app-plugin-test',
             locales: () => Promise.resolve(pluginLocales),
           }),
@@ -196,6 +197,7 @@ async function startApplication(
             packageName: '@nocobase/app-plugin-test',
             version: 'test',
             rootDir: '/test/plugins/test',
+            baseDir: '/test/plugins/test',
             jobLocations: [],
           },
         },
@@ -246,5 +248,5 @@ async function createTestApplicationOptions(
     i18n: { defaultLocale: 'en-US' },
   });
 
-  return { config, paths: createConfigPaths({ rootDir: '/test/app' }) };
+  return { config, paths: createAppPaths({ rootDir: '/test/app' }) };
 }

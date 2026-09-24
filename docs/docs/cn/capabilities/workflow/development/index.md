@@ -1,10 +1,10 @@
 ---
-title: '应用开发中的工作流'
+title: '使用 Agent 开发'
 description: '在 NocoBase 3 应用开发流程中，通过应用 Agent 设计、接入与验证工作流。'
 keywords: 'NocoBase,应用开发,工作流,Workflow Skill,DSL'
 ---
 
-# 应用开发中的工作流
+# 使用 Agent 开发
 
 本部分面向使用 NocoBase 3 应用模板、通过应用 Agent 开发业务应用的人员。当应用开发中的某个业务场景需要工作流时，人负责描述业务、补充约束、审核方案和确认风险；Agent 负责检查当前应用、实现代码并提供验证证据。内容按这条协作路径组织。
 

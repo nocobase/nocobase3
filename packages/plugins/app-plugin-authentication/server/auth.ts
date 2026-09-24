@@ -2,7 +2,11 @@ import type { DatabaseConnection } from '@nocobase/db';
 import {
   APIError,
   betterAuth,
+  getBaseURL,
+  getOrigin,
   type BetterAuthOptions,
+  type BetterAuthPlugin,
+  type FilteredAPI,
   type Session,
   type User,
 } from 'better-auth';
@@ -63,6 +67,8 @@ export class Auth {
         ...config.user,
         additionalFields: {
           ...config.user?.additionalFields,
+          deletedAt: { type: 'date', required: false, input: false },
+          deletedBy: { type: 'string', required: false, input: false },
           disabledAt: {
             type: 'date',
             required: false,
@@ -76,6 +82,30 @@ export class Auth {
           ...config.databaseHooks?.session,
           create: {
             ...configuredSessionCreate,
+            after: async (session, context) => {
+              await configuredSessionCreate?.after?.(session, context);
+              const user = context
+                ? await context.context.internalAdapter.findUserById(
+                    session.userId,
+                  )
+                : await connection.query
+                    .selectFrom('user')
+                    .select('disabledAt')
+                    .where('id', '=', session.userId)
+                    .executeTakeFirst();
+              if (!user || Reflect.get(user, 'disabledAt') != null) {
+                // A login already in flight may persist after user deletion.
+                // Remove its new session before returning it to the caller.
+                const adapter =
+                  context?.context.internalAdapter ??
+                  (await this.auth.$context).internalAdapter;
+                await adapter.deleteSession(session.token);
+                throw APIError.from('FORBIDDEN', {
+                  code: 'ACCOUNT_DISABLED',
+                  message: 'This account is disabled.',
+                });
+              }
+            },
             before: async (session, context) => {
               const configuredResult = await configuredSessionCreate?.before?.(
                 session,
@@ -136,18 +166,88 @@ export class Auth {
     return session;
   }
 
+  /** Protect writes authenticated by a browser cookie, including routes that skip normal session lookup. */
+  private async checkCookieWriteOrigin(
+    context: Context,
+  ): Promise<Response | undefined> {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) return;
+    // A credential header is not proof that it was used: an invalid API key may fall back to a valid cookie.
+    // Cookie-free API key requests have no ambient browser credential to forge.
+    if (!context.req.header('cookie')) return;
+
+    const authContext = await this.auth.$context;
+    const origin = context.req.header('origin');
+    const inferredBaseURL =
+      origin === 'null' &&
+      context.req.header('sec-fetch-site') === 'same-origin'
+        ? getBaseURL(
+            undefined,
+            authContext.options.basePath,
+            context.req.raw,
+            false,
+            authContext.options.advanced?.trustedProxyHeaders,
+          )
+        : undefined;
+    const source =
+      (inferredBaseURL ? getOrigin(inferredBaseURL) : undefined) ??
+      origin ??
+      context.req.header('referer');
+    if (!source || source === 'null') {
+      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+    }
+
+    // Better Auth also accepts per-request trusted origins. Its static context contains the
+    // configured base URL, static origins, plugin origins, and BETTER_AUTH_TRUSTED_ORIGINS.
+    const configuredOrigins = authContext.options.trustedOrigins;
+    const mergedOrigins =
+      typeof configuredOrigins === 'function'
+        ? await configuredOrigins(context.req.raw)
+        : (configuredOrigins ?? []);
+    const requestAuthContext = Object.create(authContext) as typeof authContext;
+    requestAuthContext.trustedOrigins = [
+      ...authContext.trustedOrigins,
+      ...mergedOrigins.filter(
+        (origin): origin is string =>
+          typeof origin === 'string' && Boolean(origin),
+      ),
+    ];
+    const trustedByAuth = requestAuthContext.isTrustedOrigin(source, {
+      allowRelativePaths: false,
+    });
+    if (!trustedByAuth) {
+      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+    }
+  }
+
+  /** Returns only a registered plugin's API methods, including the normal hook pipeline. */
+  pluginApi<TPlugin extends BetterAuthPlugin>(
+    pluginId: TPlugin['id'],
+  ): FilteredAPI<NonNullable<TPlugin['endpoints']>> {
+    const plugin = this.options.plugins?.find((item) => item.id === pluginId);
+    if (!plugin?.endpoints)
+      throw new Error(`Authentication plugin "${pluginId}" is not registered.`);
+    const api: Record<string, unknown> = {};
+    for (const name of Object.keys(plugin.endpoints)) {
+      const endpoint: unknown = Reflect.get(this.auth.api, name);
+      if (typeof endpoint === 'function') api[name] = endpoint;
+    }
+    return api as FilteredAPI<NonNullable<TPlugin['endpoints']>>;
+  }
+
   /** @internal Used by the Authentication-owned administration service. */
   administrationContext(): typeof this.auth.$context {
     return this.auth.$context;
   }
 
-  /** @internal Binds Authentication operations to a caller-owned transaction. */
+  /** Binds trusted server operations to a caller-owned connection or transaction. */
   forConnection(connection: DatabaseConnection): Auth {
     return new Auth({ ...this.options, connection });
   }
 
   optional(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
+      const originFailure = await this.checkCookieWriteOrigin(context);
+      if (originFailure) return originFailure;
       if (options.skip?.(context)) {
         await next();
         return;
@@ -169,6 +269,8 @@ export class Auth {
 
   required(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
+      const originFailure = await this.checkCookieWriteOrigin(context);
+      if (originFailure) return originFailure;
       if (options.skip?.(context)) {
         await next();
         return;

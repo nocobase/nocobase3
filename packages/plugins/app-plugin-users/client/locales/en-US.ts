@@ -1,27 +1,47 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  'common.close': 'Close',
   nav: { users: 'User management' },
+  assignment: {
+    inspect: 'Check effective permissions',
+    keepEditing: 'Keep editing',
+    discardChanges: 'Discard changes',
+    showMore: 'Show more',
+    title: 'Permission assignments',
+    description:
+      'Manage permissions assigned directly to this user. Changes apply when saved.',
+    search: 'Search names or descriptions',
+    selectedOnly: 'Selected only',
+    selected: '{{count}} selected',
+    changes: '{{added}} added, {{removed}} removed',
+    noChanges: 'No changes',
+    empty: 'No matching options',
+    protected: 'This assignment is protected and cannot be changed here',
+    failed: 'Could not save. Please try again.',
+    discard: 'Discard unsaved changes?',
+  },
   page: {
     title: 'Users',
-    description: 'Create accounts, assign roles, and control active sessions.',
+    description:
+      'Manage accounts, permission assignments, and active sessions.',
     add: 'Add user',
     search: 'Search name, username, or email',
     allStatuses: 'All statuses',
-    allRoles: 'All roles',
+    allRoles: 'All permission sets',
     enabled: 'Enabled',
     disabled: 'Disabled',
     noUsers: 'No users found.',
     total: '{{count}} users',
     previous: 'Previous',
     next: 'Next',
-    selectRole: 'Select role',
-    roles: 'Roles',
+    selectRole: 'Select permission set',
+    roles: 'Permission sets',
     systemAdministrator: 'System administrator',
-    noDirectRoles: 'No direct roles',
-    protectedRole: 'Protected role',
+    noDirectRoles: 'Not directly assigned',
+    protectedRole: 'Protected assignment',
     authenticatedDefaultAccess:
-      'Roles shown here are assigned directly to each user. Default access for all signed-in users applies separately and is configured in Authorization.',
+      'Only direct assignments are shown here. Permissions received through all signed-in users, teams, or other subjects are not listed.',
     columns: { user: 'User', status: 'Status', actions: 'Actions' },
     actions: {
       menu: 'User actions',
@@ -29,13 +49,14 @@ const enUS = {
       resetPassword: 'Reset password',
       revokeSessions: 'Revoke sessions',
       enable: 'Enable account',
+      delete: 'Delete user',
       disable: 'Disable account',
     },
   },
   form: {
     addTitle: 'Add user',
     editTitle: 'Edit user',
-    addDescription: 'Create an account and assign its application role.',
+    addDescription: 'Create an account and assign permissions.',
     editDescription: 'Update the account profile.',
     name: 'Name',
     username: 'Username',
@@ -61,7 +82,21 @@ const enUS = {
     enable: 'Enable',
     disable: 'Disable',
   },
-  errors: { operationFailed: 'The user operation failed.' },
+  deletion: {
+    title: 'Delete user?',
+    description:
+      'Delete {{name}}? All sessions and API Keys will be revoked. Historical activity will be retained. This action cannot be undone.',
+    success: 'User deleted.',
+  },
+  errors: {
+    SELF_DELETE_NOT_ALLOWED: 'You cannot delete your own account.',
+    LAST_HUB_ADMIN:
+      'The last active platform administrator cannot be deleted, disabled, or assigned another role.',
+    USER_HAS_APPS:
+      'Transfer or delete this user’s applications before deleting the user.',
+    HUB_ADMIN_REQUIRED: 'Only a platform administrator can delete users.',
+    operationFailed: 'The user operation failed.',
+  },
 };
 
 /**

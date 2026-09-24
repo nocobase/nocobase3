@@ -139,11 +139,11 @@ describe('registering without TypeScript', () => {
 
     const plan = await planInChildProcess(appRoot);
     const manifest = JSON.parse(plan.manifestText as string) as {
-      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
       nocobase: { plugins: Record<string, { enabled: boolean }> };
     };
 
-    expect(manifest.devDependencies['@nocobase/app-plugin-audit-log']).toBe(
+    expect(manifest.dependencies['@nocobase/app-plugin-audit-log']).toBe(
       '^1.0.0',
     );
     expect(manifest.nocobase.plugins).toEqual({});

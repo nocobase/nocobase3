@@ -2,7 +2,7 @@ import type {
   ApiClient,
   RemoteFindManyOptions,
   RemoteRepository,
-} from '@nocobase/api-client';
+} from '@nocobase/app-client';
 
 export interface FindManyRecord {
   readonly id: string;

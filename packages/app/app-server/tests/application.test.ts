@@ -6,7 +6,7 @@ import {
   Application,
   type ApplicationOptions,
 } from '../src/application/index.js';
-import { createConfigPaths } from '../src/config/index.js';
+import { createAppPaths } from '../src/config/index.js';
 import {
   defineApiRoutes,
   defineRootRoutes,
@@ -141,6 +141,7 @@ describe('application', () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-test',
       serviceProviders: [RuntimePluginProvider],
       routes: [
@@ -208,6 +209,7 @@ describe('application', () => {
       }
     }
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-runtime-order-test',
       serviceProviders: [PluginProvider],
       routes: [
@@ -410,7 +412,7 @@ class RuntimePluginProvider extends ServiceProvider<Application> {
 function createTestApplicationOptions(): ApplicationOptions {
   return {
     config: testAppConfig,
-    paths: createConfigPaths({ rootDir: '/test/app' }),
+    paths: createAppPaths({ rootDir: '/test/app' }),
   };
 }
 

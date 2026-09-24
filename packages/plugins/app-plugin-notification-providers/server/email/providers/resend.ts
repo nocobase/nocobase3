@@ -13,9 +13,9 @@ import {
 import type { PreparedEmailMessage, ResendProviderConfig } from '../types.js';
 
 export function defineResendProviderConfig(
-  input: Omit<ResendProviderConfig, 'type'>,
+  input: Omit<ResendProviderConfig, 'provider'>,
 ): ResendProviderConfig {
-  return { type: 'resend', ...input };
+  return { provider: 'resend', ...input };
 }
 
 export function createResendProviderDefinition(): NotificationProviderDefinition<
@@ -24,6 +24,7 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
 > {
   return {
     type: 'resend',
+    messageType: 'email',
     capabilities: {
       idempotency: {
         supported: true,
@@ -37,7 +38,6 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
       const { Resend } = await import('resend');
       const client = new Resend(config.apiKey);
       return {
-        name: config.name,
         type: 'resend',
         capabilities: {
           idempotency: {
@@ -52,7 +52,7 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
                 from: message.content.from ?? config.from,
                 to: message.to,
                 subject: message.content.subject,
-                text: message.content.text,
+                text: message.content.text ?? '',
                 html: message.content.html,
                 replyTo: message.content.replyTo ?? config.replyTo,
               },

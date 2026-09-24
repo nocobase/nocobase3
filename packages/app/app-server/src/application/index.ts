@@ -1,8 +1,9 @@
+import type { AppRuntimeLogging } from '../logging/config.js';
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
 import { type AppIdentityConfig } from '../config/index.js';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import {
   type AppHttpMiddleware,
   type AppRouteContribution,
@@ -47,8 +48,10 @@ export interface ApplicationOptions<
 > {
   readonly config: TConfig;
   readonly mode?: 'standalone' | 'embedded';
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly websocket?: ApplicationWebSocketFactory;
+  readonly runtimeLogging?: AppRuntimeLogging;
+  readonly strictStartup?: boolean;
 }
 
 export type ApplicationServiceProviderConstructor<
@@ -78,9 +81,11 @@ export interface ApplicationRuntimeContributions<
 export class Application<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
+  public readonly strictStartup: boolean;
+  public readonly runtimeLogging: AppRuntimeLogging | undefined;
   public readonly config: TConfig;
   public readonly mode: 'standalone' | 'embedded';
-  public readonly paths: ConfigPaths;
+  public readonly paths: AppPaths;
   public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = async (
     request,
@@ -117,6 +122,8 @@ export class Application<
   private applicationLocales: AppServerPluginLocalesLoader | undefined;
 
   public constructor(options: ApplicationOptions<TConfig>) {
+    this.strictStartup = options.strictStartup ?? false;
+    this.runtimeLogging = options.runtimeLogging;
     this.config = options.config;
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;

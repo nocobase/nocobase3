@@ -1,5 +1,5 @@
 import {
-  apiClientToken,
+  useApiClient,
   realtimeClientToken,
   useService,
 } from '@nocobase/app-client';
@@ -22,7 +22,7 @@ import { subscribeToInboxInvalidations } from '../subscription.js';
 export function NotificationInAppProvider({
   children,
 }: PropsWithChildren): ReactElement {
-  const appClient = useService(apiClientToken);
+  const appClient = useApiClient();
   const realtime = useService(realtimeClientToken);
   const [unreadCount, setUnreadCount] = useState(0);
   const [revision, setRevision] = useState(0);

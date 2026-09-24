@@ -14,6 +14,7 @@ import {
   nowInstant,
   serializeJson,
 } from './utils.js';
+import { finalizeWorkflowRun } from './finalize-run.js';
 
 export interface TimeoutReaper {
   start(): void;
@@ -30,6 +31,7 @@ export interface TimeoutReaperOptions {
   intervalMs?: number;
   /** Maximum rows handled per sweep, default 100. */
   batchSize?: number;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -71,20 +73,17 @@ export function createTimeoutReaper(
   const abortExpiredRun = async (executionId: WorkflowId): Promise<boolean> => {
     // The status guard makes the sweep safe to run concurrently with a live
     // processor: whoever updates the row first wins and the other one is a no-op.
-    const result = await store().runs.updateMany({
-      filter: {
-        id: asIdFilter(executionId),
-        status: EXECUTION_STATUS.STARTED,
-      },
-      values: {
-        status: EXECUTION_STATUS.ABORTED,
-        reason: EXECUTION_REASON.TIMEOUT,
-        finishedAt: nowInstant(),
-      },
+    const terminal = await finalizeWorkflowRun({
+      store: store(),
+      runId: executionId,
+      expectedStatus: EXECUTION_STATUS.STARTED,
+      status: EXECUTION_STATUS.ABORTED,
+      reason: EXECUTION_REASON.TIMEOUT,
+      output: null,
+      observer: options.terminalObserver,
+      logger,
     });
-    if (result.updatedCount === 0) {
-      return false;
-    }
+    if (!terminal) return false;
     await store().nodeRuns.updateMany({
       filter: {
         workflowRunId: asIdFilter(executionId),

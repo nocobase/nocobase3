@@ -1,3 +1,5 @@
+import type { LogOutputOptions, LoggerFileOptions } from './output.js';
+
 import type {
   DestinationStream,
   Logger as PinoLogger,
@@ -14,9 +16,14 @@ export interface LoggerConfig extends Omit<PinoLoggerOptions, 'redact'> {
   redact?: false | PinoLoggerOptions['redact'];
 }
 
-export interface LoggingConfig extends LoggerConfig {
+export interface LoggingConfig extends LoggerConfig, LogOutputOptions {
+  /** @deprecated getLogger() defaults to system; select other sources explicitly. */
   default?: string;
-  loggers?: Readonly<Record<string, LoggerConfig>>;
+  /** @deprecated Use console.pretty. */
+  pretty?: boolean;
+  loggers?: Readonly<
+    Record<string, LoggerConfig & { file?: LoggerFileOptions }>
+  >;
 }
 
 export type { DestinationStream, PinoLoggerOptions };

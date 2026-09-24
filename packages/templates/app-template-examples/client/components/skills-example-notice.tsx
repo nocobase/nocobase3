@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { AppNotice } from '@nocobase/app-plugin-skills-example/client/components/app-notice';
 import type { AppNoticeData } from '@nocobase/app-plugin-skills-example/server/tokens';
 import { useEffect, useState, type ReactElement } from 'react';
@@ -11,6 +12,8 @@ export interface SkillsExampleNoticeProps {
 export function SkillsExampleNotice({
   loadNotice,
 }: SkillsExampleNoticeProps): ReactElement {
+  const { t: translateDemo } = useDemoTranslation();
+
   const [notice, setNotice] = useState<AppNoticeData>();
   const [error, setError] = useState<string>();
 
@@ -40,11 +43,24 @@ export function SkillsExampleNotice({
   }, [loadNotice]);
 
   if (error) {
-    return <p className='text-sm text-destructive'>{error}</p>;
+    return (
+      <p className='text-sm text-destructive'>
+        {translateDemo(
+          error === 'Unable to load the plugin notice.'
+            ? 'noticeLoadError'
+            : error,
+          { defaultValue: error },
+        )}
+      </p>
+    );
   }
 
   if (!notice) {
-    return <p className='text-sm text-muted-foreground'>Loading notice…</p>;
+    return (
+      <p className='text-sm text-muted-foreground'>
+        {translateDemo('noticeLoading', { defaultValue: 'Loading notice…' })}
+      </p>
+    );
   }
 
   return <AppNotice {...notice} />;

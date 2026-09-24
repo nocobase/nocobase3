@@ -1,5 +1,64 @@
 # @nocobase/dev-config
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- 9e8fc3e: Export `createShadcnRegistryConfig(root)` from `@nocobase/dev-config/eslint`. It returns the shadcn/ui registry relaxations `createPortalConfig` applies to `client/`, scoped to another directory, so a package whose primitives live elsewhere applies the same list instead of copying it.
+- cde9a8e: Describe the monorepo's Skill links correctly in the comment on the ESLint Skills ignore patterns. The ignored paths are unchanged.
+
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 56613b2: Relax the rules shadcn/ui registry output trips over in `createPortalConfig`, for `client/components/ui/**/*.tsx`, `client/hooks/use-mobile.ts` and the recharts payloads in `client/components/ui/chart.tsx`.
+
+  `shadcn add` copies these files from the upstream registry verbatim, and `shadcn add <name> --diff` is only meaningful while the local copy matches, so rules such as `react-refresh/only-export-components` report on a shape nobody here chose and whose only available fix is the edit that destroys the diff. Putting the exception in the factory rather than in each `eslint.config.js` means every portal that adds a registry component gets it — the applications generated from the templates included — instead of each one discovering the same failure and writing the same block. Everything outside those paths, `client/components/` included, is held to the full rule set, and a portal can still override the relaxation through `overrides`.
+
+- fc34a66: Exclude `.agents/skills/` and `.claude/skills/` from ESLint and Prettier. Skills are prose written for agents to read rather than source to reflow, an application's copies are replaced wholesale by `skills:sync`, and `.claude/skills/` holds symbolic links into `.agents/skills/` — so formatting through one checked the same file twice and wrote the result back into the directory it points at.
+
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- fe564d9: Transform the queue loader in both Vitest presets so dynamically discovered TypeScript jobs load through the test runtime instead of Node's strip-only loader. Document the shared preset requirement for application job-discovery tests.
+
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- 5f92529: Render DOCX, XLSX, and PPTX locally in the editable file Registry components using lazily loaded OOXML viewers and existing content URLs. Preserve legacy Office Online fallback and viewer WASM asset paths in Portal development. Existing applications must merge the updated Registry source and install its declared dependency.
+
+  Correct the file Skill read-field policy for queried records used by Registry UI, and document viewer installation, Vite configuration, content authentication boundaries, and preview verification.
+
+  Demonstrate browser-local DOCX, XLSX, and PPTX previews in the file and order attachment examples, with local-network requirements and download-only legacy format guidance.
+
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- 26ac480: Add code-defined Cron scheduling with timezone support, transactional synchronization, and stable schedule identities. Applications and plugins register schedules with `SchedulerService.defineSchedule(definition)` and execution targets with `registerTarget()` during provider registration or boot.
+
+  Route scheduled jobs and workers through the application's configured logical queue, with an adapter-neutral schedule store. Keep the upstream queue dependency unmodified and store queue and scheduler timestamps compatibly with their adapters while preserving absolute instants.
+
+  Move queue storage migrations from Scheduler into the queue library, which resolves configured database connections and physical tables. Assemble these sources centrally in app-server for startup and CLI commands, rejecting overlapping active queue tables before execution. Support immutable target parameters, shared migration history and locks, upstream-compatible physical schemas, and read-only execution conditions that leave skipped migrations unapplied.
+
+  Track idempotent occurrences through the target's final outcome, including asynchronous Workflow completion and recovery with stable run references. Target registration returns a completion-reporting handle scoped to that target; long-running executions can report completion without a fixed scheduler observation timeout.
+
+  Provide an authorized, read-only schedule management page and API with paginated schedules, trigger counts, execution history, and separate schedule and execution statuses. Register `pnpm nocobase schedule sync` as a global CLI command and integrate it into all application templates.
+
+  Include application examples for custom task targets and scheduled Workflows, and agent guidance for schedule definition, target selection, asynchronous execution, diagnostics, and recovery.
+
+  Keep the database manifest CLI entry available before compilation so fresh workspace installs link the command required by package builds.
+
+  Declare the OpenTelemetry dependencies referenced by the upstream queue declarations so consumers can typecheck published Server APIs without enabling tracing or skipping library checks.
+
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+
 ## 0.1.0-beta.6
 
 ### Patch Changes

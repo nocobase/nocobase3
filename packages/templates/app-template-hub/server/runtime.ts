@@ -3,6 +3,8 @@ import {
   type AppRuntimeDefinition,
 } from '@nocobase/app-server/runtime';
 
+import { resolveHubPaths } from './paths.js';
+
 import defaultConfigs from './config/index.js';
 import { createAppConfig } from './config.js';
 import plugins from './plugins.js';
@@ -10,6 +12,8 @@ import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const appRuntime: AppRuntimeDefinition = defineAppRuntime({
+  deploymentRootDir: import.meta.filename.endsWith('.ts') ? '.' : '..',
+  resolvePaths: resolveHubPaths,
   createAppConfig,
   defaultConfigs,
   plugins,

@@ -6,16 +6,18 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  * The command surface this package exposes, asserted exactly so adding or renaming a command is a deliberate edit here
  * rather than something that drifts in unnoticed.
  *
- * All of it is plugin registration, and all of it is reached through a `pnpm` script rather than by typing `nb3`: the
- * repository root and application templates map these to `plugin:register`, `plugin:inspect`, and so on.
+ * The commands manage plugin registration and synchronize NocoBase package skills. Applications reach them through
+ * `pnpm` scripts rather than by typing `nocobase` directly.
  */
 const EXPECTED_IDS = [
+  'package:remove',
   'plugin:cli-hooks',
   'plugin:inspect',
   'plugin:register',
   'plugin:skills:sync',
   'plugin:unregister',
   'plugin:update',
+  'skills:sync',
 ];
 
 let config: Config;
@@ -29,8 +31,10 @@ describe('command tree', () => {
     expect([...config.commandIDs].sort()).toEqual([...EXPECTED_IDS].sort());
   });
 
-  it('groups every command under the plugin topic', () => {
+  it('groups commands under the package, plugin, and skills topics', () => {
+    expect(config.topics.map((topic) => topic.name)).toContain('package');
     expect(config.topics.map((topic) => topic.name)).toContain('plugin');
+    expect(config.topics.map((topic) => topic.name)).toContain('skills');
   });
 
   it('gives every command a summary so help output is never blank', () => {
@@ -107,10 +111,12 @@ describe('documented argument contract', () => {
    * a workspace application's plugins are linked from source rather than installed.
    */
   it.each([
+    'package:remove',
     'plugin:inspect',
     'plugin:register',
     'plugin:unregister',
     'plugin:skills:sync',
+    'skills:sync',
   ])('%s can target a workspace application', (id) => {
     expect(
       Object.keys(config.findCommand(id, { must: true }).flags ?? {}),
@@ -119,6 +125,7 @@ describe('documented argument contract', () => {
 
   it('names the plugin as an argument where one must be chosen', () => {
     for (const id of [
+      'package:remove',
       'plugin:inspect',
       'plugin:register',
       'plugin:unregister',

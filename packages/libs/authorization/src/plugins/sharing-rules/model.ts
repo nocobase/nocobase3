@@ -1,3 +1,4 @@
+import type { AuthorizationTitle } from '../../core/titles.js';
 import type {
   AccessConstraintValue,
   AuthorizationSubject,
@@ -10,12 +11,13 @@ export type SharingSelection =
 
 export interface SharingRuleAction {
   action: string;
+  scopeKey?: string;
   selection: SharingSelection;
 }
 
 export interface SharingRule {
   key: string;
-  title?: string;
+  title?: AuthorizationTitle;
   resource: ResourceRef;
   actions: readonly SharingRuleAction[];
   subjects: readonly AuthorizationSubject[];

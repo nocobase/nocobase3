@@ -1,4 +1,4 @@
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { cachingToken } from '@nocobase/app-server/caching';
 import {
   type AppDriveConfig,
@@ -287,7 +287,7 @@ async function createProvider(
     }).latest();
   }
 
-  const paths = createConfigPaths({ rootDir: process.cwd() });
+  const paths = createAppPaths({ rootDir: process.cwd() });
   const config = new AppConfig();
   config.load({
     name: 'test-ai-config',

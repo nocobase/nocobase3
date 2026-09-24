@@ -1,3 +1,15 @@
+import businessReportGenerator from './businessReportGenerator.js';
+import {
+  getDataSources,
+  getCollectionNames,
+  getCollectionMetadata,
+  searchFieldMetadata,
+} from './data-metadata/index.js';
+import {
+  dataSourceQuery,
+  dataSourceCounting,
+  dataQuery,
+} from './data-query/index.js';
 import chartGenerator from './chartGenerator.js';
 import executeFrontendTool from './executeFrontendTool.js';
 import formFiller from './formFiller.js';
@@ -10,6 +22,14 @@ import listAIEmployees from './sub-agents/list-ai-employees.js';
 import subAgentWebSearch from './subAgentWebSearch.js';
 import suggestions from './suggestions.js';
 const tools = [
+  getDataSources,
+  getCollectionNames,
+  getCollectionMetadata,
+  searchFieldMetadata,
+  dataSourceQuery,
+  dataSourceCounting,
+  dataQuery,
+  businessReportGenerator,
   chartGenerator,
   executeFrontendTool,
   formFiller,

@@ -14,8 +14,7 @@ import enUS from '../../client/locales/en-US.ts';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('@nocobase/app-client', () => ({
-  apiClientToken: {},
-  useService: () => ({ request }),
+  useApiClient: () => ({ request }),
 }));
 const article = {
   id: 1,

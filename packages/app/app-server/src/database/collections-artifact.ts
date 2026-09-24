@@ -1,3 +1,4 @@
+import { resolveDatabaseConfig } from './resolve-config.js';
 import {
   mkdirSync,
   mkdtempSync,
@@ -21,14 +22,15 @@ import {
   type DatabaseManager,
 } from '@nocobase/db';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import {
   isCollectionMetadataStoreInstance,
   resolveAppCollectionsDirectory,
   resolveAppMetadataStore,
 } from './collections-directory.js';
 import { createAppDatabaseManager } from './manager.js';
-import { defaultConnectionName, planAppDatabaseTasks } from './plan.js';
+import { selectAppDatabaseConnections } from './connection-selection.js';
+import { planAppDatabaseTasks } from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
 
 /**
@@ -38,7 +40,7 @@ import type { AppDatabaseConfig } from './types.js';
  * back at runtime, and migrations remain the only authority on schema.
  */
 export interface AppCollectionsArtifactOptions {
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   /** One connection; defaults to the default connection. Exclusive with `all`. */
   readonly connection?: string;
@@ -82,6 +84,13 @@ export interface AppCollectionsArtifactConnectionResult {
   /** Check mode only. */
   differences?: AppCollectionsArtifactDifference[];
   /**
+   * Check mode only. False when `directory` does not exist: nothing has been
+   * generated for this connection yet, which a reader has to tell apart from
+   * artifacts that have drifted, because every expected file is then reported
+   * `missing` and the two look alike.
+   */
+  directoryExists?: boolean;
+  /**
    * Collections whose `metadata.json` is this connection's metadata source
    * but which the database no longer has. The file is kept — it is the only
    * copy — and reported here for a person to decide about.
@@ -113,9 +122,15 @@ export async function generateAppCollectionsArtifact(
   options: AppCollectionsArtifactOptions = {},
 ): Promise<AppCollectionsArtifactResult> {
   const check = options.check ?? false;
-  const names = selectConnections(config, options);
+  const names = selectAppDatabaseConnections(config, options);
   if (names === undefined) {
     return { ok: true, status: 'not-configured', check, results: [] };
+  }
+  if (!options.database) {
+    config = await resolveDatabaseConfig({
+      ...config,
+      drivers: { ...config.drivers, ...options.drivers },
+    });
   }
   const database =
     options.database ??
@@ -167,33 +182,6 @@ export async function generateAppCollectionsArtifact(
  * part: their schema is owned elsewhere, but a snapshot of what it resolves to
  * is exactly what a reader without database access needs from them.
  */
-function selectConnections(
-  config: AppDatabaseConfig,
-  options: AppCollectionsArtifactOptions,
-): string[] | undefined {
-  if (options.connection !== undefined && options.all) {
-    throw new Error('--connection and --all are mutually exclusive.');
-  }
-  const primary = defaultConnectionName(config);
-  if (primary === 'none' || !primary) {
-    if (options.connection !== undefined) {
-      throw new Error('Database is not configured.');
-    }
-    return undefined;
-  }
-  const names = options.all
-    ? Object.keys(config.connections).sort((a, b) =>
-        a === primary ? -1 : b === primary ? 1 : a < b ? -1 : a > b ? 1 : 0,
-      )
-    : [options.connection ?? primary];
-  for (const name of names) {
-    if (!Object.hasOwn(config.connections, name)) {
-      throw new Error(`Unknown database connection "${name}".`);
-    }
-  }
-  return names;
-}
-
 /**
  * The history table name is part of a connection's migration configuration,
  * which planning already resolves — including the legacy top-level form. Ask
@@ -242,7 +230,7 @@ function metadataReadFromDirectory(
   config: AppDatabaseConfig,
   name: string,
   directory: string,
-  paths: ConfigPaths | undefined,
+  paths: AppPaths | undefined,
 ): boolean {
   const connection = config.connections[name];
   const store = resolveAppMetadataStore(connection.metadataStore, {
@@ -339,6 +327,7 @@ async function generateForConnection(
     return {
       ...base,
       status: differences.length === 0 ? 'completed' : 'stale',
+      directoryExists: disk.exists,
       differences,
       unchanged: countUnchanged(perCollection, differences),
     };
@@ -416,6 +405,8 @@ async function generateForConnection(
 }
 
 interface DirectoryState {
+  /** False when the directory itself is absent, as opposed to empty. */
+  readonly exists: boolean;
   /** Known-shaped files, relative path → content. */
   readonly files: Map<string, string>;
   /** Collection directories present on disk. */
@@ -438,7 +429,7 @@ function readDirectory(directory: string): DirectoryState {
     entries = readdirSync(directory, { withFileTypes: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { files, collections, unexpected };
+      return { exists: false, files, collections, unexpected };
     }
     throw error;
   }
@@ -476,6 +467,7 @@ function readDirectory(directory: string): DirectoryState {
     }
   }
   return {
+    exists: true,
     files,
     collections: collections.sort(),
     unexpected: unexpected.sort(),

@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import * as React from 'react';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 
@@ -45,6 +46,7 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -69,7 +71,9 @@ function DialogContent({
             }
           >
             <XIcon />
-            <span className='sr-only'>Close</span>
+            <span className='sr-only'>
+              {t('Close', { defaultValue: 'Close' })}
+            </span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -95,6 +99,7 @@ function DialogFooter({
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean;
 }) {
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   return (
     <div
       data-slot='dialog-footer'
@@ -107,7 +112,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close render={<Button variant='outline' />}>
-          Close
+          {t('Close', { defaultValue: 'Close' })}
         </DialogPrimitive.Close>
       )}
     </div>

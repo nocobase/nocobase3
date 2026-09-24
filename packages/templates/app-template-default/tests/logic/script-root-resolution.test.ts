@@ -25,7 +25,9 @@ function findRootResolutions(): RootResolution[] {
 
   for (const file of globSync('{scripts,cli}/**/*.{mjs,ts}', {
     cwd: appRoot,
-  }).sort()) {
+  })
+    .map((file) => file.split(path.sep).join('/'))
+    .sort()) {
     const source = readFileSync(path.join(appRoot, file), 'utf8');
     for (const [, argumentList] of source.matchAll(RESOLVE_FROM_OWN_LOCATION)) {
       const segments = [...argumentList.matchAll(/'([^']*)'/g)].map(
@@ -35,7 +37,7 @@ function findRootResolutions(): RootResolution[] {
         file,
         // A trailing filename such as 'package.json' is not part of walking up.
         upCount: segments.filter((segment) => segment === '..').length,
-        directoryDepth: path.dirname(file).split('/').length,
+        directoryDepth: path.posix.dirname(file).split('/').length,
       });
     }
   }
@@ -56,10 +58,8 @@ describe('resolving the application root from a file location', () => {
   it('finds every file that does this', () => {
     // Guards the pattern itself: a regex that silently stops matching would turn this suite into a no-op. The count is
     // a floor rather than an exact number so that adding such a file does not fail the suite for the wrong reason.
-    expect(resolutions.length).toBeGreaterThanOrEqual(9);
-    expect(resolutions.map(({ file }) => file)).toContain(
-      'scripts/dev/index.mjs',
-    );
+    expect(resolutions.length).toBeGreaterThanOrEqual(5);
+    expect(resolutions.map(({ file }) => file)).toContain('scripts/dev.mjs');
   });
 
   it.each(resolutions)(

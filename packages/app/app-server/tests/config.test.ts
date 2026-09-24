@@ -1,3 +1,4 @@
+import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -31,12 +32,15 @@ import {
   createAppDatabaseManager,
   createAppMigrator,
   createAppSeeder,
-  createConfigPaths,
+  createAppPaths,
   prepareAppDatabaseStorage,
-  type AppDatabaseConfig,
+  type AppDatabaseConfig as GenericAppDatabaseConfig,
 } from '../src/index.js';
 
 const drivers = { postgres, mysql, sqlite, oracle, mssql };
+type AppDatabaseConfig = GenericAppDatabaseConfig<
+  ConnectionConfigFromDrivers<typeof drivers>
+>;
 
 beforeEach(() => {
   createDatabaseMigratorMock.mockReset();
@@ -51,7 +55,7 @@ afterEach(() => {
 
 describe('app-server config runtime', () => {
   it('supports custom database runtime paths', () => {
-    const paths = createConfigPaths({
+    const paths = createAppPaths({
       rootDir: '/tmp/app',
       databaseDir: '/tmp/app/dist/database',
     });
@@ -255,6 +259,8 @@ describe('app migrator', () => {
       skipped: ['000_create_accounts'],
     });
     expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: undefined,
       directory,
@@ -285,12 +291,14 @@ describe('app migrator', () => {
       connection: 'tenant',
     });
 
-    await expect(migrator.rollback()).resolves.toEqual({
+    await expect(migrator.rollback()).resolves.toMatchObject({
       status: 'completed',
       batch: 2,
       rolledBack: ['001_create_users'],
     });
     expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database: expect.any(Object),
       connection: 'tenant',
       directory,
@@ -337,6 +345,8 @@ describe('app migrator', () => {
       status: 'completed',
     });
     expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: undefined,
       sources,
@@ -396,6 +406,8 @@ describe('app seeder', () => {
       skipped: ['000_create_roles'],
     });
     expect(createDatabaseSeederMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: 'tenant',
       directory,
@@ -429,6 +441,8 @@ describe('app seeder', () => {
 
     await expect(seeder.run()).resolves.toMatchObject({ status: 'completed' });
     expect(createDatabaseSeederMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: undefined,
       sources,
@@ -455,3 +469,43 @@ function createMockDatabaseManager(client: unknown = {}): DatabaseManager {
     destroy: vi.fn() as DatabaseManager['destroy'],
   };
 }
+
+describe('custom database task configuration readers', () => {
+  it.each(['migration', 'seed'] as const)(
+    'passes get-only readers through the direct %s factory',
+    async (kind) => {
+      const directory = mkdtempSync(path.join(tmpdir(), 'task-reader-'));
+      tempDirs.push(directory);
+      const runtimeConfig = {
+        get<T>(key: string): T | undefined {
+          if (key === '') throw new Error('Root lookup is unsupported');
+          return (
+            key === 'initialAdmin.username' ? 'custom-admin' : undefined
+          ) as T | undefined;
+        },
+      };
+      const options = {
+        database: createMockDatabaseManager(),
+        config: { directory, autoRun: true },
+        runtimeConfig,
+      };
+      const factory =
+        kind === 'migration'
+          ? createDatabaseMigratorMock
+          : createDatabaseSeederMock;
+      factory.mockImplementation(
+        ({ config }: { config: typeof runtimeConfig }) => {
+          expect(config.get('initialAdmin.username')).toBe('custom-admin');
+          expect(config.get('missing')).toBeUndefined();
+          return {
+            latest: async () => ({ executed: [], skipped: [], batch: 0 }),
+            run: async () => ({ executed: [], skipped: [] }),
+          };
+        },
+      );
+      if (kind === 'migration') await createAppMigrator(options).latest();
+      else await createAppSeeder(options).run();
+      expect(factory).toHaveBeenCalled();
+    },
+  );
+});

@@ -1,5 +1,35 @@
 # @nocobase/nb3-cli
 
+## 1.0.0-beta.11
+
+### Patch Changes
+
+- ea91af0: Load the application's TypeScript compiler through a file URL so full Skills synchronization works on Windows, and preserve compiler loading errors instead of reporting them as a missing installation.
+
+  Use directory junctions and normalize glob paths in the application template tests so they run on Windows without elevated symbolic-link privileges.
+
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- 8124b03: Mirror every synchronized skill into `.claude/skills/` as a relative symbolic link, so Claude Code discovers the skills an application's NocoBase packages ship. Claude Code reads only `~/.claude/skills/` and `<project>/.claude/skills/`, so a synchronized `.agents/skills/` was invisible to it while globally installed NocoBase 2 skills stayed available. Removing a package or a skill drops its link, application-owned entries are left alone, and a real directory occupying a `nocobase-` name is reported rather than overwritten. Ignore the generated mirror in the template and generated `.gitignore` files alongside `.agents/`.
+
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- 6e15911: Register all application plugins as production dependencies so they reach deployments, migrate legacy development declarations, and preserve declared version ranges when registering existing plugins.
+
+  Document plugin dependency placement and migration in the shared application development Skill.
+
+## 1.0.0-beta.8
+
+### Minor Changes
+
+- d86f6aa: Synchronize agent skills from direct NocoBase package dependencies with the new skills:sync command while preserving plugin:skills:sync compatibility, and share application development and upgrade skills through @nocobase/app-skills across all application templates.
+
+  Add package:remove to uninstall a NocoBase dependency and clean up its synchronized skills and ownership records, reusing plugin unregistration for plugin packages. Document the removal workflow in application templates and the shared development and upgrade skills.
+
 ## 1.0.0-beta.7
 
 ### Patch Changes

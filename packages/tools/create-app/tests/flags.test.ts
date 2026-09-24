@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { formatHelp, parseInput } from '../src/lib/flags.ts';
 
 describe('parseInput', () => {
+  it('installs and prompts by default, and accepts --json', async () => {
+    expect((await parseInput(['crm'])).flags).toMatchObject({
+      json: false,
+      install: true,
+    });
+    expect((await parseInput(['crm', '--json'])).flags).toMatchObject({
+      json: true,
+    });
+  });
+
+  /**
+   * Choosing a database is `config:init`'s job now, and it needs the driver installed first. Leaving the flag parsed
+   * but ignored would accept a command that silently did nothing about the database it named.
+   */
+  it('rejects the dialect flag, which creation no longer decides', async () => {
+    await expect(parseInput(['crm', '--dialect=postgres'])).rejects.toThrow();
+  });
   /**
    * `pnpm create @nocobase/app crm --template=hub` forwards everything after the package name verbatim, so this is the
    * exact argv the command receives in the documented invocation.
@@ -25,8 +42,7 @@ describe('parseInput', () => {
     expect(input.directory).toBeUndefined();
   });
 
-  /** The database is chosen in the generated application rather than here, so there is no flag for it. */
-  it('rejects the removed dialect flag', async () => {
+  it('rejects the long-removed database flag', async () => {
     await expect(
       parseInput(['crm', '--db-dialect=postgres']),
     ).rejects.toThrow();

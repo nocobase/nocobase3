@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { usePasswordReset } from '@nocobase/app-plugin-authentication/client/actions';
 import { useState, type FormEvent, type ReactElement } from 'react';
 
@@ -24,22 +25,32 @@ export interface PasswordResetAction {
   }) => Promise<void>;
 }
 
-export function PasswordResetForm({
-  action: actionOverride,
-  className,
-  token,
-  submitLabel = 'Reset password',
-  pendingLabel = 'Resetting…',
-}: PasswordResetFormProps): ReactElement {
+export function PasswordResetForm(
+  inputProps: PasswordResetFormProps,
+): ReactElement {
+  const { t } = useTranslation();
+  const {
+    action: actionOverride,
+    className,
+    token,
+    submitLabel = t('auth.resetTitle', { defaultValue: 'Reset password' }),
+    pendingLabel = t('auth.resetting', { defaultValue: 'Resetting…' }),
+  } = inputProps;
+
   const [confirmation, setConfirmation] = useState('');
   const [password, setPassword] = useState('');
-  const [validationError, setValidationError] = useState<string>();
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const validationError = passwordMismatch
+    ? t('auth.passwordMismatch', { defaultValue: "Passwords don't match." })
+    : undefined;
   const defaultAction = usePasswordReset();
   const action = actionOverride ?? defaultAction;
   const errorMessage =
     validationError ??
     (!token
-      ? 'This password reset link is invalid or has expired.'
+      ? t('auth.invalidResetLink', {
+          defaultValue: 'This password reset link is invalid or has expired.',
+        })
       : undefined) ??
     action.error?.message;
 
@@ -47,17 +58,19 @@ export function PasswordResetForm({
     event.preventDefault();
     if (!token) return;
     if (password !== confirmation) {
-      setValidationError("Passwords don't match.");
+      setPasswordMismatch(true);
       return;
     }
-    setValidationError(undefined);
+    setPasswordMismatch(false);
     void action.submit({ password, token });
   };
 
   return (
     <form className={className ?? 'space-y-5'} onSubmit={handleSubmit}>
       <div className='space-y-2'>
-        <Label htmlFor='new-password'>New password</Label>
+        <Label htmlFor='new-password'>
+          {t('auth.newPassword', { defaultValue: 'New password' })}
+        </Label>
         <Input
           id='new-password'
           autoComplete='new-password'
@@ -69,7 +82,11 @@ export function PasswordResetForm({
         />
       </div>
       <div className='space-y-2'>
-        <Label htmlFor='confirm-new-password'>Confirm new password</Label>
+        <Label htmlFor='confirm-new-password'>
+          {t('auth.confirmNewPassword', {
+            defaultValue: 'Confirm new password',
+          })}
+        </Label>
         <Input
           id='confirm-new-password'
           autoComplete='new-password'
@@ -92,12 +109,12 @@ export function PasswordResetForm({
       </Button>
       <div className='pt-3 text-sm'>
         <p className='text-center text-muted-foreground'>
-          Return to{' '}
+          {t('auth.returnTo', { defaultValue: 'Return to' })}{' '}
           <a
             className='font-semibold text-foreground underline underline-offset-4'
             href='login'
           >
-            sign in
+            {t('auth.signInLink', { defaultValue: 'sign in' })}
           </a>
         </p>
       </div>

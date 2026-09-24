@@ -19,7 +19,6 @@ Your business code lives in your own source. This section is organized by topic 
 - [API endpoints](./server-routes) — Write an endpoint, and control who may call it.
 - [Reading and writing data](./database) — Query, write, and transactions.
 - [Schema changes](./migrations) — Add and alter columns, and prepare initial data.
-- [Services and background jobs](./services-and-jobs) — Scheduled work and long-running work.
 - [Configuration](./configuration) — Where the database address, secrets and the rest live.
 - [Internationalization](./i18n) — Make every user-visible string translatable.
 - [Testing](./testing) — Where tests live, and what to verify after a change.

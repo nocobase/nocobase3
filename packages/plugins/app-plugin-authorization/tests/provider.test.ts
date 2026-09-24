@@ -15,6 +15,8 @@ vi.mock('../server/authorization.js', async (importOriginal) => {
 });
 
 import { AuthorizationProvider } from '../server/providers/authorization.js';
+import type { AuthorizationConfig } from '../server/authorization.js';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import { authorizationToken } from '../server/tokens.js';
 
 describe('authorization provider', () => {
@@ -23,6 +25,7 @@ describe('authorization provider', () => {
   });
 
   it('registers authorization with the service-container database', () => {
+    const plugins = [{ name: 'test-rule' } as AuthorizationPlugin];
     const connection = { kind: 'connection' };
     const database = {
       connection: vi.fn(() => connection),
@@ -31,6 +34,7 @@ describe('authorization provider', () => {
     container.instance(databaseManagerToken, database);
     const provider = new AuthorizationProvider({
       container,
+      config: appConfig({ plugins }),
     });
 
     provider.register();
@@ -38,11 +42,26 @@ describe('authorization provider', () => {
 
     expect(provider.name).toBe('@nocobase/app-plugin-authorization');
     expect(createAppAuthorization).toHaveBeenCalledExactlyOnceWith({
+      database,
       connection,
+      config: { plugins },
       onAuthenticatedPermissionsChanged: expect.any(Function),
       onUserPermissionsChanged: expect.any(Function),
     });
     expect(authorization).toBe(createAppAuthorization.mock.results[0]?.value);
+  });
+
+  it('passes no configuration when the application declares none', () => {
+    const container = new ServiceContainer();
+    const provider = new AuthorizationProvider({
+      container,
+      config: appConfig(undefined),
+    });
+
+    provider.register();
+    container.resolve(authorizationToken);
+
+    expect(createAppAuthorization.mock.calls[0]?.[0]?.config).toBeUndefined();
   });
 
   it('publishes targeted and global permission invalidations', async () => {
@@ -56,7 +75,10 @@ describe('authorization provider', () => {
       .mockReturnValueOnce({ publishFor, close: closeUser })
       .mockReturnValueOnce({ publish, close: closeGlobal });
     container.instance(realtimeServiceToken, { defineTopic } as never);
-    const provider = new AuthorizationProvider({ container });
+    const provider = new AuthorizationProvider({
+      container,
+      config: appConfig(undefined),
+    });
 
     provider.register();
     container.resolve(authorizationToken);
@@ -75,3 +97,7 @@ describe('authorization provider', () => {
     expect(closeGlobal).toHaveBeenCalledOnce();
   });
 });
+
+function appConfig(authorization: AuthorizationConfig | undefined) {
+  return { get: vi.fn(() => authorization) };
+}

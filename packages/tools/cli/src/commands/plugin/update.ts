@@ -138,7 +138,12 @@ export default class PluginUpdate extends Command {
         appRoot,
       });
       const synced = await applySkillsSync(
-        await planSkillsSync({ appPackageName, appRoot, plugins }),
+        await planSkillsSync({
+          appPackageName,
+          appRoot,
+          plugins,
+          pruneMissingPackages: true,
+        }),
       );
       if (flags.json) {
         this.logJson(

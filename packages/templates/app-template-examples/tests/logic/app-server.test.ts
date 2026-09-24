@@ -1,7 +1,6 @@
 import { createApp } from '../../server/app.js';
 import authConfig from '../../server/config/auth.js';
 // @vitest-environment node
-import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 import { analyticsRoutes } from '../../server/routes/analytics.ts';
 import { externalCrmRoutes } from '../../server/routes/external-crm.ts';
@@ -34,7 +33,7 @@ import {
   SessionProvider,
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   type AppIdentityConfig,
   type AppConfigAccessor,
@@ -191,6 +190,7 @@ describe('app server', () => {
     const app = createTestApp({
       plugins: [
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-test',
           serviceProviders: [TestPluginProvider],
         }),
@@ -206,6 +206,7 @@ describe('app server', () => {
     const app = createTestApp({
       plugins: [
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-test',
           routes: [
             defineApiRoutes((application) => {
@@ -340,9 +341,7 @@ describe('app server', () => {
             route !== numericExamplesRoutes,
         ),
         serviceProviders: [
-          ...appRuntime.serviceProviders.filter(
-            (provider) => provider !== ArticlesProvider,
-          ),
+          ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
         ],
       },
@@ -352,6 +351,7 @@ describe('app server', () => {
       ...resolvedRuntime,
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-runtime-test',
           serviceProviders: [TestRuntimePluginProvider],
         }),
@@ -746,35 +746,61 @@ describe('app server', () => {
     });
   });
 
-  it('redirects HTML navigation to installation in install mode', async () => {
-    vi.stubEnv('APP_BASE_PATH', '/main');
-    vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
-    const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/html; charset=utf-8');
-      response.end('<main>installation page</main>');
-    });
+  it('serves Users and API Keys with the application authentication and permissions', async () => {
     const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl }),
+      await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
+    const baseUrl = `http://localhost${app.application.publicBasePath}`;
+    const anonymous = await requestApp(app, `${baseUrl}/api/users`);
+    expect(anonymous.status).toBe(401);
 
-    const redirectResponse = await requestApp(app, 'http://localhost/main/', {
-      headers: { Accept: 'text/html' },
-    });
-    expect(redirectResponse.status).toBe(302);
-    expect(redirectResponse.headers.get('Location')).toBe('/main/install');
-
-    const installResponse = await requestApp(
+    const signIn = await requestApp(
       app,
-      'http://localhost/main/install',
+      `${baseUrl}/api/auth/sign-in/username`,
       {
-        headers: { Accept: 'text/html' },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
       },
     );
-    expect(installResponse.status).toBe(200);
-    expect(installResponse.headers.get('Location')).toBeNull();
-    await expect(installResponse.text()).resolves.toContain(
-      'installation page',
+    expect(signIn.status).toBe(200);
+    const cookie = signIn.headers
+      .getSetCookie()
+      .map((header) => header.split(';')[0])
+      .join('; ');
+    const users = await requestApp(app, `${baseUrl}/api/users`, {
+      headers: { cookie },
+    });
+    expect(users.status).toBe(200);
+    const created = await requestApp(
+      app,
+      `${baseUrl}/api/auth/api-key/create`,
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'template-integration' }),
+      },
     );
+    expect(created.status).toBe(200);
+    const key = (await created.json()) as { id: string; key: string };
+    const authenticated = await requestApp(app, `${baseUrl}/api/users`, {
+      headers: { 'x-api-key': key.key },
+    });
+    expect(authenticated.status).toBe(200);
+    const revoked = await requestApp(
+      app,
+      `${baseUrl}/api/auth/api-key/delete`,
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ keyId: key.id }),
+      },
+    );
+    expect(revoked.status).toBe(200);
+    const rejected = await requestApp(app, `${baseUrl}/api/users`, {
+      headers: { 'x-api-key': key.key },
+    });
+    expect(rejected.status).toBe(401);
   });
 
   it('dispatches jobs from enabled app plugins', async () => {
@@ -1325,7 +1351,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
   const config = createTestConfig(configValues);
-  const paths = createConfigPaths({ rootDir: '/test/app-template-examples' });
+  const paths = createAppPaths({ rootDir: '/test/app-template-examples' });
   const database =
     options.database === false
       ? undefined
@@ -1392,6 +1418,7 @@ function createResolvedTestServerPlugins(
         packageName: definition.packageName,
         version: 'test',
         rootDir: `/test/plugins/${definition.packageName}`,
+        baseDir: definition.baseDir,
         jobLocations: [],
       },
     })),
@@ -1528,7 +1555,7 @@ function createEmbeddedPluginFixture(rootDir: string): void {
       ...packageName.split('/'),
     );
     mkdirSync(path.dirname(target), { recursive: true });
-    symlinkSync(packageRoot, target, 'dir');
+    symlinkSync(packageRoot, target, 'junction');
   }
 }
 

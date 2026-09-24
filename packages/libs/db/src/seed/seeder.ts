@@ -1,3 +1,11 @@
+import {
+  collectChecksumMismatches,
+  describeChecksumMismatch,
+  upgradeTaskChecksums,
+  writeTaskChecksums,
+  type ChecksumMismatch,
+} from '../migration/checksum-history.js';
+import { createMigrationConnection } from '../migration/internal/context.js';
 import { createSeedContext } from './internal/context.js';
 import {
   DEFAULT_SEED_TABLE,
@@ -6,18 +14,39 @@ import {
   recordSeedCompleted,
 } from './internal/history.js';
 import { DEFAULT_SEED_LOCK_TABLE, withSeedLock } from './internal/lock.js';
+import {
+  readTaskLockState,
+  releaseTaskLock,
+} from '../migration/internal/lock.js';
 import { loadSeeds } from './loader.js';
 import type {
   CreateSeederOptions,
   LoadedSeed,
   SeedHistoryRecord,
+  SeedRepairOptions,
+  SeedRepairResult,
   SeedRunResult,
 } from './types.js';
+import type {
+  MigrationConnection,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
+} from '../migration/types.js';
 
 /** Executes pending seed definitions for one database connection. */
 export interface Seeder {
   /** Executes every seed that has no matching history record. */
   run(): Promise<SeedRunResult>;
+  /**
+   * Rewrites recorded checksums to match the current sources, clearing drift
+   * reported by a run. Executes no seed and changes no data.
+   */
+  repair(options?: SeedRepairOptions): Promise<SeedRepairResult>;
+  /** The seed lock as it stands, or undefined when no run holds it. */
+  lock(): Promise<TaskLockState | undefined>;
+  /** Releases the seed lock; an active one needs `force`. */
+  unlock(options?: TaskLockReleaseOptions): Promise<TaskLockReleaseResult>;
 }
 
 /** Creates a seed runner backed by the supplied database manager. */
@@ -28,17 +57,47 @@ export function createSeeder(options: CreateSeederOptions): Seeder {
 class DefaultSeeder implements Seeder {
   constructor(private readonly options: CreateSeederOptions) {}
 
+  async lock(): Promise<TaskLockState | undefined> {
+    return readTaskLockState(this.lockConnection(), this.lockTableName());
+  }
+
+  async unlock(
+    options: TaskLockReleaseOptions = {},
+  ): Promise<TaskLockReleaseResult> {
+    return releaseTaskLock(
+      this.lockConnection(),
+      this.lockTableName(),
+      options,
+    );
+  }
+
+  private lockConnection(): MigrationConnection {
+    return createMigrationConnection(
+      this.options.database.connection(this.options.connection),
+    );
+  }
+
+  private lockTableName(): string {
+    return this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE;
+  }
+
   async run(): Promise<SeedRunResult> {
     const connection = this.options.database.connection(
       this.options.connection,
     );
     const seeds = await loadSeeds(this.options);
-    const seedConnection = createSeedContext(connection).connection;
+    const seedConnection = createSeedContext(
+      connection,
+      this.options.config,
+      this.options.container,
+    ).connection;
 
     return withSeedLock(
       seedConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureSeedTable(
@@ -50,7 +109,13 @@ class DefaultSeeder implements Seeder {
           seedConnection,
           this.options.tableName,
         );
-        validateAppliedSeedHistory(seeds, history);
+        const warnings = this.validateAppliedHistory(seeds, history);
+        await upgradeTaskChecksums(
+          seedConnection,
+          this.options.tableName ?? DEFAULT_SEED_TABLE,
+          seeds,
+          history,
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = seeds.filter((seed) => !appliedNames.has(seed.name));
@@ -64,9 +129,50 @@ class DefaultSeeder implements Seeder {
           executed.push(seed.name);
         }
 
-        return { executed, skipped };
+        return { executed, skipped, warnings };
       },
     );
+  }
+
+  async repair(options: SeedRepairOptions = {}): Promise<SeedRepairResult> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const tableName = this.options.tableName ?? DEFAULT_SEED_TABLE;
+    const seeds = await loadSeeds(this.options);
+    const seedConnection = createMigrationConnection(connection);
+
+    return withSeedLock(
+      seedConnection,
+      {
+        tableName: this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
+      },
+      async () => {
+        await ensureSeedTable(seedConnection, tableName);
+        const history = await readSeedHistory(
+          seedConnection,
+          this.options.tableName,
+        );
+        const repaired = collectChecksumMismatches(seeds, history);
+        if (!options.dryRun)
+          await writeTaskChecksums(seedConnection, tableName, repaired);
+        return { repaired, dryRun: options.dryRun === true };
+      },
+    );
+  }
+
+  /** Applies the configured policy to executed seeds whose source has changed. */
+  private validateAppliedHistory(
+    seeds: LoadedSeed[],
+    history: SeedHistoryRecord[],
+  ): ChecksumMismatch[] {
+    const mismatches = collectChecksumMismatches(seeds, history);
+    if (this.options.onChecksumMismatch === 'error' && mismatches.length) {
+      throw new Error(describeChecksumMismatch(mismatches[0], 'seed'));
+    }
+    return mismatches;
   }
 
   private async runSeed(
@@ -75,7 +181,11 @@ class DefaultSeeder implements Seeder {
   ): Promise<void> {
     const mode = loaded.seed.transaction ?? 'auto';
     if (mode === false) {
-      const context = createSeedContext(connection);
+      const context = createSeedContext(
+        connection,
+        this.options.config,
+        this.options.container,
+      );
       const startedAt = Date.now();
       await loaded.seed.run(context);
       await recordSeedCompleted(context.connection, {
@@ -89,7 +199,11 @@ class DefaultSeeder implements Seeder {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createSeedContext(trxConnection);
+      const context = createSeedContext(
+        trxConnection,
+        this.options.config,
+        this.options.container,
+      );
       const startedAt = Date.now();
       await loaded.seed.run(context);
       await recordSeedCompleted(context.connection, {
@@ -100,23 +214,5 @@ class DefaultSeeder implements Seeder {
         durationMs: Date.now() - startedAt,
       });
     });
-  }
-}
-
-function validateAppliedSeedHistory(
-  seeds: LoadedSeed[],
-  history: SeedHistoryRecord[],
-): void {
-  const historyByName = new Map(history.map((record) => [record.name, record]));
-  for (const seed of seeds) {
-    const record = historyByName.get(seed.name);
-    if (!record) {
-      continue;
-    }
-    if (record.checksum !== seed.checksum) {
-      throw new Error(
-        `Executed seed "${record.name}" checksum changed. Package: "${record.packageName}".`,
-      );
-    }
   }
 }

@@ -48,6 +48,7 @@ it('builds a business attachment feature from the shipped Skill and materialized
     for (const name of [
       '@nocobase/app-plugin-file',
       '@nocobase/app-client',
+      '@nocobase/i18n',
       '@nocobase/app-server',
       '@nocobase/db',
       '@nocobase/db-sqlite',
@@ -64,6 +65,7 @@ it('builds a business attachment feature from the shipped Skill and materialized
       'lucide-react',
       'react-markdown',
       'remark-gfm',
+      '@silurus/ooxml',
       'hono',
       'tsx',
     ]) {

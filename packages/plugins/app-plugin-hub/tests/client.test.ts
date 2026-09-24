@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Boxes, ShieldCheck } from 'lucide-react';
+import { Boxes, ShieldCheck, KeyRound } from 'lucide-react';
 
 import hub from '../client/plugin.js';
 import {
+  defaultHubDetailTab,
   emptyHubCapabilities,
   visibleHubDetailTabs,
 } from '../client/permissions.js';
@@ -16,12 +17,12 @@ import {
 describe('@nocobase/app-plugin-hub', () => {
   it('declares the authenticated Hub page and lazy-loads it', async () => {
     expect(routes.parent).toBe('app');
-    expect(routes.routes).toHaveLength(1);
+    expect(routes.routes).toHaveLength(2);
     expect(routes.routes[0]).toMatchObject({
       name: 'hub',
       path: '/hub',
       auth: 'required',
-      access: { resource: 'hub', action: 'access' },
+      authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
       navigation: { title: 'navigation.applications', icon: Boxes },
     });
     await expect(routes.routes[0]?.componentLoader?.()).resolves.toMatchObject({
@@ -34,6 +35,7 @@ describe('@nocobase/app-plugin-hub', () => {
       routes.routes[0]?.children?.[0]?.children?.map((route) => route.path),
     ).toEqual([
       'deployments',
+      'logs',
       'releases',
       'development',
       'resources',
@@ -54,10 +56,10 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual(['deployments', 'releases']);
+    ).toEqual(['deployments']);
   });
 
-  it('shows Resources and settings only when their actions are granted', () => {
+  it('hides unfinished Resources while keeping authorized Configuration and Settings', () => {
     const permissions = {
       ...emptyHubCapabilities(),
       'read-release': true,
@@ -68,13 +70,43 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual([
-      'deployments',
-      'releases',
-      'resources',
-      'configuration',
-      'settings',
-    ]);
+    ).toEqual(['deployments', 'configuration', 'settings']);
+  });
+
+  it('chooses lifecycle defaults independently of display order and respects access', () => {
+    const permissions = {
+      ...emptyHubCapabilities(),
+      'upload-release': true,
+      'read-release': true,
+      'read-deployment': true,
+    };
+    expect(
+      defaultHubDetailTab({ hasReleases: false, deployed: false }, permissions),
+    ).toBe('deployments');
+    expect(
+      defaultHubDetailTab({ hasReleases: true, deployed: false }, permissions),
+    ).toBe('deployments');
+    expect(
+      defaultHubDetailTab({ hasReleases: true, deployed: true }, permissions),
+    ).toBe('deployments');
+    expect(
+      defaultHubDetailTab(
+        { hasReleases: true, deployed: true },
+        { ...permissions, 'read-deployment': false },
+      ),
+    ).toBe('deployments');
+    expect(
+      defaultHubDetailTab(
+        { hasReleases: false, deployed: false },
+        { ...permissions, 'upload-release': false },
+      ),
+    ).toBe('deployments');
+    expect(
+      defaultHubDetailTab(
+        { hasReleases: true, deployed: true },
+        emptyHubCapabilities(),
+      ),
+    ).toBeUndefined();
   });
 
   it('can expose a Hub console with applications and read-only roles', async () => {
@@ -88,14 +120,23 @@ describe('@nocobase/app-plugin-hub', () => {
         {
           name: 'hub',
           path: '/apps',
-          access: { resource: 'hub', action: 'access' },
+          authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
           navigation: { title: 'navigation.applications', icon: Boxes },
         },
         {
           name: 'hub-roles',
           path: '/roles',
-          access: { resource: 'users', action: 'access' },
+          authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
           navigation: { title: 'navigation.roles', icon: ShieldCheck },
+        },
+        {
+          name: 'hub-api-keys',
+          path: '/api-keys',
+          authz: {
+            resource: { type: 'hub.app', id: '*' },
+            action: 'manage-api-keys',
+          },
+          navigation: { title: 'navigation.apiKeys', icon: KeyRound },
         },
       ],
     });

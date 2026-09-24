@@ -28,16 +28,20 @@ Physical Schema
 const orders = await connection.collections.get('orders');
 ```
 
-Migration 的 context、`transaction()` 回调和测试 setup 都已经持有 `connection`，直接用它。从 Manager 起手时用 `db.collections(name?)`，它返回的就是 `db.connection(name).collections` 这同一个对象：
+`transaction()` 回调和测试 setup 都已经持有 `connection`，直接用它。从 Manager 起手时用 `db.collections(name?)`，它返回的就是 `db.connection(name).collections` 这同一个对象：
 
 ```ts
 const orders = await db.collections().get('orders');
 const events = await db.collections('analytics').get('events');
 ```
 
+Migration 和 Seed 的 context 不在此列。它们的 `connection` 是 `createMigrationConnection()` 构造的独立对象，只有 `name`、`driver`、`dialect`、`capabilities` 和 `client()`，没有 `collections`，也没有 `collectionMetadata`。这与 Migration 必须自包含一致：当前解析出的 Collection 是一个会继续变化的形状，不能成为一份已经在别处执行过的历史记录所依赖的东西。
+
 返回 `CollectionDefinition | undefined`。物理表不存在时返回 `undefined`，即使 Metadata Store 里存有同名文档——物理 Schema 是 Collection 是否存在的唯一依据，Metadata 只能补充已存在的对象。
 
 返回值是一份深拷贝。修改它不会影响缓存，也不会写回数据库：改结构用 Builder，改补充信息用 Metadata Service。
+
+Collection reads require the logical name. If an input resolves to a table owned by a different logical Collection, the read fails with `COLLECTION_NAME_CONFLICT` and identifies the expected name instead of returning fields without their metadata. Explicit logical names containing underscores remain valid; tables without metadata can still be read by their inferred logical names.
 
 ### 三个读取入口
 

@@ -3,20 +3,36 @@ import { describe, expect, it } from 'vitest';
 import routes from '../client/routes.ts';
 
 const expectedDemoRoutes = [
-  ['ai-chat-window', '/chat', 'Chat window'],
-  ['ai-floating-chat', '/floating', 'Floating chat'],
-  ['ai-employee-tasks', '/tasks', 'Employee tasks'],
-  ['ai-page-context', '/context', 'Page context'],
-  ['ai-tool-cards', '/tools', 'Tool cards'],
+  ['ai-chat-window', '/chat', 'demo.navigation.chat'],
+  ['ai-floating-chat', '/floating', 'demo.navigation.floating'],
+  ['ai-employee-tasks', '/tasks', 'demo.navigation.tasks'],
+  ['ai-page-context', '/context', 'demo.navigation.context'],
+  ['ai-tool-cards', '/tools', 'demo.navigation.tools'],
 ] as const;
 
 describe('AI Employee client routes', () => {
+  // Loading a page module transforms its whole import graph on first use, which can outlast the default 5 s timeout
+  // when a release runner runs every package's tests at once.
   it('contributes settings and one development-only AI Components group', async () => {
     const [settingsContribution, devContribution] = routes;
 
     expect(settingsContribution).toMatchObject({
       parent: 'settings',
-      routes: [{ name: 'ai', path: '/ai' }],
+      routes: [
+        {
+          name: 'aiGroup',
+          navigation: { title: 'AI' },
+          children: [
+            { name: 'ai', path: '/ai' },
+            { name: 'aiSkills', path: '/ai/skills' },
+            { name: 'aiTools', path: '/ai/tools' },
+            { name: 'aiConversations', path: '/ai/conversations' },
+            { name: 'aiLLMServices', path: '/ai/llm-services' },
+            { name: 'aiMCPServices', path: '/ai/mcp-services' },
+            { name: 'aiSettings', path: '/ai/settings' },
+          ],
+        },
+      ],
     });
     expect(devContribution).toMatchObject({
       parent: 'dev',
@@ -24,7 +40,7 @@ describe('AI Employee client routes', () => {
         {
           name: 'ai-components',
           path: '/ai-components',
-          navigation: { title: 'AI Components' },
+          navigation: { title: 'demo.navigation.group' },
           children: expectedDemoRoutes.map(([name, path, title]) => ({
             name,
             path,
@@ -34,6 +50,22 @@ describe('AI Employee client routes', () => {
         },
       ],
     });
+
+    if (settingsContribution?.parent !== 'settings') {
+      throw new Error('Missing AI Employee Settings Route contribution.');
+    }
+    const settingsPages = await Promise.all(
+      (settingsContribution.routes[0]?.children ?? []).map((route) => {
+        if (!route.componentLoader) {
+          throw new Error(`Missing settings page loader: ${route.name}`);
+        }
+        return route.componentLoader();
+      }),
+    );
+    expect(settingsPages).toHaveLength(7);
+    for (const page of settingsPages) {
+      expect(page.default).toEqual(expect.any(Function));
+    }
 
     if (devContribution?.parent !== 'dev') {
       throw new Error('Missing AI Employee Dev Route contribution.');
@@ -55,5 +87,5 @@ describe('AI Employee client routes', () => {
     for (const page of loadedPages) {
       expect(page.default).toEqual(expect.any(Function));
     }
-  });
+  }, 30_000);
 });

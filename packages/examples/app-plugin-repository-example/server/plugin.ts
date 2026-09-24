@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -6,6 +8,7 @@ import {
 import routes from './routes/index.js';
 
 const repositoryExamplePlugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-repository-example',
   routes,
   database: {

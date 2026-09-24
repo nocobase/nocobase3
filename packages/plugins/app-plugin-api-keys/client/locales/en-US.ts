@@ -1,6 +1,7 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  'common.close': 'Close',
   nav: { apiKeys: 'API keys' },
   page: {
     title: 'API keys',

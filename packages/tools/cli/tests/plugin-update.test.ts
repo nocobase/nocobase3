@@ -193,6 +193,7 @@ async function writeRegisteredPlugins(
       createRequire(import.meta.url).resolve('typescript/package.json'),
     ),
     path.join(appRoot, 'node_modules/typescript'),
+    'junction',
   );
   await writeFile(
     path.join(appRoot, 'server/plugins.ts'),

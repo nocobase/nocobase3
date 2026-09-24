@@ -1,8 +1,5 @@
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { PageContainer } from '../components/page-container.js';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
   useCallback,
@@ -14,7 +11,7 @@ import {
 import { useNavigate, useOutlet, useResolvedPath } from 'react-router';
 
 import type { ApiResponse, AppPageResponse } from './hub/types.js';
-import { ErrorBanner } from './hub/shared.js';
+import { ErrorNotification } from './hub/shared.js';
 import { Catalog, CreateDialog } from './hub/catalog.js';
 import { readError, type ReadableError } from './hub/utils.js';
 import {
@@ -30,7 +27,7 @@ export default function HubPage(): ReactElement {
 }
 
 export function ApplicationsCatalog(): ReactElement {
-  const client = useService(apiClientToken);
+  const client = useApiClient();
   const authorization = useService(authorizationClientToken);
   const navigate = useNavigate();
   const parentPath = useResolvedPath('.');
@@ -130,6 +127,8 @@ export function ApplicationsCatalog(): ReactElement {
     void navigate(`${parentPath.pathname}/${encodeURIComponent(appId)}`);
   };
   const createApp = async (): Promise<void> => {
+    if (!newAppName.trim() || !/^(?!__)[A-Za-z0-9_-]+$/.test(newAppId) || busy)
+      return;
     setBusy(true);
     setError(undefined);
     try {
@@ -150,10 +149,13 @@ export function ApplicationsCatalog(): ReactElement {
     }
   };
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
-      <div className='mx-auto max-w-[1400px] px-5 py-8 sm:px-8'>
+    <main className='min-h-[calc(100svh-4rem)] bg-background [&_button:not(:disabled)]:cursor-pointer'>
+      <PageContainer>
         {error ? (
-          <ErrorBanner error={error} onClose={() => setError(undefined)} />
+          <ErrorNotification
+            error={error}
+            onClose={() => setError(undefined)}
+          />
         ) : null}
         <Catalog
           apps={apps}
@@ -180,7 +182,7 @@ export function ApplicationsCatalog(): ReactElement {
           onSelect={goToApp}
           onPage={(page) => setPagination((current) => ({ ...current, page }))}
         />
-      </div>
+      </PageContainer>
       {createOpen && capabilities.create ? (
         <CreateDialog
           busy={busy}

@@ -1,7 +1,13 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { useCanWithoutCache } from '@refinedev/core';
+import {
+  useAuthorizationRevision,
+  useAuthorizationClient,
+  type AuthorizationCheck,
+} from '@nocobase/app-plugin-authorization/client';
 import { useEffect, useMemo, useState } from 'react';
 import { matchPath, matchRoutes, type RouteObject } from 'react-router';
+
+import { EMPTY_ARRAY } from '@/lib/constants';
 
 export interface RouteNavigationItem {
   readonly route: AppClientRegisteredRoute;
@@ -14,7 +20,10 @@ export function buildRouteNavigation(
 ): RouteNavigationItem[] {
   return routes.flatMap((route) => {
     if (denied.has(routeKey(route))) return [];
-    const children = buildRouteNavigation(route.children ?? [], denied);
+    const children = buildRouteNavigation(
+      route.children ?? EMPTY_ARRAY,
+      denied,
+    );
     return route.navigation && (route.componentLoader || children.length)
       ? [{ route, children }]
       : children;
@@ -27,9 +36,8 @@ export function selectedNavigationId(
   denied: ReadonlySet<string> = new Set(),
 ): string | undefined {
   const matches = matchRouteTree(routes, pathname);
-  const visible = new Set(
-    navigationPages(buildRouteNavigation(routes, denied)).map(routeKey),
-  );
+  const pages = navigationPages(buildRouteNavigation(routes, denied));
+  const visible = new Set(pages.map(routeKey));
   const selected =
     matches
       ?.map(({ route }) => route)
@@ -42,7 +50,7 @@ export function selectedNavigationId(
       ) ??
     (matches
       ? undefined
-      : navigationPages(buildRouteNavigation(routes, denied))
+      : pages
           .filter((route) =>
             matchPath({ path: route.path, end: false }, pathname),
           )
@@ -61,43 +69,35 @@ export function navigationPages(
 
 export function useRouteNavigation(
   routes: readonly AppClientRegisteredRoute[],
-  surface = false,
 ) {
-  const { can } = useCanWithoutCache();
+  const client = useAuthorizationClient();
+  // Recheck mounted menus after session or realtime permission invalidation.
+  const revision = useAuthorizationRevision();
   const guards = useMemo(() => {
     const collect = (
       nodes: readonly AppClientRegisteredRoute[],
-      hasPageAncestor = false,
-    ): { id: string; resource: string; action: string }[] =>
+    ): { id: string; check: AuthorizationCheck }[] =>
       nodes.flatMap((route) => [
-        ...(route.componentLoader &&
-        route.auth === 'required' &&
-        (route.access || (!surface && !hasPageAncestor))
-          ? [
-              {
-                id: routeKey(route),
-                ...(route.access ?? { resource: route.name, action: 'access' }),
-              },
-            ]
+        ...(route.componentLoader && route.authz !== 'skip'
+          ? [{ id: routeKey(route), check: route.authz }]
           : []),
-        ...collect(
-          route.children ?? [],
-          hasPageAncestor || Boolean(route.componentLoader),
-        ),
+        ...collect(route.children ?? EMPTY_ARRAY),
       ]);
     return collect(routes);
-  }, [routes, surface]);
+  }, [routes]);
   const [result, setResult] = useState<{
+    client: typeof client;
     guards: typeof guards;
+    revision: number;
     denied: ReadonlySet<string>;
   }>();
   useEffect(() => {
-    if (!can || !guards.length) return;
+    if (!guards.length) return;
     let active = true;
     void Promise.all(
-      guards.map(async ({ id, resource, action }) => {
+      guards.map(async ({ id, check }) => {
         try {
-          return (await can({ resource, action })).can ? undefined : id;
+          return (await client.can(check)) ? undefined : id;
         } catch {
           return id;
         }
@@ -105,19 +105,25 @@ export function useRouteNavigation(
     ).then((ids) => {
       if (active)
         setResult({
+          client,
           guards,
+          revision,
           denied: new Set(ids.filter((id) => id !== undefined)),
         });
     });
     return () => {
       active = false;
     };
-  }, [can, guards]);
-  const loading = Boolean(can && guards.length && result?.guards !== guards);
-  const denied =
-    can && guards.length
-      ? (result?.denied ?? new Set<string>())
-      : new Set<string>();
+  }, [client, guards, revision]);
+  const loading = Boolean(
+    guards.length &&
+    (result?.client !== client ||
+      result.guards !== guards ||
+      result.revision !== revision),
+  );
+  const denied = guards.length
+    ? (result?.denied ?? new Set<string>())
+    : new Set<string>();
   return {
     loading,
     items: loading ? [] : buildRouteNavigation(routes, denied),
@@ -133,7 +139,7 @@ export function matchRouteTree(
     nodes.map((route) => ({
       path: route.path,
       handle: route,
-      children: toMatch(route.children ?? []),
+      children: toMatch(route.children ?? EMPTY_ARRAY),
     }));
   return matchRoutes(toMatch(routes), pathname)?.map((match) => ({
     ...match,

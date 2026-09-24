@@ -16,6 +16,6 @@ export function createLCCheckpointBlobCollection(
         name: 'pk_lc_checkpoint_blobs',
       });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

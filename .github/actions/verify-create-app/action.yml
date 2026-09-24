@@ -1,7 +1,7 @@
 name: Verify create-app
 description: >-
-  Publishes packages to a throwaway registry, generates an application with create-app, and checks dev, build, and
-  production start. Fails the run before anything reaches the real registry.
+  Publishes packages to a throwaway registry, generates Default, Examples, and Hub applications with create-app, and checks test,
+  dev, build, and production start. Fails the run before anything reaches the real registry.
 
 inputs:
   port:
@@ -13,16 +13,56 @@ inputs:
   local-packages-only:
     description: Disable upstream resolution for workspace packages so PRs test their own artifacts at committed versions.
     default: 'false'
+  template-kind:
+    description: Template to verify (default, examples, hub, or all).
+    default: all
+  package-artifacts:
+    description: Directory containing the complete set of tarballs produced by pack:check. Empty uses changeset publish.
+    default: ''
+  source-directory:
+    description: Checkout containing the package versions being verified, relative to the workflow workspace.
+    default: '.'
 
 runs:
   using: composite
   steps:
+    - name: Validate smoke-test inputs and package artifacts
+      shell: bash
+      working-directory: ${{ inputs.source-directory }}
+      env:
+        ARTIFACTS: ${{ inputs.package-artifacts }}
+        LOCAL_PACKAGES_ONLY: ${{ inputs.local-packages-only }}
+        PORT: ${{ inputs.port }}
+        TEMPLATE_KIND: ${{ inputs.template-kind }}
+      run: |
+        set -euo pipefail
+        case "$TEMPLATE_KIND" in
+          all|default|examples|hub) ;;
+          *)
+            echo "::error::template-kind must be all, default, examples, or hub; received '$TEMPLATE_KIND'"
+            exit 2
+            ;;
+        esac
+
+        if [ -n "$ARTIFACTS" ]; then
+          if [ "$LOCAL_PACKAGES_ONLY" != 'true' ]; then
+            echo "::error::package-artifacts requires local-packages-only=true so missing packages cannot resolve upstream"
+            exit 2
+          fi
+          node "$GITHUB_WORKSPACE/scripts/publish-pack-artifacts.mjs" \
+            --artifacts "$ARTIFACTS" \
+            --repo-root "$PWD" \
+            --registry "http://localhost:$PORT/" \
+            --validate-only
+        fi
+
     # The registry runs as a plain container rather than a job service so it can be handed a configuration file. A
     # service container has no way to mount one, and the alternative — starting it with the defaults and rewriting the
     # configuration through docker exec afterwards — keeps the settings that matter somewhere other than the file that
     # describes them.
     - name: Start the throwaway registry
       shell: bash
+      working-directory: ${{ inputs.source-directory }}
       env:
         PORT: ${{ inputs.port }}
         LOCAL_PACKAGES_ONLY: ${{ inputs.local-packages-only }}
@@ -31,10 +71,10 @@ runs:
         CONFIG="$GITHUB_WORKSPACE/.github/verdaccio/config.yaml"
         if [ "$LOCAL_PACKAGES_ONLY" = 'true' ]; then
           CONFIG="$RUNNER_TEMP/smoke-verdaccio.yaml"
-          node scripts/smoke-registry-config.mjs > "$CONFIG"
+          node "$GITHUB_WORKSPACE/scripts/smoke-registry-config.mjs" > "$CONFIG"
         fi
         docker run -d --name release-verdaccio \
-          -p "$PORT:4873" \
+          -p "127.0.0.1:$PORT:4873" \
           -v "$CONFIG:/verdaccio/conf/config.yaml:ro" \
           verdaccio/verdaccio:5
 
@@ -58,6 +98,7 @@ runs:
     # token when the credentials are presented. Sending them always covers both without branching on the status.
     - name: Authenticate against the throwaway registry
       shell: bash
+      working-directory: ${{ inputs.source-directory }}
       env:
         PORT: ${{ inputs.port }}
       run: |
@@ -111,7 +152,9 @@ runs:
     # --no-git-tag because the tags belong to the real publish. Creating them here would leave the second publish
     # trying to create tags that already exist.
     - name: Publish packages to the throwaway registry
+      if: inputs.package-artifacts == ''
       shell: bash
+      working-directory: ${{ inputs.source-directory }}
       env:
         PORT: ${{ inputs.port }}
       run: |
@@ -140,34 +183,80 @@ runs:
 
         pnpm changeset publish --no-git-tag
 
-    - name: Generate an application and verify dev, build, and start
+    - name: Publish package artifacts to the throwaway registry
+      if: inputs.package-artifacts != ''
       shell: bash
+      working-directory: ${{ inputs.source-directory }}
+      env:
+        ARTIFACTS: ${{ inputs.package-artifacts }}
+        PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+        LOCAL="http://localhost:$PORT/"
+
+        export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
+        export PNPM_CONFIG_REGISTRY="$LOCAL"
+        export npm_config_registry="$LOCAL"
+        export NPM_CONFIG_REGISTRY="$LOCAL"
+        export NODE_AUTH_TOKEN=''
+
+        # Check both tools and both registry settings before publishing. The generated application uses pnpm, while
+        # the exact tarballs are sent with npm; a scoped registry overrides the global one for every workspace package.
+        for tool in pnpm npm; do
+          for setting in registry @nocobase:registry; do
+            RESOLVED="$("$tool" config get "$setting" | tr -d '\r' | tail -1)"
+            if [ "$RESOLVED" != "$LOCAL" ] && [ "$RESOLVED" != "${LOCAL%/}" ]; then
+              echo "::error::$tool resolves $setting to '$RESOLVED' instead of '$LOCAL'. Publishing now would reach the wrong registry."
+              exit 1
+            fi
+            echo "$tool $setting -> $RESOLVED"
+          done
+        done
+
+        # This publishes the pack:check output itself. npm must not repack a workspace or run package lifecycle scripts.
+        node "$GITHUB_WORKSPACE/scripts/publish-pack-artifacts.mjs" \
+          --artifacts "$ARTIFACTS" \
+          --repo-root "$PWD" \
+          --registry "$LOCAL"
+
+    - name: Generate selected applications and verify test, dev, build, and start
+      shell: bash
+      working-directory: ${{ inputs.source-directory }}
       env:
         PORT: ${{ inputs.port }}
+        TEMPLATE_KIND: ${{ inputs.template-kind }}
         TIMEOUT: ${{ inputs.timeout }}
       run: |
         set -euo pipefail
         export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
 
         CREATE_APP_VERSION=$(node -p "require('./packages/tools/create-app/package.json').version")
-        TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-default/package.json').version")
 
         # Outside the checkout on purpose. The generated application writes its own pnpm-workspace.yaml, which would
         # make pnpm treat it as a workspace root nested inside this one, and the release commit stages everything in
         # the working tree — a generated application there would be committed and published.
-        ./scripts/smoke-create-app.sh \
-          --registry "http://localhost:$PORT" \
-          --create-app-version "$CREATE_APP_VERSION" \
-          --template "@nocobase/app-template-default@$TEMPLATE_VERSION" \
-          --timeout "$TIMEOUT" \
-          --workdir "$RUNNER_TEMP/create-app-smoke"
+        # Each template has its own dependency graph: workspace tests cannot prove that its published declarations resolve.
+        if [ "$TEMPLATE_KIND" = 'all' ]; then
+          TEMPLATE_KINDS=(default examples hub)
+        else
+          TEMPLATE_KINDS=("$TEMPLATE_KIND")
+        fi
+        for CURRENT_TEMPLATE_KIND in "${TEMPLATE_KINDS[@]}"; do
+          TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-$CURRENT_TEMPLATE_KIND/package.json').version")
+          "$GITHUB_WORKSPACE/scripts/smoke-create-app.sh" \
+            --registry "http://localhost:$PORT" \
+            --create-app-version "$CREATE_APP_VERSION" \
+            --template "@nocobase/app-template-$CURRENT_TEMPLATE_KIND@$TEMPLATE_VERSION" \
+            --timeout "$TIMEOUT" \
+            --workdir "$RUNNER_TEMP/create-app-smoke/$CURRENT_TEMPLATE_KIND"
+        done
 
     - name: Upload smoke logs
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: create-app-smoke-logs
-        path: ${{ runner.temp }}/create-app-smoke/*.log
+        name: ${{ inputs.template-kind == 'all' && 'create-app-smoke-logs' || format('create-app-smoke-{0}-logs', inputs.template-kind) }}
+        path: ${{ runner.temp }}/create-app-smoke/**/*.log
         if-no-files-found: ignore
 
     - name: Stop the throwaway registry

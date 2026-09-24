@@ -1,4 +1,5 @@
-import type { ApiClient, RemoteGroupByOptions } from '@nocobase/api-client';
+import type { ApiClient } from '@nocobase/app-client';
+import type { RemoteGroupByOptions } from '@nocobase/api-client';
 import type { AggregateRequest } from '../shared/aggregate.js';
 import type { AggregateCall } from './aggregate.js';
 

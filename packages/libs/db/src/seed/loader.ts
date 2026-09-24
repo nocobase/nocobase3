@@ -1,8 +1,24 @@
-import { createHash } from 'node:crypto';
-import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, extname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import {
+  readTaskManifest,
+  resolveTaskChecksum,
+  type TaskManifest,
+} from '../migration/manifest.js';
+import {
+  assertTaskSourceForm,
+  DEFAULT_TASK_EXTENSIONS,
+  DEFAULT_TASK_PACKAGE_NAME,
+  importTaskDefinition,
+  isNonEmptyString,
+  isTaskFile,
+  isValidTransactionMode,
+  readTaskDirectory,
+  taskNameFromFileName,
+  validateTaskDirectory,
+  validateTaskPackageName,
+  validateUniqueTaskNames,
+} from '../migration/internal/task-loader.js';
+import { readFile, stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { isDefinedSeed } from './internal/marker.js';
 import type {
   LoadSeedsOptions,
@@ -11,8 +27,9 @@ import type {
   SeedSource,
 } from './types.js';
 
-export const DEFAULT_SEED_EXTENSIONS = ['.js', '.mjs', '.cjs', '.ts'] as const;
-export const DEFAULT_SEED_PACKAGE_NAME = 'app';
+export const DEFAULT_SEED_EXTENSIONS: readonly string[] =
+  DEFAULT_TASK_EXTENSIONS;
+export const DEFAULT_SEED_PACKAGE_NAME: string = DEFAULT_TASK_PACKAGE_NAME;
 
 /** Loads, validates, and deterministically orders seed definitions from configured sources. */
 export async function loadSeeds(
@@ -23,7 +40,7 @@ export async function loadSeeds(
     await Promise.all(sources.map((source) => loadSeedSource(source)))
   ).flat();
 
-  validateUniqueSeedNames(seeds);
+  validateUniqueTaskNames('Seed', seeds);
   return seeds.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -38,12 +55,13 @@ export async function validateSeeds(
 
 async function loadSeedSource(source: SeedSource): Promise<LoadedSeed[]> {
   const directory = resolve(source.directory);
-  const entries = await readSeedDirectory(directory);
+  const manifest = await readTaskManifest(directory);
+  const entries = await readTaskDirectory(directory);
   const extensions = new Set(source.extensions ?? DEFAULT_SEED_EXTENSIONS);
   const files = entries
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
-    .filter((fileName) => isSeedFile(fileName, extensions))
+    .filter((fileName) => isTaskFile(fileName, extensions))
     .sort();
 
   const seeds: LoadedSeed[] = [];
@@ -53,6 +71,7 @@ async function loadSeedSource(source: SeedSource): Promise<LoadedSeed[]> {
         source.packageName,
         join(directory, fileName),
         fileName,
+        manifest,
       ),
     );
   }
@@ -61,69 +80,40 @@ async function loadSeedSource(source: SeedSource): Promise<LoadedSeed[]> {
 }
 
 function normalizeSeedSources(options: LoadSeedsOptions): SeedSource[] {
-  if (options.directory !== undefined && options.sources !== undefined) {
-    throw new Error('Seed options cannot define both directory and sources.');
-  }
+  assertTaskSourceForm('Seed', options);
 
   if (options.sources !== undefined) {
     return options.sources.map((source) => ({
-      packageName: validatePackageName(source.packageName),
-      directory: validateDirectory(source.directory),
+      packageName: validateTaskPackageName('Seed', source.packageName),
+      directory: validateTaskDirectory('Seed', source.directory),
       extensions: source.extensions ?? options.extensions,
     }));
   }
 
-  if (options.directory === undefined) {
-    throw new Error('Seed options must define directory or sources.');
-  }
-
   return [
     {
-      packageName: validatePackageName(
+      packageName: validateTaskPackageName(
+        'Seed',
         options.packageName ?? DEFAULT_SEED_PACKAGE_NAME,
       ),
-      directory: validateDirectory(options.directory),
+      directory: validateTaskDirectory('Seed', options.directory),
       extensions: options.extensions,
     },
   ];
-}
-
-function validateDirectory(directory: unknown): string {
-  if (!isNonEmptyString(directory)) {
-    throw new Error('Seed directory must be a non-empty string.');
-  }
-  return directory;
-}
-
-function validatePackageName(packageName: unknown): string {
-  if (!isNonEmptyString(packageName)) {
-    throw new Error('Seed packageName must be a non-empty string.');
-  }
-  return packageName;
-}
-
-async function readSeedDirectory(directory: string): Promise<Dirent[]> {
-  try {
-    return await readdir(directory, { withFileTypes: true });
-  } catch (error) {
-    if (isNodeError(error) && error.code === 'ENOENT') {
-      return [];
-    }
-    throw error;
-  }
 }
 
 async function loadSeedFile(
   packageName: string,
   filePath: string,
   fileName: string,
+  manifest: TaskManifest | undefined,
 ): Promise<LoadedSeed> {
   const [source, fileStat] = await Promise.all([
     readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
-  const checksum = createHash('sha256').update(source).digest('hex');
-  const seed = await importSeed(filePath, fileStat.mtimeMs);
+  const checksums = resolveTaskChecksum(filePath, source, manifest);
+  const seed = await importTaskDefinition(filePath, fileStat.mtimeMs);
   validateSeedDefinition(seed, filePath, fileName);
 
   return {
@@ -131,16 +121,9 @@ async function loadSeedFile(
     name: seed.name,
     filePath,
     fileName,
-    checksum,
+    ...checksums,
     seed,
   };
-}
-
-async function importSeed(filePath: string, mtimeMs: number): Promise<unknown> {
-  const url = pathToFileURL(filePath);
-  url.searchParams.set('mtime', String(Math.trunc(mtimeMs)));
-  const module = await import(url.href);
-  return (module as { default?: unknown }).default;
 }
 
 function validateSeedDefinition(
@@ -160,7 +143,7 @@ function validateSeedDefinition(
     );
   }
 
-  const expectedName = basename(fileName, extname(fileName));
+  const expectedName = taskNameFromFileName(fileName);
   if (value.name !== expectedName) {
     throw new Error(
       `Seed file ${filePath} has name "${value.name}", but file name requires "${expectedName}".`,
@@ -173,42 +156,9 @@ function validateSeedDefinition(
     );
   }
 
-  if (
-    value.transaction !== undefined &&
-    value.transaction !== true &&
-    value.transaction !== false &&
-    value.transaction !== 'auto'
-  ) {
+  if (!isValidTransactionMode(value.transaction)) {
     throw new Error(
       `Seed "${value.name}" transaction must be true, false, or "auto".`,
     );
   }
-}
-
-function validateUniqueSeedNames(seeds: LoadedSeed[]): void {
-  const seen = new Map<string, LoadedSeed>();
-  for (const seed of seeds) {
-    const previous = seen.get(seed.name);
-    if (previous) {
-      throw new Error(
-        `Duplicate seed name "${seed.name}" in ${previous.filePath} and ${seed.filePath}.`,
-      );
-    }
-    seen.set(seed.name, seed);
-  }
-}
-
-function isSeedFile(fileName: string, extensions: Set<string>): boolean {
-  if (fileName.startsWith('.') || fileName.endsWith('.d.ts')) {
-    return false;
-  }
-  return extensions.has(extname(fileName));
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }

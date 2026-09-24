@@ -16,9 +16,8 @@ const workflow: WorkflowSourceAst = defineWorkflow({
     properties: {
       date: {
         type: 'string',
-        title: 'Report date (YYYY-MM-DD, try 2026-09-08)',
-        minLength: 10,
-        maxLength: 10,
+        title: 'Report date (YYYY-MM-DD or previous-day in Asia/Singapore)',
+        anyOf: [{ minLength: 10, maxLength: 10 }, { enum: ['previous-day'] }],
       },
     },
     additionalProperties: false,

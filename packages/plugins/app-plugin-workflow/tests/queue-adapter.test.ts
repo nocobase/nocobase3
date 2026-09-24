@@ -1,12 +1,12 @@
 import type { DatabaseManager } from '@nocobase/db';
-import { QueueSchemaService } from '@boringnode/queue';
 import {
   createQueueManager,
   type AppQueueConfig,
   type NocoBaseQueueManager,
 } from '@nocobase/queue';
-import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { queueMigrationSource } from '@nocobase/queue';
 
 import {
   createWorkflowQueueAdapter,
@@ -42,11 +42,20 @@ function databaseQueueConfig(): AppQueueConfig {
 }
 
 async function createQueueTables(database: DatabaseManager): Promise<void> {
-  const connection = await database.connect();
-  const client = await connection.client<Knex>();
-  const schema = new QueueSchemaService(client);
-  await schema.createJobsTable(QUEUE_TABLE);
-  await schema.createSchedulesTable(SCHEDULES_TABLE);
+  await database
+    .createMigrator({
+      sources: [
+        {
+          ...queueMigrationSource,
+          parameters: {
+            jobsTable: 'queue_jobs',
+            schedulesTable: 'queue_schedules',
+          },
+          configuration: [{ driver: 'database' }],
+        },
+      ],
+    })
+    .latest();
 }
 
 async function countPendingJobs(database: DatabaseManager): Promise<number> {

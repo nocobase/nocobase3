@@ -1,25 +1,33 @@
 import { createRequire } from 'node:module';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  PostgresConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { PostgresSchemaInspector } from './inspectors/postgres.js';
 import { compilePostgresJsonCondition } from './json.js';
 
+import type { PostgresConnectionConfig } from './config.js';
+export type { PostgresConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const Pg: unknown = require('pg') as unknown;
-const PgQueryStream =
-  require('pg-query-stream') as typeof import('pg-query-stream');
+// Keep native-driver types behind the private query boundary.
+const PgQueryStream = require('pg-query-stream') as new (
+  text: string,
+  values?: unknown[],
+  config?: PgQueryStreamConfig,
+) => unknown;
 
 export type PostgresOptions = Omit<
   PostgresConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
 
-export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
+export const postgresDriver: DatabaseDriverDefinition<
+  'postgres',
+  PostgresConnectionConfig
+> = {
   dialect: 'postgres',
   packageName: '@nocobase/db-postgres',
   nativeDriver: 'pg',
@@ -130,13 +138,12 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     return PostgresClientWithQueryStream;
   },
   resolveConnection: (
-    source: ConnectionConfig,
+    config: PostgresConnectionConfig,
   ): {
     connection: unknown;
     searchPath?: string[];
     useNullAsDefault?: boolean;
   } => {
-    const config = source as PostgresConnectionConfig;
     assertDriverOptions(config.driverOptions, [
       'host',
       'port',
@@ -169,7 +176,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     };
   },
   createSchemaInspector: (context) => {
-    const schema = (context.config as PostgresConnectionConfig).schema;
+    const schema = context.config.schema;
     return new PostgresSchemaInspector({
       connectionName: context.connectionName,
       searchPath:
@@ -189,10 +196,10 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     password: '',
     ssl: false,
     schema: ['public'],
-    ...(source as PostgresConnectionConfig),
+    ...source,
   }),
   resolveOwnershipTarget: (source) => {
-    const config = source as PostgresConnectionConfig;
+    const config = source;
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -207,7 +214,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     ];
   },
   resetManagedSchema: async (context) => {
-    const config = context.config as PostgresConnectionConfig;
+    const config = context.config;
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -238,7 +245,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
       );
     }
   },
-} satisfies DatabaseDriverDefinition<'postgres'>;
+} satisfies DatabaseDriverDefinition<'postgres', PostgresConnectionConfig>;
 
 export type PostgresConnection = PostgresOptions & {
   dialect: 'postgres';

@@ -1,9 +1,6 @@
+import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
   createContext,
@@ -11,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
   type ReactNode,
@@ -25,7 +23,7 @@ import {
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { Button } from '../../components/ui/button.js';
-import { ErrorBanner, ErrorDialog, AppDialog } from './shared.js';
+import { ErrorNotification, AppDialog } from './shared.js';
 import { Detail, RemoveApplicationDialog } from './detail.js';
 import { DeploymentDialog } from './configuration.js';
 import { UploadReleaseDialog } from './releases.js';
@@ -43,6 +41,7 @@ import type {
 import { DETAIL_TABS } from './types.js';
 import { uploadArtifact, readError, type ReadableError } from './utils.js';
 import {
+  defaultHubDetailTab,
   emptyHubCapabilities,
   loadHubCapabilities,
   resolveHubDetailTab,
@@ -67,11 +66,16 @@ interface HubAppPageContextValue {
   };
   readonly onRelease: (id: string) => void;
   readonly onDeploymentPage: (page: number) => void;
-  readonly onDeploy: () => void;
+  readonly onDeploy: (releaseId?: string) => void;
+  readonly releasesCollapsed: boolean;
+  readonly onReleasesCollapsed: (collapsed: boolean) => void;
   readonly onRollback: (deploymentId: string) => void;
   readonly onUpload: () => void;
   readonly onSaveConfiguration: (content: string) => void;
-  readonly onSaveSettings: (activation: 'lazy' | 'eager') => void;
+  readonly onSaveSettings: (settings: {
+    name: string;
+    activation: 'lazy' | 'eager';
+  }) => void;
   readonly onRemove: () => void;
   readonly onRefresh: () => void;
 }
@@ -96,7 +100,7 @@ export default function AppPage(): ReactElement {
 
 function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const client = useService(apiClientToken);
+  const client = useApiClient();
   const authorization = useService(authorizationClientToken);
   const navigate = useNavigate();
   const location = useLocation();
@@ -121,7 +125,11 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   });
   const [deploymentsLoading, setDeploymentsLoading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [deploymentHistoryVersion, setDeploymentHistoryVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState<'auto' | 'manual' | null>(null);
+  const refreshInFlightRef = useRef(false);
   const [selectedReleaseId, setSelectedReleaseId] = useState<string>();
+  const [releasesCollapsed, setReleasesCollapsed] = useState(false);
   const [deploymentReleaseId, setDeploymentReleaseId] = useState<string>();
   const [rollbackDeploymentId, setRollbackDeploymentId] = useState<string>();
   const [deploymentMode, setDeploymentMode] = useState<ConfigMode>('file');
@@ -138,6 +146,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   >();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ReadableError>();
+  const [pollNotice, setPollNotice] = useState<{
+    appId: string;
+    state: 'retrying' | 'finished';
+  }>();
 
   const reportError = useCallback(
     (reason: unknown): void => {
@@ -186,7 +198,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadDetail(), loadHubCapabilities(authorization)])
+    void Promise.all([loadDetail(), loadHubCapabilities(authorization, appId)])
       .then(([nextDetail, nextCapabilities]) => {
         if (cancelled) return;
         setDetail(nextDetail);
@@ -202,10 +214,11 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   }, [appId, authorization, loadDetail, reportError]);
 
   const tabMatch = matchPath(
-    { path: `${appPath.pathname}/:tab`, end: true },
+    { path: `${appPath.pathname}/:tab/*`, end: true },
     location.pathname,
   );
-  const tabParam = tabMatch?.params.tab;
+  const tabParam =
+    tabMatch?.params.tab === 'releases' ? 'deployments' : tabMatch?.params.tab;
   const activeTab = DETAIL_TABS.includes(tabParam as DetailTab)
     ? (tabParam as DetailTab)
     : undefined;
@@ -218,7 +231,15 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         capabilities,
       )
     : [];
-  const defaultTab = availableTabs[0];
+  const defaultTab = detail
+    ? defaultHubDetailTab(
+        {
+          hasReleases: detail.hasReleases,
+          deployed: Boolean(detail.app.currentDeploymentId),
+        },
+        capabilities,
+      )
+    : undefined;
   const isParentEntry = Boolean(
     matchPath({ path: appPath.pathname, end: true }, location.pathname),
   );
@@ -269,41 +290,58 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         selectedApp.releases[0]?.id),
   );
 
+  const configTab = activeTab === 'configuration' || activeTab === 'resources';
+  // Config is refreshed on explicit actions or a deployment change, not every
+  // status response. Other panels still refresh as deployment progress changes.
+  const panelDetail = configTab ? Boolean(detail) : detail;
+  const panelVersion =
+    activeTab === 'deployments' || configTab ? 0 : refreshVersion;
   useEffect(() => {
-    if (!detail || !activeTab) return;
+    if (
+      !panelDetail ||
+      !activeTab ||
+      !capabilitiesReady ||
+      activeTab === 'resources'
+    )
+      return;
     let cancelled = false;
-    const key = `${appId}:${activeTab}:${deploymentPage}:${refreshVersion}`;
+    // Refresh deployment rows in place; only a tab/page change needs a skeleton.
+    const key = `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`;
     const load = async (): Promise<void> => {
       if (activeTab === 'deployments') {
-        setDeploymentsLoading(true);
-        try {
+        if (capabilities['read-release']) {
           const response = await client.request<
-            ApiResponse<{
-              readonly items: readonly DeploymentRecord[];
-              readonly page: number;
-              readonly pageSize: number;
-              readonly total: number;
-            }>
-          >({
-            path: `hub/apps/${appId}/deployments`,
-            query: { page: deploymentPage, pageSize: 20 },
-          });
+            ApiResponse<readonly ReleaseRecord[]>
+          >({ path: `hub/apps/${appId}/releases` });
           if (cancelled) return;
-          setDeployments(response.data.items);
-          setDeploymentPagination({
-            page: response.data.page,
-            pageSize: response.data.pageSize,
-            total: response.data.total,
-          });
-        } finally {
-          if (!cancelled) setDeploymentsLoading(false);
+          setReleases(response.data);
         }
-      } else if (activeTab === 'releases') {
-        const response = await client.request<
-          ApiResponse<readonly ReleaseRecord[]>
-        >({ path: `hub/apps/${appId}/releases` });
-        if (!cancelled) setReleases(response.data);
-      } else if (activeTab === 'configuration' || activeTab === 'resources') {
+        if (capabilities['read-deployment']) {
+          setDeploymentsLoading(true);
+          try {
+            const response = await client.request<
+              ApiResponse<{
+                readonly items: readonly DeploymentRecord[];
+                readonly page: number;
+                readonly pageSize: number;
+                readonly total: number;
+              }>
+            >({
+              path: `hub/apps/${appId}/deployments`,
+              query: { page: deploymentPage, pageSize: 20 },
+            });
+            if (cancelled) return;
+            setDeployments(response.data.items);
+            setDeploymentPagination({
+              page: response.data.page,
+              pageSize: response.data.pageSize,
+              total: response.data.total,
+            });
+          } finally {
+            if (!cancelled) setDeploymentsLoading(false);
+          }
+        }
+      } else if (activeTab === 'configuration') {
         const config = await fetchConfig(appId);
         if (cancelled) return;
         setConfigMode(config.mode);
@@ -319,13 +357,17 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     };
   }, [
     activeTab,
+    capabilities,
+    capabilitiesReady,
     appId,
     client,
     deploymentPage,
+    deploymentHistoryVersion,
     fetchConfig,
     refreshVersion,
     reportError,
-    detail,
+    panelDetail,
+    panelVersion,
     detail?.app.currentDeploymentId,
   ]);
 
@@ -334,17 +376,51 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
       detail?.hasPendingDeployment || detail?.runtime.state === 'pending';
     if (!pending) return;
     let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void loadDetail()
-        .then((nextDetail) => {
-          if (cancelled) return;
-          setDetail(nextDetail);
-          setRefreshVersion((value) => value + 1);
-        })
-        .catch((reason) => {
-          if (!cancelled) reportError(reason);
-        });
-    }, 1_500);
+    let timer: number;
+    let failures = 0;
+    const poll = async (): Promise<void> => {
+      if (refreshInFlightRef.current) {
+        timer = window.setTimeout(() => void poll(), 1_500);
+        return;
+      }
+      refreshInFlightRef.current = true;
+      setRefreshing('auto');
+      let keepPolling = true;
+      try {
+        const nextDetail = await loadDetail();
+        if (cancelled) return;
+        failures = 0;
+        keepPolling =
+          nextDetail.hasPendingDeployment ||
+          nextDetail.runtime.state === 'pending';
+        setDetail(nextDetail);
+        setPollNotice(keepPolling ? undefined : { appId, state: 'finished' });
+      } catch (reason) {
+        if (cancelled) return;
+        // Authentication/authorization failures need user action, not retries.
+        if (
+          reason instanceof ApiClientError &&
+          (reason.status === 401 || reason.status === 403)
+        ) {
+          keepPolling = false;
+          reportError(reason);
+        } else {
+          failures += 1;
+          setPollNotice({ appId, state: 'retrying' });
+        }
+      } finally {
+        refreshInFlightRef.current = false;
+        setRefreshing(null);
+        // Schedule after completion so slow requests never overlap. Unchanged
+        // pending flags must not stop polling; transient errors back off.
+        if (!cancelled && keepPolling)
+          timer = window.setTimeout(
+            () => void poll(),
+            Math.min(1_500 * 2 ** Math.min(failures, 3), 12_000),
+          );
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 1_500);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -352,6 +428,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   }, [
     loadDetail,
     reportError,
+    appId,
     detail?.hasPendingDeployment,
     detail?.runtime.state,
   ]);
@@ -384,7 +461,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     if (error) {
       return (
         <div className='space-y-4 py-8'>
-          <ErrorBanner error={error} onClose={() => setError(undefined)} />
+          <ErrorNotification
+            error={error}
+            onClose={() => setError(undefined)}
+          />
           <Button
             variant='outline'
             onClick={() => void navigate(applicationsPath.pathname)}
@@ -408,7 +488,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   if (!availableTabs.length) {
     return (
       <div className='space-y-4 py-8'>
-        <ErrorBanner
+        <ErrorNotification
           message={t('detail.noTabs', {
             defaultValue:
               'You do not have access to any tabs for this application.',
@@ -425,11 +505,14 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   }
 
   const explicitTabInvalid =
-    !isParentEntry && (!activeTab || !availableTabs.includes(activeTab));
+    !isParentEntry &&
+    (!activeTab ||
+      !availableTabs.includes(activeTab) ||
+      (tabMatch?.params.tab === 'releases' && !capabilities['read-release']));
   if (explicitTabInvalid) {
     return (
       <div className='space-y-4 py-8'>
-        <ErrorBanner
+        <ErrorNotification
           message={t('detail.unavailable', {
             defaultValue: 'This application page is not available.',
           })}
@@ -449,16 +532,18 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     capabilities,
     busy,
     panelLoading:
-      panelKey !== `${appId}:${activeTab}:${deploymentPage}:${refreshVersion}`,
+      panelKey !== `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`,
     deploymentsLoading,
     configMode,
     configContent,
     selectedReleaseId,
+    releasesCollapsed,
+    onReleasesCollapsed: setReleasesCollapsed,
     release: selectedRelease,
     deploymentPagination,
     onRelease: setSelectedReleaseId,
     onDeploymentPage: setDeploymentPage,
-    onDeploy: () => {
+    onDeploy: (releaseId) => {
       setBusy(true);
       setError(undefined);
       void Promise.all([
@@ -470,9 +555,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         .then(([response, config]) => {
           setReleases(response.data);
           // Deploying moves forward, so default to the newest upload rather than the release already running. The
-          // list is newest first. An explicit choice made in the Releases tab still wins; the running release is only
+          // list is newest first. A release chosen from a row or uploaded in this workspace wins; the running release is only
           // the fallback when nothing has been uploaded at all.
           const targetId =
+            releaseId ??
             selectedReleaseId ??
             response.data[0]?.id ??
             selectedApp.deployment.desiredReleaseId;
@@ -502,7 +588,11 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         }),
       ])
         .then(([config, release]) => {
-          setReleases([release.data]);
+          setReleases((previous) =>
+            previous.some((item) => item.id === release.data.id)
+              ? previous
+              : [...previous, release.data],
+          );
           setDeploymentReleaseId(target.releaseId);
           setDeploymentMode(target.config.mode);
           setDeploymentContent('');
@@ -524,30 +614,61 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         });
         setConfigContent(response.data.content ?? '');
       }),
-    onSaveSettings: (activation) =>
+    onSaveSettings: (settings) =>
       void perform(async () => {
         await client.request({
           path: `hub/apps/${appId}/settings`,
           method: 'PUT',
-          json: { activation },
+          json: settings,
         });
       }),
     onRemove: () => setRemoveOpen(true),
-    onRefresh: () =>
-      void perform(async () => {
-        await client.request({
-          path: `hub/apps/${appId}/refresh`,
-          method: 'POST',
-        });
-      }),
+    onRefresh: () => {
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      setRefreshing('manual');
+      setError(undefined);
+      void (async () => {
+        try {
+          await client.request({
+            path: `hub/apps/${appId}/refresh`,
+            method: 'POST',
+          });
+          setDetail(await loadDetail());
+          setRefreshVersion((value) => value + 1);
+        } catch (reason) {
+          reportError(reason);
+        } finally {
+          refreshInFlightRef.current = false;
+          setRefreshing(null);
+        }
+      })();
+    },
   };
 
   return (
     <>
-      <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
+      <main className='min-h-[calc(100svh-4rem)] bg-background [&_button:not(:disabled)]:cursor-pointer'>
         <div className='mx-auto max-w-[1600px] px-5 py-6 sm:px-8 sm:py-8'>
+          {pollNotice?.appId === appId && (
+            <p role='status' className='mb-3 text-sm text-muted-foreground'>
+              {pollNotice.state === 'retrying'
+                ? t('deployments.statusRetrying', {
+                    defaultValue:
+                      'Status updates interrupted. Retrying automatically…',
+                  })
+                : !selectedApp.hasPendingDeployment &&
+                    selectedApp.runtime.state !== 'pending'
+                  ? t('deployments.statusFinished', {
+                      defaultValue:
+                        'Deployment or startup has finished. Check the latest status and deployment record for the result.',
+                    })
+                  : null}
+            </p>
+          )}
           <HubAppPageContext.Provider value={contextValue}>
             <Detail
+              refreshing={refreshing}
               app={selectedApp}
               capabilities={capabilities}
               tab={effectiveTab}
@@ -647,7 +768,9 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
             void perform(async () => {
               if (!deploymentReleaseId || deploymentMode === 'managed') return;
               const endpoint = rollbackDeploymentId ? 'rollback' : 'deploy';
-              await client.request({
+              const response = await client.request<
+                ApiResponse<{ id: string }>
+              >({
                 path: `hub/apps/${appId}/${endpoint}`,
                 method: 'POST',
                 json: {
@@ -662,10 +785,15 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
                   },
                 },
               });
+              setDeploymentHistoryVersion((value) => value + 1);
               setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
               setRollbackDeploymentId(undefined);
-              navigateToTab('deployments');
+              setReleasesCollapsed(true);
+              await navigate({
+                pathname: `${appPath.pathname}/deployments${capabilities['read-deployment'] ? `/${response.data.id}/logs` : ''}`,
+                search: location.search,
+              });
               setDeploymentPage(1);
             })
           }
@@ -680,10 +808,26 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           onUpload={() =>
             void perform(async () => {
               if (!artifact) return;
-              const uploaded = await uploadArtifact(appId, artifact);
+              const uploaded = await uploadArtifact(client, appId, artifact);
               setSelectedReleaseId(uploaded.id);
+              setReleases((previous) => [
+                uploaded,
+                ...previous.filter((item) => item.id !== uploaded.id),
+              ]);
+              setReleasesCollapsed(false);
               setArtifact(undefined);
               setUploadOpen(false);
+              toast.success(
+                t(
+                  capabilities.deploy &&
+                    capabilities['read-release'] &&
+                    capabilities['read-config'] &&
+                    capabilities['read-config-template']
+                    ? 'releases.uploaded'
+                    : 'releases.uploadedOnly',
+                ),
+                { position: 'top-right', duration: 4000 },
+              );
             })
           }
         />
@@ -706,7 +850,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         />
       ) : null}
       {error ? (
-        <ErrorDialog error={error} onClose={() => setError(undefined)} />
+        <ErrorNotification error={error} onClose={() => setError(undefined)} />
       ) : null}
     </>
   );

@@ -78,7 +78,7 @@ export class LLMServiceConfigSynchronizer {
       updated,
       deleted,
     };
-    this.logger?.info?.(
+    this.logger?.[created || updated || deleted ? 'info' : 'debug']?.(
       summary,
       'AI LLM services synchronized from application config',
     );

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification-in-app",
   "displayName": "In-app Notification App Plugin",
   "description": "Provides an authenticated in-app inbox, notification Channel, and development-only Client inbox page.",
-  "version": "0.2.0-beta.10",
+  "version": "0.2.0-beta.17",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -76,7 +76,7 @@
   },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "pnpm build",

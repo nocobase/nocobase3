@@ -334,7 +334,7 @@ function suggestionFor(code: string, packageName: string): InspectSuggestion {
   if (code === 'SKILLS_OUT_OF_DATE')
     return {
       command: 'pnpm',
-      args: ['plugin:skills:sync', '--plugin', shortName],
+      args: ['skills:sync', '--plugin', shortName],
     };
   return {
     command: 'pnpm',

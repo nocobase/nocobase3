@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import * as React from 'react';
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { cn } from '../../lib/utils.js';
@@ -53,6 +54,10 @@ function SheetContent({
   side?: 'top' | 'right' | 'bottom' | 'left';
   showCloseButton?: boolean;
 }): React.ReactElement {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-repository-example',
+  );
+
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -78,7 +83,9 @@ function SheetContent({
             }
           >
             <XIcon />
-            <span className='sr-only'>Close</span>
+            <span className='sr-only'>
+              {translateDemo('closeDialog', { defaultValue: 'Close' })}
+            </span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>

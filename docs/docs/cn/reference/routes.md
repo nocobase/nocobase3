@@ -130,12 +130,12 @@ defineAppRoutes([
     name: 'orders',
     path: '/orders',
     navigation: { title: 'Orders' },
-    componentLoader: () => import('./pages/orders.js'),
+    componentLoader: () => import('./pages/orders/index.js'),
     children: [
       {
         name: 'detail',
         path: ':orderId',
-        componentLoader: () => import('./pages/order-detail.js'),
+        componentLoader: () => import('./pages/orders/detail.js'),
       },
     ],
   },
@@ -166,9 +166,17 @@ defineAppRoutes([
 
 上例中的页面路径是 `/business/orders`。分组本身不渲染页面组件。
 
+### 面包屑声明
+
+页面和分组都可以声明 `breadcrumb: { title: 'orders.title' }`。`title` 是非空字符串，在路由所属包的语言命名空间中解析。
+
+`breadcrumb` 与 `navigation` 独立，不会互相回退。动态参数路径可以声明 `breadcrumb`，但不能声明需要固定链接的 `navigation`。省略 `breadcrumb` 的路由不会出现在面包屑中。
+
+声明本身不渲染界面；页面需要放置 `<Breadcrumbs />`。显示条件、子页面展示和完整示例见[页面和菜单](../app/pages-and-routes)。
+
 ### 页面、菜单和访问控制
 
-客户端页面的 `navigation`、`auth`、`access`、路由分组和子路由用法见 [页面和菜单](../app/pages-and-routes)。
+客户端页面的 `navigation`、`breadcrumb`、`auth`、`authz`、路由分组和子路由用法见 [页面和菜单](../app/pages-and-routes)。
 
 ### 设置页
 
@@ -180,15 +188,15 @@ defineSettingsRoutes([
     name: 'orders',
     path: '/orders',
     navigation: { title: 'navigation.orders' },
-    access: { resource: 'orders.settings', action: 'read' },
+    authz: { resource: { type: 'settings', id: 'orders' }, action: 'read' },
     componentLoader: () => import('./pages/orders-settings.js'),
   },
 ]);
 ```
 
-`access` 的值是一个 `{ resource, action }` 对象，用来指定要检查的资源和操作。例如，`{ resource: 'orders.settings', action: 'read' }` 表示检查当前用户是否有读取订单设置页的权限。设置页声明 `access` 后，客户端会在加载页面组件前执行这项检查。
+`authz` 的值是 `'skip'` 或一个 `{ resource: { type, id }, action }` 对象，用来指定要检查的资源和操作。例如，`{ resource: { type: 'settings', id: 'orders' }, action: 'read' }` 表示检查当前用户是否有读取订单设置页的权限。设置页声明权限请求后，客户端会在加载页面组件前执行这项检查；`authz: 'skip'` 仅跳过当前页面的权限检查，不跳过登录和父级检查。
 
-检查被拒绝时，页面不会出现在设置导航中，直接访问它的 URL 也不会加载页面组件。没有声明 `access` 的设置页不执行这项客户端权限检查，对所有能进入设置区域的登录用户开放。`access` 只控制客户端页面，页面调用的服务端接口仍需自行完成认证和权限校验。
+检查被拒绝时，页面不会出现在设置导航中，直接访问它的 URL 也不会加载页面组件。没有声明 `authz` 的设置页不执行这项客户端权限检查，对所有能进入设置区域的登录用户开放。`authz` 只控制客户端页面，页面调用的服务端接口仍需自行完成认证和权限校验。
 
 ### 开发页
 
@@ -207,7 +215,7 @@ defineDevRoutes([
 
 开发页在生产环境中会被移除，也不会被包含进构建产物。
 
-开发页也可以声明 `access: { resource, action }`。在开发环境中，客户端会在加载页面前检查这项权限；没有权限时，页面不会出现在开发导航中，直接访问 URL 也不会加载组件。
+开发页也可以声明 `authz: { resource: { type, id }, action }`。在开发环境中，客户端会在加载页面前检查这项权限；没有权限时，页面不会出现在开发导航中，直接访问 URL 也不会加载组件。
 
 ## 路由之间不会自动配对
 

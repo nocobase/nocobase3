@@ -20,6 +20,11 @@ export const CREATE_ARGS = {
 };
 
 export const CREATE_FLAGS = {
+  json: Flags.boolean({
+    default: false,
+    description:
+      'Output a final JSON result without interactive prompts. Requires DIRECTORY.',
+  }),
   install: Flags.boolean({
     allowNo: true,
     default: true,
@@ -51,6 +56,7 @@ export const CREATE_FLAGS = {
 export interface ParsedInput {
   directory?: string;
   flags: {
+    json: boolean;
     install: boolean;
     template: string;
     'template-tag': string;
@@ -93,6 +99,7 @@ export function formatHelp(binary: string): string {
     'EXAMPLES',
     `  $ ${binary} crm`,
     `  $ ${binary} crm --no-install`,
+    `  $ ${binary} crm --json`,
     `  $ ${binary} crm --template=hub`,
     `  $ ${binary} crm --template-tag=beta`,
     '',
@@ -100,7 +107,12 @@ export function formatHelp(binary: string): string {
     '  The template is downloaded from https://npm.nocobase.ai by default.',
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
-    "  config.yml is generated from the template's config.example.yml, with generated secrets.",
-    '  The application starts on SQLite; change the database in server/config/database.ts.',
+    '  The generated app is not configured yet. Configure it inside the app directory with:',
+    '    pnpm config:init',
+    '',
+    '  That writes config.yml with generated secrets for SQLite, whose driver the app already has.',
+    '  For another database, install its driver and name the dialect:',
+    '    pnpm add @nocobase/db-postgres',
+    '    pnpm config:init --dialect postgres',
   ].join('\n');
 }

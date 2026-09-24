@@ -32,11 +32,11 @@ import {
 } from '@nocobase/app-plugin-workflow';
 ```
 
-Only use Instruction classes exported by an installed plugin and registered in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
+Use Instruction classes exported by an installed plugin or defined in the application, and register the same classes in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
 
 ## Complete current example
 
-若应用需要可复用的流程控制能力（例如发邮件节点），请先阅读文档中的“可运行示例：发邮件节点”。示例覆盖公开导入、异步 Provider 注册、checker/build 的同一 Instruction 合同、隔离 Artifact 输出和运行时注册；不要只在 `boot()` 中注册后就直接编写 DSL。
+For reusable custom node contracts or missing process-control semantics, read [Custom Instructions](custom-instructions.md) before authoring the DSL. It includes a complete example with public imports, asynchronous Provider registration, checker contracts, and isolated Artifact output.
 
 Create all of these files; the DSL alone is not a complete package:
 
@@ -81,6 +81,8 @@ const workflow: WorkflowSourceAst = defineWorkflow({
   nodes: [
     RunInstruction.create({
       key: 'calculateRisk',
+      description:
+        'Use the quotation amount as the risk score for the approval-limit comparison.',
       title: 'Calculate risk',
       config: {
         module: './server/calculate-risk',
@@ -98,6 +100,8 @@ const workflow: WorkflowSourceAst = defineWorkflow({
     }),
     ConditionInstruction.create({
       key: 'needsApproval',
+      description:
+        'Compare the risk score with the approval limit; yes flags manual review, while no skips flagging.',
       config: {
         expression: {
           '>': [
@@ -110,6 +114,8 @@ const workflow: WorkflowSourceAst = defineWorkflow({
       yes: [
         RunInstruction.create({
           key: 'flagForManualReview',
+          description:
+            'Log the quotation ID requiring manual review; this example does not wait for approval.',
           config: {
             module: './server/flag-for-manual-review',
             args: { quotationId: '{{$input.quotationId}}' },
@@ -120,6 +126,8 @@ const workflow: WorkflowSourceAst = defineWorkflow({
     }),
     RunInstruction.create({
       key: 'recordRoutingOutcome',
+      description:
+        'Log whether the quotation needs manual review after either decision branch returns.',
       config: {
         module: './server/record-routing-outcome',
         args: { needsManualReview: '{{$nodeResults.needsApproval}}' },
@@ -133,7 +141,7 @@ export default workflow;
 
 Bind the `defineWorkflow()` result to a `const` annotated `WorkflowSourceAst` and default-export that binding. The application's server tsconfig enables `isolatedDeclarations`, and its `server/**/*.ts` include covers `workflow.ts`, so a bare `export default defineWorkflow({ ... })` fails `pnpm typecheck` with `error TS9037: Default exports can't be inferred with --isolatedDeclarations.` The annotated binding keeps the explicit `WorkflowSourceAst` type in the module's own declaration and compiles cleanly.
 
-The common successor `recordRoutingOutcome` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST. `flagForManualReview` performs one synchronous business action; it does not wait for a person, receive an approval result, or resume the workflow later.
+The common successor `recordRoutingOutcome` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST. `flagForManualReview` performs one background business action; it does not wait for a person, receive an approval result, or resume the workflow later.
 
 `server/calculate-risk.ts`:
 
@@ -250,6 +258,8 @@ Keep those stages separate: source check does not prove run-entry buildability; 
 | `inputSchema` |       no | object-root Input Schema; default is `{ type: 'object' }`          |
 | `nodes`       |      yes | ordered array of node expressions; may be empty                    |
 
+Use the workflow-level `description` to explain the workflow's purpose. When updating an existing DSL, such as changing nodes, sequencing, branches, or configuration, you may also include a concise note describing what changed relative to the previous version and the reason for the change. Preserve the purpose summary and replace the previous change note on each subsequent update; keep only the latest change, not an accumulated version history. Base the note on the actual changes and known rationale. For example: “Routes orders through inventory fulfillment. Latest change: added a fraud-risk check before inventory reservation to hold high-risk orders for review.” This note belongs to the workflow's top-level `description`; each node's required `description` still explains that node's current purpose and logic.
+
 There is no top-level `trigger`, `start`, node map, or edge list. The module default-exports a const annotated `WorkflowSourceAst` that holds the direct/derived value returned by `defineWorkflow()`, so the module still type-checks under the application's `isolatedDeclarations` server build. The evaluated AST must be JSON-compatible: no functions, symbols, BigInt, Date, Map, class instances, circular references, or non-finite numbers.
 
 ## Input Schema
@@ -289,7 +299,11 @@ Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ v
 - Keep node keys stable across revisions. Titles/descriptions may change; keys connect history, diagnostics, and result references.
 - Only call `.branch()` on a branching node, and only use branch names declared by that instruction contract.
 
-Every node source has `key`, optional `title`/`description`, required `config`, and optional `result`. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
+Every node source has `key`, optional `title`, `description`, required `config`, and optional `result`. When authoring or editing workflow orchestration, you must provide a non-empty, non-whitespace `description` for every node, including all nested branch nodes and custom Instructions. Fill missing descriptions in the workflow being edited and update descriptions whenever node logic changes. This is a mandatory authoring rule even though the DSL schema currently permits omission; a passing checker does not replace this review.
+
+Describe the node's business purpose and actual logic rather than repeating its title or key. Include relevant input sources, calculations or actions, outputs consumed downstream, and side effects. For a condition, explain the decision rule and what the `yes` and `no` branches do; for a terminate node, explain why execution stops and its outcome. Keep descriptions concise and specific to the implemented behavior; do not claim effects that the script does not perform. For example: “Compare the calculated risk score with the administrator's approval limit; flag above-limit quotations for manual review and otherwise continue without flagging.”
+
+Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
 
 ## Condition nodes
 
@@ -312,18 +326,21 @@ Its config accepts only optional `outcome`, which is `success` by default and ma
 ```ts
 ConditionInstruction.create({
   key: 'canContinue',
+  description: 'Continue when the input is approved; otherwise take the branch that ends the workflow.',
   config: { expression: { '===': [{ var: 'input.approved' }, true] } },
 }).branch({
   yes: [],
   no: [
     TerminateInstruction.create({
       key: 'stopRejected',
+      description: 'End the workflow successfully for an unapproved input and skip all remaining processing.',
       config: { outcome: 'success' },
     }),
   ],
 }),
 RunInstruction.create({
   key: 'continueProcessing',
+  description: 'Run the continuation script for approved input after the decision branch returns.',
   config: { module: './server/continue-processing' },
 }),
 ```
@@ -366,7 +383,7 @@ export const run: WorkflowRunFunction = async (
 };
 ```
 
-The public function receives `args: unknown` and options with exactly `services`, `signal`, and `logger`. `services` is a read-only application service resolver with `has(token)` and `resolve(token)`: import each service owner's original public token and do not recreate a same-named token. The resolver cannot register or replace application services. `signal` is the current Workflow abort signal, and `logger` is already bound to the current Workflow execution context. The function returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
+The processor leaves the node `PENDING` and yields before executing its module in the background. Completion saves the result and resumes the workflow; downstream nodes run only after completion. This is process-local asynchronous execution, not a durable job or a separate worker thread. The public function receives `args: unknown` and options with exactly `services`, `signal`, and `logger`. `services` is a read-only application service resolver with `has(token)` and `resolve(token)`: import each service owner's original public token and do not recreate a same-named token. The resolver cannot register or replace application services. `signal` is the current Workflow abort signal, and `logger` is already bound to the current Workflow execution context. The function returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
 
 Honor `options.signal` in cancellable I/O and use service-owned timeout options where available. Keep secrets out of args, results, logs, and service inputs that may be logged. Make external side effects idempotent using business identifiers because workflow retries/reruns may call the script again.
 
@@ -435,13 +452,16 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
 - `workflow.ts` binds `defineWorkflow()` to a const annotated with the exported `WorkflowSourceAst` type and default-exports that binding; it never default-exports a bare call expression, which fails the application's `isolatedDeclarations` typecheck (`TS9037`).
-- Import only Instruction classes exported by installed plugins and registered by the application.
+- Import Instruction classes through installed plugins' public exports or application-owned modules, and register them with the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
 - Input root is `object`; extra fields are deliberately allowed or rejected.
 - Every input reference is declared and has no inline default/nested path.
 - Every node key is safe, global, unique, and stable.
+- Every node, including nested branch nodes and custom Instructions, has a non-empty `description` that accurately explains its purpose and logic; review this even if the schema check passes.
 - Every branch belongs to the node contract.
 - Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
 - The real five-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.
+
+Workflow diagnostics use the application logging service with source `workflow` and workflow, execution, and node identities where available. They share `storage/logs/app.<UTC-date>.<part>.log` by default. Set `logging.loggers.workflow.file.name: workflow` to separate them. The message-first logger passed to run modules adapts to this service; diagnostic output is not copied into the database node execution `log` field. Execution status, result, and error records remain business data.

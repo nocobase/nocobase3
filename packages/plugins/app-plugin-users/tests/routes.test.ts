@@ -5,11 +5,12 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -104,6 +105,26 @@ describe('@nocobase/app-plugin-users API routes', () => {
     );
   });
 
+  it('reports a failure inside the service as a server error, not as invalid input', async () => {
+    const service = userService();
+    // A defect in a service or a registered role scope commonly surfaces as a
+    // TypeError. Answering 400 for it would hide the fault from monitoring and
+    // hand the caller an internal message.
+    vi.mocked(service.disable).mockRejectedValue(
+      new TypeError("Cannot read properties of undefined (reading 'key')"),
+    );
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service),
+    );
+
+    const response = await router.request('/users/user-1/disable', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.not.toContain('INVALID_USER_INPUT');
+  });
+
   it('returns 409 when an administrator creates a duplicate identity', async () => {
     const service = userService();
     vi.mocked(service.create).mockRejectedValue(
@@ -134,7 +155,28 @@ describe('@nocobase/app-plugin-users API routes', () => {
     });
   });
 
+  it('answers 409 when disabling would remove the last assignment', async () => {
+    const service = userService();
+    vi.mocked(service.disable).mockRejectedValue(
+      new PermissionSetLastAssignmentError('system-administrator'),
+    );
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service),
+    );
+
+    const response = await router.request('/users/user-1/disable', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'LAST_ASSIGNMENT',
+      message: expect.stringContaining('system-administrator'),
+    });
+  });
+
   it.each([
+    ['DELETE', '/users/user-1', 'delete'],
     ['PATCH', '/users/user-1', 'update'],
     ['POST', '/users/user-1/disable', 'disable'],
     ['POST', '/users/user-1/enable', 'enable'],
@@ -146,13 +188,16 @@ describe('@nocobase/app-plugin-users API routes', () => {
     const router = await apiRoutes.createRouter(
       createApplication('allowed', userService(), { requireAction }),
     );
-    const body = path.endsWith('reset-password')
-      ? { password: 'secret123' }
-      : path.includes('role-scopes')
-        ? { value: 'hub-viewer' }
-        : method === 'PATCH'
-          ? { name: 'Updated' }
-          : undefined;
+    const body =
+      method === 'DELETE'
+        ? { confirm: true }
+        : path.endsWith('reset-password')
+          ? { password: 'secret123' }
+          : path.includes('role-scopes')
+            ? { value: 'hub-viewer' }
+            : method === 'PATCH'
+              ? { name: 'Updated' }
+              : undefined;
 
     const response = await router.request(path, {
       method,
@@ -169,6 +214,41 @@ describe('@nocobase/app-plugin-users API routes', () => {
       resource: { type: 'user', id: 'user-1' },
       action,
     });
+  });
+
+  it('requires explicit deletion confirmation and records the actor after success', async () => {
+    const service = userService();
+    const logger = { info: vi.fn() };
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service, { logger }),
+    );
+    for (const confirm of [undefined, false, 'true']) {
+      expect(
+        (
+          await router.request('/users/user-1', {
+            method: 'DELETE',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ confirm }),
+          })
+        ).status,
+      ).toBe(400);
+    }
+    expect(service.remove).not.toHaveBeenCalled();
+    expect(logger.info).not.toHaveBeenCalled();
+    expect(
+      (
+        await router.request('/users/user-1', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ confirm: true }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(service.remove).toHaveBeenCalledWith('user-1', 'admin-1');
+    expect(logger.info).toHaveBeenCalledWith(
+      { event: 'user.delete', actorId: 'admin-1', targetUserId: 'user-1' },
+      'user.delete',
+    );
   });
 
   it('allows an optional multi-role scope to be cleared', async () => {
@@ -225,7 +305,7 @@ function createApplication(
       });
       await next();
     },
-  } as AppAuthorization);
+  } as unknown as Authorization);
   container.instance(userManagementServiceToken, service);
   if (options.logger) {
     container.instance(loggingToken, {
@@ -265,6 +345,7 @@ function userService(): UserManagementService {
     enable: vi.fn(() => Promise.resolve(user)),
     replaceRoleScope: vi.fn(() => Promise.resolve(user)),
     resetPassword: vi.fn(() => Promise.resolve()),
+    remove: vi.fn(() => Promise.resolve()),
     revokeSessions: vi.fn(() => Promise.resolve()),
   };
 }

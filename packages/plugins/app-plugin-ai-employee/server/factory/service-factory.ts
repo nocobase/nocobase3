@@ -1,3 +1,4 @@
+import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 import { type AIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
@@ -139,6 +140,9 @@ export class ServiceFactory {
       ai: this.ai,
       database: databaseManager.connection(),
       databaseManager,
+      authorization: this.container.has(authorizationToken)
+        ? this.container.resolve(authorizationToken)
+        : undefined,
       logger: this.logger,
       caching: this.container.resolve(cachingToken),
       fileStorage: managers.fileStorage,

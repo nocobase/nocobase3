@@ -36,11 +36,6 @@
   },
   {
     "type": "file",
-    "name": "services-and-jobs",
-    "label": "后台任务"
-  },
-  {
-    "type": "file",
     "name": "configuration",
     "label": "配置"
   },

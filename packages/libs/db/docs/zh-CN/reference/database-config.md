@@ -9,8 +9,7 @@ description: 选择默认连接、数据库方言、Schema 管理模式、命名
 
 ## 安装和注册 Dialect
 
-每个数据库方言都有独立的包。应用可以把工厂放入 `drivers` 注册表，供普通
-`ConnectionConfig` 使用：
+每个数据库方言都有独立的包。应用可以把工厂放入 `drivers` 注册表，供声明式连接配置使用：
 
 ```ts
 import postgres from '@nocobase/db-postgres';
@@ -44,6 +43,27 @@ const db = createDatabaseManager({
 `@nocobase/db-sqlite`、`@nocobase/db-oracle` 和 `@nocobase/db-mssql`。
 `knex` 由 `@nocobase/db` 提供；native driver 和 PostgreSQL 的
 `pg-query-stream` 由对应 dialect 包提供。
+
+## Connection type ownership
+
+`ConnectionConfig` is the dialect-independent runtime contract. Concrete types such as `SqliteConnectionConfig`, `PostgresConnectionConfig`, and `MysqlConnectionConfig` are exported by their respective `@nocobase/db-<dialect>` packages, alongside their factories and `Options`. Import these types from the dialect package rather than `@nocobase/db`.
+
+Use `DatabaseConfig<SqliteConnectionConfig>` when explicitly naming a connection shape, or infer it from registered drivers:
+
+```ts
+import sqlite from '@nocobase/db-sqlite';
+import type { DatabaseConfigFromDrivers } from '@nocobase/db';
+
+const drivers = { sqlite };
+const config: DatabaseConfigFromDrivers<typeof drivers> = {
+  drivers,
+  connections: {
+    main: { dialect: 'sqlite', filename: ':memory:' },
+  },
+};
+```
+
+`ConnectionConfigFromDrivers<typeof drivers>` extracts just the connection union, and `DriverConnectionConfig<typeof sqlite>` extracts one driver's connection shape. These utilities support both factory functions and driver descriptors. `AnyConnectionConfig` remains an alias for the common contract, and `ExtensibleDatabaseConfig<TConnection>` remains available.
 
 ## 创建最小配置
 

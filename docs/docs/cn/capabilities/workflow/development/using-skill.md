@@ -11,7 +11,7 @@ keywords: 'NocoBase,Workflow Skill,Agent,提示词'
 Workflow Skill 随插件发布。插件启用时，应用会把它同步到 `.agents/skills/`。如果该目录缺失或明显过期，在应用根目录运行：
 
 ```bash
-pnpm plugin:skills:sync
+pnpm skills:sync
 ```
 
 `.agents/skills/` 是同步生成的本地内容，下一次同步会整体替换，不要直接修改。

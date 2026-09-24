@@ -1,4 +1,8 @@
+import { findApplicationNotConfigured } from '../config/not-configured.js';
+import { formatNotConfigured } from './not-configured-message.js';
+import { loggingToken } from '../logging/token.js';
 import type { Application } from '../application/index.js';
+import { NodeServerProxy, type NodeServerProxyOptions } from './proxy.js';
 import {
   resolveAppRuntime,
   type AppRuntimeDefinition,
@@ -13,9 +17,12 @@ import {
   type StandaloneAppScope,
 } from './scope.js';
 import {
+  resolveNodeShutdownTimeouts,
   type ClosableNodeAppServer,
+  type NodeShutdownOptions,
   disposeAfterStartupFailure,
   startNodeAppServer,
+  watchStartupShutdownSignals,
 } from './server.js';
 
 export type CreateStandaloneRuntimeScopeOptions = CreateStandaloneScopeOptions;
@@ -29,6 +36,8 @@ export interface StandaloneServerListenOptions {
 export interface StandaloneServer extends ClosableNodeAppServer {
   readonly application: Application;
   readonly listenOptions: StandaloneServerListenOptions;
+  /** Shutdown budget resolved from the environment; empty keeps the defaults. */
+  readonly shutdownOptions: NodeShutdownOptions;
   readonly signal: AbortSignal;
 }
 
@@ -38,6 +47,10 @@ export interface StandaloneApplicationDefinition {
   readonly rootDir: string;
   readonly appRuntime: AppRuntimeDefinition;
   readonly createServer: StandaloneServerFactory;
+  /** Configure listener-level forwarding after the application has started. */
+  readonly proxy?: (context: {
+    readonly application: Application;
+  }) => NodeServerProxyOptions;
 }
 
 export type StandaloneServerOptions = CreateStandaloneRuntimeScopeOptions & {
@@ -57,9 +70,18 @@ export interface DefinedStandaloneServer {
 export async function createStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<StandaloneServer> {
-  const { appRuntime: _appRuntime, createServer, ...serverOptions } = options;
+  const {
+    appRuntime,
+    createServer,
+    proxy: configureProxy,
+    ...serverOptions
+  } = options;
   const scope = createStandaloneRuntimeScope(
-    resolveStandaloneServerScopeOptions(serverOptions),
+    resolveStandaloneServerScopeOptions({
+      ...serverOptions,
+      deploymentRootDir:
+        serverOptions.deploymentRootDir ?? appRuntime.deploymentRootDir,
+    }),
   );
 
   try {
@@ -68,6 +90,10 @@ export async function createStandaloneServer(
       application,
       application.publicBasePath,
     );
+    const proxy = configureProxy
+      ? new NodeServerProxy(configureProxy({ application }))
+      : undefined;
+    if (proxy) scope.registerDisposer('standalone-proxy', () => proxy.close());
     const serverConfigValue = application.config.get<NodeServerConfig>(
       'server',
     ) ?? { host: '127.0.0.1', port: 13000, startLog: true };
@@ -78,8 +104,13 @@ export async function createStandaloneServer(
     };
     const server: StandaloneServer = {
       application,
+      shutdownOptions: resolveNodeShutdownTimeouts(scope.env),
       close: (): Promise<void> => scope.destroy(),
-      fetch: mounted.fetch,
+      fetch: (request, env, executionContext) =>
+        proxy?.matches(new URL(request.url).pathname)
+          ? proxy.fetch(request)
+          : mounted.fetch(request, env, executionContext),
+      proxy,
       listenOptions,
       signal: scope.signal,
     };
@@ -95,10 +126,20 @@ export async function createStandaloneServer(
 }
 
 export function startServer(options: CreateStandaloneServerOptions): void {
+  const strictStartup =
+    createStandaloneRuntimeScope({
+      ...options,
+      deploymentRootDir:
+        options.deploymentRootDir ?? options.appRuntime.deploymentRootDir,
+    }).env.NOCOBASE_STRICT_STARTUP === 'true';
   const startPromise = startStandaloneServer(options);
   startPromise.catch((error) => {
-    console.error(error);
+    // An unconfigured application gets its instruction without a stack trace; anything else is printed whole.
+    const notConfigured = findApplicationNotConfigured(error);
+    console.error(notConfigured ? formatNotConfigured(notConfigured) : error);
     process.exitCode = 1;
+    // Startup has already disposed the scope. Do not retain leaked handles.
+    if (strictStartup) process.exit(1);
   });
 }
 
@@ -130,20 +171,64 @@ export function createStandaloneRuntimeScope(
   return createStandaloneScope(options);
 }
 
-export function resolveStandaloneAppRuntime(
+export async function resolveStandaloneAppRuntime(
   definition: AppRuntimeDefinition,
   options: CreateStandaloneRuntimeScopeOptions,
-): Promise<ResolvedAppRuntime> {
-  return resolveAppRuntime(definition, createStandaloneRuntimeScope(options));
+): Promise<ResolvedAppRuntime & { readonly scope: StandaloneAppScope }> {
+  const scope = createStandaloneRuntimeScope({
+    ...options,
+    deploymentRootDir:
+      options.deploymentRootDir ?? definition.deploymentRootDir,
+  });
+  try {
+    const runtime = await resolveAppRuntime(definition, scope);
+    return Object.assign(runtime, { scope });
+  } catch (error) {
+    return disposeAfterStartupFailure(() => scope.destroy(), error);
+  }
 }
 
 async function startStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<void> {
-  const app = await createStandaloneServer(options);
+  // Startup runs migrations and seeds under a task lock before the HTTP server
+  // registers its own handlers, so the signals are watched from here until it
+  // does. A restart that arrives mid-startup then shuts down cleanly instead
+  // of leaving the lock held by a process that no longer exists.
+  const startupSignals = watchStartupShutdownSignals();
+  let app: StandaloneServer;
+  try {
+    app = await createStandaloneServer(options);
+  } catch (error) {
+    startupSignals.dispose();
+    throw error;
+  }
+
+  const logger = app.application.container.has(loggingToken)
+    ? app.application.container.resolve(loggingToken).getLogger('server')
+    : undefined;
+
+  const startupSignal = startupSignals.received();
+  if (startupSignal) {
+    startupSignals.dispose();
+    const message = `Startup completed after ${startupSignal}; shutting down without listening.`;
+    if (logger) logger.info(message);
+    else console.log(message);
+    await app.close();
+    return;
+  }
 
   try {
     await startNodeAppServer(app, {
+      ...(logger
+        ? {
+            logger: {
+              error: (message: string, err?: unknown) =>
+                logger.error({ err }, message),
+            },
+          }
+        : {}),
+      ...app.shutdownOptions,
       hostname: app.listenOptions.hostname,
       port: app.listenOptions.port,
       onListen: (info): void => {
@@ -151,13 +236,15 @@ async function startStandaloneServer(
           return;
         }
 
-        console.log(
-          `App server listening on http://${info.address}:${info.port}`,
-        );
+        const message = `App server listening on http://${info.address}:${info.port}`;
+        if (logger) logger.info(message);
+        else console.log(message);
       },
     });
   } catch (error) {
     await disposeAfterStartupFailure(() => app.close(), error);
+  } finally {
+    startupSignals.dispose();
   }
 }
 

@@ -1,6 +1,7 @@
 import type { ApiKeysResource } from './en-US.js';
 
 const zhCN: ApiKeysResource = {
+  'common.close': '关闭',
   nav: { apiKeys: 'API 密钥' },
   page: {
     title: 'API 密钥',

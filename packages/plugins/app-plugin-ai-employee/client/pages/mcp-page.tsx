@@ -1,9 +1,5 @@
-import {
-  apiClientToken,
-  useService,
-  type ApiClient,
-} from '@nocobase/app-client';
-import { CircleAlert, Server, X } from 'lucide-react';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
+import { Server, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import {
@@ -16,29 +12,37 @@ import {
   type MCPTransport,
 } from '../mcp-service.js';
 import { useT } from '../locales/index.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '../../registry/nocobase-ai/shared/ui/card.js';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../registry/nocobase-ai/shared/ui/table.js';
 import { Switch } from '../../registry/nocobase-ai/shared/ui/switch.js';
 
 const transportLabels: Record<MCPTransport, string> = {
   stdio: 'Stdio',
-  http: 'HTTP (Streamable)',
-  sse: 'HTTP + SSE (Legacy)',
+  http: 'mcp.transportHttp',
+  sse: 'mcp.transportSse',
 };
 
-const transportColors: Record<MCPTransport, string> = {
-  stdio: 'bg-blue-100 text-blue-800',
-  http: 'bg-green-100 text-green-800',
-  sse: 'bg-amber-100 text-amber-800',
+/**
+ * Transport is a category rather than a status, so the three tones come from the
+ * theme's chart series: those are the tokens a preset defines to be told apart
+ * from one another, and unlike fixed palette colours they follow the theme.
+ */
+const transportTones: Record<MCPTransport, string> = {
+  stdio: 'bg-chart-1/20',
+  http: 'bg-chart-2/20',
+  sse: 'bg-chart-3/20',
 };
 
 export default function MCPPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const t = useT();
   const [servers, setServers] = useState<MCPRecord[]>([]);
   const [tools, setTools] = useState<Record<string, MCPToolEntry[]>>({});
@@ -97,103 +101,89 @@ export default function MCPPage(): ReactElement {
   };
 
   return (
-    <main className='px-3 py-4 sm:px-4'>
-      <Card className='gap-0 shadow-sm'>
-        <CardHeader className='border-b px-4 py-4 sm:px-5'>
-          <CardTitle className='text-lg'>{t('MCP servers')}</CardTitle>
-          <p className='mt-1 flex items-start gap-1.5 text-sm text-muted-foreground'>
-            <CircleAlert
-              className='mt-0.5 h-4 w-4 shrink-0'
-              aria-hidden='true'
-            />
-            <span>{t('MCP servers are configured in config.yml.')}</span>
-          </p>
-        </CardHeader>
-        <CardContent className='p-0'>
-          {error ? (
-            <div
-              className='mx-4 mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive sm:mx-5'
-              role='alert'
-            >
-              {error}
-            </div>
-          ) : null}
-          <div className='overflow-x-auto'>
-            <table className='w-full min-w-[48rem] text-left text-sm'>
-              <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
-                <tr>
-                  <th className='w-12 px-5 py-3 text-center'>#</th>
-                  <th className='px-5 py-3'>{t('UID')}</th>
-                  <th className='px-5 py-3'>{t('Title')}</th>
-                  <th className='px-5 py-3'>{t('Transport')}</th>
-                  <th className='px-5 py-3'>{t('Enabled')}</th>
-                  <th className='px-5 py-3'>{t('Actions')}</th>
-                </tr>
-              </thead>
-              <tbody className='divide-y'>
-                {loading ? (
-                  <tr>
-                    <td
-                      className='px-3 py-10 text-center text-muted-foreground'
-                      colSpan={6}
-                    >
-                      {t('Loading…')}
-                    </td>
-                  </tr>
-                ) : null}
-                {!loading && !servers.length ? (
-                  <tr>
-                    <td
-                      className='px-3 py-10 text-center text-muted-foreground'
-                      colSpan={6}
-                    >
-                      {t('No MCP servers configured.')}
-                    </td>
-                  </tr>
-                ) : null}
-                {!loading
-                  ? servers.map((server, index) => (
-                      <tr key={server.name} className='hover:bg-muted/30'>
-                        <td className='px-5 py-4 text-center text-muted-foreground'>
-                          {index + 1}
-                        </td>
-                        <td className='px-5 py-4 font-mono text-xs'>
-                          {server.name}
-                        </td>
-                        <td className='px-5 py-4'>{server.title || '—'}</td>
-                        <td className='px-5 py-4'>
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${transportColors[server.transport]}`}
-                          >
-                            {t(transportLabels[server.transport])}
-                          </span>
-                        </td>
-                        <td className='px-5 py-4'>
-                          <Switch
-                            checked={server.enabled}
-                            disabled={updatingName === server.name}
-                            onCheckedChange={() => void toggleEnabled(server)}
-                            aria-label={`${t('Enabled')}: ${server.name}`}
-                          />
-                        </td>
-                        <td className='px-5 py-4'>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='ghost'
-                            onClick={() => openDrawer(server)}
-                          >
-                            {t('View')}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
-                  : null}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+    <div className='flex min-w-0 flex-col gap-4'>
+      {error ? (
+        <div
+          className='rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive'
+          role='alert'
+        >
+          {error}
+        </div>
+      ) : null}
+      <div className='overflow-hidden rounded-xl border bg-card'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className='w-12 text-center'>#</TableHead>
+              <TableHead>{t('UID')}</TableHead>
+              <TableHead>{t('Title')}</TableHead>
+              <TableHead>{t('Transport')}</TableHead>
+              <TableHead>{t('Enabled')}</TableHead>
+              <TableHead>{t('Actions')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  className='h-32 text-center text-muted-foreground'
+                  colSpan={6}
+                >
+                  {t('Loading…')}
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading && !servers.length ? (
+              <TableRow>
+                <TableCell
+                  className='h-32 text-center text-muted-foreground'
+                  colSpan={6}
+                >
+                  {t('No MCP servers configured.')}
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading
+              ? servers.map((server, index) => (
+                  <TableRow key={server.name}>
+                    <TableCell className='text-center text-muted-foreground'>
+                      {index + 1}
+                    </TableCell>
+                    <TableCell className='font-mono text-xs'>
+                      {server.name}
+                    </TableCell>
+                    <TableCell>{server.title || '—'}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium text-foreground ${transportTones[server.transport]}`}
+                      >
+                        {t(transportLabels[server.transport])}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={server.enabled}
+                        disabled={updatingName === server.name}
+                        onCheckedChange={() => void toggleEnabled(server)}
+                        aria-label={`${t('Enabled')}: ${server.name}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => openDrawer(server)}
+                      >
+                        {t('View')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              : null}
+          </TableBody>
+        </Table>
+      </div>
       {selected ? (
         <MCPDrawer
           api={api}
@@ -204,7 +194,7 @@ export default function MCPPage(): ReactElement {
           }}
         />
       ) : null}
-    </main>
+    </div>
   );
 }
 
@@ -229,15 +219,15 @@ function MCPDrawer({
       }}
     >
       <aside
-        className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-background shadow-xl'
+        className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-popover shadow-xl'
         role='dialog'
         aria-modal='true'
-        aria-label={t('MCP tools')}
+        aria-label={t('mcp.toolsTitle')}
       >
         <div className='flex items-center justify-between border-b px-4 py-3'>
           <div className='flex items-center gap-2 font-semibold'>
             <Server className='h-4 w-4' />
-            {t('MCP tools')}
+            {t('mcp.toolsTitle')}
           </div>
           <button
             type='button'
@@ -276,11 +266,16 @@ function ToolsPanel({
   tools: MCPToolEntry[];
   t: (key: string) => string;
 }): ReactElement {
+  const { toolTitle, compareTitles } = useCatalogDisplay();
   const pageSize = 8;
   const [page, setPage] = useState(1);
   const [updatingTool, setUpdatingTool] = useState<string>();
   const pageCount = Math.ceil(tools.length / pageSize);
-  const visibleTools = tools.slice((page - 1) * pageSize, page * pageSize);
+  const visibleTools = [...tools]
+    .sort((left, right) =>
+      compareTitles(toolTitle(left), toolTitle(right), left.name, right.name),
+    )
+    .slice((page - 1) * pageSize, page * pageSize);
   const updatePermission = async (
     tool: MCPToolEntry,
     permission: 'ASK' | 'ALLOW',
@@ -296,7 +291,7 @@ function ToolsPanel({
   if (!tools.length)
     return (
       <div className='rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground'>
-        {t('No MCP tools available.')}
+        {t('mcp.toolsEmpty')}
       </div>
     );
   return (
@@ -311,7 +306,7 @@ function ToolsPanel({
         {visibleTools.map((tool) => (
           <li key={tool.name} className='p-3'>
             <div className='flex items-start justify-between gap-3'>
-              <div className='font-medium'>{tool.title}</div>
+              <div className='font-medium'>{toolTitle(tool)}</div>
               <div className='flex shrink-0 items-center gap-1 text-xs text-muted-foreground'>
                 <span>{t('Permission')}</span>
                 <Button

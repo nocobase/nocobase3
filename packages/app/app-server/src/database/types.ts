@@ -1,7 +1,13 @@
 import type {
+  AnyConnectionConfig,
+  ChecksumMismatchPolicy,
   CollectionMetadataStore,
   CollectionMetadataStoreConfig,
-  DatabaseConfig as NocoBaseDatabaseConfig,
+  ConnectionConfig,
+  ConnectionConfigFromDrivers,
+  DatabaseConfigFromDrivers,
+  DatabaseDriverRegistration,
+  ExtensibleDatabaseConfig,
   MigrationSource,
   SeedSource,
 } from '@nocobase/db';
@@ -15,17 +21,36 @@ import type {
 export type AppMetadataStoreConfig =
   string | CollectionMetadataStoreConfig | CollectionMetadataStore;
 
-export interface AppDatabaseConfig extends Omit<
-  NocoBaseDatabaseConfig,
+/**
+ * Application configuration over dialect-independent connections by default.
+ * Supply a dialect's connection type for explicit checking, or use
+ * `AppDatabaseConfigFromDrivers` to infer it from registered drivers.
+ */
+export interface AppDatabaseConfig<
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
+> extends Omit<
+  ExtensibleDatabaseConfig<TConnection>,
   'connections' | 'metadataStore'
 > {
-  connections: Record<string, AppDatabaseConnectionConfig>;
+  connections: Record<string, AppDatabaseConnectionConfig<TConnection>>;
   metadataStore?: AppMetadataStoreConfig;
   /** @deprecated Configure tasks on connections instead. Applies to the default connection. */
   migrations?: Partial<AppDatabaseMigrationConfig>;
   /** @deprecated Configure tasks on connections instead. Applies to the default connection. */
   seeds?: Partial<AppDatabaseSeedConfig>;
 }
+
+/**
+ * Infer accepted dialects and their connection fields from the installed drivers.
+ * `defineAppDatabaseConfig` infers this type from a callback's returned drivers.
+ * Use this alias when an explicit annotation is needed outside that helper.
+ */
+export type AppDatabaseConfigFromDrivers<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = Omit<
+  AppDatabaseConfig<ConnectionConfigFromDrivers<TDrivers>>,
+  'drivers'
+> & { drivers: DatabaseConfigFromDrivers<TDrivers>['drivers'] };
 
 /**
  * Runtime facts that task planning needs and configuration cannot supply: the
@@ -51,6 +76,13 @@ export interface AppDatabaseMigrationConfig {
   tableName?: string;
   lockTableName?: string;
   extensions?: readonly string[];
+  /**
+   * How to react when an executed migration's source no longer hashes to the
+   * checksum recorded for it. `warn` (the default) reports the drift and
+   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * history. A migration the sources cannot explain at all always fails.
+   */
+  onChecksumMismatch?: ChecksumMismatchPolicy;
 }
 
 export interface AppDatabaseSeedConfig {
@@ -61,6 +93,13 @@ export interface AppDatabaseSeedConfig {
   tableName?: string;
   lockTableName?: string;
   extensions?: readonly string[];
+  /**
+   * How to react when an executed seed's source no longer hashes to the
+   * checksum recorded for it. `warn` (the default) reports the drift and
+   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * history.
+   */
+  onChecksumMismatch?: ChecksumMismatchPolicy;
 }
 
 /** `Omit` over a union keeps only the common keys; distribute it so each dialect keeps its own. */
@@ -68,10 +107,9 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never;
 
-export type AppDatabaseConnectionConfig = DistributiveOmit<
-  NocoBaseDatabaseConfig['connections'][string],
-  'metadataStore'
-> & {
+export type AppDatabaseConnectionConfig<
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
+> = DistributiveOmit<TConnection, 'metadataStore'> & {
   migrations?: Partial<AppDatabaseMigrationConfig>;
   seeds?: Partial<AppDatabaseSeedConfig>;
   /**

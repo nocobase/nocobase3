@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-file",
   "displayName": "File App Plugin",
   "description": "File repositories, uploads, stable content URLs, and editable Registry components for NocoBase applications.",
-  "version": "0.1.0-beta.10",
+  "version": "0.1.0-beta.15",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -79,7 +79,6 @@
     "@nocobase/db": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@types/react": "catalog:",
-    "better-sqlite3": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@testing-library/user-event": "catalog:",
@@ -89,7 +88,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-markdown": "catalog:",
-    "remark-gfm": "catalog:"
+    "remark-gfm": "catalog:",
+    "@silurus/ooxml": "0.85.1"
   },
   "dependencies": {
     "hono": "catalog:"
@@ -98,7 +98,8 @@
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
-    "@nocobase/service-provider": "workspace:^"
+    "@nocobase/service-provider": "workspace:^",
+    "@nocobase/i18n": "workspace:^"
   },
   "nocobase": {
     "registry": {

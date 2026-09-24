@@ -16,15 +16,21 @@
     "label": "Authentication"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "authorization",
-    "label": "Permissions"
+    "label": "Permissions",
+    "collapsed": true
   },
   {
     "type": "dir",
     "collapsed": true,
     "name": "workflow",
     "label": "Workflow"
+  },
+  {
+    "type": "file",
+    "name": "scheduler",
+    "label": "Scheduled tasks"
   },
   {
     "type": "file",
@@ -41,6 +47,11 @@
     "type": "file",
     "name": "file",
     "label": "Files"
+  },
+  {
+    "type": "file",
+    "name": "template-print",
+    "label": "Template printing"
   },
   {
     "type": "file",

@@ -1,5 +1,331 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.21
+
+### Patch Changes
+
+- Updated dependencies [cda1175]
+- Updated dependencies [e286e0d]
+- Updated dependencies [808bf34]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [80ef702]
+  - @nocobase/app-plugin-authentication@1.0.0-beta.21
+  - @nocobase/app-plugin-authorization@0.2.0-beta.18
+  - @nocobase/app-server@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.15
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/ai-employee@0.2.0-beta.7
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.20
+
+### Patch Changes
+
+- 709f9ed: Update Better Auth and API keys to 1.7.5 and align fresh authentication databases with provider-based account identity. Existing authentication databases must be recreated; the original account migration has changed and no compatibility migration is provided.
+- d696700: Stop the `bubblegum` theme from turning settings pages into competing hues, and fix the token misuse it exposed.
+
+  The preset was carried over from tweakcn verbatim, and upstream spends the generic surface and outline roles on decoration: `--card` was a cream 101 degrees of hue away from the pink `--background`, `--border` was `--primary` itself at chroma 0.18 against a median of 0.02 across the other thirty presets, and `--muted` was a cyan. One demonstration card and a few dividers carry that; a settings page stacking several panels over dozens of hairlines does not, and pages showed pink, cream, cyan and teal at once. Six light values are retuned — `--card`, `--border`, `--muted`, `--input`, `--sidebar-border` and `--sidebar-primary` — keeping those roles in the background's hue family and leaving the preset's colour in `--primary`, `--secondary` and `--accent`. The dark values, the radius, and every other preset are unchanged, and `THIRD-PARTY-NOTICES.md` records the deviation.
+
+  The same pages also used tokens for something other than their role, which no neutral preset makes visible. Authorization's two page shells and four Hub pages painted the whole page with `bg-muted/20`, which is the page surface and belongs to `bg-background`; under a preset whose `--muted` is a real colour that was a film over the entire viewport. The AI employee page's read-only fields hand-rolled `bg-muted/40` instead of using the shared `Input` and `Textarea` with `disabled`, three information callouts were fixed `bg-blue-50`, and the MCP transport labels were fixed `bg-blue-100`/`bg-green-100`/`bg-amber-100`; the transports now take their three tones from the theme's chart series, which is what a preset defines to be told apart.
+
+  Three fixed colours on settings pages are corrected while they are in hand. The AI employee page's missing-knowledge-base warning and the schedule detail page's target-issue icon named a light-mode ink with no dark counterpart, so both were close to unreadable on a dark card; they now carry one. The routes example reported a load failure in a fixed red, which is what `--destructive` is for.
+
+  The theme authoring reference and the token reference now state the rule, so a preset converted tomorrow is checked against it.
+
+- d696700: Give every settings surface the token that matches what it is, so panels stop disagreeing with one another.
+
+  The permission set editor is where this shows: its two tabs sit in one panel, and the permission configuration tab painted itself `bg-background` while the assignment tab inherited the panel's `bg-card`, so switching tabs changed the page colour under the same heading. The same mistake is spread across the settings pages, and none of it is visible under a preset whose page and card are near-identical.
+
+  Each token names a layer rather than a shade, and every site now uses the one that describes it. A panel resting on the page is `bg-card`, which is what the AI tools and skills pages already used while the LLM service, MCP service, conversation, API key, user and notification log panels named the page surface instead — two lists in one plugin, one framed and one flat. A dialog or drawer is `bg-popover`, which is what the shared `Sheet`, `Dialog` and `Popover` primitives use and what six hand-rolled drawers and dialogs did not. An opaque sticky header, footer or table head names the surface it scrolls within rather than the page behind it. A form control names no surface at all and inherits the one it sits on, the way the shared `Input` and `Textarea` do with `bg-transparent`; twenty hand-rolled inputs, selects and text areas were pinned to the page colour and showed through as a differently coloured box inside every card.
+
+  The styling reference now states which token describes which layer, and why picking one because it happens to look right is what puts a page-coloured block inside a panel.
+
+- Updated dependencies [709f9ed]
+- Updated dependencies [d696700]
+- Updated dependencies [fa01814]
+- Updated dependencies [ca3188e]
+- Updated dependencies [38e5253]
+- Updated dependencies [fa01814]
+- Updated dependencies [7bde7bd]
+- Updated dependencies [5380642]
+- Updated dependencies [3187ace]
+- Updated dependencies [d4783c2]
+- Updated dependencies [d696700]
+- Updated dependencies [5380642]
+- Updated dependencies [c5f4438]
+- Updated dependencies [3187ace]
+- Updated dependencies [38e5253]
+- Updated dependencies [38e5253]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.20
+  - @nocobase/app-plugin-authorization@0.2.0-beta.17
+  - @nocobase/db@1.0.0-beta.13
+  - @nocobase/app-server@1.0.0-beta.23
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/ai-employee@0.2.0-beta.7
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.19
+
+### Minor Changes
+
+- ff158aa: Group Settings navigation under AI with separate AI Employees, Conversations, LLM services, and MCP services pages while preserving legacy links. Add a read-only conversation center for searching and inspecting application-wide conversation history, protected by the application's AI settings Permission Set access. Reuse Registry conversation lists, message rendering, and history conversion, with safe read-only tool and sub-agent presentation.
+
+  Make the AI Employees list collapsible and hidden by default, with a localized, accessible icon-only toggle centered on the left divider and no employee count or extra detail toolbar. Preserve the original bordered employee cards, 19rem expanded list, detail header, selection, and unsaved edits, with a reserved control gutter and touch-friendly sizing.
+
+  Keep conversation search, pagination, and selection in the URL; improve responsive metadata, accessible search controls, localized timestamps, independent retries, and scroll anchoring when loading earlier messages. Align the Conversations page with the shared AI settings header, background, spacing, and content container while preserving its read-only controls and independently scrollable list and transcript.
+
+- ff158aa: Add a standalone, read-only Skills catalog immediately after AI Employees with permission-protected management list and detail endpoints. Display associated tool names in a searchable table and show skill titles, descriptions, safe Markdown, and tool metadata in a detail dialog. Include English and Chinese translations, cancellation-safe loading, and retryable errors without executing tools or changing runtime skills endpoints.
+- ff158aa: Add a read-only Tools catalog immediately after Skills in AI settings, with searchable cards and an accessible right-side details drawer. Show tool documentation safely and input schemas as inert JSON without execution controls. Add independently authorized management endpoints while preserving the existing runtime tools response contract.
+
+### Patch Changes
+
+- ff158aa: Add human-readable display titles to the built-in data metadata, data query, and business analysis report skills and their data tools. Replace legacy translation markers in all built-in tool titles and about text with plain English metadata so management views display readable text instead of internal resource names or unresolved templates.
+- ff158aa: Constrain the AI employee editor to a viewport-responsive height and scroll overflowing tab content, including skills and tools, independently of the employee header, tabs, and save controls.
+- ff158aa: Keep system and custom role editors at the same height, avoid marking an unchanged empty custom editor as modified, and align employee save actions with the editor's right edge.
+- ff158aa: Expand the employee list by default when multiple AI employees are available, while preserving manual toggling. Let system and custom role editors fill the available detail area above the action bar.
+- ff158aa: Sort the Skills and Tools management pages and AI employee skill and tool lists alphabetically by display title, falling back to the name when the title is empty, using a consistent case-insensitive order.
+- ff158aa: Add matching icons to AI employee, skill, tool, LLM service, and MCP service settings navigation entries.
+- ff158aa: Align AI settings route authorization contracts with the current application runtime and remove a duplicate conversation type import after integrating develop.
+- ff158aa: Align LLM and MCP service settings tables with the standard administration table layout and page gutters, removing redundant card headings and nested padding. Clarify English and Chinese AI administration page descriptions and consolidate service configuration guidance into the LLM and MCP page introductions.
+- ff158aa: Keep the employee list toggle visible and usable when only one AI employee is available, while leaving the list collapsed by default.
+- ff158aa: Remove cross-feature tabs from AI Employee settings and its exported shell wrappers while preserving internal employee detail/editor tabs. Redirect legacy knowledge-base and vector-database tab URLs to their independent settings paths, preserving unrelated query parameters and hashes. Keep the tab registry and shell props as deprecated compatibility APIs without rendering contributed tabs; migrate custom tab contributions to Settings routes with parent `aiGroup`. Knowledge-base list/vector path helpers now target the standalone pages and require the owning Knowledge Base plugin's corresponding route update.
+- ff158aa: Add employee skill enable switches backed by an optional `skillSettings.enabledSkills` allowlist. Omitted or null selections retain inherited GENERAL and registered skills, while an empty list disables every skill. Preserve explicit selections across built-in registration and repository reloads, intersect session restrictions, and reject unavailable skill content and persisted tool activations. Existing skill and tool settings remain compatible without a database migration.
+- ff158aa: Add persistent employee tool selection with legacy inheritance for omitted or null selections and explicit disabling with an empty selection. Apply selections to discovered, injected, and skill-activated tools without allowing session settings to broaden access, preserve saved custom tool approval settings across registration and restart independently of explicit tool selections, and retain unknown saved names for future registrations. Selected optional tools still require their runtime capabilities, including current-user knowledge-base access.
+- ff158aa: Hide Conversations from the AI settings sidebar while preserving its guarded route and legacy direct links.
+- ff158aa: Remove the built-in data-modeling skill, which references unavailable tools. Keep the data-metadata, data-query, and business-analysis-report skills available.
+- ff158aa: Keep Atlas as the only registered built-in AI employee, removing the Dex, Ellis, Lexi, Vera, and Viz definitions while retaining reusable skills and tools.
+
+  Existing employee records and conversation history are unchanged; this release does not migrate or delete previously registered employees.
+
+- ff158aa: Unify tool rows across employee configuration, skill details, and the tool catalog with fixed heights, truncated titles and identifiers, and two-line plain-text introductions with full hover text. Read employee tool introductions from introduction.about rather than model-facing descriptions, while preserving permission controls and tool-detail navigation.
+- ff158aa: Keep skill cards at a fixed height, truncate long metadata, and collapse overflowing tool badges into a responsive +N indicator.
+- ff158aa: Replace the Skills settings table with responsive cards showing skill metadata above a tools footer with a Wrench icon and wrapping badges. Preserve metadata and tool search, accessible drawer opening and focus return, safe detail rendering, and loading, empty, and retry states.
+- ff158aa: Show localized skill counts alongside search and display tool introductions instead of model-facing descriptions in skill details. Include tool about fields in skill management responses.
+- ff158aa: Align tool cards with skill cards using fixed heights, truncated text, and title links without hover underlines. Remove scope and source from tool cards and details.
+- ff158aa: Organize tool details into labeled About, Description, and Input schema sections, and remove the redundant read-only schema hint.
+- ff158aa: Present tools as a compact single-column directory with whole-row detail triggers, responsive identifiers, localized result counts, and two-line plain-text introductions. Preserve keyboard focus and existing detail drawers.
+- ff158aa: Include tool introductions in management summaries and display and search the about field instead of the model-facing description in tool cards.
+- ff158aa: Support package-owned i18n metadata for Tools and Skills, preserving English source text for model execution while translating display titles, Tool introductions, and Skill descriptions. Localize built-in resources in English and Chinese, sort catalogs by localized titles in the current locale with stable name tie-breakers, and document Client locale ownership and exact source-text keys.
+- Updated dependencies [ff158aa]
+- Updated dependencies [ff158aa]
+- Updated dependencies [ff158aa]
+- Updated dependencies [ff158aa]
+  - @nocobase/ai-employee@0.2.0-beta.7
+
+## 0.1.0-beta.18
+
+### Patch Changes
+
+- 8f5eacf: Document a configuration readiness gate for embedded AI chat so the first message can be sent after initial navigation or refresh without switching employees or models. Include complete integration examples, actionable loading and unavailable states, and first-send verification steps.
+- 8f5eacf: Document conversation history response fields, stable message identifiers, pagination, nullability, and authenticated HTTP examples. Clarify the current SSE response limitation for non-streaming execution and distinguish history rows from message inputs and server agent results.
+- 8f5eacf: Fix AI conversation keyword searches failing with a SQL binding error. Use native repository substring filters with literal wildcard escaping while preserving user and scope isolation and conversation ordering.
+- 8f5eacf: Fix missing knowledge base options in the AI employee editor by using the knowledge base plugin's AI API route. Exclude disabled knowledge bases from the available options.
+- 8f5eacf: Use the shared Dialog and Button components for the LLM model editor so backdrop clicks and Escape dismiss it, focus is managed and restored, and modal styling matches the application's component library.
+
+  Use a searchable multi-select Combobox for provider models, with selected chips and the search input inside the same field. Filter by model label or ID, preserve selections while searching, and portal the options outside the editor's scroll container with viewport-aware list scrolling. Escape closes the picker before the editor.
+
+  Show localized loading and empty states while discovering LLM services instead of leaving the settings table blank.
+
+## 0.1.0-beta.17
+
+### Patch Changes
+
+- 64b3fdb: Integrate source-qualified database authorization and native relation policies with AI data services. Preserve explicit route group extensions, translated resource search, Hub ownership checks, API key cleanup, and protected permission-set assignments across user deletion. Update shared application guidance for the split authorization plugins.
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [fe564d9]
+- Updated dependencies [fe564d9]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/app-plugin-authorization@0.2.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.21
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- e13ed84: Make development logs concise and application-scoped while retaining structured file diagnostics. Route configuration and authentication diagnostics through application logging, reduce routine startup and request noise, distinguish optional AI Skill directories from missing configured paths, and align development console settings across templates. Document that deployed applications need rebuilding to adopt the current logging protocol.
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/logging@0.1.0-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+
+## 0.1.0-beta.15
+
+### Minor Changes
+
+- ec93611: Add discoverable data metadata, permission-scoped queries, and business analysis report skills for AI employees. Validate report charts on the server and render only confirmed report results. Reapply session restrictions to activated tools and include runtime skill assets in compiled deployment output.
+
+### Patch Changes
+
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.14
+
+### Patch Changes
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+- Updated dependencies [028dd7c]
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.17
+  - @nocobase/app-plugin-authentication@0.1.0-beta.16
+  - @nocobase/app-server@1.0.0-beta.17
+  - @nocobase/db@1.0.0-beta.8
+
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 9131230: Use plugin-owned PageContainer and PageHeader components to unify AI component demo and in-app inbox page layouts.
+
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- 6acf3bc: Use plugin-owned PageContainer and PageHeader components to standardize AI settings page spacing and headings.
+- d927494: Fix development startup of generated Hub applications by selecting the App Host launcher from the loaded package format, preserving source development in the workspace and using compiled JavaScript in installed packages. Keep the optional application configuration commented out so an empty YAML section cannot override application identity defaults during production startup. Correct the AI Employee plugin Skill namespace so generated applications can synchronize their registered plugins' Skills.
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 11c276a: 将 AI Employee Plugin Skill 移至插件标准的 `skills/` 源目录，确保发布包可以包含并同步该 Skill。
+
+  Move the AI Employee Plugin Skill into the plugin-standard `skills/` source directory so it can be included in the published package and synchronized correctly.
+
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- 1c70f60: Persist AI employee collection field metadata so Oracle returns booleans and integers with their logical types. Let the database query layer encode and decode JSON once, and use a round-trippable name for the default LLM service field. This changes initialization definitions and requires recreating development databases initialized with the previous definitions.
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- 1a85a86: Add breadcrumb labels to plugin routes so nested pages show their navigation path.
+- e067113: Depend on one zod major, so a deployment can resolve better-auth
+
+  An application that installed both the AI employee plugin and the API keys plugin failed to start with `z.ipv4 is not a function`, thrown while loading `@better-auth/core`. Nothing in better-auth was wrong: the AI employee packages asked for `zod: ^3` while better-auth asks for `^4`, and a deployment installs `dist/` with `nodeLinker: hoisted`, where one version of a package takes the root slot and the rest are nested underneath whoever depends on them. zod 3 won the root, which forced better-auth's whole subtree to be nested, and a `@better-auth/core` that ended up next to the root zod bound to the wrong major.
+
+  The same collision has a second failure mode that is harder to read. `@better-auth/api-key` declares `@better-auth/core`, `better-call`, `jose`, `kysely` and `nanostores` as peer dependencies, and a deployment sets `autoInstallPeers: false` so it installs none of them. It works anyway when better-auth's dependencies hoist to the root, because the peers are then sitting where the resolver looks; it stops working the moment the zod conflict pushes them down into `node_modules/better-auth/node_modules`, and the application fails with `Cannot find package '@better-auth/core'`.
+
+  So the fix is not to declare better-auth's internals somewhere. `@nocobase/ai-employee` never imported zod at all and no longer declares it, `@nocobase/app-plugin-ai-employee` moves to zod 4, and all three templates and the plugin now take it from the `zod` catalog entry, so one version is what an application gets. Its schemas use `z.object`, `z.string`, `z.number`, `z.array`, `z.record`, `z.coerce`, `z.any` and `z.unknown`, all of which carry over unchanged; `buildStandardAgentMiddleware` gained an explicit `AgentMiddleware[]` return type, which the new resolution made necessary.
+
+  A deployment tree now holds a single `zod` and a single `@better-auth/core`, hoisted to the root where `@better-auth/api-key` resolves them.
+
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+- Updated dependencies [e067113]
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+  - @nocobase/app-plugin-authentication@0.1.0-beta.14
+  - @nocobase/app-client@1.0.0-beta.16
+  - @nocobase/ai-employee@0.2.0-beta.5
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.9
 
 ### Patch Changes

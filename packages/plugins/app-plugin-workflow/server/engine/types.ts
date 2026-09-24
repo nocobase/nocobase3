@@ -74,6 +74,8 @@ export interface WorkflowRun {
   createdAt: string;
   manually: boolean;
   reason: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
   workflow?: WorkflowDefinition;
   nodeRuns?: WorkflowNodeRun[];
 }
@@ -104,12 +106,16 @@ export interface WorkflowLogger {
 export interface WorkflowEventOptions {
   eventKey?: string;
   deferred?: boolean;
+  /** Return after persisting a manual run while the runtime tracks its execution. */
+  waitForCompletion?: boolean;
   /** Execute any workflow manually, bypassing its enabled state and trigger-specific event validation. */
   manually?: boolean;
   force?: boolean;
   stack?: WorkflowId[];
   parentRunId?: WorkflowId;
   parameterValues?: WorkflowParameterValues;
+  sourceType?: string;
+  sourceId?: string;
   onTriggerFail?: (
     workflow: WorkflowDefinition,
     input: unknown,
@@ -168,4 +174,19 @@ export interface WorkflowEngineOptions {
   timeoutReaperBatchSize?: number;
   /** Forwarded to `Dispatcher.recover()` during initialization. */
   recoverGracePeriod?: number;
+  terminalObserver?: WorkflowTerminalObserver;
 }
+
+export interface WorkflowTerminalEvent {
+  readonly runId: WorkflowId;
+  readonly status: number;
+  readonly reason: string | null;
+  readonly output: unknown;
+  readonly finishedAt: string;
+  readonly sourceType: string | null;
+  readonly sourceId: string | null;
+}
+
+export type WorkflowTerminalObserver = (
+  event: WorkflowTerminalEvent,
+) => void | Promise<void>;

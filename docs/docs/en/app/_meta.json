@@ -36,11 +36,6 @@
   },
   {
     "type": "file",
-    "name": "services-and-jobs",
-    "label": "Services and background jobs"
-  },
-  {
-    "type": "file",
     "name": "configuration",
     "label": "Configuration"
   },

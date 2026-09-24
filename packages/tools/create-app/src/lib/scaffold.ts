@@ -40,8 +40,9 @@ export async function assertTargetIsUsable(directory: string): Promise<void> {
 }
 
 /**
- * The minimum a generated project must ignore. `config.yml` carries the generated `auth.secret` and `.env` carries a
- * hub's settings, so committing either would publish local configuration; the rest are build output and local state.
+ * The minimum a generated project must ignore. `config.yml` carries the `auth.secret` that `config:init` generates
+ * and `.env` carries a hub's settings, so committing either would publish local configuration; the rest are build
+ * output and local state.
  */
 const FALLBACK_GITIGNORE = [
   'node_modules/',
@@ -60,7 +61,12 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-journal',
   '/database.sqlite-wal',
   '/database.sqlite-shm',
+  // Written by `pnpm collections:generate`: a snapshot of what this machine's database resolves every Collection
+  // to, regenerated after migrating rather than committed. Only the managed connection the template ships is named,
+  // because an `external` connection keeps its metadata.json in the repository as the metadata source.
+  '/database/main/collections/',
   '/.agents/',
+  '/.claude/skills/',
   '/.agent-annotations/',
   '/.nocobase/',
   '*.log',
@@ -76,6 +82,7 @@ const FALLBACK_GITIGNORE = [
 const REQUIRED_GITIGNORE_ENTRIES = [
   '/.env',
   '/.agents/',
+  '/.claude/skills/',
   '/.agent-annotations/',
 ] as const;
 
@@ -265,20 +272,6 @@ export async function scaffoldFromTemplate(
 
 export async function removeDirectory(directory: string): Promise<void> {
   await rm(directory, { force: true, recursive: true });
-}
-
-/**
- * Reads the template's `config.example.yml`, which becomes the generated `config.yml`. A template is not required to
- * ship one, so the caller falls back rather than failing.
- */
-export async function readConfigExample(
-  directory: string,
-): Promise<string | undefined> {
-  try {
-    return await readFile(path.join(directory, 'config.example.yml'), 'utf8');
-  } catch {
-    return undefined;
-  }
 }
 
 /**

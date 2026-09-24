@@ -8,51 +8,74 @@ import { resolveAuthorizationSubjects } from '../../core/index.js';
 import type { RestrictionRule } from './model.js';
 import type { RestrictionRuleStore } from './store.js';
 
-export interface RestrictionRulesApi {
+export interface RestrictionRulesApi<TTransaction = unknown> {
   create(rule: RestrictionRule): Promise<RestrictionRule>;
   update(key: string, rule: RestrictionRule): Promise<RestrictionRule>;
   delete(key: string): Promise<void>;
   get(key: string): Promise<RestrictionRule | undefined>;
   list(): Promise<readonly RestrictionRule[]>;
+  /**
+   * Returns an API bound to the caller's transaction. The caller opens and
+   * commits the transaction.
+   */
+  withTransaction(transaction: TTransaction): RestrictionRulesApi<TTransaction>;
 }
 
-export class RestrictionRuleService
-  implements RestrictionRulesApi, AccessConstraintResolver
+export class RestrictionRuleService<TTransaction = unknown>
+  implements RestrictionRulesApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'restriction-rules';
-  private store?: RestrictionRuleStore;
 
-  constructor(store?: RestrictionRuleStore) {
-    this.store = store;
-  }
-  initialize(store: RestrictionRuleStore): void {
-    this.store = store;
+  constructor(private readonly store: RestrictionRuleStore<TTransaction>) {}
+  withTransaction(
+    transaction: TTransaction,
+  ): RestrictionRulesApi<TTransaction> {
+    return new RestrictionRuleService<TTransaction>(
+      this.store.withTransaction(transaction),
+    );
   }
   create(rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.getStore().create(rule);
+    return this.store.create(rule);
   }
   update(key: string, rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.getStore().update(key, rule);
+    return this.store.update(key, rule);
   }
   delete(key: string): Promise<void> {
-    return this.getStore().delete(key);
+    return this.store.delete(key);
   }
   get(key: string): Promise<RestrictionRule | undefined> {
-    return this.getStore().get(key);
+    return this.store.get(key);
   }
   list(): Promise<readonly RestrictionRule[]> {
-    return this.getStore().list();
+    return this.store.list();
+  }
+
+  scope(): AccessConstraintResolver {
+    let rules: Promise<readonly RestrictionRule[]> | undefined;
+    return {
+      id: this.id,
+      resolve: async (input) =>
+        this.resolveRules(input, await (rules ??= this.store.list())),
+    };
   }
 
   async resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]> {
+    return this.resolveRules(input, await this.store.list());
+  }
+
+  private resolveRules(
+    input: ResolveAccessConstraintsInput,
+    rules: readonly RestrictionRule[],
+  ): readonly AccessConstraint[] {
     const subjects = resolveAuthorizationSubjects(input);
-    const rules = await this.getStore().list();
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
-          (action) => action.action === input.action,
+          (action) =>
+            action.action === input.action &&
+            action.scopeKey === input.scopeKey,
         );
         return restrictionMatches(rule, input) &&
           appliesToSubject(rule.subjects, subjects) &&
@@ -61,16 +84,14 @@ export class RestrictionRuleService
           : [];
       })
       .map(({ rule, configured }) => ({
-        source: { plugin: this.id, id: rule.key },
+        source: {
+          plugin: this.id,
+          id: rule.key,
+          ...(rule.title === undefined ? {} : { title: rule.title }),
+        },
         effect: 'restrict' as const,
         value: configured.scope,
       }));
-  }
-
-  private getStore(): RestrictionRuleStore {
-    if (!this.store)
-      throw new Error('Restriction Rules has not been initialized');
-    return this.store;
   }
 }
 

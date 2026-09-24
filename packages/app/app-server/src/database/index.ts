@@ -1,4 +1,14 @@
 export {
+  MissingDatabaseDriversError,
+  OFFICIAL_DIALECTS,
+  resolveDatabaseConfig,
+  type DatabaseConfigInput,
+  type MissingDatabaseDriver,
+  type OfficialDialect,
+  type ResolvedDatabaseConfig,
+} from './resolve-config.js';
+export { defineAppDatabaseConfig } from './define-app-database-config.js';
+export {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,
 } from './manager.js';
@@ -8,6 +18,7 @@ export {
 } from './provider.js';
 export {
   createAppMigrator,
+  type AppMigrationRepairResult,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,
   type AppMigrationSkippedReason,
@@ -16,6 +27,7 @@ export {
 export {
   createAppSeeder,
   type AppSeeder,
+  type AppSeedRepairResult,
   type AppSeedRunResult,
   type AppSeedSkippedReason,
   type CreateAppSeederOptions,
@@ -37,16 +49,30 @@ export {
   type AppCollectionsArtifactResult,
 } from './collections-artifact.js';
 export {
+  runAppCollectionsDoctor,
+  type AppCollectionsDoctorConnectionResult,
+  type AppCollectionsDoctorOptions,
+  type AppCollectionsDoctorResult,
+} from './collections-doctor.js';
+export {
+  selectAppDatabaseConnections,
+  type AppDatabaseConnectionSelection,
+} from './connection-selection.js';
+export {
   runAppMigrations,
   runAppSeeds,
   runAppDatabaseTasks,
   AppDatabaseTaskError,
+  type AppDatabaseTaskOperation,
   type AppDatabaseTaskResult,
   type AppDatabaseTaskRunOptions,
   type AppDatabaseTasksResult,
 } from './tasks.js';
 export {
   planAppDatabaseTasks,
+  planAppRuntimeDatabaseTasks,
+  type AppRuntimeDatabaseTaskPlanOptions,
+  type AppDatabaseMigrationSource,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
   type AppDatabaseTaskPlanOptions,
@@ -54,6 +80,7 @@ export {
 } from './plan.js';
 export type {
   AppDatabaseConfig,
+  AppDatabaseConfigFromDrivers,
   AppDatabaseConnectionConfig,
   AppMetadataStoreConfig,
   AppDatabaseMigrationConfig,

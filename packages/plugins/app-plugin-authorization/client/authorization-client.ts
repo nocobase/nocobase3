@@ -1,4 +1,19 @@
 import type { ApiClient } from '@nocobase/app-client';
+import type {
+  ResourceRef,
+  AuthorizationPermissionsSnapshot,
+} from '@nocobase/authorization/core';
+
+export type {
+  ResourceRef,
+  AuthorizationPermission,
+  AuthorizationPermissionsSnapshot,
+} from '@nocobase/authorization/core';
+
+export interface AuthorizationCheck {
+  resource: ResourceRef;
+  action: string;
+}
 
 export interface PermissionGrantAction {
   action: string;
@@ -10,10 +25,24 @@ export interface PermissionGrant {
   actions: readonly PermissionGrantAction[];
 }
 
+export type PermissionSetWriteOperation =
+  'create' | 'update' | 'delete' | 'assign' | 'revoke';
+
+export interface PermissionSetProtection {
+  owner: string;
+  allow: readonly PermissionSetWriteOperation[];
+  /** Subject types the set may be assigned to. Absent means any. */
+  assignableTo?: readonly string[];
+}
+
 export interface PermissionSet {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   grants: readonly PermissionGrant[];
+  /** Present when the set is protected; `allow` lists the operations the generic API still performs. */
+  readonly protection?: PermissionSetProtection;
+  /** True when holding this set grants unrestricted access. */
+  readonly unrestricted?: boolean;
 }
 
 export interface PermissionSetAssignment {
@@ -24,7 +53,7 @@ export interface PermissionSetAssignment {
 
 export interface PermissionSetInput {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   grants: readonly PermissionGrant[];
 }
 
@@ -32,40 +61,73 @@ export interface PermissionAssignmentInput {
   subject: { type: string; id: string };
 }
 
-export interface SelectOption {
+export type LocalizedText =
+  string | { key: string; ns: string; defaultValue?: string };
+
+export interface SelectOption<Text = string> {
+  category?: 'business' | 'pages' | 'administration';
   value: string;
-  label: string;
-  description?: string;
+  label: Text;
+  description?: Text;
 }
-export interface ResourceOption extends SelectOption {
-  actions?: readonly SelectOption[];
+export interface ResourceOption<Text = string> extends SelectOption<Text> {
+  searchText?: string;
+  ruleScopes?: readonly {
+    action: string;
+    scopeKey: string;
+    label: Text;
+    collection: string;
+    policies?: readonly string[];
+  }[];
+  actionScopes?: Readonly<
+    Record<
+      string,
+      {
+        policyType: string;
+        fields: readonly {
+          key: string;
+          collectionFields?: readonly string[];
+          label: Text;
+          defaultValue: string;
+          options: readonly SelectOption<Text>[];
+        }[];
+      }
+    >
+  >;
+  group?: string;
+  actions?: readonly SelectOption<Text>[];
 }
-export interface ResourceTypeOption {
+export interface ResourceGroupOption<Text = string> extends SelectOption<Text> {
+  children?: readonly ResourceGroupOption<Text>[];
+}
+export interface ResourceTypeOption<Text = string> {
+  category?: 'business' | 'pages' | 'administration';
+  groups?: readonly ResourceGroupOption<Text>[];
   value: string;
-  label: string;
-  resources: readonly ResourceOption[];
-  actions: readonly SelectOption[];
+  label: Text;
+  resources: readonly ResourceOption<Text>[];
+  actions: readonly SelectOption<Text>[];
 }
 export interface DatabaseCollectionOption {
   name: string;
-  title?: string;
-  description?: string;
-  actions: readonly string[];
   fields: readonly string[];
-  attributes?: Readonly<Record<string, string>>;
 }
-export interface AuthorizationOptions {
-  plugins: readonly string[];
-  resourceTypes: readonly ResourceTypeOption[];
-  subjectTypes: readonly SelectOption[];
-  collections: readonly DatabaseCollectionOption[];
-  recordAccessPolicies: readonly SelectOption[];
+export interface SubjectTypeOption<Text = string> extends SelectOption<Text> {
+  selection?: { type: 'fixed'; id: string } | { type: 'collection' };
 }
-export interface AuthorizationUser {
+export interface SubjectOption {
   id: string;
-  name: string;
-  username?: string;
-  email: string;
+  title: string;
+  description?: string;
+}
+export type SubjectSettings = string;
+export interface AuthorizationOptions<Text = string> {
+  resourceGroups?: readonly SelectOption<Text>[];
+  plugins: readonly string[];
+  resourceTypes: readonly ResourceTypeOption<Text>[];
+  subjectTypes: readonly SubjectTypeOption<Text>[];
+  collections: readonly DatabaseCollectionOption[];
+  recordAccessPolicies: readonly SelectOption<Text>[];
 }
 export interface AuthorizationRecordOption {
   id: string;
@@ -79,41 +141,41 @@ export type AccessScope =
       type: 'database';
       recordAccess: string | { key: string; params?: unknown };
     };
-export interface DefaultAccessRule {
-  resource: { type: string; id: string };
-  actions: readonly { action: string; scope: AccessScope }[];
-}
+
 export interface AuthorizationSubject {
   type: string;
   id: string;
 }
-export interface SharingRule {
-  key: string;
-  title?: string;
-  resource: { type: string; id: string };
-  actions: readonly {
-    action: string;
-    selection:
-      | { type: 'records'; ids: readonly string[] }
-      | { type: 'policy'; policy: AccessScope };
-  }[];
-  subjects: readonly AuthorizationSubject[];
-  reason?: string;
-}
-export interface RestrictionRule {
-  key: string;
-  title?: string;
-  resource: { type: string; id: string };
-  actions: readonly { action: string; scope: AccessScope }[];
-  subjects: readonly AuthorizationSubject[];
-  reason?: string;
+
+/** One reason a decision came out as it did, as the core gave it. */
+export interface AuthorizationReason {
+  code: string;
+  message: string;
+  /** The plugin the reason came from; absent when the core itself said it. */
+  plugin?: string;
+  details?: Readonly<Record<string, unknown>>;
 }
 
-interface PermissionsSnapshot {
-  permissions: readonly {
-    resource: { type: string; id: string };
-    actions: readonly string[];
-  }[];
+export type AuthorizationEffect = 'permit' | 'conditional' | 'deny';
+
+/** What the core decided, with why, and what it holds for when conditional. */
+export interface AuthorizationDecision {
+  checks?: readonly AuthorizationInspection[];
+  effect: AuthorizationEffect;
+  conditions?: Readonly<Record<string, unknown>> & { type: string };
+  reasons: readonly AuthorizationReason[];
+}
+
+export interface AuthorizationInspectInput {
+  subject: AuthorizationSubject;
+  resource: { type: string; id: string };
+  action: string;
+}
+
+export interface AuthorizationInspection {
+  resource: { type: string; id: string };
+  action: string;
+  decision: AuthorizationDecision;
 }
 
 interface DataResponse<T> {
@@ -121,16 +183,15 @@ interface DataResponse<T> {
 }
 
 export class AuthorizationClient {
-  private snapshot?: Promise<PermissionsSnapshot>;
+  private snapshot?: Promise<AuthorizationPermissionsSnapshot>;
+  private permissionsRevision = 0;
   private readonly invalidationListeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
 
-  async can(
-    resource: { type: string; id: string },
-    action: string,
-  ): Promise<boolean> {
+  async can({ resource, action }: AuthorizationCheck): Promise<boolean> {
     const snapshot = await this.permissions();
+    if (snapshot.unrestricted) return true;
     return snapshot.permissions.some(
       (permission) =>
         permission.resource.type === resource.type &&
@@ -140,17 +201,29 @@ export class AuthorizationClient {
     );
   }
 
-  permissions(): Promise<PermissionsSnapshot> {
-    this.snapshot ??= this.api
-      .request<DataResponse<PermissionsSnapshot>>({
-        path: 'authz/permissions',
-      })
-      .then((response) => response.data)
-      .catch((error: unknown) => {
-        this.snapshot = undefined;
-        throw error;
-      });
+  permissions(): Promise<AuthorizationPermissionsSnapshot> {
+    if (!this.snapshot) {
+      const request: Promise<AuthorizationPermissionsSnapshot> = this.api
+        .request<DataResponse<AuthorizationPermissionsSnapshot>>({
+          path: 'authz/permissions',
+        })
+        .then(
+          (response) =>
+            this.snapshot === request ? response.data : this.permissions(),
+          (error: unknown) => {
+            // A request from an earlier session must not evict its successor.
+            if (this.snapshot !== request) return this.permissions();
+            this.snapshot = undefined;
+            throw error;
+          },
+        );
+      this.snapshot = request;
+    }
     return this.snapshot;
+  }
+
+  getPermissionsRevision(): number {
+    return this.permissionsRevision;
   }
 
   listPermissionSets(): Promise<readonly PermissionSet[]> {
@@ -161,90 +234,56 @@ export class AuthorizationClient {
       .then((response) => response.data);
   }
 
-  loadOptions(path: string): Promise<AuthorizationOptions> {
-    return this.get<AuthorizationOptions>(path);
+  loadOptions(path: string): Promise<AuthorizationOptions<LocalizedText>> {
+    return this.get<AuthorizationOptions<LocalizedText>>(path);
   }
-  loadUsers(path: string): Promise<readonly AuthorizationUser[]> {
-    return this.get<readonly AuthorizationUser[]>(path);
+  /**
+   * Users come from the Users API rather than from Authorization, which knows
+   * subject ids and nothing about accounts. It authorizes separately, so this
+   * request can be refused while the settings page itself is allowed.
+   */
+  listSubjects(
+    settings: SubjectSettings,
+    type: string,
+    query: { search?: string; page: number; pageSize: number },
+  ): Promise<{ items: readonly SubjectOption[]; total: number }> {
+    return this.api
+      .request<
+        DataResponse<{ items: readonly SubjectOption[]; total: number }>
+      >({
+        path: `authz/${settings}/subjects/${encodeURIComponent(type)}`,
+        query,
+      })
+      .then((response) => response.data);
   }
-  listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
-    return this.get<readonly DefaultAccessRule[]>('authz/default-access');
-  }
-  setDefaultAccess(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
-    return this.send<DefaultAccessRule>('authz/default-access', 'PUT', rule);
-  }
-  async deleteDefaultAccess(resource: {
-    type: string;
-    id: string;
-  }): Promise<void> {
-    await this.api.request({
-      path: `authz/default-access/${encodeURIComponent(resource.type)}/${encodeURIComponent(resource.id)}`,
-      method: 'DELETE',
-    });
-  }
-  listSharingRules(): Promise<readonly SharingRule[]> {
-    return this.get<readonly SharingRule[]>('authz/sharing-rules');
-  }
-  listSharingRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]> {
-    return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/sharing-rules/records/${encodeURIComponent(collection)}`,
+  resolveSubjects(
+    settings: SubjectSettings,
+    type: string,
+    ids: readonly string[],
+  ): Promise<readonly SubjectOption[]> {
+    return this.send<readonly SubjectOption[]>(
+      `authz/${settings}/subjects/${encodeURIComponent(type)}/resolve`,
+      'POST',
+      { ids },
     );
   }
-  listDefaultAccessRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]> {
-    return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/default-access/records/${encodeURIComponent(collection)}`,
-    );
+  /** What one person may do on one resource, and why the application says so. */
+  inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {
+    return this.send<AuthorizationDecision>('authz/inspect', 'POST', input);
   }
-  createSharingRule(rule: SharingRule): Promise<SharingRule> {
-    return this.send<SharingRule>('authz/sharing-rules', 'POST', rule);
+  inspectConfigured(subject: AuthorizationSubject): Promise<{
+    unrestricted: boolean;
+    types: readonly string[];
+    resources: readonly { type: string; id: string }[];
+  }> {
+    return this.send('authz/inspect/configured', 'POST', { subject });
   }
-  updateSharingRule(key: string, rule: SharingRule): Promise<SharingRule> {
-    return this.send<SharingRule>(
-      `authz/sharing-rules/${encodeURIComponent(key)}`,
-      'PUT',
-      rule,
-    );
+  inspectBatch(
+    subject: AuthorizationSubject,
+    checks: readonly Omit<AuthorizationInspectInput, 'subject'>[],
+  ): Promise<readonly AuthorizationInspection[]> {
+    return this.send('authz/inspect/batch', 'POST', { subject, checks });
   }
-  async deleteSharingRule(key: string): Promise<void> {
-    await this.api.request({
-      path: `authz/sharing-rules/${encodeURIComponent(key)}`,
-      method: 'DELETE',
-    });
-  }
-  listRestrictionRules(): Promise<readonly RestrictionRule[]> {
-    return this.get<readonly RestrictionRule[]>('authz/restriction-rules');
-  }
-  listRestrictionRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]> {
-    return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/restriction-rules/records/${encodeURIComponent(collection)}`,
-    );
-  }
-  createRestrictionRule(rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.send<RestrictionRule>('authz/restriction-rules', 'POST', rule);
-  }
-  updateRestrictionRule(
-    key: string,
-    rule: RestrictionRule,
-  ): Promise<RestrictionRule> {
-    return this.send<RestrictionRule>(
-      `authz/restriction-rules/${encodeURIComponent(key)}`,
-      'PUT',
-      rule,
-    );
-  }
-  async deleteRestrictionRule(key: string): Promise<void> {
-    await this.api.request({
-      path: `authz/restriction-rules/${encodeURIComponent(key)}`,
-      method: 'DELETE',
-    });
-  }
-
   createPermissionSet(input: PermissionSetInput): Promise<PermissionSet> {
     return this.api
       .request<DataResponse<PermissionSet>>({
@@ -307,6 +346,7 @@ export class AuthorizationClient {
 
   invalidatePermissions(): void {
     this.snapshot = undefined;
+    this.permissionsRevision += 1;
     for (const listener of this.invalidationListeners) listener();
   }
 

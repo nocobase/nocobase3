@@ -84,7 +84,10 @@ describe('client plugin definitions', () => {
           {
             name: 'index',
             path: '/feature/',
-            access: { resource: 'feature.dashboard', action: 'access' },
+            authz: {
+              resource: { type: 'page', id: 'feature.dashboard' },
+              action: 'access',
+            },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -109,7 +112,10 @@ describe('client plugin definitions', () => {
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
       source: 'plugin',
-      access: { resource: 'feature.dashboard', action: 'access' },
+      authz: {
+        resource: { type: 'page', id: 'feature.dashboard' },
+        action: 'access',
+      },
     });
     expect(
       resolved.reactProviders.map((reactProvider) => reactProvider.id),
@@ -117,6 +123,33 @@ describe('client plugin definitions', () => {
       '@nocobase/app-plugin-foundation:first',
       '@nocobase/app-plugin-feature:second',
     ]);
+  });
+
+  it('normalizes skipped and default authorization during registration', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-feature',
+        routes: defineAppRoutes([
+          {
+            name: 'landing',
+            path: '/feature/landing',
+            authz: 'skip',
+            componentLoader: async () => ({ default: () => null }),
+          },
+          {
+            name: 'reports',
+            path: '/feature/reports',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.routes[0].authz).toBe('skip');
+    expect(resolved.routes[1].authz).toEqual({
+      resource: { type: 'page', id: 'reports' },
+      action: 'access',
+    });
   });
 
   it('supports guest and optional routes while protecting reserved paths', () => {
@@ -546,8 +579,11 @@ describe('client settings', () => {
                 name: 'permission-sets',
                 path: '/permission-sets',
                 navigation: { title: 'Permission Sets' },
-                access: {
-                  resource: 'authorization.settings.permission-sets',
+                authz: {
+                  resource: {
+                    type: 'settings',
+                    id: 'authorization.permission-sets',
+                  },
                   action: 'read',
                 },
                 componentLoader: page,
@@ -753,6 +789,103 @@ describe('client settings', () => {
     );
   });
 
+  it('extends a group explicitly regardless of contribution order', () => {
+    const owner = {
+      packageName: '@nocobase/app-plugin-owner',
+      routes: defineSettingsRoutes([
+        {
+          name: 'automation',
+          path: '/automation',
+          navigation: { title: 'Automation' },
+          children: [
+            {
+              name: 'workflows',
+              path: '/workflows',
+              navigation: { title: 'Workflows' },
+              componentLoader: page,
+            },
+          ],
+        },
+      ]),
+    };
+    const extension = {
+      packageName: '@nocobase/app-plugin-extension',
+      routes: defineSettingsRoutes([
+        {
+          name: 'automation',
+          path: '/automation',
+          navigation: { title: 'Ignored extension metadata' },
+          extend: true,
+          children: [
+            {
+              name: 'schedules',
+              path: '/schedules',
+              navigation: { title: 'Schedules' },
+              componentLoader: page,
+            },
+          ],
+        },
+      ]),
+    };
+
+    for (const contributions of [
+      [owner, extension],
+      [extension, owner],
+    ]) {
+      const resolved = resolveAppClientContributions(contributions);
+      expect(resolved.settingGroups).toMatchObject([
+        {
+          id: 'automation',
+          packageName: '@nocobase/app-plugin-owner',
+          settings: [
+            { id: 'workflows', path: '/settings/automation/workflows' },
+            {
+              id: 'schedules',
+              path: '/settings/automation/schedules',
+              packageName: '@nocobase/app-plugin-extension',
+            },
+          ],
+        },
+      ]);
+    }
+  });
+
+  it('uses a group extension as the fallback owner when no owner is registered', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-extension',
+        routes: defineSettingsRoutes([
+          {
+            name: 'automation',
+            path: '/automation',
+            navigation: { title: 'Automation' },
+            extend: true,
+            children: [
+              {
+                name: 'schedules',
+                path: '/schedules',
+                componentLoader: page,
+              },
+            ],
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.settingGroups).toMatchObject([
+      {
+        id: 'automation',
+        packageName: '@nocobase/app-plugin-extension',
+        settings: [
+          {
+            id: 'schedules',
+            path: '/settings/automation/schedules',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('rejects duplicate child ids inside one group', () => {
     expect(() =>
       resolveAppClientContributions([
@@ -784,7 +917,7 @@ describe('client settings', () => {
     ).toThrow('defines duplicate child id "child"');
   });
 
-  it('rejects an empty group', () => {
+  it('accepts an empty group for contributions', () => {
     expect(() =>
       resolveAppClientContributions([
         {
@@ -799,7 +932,7 @@ describe('client settings', () => {
           ]),
         },
       ]),
-    ).toThrow('must define at least one child');
+    ).not.toThrow();
   });
 
   it('rejects a route that collides with a registered setting, and the reverse', () => {
@@ -822,7 +955,7 @@ describe('client settings', () => {
     };
 
     expect(() => resolveAppClientContributions([settings, route])).toThrow(
-      'conflicts with setting "general" at "/settings/general"',
+      'conflicts with route "@nocobase/app-plugin-second:general" at "/settings/general"',
     );
     expect(() => resolveAppClientContributions([route, settings])).toThrow(
       'conflicts with route "@nocobase/app-plugin-second:general" at "/settings/general"',

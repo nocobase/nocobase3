@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+ARG NODE_VERSION=24.15.0
+ARG PNPM_VERSION=11.7.0
+ARG APP_BASE_PATH=/hub
+
+FROM node:${NODE_VERSION}-bookworm AS build
+ARG PNPM_VERSION
+RUN npm install --global pnpm@${PNPM_VERSION} \
+    && pnpm config set store-dir /pnpm/store \
+    && pnpm config set @nocobase:registry https://npm.nocobase.ai/
+
+# Both scaffolding and the build's production dependency install need fresh releases.
+ENV PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
+WORKDIR /app
+ARG CREATE_APP_VERSION=latest
+ARG HUB_TEMPLATE_VERSION=latest
+RUN --mount=type=cache,target=/pnpm/store \
+    pnpm create "@nocobase/app@${CREATE_APP_VERSION}" \
+        --template "@nocobase/app-template-hub@${HUB_TEMPLATE_VERSION}" \
+        --no-install hub
+
+WORKDIR /app/hub
+RUN --mount=type=cache,target=/pnpm/store pnpm install
+
+ARG APP_BASE_PATH
+ENV APP_BASE_PATH=${APP_BASE_PATH}
+# The application build installs and verifies dist/node_modules, including native modules.
+RUN --mount=type=cache,target=/pnpm/store pnpm build
+
+FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+ARG PNPM_VERSION
+RUN npm install --global pnpm@${PNPM_VERSION} && npm cache clean --force
+
+ARG APP_BASE_PATH
+# Keep pnpm from reinstalling the packaged dependencies, and forward stop signals to Node.
+ENV NODE_ENV=production \
+    pnpm_config_verify_deps_before_run=false \
+    pnpm_config_shell_emulator=true \
+    APP_SERVER_HOST=0.0.0.0 \
+    APP_SERVER_PORT=13000 \
+    APP_BASE_PATH=${APP_BASE_PATH}
+
+# Keep the dist directory name: the runtime uses it to resolve built client paths.
+WORKDIR /app/dist
+COPY --from=build --chown=node:node /app/hub/dist/ ./
+# Supply instance-specific config.yml at runtime; never copy the generated secrets.
+COPY --from=build /app/hub/config.example.yml /app/config.example.yml
+RUN mkdir -p storage && chown node:node storage
+USER node
+EXPOSE 13000
+CMD ["pnpm", "start"]

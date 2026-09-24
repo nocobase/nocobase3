@@ -74,6 +74,58 @@ describeIntegrationDatabases('Temporal query values', (context) => {
     });
   });
 
+  it('preserves undefined temporal fields for insert defaults and skipped updates', async () => {
+    await createCollection('temporalQueryUndefined');
+    await context.database
+      .query()
+      .insertInto('temporalQueryUndefined')
+      .values([
+        {
+          id: 'empty',
+          day: undefined,
+          clock: undefined,
+          local: undefined,
+          instant: undefined,
+        },
+        { id: 'full', ...values },
+      ])
+      .execute();
+    await expect(
+      context.database
+        .query()
+        .selectFrom('temporalQueryUndefined')
+        .selectAll()
+        .where('id', '=', 'empty')
+        .executeTakeFirst(),
+    ).resolves.toEqual({
+      id: 'empty',
+      day: null,
+      clock: null,
+      local: null,
+      instant: null,
+    });
+    await context.database
+      .query()
+      .updateTable('temporalQueryUndefined')
+      .set({
+        id: 'updated',
+        day: undefined,
+        clock: undefined,
+        local: undefined,
+        instant: undefined,
+      })
+      .where('id', '=', 'full')
+      .execute();
+    await expect(
+      context.database
+        .query()
+        .selectFrom('temporalQueryUndefined')
+        .selectAll()
+        .where('id', '=', 'updated')
+        .executeTakeFirst(),
+    ).resolves.toEqual({ id: 'updated', ...values });
+  });
+
   it('preserves null temporal values through Query mutations', async () => {
     await createCollection('temporalQueryNulls');
 
@@ -159,6 +211,32 @@ describeIntegrationDatabases('Temporal query values', (context) => {
       clock: '10:45:01.456',
       local: '2026-09-07T10:45:01.456',
     });
+  });
+
+  it('writes a SQL expression to a temporal column instead of binding it as text', async () => {
+    await createCollection('temporalQueryExpression');
+
+    // An expression is SQL the builder composes, not a value. Reaching a dialect's `temporalBinding` would
+    // render it with `String(value)` and bind that text as a parameter; MySQL and OceanBase also apply
+    // `.replace('T', ' ')` to it, turning `CURRENT_TIMESTAMP` into the unparseable `CURREN _TIMESTAMP`.
+    await expect(
+      context.database
+        .query()
+        .insertInto('temporalQueryExpression')
+        .values({
+          id: 'expression',
+          local: context.db.raw('CURRENT_TIMESTAMP'),
+        })
+        .execute(),
+    ).resolves.toMatchObject({ insertedCount: 1 });
+
+    const row = await context.database
+      .query()
+      .selectFrom('temporalQueryExpression')
+      .select(['local'])
+      .where('id', '=', 'expression')
+      .executeTakeFirst();
+    expect(row?.local).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/);
   });
 
   it('selects temporal fields through aliases and scalar subqueries', async () => {

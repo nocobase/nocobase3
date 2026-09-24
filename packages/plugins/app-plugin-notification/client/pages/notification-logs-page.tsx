@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -12,8 +14,13 @@ import { getNotificationClient } from '../runtime.js';
 
 const notification = getNotificationClient();
 
+type Translate = (
+  key: string,
+  options?: Readonly<Record<string, unknown>>,
+) => string;
+
 export default function NotificationLogsPage(): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -96,26 +103,17 @@ export default function NotificationLogsPage(): ReactElement {
   );
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
-      <header className='border-b bg-background px-6 py-7'>
-        <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
-          <div>
-            <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              {t('logs.eyebrow', { defaultValue: 'Notifications' })}
-            </p>
-            <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
-              {t('logs.title', { defaultValue: 'Notification logs' })}
-            </h1>
-            <p className='mt-1 max-w-3xl text-sm text-muted-foreground'>
-              {t('logs.description', {
-                defaultValue:
-                  'Trace notification delivery and every provider attempt. Message bodies, recipients, and lease tokens are redacted.',
-              })}
-            </p>
-          </div>
-          <div className='flex flex-wrap gap-2'>
+    <PageContainer>
+      <PageHeader
+        title={t('logs.title', { defaultValue: 'Notification logs' })}
+        description={t('logs.description', {
+          defaultValue:
+            'Trace notification delivery and every provider attempt. Message bodies, recipients, and lease tokens are redacted.',
+        })}
+        actions={
+          <>
             <button
-              className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+              className='inline-flex h-9 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
               disabled={loading}
               onClick={refresh}
               type='button'
@@ -133,11 +131,11 @@ export default function NotificationLogsPage(): ReactElement {
                 defaultValue: 'Send test notification',
               })}
             </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
+      <div className='space-y-5'>
         <div className='grid max-w-md grid-cols-2 gap-3'>
           <Metric
             label={t('logs.deliveriesShown', {
@@ -198,7 +196,7 @@ export default function NotificationLogsPage(): ReactElement {
           onSent={refresh}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -213,25 +211,12 @@ function TestNotificationDialog({
   readonly onClose: () => void;
   readonly onSent: () => void;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const [selected, setSelected] = useState<NotificationTestTarget>();
   const [values, setValues] = useState<Readonly<Record<string, string>>>({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
-
-  const channels = useMemo(
-    () => [...new Set((targets ?? []).map((item) => item.channel.type))],
-    [targets],
-  );
-  const providerCounts = useMemo(
-    () =>
-      (targets ?? []).reduce<Record<string, number>>((counts, item) => {
-        counts[item.channel.type] = (counts[item.channel.type] ?? 0) + 1;
-        return counts;
-      }, {}),
-    [targets],
-  );
 
   const send = (): void => {
     if (!selected) return;
@@ -240,11 +225,7 @@ function TestNotificationDialog({
     setSuccess(undefined);
     void notification
       .sendTest({
-        channel: selected.channel.type,
-        provider: {
-          name: selected.provider.name,
-          type: selected.provider.type,
-        },
+        channel: selected.channel.name,
         values,
       })
       .then(
@@ -281,7 +262,7 @@ function TestNotificationDialog({
       <section
         aria-labelledby='notification-test-title'
         aria-modal='true'
-        className='max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border bg-background shadow-xl'
+        className='max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border bg-popover shadow-xl'
         role='dialog'
       >
         <div className='flex items-start justify-between gap-4 border-b px-5 py-4'>
@@ -292,7 +273,7 @@ function TestNotificationDialog({
             <p className='mt-1 text-sm text-muted-foreground'>
               {t('test.description', {
                 defaultValue:
-                  'Select a Channel and Provider, then click Send. The message is sent to the recipient you provide and recorded below.',
+                  'Select a Channel, then click Send. The message is sent to the recipient you provide and recorded below.',
               })}
             </p>
           </div>
@@ -335,7 +316,7 @@ function TestNotificationDialog({
                 aria-label={t('test.channelProvider', {
                   defaultValue: 'Delivery method',
                 })}
-                className='h-9 w-full rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+                className='h-9 w-full rounded-md border bg-transparent px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
                 disabled={sending}
                 onChange={(event) => {
                   setSelected(
@@ -362,34 +343,10 @@ function TestNotificationDialog({
                     defaultValue: 'Select a delivery method',
                   })}
                 </option>
-                {channels.map((channel) => (
-                  <optgroup
-                    key={channel}
-                    label={
-                      targets?.find((item) => item.channel.type === channel)
-                        ?.channel.label ?? channel
-                    }
-                  >
-                    {targets
-                      .filter((item) => item.channel.type === channel)
-                      .map((item) => (
-                        <option
-                          key={providerKey(item)}
-                          value={providerKey(item)}
-                        >
-                          {providerLabel(
-                            item,
-                            providerCounts[item.channel.type] ?? 0,
-                            (channel, provider) =>
-                              t('test.singleProviderLabel', {
-                                defaultValue: `${channel} (${provider})`,
-                                channel,
-                                provider,
-                              }),
-                          )}
-                        </option>
-                      ))}
-                  </optgroup>
+                {targets.map((item) => (
+                  <option key={item.channel.name} value={item.channel.name}>
+                    {item.channel.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -404,7 +361,7 @@ function TestNotificationDialog({
               {field.type === 'textarea' ? (
                 <textarea
                   aria-label={field.label}
-                  className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
+                  className='min-h-24 resize-y rounded-md border bg-transparent px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
                   disabled={sending}
                   maxLength={field.maxLength}
                   onChange={(event) =>
@@ -420,7 +377,7 @@ function TestNotificationDialog({
               ) : (
                 <input
                   aria-label={field.label}
-                  className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
+                  className='h-9 rounded-md border bg-transparent px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
                   disabled={sending}
                   maxLength={field.maxLength}
                   onChange={(event) =>
@@ -451,7 +408,7 @@ function TestNotificationDialog({
         </div>
         <div className='flex justify-end gap-2 border-t px-5 py-4'>
           <button
-            className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+            className='inline-flex h-9 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
             disabled={sending}
             onClick={onClose}
             type='button'
@@ -481,17 +438,7 @@ function TestNotificationDialog({
 }
 
 function providerKey(item: NotificationTestTarget): string {
-  return `${item.channel.type}:${item.provider.name}:${item.provider.type}`;
-}
-
-function providerLabel(
-  item: NotificationTestTarget,
-  providerCount: number,
-  formatSingleProvider: (channel: string, provider: string) => string,
-): string {
-  return providerCount === 1
-    ? formatSingleProvider(item.channel.label, item.provider.label)
-    : `${item.provider.name} (${item.provider.label})`;
+  return item.channel.name;
 }
 
 function Metric({
@@ -522,7 +469,7 @@ function NotificationLogsTable({
   readonly logs: readonly NotificationLogDetails[];
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   return (
     <div className='overflow-x-auto'>
       <table className='w-full min-w-[860px] text-sm'>
@@ -574,7 +521,7 @@ function NotificationTableRow({
   readonly details: NotificationLogDetails;
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const [open, setOpen] = useState(false);
   return (
     <Fragment>
@@ -644,7 +591,7 @@ function DeliveryTable({
   readonly deliveries: readonly NotificationDeliveryDetails[];
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   if (deliveries.length === 0) {
     return (
       <p className='py-4 text-center text-sm text-muted-foreground'>
@@ -656,7 +603,7 @@ function DeliveryTable({
   }
 
   return (
-    <div className='overflow-x-auto rounded-lg border bg-background'>
+    <div className='overflow-x-auto rounded-lg border bg-card'>
       <table className='w-full min-w-[760px] text-sm'>
         <thead className='bg-muted/35 text-left'>
           <tr className='border-b'>
@@ -680,8 +627,7 @@ function DeliveryTable({
         <tbody>
           {deliveries.map((details) => {
             const presentation = providerPresentation(
-              details.delivery.channel,
-              details.delivery.providerName,
+              details.delivery.channelName,
               details.delivery.providerType,
               targets,
             );
@@ -728,7 +674,7 @@ function AttemptList({
   readonly details: NotificationDeliveryDetails;
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   if (details.attempts.length === 0) {
     return (
       <p className='text-xs text-muted-foreground'>
@@ -740,8 +686,7 @@ function AttemptList({
     <div className='grid gap-1.5'>
       {details.attempts.map((attempt) => {
         const presentation = providerPresentation(
-          details.delivery.channel,
-          attempt.providerName,
+          details.delivery.channelName,
           attempt.providerType,
           targets,
         );
@@ -762,7 +707,7 @@ function AttemptList({
               ) : null}
               {attempt.error ? (
                 <span className='mt-1 block truncate text-destructive'>
-                  {attempt.error.message}
+                  {providerErrorMessage(t, attempt.error)}
                 </span>
               ) : null}
             </span>
@@ -776,7 +721,6 @@ function AttemptList({
 
 function providerPresentation(
   channel: string,
-  providerName: string,
   providerType: string,
   targets?: readonly NotificationTestTarget[],
 ): {
@@ -786,26 +730,10 @@ function providerPresentation(
 } {
   const target = targets?.find(
     (candidate) =>
-      candidate.channel.type === channel &&
-      candidate.provider.name === providerName &&
+      candidate.channel.name === channel &&
       candidate.provider.type === providerType,
   );
-  if (!target) {
-    return { channel, provider: providerName, detail: providerType };
-  }
-  const providerCount = targets?.filter(
-    (candidate) => candidate.channel.type === channel,
-  ).length;
-  return providerCount === 1
-    ? {
-        channel: target.channel.label,
-        provider: target.provider.label,
-      }
-    : {
-        channel: target.channel.label,
-        provider: target.provider.name,
-        detail: target.provider.label,
-      };
+  return { channel, provider: target?.provider.label ?? providerType };
 }
 
 function StatusBadge({
@@ -813,7 +741,7 @@ function StatusBadge({
 }: {
   readonly status: NotificationStatus;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(status)}`}
@@ -842,4 +770,18 @@ function formatTime(value: string): string {
 
 function errorMessage(value: unknown, fallback: string): string {
   return value instanceof Error ? value.message : fallback;
+}
+
+function providerErrorMessage(
+  t: Translate,
+  error: { readonly message: string; readonly code?: string },
+): string {
+  if (
+    error.code === 'IN_APP_NOTIFICATION_RECIPIENT_NOT_FOUND' ||
+    error.message === 'In-app notification recipient does not exist.'
+  )
+    return t('errors.inAppRecipientNotFound', {
+      defaultValue: 'In-app notification recipient does not exist.',
+    });
+  return error.message;
 }

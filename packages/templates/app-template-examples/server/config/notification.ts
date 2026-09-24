@@ -5,7 +5,7 @@ import {
 import type { NotificationConfig } from '@nocobase/app-plugin-notification/server';
 
 const notification: AppConfigFactory<NotificationConfig> = defineAppConfig(
-  (_runtime) => ({ channels: [] }),
+  (_runtime) => ({ channels: { inbox: { provider: 'in-app' } } }),
 );
 
 export default notification;

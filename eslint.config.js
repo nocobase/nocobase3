@@ -30,6 +30,7 @@ const nodeLibraryRoots = [
   'packages/libs/logging',
   'packages/libs/queue',
   'packages/libs/session',
+  'dev/db',
 ];
 const devConfigRoots = ['packages/tools/dev-config'];
 const clientLibraryRoots = [

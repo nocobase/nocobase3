@@ -2,6 +2,10 @@
 
 This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 Skills here; follow the nearest `AGENTS.md` and repository-local NocoBase 3 Skill instead.
 
+## Root README Policy
+
+Do not add content to the repository root `README.md`. Record repository development rules in `AGENTS.md` and put detailed usage documentation in dedicated documentation files. Do not refill an empty root README as part of documenting a change.
+
 ## Markdown Paragraph Formatting
 
 Write each prose paragraph in Markdown source on a single physical line, including in README, AGENTS.md, Skills, and other documentation. Do not insert manual line breaks to fit a column width or put each sentence on its own line; let the editor or renderer wrap the text visually. Separate paragraphs with blank lines. Preserve line breaks required by Markdown structure, such as headings, list items, tables, blockquotes, and code blocks.
@@ -39,6 +43,20 @@ Every published package lives under `packages/`, grouped into six directories by
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
 
 `docs/` is the seventh workspace member and the one exception to the table above. It is the documentation site rather than something an application depends on, so it sits at the repository root rather than under `packages/`, and it is the only workspace package that sets `private: true`. That placement is what keeps it out of `pnpm pack:check`, which discovers publishable packages by descending into `packages/<category>/` and would otherwise reject it for being private. See the "Documentation Site" section below before changing anything under it.
+
+## Repository Skills
+
+This repository's Skills are committed under the root `skills/` directory, and nowhere else. Agents do not read that path on their own — most look in `.agents/skills/`, and Claude Code discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/sync-skills.mjs`, which links each Skill in `skills/` into both `.agents/skills/` and `.claude/skills/` as a relative symbolic link. Both directories are therefore generated and ignored, and editing a Skill through any of the three paths edits the same committed file. This is the same arrangement `nocobase skills sync` sets up inside a generated application, except that an application's Skills come from its installed packages while this repository's are written by hand.
+
+Because a Skill is read through links one directory deeper than where it is committed, a relative Markdown link from a Skill into the rest of the repository resolves differently depending on the path it was opened through. Refer to repository files by their path from the repository root in a code span, such as `packages/tools/cli/src/lib/skills-sync.ts`, and keep relative links for files inside the Skill itself.
+
+`skills/` holds two kinds of Skill. `nocobase-plugin-development` is for developing plugins in this repository. `nocobase-create-app` is installed globally by users, so that an agent knows how to reach NocoBase 3 before any application exists, with `npx skills add nocobase/nocobase3 --skill nocobase-create-app -g`; `--skill` is required because the `skills` CLI reads the whole directory and would otherwise offer the development Skill alongside it. Before merging a change to a global Skill, try it against the unreleased checkout with `pnpm unreleased:*`, as [skills/README.md](skills/README.md) describes: the published packages cannot show whether a Skill works with behavior that has not been released yet.
+
+Every Skill in `skills/` is released by merging, not by publishing. `npx skills add` reads the default branch, so a change reaches every user the moment it lands on `develop`, while `pnpm create @nocobase/app` installs whatever version was last published to npm. A global Skill may therefore describe only behavior that has already been released: a change that documents a new command or flag waits until the release that ships it, and says so in its pull request. Nothing enforces this — `scripts/require-changesets.mjs` looks only at `packages/`, and there is no version to bump. Keep such a Skill to the entry point and hand over to the application's own `AGENTS.md` and `.agents/skills/` as soon as the application exists, because those are synchronized from the installed version and a global Skill is not.
+
+Skills written for generated applications, such as `nocobase-deployment` and `nocobase-app-development`, are not linked here. They live in `packages/app/app-skills/skills/` so that `nocobase skills sync` delivers them to every application, and they describe work done inside an application rather than on this repository. Editing one is a change to `@nocobase/app-skills` and needs a changeset.
+
+The sync never replaces a path that is not a symbolic link, so a Skill you keep only in `.agents/skills/` or `.claude/skills/` is reported and left alone rather than deleted, and a link whose Skill is gone from `skills/` is removed. It also never fails the install: a warning is enough, because the Skills are still readable where they are committed. Adding or removing a Skill takes effect on the next `pnpm install`, or immediately with `node ./scripts/sync-skills.mjs`.
 
 ## Selecting and Using Shared Development Configuration
 
@@ -82,7 +100,7 @@ Every package under `packages/` is published to npm, so none of them set `privat
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
-"Libraries ship `dist` alone" is stricter than it sounds, and `pack:check` now enforces it: a package that publishes `dist` must not also publish `database` or `server`. The runtime resolves a plugin's declared `database/migrations`, `database/seeds` and `server/jobs` against the package directory before its `dist`, so publishing both hands an installed application the TypeScript sources — and Node refuses to strip types from a file under `node_modules`. `@nocobase/app-plugin-ai-employee` shipped this way and failed every application start with `Stripping types is currently unsupported for files under node_modules`, while every development checkout kept working, because a workspace link resolves the same sources outside `node_modules`. Templates are unaffected: they publish their sources instead of a `dist`, so there is nothing to shadow.
+"Libraries ship `dist` alone" is stricter than it sounds, and `pack:check` now enforces it: a package that publishes `dist` must not also publish `database` or `server`. Plugins now declare an explicit `baseDir` for `database/migrations`, `database/seeds` and `server/jobs`. Earlier runtimes tried the package directory before `dist`, so publishing both handed installed applications TypeScript sources — and Node refuses to strip types from a file under `node_modules`. `@nocobase/app-plugin-ai-employee` shipped this way and failed every application start with `Stripping types is currently unsupported for files under node_modules`, while every development checkout kept working, because a workspace link resolves the same sources outside `node_modules`. Templates are unaffected: they publish their sources instead of a `dist`, so there is nothing to shadow.
 
 Check npm before settling on a package name. A name the v2 line still publishes under is off limits — `@nocobase/database` is releasing `3.0.0-alpha` versions as this is written, so `@nocobase/db` is the v3 database package.
 
@@ -127,7 +145,7 @@ changing `packages/tools/dev-config`, run
 
 ## Keeping the Application Templates in Sync
 
-`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, the nested `client/AGENTS.md` and `server/AGENTS.md`, and `skills/`.
+`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, and the nested `client/AGENTS.md` and `server/AGENTS.md`. Shared application Skills live in `packages/app/app-skills` and synchronize into each application from the `@nocobase/app-skills` dependency.
 
 They drift otherwise, and the drift is invisible until someone hits it. Both templates carried a `tsconfig.migrations.base.json` that nothing referenced, and both omitted `database/**/*.ts` from `tsconfig.server.json`, so an application-owned migration ran under `pnpm migrate` but was silently dropped by `pnpm build` — the same defect, twice, because a fix to one was never carried across.
 
@@ -135,11 +153,13 @@ Not everything transfers. Examples owns its demonstration homepage, article modu
 
 Apply all applicable sides in one change and run each affected template's `check`. A framework change that lands in only one template is incomplete, and a reviewer cannot tell whether the omission was a decision or an oversight; if it genuinely does not apply, say so in the pull request.
 
+When a template, application runtime, or CLI change affects how an agent develops, configures, builds, deploys, or upgrades an application, review `packages/app/app-skills` and update the relevant Skill or reference in the same change. Keep the guidance concise and actionable; record the current rule rather than implementation history, and link to existing detail instead of duplicating it.
+
 ## Application Themes and UI Styling
 
-For creating or editing theme presets, read `packages/templates/app-template-default/skills/nocobase-app-development/references/themes.md` (from the repository root). When working on Hub, use the corresponding reference under `packages/templates/app-template-hub/`.
+For creating or editing theme presets, read `packages/app/app-skills/skills/nocobase-app-development/references/themes.md` from the repository root.
 
-For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/templates/app-template-default/skills/nocobase-app-development/references/theme-tokens.md` (from the repository root), or the corresponding Hub reference. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/app/app-skills/skills/nocobase-app-development/references/theme-tokens.md` from the repository root. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 
 ## Database Migration Development
 
@@ -151,28 +171,37 @@ When a migration needs to create a collection, call `builder.createCollection` w
 
 Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata.
 
+### Choosing a data-access tool in a migration or seed
+
+A migration's context carries three tools and they are not interchangeable. `builder` is the only one that changes structure. `query` is the default for data: it reads and writes rows through the Connection naming strategy and expresses exactly what it is given. `repository` is the narrow one — reach for it only where `query` would get the write wrong: cross-dialect field encoding and decoding, Collection-level naming overrides, and relation writes, including the junction rows behind a `belongsToMany`. Anything `query` expresses correctly stays on `query`.
+
+A seed's context carries only the last two, because a seed never changes structure. There the default is reversed: installation data is written in Collection terms, so `repository` is the normal tool and `query` is for what it cannot express, such as reading a physical table that backs no Collection.
+
+This does not loosen the rule above. `repository(name)` resolves the Collection from the database itself — the metadata a previous `builder` operation wrote — which is why it is available at all; importing or iterating an application's own collection definitions from a migration remains forbidden, and no amount of convenience justifies it. What it does mean is that a migration using `repository` is betting on a shape it did not declare in its own body, so three things follow:
+
+- Say in a comment why `query` was not enough. A reviewer cannot tell a considered use from a reflex, and the comment is what makes the difference visible.
+- Do not use it in `down`. By the time a rollback runs, the Collection has already moved past what `up` left behind, possibly several migrations past.
+- Do not use it to walk a table. Selecting every row and updating each one through a Repository is the shape to avoid; a set-based `query` statement is both correct and bounded.
+
+Both tasks get their Repository from the connection the task runs on, which inside a transaction is that transaction's connection. This is why the service container withholds the application's `DatabaseManager` from migrations and seeds: a Repository taken from it would write outside the task's transaction and survive a failure that should have discarded it.
+
+### A plugin's migrations are laid out differently from an application's
+
+An application keeps its tasks under `database/<connection>/migrations` and `seeds`, one directory per configured connection. A plugin declares a single `database/migrations` and `database/seeds` in its `defineServerPlugin` call, relative to the plugin's `baseDir`, and there is no connection segment because a plugin contributes only to the installing application's default connection. It cannot know which further connections an application defines, and cannot target one.
+
+The loader flattens the application's sources and every registered plugin's into one list per connection, rejects duplicate migration names across all of them, and orders what remains by name alone. So a plugin's migration name has to be derived from its package rather than being a bare timestamp — a collision fails the run for the whole application — and a plugin's migrations interleave with the application's by name rather than applying as a block. Execution history records the owning package name, so attribution survives the shared run.
+
+`packages/tools/create-plugin/template/AGENTS.md` carries this for generated plugins; change both together.
+
 Before editing an existing migration, check its Git history and the status of the branch that introduced it. An existing migration may be corrected directly only while its introducing feature branch has not yet been merged. Once that branch has been merged into its target branch, never modify the migration again; implement every correction or subsequent schema change in a new migration. Do not use hard-coded previous checksum hashes to make an edited migration appear compatible.
 
 ## Database Integration Test Scheduling
 
-Run a dialect integration suite through the package that owns it:
-`pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no
-integration script of its own. It used to forward to each dialect, which made
-`pnpm --filter @nocobase/db test:integration` read as a full run when it only
-ran SQLite, and `test:integration:all` invite an eight-dialect serial run that
-CI performs on every pull request anyway. Run one suite at a time: never start
-two at once, and never leave one in the background. The runners isolate their
-Compose projects and host ports, so the hazard is not a collision but
-contention for one machine's CPU, memory, and Docker I/O, which pushes service
-health checks past their start period and reports a flaky startup failure
-instead of a result. CI parallelizes safely only because its matrix gives each
-dialect its own runner.
+Run a dialect integration suite through the package that owns it: `pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no integration script of its own. Run one suite at a time locally: never start two at once, and never leave one in the background. The runners isolate their Compose projects and host ports, so the hazard is not a collision but contention for one machine's CPU, memory, and Docker I/O, which pushes service health checks past their start period and reports a flaky startup failure instead of a result. CI parallelizes safely because each selected dialect gets its own job and runner.
 
-Which suites a given change actually requires, and the command forms that
-silently run nothing, are in the
-[`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md).
-Every pull request already runs all eight dialects unconditionally, so run
-locally only the dialects the change puts at risk.
+On pull requests and pushes to `develop`, `scripts/select-db-integration-matrix.mjs` selects the Quality workflow's database matrix from changed paths. A dialect package change selects that dialect; changes to `db`, `db-testkit`, their shared dependencies, shared development configuration, or dependency/CI inputs select all eight. Unrelated changes skip the matrix. Selection covers entire package directories, including tests and documentation; deletions and both sides of renames count. An unavailable comparison range runs all eight conservatively. Keep the selector's shared paths current when adding database dependencies or changing the test setup.
+
+Run locally only the dialects the change puts at risk; CI covers the selected matrix. After changing `packages/libs/db`, `packages/libs/db-testkit`, or a `packages/libs/db-<dialect>` package, read [packages/libs/db-testkit/docs/integration-testing.md](packages/libs/db-testkit/docs/integration-testing.md) for which suites a change requires, how to narrow a run, and the command forms that silently run nothing.
 
 ## Native Dependencies in Generated Applications
 
@@ -237,9 +266,9 @@ If yes, it belongs to the rule. In practice that means the package exports at le
 - **A module-level singleton.** A `const` holding a `new` instance or accumulated state, such as `nocobaseClient`, gives each copy its own session, cache, or connection.
 - **A registration into a process-wide registry.** `@nocobase/queue` registers job classes into the `Locator` of `@boringnode/queue`; the second copy registers into a table the first one never reads.
 
-A package that exports only classes, functions, and types holds nothing a second copy could split. Constructing two instances of a class is what callers already do, and a duplicated pure function behaves identically. `@nocobase/drive`, `@nocobase/caching`, `@nocobase/logging`, `@nocobase/session`, and `@nocobase/snowflake` are in this group today and stay ordinary dependencies. They move only if they gain one of the exports above — adding a token or a context to any of them is the moment to revisit the entry, not a later release.
+Public classes with private members also carry declaration identity: passing a DatabaseConnection between packages using different db versions can fail type checking even when runtime methods match. Review public object contracts as well as singletons, including authorization error identity, caching registries, AI employee service tokens, and repository-input filter symbols. Ordinary dependencies remain appropriate for implementation details that do not cross the package boundary.
 
-Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. And a package that only ever appears in `import type` needs no runtime declaration at all.
+Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. A type-only import that survives in published declarations still needs a consumer-resolvable dependency contract.
 
 When you do add an entry, record what breaks without it rather than only the package name. The reason is what lets the next person apply this rule to a package nobody has seen yet; a bare list decays into something people copy without understanding.
 
@@ -258,11 +287,11 @@ The current entries:
 
 ### Why a second copy is worth this much trouble
 
-Nothing warns at install time, the build succeeds, and the application starts. The symptom appears at runtime as `Service "..." is not registered` for a service that is demonstrably registered, or as a React context reading `undefined` under a provider that is demonstrably mounted — the error points at correct code, and the actual fault is a duplicated module that appears nowhere in the source.
+Installation can succeed while a later build rejects database classes from different versions because their private members have different declaration identities. If type checking succeeds, runtime identity can still fail: `Service "..." is not registered` for a service that is demonstrably registered, or a React context reads `undefined` under a mounted provider. Inspect the installed dependency graph when these symptoms cross package boundaries.
 
-It cannot be reproduced here. The monorepo links every consumer to one directory through the `workspace:` protocol, so a second copy is impossible; it becomes possible only once a plugin is installed from a registry, where a `dependencies` range lets a package manager satisfy it with its own copy. That is why the declaration has to be right before publishing, not after the first report.
+Workspace links can hide this problem by resolving consumers to the same source directory. Passing monorepo checks does not prove that published packages install correctly. Reproduce version skew with installed packages outside the workspace, as in `tests/scripts/shared-db-install.test.mjs`, and verify the published dependency contract before release.
 
-### Declaring both, and why
+### Declaring the shared dependency
 
 ```json
 {
@@ -270,15 +299,15 @@ It cannot be reproduced here. The monorepo links every consumer to one directory
 }
 ```
 
-**`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application "provide this, and provide exactly one". `devDependencies` are not published at all, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
+**`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application which compatible package to provide. `devDependencies` are not installed for consumers, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
 
 One declaration is enough. pnpm installs a peer and links it into the plugin's own `node_modules`, `workspace:^` resolving to the copy in this repository exactly as `workspace:*` would — a plugin with its devDependency removed still links, typechecks, builds, and tests against it. A paired `devDependency` used to be required on the grounds that development would otherwise float across the wide peer range; it does not, so the second entry only added a line to keep in step.
 
 ### Scope
 
-The rule applies to plugins, which are guests in an application someone else assembled: `packages/plugins` and `packages/examples`, which is what `CHECKED_GROUPS` in the check script covers.
+The shared-provider rule also applies to libraries and application runtimes receiving host-owned objects. Applications supply the production dependencies. The current `pnpm peers:check` scans plugins and examples against its recorded package list; review library consumers and required template providers explicitly, because the check does not cover them.
 
-It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
+A peer range expresses compatibility; it does not guarantee a global singleton across incompatible peer contexts. Test installed artifacts and old-lockfile upgrades, and keep the host ranges compatible. Deployment sets `autoInstallPeers: false`, so promoting a dependency to a peer must include its production provider in all affected templates. Do not rely on a development dependency or a transitive copy to supply it. For changes to these contracts, update all affected templates and the lockfile, run peer/runtime checks and the installed-package regression, and document existing-application upgrade requirements in a changeset. Do not hide type conflicts with casts or relaxed checking.
 
 A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands.
 
@@ -286,9 +315,9 @@ A plugin that contributes CLI commands declares `@oclif/core` as a peer for a re
 
 ## Declaring Dependencies by How They Are Used
 
-Server code that ships goes in `dependencies`. Browser code a consumer has to resolve goes in `peerDependencies`. Build tooling, tests, and type-only imports go in `devDependencies`. `pnpm deps:check` enforces the server half and runs in CI.
+Ordinary server implementation dependencies go in `dependencies`; shared identity-sensitive packages follow the peer rule above even when imported by server code. Browser code a consumer has to resolve goes in `peerDependencies`. Build tooling, tests, and type imports absent from published declarations go in `devDependencies`. `pnpm deps:check` checks server runtime import declarations and runs in CI.
 
-The rule is one question: **does someone outside this repository have to resolve this import?** If yes, the package has to be declared where npm publishes it, and `devDependencies` are not published at all.
+The rule is one question: **does someone outside this repository have to resolve this import?** If yes, declare it as a dependency or peer according to its ownership; a published package's devDependencies are not installed for its consumers.
 
 **A deployed server resolves its imports at runtime.** `pnpm build` emits `dist/server` with its bare imports intact and generates `dist/package.json` by walking `dependencies`. A server module importing something declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server. `@nocobase/app-plugin-workflow` shipped this: `server/loader/source-parser.ts` imports `typescript`, and `typescript` sat in `devDependencies`. The application crashed on start with `Cannot find package 'typescript'`, an error naming nothing that points back at the manifest.
 
@@ -300,9 +329,9 @@ A plugin's client dependency is also easy to believe is fine when it is not. Ten
 
 So the question is who resolves the import, and then what the import actually is:
 
-- **A server value import belongs in `dependencies`.** `import ts from 'typescript'` in `server/` needs it even though TypeScript sounds like build tooling.
+- **An ordinary server value import belongs in `dependencies`; shared identity-sensitive imports are peers.** `import ts from 'typescript'` in `server/` needs a runtime dependency even though TypeScript sounds like build tooling. A shared database connection follows the host-provided peer contract instead.
 - **A client value import belongs in `peerDependencies`.** `sonner`, `lucide-react`, `@base-ui/react`, `clsx` — the installing application resolves them from the published manifest and provides one shared copy, while a server deployment installs none.
-- **A type-only import belongs in `devDependencies` wherever it lives.** `import type { Config } from 'x'` and `import { type A, type B } from 'x'` are erased before anything runs.
+- **A type-only import can belong in `devDependencies` only if consumers do not need to resolve it.** JavaScript erases `import type`, but emitted `.d.ts` files can retain references to that package. Inspect the published declarations and use a dependency or peer contract when those references survive; shared classes with private members follow the peer rule.
 - **A dynamic `import()` counts as a value import.** Deferring the load changes when a package is needed, not whether.
 - **The `files` field decides whether code ships at all.** A test, an eval harness, or a build script excluded from `files` never reaches a consumer, so its imports are correctly devDependencies.
 
@@ -310,9 +339,11 @@ So the question is who resolves the import, and then what the import actually is
 
 `peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `react`, `react-dom`, `react-router`, and everything in `IDENTITY_SENSITIVE_PACKAGES` belong here rather than in `dependencies`: a second copy of a router or a React context does not merely waste space, it silently breaks. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
 
+A tool a package **spawns** rather than imports is a dependency too, and it is the one neither check can find: both read import specifiers, so a `spawn('vite', …)` is invisible to them. Declare it as a peer, because the application owns the copy that runs, and record it where someone adding the next one will look — `@nocobase/app-tools` keeps a table of the executables it spawns in its README. Nothing else catches an omission here: the binary resolves from `node_modules/.bin` in this repository and in any generated application, so it is missing only in an application that never installed it.
+
 This rule changed once, and the reason is worth recording. Client imports used to belong in `devDependencies`, because `dist/package.json` was built by walking `dependencies` transitively and dragged every client package into the server deployment — `lucide-react` and `@xyflow/react` alone were 44 MB installed and never required. They are peers now, which keeps them out of a deployment without keeping them out of the application that has to resolve them.
 
-When the check reports something, there are two correct fixes and picking the wrong one is worse than the original: declare it in `dependencies` if server code genuinely imports it, or stop importing it from server code if it is client or build-time code that leaked across. Adding a declaration to silence the check trades a startup crash for a dependency every deployment carries forever.
+When the check reports something, inspect ownership and usage: declare an ordinary server dependency, declare a shared peer and its application provider, or remove a client or build-time import that leaked into server code. Adding a declaration only to silence the check can leave either a duplicate shared module or an unnecessary deployment dependency.
 
 `pnpm plugin:create` emits a generated plugin's `AGENTS.md` carrying this rule, so a plugin created tomorrow is told where a dependency goes before anyone adds one. When the rule changes here, change `packages/tools/create-plugin/template/AGENTS.md` in the same commit — the two are kept in step by a test, but only for the files' existence, not their content.
 
@@ -374,33 +405,31 @@ The workflow files under `.github/workflows/` still carry Chinese comments writt
 
 ## TypeScript Requirements for Library Development
 
-Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:
+Library packages that emit `.d.ts` files (`declaration: true`) enable both `isolatedDeclarations: true` and `isolatedModules: true`. The three application templates keep declaration emission and `isolatedModules`, but set `isolatedDeclarations: false` in `tsconfig.server.json`: their full TypeScript build infers application configuration exports such as `export default defineAppDatabaseConfig(...)`. Do not apply this application exception to library packages. The library requirement currently covers:
 
-| Configuration                                                  | Purpose                    |
-| -------------------------------------------------------------- | -------------------------- |
-| `packages/app/app-portal-sdk/tsconfig.json`                    | Portal SDK                 |
-| `packages/plugins/app-plugin-authentication/tsconfig.json`     | Authentication library     |
-| `packages/libs/authorization/tsconfig.json`                    | Authorization library      |
-| `packages/libs/db/tsconfig.json`                               | Database package           |
-| `packages/libs/db-testkit/tsconfig.json`                       | Database test contract     |
-| `packages/libs/db-sqlite/tsconfig.json`                        | SQLite dialect             |
-| `packages/libs/db-postgres/tsconfig.json`                      | PostgreSQL dialect         |
-| `packages/libs/db-mysql/tsconfig.json`                         | MySQL dialect              |
-| `packages/libs/db-kingbase/tsconfig.json`                      | Kingbase dialect           |
-| `packages/libs/db-oceanbase/tsconfig.json`                     | OceanBase dialect          |
-| `packages/libs/db-oracle/tsconfig.json`                        | Oracle dialect             |
-| `packages/libs/db-mssql/tsconfig.json`                         | MSSQL dialect              |
-| `packages/libs/db-dameng/tsconfig.json`                        | Dameng dialect             |
-| `packages/app/app-host/tsconfig.json`                          | Application host           |
-| `packages/app/app-server/tsconfig.json`                        | Application server library |
-| `packages/libs/caching/tsconfig.json`                          | Caching library            |
-| `packages/libs/drive/tsconfig.json`                            | File storage library       |
-| `packages/libs/snowflake/tsconfig.json`                        | Snowflake ID library       |
-| `packages/libs/logging/tsconfig.json`                          | Logging library            |
-| `packages/libs/queue/tsconfig.json`                            | Queue library              |
-| `packages/libs/session/tsconfig.json`                          | Session library            |
-| `packages/templates/app-template-default/tsconfig.server.json` | Default template server    |
-| `packages/templates/app-template-hub/tsconfig.server.json`     | Hub server                 |
+| Configuration                                              | Purpose                    |
+| ---------------------------------------------------------- | -------------------------- |
+| `packages/app/app-portal-sdk/tsconfig.json`                | Portal SDK                 |
+| `packages/plugins/app-plugin-authentication/tsconfig.json` | Authentication library     |
+| `packages/libs/authorization/tsconfig.json`                | Authorization library      |
+| `packages/libs/db/tsconfig.json`                           | Database package           |
+| `packages/libs/db-testkit/tsconfig.json`                   | Database test contract     |
+| `packages/libs/db-sqlite/tsconfig.json`                    | SQLite dialect             |
+| `packages/libs/db-postgres/tsconfig.json`                  | PostgreSQL dialect         |
+| `packages/libs/db-mysql/tsconfig.json`                     | MySQL dialect              |
+| `packages/libs/db-kingbase/tsconfig.json`                  | Kingbase dialect           |
+| `packages/libs/db-oceanbase/tsconfig.json`                 | OceanBase dialect          |
+| `packages/libs/db-oracle/tsconfig.json`                    | Oracle dialect             |
+| `packages/libs/db-mssql/tsconfig.json`                     | MSSQL dialect              |
+| `packages/libs/db-dameng/tsconfig.json`                    | Dameng dialect             |
+| `packages/app/app-host/tsconfig.json`                      | Application host           |
+| `packages/app/app-server/tsconfig.json`                    | Application server library |
+| `packages/libs/caching/tsconfig.json`                      | Caching library            |
+| `packages/libs/drive/tsconfig.json`                        | File storage library       |
+| `packages/libs/snowflake/tsconfig.json`                    | Snowflake ID library       |
+| `packages/libs/logging/tsconfig.json`                      | Logging library            |
+| `packages/libs/queue/tsconfig.json`                        | Queue library              |
+| `packages/libs/session/tsconfig.json`                      | Session library            |
 
 Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.
 

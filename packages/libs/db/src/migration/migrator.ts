@@ -1,3 +1,10 @@
+import {
+  collectChecksumMismatches,
+  describeChecksumMismatch,
+  upgradeTaskChecksums,
+  writeTaskChecksums,
+  type ChecksumMismatch,
+} from './checksum-history.js';
 import { assertManagedSchema } from '../database/schema-management.js';
 import type { Knex } from 'knex';
 import {
@@ -13,6 +20,8 @@ import {
 } from './internal/history.js';
 import {
   DEFAULT_MIGRATION_LOCK_TABLE,
+  readTaskLockState,
+  releaseTaskLock,
   withMigrationLock,
 } from './internal/lock.js';
 import { loadMigrations } from './loader.js';
@@ -21,8 +30,15 @@ import type {
   LoadedMigration,
   MigrationDefinition,
   MigrationHistoryRecord,
+  MigrationRepairOptions,
+  MigrationRepairResult,
+  MigrationRollbackOptions,
   MigrationRollbackResult,
   MigrationRunResult,
+  MigrationConnection,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
 } from './types.js';
 
 /** Executes and rolls back ordered migrations for one database connection. */
@@ -32,13 +48,31 @@ export interface Migrator {
   /** Applies pending migrations through the named migration, inclusive. */
   upTo(name: string): Promise<MigrationRunResult>;
   /** Rolls back the most recently applied migration batch. */
-  rollback(): Promise<MigrationRollbackResult>;
+  rollback(
+    options?: MigrationRollbackOptions,
+  ): Promise<MigrationRollbackResult>;
+  /**
+   * Rewrites recorded checksums to match the current sources, clearing drift
+   * reported by a run. Executes no migration and changes no schema.
+   */
+  repair(options?: MigrationRepairOptions): Promise<MigrationRepairResult>;
   /**
    * Migrations already applied on the connection, oldest first. Reads only:
    * a connection without a history table yields an empty list rather than
    * getting one created.
    */
   history(): Promise<MigrationHistoryRecord[]>;
+  /**
+   * The lock as it stands, or undefined when no run holds it. Reads only, and
+   * creates no table.
+   */
+  lock(): Promise<TaskLockState | undefined>;
+  /**
+   * Deletes the lock row so a later run can proceed. An expired lock — one
+   * whose holder stopped sending heartbeats — is released; an active one needs
+   * `force`, because releasing it lets a second run start beside the first.
+   */
+  unlock(options?: TaskLockReleaseOptions): Promise<TaskLockReleaseResult>;
 }
 
 /** Creates a migration runner backed by the supplied database manager. */
@@ -75,12 +109,18 @@ class DefaultMigrator implements Migrator {
     );
     const migrations = await loadMigrations(this.options);
     const selectedMigrations = selectMigrations(migrations, targetName);
-    const migrationConnection = createMigrationContext(connection).connection;
+    const migrationConnection = createMigrationContext(
+      connection,
+      this.options.config,
+      this.options.container,
+    ).connection;
 
     const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(
@@ -92,10 +132,12 @@ class DefaultMigrator implements Migrator {
           migrationConnection,
           this.options.tableName,
         );
-        validateAppliedMigrationHistory(
+        const warnings = this.validateAppliedHistory(migrations, history);
+        await upgradeTaskChecksums(
+          migrationConnection,
+          this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
           migrations,
           history,
-          participatingPackageNames(this.options),
         );
 
         const appliedNames = new Set(history.map((record) => record.name));
@@ -105,16 +147,36 @@ class DefaultMigrator implements Migrator {
         const skipped = selectedMigrations
           .filter((migration) => appliedNames.has(migration.name))
           .map((migration) => migration.name);
-        const batch =
-          pending.length > 0 ? nextBatch(history) : currentBatch(history);
+        let batch = currentBatch(history);
         const executed: string[] = [];
 
         for (const migration of pending) {
+          if (migration.migration.shouldRun) {
+            const shouldRun = await migration.migration.shouldRun({
+              ...createMigrationContext(
+                connection,
+                this.options.config,
+                this.options.container,
+              ),
+              parameters: migration.parameters,
+              configuration: migration.configuration,
+            });
+            if (typeof shouldRun !== 'boolean') {
+              throw new Error(
+                `Migration "${migration.name}" shouldRun must return a boolean.`,
+              );
+            }
+            if (!shouldRun) {
+              skipped.push(migration.name);
+              continue;
+            }
+          }
+          batch = nextBatch(history);
           await this.runUpMigration(connection, migration, batch);
           executed.push(migration.name);
         }
 
-        return { batch, executed, skipped };
+        return { batch, executed, skipped, warnings };
       },
     );
     if (result.executed.length > 0) connection.collections.invalidate();
@@ -132,7 +194,34 @@ class DefaultMigrator implements Migrator {
     return readMigrationHistory(migrationConnection, tableName);
   }
 
-  async rollback(): Promise<MigrationRollbackResult> {
+  async lock(): Promise<TaskLockState | undefined> {
+    return readTaskLockState(this.lockConnection(), this.lockTableName());
+  }
+
+  async unlock(
+    options: TaskLockReleaseOptions = {},
+  ): Promise<TaskLockReleaseResult> {
+    return releaseTaskLock(
+      this.lockConnection(),
+      this.lockTableName(),
+      options,
+    );
+  }
+
+  private lockConnection(): MigrationConnection {
+    return createMigrationConnection(
+      this.options.database.connection(this.options.connection),
+    );
+  }
+
+  private lockTableName(): string {
+    return this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE;
+  }
+
+  async rollback(
+    options: MigrationRollbackOptions = {},
+  ): Promise<MigrationRollbackResult> {
+    const dryRun = options.dryRun ?? false;
     const connection = this.options.database.connection(
       this.options.connection,
     );
@@ -144,12 +233,18 @@ class DefaultMigrator implements Migrator {
       'migration.rollback',
     );
     const migrations = await loadMigrations(this.options);
-    const migrationConnection = createMigrationContext(connection).connection;
+    const migrationConnection = createMigrationContext(
+      connection,
+      this.options.config,
+      this.options.container,
+    ).connection;
 
     const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(
@@ -161,15 +256,17 @@ class DefaultMigrator implements Migrator {
           migrationConnection,
           this.options.tableName,
         );
-        validateAppliedMigrationHistory(
+        const warnings = this.validateAppliedHistory(migrations, history);
+        await upgradeTaskChecksums(
+          migrationConnection,
+          this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
           migrations,
           history,
-          participatingPackageNames(this.options),
         );
 
         const batch = currentBatch(history);
         if (batch === 0) {
-          return { batch: 0, rolledBack: [] };
+          return { batch: 0, rolledBack: [], records: [], warnings, dryRun };
         }
 
         const migrationsByName = new Map(
@@ -188,6 +285,19 @@ class DefaultMigrator implements Migrator {
           validateRollbackMigration(migration.migration);
           return migration;
         });
+        // Validation above already rejected an irreversible batch, so a dry run
+        // reports what a run would undo and why it could not, without running
+        // any `down`.
+        if (dryRun) {
+          return {
+            batch,
+            rolledBack: rollbackItems.map((migration) => migration.name),
+            records,
+            warnings,
+            dryRun,
+          };
+        }
+
         const rolledBack: string[] = [];
 
         for (const migration of rollbackItems) {
@@ -195,11 +305,72 @@ class DefaultMigrator implements Migrator {
           rolledBack.push(migration.name);
         }
 
-        return { batch, rolledBack };
+        return { batch, rolledBack, records, warnings, dryRun };
       },
     );
-    if (result.rolledBack.length > 0) connection.collections.invalidate();
+    if (!dryRun && result.rolledBack.length > 0)
+      connection.collections.invalidate();
     return result;
+  }
+
+  async repair(
+    options: MigrationRepairOptions = {},
+  ): Promise<MigrationRepairResult> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const tableName = this.options.tableName ?? DEFAULT_MIGRATION_TABLE;
+    const migrations = await loadMigrations(this.options);
+    const migrationConnection = createMigrationConnection(connection);
+
+    return withMigrationLock(
+      migrationConnection,
+      {
+        tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
+      },
+      async () => {
+        await ensureMigrationTable(migrationConnection, tableName);
+        const history = await readMigrationHistory(
+          migrationConnection,
+          this.options.tableName,
+        );
+        const repaired = collectChecksumMismatches(migrations, history);
+        if (!options.dryRun)
+          await writeTaskChecksums(migrationConnection, tableName, repaired);
+        return { repaired, dryRun: options.dryRun === true };
+      },
+    );
+  }
+
+  /**
+   * Fails on history the sources cannot explain at all, and applies the
+   * configured policy to executed migrations whose source has since changed.
+   */
+  private validateAppliedHistory(
+    migrations: LoadedMigration[],
+    history: MigrationHistoryRecord[],
+  ): ChecksumMismatch[] {
+    const participatingPackages = participatingPackageNames(this.options);
+    const migrationsByName = new Map(
+      migrations.map((migration) => [migration.name, migration]),
+    );
+    for (const record of history) {
+      if (
+        !migrationsByName.has(record.name) &&
+        participatingPackages.has(record.packageName)
+      ) {
+        throw new Error(
+          `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
+        );
+      }
+    }
+    const mismatches = collectChecksumMismatches(migrations, history);
+    if (this.options.onChecksumMismatch === 'error' && mismatches.length) {
+      throw new Error(describeChecksumMismatch(mismatches[0], 'migration'));
+    }
+    return mismatches;
   }
 
   private async runUpMigration(
@@ -209,7 +380,15 @@ class DefaultMigrator implements Migrator {
   ): Promise<void> {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
-      const context = createMigrationContext(connection);
+      const context = {
+        ...createMigrationContext(
+          connection,
+          this.options.config,
+          this.options.container,
+        ),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       const startedAt = Date.now();
       await loaded.migration.up(context);
       await recordMigrationCompleted(context.connection, {
@@ -224,7 +403,15 @@ class DefaultMigrator implements Migrator {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createMigrationContext(trxConnection);
+      const context = {
+        ...createMigrationContext(
+          trxConnection,
+          this.options.config,
+          this.options.container,
+        ),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       const startedAt = Date.now();
       await loaded.migration.up(context);
       await recordMigrationCompleted(context.connection, {
@@ -244,7 +431,15 @@ class DefaultMigrator implements Migrator {
   ): Promise<void> {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
-      const context = createMigrationContext(connection);
+      const context = {
+        ...createMigrationContext(
+          connection,
+          this.options.config,
+          this.options.container,
+        ),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       await loaded.migration.down?.(context);
       await deleteMigrationHistoryRecord(context.connection, {
         tableName: this.options.tableName,
@@ -254,7 +449,15 @@ class DefaultMigrator implements Migrator {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createMigrationContext(trxConnection);
+      const context = {
+        ...createMigrationContext(
+          trxConnection,
+          this.options.config,
+          this.options.container,
+        ),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       await loaded.migration.down?.(context);
       await deleteMigrationHistoryRecord(context.connection, {
         tableName: this.options.tableName,
@@ -277,35 +480,6 @@ function selectMigrations(
     throw new Error(`Migration target "${targetName}" was not found.`);
   }
   return migrations.slice(0, targetIndex + 1);
-}
-
-function validateAppliedMigrationHistory(
-  migrations: LoadedMigration[],
-  history: MigrationHistoryRecord[],
-  participatingPackages?: ReadonlySet<string>,
-): void {
-  const migrationsByName = new Map(
-    migrations.map((migration) => [migration.name, migration]),
-  );
-  for (const record of history) {
-    const migration = migrationsByName.get(record.name);
-    if (!migration) {
-      if (
-        participatingPackages &&
-        !participatingPackages.has(record.packageName)
-      ) {
-        continue;
-      }
-      throw new Error(
-        `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
-      );
-    }
-    if (record.checksum !== migration.checksum) {
-      throw new Error(
-        `Executed migration "${record.name}" checksum changed. Package: "${record.packageName}".`,
-      );
-    }
-  }
 }
 
 function participatingPackageNames(

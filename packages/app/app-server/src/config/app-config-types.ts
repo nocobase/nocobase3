@@ -1,6 +1,7 @@
-import type { ConfigMap } from '@nocobase/config';
+import type { Logger } from '@nocobase/logging';
 import type {
   ConfigLoadOptions,
+  ConfigMap,
   ConfigParser,
   ConfigProvider,
 } from '@nocobase/config';
@@ -28,6 +29,7 @@ export interface AppConfigReloadResult {
 }
 
 export interface AppConfigAccessor {
+  setLogger?(logger: Pick<Logger, 'debug'>): void;
   mergeDefaults(values: ConfigMap): void;
   get<TValue = unknown>(key: string): TValue | undefined;
   raw(): ConfigMap;
@@ -36,4 +38,16 @@ export interface AppConfigAccessor {
     namespace: string,
     listener: AppConfigChangeListener<TValue>,
   ): () => void;
+}
+
+/**
+ * The two layers an application's configuration is merged from, as read-only copies.
+ *
+ * `defaults` is what the application declares in code; `overrides` is what its own sources — configuration files and
+ * the environment — supply over them. The merged result can no longer tell the two apart, which is exactly what a
+ * check needs: a key that only ever appears in `overrides` is one the application does not know.
+ */
+export interface AppConfigLayers {
+  readonly defaults: ConfigMap;
+  readonly overrides: ConfigMap;
 }

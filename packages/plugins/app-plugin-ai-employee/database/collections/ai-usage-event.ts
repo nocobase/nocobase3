@@ -47,6 +47,6 @@ export function createAIUsageEventCollection(
       });
       c.index('sessionId', { name: 'idx_ai_usage_events_session' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

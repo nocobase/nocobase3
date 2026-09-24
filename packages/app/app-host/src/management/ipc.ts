@@ -1,3 +1,5 @@
+import type { JournalEntry } from '@nocobase/logging';
+import type { DeploymentLogListener } from '../deployment-log.js';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -46,6 +48,7 @@ interface IpcResponse {
   result?: unknown;
   error?: string;
   accepted?: boolean;
+  log?: JournalEntry;
 }
 
 export interface IpcHostManagementClientOptions {
@@ -91,8 +94,11 @@ export class IpcHostManagementClient implements HostManagementService {
     );
   }
 
-  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
-    return this.call<HostStatus>('applyDeployment', deployment);
+  applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus> {
+    return this.call<HostStatus>('applyDeployment', deployment, listener);
   }
 
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
@@ -115,7 +121,11 @@ export class IpcHostManagementClient implements HostManagementService {
     return this.call<HostStatus>('restartApp', { appId });
   }
 
-  private call<T>(method: IpcMethod, payload?: unknown): Promise<T> {
+  private call<T>(
+    method: IpcMethod,
+    payload?: unknown,
+    listener?: DeploymentLogListener,
+  ): Promise<T> {
     if (!this.child.connected) {
       return Promise.reject(new Error('App host IPC channel is disconnected'));
     }
@@ -138,6 +148,15 @@ export class IpcHostManagementClient implements HostManagementService {
 
       const onMessage = (message: unknown): void => {
         if (!isIpcResponse(message) || message.requestId !== requestId) {
+          return;
+        }
+        if (message.log) {
+          try {
+            listener?.(message.log);
+          } catch (error) {
+            cleanup();
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
           return;
         }
         if (message.accepted) {
@@ -240,6 +259,13 @@ export class IpcHostManagementServer {
         this.accept(request);
         result = await this.service.applyDeployment(
           request.payload as HostDeploymentSpec,
+          (log) =>
+            this.send({
+              channel: IPC_CHANNEL,
+              kind: 'response',
+              requestId: request.requestId,
+              log,
+            }),
         );
         break;
       case 'startDeployment':

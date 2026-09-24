@@ -7,14 +7,15 @@ import {
   type AIManager,
   type FileStorageFactory,
 } from '@nocobase/ai-employee';
-import {
-  createConfigPaths,
-  type ConfigPaths,
-} from '@nocobase/app-server/config';
+import { createAppPaths, type AppPaths } from '@nocobase/app-server/config';
 import {
   createAuthentication,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import {
+  createAppAuthorization,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import type { Caching } from '@nocobase/caching';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { createLogging, type Logging } from '@nocobase/logging';
@@ -25,9 +26,10 @@ import {
 
 export interface TestAppDeps {
   readonly ai: AIManager;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly database: DatabaseManager;
   readonly auth: Auth;
+  readonly authorization: AppAuthorization;
   readonly caching: Caching;
   readonly fileStorageFactory: FileStorageFactory;
   readonly aiStorageDisk: string;
@@ -45,11 +47,14 @@ export function createTestAppDeps(): TestAppDeps {
   });
   return {
     ai: createAIManager(),
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     database,
     auth: createAuthentication({
       connection: database.connection(),
       secret: 'ai-employee-test-auth-secret-at-least-32-characters',
+    }),
+    authorization: createAppAuthorization({
+      connection: database.connection(),
     }),
     caching: {
       getCache: ({ namespace }) => {

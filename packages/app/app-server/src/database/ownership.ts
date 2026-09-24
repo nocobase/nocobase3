@@ -1,12 +1,15 @@
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
-import { resolveAppDatabaseDriver, resolveConnections } from './manager.js';
-import type { DatabaseDriverRegistration } from '@nocobase/db';
+import { resolveConnections } from './manager.js';
+import {
+  resolveDatabaseDriver,
+  type DatabaseDriverRegistration,
+} from '@nocobase/db';
 
 /** Catch identical configured targets. Network aliases still require operator validation. */
 export function validateDatabaseOwnership(
   config: AppDatabaseConfig,
-  paths?: ConfigPaths,
+  paths?: AppPaths,
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): void {
   const owners = new Map<string, string>();
@@ -17,10 +20,11 @@ export function validateDatabaseOwnership(
     }),
   )) {
     if (connection.schemaManagement === 'external') continue;
-    const driver = resolveAppDatabaseDriver(connection.dialect, {
-      ...config.drivers,
-      ...drivers,
-    });
+    const driver = resolveDatabaseDriver(
+      connection,
+      { ...config.drivers, ...drivers },
+      name,
+    );
     const target = driver?.resolveOwnershipTarget
       ? driver.resolveOwnershipTarget(connection)
       : genericOwnershipTarget(

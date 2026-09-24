@@ -1,5 +1,228 @@
 # @nocobase/db
 
+## 1.0.0-beta.15
+
+### Patch Changes
+
+- 4e58fe3: Add `nocobase app config init`, which writes the configuration file an application starts from, and run it in an application with `pnpm config:init`.
+
+  It generates `config.yml` from the application's `config.example.yml` so the example's comments reach the file people edit, fills in `auth.secret` and `session.secret`, and points `database.connections.main` at the selected dialect while leaving every other connection alone. The dialect defaults to the installed driver when there is exactly one, is asked for on a terminal when there are several, and must be given with `--dialect` in a script.
+
+  The command installs nothing. Which dialects an application can run on is decided by the driver it depends on, so a missing one is reported with the `pnpm add` that supplies it — pinned to the range the installed `@nocobase/app-server` declares for that driver, because the newest release is not necessarily one the runtime was built against — rather than installed behind the user's back — in a deployment, where adding a driver to a built `dist` would be undone by the next build, it reports that the application has to be built again instead. Everything is validated before anything is written, so a run that reports a problem leaves the directory untouched and can simply be repeated once the driver is there.
+
+  The three application templates now declare `@nocobase/db-sqlite`, the driver their own `server/config/database.ts` defaults to, so a new application can be configured and started without installing one first.
+
+  `@nocobase/app-server` exports `OFFICIAL_DIALECTS` and `OfficialDialect` from `@nocobase/app-server/database`, so tooling that has to name the dialects reads the same list the runtime loads drivers from.
+
+  The application development and deployment Skills describe the new step: how an application is configured, that the driver decides which dialects it can run on, and that a deployment writes its configuration with `pnpm config:init` inside `dist/`, from the `config.example.yml` the archive carries. The database Skill shipped with `@nocobase/db` now points at `pnpm config:init` rather than at a creation flag that no longer exists.
+
+## 1.0.0-beta.14
+
+### Minor Changes
+
+- 8f1ead4: Add `nocobase app db doctor`, which compares stored Collection metadata with the schema behind it and deletes the records whose table is gone.
+
+  The physical schema and the Collection metadata are two records of what exists, and they can disagree: a table dropped outside a migration leaves its metadata record behind, and from then on resolving that Collection fails — including inside the migration that would recreate it, which is how the state becomes self-sustaining. Until now nothing reported it and nothing fixed it, so the only way out was deleting rows from `__nocobase_collection_metadata` by hand, which the documentation forbids for good reason.
+
+  `ConnectionCollections.diagnose()` walks every metadata record, reports the ones whose physical table is missing as `COLLECTION_TABLE_MISSING`, and for the rest reports whatever resolving them reports. Only a missing table is marked `orphaned`, because deleting the record is then a complete fix; every other issue means the table is there and something in it no longer matches, which a migration has to reconcile.
+
+  `db doctor` prints what disagrees per connection and exits non-zero while anything remains. `--fix` deletes the orphaned records and leaves the rest alone, `--connection` and `--all` select connections as they do elsewhere, and `--json` carries the result. The three templates gain a `db:doctor` script.
+
+  `runAppCollectionsDoctor` is exported for hosts that run it themselves, and the connection selection the artifact generator already had is now shared rather than duplicated.
+
+  The migrations reference also records why `onChecksumMismatch` defaults to `warn` and when to set `error` for a connection. The default was an implicit choice in the code, leaving a reader no way to judge whether to flip it: a checksum hashes the migration's file contents, so formatting the directory changes it and `error` would then stop the application from starting; startup runs migrations, so refusing to run turns drift into an outage on an upgrade where the compiled representation hashes differently. Nothing about the behaviour changes.
+
+- a1a8690: Expire a task lock whose holder was killed, and add `nocobase app db unlock` to inspect and release one.
+
+  A run that is hard-killed — SIGKILL, a stopped container, a lost machine — runs no cleanup, so its lock row survived it and every later run waited out the acquire timeout and then failed, until somebody deleted the row by hand. A holder now refreshes a `heartbeat_at` column every five seconds while it works, and a lock that has not been refreshed for thirty seconds is taken over by the next run, which then continues normally. The takeover is reported through `onStaleLock` and logged by the application, because it means a previous run did not shut down cleanly. A working run is never taken over: several missed beats are tolerated, so a slow database does not hand the lock to a second run.
+
+  The lock table gains `heartbeat_at`, added in place when the table predates it. It cannot be a migration: the lock is what every migration runs inside.
+
+  `db unlock` reports who holds each lock — the owner, when it was taken, and its last heartbeat — and releases the ones that have stopped beating. A lock that is still beating is reported rather than released; `--force` releases it anyway, which lets a second run start beside the first. It covers the migration and the seed lock together, takes `--connection` / `--all` / `--json` like the other database commands, and needs no migration or seed directory, since startup and plugins take the same locks. The three templates gain a `db:unlock` script.
+
+  `Migrator` and `Seeder` gain `lock()`, which reads the lock without creating its table, and `unlock(options)`. `AppDatabaseTaskOperation` gains `'unlock'`, and a task result carries `lock`, `released` and `lockReason`. The exhausted-wait message now names the last heartbeat and points at `db unlock` rather than at deleting a row by hand.
+
+### Patch Changes
+
+- ffafc2a: Preserve undefined temporal query values before dialect encoding so optional notification delivery timestamps use insert defaults or remain unchanged on update instead of becoming invalid date strings.
+
+## 1.0.0-beta.13
+
+### Minor Changes
+
+- fa01814: Report migration and seed checksum drift as a warning instead of failing, and add `nocobase app db repair` to realign the recorded history.
+
+  An executed migration or seed whose source has since changed no longer stops the run. `latest()`, `rollback()` and `run()` return the drift in a new `warnings` field, the CLI prints it, `--json` carries it, and startup logs it through the application logger. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration, or at the top level, to keep refusing to run. A history record whose migration is missing from the sources entirely still fails regardless of the policy.
+
+  `pnpm db:repair` rewrites recorded checksums to match the current sources, covering both migrations and seeds in one command. It previews before writing, prompts for confirmation unless `--force` is passed, supports `--dry-run` for inspection in CI, and conditions every write on the checksum it read, so a history changed in between fails rather than being overwritten. It never deletes a history record, so a repair cannot make an executed task run again.
+
+- 38e5253: Store an offset-bearing ISO string in a `datetime` Field as the local wall clock it names, and validate temporal strings written through `database.query()`.
+
+  `datetime` is a wall-clock type, so a value carrying `Z` or `±HH:MM` is not something it can hold as written. Repository refused such a value outright, while `database.query()` passed every string to the driver untouched: `2026-09-06T09:30:00Z` was accepted by the write and then stored verbatim on SQLite, where the first read of the row failed with `FIELD_CAPABILITY_NOT_SUPPORTED` because no valid local value carries an offset. Every other dialect took the write too and silently dropped the offset, giving one value on PostgreSQL and a different one on MySQL.
+
+  Both writers now converge on one answer: the offset is applied and the instant is stored as the host's local reading of it, which is exactly where the equivalent `Date` value has always landed. `2026-09-06T09:30:00Z`, `2026-09-06T17:30:00+08:00` and `new Date('2026-09-06T09:30:00Z')` are one value for a host at `+08:00`, through `createOne`, `createMany`, `updateOne`, `updateMany`, `upsertOne`, and Query `insertInto` and `updateTable`. `datetimeTz` is unchanged and still keeps the instant. Rows already holding an offset, which only SQLite could store, are read back through the same conversion rather than failing.
+
+  Temporal strings written through `database.query()` are now validated the way Repository has always validated them, so a value that cannot be stored is reported at the write instead of at a later read. This rejects shapes the query builder used to accept silently, including the space-separated `2026-08-14 10:00:00`: write `2026-08-14T10:00:00`, or pass a `Date`.
+
+- 7bde7bd: Add `nocobase app db rollback` and `nocobase app db redo`, so a migration corrected before its branch is merged can be re-run without resetting the database.
+
+  Editing an executed migration changes nothing on its own: it is recorded as executed, so `db apply` skips it and the database keeps the schema the old source produced. Until now the only way forward was `db reset`, which drops every managed table and every row with it, or editing the history table by hand — which the documentation forbids, and which splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable.
+
+  `db rollback` runs `down()` for the latest migration batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one, and the confirmation lists every migration with the package it belongs to before anything runs. It fails having run nothing when a migration in the batch is irreversible or has no `down()`. `db redo` is that followed by `db apply`. Both are destructive in the same way and confirm the same way: CI and non-interactive terminals require `--force`, `--connection` and `--all` select connections as they do elsewhere, and `--json` carries the result. Seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored.
+
+  `Migrator.rollback()` accepts `{ dryRun: true }`, which is what the confirmation is built from: it takes the lock, resolves the batch, rejects an irreversible one, and reports what a run would undo without running any `down`. `MigrationRollbackResult` gains `records` — the batch's history records in rollback order, carrying each migration's package — and `dryRun`. `AppDatabaseTaskOperation` gains `'rollback'`, which applies to migrations alone: a plan including seeds is refused, because seeds have no inverse.
+
+  The three templates gain `db:rollback` and `db:redo` scripts. The migrations reference now documents re-running a corrected migration, states what `db:repair` is and is not for — it records that the schema already matches, so using it on a change the database never received leaves the schema wrong and nothing recording that — and lists each internal table with the command that maintains it.
+
+- 5380642: Publish a `nocobase-db` Skill so an application's agents get the database rules with the package.
+
+  The package's documentation is not published — `files` carried `dist` alone — so an application that installed `@nocobase/db` had no guidance from it, and what existed lived in the application template as a second-hand copy that covered `QueryAdapter` and not Repository. The Skill ships under `skills/` and `nocobase skills sync` copies it into `.agents/skills/` of every application that depends on the package, alongside the plugin Skills already synchronized there.
+
+  It is organized as the six areas an application meets: connection and dialect configuration, migrations and seeds, the Collection Builder, Repository and Query, transactions, and Collections. It records what the type declarations cannot — which layer a task belongs to, the reverse criterion for reaching past `query` in a migration or seed, that `database/<connection>/collections/` is derived output for a managed connection but committed metadata for an external one, and the API shapes that do not exist and are otherwise guessed.
+
+- 3187ace: Let a Collection be created again when its metadata outlived its physical table.
+
+  `createCollection` resolved the Collection it was about to create, which fails with `COLLECTION_SCHEMA_DRIFT` when a metadata record survived without its table — the state a corrected migration re-runs into, and the state a hand-rolled reset leaves behind. The resolved definition was then discarded and replaced by the operation's own, so the lookup could only fail, never inform the operation. Collections that these operations define themselves are no longer resolved; referenced Collections still are, and every other operation on a Collection whose table is missing still reports the drift.
+
+- 5380642: Give migrations and seeds a `repository` on their context, bound to the connection the task runs on.
+
+  `query` reaches rows through the Connection naming strategy and expresses exactly what it is given, which leaves three things for each task to assemble by hand: cross-dialect field encoding, Collection-level naming overrides, and relation writes including the junction rows behind a `belongsToMany`. `context.repository(name)` covers them, taking the Collection as the database itself records it — the metadata a previous `builder` operation wrote — rather than importing any application definition.
+
+  The two contexts default differently. A migration changes structure, so `builder` and `query` remain its tools and `repository` is for the writes `query` would get wrong; a migration that uses it should say in a comment why `query` was not enough, keep it out of `down`, and not walk a table with it. A seed changes no structure and writes installation data in Collection terms, so `repository` is its normal tool and `query` covers what that cannot express.
+
+  Inside a transaction the Repository comes from the transaction's own connection, so a failed task discards its writes. This is what the database task service container has been protecting: resolving the application's `DatabaseManager` there would have produced a Repository writing outside the task's transaction, and its refusal now names the supported path instead of only refusing.
+
+- 3187ace: Wait for a contended migration or seed lock instead of failing on the first conflict, report who holds it, and stop abandoning it held when a restart interrupts startup.
+
+  Acquiring the lock now retries with backoff until `lockAcquireTimeoutMs` — a new Migrator and Seeder option defaulting to 30 seconds — so the brief overlap between two starts resolves itself rather than surfacing as an error. A conflicting insert is treated as contention on its own: the previous implementation re-read the lock row to decide what to report, and a holder that released in between left the driver's `UNIQUE constraint failed` text as the whole explanation. When the wait does expire, the message names the holder recorded in `locked_by`, the time in `locked_at`, how long it waited, and that the row has to be deleted if the process holding it was killed. An insert that keeps failing while the lock table holds no row is still reported as the driver error it is, rather than being retried until the timeout.
+
+  Startup watches `SIGINT` and `SIGTERM` from before the application boots until the HTTP server registers its own handlers. Migrations and seeds run in that window, and Node's default disposition terminated the process outright, so a `tsx watch` restart triggered by a dependency install left the lock held by a process that no longer existed and the next start had to wait it out. The signal is now recorded, startup finishes and releases the lock the ordinary way, and the application shuts down instead of listening. A second signal still forces the exit. `watchStartupShutdownSignals` is exported for hosts that run their own startup sequence, and the app-host CLI uses it: its handlers were registered before the host existed, so a signal during startup exited the process immediately and abandoned the same locks.
+
+  Migrations and seeds share one lock implementation, so contention behaves and reports identically for both.
+
+### Patch Changes
+
+- c5f4438: Keep one implementation of the task ledger and the source loader behind the two kinds, and apply the history table's column upgrade to the seed ledger as well.
+
+  Migrations and seeds keep separate ledgers because only one of them is reversible, but the table, its reads and writes, and most of loading a source directory were the same work written twice: the two `internal/history.ts` modules differed by one column and their names, and the two loaders by which fields a definition must define. The shared halves now live in `migration/internal/history.ts` and `migration/internal/task-loader.ts`, with each kind naming its own table and messages — the arrangement the task locks already use. Every exported function keeps its name and signature, and no message changes.
+
+  The duplication had a cost beyond size: a change to one side could be forgotten on the other, which is how the seed ledger never got the `package_name` column upgrade the migration ledger has. It has it now, so a ledger created before that column existed is upgraded in place on the next run rather than failing its first read.
+
+- 38e5253: Accept `YYYY-MM-DD HH:mm:ss` when writing a `datetime` or `datetimeTz` value
+
+  Reading has always accepted the space separator, because it is the shape catalogs and drivers hand back, while writing required the `T` and reported a value that "is not a valid V1 temporal value" without naming the separator. The two halves of one contract disagreed, and the literal they disagreed about is the one every SQL dialect spells.
+
+  Both writers now normalize it, so `'2026-09-02 09:00:00'` and `'2026-09-02T09:00:00'` store the same canonical value. The space is unambiguous — no valid V1 value carries one — and this only widens what is accepted, so nothing that worked before changes.
+
+- 38e5253: Read temporal values through the result normalizer in Repository, and resolve a stored timestamp on the UTC pivot
+
+  Repository decoded stored timestamps with the mutation validator rather than the result normalizer Query has always used, so the same row read through the two APIs could differ or fail on one of them. It now decodes through the result normalizer, which is what recognizes the shapes storage produces rather than the shapes a caller writes.
+
+  That matters most after a Field is converted between `datetime` and `datetimeTz`. The two types disagree about what a stored value is, and the physical column is not rewritten: a widened SQLite column holds text carrying no offset, which Repository rejected outright with `FIELD_CAPABILITY_NOT_SUPPORTED`, and a narrowed one holds text that carries one.
+
+  Both are now resolved on UTC, in both directions, for the same reason MySQL's `datetime(3)` already pivots there: it is the only reading that does not depend on the host the row is read on, so one database reports the same value everywhere and a Field converted one way and back returns what it started with. A previously stored offset in a `datetime` value therefore reads as the instant's UTC wall clock rather than the host's — writing keeps resolving a caller's offset against the host, where a caller is present and `Date` semantics apply.
+
+  PostgreSQL still converts these columns by reading each value in the session time zone, so a migration that widens or narrows one has to pin that session to UTC itself.
+
+## 1.0.0-beta.12
+
+### Minor Changes
+
+- 43592e9: Expose a read-only config.get() reader and service container to migration and seed callbacks. Inject application configuration snapshots for startup and CLI database tasks and document configuration and rollback semantics.
+
+  Restrict application database task service access to the ID generator and reuse the templates’ application factory for CLI migrations and seeds. CLI tasks share the application database manager and dispose application and scope resources without booting providers or triggering autoRun.
+
+  Simplify createAppCommands to one options object with lazy rootDir-based runtime and application discovery and optional factory overrides.
+
+## 1.0.0-beta.11
+
+### Minor Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+
+### Patch Changes
+
+- c84bfe8: Reject collection reads whose input resolves to a different logical collection name, instead of silently omitting logical field metadata. Use the logical name for get, getResolution, and getPhysical; inspect physical table names through schemaInspector.getPhysicalCollection.
+
+  Refresh the collection naming index when metadata documents are created or removed, including field-only metadata, so explicitly declared underscored logical names remain valid during and after migrations.
+
+  Resolve Query relative table identifiers to their logical collection before loading field metadata, preserving snake_case table inputs, aliases, and connection prefixes without relaxing public Collection name validation.
+
+## 1.0.0-beta.10
+
+### Minor Changes
+
+- e0c4b3d: Add a transaction-safe physical row upsert API and use it through a unified Queue adapter accepting DatabaseConnection, with the upstream Knex client bridge kept private. Fix scheduler startup across database dialects while preserving schedule execution history.
+
+  Preserve the outer Oracle transaction when a nested savepoint completes, allowing inserted rows to roll back with their owning transaction.
+
+  Retry deadlocks with bounded backoff when a physical row upsert owns its transaction; preserve caller-owned transaction boundaries and propagate failures requiring the caller to retry.
+
+  Recognize Dameng unique-key conflicts during concurrent upserts and preserve the outer transaction when knex-dm finishes a nested savepoint.
+
+  Declare Knex as a Dameng runtime dependency so nested transaction support also works in registry installations.
+
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- 24e771f: Remove circular development dependencies between the database core, shared testkit, and dialect packages. Move runnable database examples, the playground, and benchmarks to repository development tools.
+- 26ac480: Add code-defined Cron scheduling with timezone support, transactional synchronization, and stable schedule identities. Applications and plugins register schedules with `SchedulerService.defineSchedule(definition)` and execution targets with `registerTarget()` during provider registration or boot.
+
+  Route scheduled jobs and workers through the application's configured logical queue, with an adapter-neutral schedule store. Keep the upstream queue dependency unmodified and store queue and scheduler timestamps compatibly with their adapters while preserving absolute instants.
+
+  Move queue storage migrations from Scheduler into the queue library, which resolves configured database connections and physical tables. Assemble these sources centrally in app-server for startup and CLI commands, rejecting overlapping active queue tables before execution. Support immutable target parameters, shared migration history and locks, upstream-compatible physical schemas, and read-only execution conditions that leave skipped migrations unapplied.
+
+  Track idempotent occurrences through the target's final outcome, including asynchronous Workflow completion and recovery with stable run references. Target registration returns a completion-reporting handle scoped to that target; long-running executions can report completion without a fixed scheduler observation timeout.
+
+  Provide an authorized, read-only schedule management page and API with paginated schedules, trigger counts, execution history, and separate schedule and execution statuses. Register `pnpm nocobase schedule sync` as a global CLI command and integrate it into all application templates.
+
+  Include application examples for custom task targets and scheduled Workflows, and agent guidance for schedule definition, target selection, asynchronous execution, diagnostics, and recovery.
+
+  Keep the database manifest CLI entry available before compilation so fresh workspace installs link the command required by package builds.
+
+  Declare the OpenTelemetry dependencies referenced by the upstream queue declarations so consumers can typecheck published Server APIs without enabling tracing or skipping library checks.
+
+## 1.0.0-beta.8
+
+### Patch Changes
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+## 1.0.0-beta.7
+
+### Major Changes
+
+- 1c70f60: Remove the `syncMetadata` execution option from CollectionBuilder. Executed schema changes always validate and synchronize supplemental metadata so logical field types, relations, and optimistic locking remain available to data input and output. Legacy calls that pass the removed option now fail before DDL; remove the option to migrate.
+
+### Minor Changes
+
+- 63db898: Let a driver declare the connection shape its hooks receive.
+
+  Splitting the dialects into packages left the driver descriptor's hooks disagreeing about how to say "a connection": seven took `unknown` and `resolveConnection` took the closed `ConnectionConfig` union. Neither is a type a contributed dialect can work with, so each package asserted its way back to its own — `@nocobase/db-dameng` through `source as unknown as DamengConnectionConfig`, a double assertion, which is what two types with no overlap require.
+
+  `DatabaseDriverDefinition<TDialect, TConfig>` now carries the connection type, and every hook receives it. All eight dialect packages name theirs and the assertions are gone; the lint rule that reports a redundant assertion is what removed the last of them.
+
+  The hooks are declared as methods rather than function properties. TypeScript checks method parameters bivariantly, which is what lets a driver narrowed to one dialect sit in the `drivers` map holding drivers for all of them. The pairing that gives up on is one the runtime enforces anyway: a driver is looked up by the connection's own dialect, so it is only ever handed a config of the dialect it declares.
+
+  `DatabaseConfig` is now an alias of `ExtensibleDatabaseConfig<ConnectionConfig>` rather than a second interface. The two were written out separately and stayed field-for-field identical, which left every consumer choosing between two names for one shape — `@nocobase/app-server` chose the closed one, which is why an application could not configure a contributed dialect at all.
+
+  Also: `AnyConnectionConfig` is exported as the constraint to write connection-generic code against; `BaseConnectionConfig.pool` is `Knex.PoolConfig` instead of `unknown`, which is what `configurePool` already said it was; and `@nocobase/db-oceanbase` declares `OceanbaseConnectionConfig` instead of reusing `MysqlConnectionConfig`, whose dialect literal is `'mysql'`.
+
+  This is a step toward inferring a database's connections from its registered `drivers`, which would turn `Database dialect "..." is not registered.` from a startup error into a compile error. That inference needs the driver to own its connection type first.
+
+- 63db898: Move concrete database connection types into their owning dialect packages and keep the core connection contract independent of installed dialects. Import `SqliteConnectionConfig`, `PostgresConnectionConfig`, `MysqlConnectionConfig`, `OracleConnectionConfig`, and `MssqlConnectionConfig` from the corresponding `@nocobase/db-<dialect>` package instead of `@nocobase/db`.
+
+  `ConnectionConfig` and the default `DatabaseConfig` and `AppDatabaseConfig` now describe the common runtime contract. For strict configuration checking, supply a concrete connection type or use `DatabaseConfigFromDrivers` and `AppDatabaseConfigFromDrivers`. The core also exports `DriverConnectionConfig` and `ConnectionConfigFromDrivers` for reusable driver inference. Preserve mutually exclusive host and socket targets in MySQL and OceanBase configuration and factory options.
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+
+### Patch Changes
+
+- 63db898: Require each driver registration key to match the driver's declared dialect in inferred database configurations. Reject aliases and mismatched keys even when no connection uses that driver or the connections map is empty, while preserving connection inference for correctly registered factories and descriptors.
+
 ## 1.0.0-beta.6
 
 ### Minor Changes

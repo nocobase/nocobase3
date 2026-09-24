@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { Bot, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
@@ -27,13 +28,19 @@ function AIEmployeeDevScene({
 }: {
   readonly onRetry: () => void;
 }): ReactElement {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const ai = useAI();
 
   if (ai.configurationStatus === 'loading') {
     return (
       <DevPageShell>
         <div className='flex min-h-[32rem] items-center justify-center text-sm text-muted-foreground'>
-          Loading AI employees and enabled models…
+          {translateDemo('demo.loadingConfiguration', {
+            defaultValue: 'Loading AI employees and enabled models…',
+          })}
         </div>
       </DevPageShell>
     );
@@ -47,15 +54,23 @@ function AIEmployeeDevScene({
             <TriangleAlert className='h-6 w-6' aria-hidden='true' />
           </span>
           <div>
-            <h2 className='text-lg font-semibold'>AI employee is not ready</h2>
+            <h2 className='text-lg font-semibold'>
+              {translateDemo('demo.configurationNotReady', {
+                defaultValue: 'AI employee is not ready',
+              })}
+            </h2>
             <p className='mt-1 text-sm text-muted-foreground'>
               {ai.configurationError?.message ??
-                'No AI employee is available for the current user.'}
+                translateDemo('demo.noEmployee', {
+                  defaultValue:
+                    'No AI employee is available for the current user.',
+                })}
             </p>
           </div>
           <Button variant='outline' onClick={onRetry}>
             <RefreshCw className='h-4 w-4' aria-hidden='true' />
-            Retry
+
+            {translateDemo('Retry', { defaultValue: 'Retry' })}
           </Button>
         </div>
       </DevPageShell>
@@ -85,15 +100,23 @@ function AIEmployeeDevScene({
           <div className='mt-5 rounded-xl border bg-background p-4 text-sm'>
             <div className='flex items-center gap-2 font-medium'>
               <Sparkles className='h-4 w-4 text-primary' aria-hidden='true' />
-              Development instance
+
+              {translateDemo('demo.developmentInstance', {
+                defaultValue: 'Development instance',
+              })}
             </div>
             <p className='mt-2 text-muted-foreground'>
-              This page uses the Registry UI against the plugin&apos;s existing
-              authenticated
+              {translateDemo('demo.developmentDescription', {
+                defaultValue:
+                  "This page uses the Registry UI against the plugin's existing authenticated",
+              })}
               <code className='mx-1 rounded bg-muted px-1 py-0.5 text-xs'>
                 /api/ai
               </code>
-              routes. It is excluded from production builds.
+
+              {translateDemo('demo.developmentOnly', {
+                defaultValue: 'routes. It is excluded from production builds.',
+              })}
             </p>
           </div>
         </aside>
@@ -107,19 +130,29 @@ function DevPageShell({
 }: {
   readonly children: ReactElement;
 }): ReactElement {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   return (
     <main className='min-h-full bg-gradient-to-b from-muted/50 to-background p-4 sm:p-6'>
       <div className='mx-auto max-w-7xl'>
         <header className='mb-5'>
           <p className='text-xs font-semibold uppercase tracking-[0.2em] text-primary'>
-            AI Employee Registry
+            {translateDemo('demo.aiEmployeeRegistry', {
+              defaultValue: 'AI Employee Registry',
+            })}
           </p>
           <h1 className='mt-2 text-2xl font-semibold tracking-tight'>
-            AI employee playground
+            {translateDemo('demo.aiEmployeePlayground', {
+              defaultValue: 'AI employee playground',
+            })}
           </h1>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Exercise the application-owned AI component library with the current
-            plugin runtime.
+            {translateDemo('demo.playgroundDescription', {
+              defaultValue:
+                'Exercise the application-owned AI component library with the current plugin runtime.',
+            })}
           </p>
         </header>
         {children}

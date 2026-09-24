@@ -5,7 +5,7 @@ import type {
   CollectionMetadataStoreConfig,
 } from '@nocobase/db';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import type { AppMetadataStoreConfig } from './types.js';
 
 /**
@@ -16,7 +16,7 @@ import type { AppMetadataStoreConfig } from './types.js';
  */
 export function resolveAppCollectionsDirectory(
   name: string,
-  paths?: ConfigPaths,
+  paths?: AppPaths,
 ): string {
   const root = paths?.database() ?? path.resolve('database');
   return path.join(root, name, 'collections');
@@ -27,7 +27,7 @@ export interface ResolveAppMetadataStoreOptions {
   readonly external: boolean;
   /** The top-level `database.metadataStore`, which a connection without its own falls back to. */
   readonly shared?: AppMetadataStoreConfig;
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
 }
 
 /**
@@ -71,7 +71,7 @@ function isStoreInstance(value: unknown): value is CollectionMetadataStore {
   );
 }
 
-function resolveRoot(directory: string, paths?: ConfigPaths): string {
+function resolveRoot(directory: string, paths?: AppPaths): string {
   return path.isAbsolute(directory)
     ? directory
     : path.resolve(paths?.root() ?? process.cwd(), directory);

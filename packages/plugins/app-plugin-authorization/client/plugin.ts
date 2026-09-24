@@ -3,6 +3,7 @@ import {
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
+import locales from './locales/index.js';
 import reactProviders from './react-providers.js';
 import routes from './routes.js';
 import serviceProviders from './service-provider.js';
@@ -14,6 +15,7 @@ export interface AuthorizationClientOptions {
 const authorization: AppClientPluginFactory<AuthorizationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-authorization',
+    locales,
     serviceProviders,
     routes,
     reactProviders,

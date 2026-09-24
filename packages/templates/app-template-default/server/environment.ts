@@ -1,5 +1,6 @@
 import {
   envString,
+  envBoolean,
   envInteger,
   type EnvironmentMapping,
 } from '@nocobase/config/providers/env';
@@ -13,6 +14,7 @@ export const environmentMappings: Readonly<Record<string, EnvironmentMapping>> =
     // Deployment
     APP_SERVER_HOST: envString('server.host'),
     APP_SERVER_PORT: envInteger('server.port'),
+    APP_SERVER_START_LOG: envBoolean('server.startLog'),
     APP_PUBLIC_ORIGIN: envString('app.publicOrigin'),
     APP_DEFAULT_LOCALE: envString('i18n.defaultLocale'),
     SNOWFLAKE_WORKER_ID: envInteger('snowflake.workerId'),

@@ -1,8 +1,25 @@
 import { createHash } from 'node:crypto';
-import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, extname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import {
+  readTaskManifest,
+  resolveTaskChecksum,
+  type TaskManifest,
+} from './manifest.js';
+import {
+  assertTaskSourceForm,
+  DEFAULT_TASK_EXTENSIONS,
+  DEFAULT_TASK_PACKAGE_NAME,
+  importTaskDefinition,
+  isNonEmptyString,
+  isTaskFile,
+  isValidTransactionMode,
+  readTaskDirectory,
+  taskNameFromFileName,
+  validateTaskDirectory,
+  validateTaskPackageName,
+  validateUniqueTaskNames,
+} from './internal/task-loader.js';
+import { readFile, stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { isDefinedMigration } from './internal/marker.js';
 import type {
   LoadedMigration,
@@ -11,13 +28,9 @@ import type {
   MigrationSource,
 } from './types.js';
 
-export const DEFAULT_MIGRATION_EXTENSIONS = [
-  '.js',
-  '.mjs',
-  '.cjs',
-  '.ts',
-] as const;
-export const DEFAULT_MIGRATION_PACKAGE_NAME = 'app';
+export const DEFAULT_MIGRATION_EXTENSIONS: readonly string[] =
+  DEFAULT_TASK_EXTENSIONS;
+export const DEFAULT_MIGRATION_PACKAGE_NAME: string = DEFAULT_TASK_PACKAGE_NAME;
 
 /** Loads, validates, and deterministically orders migration definitions from configured sources. */
 export async function loadMigrations(
@@ -28,7 +41,7 @@ export async function loadMigrations(
     await Promise.all(sources.map((source) => loadMigrationSource(source)))
   ).flat();
 
-  validateUniqueMigrationNames(migrations);
+  validateUniqueTaskNames('Migration', migrations);
   return migrations.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -45,12 +58,13 @@ async function loadMigrationSource(
   source: MigrationSource,
 ): Promise<LoadedMigration[]> {
   const directory = resolve(source.directory);
-  const entries = await readMigrationDirectory(directory);
+  const manifest = await readTaskManifest(directory);
+  const entries = await readTaskDirectory(directory);
   const extensions = new Set(source.extensions ?? DEFAULT_MIGRATION_EXTENSIONS);
   const files = entries
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
-    .filter((fileName) => isMigrationFile(fileName, extensions))
+    .filter((fileName) => isTaskFile(fileName, extensions))
     .sort();
 
   const migrations: LoadedMigration[] = [];
@@ -60,6 +74,9 @@ async function loadMigrationSource(
         source.packageName,
         join(directory, fileName),
         fileName,
+        manifest,
+        source.parameters,
+        source.configuration,
       ),
     );
   }
@@ -70,91 +87,60 @@ async function loadMigrationSource(
 function normalizeMigrationSources(
   options: LoadMigrationsOptions,
 ): MigrationSource[] {
-  if (options.directory !== undefined && options.sources !== undefined) {
-    throw new Error(
-      'Migration options cannot define both directory and sources.',
-    );
-  }
+  assertTaskSourceForm('Migration', options);
 
   if (options.sources !== undefined) {
     return options.sources.map((source) => ({
-      packageName: validatePackageName(source.packageName),
-      directory: validateDirectory(source.directory),
+      parameters: normalizeParameters(source.parameters),
+      configuration: source.configuration?.map((entry) =>
+        Object.freeze({ ...entry }),
+      ),
+      packageName: validateTaskPackageName('Migration', source.packageName),
+      directory: validateTaskDirectory('Migration', source.directory),
       extensions: source.extensions ?? options.extensions,
     }));
   }
 
-  if (options.directory === undefined) {
-    throw new Error('Migration options must define directory or sources.');
-  }
-
   return [
     {
-      packageName: validatePackageName(
+      packageName: validateTaskPackageName(
+        'Migration',
         options.packageName ?? DEFAULT_MIGRATION_PACKAGE_NAME,
       ),
-      directory: validateDirectory(options.directory),
+      directory: validateTaskDirectory('Migration', options.directory),
       extensions: options.extensions,
     },
   ];
-}
-
-function validateDirectory(directory: unknown): string {
-  if (!isNonEmptyString(directory)) {
-    throw new Error('Migration directory must be a non-empty string.');
-  }
-  return directory;
-}
-
-function validatePackageName(packageName: unknown): string {
-  if (!isNonEmptyString(packageName)) {
-    throw new Error('Migration packageName must be a non-empty string.');
-  }
-  return packageName;
-}
-
-async function readMigrationDirectory(directory: string): Promise<Dirent[]> {
-  try {
-    return await readdir(directory, { withFileTypes: true });
-  } catch (error) {
-    if (isNodeError(error) && error.code === 'ENOENT') {
-      return [];
-    }
-    throw error;
-  }
 }
 
 async function loadMigrationFile(
   packageName: string,
   filePath: string,
   fileName: string,
+  manifest: TaskManifest | undefined,
+  parameters?: Readonly<Record<string, string>>,
+  configuration?: readonly Readonly<Record<string, unknown>>[],
 ): Promise<LoadedMigration> {
   const [source, fileStat] = await Promise.all([
     readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
-  const checksum = createMigrationChecksum(source);
-  const migration = await importMigration(filePath, fileStat.mtimeMs);
+  const checksums = resolveTaskChecksum(filePath, source, manifest);
+  const migration = await importTaskDefinition(filePath, fileStat.mtimeMs);
   validateMigrationDefinition(migration, filePath, fileName);
 
   return {
     packageName,
-    name: migration.name,
+    configuration,
+    name: parameters
+      ? `${migration.name}_${createHash('sha256').update(JSON.stringify(parameters)).digest('hex')}`
+      : migration.name,
+    ...(parameters ? { parameters } : {}),
     filePath,
     fileName,
-    checksum,
+    ...checksums,
     migration,
   };
-}
-
-async function importMigration(
-  filePath: string,
-  mtimeMs: number,
-): Promise<unknown> {
-  const url = pathToFileURL(filePath);
-  url.searchParams.set('mtime', String(Math.trunc(mtimeMs)));
-  const module = await import(url.href);
-  return (module as { default?: unknown }).default;
 }
 
 function validateMigrationDefinition(
@@ -174,10 +160,16 @@ function validateMigrationDefinition(
     );
   }
 
-  const expectedName = migrationNameFromFileName(fileName);
+  const expectedName = taskNameFromFileName(fileName);
   if (value.name !== expectedName) {
     throw new Error(
       `Migration file ${filePath} has name "${value.name}", but file name requires "${expectedName}".`,
+    );
+  }
+
+  if (value.shouldRun !== undefined && typeof value.shouldRun !== 'function') {
+    throw new Error(
+      `Migration "${value.name}" shouldRun must be a function when provided.`,
     );
   }
 
@@ -212,44 +204,17 @@ function validateMigrationDefinition(
   }
 }
 
-function validateUniqueMigrationNames(migrations: LoadedMigration[]): void {
-  const seen = new Map<string, LoadedMigration>();
-  for (const migration of migrations) {
-    const previous = seen.get(migration.name);
-    if (previous) {
-      throw new Error(
-        `Duplicate migration name "${migration.name}" in ${previous.filePath} and ${migration.filePath}.`,
-      );
-    }
-    seen.set(migration.name, migration);
-  }
-}
-
-function isMigrationFile(fileName: string, extensions: Set<string>): boolean {
-  if (fileName.startsWith('.') || fileName.endsWith('.d.ts')) {
-    return false;
-  }
-  return extensions.has(extname(fileName));
-}
-
-function migrationNameFromFileName(fileName: string): string {
-  return basename(fileName, extname(fileName));
-}
-
-function createMigrationChecksum(source: string): string {
-  return createHash('sha256').update(source).digest('hex');
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isValidTransactionMode(value: unknown): boolean {
-  return (
-    value === undefined || value === true || value === false || value === 'auto'
+function normalizeParameters(
+  parameters: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (parameters === undefined) return undefined;
+  const entries = Object.entries(parameters).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
   );
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
+  if (entries.some(([, value]) => typeof value !== 'string')) {
+    throw new Error('Migration source parameters must be strings.');
+  }
+  return entries.length
+    ? Object.freeze(Object.fromEntries(entries))
+    : undefined;
 }

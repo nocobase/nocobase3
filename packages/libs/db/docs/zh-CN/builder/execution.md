@@ -67,15 +67,14 @@ await builder.apply(operations, { strict: true });
 
 ## 执行选项
 
-| 目的               | 选项                  | 关键边界                                         |
-| ------------------ | --------------------- | ------------------------------------------------ |
-| 只编译、不执行     | `dryRun`              | 不修改 Schema，也不同步 Metadata                 |
-| 查看 SQL           | `previewSql`          | Adapter 支持时返回，通常配合 dry-run             |
-| 跳过 Metadata 同步 | `syncMetadata: false` | 保留 DDL，不写补充 Metadata                      |
-| 已存在时跳过创建   | `ifNotExists`         | 不会把已有 Schema 自动对齐到定义                 |
-| 不存在时跳过删除   | `ifExists`            | 只处理对象不存在，不改变其他行为                 |
-| 拒绝能力降级       | `strict`              | 拒绝 capability warning，不确认 destructive 操作 |
-| Builder 管理事务   | `transaction`         | 当前只是预留字段，没有执行语义                   |
+| 目的             | 选项          | 关键边界                                         |
+| ---------------- | ------------- | ------------------------------------------------ |
+| 只编译、不执行   | `dryRun`      | 不修改 Schema，也不同步 Metadata                 |
+| 查看 SQL         | `previewSql`  | Adapter 支持时返回，通常配合 dry-run             |
+| 已存在时跳过创建 | `ifNotExists` | 不会把已有 Schema 自动对齐到定义                 |
+| 不存在时跳过删除 | `ifExists`    | 只处理对象不存在，不改变其他行为                 |
+| 拒绝能力降级     | `strict`      | 拒绝 capability warning，不确认 destructive 操作 |
+| Builder 管理事务 | `transaction` | 当前只是预留字段，没有执行语义                   |
 
 Migration 事务由 Migrator 提供。其他场景需要事务时，使用 `db.transaction()` 或 `connection.transaction()` 获得事务 Connection，再使用该 Connection 的 Builder。
 
@@ -107,6 +106,6 @@ Migration 事务由 Migrator 提供。其他场景需要事务时，使用 `db.t
 
 ## Metadata 不属于 Operation 计划
 
-Operation DSL 表达 Schema 计划。Builder 可以在 Schema 成功后同步定义中可提取的补充 Metadata，但纯 `title`、`description` 或 Relation Metadata 更新应使用 `connection.collectionMetadata`，不要伪造成 Schema operation。
+Operation DSL 表达 Schema 计划。Builder 真实执行时必须同步定义中可提取的补充 Metadata，确保逻辑字段类型、关系和乐观锁配置与 Schema 一致；没有关闭同步的执行选项。纯 `title`、`description` 或 Relation Metadata 更新应使用 `connection.collectionMetadata`，不要伪造成 Schema operation。
 
 Collection rename 会同时处理物理对象和 Metadata，并在依赖无法原子更新时拒绝；具体行为见[在 Migration 中管理 Collection Schema](./collection-schema.md)。

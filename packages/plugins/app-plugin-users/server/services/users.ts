@@ -1,4 +1,6 @@
-import type { DatabaseManager } from '@nocobase/db';
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 import type {
   AdministratedUser,
   UserAdministrationService,
@@ -37,6 +39,12 @@ export interface CreateUserManagementServiceOptions {
   readonly database: DatabaseManager;
   readonly users: UserAdministrationService;
   readonly roleScopes: UserRoleScopeRegistry;
+  /**
+   * Absent in an application assembled without authorization. When present,
+   * disabling an account asks it whether that account is the last one able to
+   * use a Permission Set the application must always keep in use.
+   */
+  readonly permissionSets?: PermissionSetsApi<DatabaseConnection>;
   readonly onRoleScopesChanged?: (userId: string) => void | Promise<void>;
 }
 
@@ -120,7 +128,14 @@ class DefaultUserManagementService implements UserManagementService {
     userId: string,
     input: Parameters<UserManagementService['update']>[1],
   ) {
-    const user = await this.services.users.update(userId, input);
+    const user = await this.services.database.transaction(
+      async (connection) => {
+        await lockUserForAdministration(connection, userId);
+        return this.services.users
+          .withConnection(connection)
+          .update(userId, input);
+      },
+    );
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
@@ -130,14 +145,62 @@ class DefaultUserManagementService implements UserManagementService {
         for (const scope of this.services.roleScopes.list()) {
           await scope.assertCanDisable?.(userId, connection);
         }
+        // A disabled account can no longer act, so disabling it removes the
+        // subject from every Permission Set as surely as revoking would.
+        await this.services.permissionSets
+          ?.withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: userId });
+        await lockUserForAdministration(connection, userId);
         return this.services.users.withConnection(connection).disable(userId);
       },
     );
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
+  async remove(userId: string, actorId: string): Promise<void> {
+    if (
+      !this.services.roleScopes
+        .list()
+        .some(
+          (scope) =>
+            typeof scope.assertCanDelete === 'function' &&
+            typeof scope.onDelete === 'function',
+        )
+    )
+      throw new UserManagementError(
+        'USER_DELETION_NOT_CONFIGURED',
+        'User deletion is not configured for this application.',
+        409,
+      );
+    if (userId === actorId)
+      throw new UserManagementError(
+        'SELF_DELETE_NOT_ALLOWED',
+        'You cannot delete your own account.',
+        409,
+      );
+    await this.services.database.transaction(async (connection) => {
+      for (const scope of this.services.roleScopes.list()) {
+        await scope.assertCanDelete?.(userId, actorId, connection);
+      }
+      await this.services.permissionSets
+        ?.withTransaction(connection)
+        .assertSubjectRemovable({ type: 'user', id: userId });
+      const users = this.services.users.withConnection(connection);
+      if (!(await users.get(userId))) return;
+      for (const scope of this.services.roleScopes.list())
+        await scope.onDelete?.(userId, connection);
+      await users.remove(userId, actorId);
+    });
+    await this.services.onRoleScopesChanged?.(userId);
+  }
+
   async enable(userId: string): Promise<ManagedUser> {
-    const user = await this.services.users.enable(userId);
+    const user = await this.services.database.transaction(
+      async (connection) => {
+        await lockUserForAdministration(connection, userId);
+        return this.services.users.withConnection(connection).enable(userId);
+      },
+    );
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
@@ -174,11 +237,12 @@ class DefaultUserManagementService implements UserManagementService {
   }
 
   async resetPassword(userId: string, password: string): Promise<void> {
-    await this.services.database.transaction((connection) =>
-      this.services.users
+    await this.services.database.transaction(async (connection) => {
+      await lockUserForAdministration(connection, userId);
+      await this.services.users
         .withConnection(connection)
-        .resetPassword(userId, password),
-    );
+        .resetPassword(userId, password);
+    });
   }
 
   revokeSessions(userId: string): Promise<void> {

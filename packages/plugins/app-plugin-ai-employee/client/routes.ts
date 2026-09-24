@@ -28,24 +28,28 @@ const routes: readonly AppClientRouteContribution[] = [
     {
       name: 'ai-components',
       path: '/ai-components',
-      navigation: { title: 'AI Components', icon: Bot },
+      navigation: { title: 'demo.navigation.group', icon: Bot },
+      breadcrumb: { title: 'demo.navigation.group' },
       children: [
         {
           name: 'ai-chat-window',
           path: '/chat',
-          navigation: { title: 'Chat window' },
+          navigation: { title: 'demo.navigation.chat' },
+          breadcrumb: { title: 'demo.navigation.chat' },
           componentLoader: createAIEmployeeDemoLoader('AIChatDemoPage'),
         },
         {
           name: 'ai-floating-chat',
           path: '/floating',
-          navigation: { title: 'Floating chat' },
+          navigation: { title: 'demo.navigation.floating' },
+          breadcrumb: { title: 'demo.navigation.floating' },
           componentLoader: createAIEmployeeDemoLoader('FloatingChatDemoPage'),
         },
         {
           name: 'ai-employee-tasks',
           path: '/tasks',
-          navigation: { title: 'Employee tasks' },
+          navigation: { title: 'demo.navigation.tasks' },
+          breadcrumb: { title: 'demo.navigation.tasks' },
           componentLoader: createAIEmployeeDemoLoader(
             'AIEmployeeTasksDemoPage',
           ),
@@ -53,13 +57,15 @@ const routes: readonly AppClientRouteContribution[] = [
         {
           name: 'ai-page-context',
           path: '/context',
-          navigation: { title: 'Page context' },
+          navigation: { title: 'demo.navigation.context' },
+          breadcrumb: { title: 'demo.navigation.context' },
           componentLoader: createAIEmployeeDemoLoader('PageContextDemoPage'),
         },
         {
           name: 'ai-tool-cards',
           path: '/tools',
-          navigation: { title: 'Tool cards' },
+          navigation: { title: 'demo.navigation.tools' },
+          breadcrumb: { title: 'demo.navigation.tools' },
           componentLoader: createAIEmployeeDemoLoader('ToolCardsDemoPage'),
         },
       ],

@@ -90,8 +90,8 @@ compiler.
 
 The client contributes Workflows and Workflow runs under the application's
 Automation settings group. Their record detail routes stay inside the settings
-layout at `/settings/automation/workflows/:workflowId` and
-`/settings/automation/workflow-runs/:runId`.
+layout at `/settings/workflow/workflows/:id` and
+`/settings/workflow/runs/:id`.
 
 Register it with `pnpm plugin:register workflow --app app-template-default`.
 Application-owned workflow source remains in the application package. The
@@ -116,10 +116,7 @@ workflow.registerInstruction(CustomInstruction);
 
 ## Development dependencies
 
-The Workflow integration tests intentionally pin `better-sqlite3` 13 and the
-matching Knex range instead of using the workspace catalog. The queue test
-adapter currently exercises that newer native-driver combination; move these
-entries back to `catalog:` once the workspace database fixture is upgraded.
+The Workflow tests use `@nocobase/db-sqlite`, which owns the `better-sqlite3` runtime dependency and uses the version in the workspace catalog. The plugin does not declare the native driver separately, so its tests exercise the same driver as applications.
 
 ## Agent Skill
 

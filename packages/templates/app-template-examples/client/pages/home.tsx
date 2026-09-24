@@ -1,14 +1,19 @@
+import { PageContainer } from '@/components/page-container';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   ArrowUpRight,
   BookOpen,
+  Bell,
+  ClipboardList,
   Database,
   Hash,
+  Languages,
   FileText,
   FolderOpen,
   ShoppingCart,
   PanelsTopLeft,
   Plug,
+  ShieldCheck,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -17,22 +22,30 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
 const examples = [
+  { key: 'notifications', path: '/notifications', icon: Bell },
+  {
+    key: 'notificationTasks',
+    path: '/notification-example',
+    icon: ClipboardList,
+  },
   { key: 'routeOverlays', path: '/route-overlays', icon: PanelsTopLeft },
   { key: 'articles', path: '/articles', icon: FileText },
   { key: 'numbers', path: '/numeric-examples', icon: Hash },
+  { key: 'i18n', path: '/i18n-examples', icon: Languages },
   { key: 'externalCrm', path: '/external-crm', icon: Plug },
   { key: 'repository', path: '/repository-example/find-many', icon: Database },
   { key: 'crm', path: '/repository-example/crm', icon: Users },
   { key: 'orders', path: '/repository-example/orders', icon: ShoppingCart },
+  { key: 'authorization', path: '/authorization-example', icon: ShieldCheck },
   { key: 'files', path: '/file-repository', icon: FolderOpen },
   { key: 'routes', path: '/routes-example', icon: BookOpen },
-  { key: 'workflows', path: '/settings/automation/workflows', icon: Workflow },
+  { key: 'workflows', path: '/settings/workflow/workflows', icon: Workflow },
 ] as const;
 
 export default function ExamplesHomePage(): ReactElement {
   const { t } = useTranslation();
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-8 p-6 md:p-8'>
+    <PageContainer>
       <header className='space-y-4 rounded-xl border bg-card p-6 md:p-8'>
         <p className='text-sm font-medium text-muted-foreground'>
           {t('examples.eyebrow')}
@@ -72,6 +85,6 @@ export default function ExamplesHomePage(): ReactElement {
       <p className='text-sm text-muted-foreground'>
         {t('examples.accessNote')}
       </p>
-    </section>
+    </PageContainer>
   );
 }

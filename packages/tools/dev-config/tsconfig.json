@@ -9,6 +9,7 @@
     "vite/**/*.ts",
     "vitest/**/*.ts",
     "vitest.config.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "database/**/*.ts"
   ]
 }

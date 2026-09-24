@@ -1,8 +1,12 @@
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { Link } from 'react-router';
+import { useClientApplication } from '@nocobase/app-client';
+import { PermissionSelection } from '../components/permission-selection.js';
+import { PermissionAssignmentDrawer } from '../components/permission-assignment-drawer.js';
+import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
+import { toast } from 'sonner';
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -37,7 +41,6 @@ import {
 } from '../components/ui/dialog.js';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -94,10 +97,18 @@ const EMPTY_PAGE: ManagedUserPage = {
 };
 
 export default function UsersPage(): ReactElement {
+  const { session } = useAuthentication();
   const { t } = useTranslation('@nocobase/app-plugin-users');
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const authorization = useService(authorizationClientToken);
   const users = useMemo(() => new UsersClient(api), [api]);
+  const app = useClientApplication();
+  const inspector = app.runtime.settings.find(
+    (route) =>
+      route.id === '@nocobase/app-plugin-authorization:inspector' &&
+      route.packageName === '@nocobase/app-plugin-authorization',
+  );
+  const [canInspect, setCanInspect] = useState(false);
   const [options, setOptions] = useState<UsersOptions>({ roleScopes: [] });
   const [result, setResult] = useState<ManagedUserPage>(EMPTY_PAGE);
   const [search, setSearch] = useState('');
@@ -106,8 +117,23 @@ export default function UsersPage(): ReactElement {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [deleteUser, setDeleteUser] = useState<ManagedUser>();
+  const reportError = useCallback(
+    (reason: unknown) => {
+      const code = reason instanceof ApiClientError ? reason.code : undefined;
+      toast.error(
+        t(`errors.${code ?? 'operationFailed'}`, {
+          defaultValue: readError(reason, t('errors.operationFailed')),
+        }),
+      );
+    },
+    [t],
+  );
   const [editor, setEditor] = useState<ManagedUser | 'create'>();
+  const [assignment, setAssignment] = useState<{
+    user: ManagedUser;
+    scope: UserRoleScopeOption;
+  }>();
   const [passwordUser, setPasswordUser] = useState<ManagedUser>();
   const [stateUser, setStateUser] = useState<ManagedUser>();
   const [globalCapabilities, setGlobalCapabilities] =
@@ -117,8 +143,10 @@ export default function UsersPage(): ReactElement {
   >({});
 
   const localizedOptions: UsersOptions = {
-    roleScopes: localizeRoleScopes(options.roleScopes, (key, namespace) =>
-      t(key, namespace ? { ns: namespace } : undefined),
+    roleScopes: localizeRoleScopes(
+      options.roleScopes,
+      (key, namespace, defaultValue) =>
+        t(key, { ...(namespace ? { ns: namespace } : {}), defaultValue }),
     ),
   };
   const roleChoices = localizedOptions.roleScopes.flatMap((scope) =>
@@ -135,10 +163,9 @@ export default function UsersPage(): ReactElement {
   );
   const load = useCallback(async () => {
     setLoading(true);
-    setError(undefined);
     try {
-      const [nextOptions, nextPage, nextGlobalCapabilities] = await Promise.all(
-        [
+      const [nextOptions, nextPage, nextGlobalCapabilities, inspectAllowed] =
+        await Promise.all([
           users.options(),
           users.list({
             page,
@@ -153,8 +180,11 @@ export default function UsersPage(): ReactElement {
                 }),
           }),
           loadUserCapabilities(authorization, '*'),
-        ],
-      );
+          authorization.can({
+            resource: { type: 'settings', id: 'authorization.inspector' },
+            action: 'inspect',
+          }),
+        ]);
       const capabilityEntries: readonly (readonly [
         string,
         UserCapabilities,
@@ -168,16 +198,17 @@ export default function UsersPage(): ReactElement {
       );
       const nextUserCapabilities: Readonly<Record<string, UserCapabilities>> =
         Object.fromEntries(capabilityEntries);
+      setCanInspect(inspectAllowed);
       setOptions(nextOptions);
       setResult(nextPage);
       setGlobalCapabilities(nextGlobalCapabilities);
       setUserCapabilities(nextUserCapabilities);
     } catch (reason) {
-      setError(readError(reason, t('errors.operationFailed')));
+      reportError(reason);
     } finally {
       setLoading(false);
     }
-  }, [authorization, page, role, search, status, t, users]);
+  }, [authorization, page, role, search, status, users, reportError]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 200);
@@ -191,7 +222,6 @@ export default function UsersPage(): ReactElement {
 
   const perform = async (work: () => Promise<unknown>): Promise<void> => {
     setBusy(true);
-    setError(undefined);
     try {
       await work();
       await load();
@@ -199,277 +229,306 @@ export default function UsersPage(): ReactElement {
       if (reason instanceof ApiClientError && reason.status === 403) {
         authorization.invalidatePermissions();
       }
-      setError(readError(reason, t('errors.operationFailed')));
+      reportError(reason);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-6xl space-y-5'>
-        <header className='flex flex-wrap items-end justify-between gap-4'>
-          <div>
-            <h1 className='text-2xl font-semibold tracking-tight'>
-              {t('page.title')}
-            </h1>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              {t('page.description')}
-            </p>
-          </div>
-          {globalCapabilities.create && globalCapabilities['assign-role'] ? (
+    <PageContainer>
+      <PageHeader
+        title={t('page.title')}
+        description={t('page.description')}
+        actions={
+          globalCapabilities.create && globalCapabilities['assign-role'] ? (
             <Button onClick={() => setEditor('create')}>
               <Plus /> {t('page.add')}
             </Button>
-          ) : null}
-        </header>
+          ) : null
+        }
+      />
 
-        {error ? (
-          <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
-            {error}
-          </div>
-        ) : null}
-
-        <div className='flex flex-wrap gap-3'>
-          <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
-            <Search className='size-4 text-muted-foreground' />
-            <Input
-              className='h-auto border-0 p-0 focus-visible:ring-0'
-              placeholder={t('page.search')}
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-            />
-          </label>
+      <div className='flex flex-wrap gap-3'>
+        <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-transparent px-3'>
+          <Search className='size-4 text-muted-foreground' />
+          <Input
+            className='h-auto border-0 p-0 focus-visible:ring-0'
+            placeholder={t('page.search')}
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <Select
+          items={statusOptions}
+          value={status}
+          onValueChange={(value) => {
+            setStatus(value as typeof status);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className='w-36'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='all'>{t('page.allStatuses')}</SelectItem>
+            <SelectItem value='enabled'>{t('page.enabled')}</SelectItem>
+            <SelectItem value='disabled'>{t('page.disabled')}</SelectItem>
+          </SelectContent>
+        </Select>
+        {roleChoices.length ? (
           <Select
-            items={statusOptions}
-            value={status}
+            items={roleFilterOptions}
+            value={role}
             onValueChange={(value) => {
-              setStatus(value as typeof status);
+              setRole(String(value));
               setPage(1);
             }}
           >
-            <SelectTrigger className='w-36'>
+            <SelectTrigger className='w-48'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value='all'>{t('page.allStatuses')}</SelectItem>
-              <SelectItem value='enabled'>{t('page.enabled')}</SelectItem>
-              <SelectItem value='disabled'>{t('page.disabled')}</SelectItem>
+              <SelectItem value='all'>{t('page.allRoles')}</SelectItem>
+              {roleChoices.map(({ scope, option }) => (
+                <SelectItem
+                  key={`${scope.key}:${option.value}`}
+                  value={`${scope.key}:${option.value}`}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {roleChoices.length ? (
-            <Select
-              items={roleFilterOptions}
-              value={role}
-              onValueChange={(value) => {
-                setRole(String(value));
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className='w-48'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='all'>{t('page.allRoles')}</SelectItem>
-                {roleChoices.map(({ scope, option }) => (
-                  <SelectItem
-                    key={`${scope.key}:${option.value}`}
-                    value={`${scope.key}:${option.value}`}
-                  >
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-        </div>
-
-        {localizedOptions.roleScopes.some(
-          (scope) => scope.hasAuthenticatedDefaultAccess,
-        ) ? (
-          <p className='text-sm text-muted-foreground'>
-            {t('page.authenticatedDefaultAccess')}
-          </p>
         ) : null}
+      </div>
 
-        <div className='overflow-hidden rounded-xl border bg-background'>
-          <Table>
-            <TableHeader>
+      {localizedOptions.roleScopes.some(
+        (scope) => scope.hasAuthenticatedDefaultAccess,
+      ) ? (
+        <p className='text-sm text-muted-foreground'>
+          {t('page.authenticatedDefaultAccess')}
+        </p>
+      ) : null}
+
+      <div className='overflow-hidden rounded-xl border bg-card'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('page.columns.user')}</TableHead>
+              <TableHead>{t('page.columns.status')}</TableHead>
+              {localizedOptions.roleScopes.map((scope) => (
+                <TableHead key={scope.key}>{scope.label}</TableHead>
+              ))}
+              <TableHead className='w-14'>
+                <span className='sr-only'>{t('page.columns.actions')}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
               <TableRow>
-                <TableHead>{t('page.columns.user')}</TableHead>
-                <TableHead>{t('page.columns.status')}</TableHead>
-                {localizedOptions.roleScopes.map((scope) => (
-                  <TableHead key={scope.key}>{scope.label}</TableHead>
-                ))}
-                <TableHead className='w-14'>
-                  <span className='sr-only'>{t('page.columns.actions')}</span>
-                </TableHead>
+                <TableCell
+                  colSpan={3 + localizedOptions.roleScopes.length}
+                  className='h-32 text-center text-muted-foreground'
+                >
+                  <LoaderCircle className='mx-auto size-5 animate-spin' />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={3 + localizedOptions.roleScopes.length}
-                    className='h-32 text-center text-muted-foreground'
-                  >
-                    <LoaderCircle className='mx-auto size-5 animate-spin' />
-                  </TableCell>
-                </TableRow>
-              ) : result.items.length ? (
-                result.items.map((user) => {
-                  const capabilities =
-                    userCapabilities[user.id] ?? emptyUserCapabilities();
-                  const canChangeState = user.disabledAt
-                    ? capabilities.enable
-                    : capabilities.disable;
-                  const hasActions =
-                    capabilities.update ||
-                    capabilities['reset-password'] ||
-                    capabilities['revoke-sessions'] ||
-                    canChangeState;
-                  return (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className='font-medium'>{user.name}</div>
-                        <div className='text-xs text-muted-foreground'>
-                          {user.username ? `@${user.username} · ` : ''}
-                          {user.email}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={user.disabledAt ? 'secondary' : 'default'}
-                        >
-                          {user.disabledAt
-                            ? t('page.disabled')
-                            : t('page.enabled')}
-                        </Badge>
-                      </TableCell>
-                      {localizedOptions.roleScopes.map((scope) => (
-                        <TableCell key={scope.key}>
-                          {capabilities['assign-role'] &&
-                          scope.options.some((option) =>
-                            roleOptionCanToggle(
-                              option,
-                              roleValues(user.roleScopes[scope.key] ?? ''),
-                            ),
-                          ) ? (
-                            <RoleEditor
-                              disabled={busy}
-                              scope={scope}
-                              value={user.roleScopes[scope.key] ?? ''}
-                              onChange={(value) =>
-                                void perform(() =>
-                                  users.replaceRoleScope(
-                                    user.id,
-                                    scope.key,
-                                    value,
-                                  ),
-                                )
-                              }
-                            />
-                          ) : (
+            ) : result.items.length ? (
+              result.items.map((user) => {
+                const capabilities =
+                  userCapabilities[user.id] ?? emptyUserCapabilities();
+                const canChangeState = user.disabledAt
+                  ? capabilities.enable
+                  : capabilities.disable;
+                const canDelete =
+                  capabilities.delete && user.id !== session?.user.id;
+                const hasActions =
+                  (canInspect && !!inspector) ||
+                  capabilities.update ||
+                  capabilities['reset-password'] ||
+                  capabilities['revoke-sessions'] ||
+                  canDelete ||
+                  canChangeState;
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className='font-medium'>{user.name}</div>
+                      <div className='text-xs text-muted-foreground'>
+                        {user.username ? `@${user.username} · ` : ''}
+                        {user.email}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={user.disabledAt ? 'secondary' : 'default'}
+                      >
+                        {user.disabledAt
+                          ? t('page.disabled')
+                          : t('page.enabled')}
+                      </Badge>
+                    </TableCell>
+                    {localizedOptions.roleScopes.map((scope) => (
+                      <TableCell key={scope.key}>
+                        {capabilities['assign-role'] &&
+                        scope.options.some((option) =>
+                          roleOptionCanToggle(
+                            option,
+                            roleValues(user.roleScopes[scope.key] ?? ''),
+                          ),
+                        ) ? (
+                          <Button
+                            variant='ghost'
+                            className='h-auto max-w-72 justify-start px-2 py-1.5 text-left font-normal'
+                            disabled={busy}
+                            aria-label={`${t('assignment.title')} · ${user.name} · ${scope.label}`}
+                            onClick={() => setAssignment({ user, scope })}
+                          >
                             <RoleValue
                               scope={scope}
                               value={user.roleScopes[scope.key] ?? ''}
                             />
-                          )}
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        {hasActions ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={<Button variant='ghost' size='icon-sm' />}
-                            >
-                              <MoreHorizontal />
-                              <span className='sr-only'>
-                                {t('page.actions.menu')}
-                              </span>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align='end'>
-                              {capabilities.update ? (
-                                <DropdownMenuItem
-                                  onClick={() => setEditor(user)}
-                                >
-                                  {t('page.actions.edit')}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {capabilities['reset-password'] ? (
-                                <DropdownMenuItem
-                                  onClick={() => setPasswordUser(user)}
-                                >
-                                  {t('page.actions.resetPassword')}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {capabilities['revoke-sessions'] ? (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    void perform(() =>
-                                      users.revokeSessions(user.id),
-                                    )
-                                  }
-                                >
-                                  {t('page.actions.revokeSessions')}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {canChangeState ? (
-                                <DropdownMenuItem
-                                  onClick={() => setStateUser(user)}
-                                >
-                                  {user.disabledAt
-                                    ? t('page.actions.enable')
-                                    : t('page.actions.disable')}
-                                </DropdownMenuItem>
-                              ) : null}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : null}
+                            <ChevronDown className='size-4 shrink-0 text-muted-foreground' />
+                          </Button>
+                        ) : (
+                          <RoleValue
+                            scope={scope}
+                            value={user.roleScopes[scope.key] ?? ''}
+                          />
+                        )}
                       </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={3 + localizedOptions.roleScopes.length}
-                    className='h-32 text-center text-muted-foreground'
-                  >
-                    {t('page.noUsers')}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                    ))}
+                    <TableCell>
+                      {hasActions ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={<Button variant='ghost' size='icon-sm' />}
+                          >
+                            <MoreHorizontal />
+                            <span className='sr-only'>
+                              {t('page.actions.menu')}
+                            </span>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align='end'>
+                            {canInspect && inspector && (
+                              <DropdownMenuItem
+                                render={
+                                  <Link
+                                    to={`${inspector.path}?subjectType=user&subjectId=${encodeURIComponent(user.id)}`}
+                                  />
+                                }
+                              >
+                                {t('assignment.inspect')}
+                              </DropdownMenuItem>
+                            )}
 
-        <div className='flex items-center justify-between text-sm text-muted-foreground'>
-          <span>{t('page.total', { count: result.total })}</span>
-          <div className='flex gap-2'>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page <= 1 || loading}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              {t('page.previous')}
-            </Button>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page * result.pageSize >= result.total || loading}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              {t('page.next')}
-            </Button>
-          </div>
+                            {capabilities.update ? (
+                              <DropdownMenuItem onClick={() => setEditor(user)}>
+                                {t('page.actions.edit')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {capabilities['reset-password'] ? (
+                              <DropdownMenuItem
+                                onClick={() => setPasswordUser(user)}
+                              >
+                                {t('page.actions.resetPassword')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {capabilities['revoke-sessions'] ? (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void perform(() =>
+                                    users.revokeSessions(user.id),
+                                  )
+                                }
+                              >
+                                {t('page.actions.revokeSessions')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canChangeState ? (
+                              <DropdownMenuItem
+                                onClick={() => setStateUser(user)}
+                              >
+                                {user.disabledAt
+                                  ? t('page.actions.enable')
+                                  : t('page.actions.disable')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canDelete ? (
+                              <DropdownMenuItem
+                                className='text-destructive'
+                                onClick={() => setDeleteUser(user)}
+                              >
+                                {t('page.actions.delete')}
+                              </DropdownMenuItem>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={3 + localizedOptions.roleScopes.length}
+                  className='h-32 text-center text-muted-foreground'
+                >
+                  {t('page.noUsers')}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className='flex items-center justify-between text-sm text-muted-foreground'>
+        <span>{t('page.total', { count: result.total })}</span>
+        <div className='flex gap-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            {t('page.previous')}
+          </Button>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={page * result.pageSize >= result.total || loading}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            {t('page.next')}
+          </Button>
         </div>
       </div>
 
+      {assignment && userCapabilities[assignment.user.id]?.['assign-role'] ? (
+        <PermissionAssignmentDrawer
+          user={assignment.user}
+          scope={
+            localizedOptions.roleScopes.find(
+              (scope) => scope.key === assignment.scope.key,
+            ) ?? assignment.scope
+          }
+          onClose={() => setAssignment(undefined)}
+          onSave={async (value) => {
+            await users.replaceRoleScope(
+              assignment.user.id,
+              assignment.scope.key,
+              value,
+            );
+            setAssignment(undefined);
+            await load();
+          }}
+        />
+      ) : null}
       {editor &&
       (editor === 'create'
         ? globalCapabilities.create && globalCapabilities['assign-role']
@@ -486,6 +545,21 @@ export default function UsersPage(): ReactElement {
                 await users.update(editor.id, input.value);
               }
               setEditor(undefined);
+            })
+          }
+        />
+      ) : null}
+      {deleteUser && userCapabilities[deleteUser.id]?.delete ? (
+        <ConfirmDeleteDialog
+          user={deleteUser}
+          busy={busy}
+          onClose={() => setDeleteUser(undefined)}
+          onConfirm={() =>
+            void perform(async () => {
+              await users.remove(deleteUser.id);
+              setDeleteUser(undefined);
+              if (result.items.length === 1 && page > 1) setPage(page - 1);
+              toast.success(t('deletion.success'));
             })
           }
         />
@@ -520,7 +594,7 @@ export default function UsersPage(): ReactElement {
           }
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -541,12 +615,17 @@ function RoleValue({
     );
   }
   return (
-    <div className='flex flex-wrap gap-1.5'>
-      {values.map((entry) => {
+    <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+      {values.slice(0, 2).map((entry) => {
         const option = scope.options.find((item) => item.value === entry);
         return (
-          <Badge key={entry} variant='secondary'>
-            {option?.label ?? entry}
+          <Badge
+            key={entry}
+            variant='secondary'
+            className='max-w-48'
+            title={option?.label ?? entry}
+          >
+            <span className='truncate'>{option?.label ?? entry}</span>
             {option?.removable === false ? (
               <LockKeyhole
                 aria-label={t('page.protectedRole')}
@@ -556,112 +635,12 @@ function RoleValue({
           </Badge>
         );
       })}
+      {values.length > 2 && (
+        <span className='text-xs text-muted-foreground'>
+          +{values.length - 2}
+        </span>
+      )}
     </div>
-  );
-}
-
-function RoleEditor({
-  disabled,
-  scope,
-  value,
-  onChange,
-}: {
-  readonly disabled: boolean;
-  readonly scope: UserRoleScopeOption;
-  readonly value: UserRoleValue;
-  readonly onChange: (value: UserRoleValue) => void;
-}): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
-  if (scope.selection === 'multiple') {
-    const selected = roleValues(value);
-    const selectedLabels = selected.map(
-      (entry) =>
-        scope.options.find((option) => option.value === entry)?.label ?? entry,
-    );
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={disabled}
-              aria-label={scope.label}
-              className='max-w-64 justify-between font-normal'
-            />
-          }
-        >
-          <span className='truncate'>
-            {selectedLabels.join(', ') || t('page.noDirectRoles')}
-          </span>
-          <ChevronDown className='text-muted-foreground' />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align='start' className='min-w-56'>
-          {scope.options.map((option) => {
-            const checked = selected.includes(option.value);
-            const protectedOption = checked
-              ? option.removable === false
-              : option.assignable === false;
-            return (
-              <DropdownMenuCheckboxItem
-                key={option.value}
-                checked={checked}
-                disabled={disabled || protectedOption}
-                onCheckedChange={(nextChecked) =>
-                  onChange(
-                    nextChecked
-                      ? [...selected, option.value]
-                      : selected.filter((entry) => entry !== option.value),
-                  )
-                }
-              >
-                <span className='min-w-0 flex-1'>
-                  <span className='block truncate'>{option.label}</span>
-                  {option.description ? (
-                    <span className='block truncate text-xs text-muted-foreground'>
-                      {option.description}
-                    </span>
-                  ) : null}
-                </span>
-                {protectedOption ? (
-                  <LockKeyhole
-                    aria-label={t('page.protectedRole')}
-                    className='size-3.5 text-muted-foreground'
-                  />
-                ) : null}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  }
-  const selectedRole = typeof value === 'string' ? value : '';
-  const selectedOption = scope.options.find(
-    (option) => option.value === selectedRole,
-  );
-  return (
-    <Select
-      items={scope.options}
-      disabled={disabled || selectedOption?.removable === false}
-      value={selectedRole}
-      onValueChange={(next) => onChange(String(next))}
-    >
-      <SelectTrigger aria-label={scope.label} className='w-44'>
-        <SelectValue placeholder={t('page.selectRole')} />
-      </SelectTrigger>
-      <SelectContent>
-        {scope.options.map((option) => (
-          <SelectItem
-            key={option.value}
-            value={option.value}
-            disabled={option.assignable === false}
-          >
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -768,17 +747,22 @@ function UserDialog({
               </Field>
               {creationRoleScopes.map((scope) => (
                 <Field key={scope.key} label={scope.label}>
-                  <RoleEditor
-                    disabled={busy}
-                    scope={scope}
-                    value={roles[scope.key] ?? ''}
-                    onChange={(value) =>
-                      setRoles((current) => ({
-                        ...current,
-                        [scope.key]: value,
-                      }))
-                    }
-                  />
+                  <div className='flex max-h-80 flex-col overflow-hidden rounded-lg border'>
+                    <PermissionSelection
+                      disabled={busy}
+                      scope={scope}
+                      selected={roleValues(roles[scope.key] ?? '')}
+                      onChange={(value) =>
+                        setRoles((current) => ({
+                          ...current,
+                          [scope.key]:
+                            scope.selection === 'single'
+                              ? (value[0] ?? '')
+                              : value,
+                        }))
+                      }
+                    />
+                  </div>
                 </Field>
               ))}
             </>
@@ -938,4 +922,43 @@ function Field({
 function readError(value: unknown, fallback: string): string {
   if (value instanceof Error) return value.message;
   return fallback;
+}
+
+export function ConfirmDeleteDialog({
+  user,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  readonly user: ManagedUser;
+  readonly busy: boolean;
+  readonly onClose: () => void;
+  readonly onConfirm: () => void;
+}): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-users');
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+    >
+      <DialogContent className='sm:max-w-md'>
+        <DialogHeader>
+          <DialogTitle>{t('deletion.title')}</DialogTitle>
+          <DialogDescription>
+            {t('deletion.description', { name: user.name })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant='outline' disabled={busy} onClick={onClose}>
+            {t('form.cancel')}
+          </Button>
+          <Button variant='destructive' disabled={busy} onClick={onConfirm}>
+            {t('page.actions.delete')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

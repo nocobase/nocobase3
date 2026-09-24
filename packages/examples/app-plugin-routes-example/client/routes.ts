@@ -18,8 +18,11 @@ const routes: readonly AppClientRouteContribution[] = [
     {
       name: 'routes-example',
       path: '/routes-example',
-      navigation: { title: 'Routes example' },
-      access: { resource: 'routes-example.settings', action: 'read' },
+      navigation: { title: 'title' },
+      authz: {
+        resource: { type: 'page', id: 'routes-example.settings' },
+        action: 'access',
+      },
       componentLoader: () => import('./pages/routes-example-settings-page.js'),
     },
   ]),
@@ -28,7 +31,7 @@ const routes: readonly AppClientRouteContribution[] = [
     {
       name: 'routes-example',
       path: '/routes-example',
-      navigation: { title: 'Routes example' },
+      navigation: { title: 'title' },
       componentLoader: () => import('./pages/routes-example-dev-page.js'),
     },
   ]),

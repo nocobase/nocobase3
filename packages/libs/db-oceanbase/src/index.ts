@@ -1,24 +1,31 @@
 import { createRequire } from 'node:module';
 import { RepositoryError } from '@nocobase/db';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
   DatabaseDriverRuntimeContext,
   JsonResultForm,
-  MysqlConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { MysqlSchemaInspector } from './inspectors/mysql.js';
 import { compileMysqlJsonCondition } from './json.js';
 
+import type { OceanbaseConnectionConfig } from './config.js';
+export type { OceanbaseConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const Mysql2: unknown = require('mysql2') as unknown;
-export type OceanbaseOptions = Omit<
-  MysqlConnectionConfig,
-  'dialect' | 'driver' | 'databaseDriver'
->;
-export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
+/** Preserve the mutually exclusive host and socket targets when omitting driver fields. */
+type ConnectionOptions<T> = T extends unknown
+  ? Omit<T, 'dialect' | 'driver' | 'databaseDriver'>
+  : never;
+
+export type OceanbaseOptions = ConnectionOptions<OceanbaseConnectionConfig>;
+
+export const oceanbaseDriver: DatabaseDriverDefinition<
+  'oceanbase',
+  OceanbaseConnectionConfig
+> = {
   dialect: 'oceanbase',
   packageName: '@nocobase/db-oceanbase',
   nativeDriver: 'mysql2',
@@ -152,8 +159,7 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
     }
     return MysqlClientWithDriver;
   },
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as MysqlConnectionConfig;
+  resolveConnection: (config) => {
     assertSocketPathExclusive(config, ['host', 'port']);
     assertDriverOptions(config.driverOptions, [
       'host',
@@ -194,8 +200,9 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
-  normalizeConnection: (source) => {
-    const config = source as MysqlConnectionConfig;
+  normalizeConnection: (config) => {
+    // The connection target is a union — host and port, or socketPath — and filling in host defaults
+    // produces an object TypeScript cannot attribute to one branch of it.
     return {
       ...(config.socketPath ? {} : { host: '127.0.0.1', port: 2881 }),
       database: 'app',
@@ -203,10 +210,9 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
       password: '',
       charset: 'utf8mb4',
       ...config,
-    };
+    } as OceanbaseConnectionConfig;
   },
-  resolveOwnershipTarget: (source) => {
-    const config = source as MysqlConnectionConfig;
+  resolveOwnershipTarget: (config) => {
     return [
       'oceanbase',
       config.host,
@@ -217,7 +223,7 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
     ];
   },
   resetManagedSchema: async (context) => {
-    const config = context.config as MysqlConnectionConfig;
+    const { config } = context;
     const client = await context.resolveClient();
     const database =
       config.database ??
@@ -317,7 +323,7 @@ function assertDriverOptions(
 }
 
 function normalizeMysqlSsl(
-  ssl: MysqlConnectionConfig['ssl'],
+  ssl: OceanbaseConnectionConfig['ssl'],
 ): boolean | Record<string, unknown> | undefined {
   return ssl === true ? {} : ssl;
 }

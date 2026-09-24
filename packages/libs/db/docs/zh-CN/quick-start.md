@@ -152,8 +152,8 @@ await db.destroy();
 - 读取完整 Collection 或补充 Metadata：[Collections](./collections/overview.md)和 [Collection Metadata](./collection-metadata/overview.md)
 - 检查真实数据库结构：[Schema Inspector](./schema-inspector/overview.md)
 
-仓库内的完整可运行示例位于 `packages/libs/db/examples/managed-collection-lifecycle`，执行：
+仓库内的完整可运行示例位于 `dev/db/examples/managed-collection-lifecycle`，执行：
 
 ```bash
-pnpm --filter @nocobase/db example managed
+pnpm db:example managed
 ```

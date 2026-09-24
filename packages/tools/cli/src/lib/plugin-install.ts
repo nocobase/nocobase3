@@ -14,15 +14,17 @@ export interface PackageManagerInvocation {
   readonly packageManager: PackageManager;
 }
 
-/** How each package manager spells "add this as a development dependency". */
+/** Plugins are deployment dependencies, including those that only contribute client code. */
 export function addDependencyCommand(
   packageManager: PackageManager,
   specifier: string,
 ): PackageManagerInvocation {
   const args =
     packageManager === 'npm'
-      ? ['install', '--save-dev', specifier]
-      : ['add', '--save-dev', specifier];
+      ? ['install', '--save-prod', specifier]
+      : packageManager === 'pnpm'
+        ? ['add', '--save-prod', specifier]
+        : ['add', specifier];
   return { args, packageManager };
 }
 

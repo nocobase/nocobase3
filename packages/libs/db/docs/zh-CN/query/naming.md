@@ -68,7 +68,7 @@ const rows = await db.query().selectFrom('orderItems').selectAll().execute();
 
 ## tablePrefix
 
-`db.query()` 使用 Connection 的 `underscored` 和 `tablePrefix`，但不读取 Collection Metadata。表来源参数使用不带前缀的 Connection 相对标识符：
+`db.query()` resolves table identifiers using the Connection’s `underscored` and `tablePrefix` options. Table inputs are Connection-relative identifiers without the prefix. Query resolves the resulting physical table to its logical Collection when loading field metadata for value conversion; this does not change SQL table naming or make Collection naming overrides apply to Query inputs.
 
 ```ts
 db.query().selectFrom('orderItems');

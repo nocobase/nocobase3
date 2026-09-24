@@ -23,6 +23,6 @@ export function createAIFileCollection(
       c.datetime('updatedAt').nullable();
       c.primary('id', { name: 'pk_ai_files' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

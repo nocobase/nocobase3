@@ -1,9 +1,11 @@
+import singleProviderMigration from '../database/migrations/202609200003_notification_single_provider.js';
+import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
+import type { OracleConnectionConfig } from '@nocobase/db-oracle';
 import { resolve } from 'node:path';
 
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
-  type ConnectionConfig,
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
@@ -11,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import baseMigration from '../database/migrations/202608190001_create_notification_tables.js';
 import idempotencyMigration from '../database/migrations/202609080001_create_notification_idempotency.js';
+import namesMigration from '../database/migrations/202609200001_notification_channel_names.js';
 import instantMigration from '../database/migrations/202609130001_notification_instant_columns.js';
 
 type TestedDialect = 'mysql' | 'oracle';
@@ -78,6 +81,7 @@ describe.skipIf(!dialect)(
         batch: 1,
         executed: [baseMigration.name],
         skipped: [],
+        warnings: [],
       });
       await connection.query
         .insertInto<DispatchRow>('notificationDispatches')
@@ -89,8 +93,14 @@ describe.skipIf(!dialect)(
 
       await expect(migrator.latest()).resolves.toEqual({
         batch: 2,
-        executed: [idempotencyMigration.name, instantMigration.name],
+        executed: [
+          idempotencyMigration.name,
+          instantMigration.name,
+          namesMigration.name,
+          singleProviderMigration.name,
+        ],
         skipped: [baseMigration.name],
+        warnings: [],
       });
       await expect(
         connection.schemaInspector.getPhysicalCollection({
@@ -145,9 +155,15 @@ describe.skipIf(!dialect)(
           .execute(),
       ).rejects.toThrow();
 
-      await expect(migrator.rollback()).resolves.toEqual({
+      await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 2,
-        rolledBack: [instantMigration.name, idempotencyMigration.name],
+        rolledBack: [
+          singleProviderMigration.name,
+          namesMigration.name,
+          instantMigration.name,
+          idempotencyMigration.name,
+        ],
+        warnings: [],
       });
       const client = await connection.client<SchemaClient>();
       await expect(
@@ -174,9 +190,10 @@ describe.skipIf(!dialect)(
           ),
         ]),
       ).resolves.toEqual([false, false, false, false, false]);
-      await expect(migrator.rollback()).resolves.toEqual({
+      await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 1,
         rolledBack: [baseMigration.name],
+        warnings: [],
       });
     });
   },
@@ -191,7 +208,9 @@ function selectedDialect(): TestedDialect | undefined {
   );
 }
 
-function connectionConfig(selected: TestedDialect): ConnectionConfig {
+function connectionConfig(
+  selected: TestedDialect,
+): MysqlConnectionConfig | OracleConnectionConfig {
   if (selected === 'mysql') {
     return {
       dialect: 'mysql',

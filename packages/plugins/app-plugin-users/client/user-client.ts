@@ -137,6 +137,12 @@ export class UsersClient {
     );
   }
 
+  async remove(userId: string): Promise<void> {
+    await this.send(`users/${encodeURIComponent(userId)}`, 'DELETE', {
+      confirm: true,
+    });
+  }
+
   async revokeSessions(userId: string): Promise<void> {
     await this.send(
       `users/${encodeURIComponent(userId)}/revoke-sessions`,
@@ -150,7 +156,7 @@ export class UsersClient {
 
   private send<T = { readonly success: true }>(
     path: string,
-    method: 'POST' | 'PATCH' | 'PUT',
+    method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
     json?: unknown,
   ): Promise<T> {
     return this.api

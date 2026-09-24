@@ -1,4 +1,7 @@
 // @vitest-environment node
+// The installed workflow plugin uses native import() for run modules. Match pnpm dev's loader so .js specifiers resolve adjacent .ts sources.
+import 'tsx/esm';
+
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -19,6 +22,7 @@ import { requireDate } from '../../server/workflows/example-analytics-report/ser
 
 const root = path.resolve(import.meta.dirname, '../..');
 const temporary = mkdtempSync(path.join(tmpdir(), 'workflow-examples-'));
+const artifactRoot = path.join(temporary, 'artifacts');
 let server: StandaloneServer;
 let cookie = '';
 const ids = new Map<string, string>();
@@ -33,19 +37,20 @@ async function request(
   body?: object,
   eventKey?: string,
 ): Promise<Response> {
+  const target = new URL(
+    `http://localhost${server.application.publicBasePath}/api${url}`,
+  );
   return server.fetch(
-    new Request(
-      `http://localhost${server.application.publicBasePath}/api${url}`,
-      {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: {
-          cookie,
-          'content-type': 'application/json',
-          ...(eventKey ? { 'event-key': eventKey } : {}),
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    new Request(target, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        cookie,
+        'content-type': 'application/json',
+        ...(body === undefined ? {} : { origin: target.origin }),
+        ...(eventKey ? { 'event-key': eventKey } : {}),
       },
-    ),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
   );
 }
 async function data<T>(response: Response): Promise<T> {
@@ -77,16 +82,21 @@ async function invoke(
   return run!;
 }
 
-beforeAll(async () => {
-  const artifactRoot = path.join(temporary, 'artifacts');
+// Each workflow builds a TypeScript program; CI runs this alongside other template suites.
+// Keep compilation separate so it cannot consume the server startup timeout.
+beforeAll(async function buildExampleArtifacts() {
   await buildApplicationWorkflows({
     sourceRoot: path.join(root, 'server/workflows'),
     distRoot: artifactRoot,
   });
+}, 120000);
+
+beforeAll(async function startExampleServer() {
   const configPath = path.join(temporary, 'config.yml');
   writeFileSync(
     configPath,
     JSON.stringify({
+      app: { publicOrigin: 'http://localhost' },
       workflow: { distRoot: artifactRoot },
       database: {
         default: 'main',

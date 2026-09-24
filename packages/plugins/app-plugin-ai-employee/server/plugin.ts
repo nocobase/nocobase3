@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -8,6 +10,7 @@ import routes from './route/plugin.js';
 export { aiManagerToken } from './provider/ai-employee.js';
 
 const aiEmployeePlugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-ai-employee',
   serviceProviders,
   routes,

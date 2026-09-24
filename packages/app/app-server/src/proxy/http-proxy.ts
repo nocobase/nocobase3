@@ -59,6 +59,9 @@ export function createProxyResponseHeaders(headers: Headers): Headers {
 }
 
 export function removeHopByHopHeaders(headers: Headers): void {
+  for (const name of headers.get('connection')?.split(',') ?? []) {
+    if (name.trim()) headers.delete(name.trim());
+  }
   for (const header of [
     'connection',
     'keep-alive',

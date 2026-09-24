@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
@@ -9,6 +9,7 @@ const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
 export interface InstallOptions {
   directory: string;
   registry?: string;
+  onOutput?: (chunk: string) => void;
 }
 
 /** Installs the generated project's dependencies. */
@@ -25,6 +26,7 @@ export async function installDependencies(
     await runCommand('pnpm', args, {
       cwd: options.directory,
       timeoutMs: INSTALL_TIMEOUT_MS,
+      onOutput: options.onOutput,
     });
   } catch (error) {
     if (error instanceof CommandFailedError) {
@@ -51,9 +53,8 @@ export interface DriverVerification {
  *
  * It arrives transitively rather than being installed by name: each template depends on `@nocobase/db-sqlite`, which
  * depends on `better-sqlite3`. That makes it the one native addon a generated project is guaranteed to need, and the
- * only one worth checking. The other entries in `ALLOWED_BUILDS` do not qualify — `oracledb` is not installed unless
- * the application adds that dialect itself, and `esbuild` resolves its binary from a platform package rather than
- * compiling one, so neither fails the way this does.
+ * only addon this verifier checks. An application that adds another driver later, for another dialect, is on its own
+ * for that driver's runtime readiness; database connectivity is never verified here.
  */
 export const DEFAULT_NATIVE_DRIVER = 'better-sqlite3';
 
@@ -179,20 +180,30 @@ export interface SkillsSyncResult {
 }
 
 /**
- * Copies the skills of every registered plugin into the app's `.agents/skills/`.
+ * Copies the skills of the app's NocoBase dependencies into `.agents/skills/`.
  *
- * This only works once the dependencies are installed, because the plugins the sync reads from are resolved out of
+ * This only works once the dependencies are installed, because the packages the sync reads from are resolved out of
  * `node_modules`. The template ships the script and the CLI behind it, so the generated app owns the command and
- * running it here is the same thing the user would run themselves after a plugin upgrade.
+ * running it here is the same thing the user would run themselves after a package upgrade. Templates created before
+ * `skills:sync` was introduced retain the old `plugin:skills:sync` script, which remains a supported fallback here.
  *
  * Skills are an assistive layer rather than something the app needs to boot, so a failure is reported and the
  * generated project is still usable — the caller warns instead of aborting.
  */
-export async function syncPluginSkills(
-  directory: string,
-): Promise<SkillsSyncResult> {
+export async function syncSkills(directory: string): Promise<SkillsSyncResult> {
+  let scriptName = 'skills:sync';
   try {
-    await runCommand('pnpm', ['run', 'plugin:skills:sync'], {
+    const manifest = JSON.parse(
+      await readFile(path.join(directory, 'package.json'), 'utf8'),
+    ) as { scripts?: Record<string, unknown> };
+    if (
+      typeof manifest.scripts?.[scriptName] !== 'string' &&
+      typeof manifest.scripts?.['plugin:skills:sync'] === 'string'
+    ) {
+      scriptName = 'plugin:skills:sync';
+    }
+
+    await runCommand('pnpm', ['run', scriptName], {
       cwd: directory,
       timeoutMs: SKILLS_SYNC_TIMEOUT_MS,
     });
@@ -207,11 +218,11 @@ export async function syncPluginSkills(
     return {
       ok: false,
       reason: [
-        'Could not synchronize plugin skills into .agents/skills.',
+        'Could not synchronize NocoBase package skills into .agents/skills.',
         detail,
         '',
         'To do it later, run this inside the app directory:',
-        '  pnpm plugin:skills:sync',
+        `  pnpm ${scriptName}`,
       ].join('\n'),
     };
   }

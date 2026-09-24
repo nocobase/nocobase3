@@ -23,20 +23,15 @@ const migration: MigrationDefinition = defineMigration({
       if (!hasRecommendedMode(service.enabledModels)) continue;
       await query
         .updateTable<LLMServiceRow>('llmServices')
-        .set({ enabledModels: JSON.stringify(PROVIDER_DEFAULT) })
+        .set({ enabledModels: PROVIDER_DEFAULT })
         .where('name', '=', service.name)
         .execute();
     }
-    await builder.alterField(
-      'llmServices',
-      'enabledModels',
-      {
-        type: 'json',
-        nullable: false,
-        defaultValue: PROVIDER_DEFAULT,
-      },
-      { syncMetadata: false },
-    );
+    await builder.alterField('llmServices', 'enabledModels', {
+      type: 'json',
+      nullable: false,
+      defaultValue: PROVIDER_DEFAULT,
+    });
   },
 });
 

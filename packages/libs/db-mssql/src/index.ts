@@ -1,13 +1,14 @@
 import { createRequire } from 'node:module';
 import { RepositoryError } from '@nocobase/db';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  MssqlConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { MssqlSchemaInspector } from './inspectors/mssql.js';
+
+import type { MssqlConnectionConfig } from './config.js';
+export type { MssqlConnectionConfig } from './config.js';
 
 const require = createRequire(import.meta.url);
 const Tedious: unknown = require('tedious') as unknown;
@@ -15,7 +16,10 @@ export type MssqlOptions = Omit<
   MssqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
-export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
+export const mssqlDriver: DatabaseDriverDefinition<
+  'mssql',
+  MssqlConnectionConfig
+> = {
   dialect: 'mssql',
   packageName: '@nocobase/db-mssql',
   nativeDriver: 'tedious',
@@ -248,8 +252,7 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
     }
     return MssqlClientWithDriver;
   },
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as MssqlConnectionConfig;
+  resolveConnection: (config: MssqlConnectionConfig) => {
     assertDriverOptions(config.driverOptions, [
       'host',
       'server',
@@ -296,10 +299,10 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
     password: '',
     encrypt: false,
     trustServerCertificate: false,
-    ...(source as MssqlConnectionConfig),
+    ...source,
   }),
   resolveOwnershipTarget: (source) => {
-    const config = source as MssqlConnectionConfig;
+    const config = source;
     return [
       'mssql',
       config.host,

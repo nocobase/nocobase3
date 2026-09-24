@@ -1,4 +1,5 @@
 import sqlite from '@nocobase/db-sqlite';
+import type { Knex } from 'knex';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -17,8 +18,13 @@ const seedsDirectory = fileURLToPath(
   new URL('../database/seeds', import.meta.url),
 );
 const createMigrationName = '202608200001_create_workflow_collections';
+const sourceMigrationName = '202609090001_add_workflow_run_source';
 const instantMigrationName = '202609110001_workflow_instant_columns';
-const migrationNames = [createMigrationName, instantMigrationName];
+const migrationNames = [
+  createMigrationName,
+  sourceMigrationName,
+  instantMigrationName,
+];
 /** Columns that hold an instant and therefore must resolve as `datetimeTz`. */
 const instantFields = {
   workflowRuns: ['startedAt', 'finishedAt', 'expiresAt', 'createdAt'],
@@ -55,8 +61,8 @@ describe('@nocobase/app-plugin-workflow database', () => {
         packageName: '@nocobase/app-plugin-workflow',
       });
 
-      // Applied as two batches so the rollback below reaches exactly the
-      // instant migration, which is the reversible half being verified.
+      // Applied in separate batches so each reversible migration can be
+      // verified independently below.
       await expect(migrator.upTo(createMigrationName)).resolves.toMatchObject({
         executed: [createMigrationName],
         skipped: [],
@@ -66,9 +72,15 @@ describe('@nocobase/app-plugin-workflow database', () => {
       // has to read it back as the same instant, whatever time zone the
       // database server happens to be configured with.
       const legacy = '2026-08-24T01:18:19.007Z';
-      // Written through the query builder on purpose: before the columns were
-      // `datetimeTz` this is the shape the engine stored, and the migration has
-      // to read it back as the same instant.
+      // Bound as raw SQL on purpose. These bytes were written by an older build,
+      // through a query builder that passed strings to the driver untouched, so
+      // they must not go through the temporal encoder of the build under test —
+      // it would resolve the offset against the host and store a wall clock,
+      // which is a different row from the one the migration has to convert.
+      const legacyBinding = (await database.connection().client<Knex>()).raw(
+        '?',
+        [legacy],
+      );
       await database
         .query()
         .insertInto('workflowRuns')
@@ -82,13 +94,17 @@ describe('@nocobase/app-plugin-workflow database', () => {
           output: JSON.stringify(null),
           dispatched: false,
           manually: false,
-          createdAt: legacy,
+          createdAt: legacyBinding,
         })
         .execute();
 
+      await expect(migrator.upTo(sourceMigrationName)).resolves.toMatchObject({
+        executed: [sourceMigrationName],
+        skipped: [createMigrationName],
+      });
       await expect(migrator.latest()).resolves.toMatchObject({
         executed: [instantMigrationName],
-        skipped: [createMigrationName],
+        skipped: [createMigrationName, sourceMigrationName],
       });
       const connection = database.connection();
       const migrated = await workflowStore(database).runs.findOne({
@@ -156,6 +172,9 @@ describe('@nocobase/app-plugin-workflow database', () => {
           ),
         ).toEqual(fields.map(() => 'datetime'));
       }
+      await expect(migrator.rollback()).resolves.toMatchObject({
+        rolledBack: [sourceMigrationName],
+      });
       await expect(migrator.rollback()).resolves.toMatchObject({
         rolledBack: [createMigrationName],
       });

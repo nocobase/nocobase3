@@ -1,32 +1,27 @@
 import type { AuthorizationPlugin } from '../../core/index.js';
-import { DatabaseRestrictionRuleStore } from './database-store.js';
 import { RestrictionRuleService, type RestrictionRulesApi } from './service.js';
 import type { RestrictionRuleStore } from './store.js';
+import { requireStore } from '../internal/store.js';
 
-export interface RestrictionRulesAuthorizationApi {
-  restrictionRules: RestrictionRulesApi;
+export interface RestrictionRulesAuthorizationApi<TTransaction = unknown> {
+  restrictionRules: RestrictionRulesApi<TTransaction>;
 }
-export interface RestrictionRulesOptions {
-  store?: RestrictionRuleStore;
+export interface RestrictionRulesOptions<TTransaction = unknown> {
+  store: RestrictionRuleStore<TTransaction>;
 }
-export type RestrictionRulesPlugin =
-  AuthorizationPlugin<RestrictionRulesAuthorizationApi>;
+export type RestrictionRulesPlugin<TTransaction = unknown> =
+  AuthorizationPlugin<RestrictionRulesAuthorizationApi<TTransaction>>;
 
-export function restrictionRules(
-  options: RestrictionRulesOptions = {},
-): RestrictionRulesPlugin {
-  const service = new RestrictionRuleService(options.store);
+export function restrictionRules<TTransaction = unknown>(
+  options: RestrictionRulesOptions<TTransaction>,
+): RestrictionRulesPlugin<TTransaction> {
+  const service = new RestrictionRuleService(
+    requireStore(options.store, 'Restriction Rules'),
+  );
   return {
     id: 'restriction-rules',
     authorizationApi: { restrictionRules: service },
     setup(authz): void {
-      if (!options.store) {
-        if (!authz.connection)
-          throw new Error(
-            'Restriction Rules requires createAuthorization({ connection }) or an explicit store',
-          );
-        service.initialize(new DatabaseRestrictionRuleStore(authz.connection));
-      }
       authz.constraints.add(service);
     },
   };

@@ -1,7 +1,8 @@
+import createAuthenticationTables from '../../app-plugin-authentication/database/migrations/202608200001_create_authentication_tables.js';
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { createDatabaseManager, type DatabaseConnection } from '@nocobase/db';
@@ -124,6 +125,23 @@ describe('@nocobase/app-plugin-users service', () => {
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     databases.push(database);
+    const connection = database.connection();
+    await createAuthenticationTables.up({
+      connection,
+      builder: connection.builder,
+      query: connection.query,
+    });
+    await connection.query
+      .insertInto('user')
+      .values({
+        id: 'user-1',
+        name: 'User',
+        email: 'user@example.com',
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
     await database
       .connection()
       .builder.createCollection('testPasswordState', (collection) => {
@@ -316,8 +334,9 @@ describe('@nocobase/app-plugin-users resource authorization', () => {
     const add = vi.fn();
     const container = new ServiceContainer();
     container.instance(authorizationToken, {
-      resources: { add },
-    } as unknown as AppAuthorization);
+      resourceTypes: { add },
+      subjects: { define: vi.fn() },
+    } as unknown as Authorization);
     const provider = new UsersProvider({
       appName: 'test',
       publicBasePath: '',
@@ -403,6 +422,7 @@ function administrationService(
     disable: vi.fn(),
     enable: vi.fn(),
     resetPassword: vi.fn(),
+    remove: vi.fn(() => Promise.resolve()),
     revokeSessions: vi.fn(),
   });
   return create(initialConnection);

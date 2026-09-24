@@ -1,3 +1,5 @@
+import type { Logger } from '@nocobase/logging';
+import type { DeploymentLogListener } from './../deployment-log.js';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -36,7 +38,10 @@ export interface HostManagementService {
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<ApplyDeploymentSetResult>;
-  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus>;
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
   stopDeployment(appId: string): Promise<HostStatus>;
   removeDeployment(appId: string): Promise<HostStatus>;
@@ -45,6 +50,7 @@ export interface HostManagementService {
 }
 
 export interface HostManagerOptions {
+  logger?: Logger;
   mode: AppHostMode;
   registry: AppRuntimeRegistry;
   deploymentCatalog: DeploymentCatalog;
@@ -93,6 +99,7 @@ export class HostManager implements HostManagementService {
         : {
             mode: 'managed',
             reconciler: new ManagedReconciler({
+              logger: options.logger,
               registry: options.registry,
               artifactResolver: options.artifactResolver,
               volumes: options.deploymentCatalog.volumes,
@@ -123,11 +130,14 @@ export class HostManager implements HostManagementService {
     return this.state.reconciler.applyDeploymentSet(deploymentSet);
   }
 
-  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+  applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus> {
     if (this.state.mode !== 'managed') {
       throw new Error('Deployments require managed host mode');
     }
-    return this.state.reconciler.applyDeployment(deployment);
+    return this.state.reconciler.applyDeployment(deployment, listener);
   }
 
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {

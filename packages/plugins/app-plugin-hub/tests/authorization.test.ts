@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 
-import { createAppAuthorization } from '@nocobase/app-plugin-authorization';
+import {
+  createAppAuthorization,
+  type Authorization,
+} from '@nocobase/app-plugin-authorization';
 import {
   createDatabaseManager,
   createMigrator,
@@ -10,13 +13,19 @@ import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  PermissionSetLastAssignmentError,
+  type PermissionSetsAuthorizationApi,
+} from '@nocobase/authorization/permissions';
+
+import {
   createHubUserRoleScope,
   HUB_ADMINISTRATOR,
+  protectHubPermissionSets,
 } from '../server/authorization.js';
 
 describe('Hub user role scope', () => {
   let database: DatabaseManager;
-  let authorization: ReturnType<typeof createAppAuthorization>;
+  let authorization: Authorization & PermissionSetsAuthorizationApi;
 
   beforeEach(async () => {
     database = createDatabaseManager({
@@ -41,13 +50,50 @@ describe('Hub user role scope', () => {
       '@nocobase/app-plugin-hub',
       '../database/migrations',
     );
+    // The Hub declares its own protections, so Permission Sets is the only
+    // plugin these tests drive.
     authorization = createAppAuthorization({
       connection: database.connection(),
     });
+    // What HubAuthorizationProvider declares at runtime.
+    protectHubPermissionSets(authorization.permissionSets);
   });
 
   afterEach(async () => {
     await database.destroy();
+  });
+
+  it('leaves ownership and existing Apps unchanged when migrations run again', async () => {
+    await database
+      .query()
+      .insertInto('hubApps')
+      .values({
+        id: 'owned',
+        name: 'Owned',
+        createdBy: 'user-1',
+        enabled: false,
+        basePath: '/owned',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+    const directory = '../database/migrations';
+    const migrator = createMigrator({
+      database,
+      packageName: '@nocobase/app-plugin-hub',
+      directory: fileURLToPath(new URL(directory, import.meta.url)),
+    });
+    expect((await migrator.latest()).executed).toEqual([]);
+    expect((await migrator.latest()).executed).toEqual([]);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubApps')
+        .select(['id', 'createdBy'])
+        .execute(),
+    ).toEqual([{ id: 'owned', createdBy: 'user-1' }]);
   });
 
   it('keeps exactly one Hub role without touching other Permission Sets', async () => {
@@ -64,7 +110,7 @@ describe('Hub user role scope', () => {
       subject: { type: 'user', id: 'user-1' },
       permissionSet: 'other-role',
     });
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await database.transaction((connection) =>
       scope.replace('user-1', 'hub-operator', connection),
@@ -90,7 +136,7 @@ describe('Hub user role scope', () => {
   });
 
   it('exposes localized labels for the Hub role scope and options', async () => {
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await expect(scope.options()).resolves.toEqual([
       expect.objectContaining({
@@ -105,6 +151,7 @@ describe('Hub user role scope', () => {
       }),
       expect.objectContaining({
         value: 'hub-viewer',
+        assignable: false,
         labelI18nKey: 'roles.names.hub-viewer',
         labelI18nNs: '@nocobase/app-plugin-hub',
       }),
@@ -113,6 +160,51 @@ describe('Hub user role scope', () => {
       labelI18nKey: 'roles.scope',
       labelI18nNs: '@nocobase/app-plugin-hub',
     });
+  });
+
+  it('preserves existing Viewers without allowing new assignments or automatic promotion', async () => {
+    await createUser(database, 'legacy');
+    await createUser(database, 'new-user');
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'legacy' },
+      permissionSet: 'hub-viewer',
+    });
+    const scope = createHubUserRoleScope(authorization.permissionSets);
+    expect(
+      (await scope.options())
+        .filter((option) => option.assignable !== false)
+        .map((option) => option.value),
+    ).toEqual(['hub-administrator', 'hub-operator']);
+    const before = await authorization.permissionSets.listAssignments();
+    await expect(
+      database.transaction((connection) =>
+        scope.replace('new-user', 'hub-viewer', connection),
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
+    await database.transaction((connection) =>
+      scope.replace('legacy', 'hub-viewer', connection),
+    );
+    expect(await authorization.permissionSets.listAssignments()).toEqual(
+      before,
+    );
+    expect(await scope.get('legacy', database.connection())).toBe('hub-viewer');
+    expect(await scope.getMany?.(['legacy'], database.connection())).toEqual({
+      legacy: 'hub-viewer',
+    });
+    expect(
+      await scope.findUserIds?.('hub-viewer', database.connection()),
+    ).toEqual(['legacy']);
+    await database.transaction((connection) =>
+      scope.replace('legacy', 'hub-operator', connection),
+    );
+    expect(await scope.get('legacy', database.connection())).toBe(
+      'hub-operator',
+    );
+    await expect(
+      database.transaction((connection) =>
+        scope.replace('legacy', 'hub-viewer', connection),
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
   });
 
   it('loads one page of Hub roles through one batch read', async () => {
@@ -126,10 +218,10 @@ describe('Hub user role scope', () => {
       authorization.permissionSets,
       'listAssignments',
     );
-    vi.spyOn(authorization.permissionSets, 'withConnection').mockReturnValue(
+    vi.spyOn(authorization.permissionSets, 'withTransaction').mockReturnValue(
       authorization.permissionSets,
     );
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await expect(
       scope.getMany?.(['user-1', 'user-2'], database.connection()),
@@ -146,18 +238,16 @@ describe('Hub user role scope', () => {
       subject: { type: 'user', id: 'admin-1' },
       permissionSet: HUB_ADMINISTRATOR,
     });
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
+    await expect(assertRemovable('admin-1')).rejects.toBeInstanceOf(
+      PermissionSetLastAssignmentError,
+    );
     await expect(
       database.transaction((connection) =>
-        scope.assertCanDisable!('admin-1', connection),
+        scope.replace('admin-1', 'hub-operator', connection),
       ),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN', status: 409 });
-    await expect(
-      database.transaction((connection) =>
-        scope.replace('admin-1', 'hub-viewer', connection),
-      ),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN', status: 409 });
+    ).rejects.toBeInstanceOf(PermissionSetLastAssignmentError);
   });
 
   it('allows one administrator to be disabled or demoted when another is enabled', async () => {
@@ -169,21 +259,15 @@ describe('Hub user role scope', () => {
         permissionSet: HUB_ADMINISTRATOR,
       });
     }
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
-    await expect(
-      database.transaction((connection) =>
-        scope.assertCanDisable!('admin-1', connection),
-      ),
-    ).resolves.toBeUndefined();
+    await expect(assertRemovable('admin-1')).resolves.toBeUndefined();
     await database.transaction((connection) =>
-      scope.replace('admin-1', 'hub-viewer', connection),
+      scope.replace('admin-1', 'hub-operator', connection),
     );
-    await expect(
-      database.transaction((connection) =>
-        scope.assertCanDisable!('admin-2', connection),
-      ),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN' });
+    await expect(assertRemovable('admin-2')).rejects.toBeInstanceOf(
+      PermissionSetLastAssignmentError,
+    );
   });
 
   it('keeps one enabled administrator when demotion and disable compete', async () => {
@@ -195,14 +279,16 @@ describe('Hub user role scope', () => {
         permissionSet: HUB_ADMINISTRATOR,
       });
     }
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     const results = await Promise.allSettled([
       database.transaction((connection) =>
-        scope.replace('admin-1', 'hub-viewer', connection),
+        scope.replace('admin-1', 'hub-operator', connection),
       ),
       database.transaction(async (connection) => {
-        await scope.assertCanDisable!('admin-2', connection);
+        await authorization.permissionSets
+          .withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: 'admin-2' });
         await connection.query
           .updateTable('user')
           .set({ disabledAt: new Date() })
@@ -218,7 +304,9 @@ describe('Hub user role scope', () => {
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
     expect(failures).toHaveLength(1);
-    expect(failures[0]?.reason).toMatchObject({ code: 'LAST_HUB_ADMIN' });
+    expect(failures[0]?.reason).toBeInstanceOf(
+      PermissionSetLastAssignmentError,
+    );
     const enabledAdministrators = await database
       .connection()
       .query.selectFrom('authorizationPermissionSetAssignments')
@@ -238,6 +326,15 @@ describe('Hub user role scope', () => {
       .execute();
     expect(enabledAdministrators).toHaveLength(1);
   });
+
+  /** What the user management service asks before disabling an account. */
+  function assertRemovable(userId: string): Promise<void> {
+    return database.transaction((connection) =>
+      authorization.permissionSets
+        .withTransaction(connection)
+        .assertSubjectRemovable({ type: 'user', id: userId }),
+    );
+  }
 });
 
 async function migratePackage(

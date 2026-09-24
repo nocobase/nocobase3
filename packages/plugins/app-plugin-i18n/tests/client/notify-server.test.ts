@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createApiClient } from '@nocobase/app-client';
+
+import { notifyServerLocale } from '../../client/use-locale.js';
 
 /**
  * An application is served from a base path, and its API lives under that base rather than at the origin root.
@@ -10,7 +13,6 @@ const BASE = '/main';
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.resetModules();
 });
 
 describe('telling the server which language to answer in', () => {
@@ -19,18 +21,8 @@ describe('telling the server which language to answer in', () => {
       .fn<typeof globalThis.fetch>()
       .mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
-    vi.stubGlobal('window', {
-      location: { origin: 'http://localhost:13000' },
-      APP_BASE_PATH: BASE,
-    });
-    vi.stubGlobal('localStorage', {
-      getItem: () => null,
-      setItem: () => undefined,
-    });
-
-    // Imported after the globals are in place, because the client resolves the base when it is first created.
-    const { notifyServerLocale } = await import('../../client/use-locale.js');
-    await notifyServerLocale('zh-CN');
+    const api = createApiClient({ baseURL: `${BASE}/api` });
+    await notifyServerLocale(api, 'zh-CN');
 
     const [url, init] = fetchSpy.mock.calls[0] ?? [];
     // Path-relative, which the browser resolves against the current origin.
@@ -49,14 +41,14 @@ describe('telling the server which language to answer in', () => {
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue(Response.json(result)),
     );
-    const { notifyServerLocale } = await import('../../client/use-locale.js');
-    await expect(notifyServerLocale('ja-JP')).resolves.toEqual(result);
+    const api = createApiClient({ baseURL: `${BASE}/api` });
+    await expect(notifyServerLocale(api, 'ja-JP')).resolves.toEqual(result);
   });
 
   it('keeps transport failures distinguishable from a successful fallback', async () => {
     const failure = new TypeError('Network unavailable');
     vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(failure));
-    const { notifyServerLocale } = await import('../../client/use-locale.js');
-    await expect(notifyServerLocale('ja-JP')).rejects.toBe(failure);
+    const api = createApiClient({ baseURL: `${BASE}/api` });
+    await expect(notifyServerLocale(api, 'ja-JP')).rejects.toBe(failure);
   });
 });

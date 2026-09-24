@@ -1,11 +1,583 @@
 export default {
+  // Tool and Skill display metadata uses exact English source text as flat keys.
+  'Chart generator': 'Chart generator',
+  'Generates ECharts options (JSON) based on user input or data context.':
+    'Generates ECharts options (JSON) based on user input or data context.',
+  'Web search': 'Web search',
+  'Use web search to quickly find up-to-date information from the internet.':
+    'Use web search to quickly find up-to-date information from the internet.',
+  'Business report generator': 'Business report generator',
+  'Validate and prepare a business analysis report for preview and export.':
+    'Validate and prepare a business analysis report for preview and export.',
+  'Load frontend tool': 'Load frontend tool',
+  'Load the input schema of a frontend tool provided by the selected block.':
+    'Load the input schema of a frontend tool provided by the selected block.',
+  'Execute frontend tool': 'Execute frontend tool',
+  'Execute a frontend tool provided by the selected block.':
+    'Execute a frontend tool provided by the selected block.',
+  'Get AI employee': 'Get AI employee',
+  'Get the detailed profile of an AI employee.':
+    'Get the detailed profile of an AI employee.',
+  'Dispatch AI employee task': 'Dispatch AI employee task',
+  'Assign a task to an AI employee and return the result.':
+    'Assign a task to an AI employee and return the result.',
+  'List AI employees': 'List AI employees',
+  'Get the list of available AI employees.':
+    'Get the list of available AI employees.',
+  'Form filler': 'Form filler',
+  'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.':
+    'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.',
+  'Load skill': 'Load skill',
+  'Load the content and related tools for a specified skill.':
+    'Load the content and related tools for a specified skill.',
+  'Knowledge base retrieval': 'Knowledge base retrieval',
+  'Retrieve relevant content from the knowledge base.':
+    'Retrieve relevant content from the knowledge base.',
+  Suggestions: 'Suggestions',
+  'Provide a list of suggested prompts for the user to choose from.':
+    'Provide a list of suggested prompts for the user to choose from.',
+  'List data sources': 'List data sources',
+  'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).':
+    'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).',
+  'List collections': 'List collections',
+  'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.':
+    'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.',
+  'Get collection metadata': 'Get collection metadata',
+  'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.':
+    'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.',
+  'Search field metadata': 'Search field metadata',
+  'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.':
+    'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.',
+  'Query records': 'Query records',
+  'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.':
+    'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.',
+  'Count records': 'Count records',
+  'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.':
+    'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.',
+  'Aggregate data': 'Aggregate data',
+  'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.':
+    'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.',
+  'Data metadata': 'Data metadata',
+  'Discover accessible database connections, collections, fields, and relationships before querying business data.':
+    'Discover accessible database connections, collections, fields, and relationships before querying business data.',
+  'Data query': 'Data query',
+  'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.':
+    'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.',
+  'Business analysis report': 'Business analysis report',
+  'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.':
+    'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.',
+  employeeTools: {
+    use: 'Use {{name}}',
+    description:
+      'Choose which tools this employee may use. Skill tools still require their skill to be loaded; optional tools require the corresponding capability.',
+    loading: 'Loading tool eligibility…',
+    error: 'Tool eligibility unavailable. Retry to edit tools and permissions.',
+    unavailable: 'Unavailable',
+    permission: 'Permission for {{name}}: {{permission}}',
+    permissionUnavailable: 'Unknown',
+    enableToEdit:
+      'Enable this tool to edit its permission. Your saved permission is retained.',
+    registeredPermission:
+      'Permission is defined by this tool and cannot be changed here.',
+    askHint: 'Ask for approval before running this tool.',
+    allowHint: 'Allow this tool to run without asking for approval.',
+  },
+  employeeSkills: {
+    use: 'Use {{name}}',
+    loading: 'Loading skill catalog…',
+    error: 'Skill catalog unavailable. Retry to edit skills.',
+    unavailable: 'Unavailable',
+  },
+  tools: {
+    title: 'Tools',
+    description:
+      'Browse the tools available to AI employees and review their usage instructions and input parameters.',
+    search: 'Search tools',
+    searchPlaceholder: 'Search tool names, identifiers, or introductions',
+    count_one: '{{count}} tool',
+    count_other: '{{count}} tools',
+    loading: 'Loading tools…',
+    error: 'Unable to load tools.',
+    empty: 'No tools are available.',
+    noMatches: 'No tools match your search.',
+    scope: 'Scope',
+    source: 'Source',
+    details: 'Tool details',
+    detailsDescription: 'Read about this tool and review its input schema.',
+    detailsLoading: 'Loading tool details…',
+    detailsError: 'Unable to load tool details.',
+    about: 'Overview',
+    descriptionLabel: 'Tool description',
+    noAbout: 'No additional documentation is available.',
+    inputSchema: 'Input JSON Schema',
+    noSchema: 'No input schema is available.',
+  },
+  skills: {
+    count_one: '{{count}} skill',
+    count_other: '{{count}} skills',
+    skill: 'Skill',
+    description: 'Description',
+    tools: 'Tools',
+    details: 'Skill details',
+    instructions: 'Instructions',
+    toolsDescription: 'Tools referenced by this skill. Details are read-only.',
+    detailsDescription: 'Read the skill instructions and review its tools.',
+    detailsLoading: 'Loading skill details…',
+    detailsError: 'Unable to load skill details.',
+    content: 'Skill instructions',
+    noContent: 'No instructions are available.',
+    noTools: 'No tools',
+    toolAvailable: 'Available',
+    toolMissing: 'Missing',
+  },
+  'demo.navigation.group': 'AI Components',
+  'demo.navigation.chat': 'Chat window',
+  'demo.navigation.floating': 'Floating chat',
+  'demo.navigation.tasks': 'Employee tasks',
+  'demo.navigation.context': 'Page context',
+  'demo.navigation.tools': 'Tool cards',
+  'demo.containerPatterns': 'Container patterns',
+  'demo.promptGenerator': 'Prompt generator',
+  'demo.componentApi': 'Component API',
+  'demo.manualContext': 'Manual context',
+  'demo.shortcutContext': 'Task context · Shortcut',
+  'demo.presetContext': 'Task context · Conversation preset',
+  'demo.scopeContext': 'Task context · Scope inheritance',
+  'demo.builtinFrontendTool': 'Built-in frontend tool',
+  'demo.customFrontendTool': 'Custom frontend tool',
+  'demo.specializedRenderers': 'Specialized renderers',
+  'demo.defaultToolCard': 'Default Tool Card',
+  'demo.codePrompt': 'Code prompt',
+
+  'demo.conversationList': 'Conversation list',
+  'demo.aiEmployeeSelector': 'AI employee selector',
+  'demo.modelSelector': 'Model selector',
+  'demo.personalizedPromptEditor': 'Personalized prompt editor',
+  'demo.uploadFiles': 'Upload files',
+  'demo.panelExpandCollapse': 'Panel expand / collapse',
+  'demo.chatSurfaceProps': 'ChatSurface props',
+  'demo.chatWindowProps': 'AIChatWindow props',
+  'demo.panelWidthDefault': '450px · NocoBase default',
+  'demo.props.width': 'Sets the width used by the side-panel variant.',
+  'demo.props.closeOnEscape': 'Allows Escape to close the active surface.',
+  'demo.props.showCloseHandle':
+    'Shows an outside close handle for the side-panel variant.',
+  'demo.props.className':
+    'Adds layout or sizing classes to the root conversation window.',
+  'demo.props.headerActions':
+    'Adds surface actions such as expand, collapse, or close to the header.',
+  'demo.props.composerActions':
+    'Application-specific buttons rendered in the composer toolbar.',
+  'demo.props.showConversationToggle': 'Shows the conversation-list control.',
+  'demo.props.showNewConversation': 'Shows the new-conversation action.',
+  'demo.props.showEmployeeSelector':
+    'Shows the AI employee selector in the composer.',
+  'demo.props.showModelSelector': 'Shows the model selector in the composer.',
+  'demo.props.showUserPrompt':
+    'Shows the personalized AI employee prompt editor.',
+  'demo.props.enableAttachments':
+    'Enables file picker, drag-and-drop, and pasted-image uploads.',
+  'demo.props.attachmentActionIndex':
+    'Places the attachment action at a specific position in the composer toolbar.',
+  'demo.props.onToolCallDecision':
+    'Observes approve, reject, or edit decisions after AIChatProvider has processed them; use it for application side effects or telemetry.',
+  'demo.props.placeholder': 'Composer placeholder text.',
+  'demo.props.disclaimer': 'Customizes or hides the footer disclaimer.',
+  'demo.props.variant':
+    'Changes only the outer presentation while keeping the same chat window mounted.',
+  'demo.props.open': 'Controls whether the surface is open.',
+  'demo.props.onOpenChange':
+    'Receives close requests from Escape, the dialog backdrop, or surface actions.',
+  'demo.props.side': 'Chooses the side used by the side-panel variant.',
+  'demo.noEmployee': 'No AI employee is available for the current user.',
+  'demo.insideThePage': 'Inside the page',
+  'demo.dedicatedPage': 'Dedicated page',
+  'demo.rightSidePanel': 'Right side panel',
+  'demo.mobileRegion': 'Mobile region',
+  'demo.pushSidePanel': 'Push side panel',
+  'demo.mobileContainer': 'Mobile container',
+  'demo.previewBlock': 'Preview block',
+  'demo.previewPage': 'Preview page',
+  'demo.openPanel': 'Open panel',
+  'demo.openDialog': 'Open dialog',
+  'demo.previewMobile': 'Preview mobile',
+  'demo.containers.embeddedDescription':
+    'Place chat inside a dashboard, record page, or workspace region.',
+  'demo.containers.pageDescription':
+    'Give the conversation a full route and the largest working area.',
+  'demo.containers.panelDescription':
+    'Keep the page operable while the content narrows for chat.',
+  'demo.containers.dialogDescription':
+    'Open a focused conversation from an action without changing route.',
+  'demo.containers.mobileDescription':
+    'Use the same component in a narrow, touch-friendly viewport.',
+  'demo.placements.embeddedDescription':
+    'Embed chat in the selected content region.',
+  'demo.placements.pageDescription':
+    'Create a full route for the AI conversation.',
+  'demo.placements.panelDescription':
+    'Push the page narrower while chat is open.',
+  'demo.placements.dialogDescription':
+    'Open chat from a button or page action.',
+  'demo.placements.mobileDescription':
+    'Optimize the embedded container for a narrow viewport.',
+  'demo.ticketAnalysis': 'Ticket analysis',
+  'demo.responseDrafting': 'Response drafting',
+  'demo.workflowDesign': 'Workflow design',
+  'demo.inspectRecord': 'Inspect record',
+  'demo.searchRecords': 'Search records',
+  'demo.updateRecord': 'Update record',
+  'demo.suggestions': 'Suggestions',
+  'demo.businessReport': 'Business report',
+  'demo.chart': 'Chart',
+  'demo.subAgent': 'Sub-agent',
+  'demo.workflowOutput': 'Workflow output',
+  'demo.pickPageElement': 'Pick page element',
+  'demo.fillLeadForm': 'Fill lead form',
+  'demo.updateQuoteDiscount': 'Update quote discount',
+  'demo.applyReviewDiscount': 'Apply review discount',
+  'demo.prepareOpportunityBrief': 'Prepare opportunity brief',
+  'demo.renewalTask': 'Recommend next renewal action',
+  'demo.loadingConfiguration': 'Loading AI employees and enabled models…',
+  'demo.configurationNotReady': 'AI employee is not ready',
+  'demo.developmentInstance': 'Development instance',
+  'demo.developmentDescription':
+    "This page uses the Registry UI against the plugin's existing authenticated",
+  'demo.developmentOnly': 'routes. It is excluded from production builds.',
+  'demo.aiEmployeeRegistry': 'AI Employee Registry',
+  'demo.aiEmployeePlayground': 'AI employee playground',
+  'demo.playgroundDescription':
+    'Exercise the application-owned AI component library with the current plugin runtime.',
+  'demo.inlineMessages': 'Inline messages',
+  'demo.standardConversationTranscript': 'Standard conversation transcript',
+  'demo.transcriptDescription':
+    'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
+  'demo.conversations': 'Conversations',
+  'demo.supportWorkspaceReview': 'Support workspace review',
+  'demo.newConversation': 'New conversation',
+  'demo.messagePlaceholder': 'Message your AI employee…',
+  'demo.attachFile': 'Attach file',
+  'demo.sendMessage': 'Send message',
+  'demo.compactComposer': 'Compact composer',
+  'demo.compactTitle': 'Open the transcript only when needed',
+  'demo.compactDescription':
+    'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
+  'demo.contextPickerTitle': 'Pick page context while composing a message',
+  'demo.contextPickerDescription':
+    'The user can pick any registered page element from the composer. Its current content is added to this message without changing task configuration.',
+  'demo.shortcutContextTitle': 'Reference page context from a Shortcut task',
+  'demo.shortcutContextDescription':
+    'The Shortcut task stores a page-element reference in message.workContext and reads its latest content when the user starts the task.',
+  'demo.presetContextTitle':
+    'Reference page context from a conversation preset task',
+  'demo.presetContextDescription':
+    'The AIChatProvider employeeTasks configuration uses the same message.workContext reference, but exposes the task in the conversation empty state instead of through a Shortcut.',
+  'demo.scopeTitle': 'Inherit the surrounding page context',
+  'demo.scopeDescription':
+    'A Shortcut or AIChatProvider inside AIPageContextScope inherits that context. A task-level message.workContext still takes precedence when configured.',
+  'demo.formFillerTitle': 'Fill a registered React form with Form filler',
+  'demo.formFillerDescription':
+    'Form filler is registered once by AIProvider. The form exposes its identifier, field schema, live values, and setter through useAIForm; it is not part of the custom frontend Tool catalog.',
+  'demo.pageActionTitle': 'Expose a page-specific action to the AI employee',
+  'demo.pageActionDescription':
+    'A registered page element can advertise custom Tools through the NocoBase loadFrontendTool and executeFrontendTool protocol. The example uses ASK permission and updates only the local quote preview.',
+  'demo.sceneGeneratorTitle': 'Generate a complete page context scene',
+  'demo.sceneGeneratorDescription':
+    'Describe the business scene, select the AI employee and task, then generate the full page surface, context binding, conversation layout, and optional frontend capability together.',
+  'demo.sourceContent': 'Source content',
+  'demo.sourceContentHint':
+    'Edit this text, then ask the AI employee to fill the registered form below.',
+  'demo.leadIntakeForm': 'Lead intake form',
+  'demo.formFillerHint':
+    'Form filler changes visible values only. It never submits the form.',
+  'demo.clear': 'Clear',
+  'demo.company': 'Company',
+  'demo.contactName': 'Contact name',
+  'demo.email': 'Email',
+  'demo.priority': 'Priority',
+  'demo.low': 'Low',
+  'demo.normal': 'Normal',
+  'demo.high': 'High',
+  'demo.quoteReview': 'Quote review',
+  'demo.customTool': 'Custom Tool',
+  'demo.reviewNote': 'Review note',
+  'demo.quoteToolHint':
+    'The page element registers update_quote_discount. Its full input schema is loaded only when the AI chooses this Tool. Approval is controlled by the ASK permission.',
+  'demo.selectedSupportCase': 'Selected support case',
+  'demo.caseEditHint': 'Change a value before running either task.',
+  'demo.taskContext': 'Task context',
+  'demo.summary': 'Summary',
+  'demo.severity': 'Severity',
+  'demo.medium': 'Medium',
+  'demo.taskShortcutArea': 'Task shortcut area',
+  'demo.shortcutReferenceHint':
+    'This button is outside the selected page element. Its task explicitly references “Selected support case”.',
+  'demo.explicitReference': 'Explicit reference',
+  'demo.analyzeSelectedCase': 'Analyze selected case',
+  'demo.selectedOpportunity': 'Selected opportunity',
+  'demo.opportunityEditHint':
+    'Change a value, then select the preset task in the chat.',
+  'demo.presetTaskContext': 'Preset task context',
+  'demo.opportunity': 'Opportunity',
+  'demo.forecast': 'Forecast',
+  'demo.pipeline': 'Pipeline',
+  'demo.likely': 'Likely',
+  'demo.committed': 'Committed',
+  'demo.presetTaskHint':
+    'No Shortcut is used here. “Prepare opportunity brief” comes from AIChatProvider.employeeTasks and appears in the conversation empty state.',
+  'demo.currentAccountRenewal': 'Current account renewal',
+  'demo.renewalScopeHint':
+    'Shortcut and conversation are inside this context scope.',
+  'demo.inherited': 'Inherited',
+  'demo.account': 'Account',
+  'demo.renewalStage': 'Renewal stage',
+  'demo.discovery': 'Discovery',
+  'demo.negotiation': 'Negotiation',
+  'demo.inheritedShortcut': 'Shortcut task without message.workContext',
+  'demo.reviewCurrentRenewal': 'Review current renewal',
+  'demo.inheritedTaskHint':
+    'The preset task “Recommend next renewal action” also has no task context, so it inherits this scope.',
+  'demo.customerWorkspace': 'Customer workspace',
+  'demo.pageElementsHint':
+    'The form and detail card are registered page elements.',
+  'demo.selectableElements': '2 selectable elements',
+  'demo.customerIntakeForm': 'Customer intake form',
+  'demo.customerFormHint':
+    'Update a value, then pick this form to capture its current state.',
+  'demo.customerName': 'Customer name',
+  'demo.contactEmail': 'Contact email',
+  'demo.customerHealthSummary': 'Customer health summary',
+  'demo.floatingChatPrompt': 'Floating chat prompt',
+  'demo.launcherTitle': 'Generate the global launcher separately',
+  'demo.launcherAction': 'Add a lower-right AI floating entry',
+  'demo.launcherDescription':
+    'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
+  'demo.integrationTitle': 'Describe the integration',
+  'demo.integrationHint':
+    'Choose where chat belongs and which capabilities the target page needs.',
+  'demo.targetRegion': 'Target page or region',
+  'demo.targetPlaceholder': 'e.g. the ticket detail page',
+  'demo.placement': 'Placement',
+  'demo.sidePanelWidth': 'Side panel width',
+  'demo.messagePresentation': 'Message presentation',
+  'demo.fullTranscript': 'Full transcript',
+  'demo.compactHistory': 'Compact + history dialog',
+  'demo.capabilities': 'Capabilities',
+  'demo.capabilitiesPreview': 'Capabilities preview',
+  'demo.capabilitiesHint':
+    'The selected controls are rendered on the real AIChatWindow.',
+  'demo.generatedImplementationPrompt': 'Generated implementation prompt',
+  'demo.promptHint':
+    'Updates from the selected page, placement, and capabilities.',
+  'demo.multipleTasksScenario': 'Scenario 1 · Multiple tasks',
+  'demo.multipleTasksTitle': 'Trigger employee tasks from a business record',
+  'demo.multipleTasksDescription':
+    'The Shortcut component can still sit in a detail header and provide the current record as work context. Opening it shows the configured analysis and reply tasks below the employee greeting.',
+  'demo.requester': 'Requester',
+  'demo.created': 'Created',
+  'demo.description': 'Description',
+  'demo.explicitTargetScenario': 'Scenario 2 · Explicit target',
+  'demo.explicitTargetTitle':
+    'Send a shortcut task to a designated embedded chat',
+  'demo.explicitTargetDescription':
+    'The shortcut receives the embedded chat Controller directly. Its Provider explicitly configures',
+  'demo.explicitTargetHint':
+    'and an employee task set. It does not need a global target ID and cannot accidentally trigger another conversation on the same page.',
+  'demo.riskReviewWorkspace': 'Risk review workspace',
+  'demo.riskReviewHint':
+    'The embedded chat starts without preset tasks. Clicking the Shortcut injects “Review operational risk” into this specific conversation, where the user can choose it before the request is placed in the composer.',
+  'demo.chatTasksScenario': 'Scenario 3 · Chat-bound tasks',
+  'demo.chatTasksTitle': 'Show tasks when the selected employee changes',
+  'demo.chatTasksDescription':
+    'This conversation window binds task lists directly to business AI employees. Starting a new conversation or switching employees in the composer immediately replaces the empty-state tasks. Employees without a binding keep the normal greeting-only state.',
+  'demo.employeeTaskBindings': 'Employee task bindings',
+  'demo.analyzeThisTicket': 'Analyze this ticket',
+  'demo.draftACustomerReply': 'Draft a customer reply',
+  'demo.reviewOperationalRisk': 'Review operational risk',
+  'demo.employeeSwitchHint':
+    'Switch employees from the bottom of the chat to preview each configured task list.',
+  'demo.taskParameterPrefix': 'The same',
+  'demo.taskParameterSuffix':
+    'parameter works in page, embedded, side-panel, dialog, and mobile containers.',
+  'demo.employeeTasksPrompt': 'Employee tasks prompt',
+  'demo.taskPromptTitle': 'Generate an integration prompt',
+  'demo.taskPromptDescription':
+    'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.',
+  'demo.employeeTaskConfiguration': 'Employee task configuration',
+  'demo.integration': 'Integration',
+  'demo.contextualShortcut': 'Contextual Shortcut',
+  'demo.tasksInsideAChat': 'Tasks inside a chat',
+  'demo.aiEmployee': 'AI employee',
+  'demo.employeeSelectionHint':
+    'Select an employee first, then configure the tasks shown in that employee’s new-conversation state.',
+  'demo.chatContainer': 'Chat container',
+  'demo.page': 'Page',
+  'demo.embeddedBlock': 'Embedded block',
+  'demo.sidePanel': 'Side panel',
+  'demo.dialog': 'Dialog',
+  'demo.targetConversation': 'Target conversation',
+  'demo.globalSidePanel': 'Global side panel',
+  'demo.embeddedChat': 'Embedded chat',
+  'demo.tasks': 'Tasks',
+  'demo.configuredTask': 'configured task',
+  'demo.addTask': 'Add task',
+  'demo.model': 'Model',
+  'demo.useEmployeeDefault': 'Use employee default',
+  'demo.defaultUserMessage': 'Default user message',
+  'demo.autoSend': 'Auto send',
+  'demo.autoSendHint': 'Otherwise the message is placed in the composer.',
+  'demo.workContext': 'Work context',
+  'demo.workContextHint':
+    'Select a page context for this task. Without one, the task inherits its surrounding context.',
+  'demo.pickContext': 'Pick context',
+  'demo.removeTaskContext': 'Remove task context',
+  'demo.advancedTaskSettings': 'Advanced task settings',
+  'demo.advancedSettingsHint': 'Background, Web search, Skills, and Tools',
+  'demo.background': 'Background',
+  'demo.webSearch': 'Web search',
+  'demo.webSearchHint': 'Subject to the selected LLM service capability.',
+  'demo.presetHint': 'Preset inherits the AI employee configuration.',
+  'demo.preset': 'Preset',
+  'demo.containersTitle':
+    'Use the same conversation window wherever the product needs it',
+  'demo.containersDescription':
+    'The provider owns conversation state. Page, embedded block, push side panel, dialog, and mobile containers only decide placement and dimensions.',
+  'demo.historyTitle':
+    'Choose how much conversation history the page should expose',
+  'demo.historyDescription':
+    'Use the complete transcript for conversational work, or a compact worker surface that opens message history only when the user asks for it.',
+  'demo.promptGeneratorTitle':
+    'Describe where chat belongs, then copy an implementation prompt',
+  'demo.promptGeneratorDescription':
+    'This replaces a generic prop configuration panel with a task-oriented generator: choose the target area, placement mode, and required capabilities.',
+  'demo.surfacePropsDescription':
+    'Use variant as the single presentation switch. The child AIChatWindow remains the same React instance while the surface changes shape.',
+  'demo.windowPropsDescription':
+    'The core window stays reusable while business pages provide placement, composer actions, and tool-approval behavior.',
+  'demo.prop': 'Prop',
+  'demo.type': 'Type',
+  'demo.default': 'Default',
+  'demo.sceneSettings': 'Scene settings',
+  'demo.sceneTitle': 'Scene title',
+  'demo.businessScene': 'Business scene',
+  'demo.taskTitle': 'Task title',
+  'demo.taskMessage': 'Task message',
+  'demo.sceneAutoSendHint': 'Otherwise fill the composer for review.',
+  'demo.manualPickHint':
+    'Manual Pick keeps the message in the composer so context can be selected before sending.',
+  'demo.contextIntegration': 'Context integration',
+  'demo.shortcutTask': 'Shortcut task',
+  'demo.conversationPresetTask': 'Conversation preset task',
+  'demo.scopeInheritance': 'Scope inheritance',
+  'demo.manualPick': 'Manual Pick',
+  'demo.contextId': 'Context id',
+  'demo.contextTitle': 'Context title',
+  'demo.pageCapability': 'Page capability',
+  'demo.contextOnly': 'Context only',
+  'demo.formFiller': 'Built-in Form filler',
+  'demo.frontendTool': 'Custom frontend Tool',
+  'demo.toolName': 'Tool name',
+  'demo.businessAction': 'Business action',
+  'demo.scenePrompt': 'Complete page context scene prompt',
+  'demo.scenePromptHint':
+    'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.',
+  'demo.toolCardsTitle':
+    'Adapt NocoBase tool results to the job they represent',
+  'demo.toolCardsDescription':
+    "These cards follow the original AI employee patterns while using the starter's shadcn and Base UI component system.",
+  'demo.toolShellTitle': 'One shared shell for every normal tool state',
+  'demo.toolShellDescription':
+    'Tools without a specialized renderer still use the same compact status, input disclosure, error, and permission behavior.',
+  'demo.approvalRequired': 'Approval required',
+  'demo.toolPromptTitle':
+    'Generate an implementation prompt for a specialized Tool Card',
+  'demo.toolPromptDescription':
+    'Choose the nearest existing renderer and describe the business interaction. The generated prompt tells the coding agent exactly where and how to implement it.',
+  'demo.toolCardSettings': 'Describe the Tool Card',
+  'demo.toolCardSettingsHint':
+    'The examples above remain the visual reference; these values define the implementation task.',
+  'demo.closestExample': 'Closest example',
+  'demo.businessInteraction': 'Business interaction',
+  'demo.customApproval': 'Card owns approval UI',
+  'demo.customApprovalHint':
+    'Enable for actions such as Approve, Revise, and Reject.',
+  'demo.codingPrompt': 'Coding prompt',
+  'demo.codingPromptHint': 'Ready to paste into an implementation task.',
+  'demo.containerPreview': 'Container preview',
+
+  AI: 'AI',
+  'AI Conversations': 'AI Conversations',
   'AI Employee': 'AI Employee',
+  'AI Employees': 'AI Employees',
+  'Expand employee list': 'Expand employee list',
+  'Collapse employee list': 'Collapse employee list',
+  'LLM services': 'LLM services',
+  'MCP services': 'MCP services',
+  'employees.pageDescription':
+    'Configure AI employees, their models, instructions, skills, and tools.',
+  'llmServices.pageDescription':
+    'Manage LLM service status and available models. Connections are configured during deployment.',
+  'mcp.pageDescription':
+    'Manage MCP service status and tool permissions. Connections are configured during deployment.',
   'AI settings': 'AI settings',
+  'Conversation center': 'Conversation center',
+  'conversations.pageDescription':
+    'Review all users’ conversations with AI employees, including messages and tool calls, without changing their read status.',
+  'Refresh list': 'Refresh list',
+  'Refresh messages': 'Refresh messages',
+  'Refreshing…': 'Refreshing…',
+  'Conversation pagination': 'Conversation pagination',
+  'Select a conversation': 'Select a conversation',
+  'Choose a conversation on the left to review messages, tool results, and reasoning.':
+    'Choose a conversation on the left to review messages, tool results, and reasoning.',
+  'Read only · Viewing does not mark messages as read.':
+    'Read only · Viewing does not mark messages as read.',
+  '{{count}} messages loaded': '{{count}} messages loaded',
+  'Read only': 'Read only',
+  'View all application conversations in read-only mode.':
+    'View all application conversations in read-only mode.',
+  Refresh: 'Refresh',
+  'Back to conversations': 'Back to conversations',
+  Category: 'Category',
+  'Load earlier messages': 'Load earlier messages',
+  'Page {{page}} of {{pages}}': 'Page {{page}} of {{pages}}',
+  Conversations: 'Conversations',
+  'Search conversations': 'Search conversations',
+  'Search by title or session ID': 'Search by title or session ID',
+  Search: 'Search',
+  'Selected conversation': 'Selected conversation',
+  'Conversation details': 'Conversation details',
+  'Session ID': 'Session ID',
+  User: 'User',
+  'User ID': 'User ID',
+  Scope: 'Scope',
+  'All conversations': 'All conversations',
+  'My conversations': 'My conversations',
+  'Created at': 'Created at',
+  'Updated at': 'Updated at',
+  'Last message at': 'Last message at',
+  Messages: 'Messages',
+  'Message count': 'Message count',
+  Model: 'Model',
+  Metadata: 'Metadata',
+  'Untitled conversation': 'Untitled conversation',
+  'Unknown user': 'Unknown user',
+  'No conversations found.': 'No conversations found.',
+  'Select a conversation to view its messages.':
+    'Select a conversation to view its messages.',
+  'No messages in this conversation.': 'No messages in this conversation.',
+  'Loading conversations…': 'Loading conversations…',
+  'Loading messages…': 'Loading messages…',
+  'Unable to load conversations.': 'Unable to load conversations.',
+  'Unable to load conversation messages.':
+    'Unable to load conversation messages.',
   'LLM Service': 'LLM Service',
   MCP: 'MCP',
+  'mcp.toolsTitle': 'MCP tools',
+  'mcp.toolsEmpty': 'No MCP tools available.',
+  'mcp.transportHttp': 'HTTP (Streamable)',
+  'mcp.transportSse': 'HTTP + SSE (Legacy)',
   'MCP servers': 'MCP servers',
-  'LLM services are configured in config.yml.':
-    'LLM services are configured in config.yml.',
   'Manage AI employees, LLM services, and MCP services.':
     'Manage AI employees, LLM services, and MCP services.',
   'Connect AI employees to external tools through Model Context Protocol servers.':
@@ -13,6 +585,7 @@ export default {
   'Add MCP server': 'Add MCP server',
   'Edit MCP server': 'Edit MCP server',
   'No MCP servers configured.': 'No MCP servers configured.',
+  'No LLM services configured.': 'No LLM services configured.',
   Transport: 'Transport',
   Stdio: 'Stdio',
   HTTP: 'HTTP',
@@ -105,6 +678,13 @@ export default {
   'Saving…': 'Saving…',
   Score: 'Score',
   Skills: 'Skills',
+  'skills.pageDescription':
+    'Browse the skills available to AI employees and review their instructions and associated tools.',
+  'Search skills': 'Search skills',
+  'Loading skills…': 'Loading skills…',
+  'Unable to load skills.': 'Unable to load skills.',
+  'No skills match your search.': 'No skills match your search.',
+  'No skills are available.': 'No skills are available.',
   Tools: 'Tools',
   'Use dedicated models': 'Use dedicated models',
   'Enable dedicated model configuration':
@@ -115,8 +695,8 @@ export default {
     'Restrict this AI employee to the selected models.',
   'Role setting description':
     'The system prompt for the AI model, defines who "I" am, as well as the rules and requirements I follow to perform tasks.',
-  'Role setting placeholder':
-    'The system prompt for the AI model, defines who "I" am, as well as the rules and requirements I follow to perform tasks.',
+  'employees.rolePlaceholder':
+    'Describe the role, responsibilities, and working guidelines.',
   'System default': 'System default',
   Custom: 'Custom',
   'General skills': 'General skills',

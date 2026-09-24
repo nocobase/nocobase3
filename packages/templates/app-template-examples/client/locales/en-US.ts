@@ -1,12 +1,211 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  i18nExamples: {
+    title: 'Internationalization',
+    description:
+      'Explore plurals, missing translations and regional formats. Switch language from the account menu to see the results update.',
+    pluralTitle: 'Plurals',
+    pluralDescription:
+      'English uses different forms for one and other counts. Chinese uses the same wording for both.',
+    count: 'Item count',
+    countHint: 'Enter a non-negative safe integer or choose a preset.',
+    presets: 'Count presets',
+    invalidCount: 'Enter a valid non-negative safe integer.',
+    itemCount_one: '{{count}} item',
+    itemCount_other: '{{count}} items',
+    fallbackTitle: 'Missing translations',
+    fallbackDescription:
+      'Switch to Chinese: the English-only message falls back to English. The last two rows have no translation in either language.',
+    fallbackChain:
+      'Lookup order: current language ({{locale}}) → application default ({{defaultLocale}}) → en-US. Repeated languages are checked once.',
+    scenarios: {
+      translated: 'Available in both languages',
+      englishOnly: 'Available in English only',
+      withDefault: 'Missing, with defaultValue',
+      withoutDefault: 'Missing, without defaultValue',
+    },
+    scenario: 'Scenario / key',
+    result: 'Rendered result',
+    source: 'Source',
+    keySource: 'Key itself',
+    defaultValue: 'Translation unavailable.',
+    isolationNote:
+      'These deliberately incomplete resources use an isolated I18nRuntime with the current language and application default. The application’s own translations remain complete.',
+    loading: 'Loading fallback examples',
+    error: 'Unable to load the fallback examples.',
+    retry: 'Retry',
+    formatTitle: 'Regional formats',
+    formatDescription:
+      'Compare the same number, USD amount and UTC timestamp using Intl.NumberFormat and Intl.DateTimeFormat.',
+    region: 'Region',
+    number: 'Number',
+    currency: 'Currency (USD)',
+    date: 'Date and time (UTC)',
+    formatNote:
+      'Formatting changes presentation, not value: no currency conversion takes place. These regions do not add interface languages; the comparison stays fixed when you switch language.',
+  },
+  notifications: { unreadLabel: 'Notifications, {{count}} unread' },
+  overrides: {
+    '@nocobase/app-plugin-notification-in-app': {
+      inbox: { title: 'Notifications' },
+    },
+  },
+  noticeLoading: 'Loading notice…',
+  noticeLoadError: 'Unable to load the plugin notice.',
+  'auth.welcome': 'Welcome back',
+  'auth.loginDescription': 'Sign in with your username or email and password.',
+  'auth.registerTitle': 'Create an account',
+  'auth.registerDescription': 'Create an account to get started.',
+  'auth.forgotTitle': 'Forgot password',
+  'auth.forgotDescription':
+    'Enter your email and we will send a reset link if the account exists.',
+  'auth.resetTitle': 'Reset password',
+  'auth.resetDescription': 'Choose a new password for your account.',
+  'auth.identifier': 'Username or email',
+  'auth.password': 'Password',
+  'auth.signIn': 'Sign in',
+  'auth.signInLink': 'sign in',
+  'auth.signingIn': 'Signing in…',
+  'auth.hidePassword': 'Hide password',
+  'auth.showPassword': 'Show password',
+  'auth.forgotLink': 'Forgot password?',
+  'auth.signUp': 'Sign up',
+  'auth.createAccount': 'Create account',
+  'auth.creatingAccount': 'Creating account…',
+  'auth.name': 'Name',
+  'auth.username': 'Username',
+  'auth.email': 'Email',
+  'auth.confirmPassword': 'Confirm password',
+  'auth.existingAccount': 'Already have an account?',
+  'auth.resetting': 'Resetting…',
+  'auth.newPassword': 'New password',
+  'auth.confirmNewPassword': 'Confirm new password',
+  'auth.invalidResetLink':
+    'This password reset link is invalid or has expired.',
+  'auth.returnTo': 'Return to',
+  'auth.sendResetLink': 'Send reset link',
+  'auth.sending': 'Sending…',
+  'auth.resetSent': 'If the account exists, a reset link has been sent.',
+  'auth.rememberPassword': 'Remember your password?',
+  'auth.methods': 'Authentication methods',
+  'auth.continueWith': 'Or continue with',
+  'auth.about': 'About this application',
+  'auth.marketingDescription':
+    'Give AI a flexible frontend framework to shape each experience, while NocoBase secures the data, permissions, workflows and governance underneath.',
+  'auth.platform': 'AI-native application platform',
+  'auth.frontendDescription':
+    'Compose interfaces freely on a flexible framework.',
+  'auth.frontend': 'AI-native frontend',
+  'auth.foundationDescription':
+    'Reliable data, access control, workflows and governance.',
+  'auth.foundation': 'NocoBase foundation',
+  'auth.marketingFooter': 'Freedom above. Confidence below.',
+  'auth.marketingTitleFirst': 'Let AI build freely.',
+  'auth.marketingTitleSecond': 'NocoBase keeps it',
+  'auth.marketingTitleThird': 'reliable.',
+  'status.loading': 'Loading',
+  'status.loadingPage': 'Loading page',
+  'status.loadingSettings': 'Loading settings',
+  'status.loadingDev': 'Loading dev tools',
+  'status.denied': 'Access denied',
+  'status.pageFailed': 'Unable to load page',
+  'status.retry': 'Retry',
+  'navigation.brandHome': 'NocoBase home',
+  'navigation.brandApps': 'NocoBase applications',
+  'auth.passwordMismatch': "Passwords don't match.",
+  'status.deniedDescription': 'You do not have permission to access {{label}}.',
+  'status.routeFailedDescription':
+    'Route {{label}} from {{packageName}} could not be loaded.',
+  shell: {
+    workspace: 'AI application workspace',
+    buildFreely: 'AI builds freely.',
+    reliability: '<brand>NocoBase</brand> keeps it reliable.',
+  },
+  surface: {
+    backToApp: 'Back to app',
+    loading: 'Loading {{title}}',
+    navigation: '{{title}} navigation',
+    page: '{{title}} page',
+  },
+  settings: {
+    title: 'Settings',
+    emptyTitle: 'No settings available',
+    emptyDescription:
+      'No enabled plugin contributes a settings page you have access to.',
+  },
+  dev: {
+    componentExamples: 'Component examples',
+    title: 'Dev tools',
+    emptyTitle: 'No dev tools available',
+    emptyDescription:
+      'No enabled plugin contributes a dev page you have access to.',
+  },
   routeOverlays: {
     title: 'Route dialogs and drawers',
     description:
       'Open a dialog or drawer, then open another layer. Close the child to return to your draft. Each layer has its own URL.',
     openDialog: 'Open dialog',
     openDrawer: 'Open drawer',
+    dialogCardTitle: 'Dialog route',
+    dialogCardDescription:
+      'Keep the user focused on one task with a centered, URL-addressable layer.',
+    dialogPattern: 'Centered overlay',
+    dialogFeatureFocus: 'Focused task flow',
+    dialogFeatureNested: 'Can open a child drawer',
+    dialogFeatureConfirm: 'Supports close confirmation',
+    drawerCardTitle: 'Drawer route',
+    drawerCardDescription:
+      'Keep the underlying page visible while a side panel handles a secondary task.',
+    drawerPattern: 'Side panel',
+    drawerFeatureContext: 'Keeps page context visible',
+    drawerFeatureNested: 'Can open a child dialog',
+    drawerFeatureHistory: 'Works with browser history',
+    guideTitle: 'Try the nested flow',
+    guideDescription:
+      'Move between layers to see how each route is reflected in the address bar and browser history.',
+    stepOneTitle: 'Open a layer',
+    stepOneDescription: 'Start with a dialog or drawer from the cards above.',
+    stepTwoTitle: 'Open the next layer',
+    stepTwoDescription: 'Use the action inside the overlay to continue deeper.',
+    stepThreeTitle: 'Return to your draft',
+    stepThreeDescription:
+      'Close the child layer and the parent keeps its local state.',
+    deepLinks: 'Jump directly:',
+    openDialogDrawer: 'Dialog → Drawer',
+    openDrawerDialog: 'Drawer → Dialog',
+    currentRoute: 'Current route',
+    stateDescription:
+      'Every layer is a real route. Use browser back and forward to move through the same flow.',
+    preview: 'Preview',
+    newExample: 'New example',
+    childPagesCardTitle: 'Nested pages',
+    childPagesCardDescription:
+      'Open a page instead of an overlay and watch the breadcrumb gain a level for each one.',
+    openChildPages: 'Open nested pages',
+    childPagesTitle: 'Nested pages',
+    childPagesDescription:
+      'Each of these is its own page rather than a layer, so opening one replaces this content and adds a breadcrumb level.',
+    openTopic: 'Open page',
+    openTopicDialog: 'Open dialog',
+    topicQuotation: 'Quotation routing',
+    topicQuotationSummary:
+      'Route a quotation to the reviewer who owns the account.',
+    topicOnboarding: 'Onboarding checklist',
+    topicOnboardingSummary:
+      'Track the steps a new teammate works through in their first week.',
+    topicRenewal: 'Renewal reminder',
+    topicRenewalSummary:
+      'Notify the owner before a subscription reaches its renewal date.',
+    topicHint:
+      'The breadcrumb above gained a level when this page opened, because this page is somewhere you can return to.',
+    topicOverlayHint:
+      'Open the dialog above and the breadcrumb stays put: the address bar changes, but an overlay is not another destination.',
+    topicDialogTitle: 'A layer above the page',
+    topicDialogDescription:
+      'This dialog is a child route of the page behind it, and names no destination.',
+    topicDialogHint:
+      'The address bar changed, but the breadcrumb did not: the page behind this layer is still where you are.',
     dialogTitle: 'Dialog example',
     drawerTitle: 'Drawer example',
     hint: 'Type a draft and open a child layer to try keeping your work in place.',
@@ -59,6 +258,21 @@ const enUS = {
     },
   },
   examples: {
+    i18n: {
+      title: 'Internationalization',
+      description:
+        'Try plural forms, missing-translation fallbacks and regional number, currency and date formats.',
+    },
+    notifications: {
+      title: 'Notifications',
+      description:
+        'View your in-app notifications, filter unread messages, and manage their read state.',
+    },
+    notificationTasks: {
+      title: 'Task notifications',
+      description:
+        'Assign tasks to different users and let recipients update the task from the notification detail page.',
+    },
     routeOverlays: {
       title: 'Route dialogs and drawers',
       description:
@@ -102,6 +316,11 @@ const enUS = {
       description:
         'Explore orders, line items and products in a connected business example.',
     },
+    authorization: {
+      title: 'Authorization',
+      description:
+        'Configure sales feature permissions and data scopes with default access, sharing and restriction rules.',
+    },
     files: {
       title: 'File management',
       description:
@@ -132,8 +351,7 @@ const enUS = {
     filter: 'Filter by status',
     search: 'Search titles…',
     loading: 'Loading articles…',
-    loadError:
-      'Unable to load articles. Check your connection and article permissions.',
+    loadError: 'Unable to load articles. Check your connection and try again.',
     retry: 'Try again',
     empty: 'No matching articles',
     emptyHint: 'Try another search or create your first article.',
@@ -159,7 +377,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Default', compact: 'Compact' },
+    themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',
@@ -209,12 +427,15 @@ const enUS = {
     note: 'Writes are not exposed: the CRM owns this data, so the routes register only query actions and the Policy grants reads alone.',
   },
   account: {
+    signOutFailed: 'Unable to sign out. Please try again.',
     openMenu: 'Open account menu',
     fallback: 'Account',
     signOut: 'Sign out',
     signingOut: 'Signing out…',
   },
   navigation: {
+    i18nExamples: 'Internationalization',
+    notifications: 'Notifications',
     numbers: 'Numeric types',
     externalCrm: 'External CRM',
     routeOverlays: 'Route dialogs and drawers',
@@ -225,6 +446,26 @@ const enUS = {
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
     label: 'Application navigation',
+    breadcrumb: 'Breadcrumb',
+  },
+  dataTable: {
+    noResults: 'No results.',
+    sortAscending: 'Asc',
+    sortDescending: 'Desc',
+    hideColumn: 'Hide',
+    view: 'View',
+    toggleColumns: 'Toggle columns',
+    selectedCount: '{{selected}} of {{total}} row(s) selected.',
+    rowsPerPage: 'Rows per page',
+    pageOf: 'Page {{page}} of {{pageCount}}',
+    firstPage: 'Go to first page',
+    previousPage: 'Go to previous page',
+    nextPage: 'Go to next page',
+    lastPage: 'Go to last page',
+  },
+  datePicker: {
+    placeholder: 'Pick a date',
+    rangePlaceholder: 'Pick a date range',
   },
 };
 

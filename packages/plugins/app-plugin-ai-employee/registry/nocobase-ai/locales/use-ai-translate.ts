@@ -20,7 +20,9 @@ export function useAITranslate(): (
   options?: Readonly<Record<string, unknown>>,
 ) => string {
   const { i18n } = useTranslation();
-  const messages = i18n.resolvedLanguage?.toLowerCase().startsWith('zh')
+  const messages = (i18n.language ?? i18n.resolvedLanguage)
+    ?.toLowerCase()
+    .startsWith('zh')
     ? zhCN
     : enUS;
 

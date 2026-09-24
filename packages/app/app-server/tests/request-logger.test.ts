@@ -36,9 +36,7 @@ describe('requestLogger', () => {
       await router.request(path);
     }
     expect(output.records().map((record) => record.msg)).toEqual([
-      'GET /api started',
       'GET /api 200 completed',
-      'GET /api/users started',
       'GET /api/users 200 completed',
     ]);
   });
@@ -50,7 +48,7 @@ describe('requestLogger', () => {
       '*',
       requestLogger({
         app: 'main',
-        logger: createLogger({}, output),
+        logger: createLogger({ level: 'debug' }, output),
       }),
     );
     router.get('/users/:id', (context) => context.json({ ok: true }));
@@ -65,7 +63,7 @@ describe('requestLogger', () => {
 
     expect(output.records()).toEqual([
       expect.objectContaining({
-        level: 30,
+        level: 20,
         app: 'main',
         req: {
           method: 'GET',
@@ -108,7 +106,9 @@ describe('requestLogger', () => {
       throw new Error('failed');
     });
 
-    await router.request('/missing');
+    await router.request('/missing?reason=unknown', {
+      headers: { 'user-agent': 'test', authorization: 'secret' },
+    });
     await router.request('/error');
 
     const completed = output
@@ -117,6 +117,10 @@ describe('requestLogger', () => {
     expect(completed).toEqual([
       expect.objectContaining({
         level: 40,
+        req: expect.objectContaining({
+          query: { reason: 'unknown' },
+          headers: { 'user-agent': 'test' },
+        }),
         res: expect.objectContaining({ status: 404 }),
         msg: 'GET /missing 404 completed',
       }),

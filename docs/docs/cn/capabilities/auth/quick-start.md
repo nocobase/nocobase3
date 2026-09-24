@@ -43,7 +43,7 @@ config.yml 或 AUTH_SECRET             部署密钥和公网地址
 Agent 靠插件同步到应用里的 Skill 了解认证怎么用。看一眼 `.agents/skills/nocobase-app-plugin-authentication/` 在不在，不在就在应用根目录运行：
 
 ```bash
-pnpm plugin:skills:sync
+pnpm skills:sync
 ```
 
 这个目录是自动生成的，别手改。

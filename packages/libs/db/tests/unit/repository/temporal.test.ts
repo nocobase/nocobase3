@@ -38,7 +38,6 @@ describe('V1 temporal values', () => {
     ['time', '09:30:00Z'],
     ['time', '-01:00:00'],
     ['time', '09:30:00.0000'],
-    ['datetime', '2026-09-06T09:30:00Z'],
     ['date', new Date('invalid')],
     ['time', new Date('invalid')],
     ['datetime', new Date('invalid')],
@@ -49,6 +48,10 @@ describe('V1 temporal values', () => {
     ['datetimeTz', '2026-09-06T09:30:00+01:60'],
     ['datetimeTz', '1000-01-01T00:00:00+01:00'],
     ['datetimeTz', '9999-12-31T23:59:59-01:00'],
+    ['datetime', '2026-09-06T09:30:00-00:00'],
+    ['datetime', '2026-09-06T09:30:00+14:01'],
+    ['datetime', '2026-09-06T09:30:00+01:60'],
+    ['date', '2026-09-06T09:30:00Z'],
   ])(
     'rejects invalid %s values rather than normalizing them silently',
     (type, input) => {
@@ -77,6 +80,78 @@ describe('V1 temporal values', () => {
         path: ['filter', 'value'],
       }),
     );
+  });
+});
+
+describe('datetime values carrying a zone offset', () => {
+  const field = { name: 'value', type: 'datetime' };
+
+  /** The host's local reading of an instant, computed rather than written out so any TZ runs this suite. */
+  function localDatetime(instant: Date): string {
+    const pad = (part: number) => String(part).padStart(2, '0');
+    return `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}.${String(instant.getMilliseconds()).padStart(3, '0')}`;
+  }
+
+  it.each([
+    '2026-09-06T09:30:00Z',
+    '2026-09-06T09:30:00.120Z',
+    '2026-09-06T09:30:00+08:00',
+    '2026-09-06T09:30:00-05:30',
+  ])('converts %s to the local wall clock instead of rejecting it', (input) => {
+    expect(normalizeTemporalValue(field, input)).toBe(
+      localDatetime(new Date(input)),
+    );
+  });
+
+  it('agrees with the equivalent Date input', () => {
+    const instant = new Date('2026-09-06T09:30:00.120Z');
+    expect(normalizeTemporalValue(field, '2026-09-06T09:30:00.120Z')).toBe(
+      normalizeTemporalValue(field, instant),
+    );
+  });
+
+  it.each([
+    ['datetime', '2026-09-06 09:30:00', '2026-09-06T09:30:00.000'],
+    ['datetime', '2026-09-06 09:30:00.120', '2026-09-06T09:30:00.120'],
+    ['datetimeTz', '2026-09-06 09:30:00Z', '2026-09-06T09:30:00.000Z'],
+    ['datetimeTz', '2026-09-06 09:30:00.120+00:00', '2026-09-06T09:30:00.120Z'],
+  ])(
+    'accepts the SQL space separator, writing %s %s as %s',
+    (type, input, expected) => {
+      expect(normalizeTemporalValue({ name: 'value', type }, input)).toBe(
+        expected,
+      );
+    },
+  );
+
+  it('leaves an offset-free value on the wall clock it already names', () => {
+    expect(normalizeTemporalValue(field, '2026-09-06T09:30:00.120')).toBe(
+      '2026-09-06T09:30:00.120',
+    );
+  });
+
+  // Reading is not writing. A caller's offset is resolved against the host, because the caller is present and
+  // an equivalent `Date` lands there too. Stored bytes are resolved against UTC: nobody is present, the same
+  // database has to report the same value on every host, and MySQL's `datetime(3)` already pivots on UTC.
+  it.each([
+    ['2026-09-06T09:30:00.120Z', '2026-09-06T09:30:00.120'],
+    ['2026-09-06T17:30:00.120+08:00', '2026-09-06T09:30:00.120'],
+    ['2026-09-06T04:00:00.120-05:30', '2026-09-06T09:30:00.120'],
+  ])(
+    'reads the stored offset %s as the UTC wall clock %s',
+    (stored, expected) => {
+      expect(normalizeTemporalResultValue(field, stored)).toBe(expected);
+    },
+  );
+
+  it('reads a stored datetimeTz that carries no offset as UTC', () => {
+    // What a `datetime` column holds after the Field is widened, and what MySQL's `datetime(3)` always holds.
+    expect(
+      normalizeTemporalResultValue(
+        { name: 'value', type: 'datetimeTz' },
+        '2026-09-06T09:30:00.120',
+      ),
+    ).toBe('2026-09-06T09:30:00.120Z');
   });
 });
 

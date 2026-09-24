@@ -1,0 +1,205 @@
+export default {
+  practice: {
+    intro:
+      'Use the accounts below instead of an administrator. Administrators bypass the restrictions. These are independent sales collaboration exercises, not a complete quote-to-order approval workflow. Each exercise starts from the seeded record state.',
+    read: {
+      title: 'An assistant consults project information',
+      steps:
+        'Sign in as sales_assistant: Projects shows project-1, project-2 and project-3, but no edit actions. Quotes and orders remain limited to the owned project.',
+      reason:
+        'Project sharing grants records for viewing only; it grants neither editing nor related records. Confidential project-4 stays excluded.',
+    },
+    scopes: {
+      title: 'An engineer prepares and submits a quote',
+      steps:
+        'Sign in as sales_engineer: edit and submit your quote-2. You may consult quote-5, but cannot change or submit a colleague’s quote. You may continue preparing quote-6, but cannot submit it for a project outside your region.',
+      reason:
+        'Non-confidential quotes are internal reference material across regions. The preparer owns the content; regional responsibility governs submission. Viewing does not grant editing. Existing orders reference separate accepted quotes; submitting a practice quote does not create an order.',
+    },
+    teams: {
+      title: 'Temporary collaboration with the proposal team',
+      steps:
+        'A South-region project owner asks the proposal team to complete quote-7. Sign in as sales_proposal, edit the quote and submit it. As an administrator, reset the records and remove the Proposal team assignment from the Proposal team quote collaboration sharing rule. Sign in again: the team can no longer edit or submit this quote.',
+      reason:
+        'The handover permits editing and submitting this quote plus the project access needed for submission; it does not delegate the entire South region. The engineer role grants operations, while sharing identifies the records. As an advanced exercise, withdraw either the project or quote scope: submission requires both.',
+    },
+    combined: {
+      title: 'A project manager also helps the proposal team',
+      steps:
+        'Sign in as sales_coordinator: maintain your project-8 and help with quote-7. As an administrator, revoke the engineer permission set from the proposal team. The account can still edit project-8 but can no longer edit or submit quote-7. Restore the team role afterwards.',
+      reason:
+        'Personal project management and team engineering are separate responsibilities. Revoking a team role affects every member, while directly assigned project management remains intact.',
+    },
+    delivery: {
+      title: 'The delivery team fulfils an order',
+      steps:
+        'Sign in as sales_delivery or sales_dispatch. Open order-2, assign a delivery team, maintain checks and enter a delivery reference. After confirming delivery, neither its relations nor its delivery state can be changed again. Reset the records before repeating with another account.',
+      reason:
+        'Delivery staff enter Orders only; links to quotes and projects do not grant access to those pages. The accounts demonstrate direct and inherited authorization for the same duties.',
+    },
+  },
+  reset: {
+    action: 'Reset practice records',
+    cancel: 'Cancel',
+    confirm:
+      'Restore the seeded projects, quotes and orders for every demo account? Changes to those records will be overwritten.',
+    description:
+      'An administrator can reset business records here before repeating an exercise or switching delivery accounts. Accounts, memberships and permission settings are preserved; restore any authorization changes manually.',
+    done: 'Practice records restored. Refresh any open record lists.',
+  },
+
+  teams: {
+    subject: 'Teams',
+    handover: 'Proposal team quote collaboration',
+    title: 'Roles and team authorization',
+    direct: 'Direct assignment',
+    inherited: 'Inherited from team',
+    proposal: 'Proposal team',
+    delivery: 'Delivery team',
+    combined: 'Direct project manager + sales engineer from proposal team',
+    coverage:
+      'Each account has its own job responsibilities. Joining a collaboration team adds duties; leaving it does not remove directly assigned responsibilities.',
+  },
+  rules: {
+    public: 'Exclude confidential projects',
+    delivery: 'Orders assigned to the delivery team',
+    projects: 'Shared example projects',
+  },
+  accountMenus: {
+    assistant: 'Projects, quotes and orders (read only)',
+    engineer:
+      'Consult non-confidential quotes; edit own quotes and submit within the assigned region',
+    manager: 'Manage owned projects; quotes and orders are read only',
+    delivery: 'Orders only; confirm regional deliveries',
+  },
+  relations: {
+    access: {
+      notGranted: 'Read only: delivery coordination is not granted.',
+      outsideScope: 'Read only: this order is outside your delivery scope.',
+      notReady: 'Delivered orders cannot be changed.',
+    },
+    title: 'Order relationships',
+    description:
+      'Assign an active delivery team, maintain checks, and manage collaborating teams. Try a delivery account and a read-only account to compare access.',
+    order: 'Order',
+    deliveryTeam: 'Delivery team',
+    unassigned: 'None assigned',
+    assign: 'Assign delivery team',
+    disconnect: 'Remove assignment',
+    checks: 'Delivery checks',
+    done: 'Done',
+    pending: 'Pending',
+    toggle: 'Toggle completion',
+    delete: 'Delete check',
+    checkTitle: 'Check title',
+    add: 'Add check',
+    collaborators: 'Collaborating teams',
+    note: 'Collaboration note',
+    addProposal: 'Add selected team',
+    replace: 'Replace with selected team',
+    clear: 'Remove all collaborators',
+    unavailable: 'These relationships are not accessible.',
+    loading: 'Loading relationships…',
+  },
+  sales: {
+    manageRelations: 'Arrange order delivery',
+    saveFirst: 'Save changes before submitting.',
+    states: {
+      draft: 'Draft',
+      submitted: 'Submitted',
+      accepted: 'Accepted',
+      ready: 'Ready',
+      delivered: 'Delivered',
+    },
+    errors: {
+      session: 'Session expired. Sign in again.',
+      input: 'Check the amount and required fields.',
+      conflict: 'The record state changed. Refresh before trying again.',
+      request: 'Request failed. Check your connection and try again.',
+    },
+
+    operation: {
+      outsideScope: 'Outside permitted operation scope',
+      notReady: 'Only ready orders can be delivered',
+
+      allowed: 'Within submission scope',
+      notGranted: 'Read only — operation not granted',
+      quoteScope: 'Outside permitted quote scope',
+      projectScope: 'Project outside permitted scope',
+      notDraft: 'Only drafts can be submitted',
+      invalidAmount: 'Amount must be positive',
+    },
+    preparedBy: 'Prepared by',
+    parentProject: 'Project',
+    sourceQuote: 'Source quote',
+    relationships: 'Related records',
+    relatedQuotes: 'Project quotes',
+    relatedOrders: 'Project orders',
+    filtered: 'Filtered by',
+    clearFilter: 'Clear filter',
+    noPageAccess: 'No page access',
+    descriptions: {
+      projects:
+        'Open related quotes and orders from a project. Related lists show only records this account can access.',
+      quotes:
+        'A project can have several quotes. Submission checks project scope and quote preparer independently, then validates draft status and amount.',
+      orders:
+        'Each order references its source quote and project. Delivery accounts only enter Orders; references do not grant access to other pages or records.',
+    },
+
+    delivery: 'Delivery',
+    orders: 'Orders',
+    editProject: 'Edit project information',
+    editQuote: 'Edit pricing',
+    submit: 'Submit quote',
+    submitScopes: {
+      projects: 'Projects linked to the quotes',
+      quotes: 'Quotes allowed for submission',
+    },
+    deliver: 'Confirm delivery',
+    amount: 'Amount',
+    status: 'Status',
+    deliveryReference: 'Delivery reference',
+
+    group: 'Sales collaboration',
+    title: 'Sales permissions example',
+    projects: 'Projects',
+    quotes: 'Quotes',
+    view: 'View',
+    edit: 'Edit notes',
+    intro:
+      'Explore the access boundaries of assistants consulting records, engineers preparing quotes, temporary proposal teams and delivery staff fulfilling orders.',
+    record: 'Record',
+    notes: 'Notes',
+    save: 'Save',
+    refresh: 'Refresh',
+    loading: 'Loading…',
+    empty: 'No accessible records',
+    readOnly: 'Read only',
+    saved: 'Saved',
+    scope: {
+      prepared: 'Quotes prepared by me',
+      title: 'Sales data scope',
+      unrestricted: 'No restriction',
+      region: 'My region',
+      own: 'Parent project owned by me',
+      public: 'Non-confidential projects',
+    },
+  },
+  title: 'Sales permissions example',
+  overview: 'Guide',
+  actions: 'Actions',
+  testAccounts: 'Example accounts',
+  account: 'Account',
+  permissionSet: 'Permission set',
+  password: 'Example password: AuthzExample123!',
+  tryTitle: 'Configure and verify',
+  roles: {
+    assistant: 'Sales assistant',
+    engineer: 'Sales engineer',
+    manager: 'Project manager',
+    delivery: 'Delivery specialist',
+  },
+  forbidden: 'You do not have permission for this operation.',
+  error: 'Failed to load. Please try again.',
+};

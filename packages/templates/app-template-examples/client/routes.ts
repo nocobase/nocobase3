@@ -1,4 +1,11 @@
-import { FileText, Home, Hash, PanelsTopLeft, Plug } from 'lucide-react';
+import {
+  FileText,
+  Home,
+  Hash,
+  Languages,
+  PanelsTopLeft,
+  Plug,
+} from 'lucide-react';
 import {
   defineAppRoutes,
   defineSettingsRoutes,
@@ -7,6 +14,9 @@ import {
 
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
+    // Every signed-in user reaches the landing page. `authz: 'skip'` takes it out of page authorization entirely, so
+    // no permission change can leave a user signed in with nowhere to land.
+    authz: 'skip',
     auth: 'required',
     componentLoader: () => import('./pages/home.js'),
     name: 'home',
@@ -14,35 +24,85 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/',
   },
   {
+    // The header bell is where a user looks for unread items, so this page is reached from there. Declaring no
+    // navigation keeps a second menu entry from pointing at the one destination the bell already owns.
+    authz: 'skip',
+    auth: 'required',
+    componentLoader: () => import('./pages/notifications.js'),
+    name: 'notifications',
+    path: '/notifications',
+  },
+  {
     auth: 'required',
     name: 'routeOverlays',
     path: '/route-overlays',
     navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
-    componentLoader: () => import('./pages/route-overlays.js'),
+    breadcrumb: { title: 'navigation.routeOverlays' },
+    componentLoader: () => import('./pages/route-overlays/index.js'),
     children: [
       {
         name: 'routeDialogExample',
         path: 'dialog',
-        componentLoader: () => import('./pages/route-dialog-example.js'),
+        componentLoader: () => import('./pages/route-overlays/dialog/index.js'),
         children: [
           {
             name: 'routeDialogDrawerExample',
             path: 'drawer',
             componentLoader: () =>
-              import('./pages/route-drawer-child-example.js'),
+              import('./pages/route-overlays/dialog/drawer.js'),
           },
         ],
       },
       {
         name: 'routeDrawerExample',
         path: 'drawer',
-        componentLoader: () => import('./pages/route-drawer-example.js'),
+        componentLoader: () => import('./pages/route-overlays/drawer/index.js'),
         children: [
           {
             name: 'routeDrawerDialogExample',
             path: 'dialog',
             componentLoader: () =>
-              import('./pages/route-dialog-child-example.js'),
+              import('./pages/route-overlays/drawer/dialog.js'),
+          },
+        ],
+      },
+      // The overlays above name no destination and stay out of the breadcrumb. These are pages, so each declares a
+      // title and adds a level to the trail — which is the contrast the page is there to show.
+      {
+        name: 'routeChildPages',
+        path: 'pages',
+        breadcrumb: { title: 'routeOverlays.childPagesTitle' },
+        componentLoader: () => import('./pages/route-overlays/pages/index.js'),
+        children: [
+          {
+            name: 'routeChildPageQuotation',
+            path: 'quotation',
+            breadcrumb: { title: 'routeOverlays.topicQuotation' },
+            componentLoader: () =>
+              import('./pages/route-overlays/pages/quotation/index.js'),
+            children: [
+              // An overlay below a page. It names no destination, so the trail stops at the page above it.
+              {
+                name: 'routeChildPageDialog',
+                path: 'dialog',
+                componentLoader: () =>
+                  import('./pages/route-overlays/pages/quotation/dialog.js'),
+              },
+            ],
+          },
+          {
+            name: 'routeChildPageOnboarding',
+            path: 'onboarding',
+            breadcrumb: { title: 'routeOverlays.topicOnboarding' },
+            componentLoader: () =>
+              import('./pages/route-overlays/pages/onboarding.js'),
+          },
+          {
+            name: 'routeChildPageRenewal',
+            path: 'renewal',
+            breadcrumb: { title: 'routeOverlays.topicRenewal' },
+            componentLoader: () =>
+              import('./pages/route-overlays/pages/renewal.js'),
           },
         ],
       },
@@ -50,6 +110,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    authz: 'skip',
     componentLoader: () => import('./pages/articles.js'),
     name: 'articles',
     navigation: { title: 'navigation.articles', icon: FileText },
@@ -61,6 +122,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'numeric-examples',
     navigation: { title: 'navigation.numbers', icon: Hash },
     path: '/numeric-examples',
+  },
+  {
+    auth: 'required',
+    componentLoader: () => import('./pages/i18n-examples/index.js'),
+    name: 'i18n-examples',
+    navigation: { title: 'navigation.i18nExamples', icon: Languages },
+    path: '/i18n-examples',
   },
   {
     auth: 'required',

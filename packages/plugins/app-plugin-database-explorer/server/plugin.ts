@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -12,6 +14,7 @@ import routes from './routes/index.js';
  * as translated API errors without producing any.
  */
 const databaseExplorerPlugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-database-explorer',
   routes,
 });

@@ -42,6 +42,8 @@ both `create` and `assign-role`.
 5. Use `componentLoader` only to replace the page implementation. It does not
    change the route identity, mount, or path.
 
+The default `app` permission-set scope is supplied by Users whenever `permissionSetsToken` is available. Do not copy a user-roles Provider into an application. Set `users.permissionSets: false` to replace the default with an application-owned scope; Hub uses this setting.
+
 ## Add an application role scope
 
 Resolve `userRoleScopeRegistryToken` in an application or business plugin
@@ -111,3 +113,5 @@ uses it for list pages and falls back to `get()` for existing scopes.
   assignments outside the registered scope.
 - The target App passes its relevant tests, typecheck, and build. Skill
   synchronization alone proves only that the copy matches this source.
+
+Deletion uses `DELETE /api/users/:userId` with `{ "confirm": true }` and `user/delete` authorization. Obtain an explicit user deletion request before calling it. Application role scopes can guard deletion and clean dependent credentials transactionally. Hub blocks self-deletion, deleting its last active administrator, and deleting owners of Apps. Historical user identities are retained but cannot sign in or appear in management lists.

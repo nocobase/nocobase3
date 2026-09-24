@@ -1,6 +1,6 @@
 ---
 title: Builder 执行选项
-description: 根据预览、Metadata 同步、存在性处理、方言严格模式和事务需要选择 BuilderExecOptions。
+description: 根据预览、存在性处理、方言严格模式和事务需要选择 BuilderExecOptions，并了解强制 Metadata 同步的边界。
 ---
 
 # Builder 执行选项
@@ -9,15 +9,14 @@ description: 根据预览、Metadata 同步、存在性处理、方言严格模�
 
 ## 选择选项
 
-| 目的                      | 选项                  | 当前行为                                        |
-| ------------------------- | --------------------- | ----------------------------------------------- |
-| 只编译、不修改数据库      | `dryRun`              | 不执行 Schema 变更，也不同步 Metadata           |
-| 查看 adapter 生成的 SQL   | `previewSql`          | adapter 支持时返回 SQL，通常与 dry-run 一起使用 |
-| 跳过 Metadata 同步        | `syncMetadata: false` | 保留 DDL，但不保存或更新补充 Metadata           |
-| 对已存在对象跳过创建      | `ifNotExists`         | 仅对明确支持的创建操作生效                      |
-| 对不存在对象跳过删除      | `ifExists`            | 仅对明确支持的删除操作生效                      |
-| 阻止能力降级              | `strict`              | 真实执行遇到 capability warning 时抛错          |
-| 请求 Builder 自动管理事务 | `transaction`         | 预留字段，当前没有执行语义                      |
+| 目的                      | 选项          | 当前行为                                        |
+| ------------------------- | ------------- | ----------------------------------------------- |
+| 只编译、不修改数据库      | `dryRun`      | 不执行 Schema 变更，也不同步 Metadata           |
+| 查看 adapter 生成的 SQL   | `previewSql`  | adapter 支持时返回 SQL，通常与 dry-run 一起使用 |
+| 对已存在对象跳过创建      | `ifNotExists` | 仅对明确支持的创建操作生效                      |
+| 对不存在对象跳过删除      | `ifExists`    | 仅对明确支持的删除操作生效                      |
+| 阻止能力降级              | `strict`      | 真实执行遇到 capability warning 时抛错          |
+| 请求 Builder 自动管理事务 | `transaction` | 预留字段，当前没有执行语义                      |
 
 ## 先预览变更
 
@@ -35,11 +34,13 @@ dry-run 优先返回 warning，即使同时启用了 `strict`，也不会因为 
 
 `previewSql` 依赖当前 Schema Adapter 的编译能力；没有 `sql` 不表示计划无效。SQL 只用于诊断和预览，不是跨数据库的 canonical source。
 
-## 控制 Metadata 同步
+## Metadata 同步不可关闭
 
-Builder 默认同步从 Collection 定义中提取出的补充 Metadata。设置 `syncMetadata: false` 会跳过文档写入，但 DDL 成功后仍使旧的 Collection 解析缓存失效。
+Builder 真实执行时必须校验并同步从 Collection 定义中提取出的补充 Metadata。它包含数据输入和输出依赖的逻辑字段类型、关系和乐观锁配置，缺失或过期会导致序列化、结果解析或并发更新行为错误。DDL 成功后，Builder 会使旧的 Collection 解析缓存失效并同步 Metadata。
 
-物理 Field、Index 和 Constraint 不会因为默认同步而复制进 Metadata Store。纯 Metadata 更新使用 `connection.collectionMetadata`。
+`syncMetadata` 已移除；旧调用无论传入 `true` 还是 `false`，都会在 DDL 前报错，应直接删除该选项。只预览使用 `dryRun`，Schema 和 Metadata 都不会被修改。如果操作需要修改只读 Metadata Store，Builder 会在 DDL 前拒绝执行。
+
+Metadata Store 保存逻辑字段类型等补充信息，物理列定义、Index 和 Constraint 仍以数据库为准。纯 Metadata 更新使用 `connection.collectionMetadata`。
 
 ## 谨慎使用存在性选项
 

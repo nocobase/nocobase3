@@ -1,7 +1,10 @@
 import type { WorkflowServerResource } from './en-US.js';
 
 const zhCN: WorkflowServerResource = {
+  nav: { automation: '自动化' },
+  authorization: { title: '工作流', manage: '管理' },
   errors: {
+    forbidden: '需要工作流管理权限。',
     badRequest: '工作流请求无效。',
     conflict: '工作流请求与当前状态冲突。',
     serviceUnavailable: '工作流服务不可用。',

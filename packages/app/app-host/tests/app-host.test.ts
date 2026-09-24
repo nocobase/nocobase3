@@ -90,7 +90,7 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -168,7 +168,7 @@ it('does not discover a client-only app without a server artifact', async () => 
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -222,7 +222,7 @@ it('serves a server-only app from dist/server/embedded.js', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -289,7 +289,7 @@ it('calls registered app disposers when the app is destroyed', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -358,7 +358,7 @@ it('keeps serving after a streaming response client disconnects', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -420,7 +420,7 @@ it('reserves /assets for static files and does not fall through to the server', 
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -461,7 +461,7 @@ it('serves the packaged app-dist fixture', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     idleTtlMs: 60_000,
   });
   runningHosts.push(host);
@@ -636,7 +636,7 @@ it('serves health information without discovered apps', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
   });
   runningHosts.push(host);
   await host.start();
@@ -672,7 +672,7 @@ it('does not discover directory apps or expose management HTTP in managed mode',
     mode: 'managed',
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
   });
   runningHosts.push(host);
   await host.start();
@@ -706,7 +706,7 @@ it('exposes app management through /__apps', async () => {
   const host = createAppHost({
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
   });
   runningHosts.push(host);
   await host.start();

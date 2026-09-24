@@ -13,6 +13,7 @@ const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 interface AppPackageJson {
   readonly files?: readonly string[];
+  readonly publishConfig?: unknown;
   readonly scripts?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
 }
@@ -23,27 +24,29 @@ const appPackage = JSON.parse(
 
 const scripts = appPackage.scripts ?? {};
 
-function normalizeScript(command: string | undefined): string | undefined {
-  return command?.replace(/^NODE_OPTIONS=--openssl-legacy-provider\s+/, '');
-}
-
 /** The application's plugin command surface, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:register': 'nocobase plugin register',
   'plugin:inspect': 'nocobase plugin inspect',
   'plugin:unregister': 'nocobase plugin unregister',
   'plugin:update': 'nocobase plugin update',
-  'plugin:skills:sync': 'nocobase plugin skills sync',
+  'skills:sync': 'nocobase skills sync',
+  'package:remove': 'nocobase package remove',
   nocobase: 'tsx ./cli/index.ts',
-  'client:inspect': 'pnpm nocobase app inspect client',
-  'server:inspect': 'pnpm nocobase app inspect server',
-  migrate: 'pnpm nocobase app migrate',
-  seed: 'pnpm nocobase app seed',
+  // Straight at the CLI entry, not through `pnpm nocobase`: a script calling another script is a
+  // second `pnpm run`, and each layer prints its own ELIFECYCLE line for one non-zero exit.
+  'db:apply': 'tsx ./cli/index.ts app db apply',
+  'db:reset': 'tsx ./cli/index.ts app db reset',
+  'db:repair': 'tsx ./cli/index.ts app db repair',
+  'db:rollback': 'tsx ./cli/index.ts app db rollback',
+  'db:redo': 'tsx ./cli/index.ts app db redo',
+  'db:unlock': 'tsx ./cli/index.ts app db unlock',
+  'db:doctor': 'tsx ./cli/index.ts app db doctor',
 };
 
 describe('documented plugin commands', () => {
   it.each(Object.entries(DOCUMENTED_SCRIPTS))('exposes %s', (name, command) => {
-    expect(normalizeScript(scripts[name])).toBe(command);
+    expect(scripts[name]).toBe(command);
   });
 
   it('declares the CLI that the plugin scripts invoke', () => {
@@ -57,24 +60,15 @@ describe('documented plugin commands', () => {
     expect(appPackage.dependencies?.['@nocobase/nb3-cli']).toBeTruthy();
   });
 
-  it('ships the inspector that client:inspect runs', () => {
-    const entry = path.join(
-      appRoot,
-      'cli/dev-commands/inspect-client-impl.mjs',
-    );
-
-    expect(existsSync(entry)).toBe(true);
-    // A generated app only receives what `files` lists, so an unlisted directory is present here and missing there.
-    expect(appPackage.files).toContain('cli');
-  });
-
   it('keeps synchronized Agent state out of source control and publication', () => {
     expect(readFileSync(path.join(appRoot, '.gitignore'), 'utf8')).toContain(
       '/.agents/',
     );
-    expect(readFileSync(path.join(appRoot, '.npmignore'), 'utf8')).toContain(
-      '.agents/',
-    );
+    const npmIgnorePath = path.join(appRoot, '.npmignore');
+    if (appPackage.publishConfig) {
+      expect(existsSync(npmIgnorePath)).toBe(true);
+      expect(readFileSync(npmIgnorePath, 'utf8')).toContain('.agents/');
+    }
     expect(appPackage.files).not.toContain('.agents');
   });
 });

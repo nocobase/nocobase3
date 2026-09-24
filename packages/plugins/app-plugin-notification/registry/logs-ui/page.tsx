@@ -1,3 +1,5 @@
+import { useApiClient } from '@nocobase/app-client';
+import { useTranslation } from '@nocobase/i18n/client';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FileClock, RefreshCw } from 'lucide-react';
 
@@ -26,7 +28,15 @@ import {
   type NotificationStatus,
 } from './api.js';
 
+type Translate = (
+  key: string,
+  options?: Readonly<Record<string, unknown>>,
+) => string;
+
 export function NotificationLogsPage(): React.ReactElement {
+  const api = useApiClient();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
+
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -40,14 +50,14 @@ export function NotificationLogsPage(): React.ReactElement {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchNotificationLogs(controller.signal)
+    fetchNotificationLogs(api, controller.signal)
       .then(setLogs)
       .catch((reason: Error) => {
         if (reason.name !== 'AbortError') setError(reason.message);
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [revision]);
+  }, [api, revision]);
 
   const totals = useMemo(
     () => ({
@@ -64,55 +74,83 @@ export function NotificationLogsPage(): React.ReactElement {
       <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
         <div>
           <div className='mb-2 flex items-center gap-2 text-sm font-medium text-primary'>
-            <FileClock className='size-4' /> Delivery operations
+            <FileClock className='size-4' />{' '}
+            {t('logs.deliveryOperations', {
+              defaultValue: 'Delivery operations',
+            })}
           </div>
           <h1 className='text-2xl font-semibold tracking-tight'>
-            Notification logs
+            {t('logs.title', { defaultValue: 'Notification logs' })}
           </h1>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Trace each channel handoff and every provider attempt.
+            {t('logs.recipeDescription', {
+              defaultValue:
+                'Trace each channel handoff and every provider attempt.',
+            })}
           </p>
         </div>
         <div>
           <Button variant='outline' onClick={refresh}>
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
-            Refresh
+
+            {t('logs.refresh', { defaultValue: 'Refresh' })}
           </Button>
         </div>
       </header>
 
       <div className='grid grid-cols-2 gap-3 sm:max-w-md'>
-        <Metric label='Deliveries shown' value={totals.deliveries} />
-        <Metric label='Need attention' value={totals.attention} attention />
+        <Metric
+          label={t('logs.deliveriesShown', {
+            defaultValue: 'Deliveries shown',
+          })}
+          value={totals.deliveries}
+        />
+        <Metric
+          label={t('logs.needAttention', { defaultValue: 'Need attention' })}
+          value={totals.attention}
+          attention
+        />
       </div>
 
       {error ? (
         <Alert variant='destructive'>
-          <AlertTitle>Logs unavailable</AlertTitle>
+          <AlertTitle>
+            {t('logs.unavailable', { defaultValue: 'Logs unavailable' })}
+          </AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
       <Card className='gap-0 overflow-hidden py-0'>
         <CardHeader className='border-b bg-muted/20 py-4'>
-          <CardTitle className='text-base'>Recent notifications</CardTitle>
+          <CardTitle className='text-base'>
+            {t('logs.recent', { defaultValue: 'Recent notifications' })}
+          </CardTitle>
           <CardDescription>
-            Message bodies, recipients, and lease tokens are redacted.
+            {t('logs.redacted', {
+              defaultValue:
+                'Message bodies, recipients, and lease tokens are redacted.',
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className='p-0'>
           {loading ? (
             <div className='p-12 text-center text-sm text-muted-foreground'>
-              Loading delivery history…
+              {t('logs.loading', { defaultValue: 'Loading delivery history…' })}
             </div>
           ) : logs.length === 0 ? (
             <div className='grid place-items-center gap-2 p-12 text-center'>
               <div className='grid size-12 place-items-center rounded-full bg-muted'>
                 <FileClock className='size-5 text-muted-foreground' />
               </div>
-              <p className='font-medium'>No deliveries yet</p>
+              <p className='font-medium'>
+                {t('logs.emptyTitle', { defaultValue: 'No deliveries yet' })}
+              </p>
               <p className='text-sm text-muted-foreground'>
-                Delivery records will appear here after notifications are sent.
+                {t('logs.emptyDescription', {
+                  defaultValue:
+                    'Delivery records will appear here after notifications are sent.',
+                })}
               </p>
             </div>
           ) : (
@@ -145,21 +183,39 @@ function Metric({
   );
 }
 
-function NotificationLogsTable({
-  logs,
-}: {
+function NotificationLogsTable(props: {
   readonly logs: readonly NotificationLogDetails[];
 }): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
+  const { logs } = props;
+
   return (
     <Table className='min-w-[860px]'>
       <TableHeader className='bg-muted/35'>
         <TableRow className='hover:bg-muted/35'>
-          <TableHead className='w-12' aria-label='Expand notification' />
-          <TableHead>Source</TableHead>
-          <TableHead>Notification ID</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className='text-right'>Deliveries</TableHead>
-          <TableHead>Created</TableHead>
+          <TableHead
+            className='w-12'
+            aria-label={t('logs.expand', {
+              defaultValue: 'Expand notification',
+            })}
+          />
+          <TableHead>
+            {t('logs.columns.source', { defaultValue: 'Source' })}
+          </TableHead>
+          <TableHead>
+            {t('logs.columns.notificationId', {
+              defaultValue: 'Notification ID',
+            })}
+          </TableHead>
+          <TableHead>
+            {t('logs.columns.status', { defaultValue: 'Status' })}
+          </TableHead>
+          <TableHead className='text-right'>
+            {t('logs.columns.deliveries', { defaultValue: 'Deliveries' })}
+          </TableHead>
+          <TableHead>
+            {t('logs.columns.created', { defaultValue: 'Created' })}
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -171,11 +227,12 @@ function NotificationLogsTable({
   );
 }
 
-function NotificationTableRow({
-  details,
-}: {
+function NotificationTableRow(props: {
   readonly details: NotificationLogDetails;
 }): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
+  const { details } = props;
+
   const [open, setOpen] = useState(false);
   return (
     <Fragment>
@@ -184,7 +241,11 @@ function NotificationTableRow({
           <Button
             variant='ghost'
             size='icon-sm'
-            aria-label={open ? 'Collapse notification' : 'Expand notification'}
+            aria-label={
+              open
+                ? t('logs.collapse', { defaultValue: 'Collapse notification' })
+                : t('logs.expand', { defaultValue: 'Expand notification' })
+            }
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
@@ -232,15 +293,16 @@ function NotificationTableRow({
   );
 }
 
-function DeliveryTable({
-  deliveries,
-}: {
+function DeliveryTable(props: {
   readonly deliveries: readonly NotificationDeliveryDetails[];
 }): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
+  const { deliveries } = props;
+
   if (deliveries.length === 0) {
     return (
       <p className='py-4 text-center text-sm text-muted-foreground'>
-        No deliveries recorded.
+        {t('logs.noDeliveries', { defaultValue: 'No deliveries recorded.' })}
       </p>
     );
   }
@@ -250,11 +312,21 @@ function DeliveryTable({
       <Table className='min-w-[760px]'>
         <TableHeader className='bg-muted/35'>
           <TableRow className='hover:bg-muted/35'>
-            <TableHead>Channel</TableHead>
-            <TableHead>Provider</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className='text-right'>Attempts</TableHead>
-            <TableHead>Updated</TableHead>
+            <TableHead>
+              {t('logs.columns.channel', { defaultValue: 'Channel' })}
+            </TableHead>
+            <TableHead>
+              {t('logs.columns.provider', { defaultValue: 'Provider' })}
+            </TableHead>
+            <TableHead>
+              {t('logs.columns.status', { defaultValue: 'Status' })}
+            </TableHead>
+            <TableHead className='text-right'>
+              {t('logs.columns.attempts', { defaultValue: 'Attempts' })}
+            </TableHead>
+            <TableHead>
+              {t('logs.columns.updated', { defaultValue: 'Updated' })}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -262,13 +334,12 @@ function DeliveryTable({
             <Fragment key={details.delivery.id}>
               <TableRow>
                 <TableCell>
-                  <Badge variant='outline'>{details.delivery.channel}</Badge>
+                  <Badge variant='outline'>
+                    {details.delivery.channelName}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <div className='font-medium'>
-                    {details.delivery.providerName}
-                  </div>
-                  <div className='text-xs text-muted-foreground'>
                     {details.delivery.providerType}
                   </div>
                 </TableCell>
@@ -295,21 +366,24 @@ function DeliveryTable({
   );
 }
 
-function AttemptTable({
-  details,
-}: {
+function AttemptTable(props: {
   readonly details: NotificationDeliveryDetails;
 }): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
+  const { details } = props;
+
   if (details.attempts.length === 0) {
     return (
-      <p className='text-xs text-muted-foreground'>No attempts recorded.</p>
+      <p className='text-xs text-muted-foreground'>
+        {t('logs.noAttempts', { defaultValue: 'No attempts recorded.' })}
+      </p>
     );
   }
 
   return (
     <div>
       <div className='mb-2 text-xs font-medium text-muted-foreground'>
-        Provider attempts
+        {t('logs.providerAttempts', { defaultValue: 'Provider attempts' })}
       </div>
       <div className='grid gap-1.5'>
         {details.attempts.map((attempt) => (
@@ -321,13 +395,10 @@ function AttemptTable({
               #{attempt.sequence}
             </span>
             <span className='min-w-0'>
-              <strong>{attempt.providerName}</strong>
-              <span className='ml-2 text-muted-foreground'>
-                {attempt.providerType}
-              </span>
+              <strong>{attempt.providerType}</strong>
               {attempt.error ? (
                 <span className='mt-1 block truncate text-destructive'>
-                  {attempt.error.message}
+                  {providerErrorMessage(t, attempt.error)}
                 </span>
               ) : null}
             </span>
@@ -340,8 +411,13 @@ function AttemptTable({
 }
 
 function StatusBadge({ status }: { readonly status: NotificationStatus }) {
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const tone = statusTone(status);
-  return <Badge className={tone.badge}>{status.replace('_', ' ')}</Badge>;
+  return (
+    <Badge className={tone.badge}>
+      {t(`status.${status}`, { defaultValue: status.replace('_', ' ') })}
+    </Badge>
+  );
 }
 
 function statusTone(status: NotificationStatus): {
@@ -367,4 +443,18 @@ function formatTime(value: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function providerErrorMessage(
+  t: Translate,
+  error: { readonly message: string; readonly code?: string },
+): string {
+  if (
+    error.code === 'IN_APP_NOTIFICATION_RECIPIENT_NOT_FOUND' ||
+    error.message === 'In-app notification recipient does not exist.'
+  )
+    return t('errors.inAppRecipientNotFound', {
+      defaultValue: 'In-app notification recipient does not exist.',
+    });
+  return error.message;
 }

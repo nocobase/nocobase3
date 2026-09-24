@@ -4,6 +4,7 @@ export const USER_MANAGEMENT_ACTIONS = [
   'create',
   'update',
   'disable',
+  'delete',
   'enable',
   'assign-role',
   'reset-password',
@@ -25,7 +26,7 @@ export async function loadUserCapabilities(
 ): Promise<UserCapabilities> {
   const allowed = await Promise.all(
     USER_MANAGEMENT_ACTIONS.map((action) =>
-      authorization.can({ type: 'user', id: userId }, action),
+      authorization.can({ resource: { type: 'user', id: userId }, action }),
     ),
   );
   return Object.fromEntries(

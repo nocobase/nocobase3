@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   GuestAuthentication,
   RequiredAuthentication,
@@ -7,8 +8,9 @@ import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 
 import { Loading } from '@/components/loading';
+import { EMPTY_ARRAY } from '@/lib/constants';
 
-import { AppShell } from '../shell/index.js';
+import { AppLayout } from '../layouts/app-layout.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
 
@@ -33,11 +35,10 @@ export interface AppRouterProps {
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
 }
 
-export function AppRouter({
-  settingsRouteTree,
-  devRouteTree,
-  clientRoutes,
-}: AppRouterProps): ReactElement {
+export function AppRouter(inputProps: AppRouterProps): ReactElement {
+  const { t } = useTranslation();
+  const { settingsRouteTree, devRouteTree, clientRoutes } = inputProps;
+
   const settingsRoutes = useMemo(
     () =>
       filterRouteTree(
@@ -79,7 +80,7 @@ export function AppRouter({
           </RequiredAuthentication>
         }
       >
-        <Route element={<AppShell routes={routeGroups.required} />}>
+        <Route element={<AppLayout routes={routeGroups.required} />}>
           {renderRouteTree(routeGroups.required)}
         </Route>
         <Route
@@ -87,7 +88,12 @@ export function AppRouter({
           element={
             <Suspense
               fallback={
-                <Loading className='min-h-svh' label='Loading settings' />
+                <Loading
+                  className='min-h-svh'
+                  label={t('status.loadingSettings', {
+                    defaultValue: 'Loading settings',
+                  })}
+                />
               }
             >
               <SettingsLayout
@@ -103,7 +109,12 @@ export function AppRouter({
             element={
               <Suspense
                 fallback={
-                  <Loading className='min-h-svh' label='Loading dev tools' />
+                  <Loading
+                    className='min-h-svh'
+                    label={t('status.loadingDev', {
+                      defaultValue: 'Loading dev tools',
+                    })}
+                  />
                 }
               >
                 <DevLayout routeTree={devRouteTree} routes={devRoutes} />
@@ -141,7 +152,7 @@ function filterRouteTree(
 ): AppClientRegisteredRoute[] {
   return routes.flatMap((route) => {
     if (route.componentLoader) return predicate(route) ? [route] : [];
-    const children = filterRouteTree(route.children ?? [], predicate);
+    const children = filterRouteTree(route.children ?? EMPTY_ARRAY, predicate);
     return children.length ? [{ ...route, children }] : [];
   });
 }

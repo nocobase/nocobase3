@@ -22,6 +22,29 @@ docs/theme/components/NavScreen/
 docs/theme/components/Search/
 docs/theme/components/HomeHero/
 
+# Skills are prose written for agents to read, not source this repository's formatter should reflow. `.agents/skills/`
+# and `.claude/skills/` hold symbolic links — into `skills/`, written by scripts/sync-skills.mjs here, and into
+# `.agents/skills/` in an application, written by `nocobase skills sync` — so formatting through one would check the
+# same file twice under two paths and write the result back into the committed source.
+#
+# The `**/` matters: an unanchored path matches only the repository root, and each template under packages/templates/
+# has both directories of its own. `.gitignore` lists them too, but `--ignore-path` replaces `.gitignore` rather than
+# adding to it, and both `pnpm format` and `pnpm format:all` pass it.
+#
+# The root `skills/` holds this repository's committed Skills, including those users install globally with
+# `npx skills add`, and is prose for the same reason.
+**/.agents/skills/
+**/.claude/skills/
+/skills/
+
+# The generated Collection artifacts an application keeps under `database/<connection>/collections/`: one JSON file
+# per Collection plus a `_manifest.json`, written by `pnpm collections:generate` through a stable serializer so that
+# `pnpm collections:generate --check` can regenerate them and compare byte for byte. Prettier collapses their short
+# arrays and objects onto single lines, which makes that check report the artifacts as out of date when nothing about
+# the schema changed. Each template names the same path in its own `.prettierignore`; a pattern containing a slash is
+# anchored to the directory of the file it is written in, so reaching them from here needs the `**/`.
+**/database/*/collections/
+
 # changeset 文件由 changesets 生成和消费，格式由它自己决定。
 # 项目的 singleQuote 会把 `"@nocobase/core": minor` 改成单引号，
 # 与 changesets 实际生成的格式不符。

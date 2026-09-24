@@ -22,7 +22,7 @@ export {
   type RemoteRepository,
   type RemoteRepositoryQuery,
 } from '@nocobase/api-client';
-export { useClientApplication, useService } from './hooks.js';
+export { useApiClient, useClientApplication, useService } from './hooks.js';
 export type {
   RealtimeClient,
   RealtimeErrorEvent,
@@ -97,6 +97,7 @@ export type {
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
   AppClientRouteAuth,
+  AppClientRouteAuthz,
   AppClientRouteComponentLoader,
   AppClientRouteComponentModule,
   AppClientRouteComponentOverrideDefinition,

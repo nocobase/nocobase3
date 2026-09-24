@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 import type { AIManager, FileStorage } from '@nocobase/ai-employee';
 import type { Caching } from '@nocobase/caching';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
@@ -281,6 +282,9 @@ export class SubAgentsDispatcher {
       },
       ai: this.ai,
       database: this.databaseManager,
+      authorization: this.container?.has(authorizationToken)
+        ? this.container.resolve(authorizationToken)
+        : undefined,
       logger: this.logger,
       repositories: this.repositories,
       aiEmployeesManager: this.aiEmployeesManager,

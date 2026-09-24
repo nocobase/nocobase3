@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ComponentPropsWithoutRef, ReactElement } from 'react';
 
 import { Spinner } from '@/components/ui/spinner';
@@ -8,12 +9,15 @@ export interface LoadingProps extends ComponentPropsWithoutRef<'div'> {
   readonly label?: string;
 }
 
-export function Loading({
-  className,
-  fullscreen = false,
-  label = 'Loading',
-  ...props
-}: LoadingProps): ReactElement {
+export function Loading(inputProps: LoadingProps): ReactElement {
+  const { t } = useTranslation();
+  const {
+    className,
+    fullscreen = false,
+    label = t('status.loading', { defaultValue: 'Loading' }),
+    ...props
+  } = inputProps;
+
   return (
     <div
       aria-label={label}

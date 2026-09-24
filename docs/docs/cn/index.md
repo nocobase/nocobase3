@@ -2,11 +2,11 @@
 pageType: home
 pageName: home
 title: 'NocoBase 3 文档'
-description: 'NocoBase 3 是为 AI 协作开发而生的业务系统开发基座。一条命令生成归你所有的应用源码，你说要什么，AI 来写，认证、权限、工作流、通知等通用能力装上就有。'
-keywords: 'NocoBase,NocoBase 3,AI 开发,业务系统,低代码,开源'
+description: 'NocoBase 3 是为 AI Agent 协作开发而生的业务系统开发基座。一条命令生成归你所有的应用源码，你说要什么，AI Agent 来写，认证、权限、工作流、通知等通用能力装上就有。'
+keywords: 'NocoBase,NocoBase 3,AI Agent 开发,业务系统,低代码,开源'
 hero:
   name: 'NocoBase 3 文档'
-  text: '和 AI 一起，搭建稳定的业务系统'
+  text: '和 AI Agent 一起，搭建稳定的业务系统'
   actions:
     - theme: brand
       text: '快速上手'
@@ -17,32 +17,32 @@ hero:
 
 features:
   - title: '开始'
-    details: '十分钟跑起来，并且亲眼看见 AI 做出一个功能。'
+    details: '创建应用，和 AI Agent 一起完成第一个业务功能。'
     items:
       - title: 'NocoBase 3 是什么'
-        details: '一条命令生成归你所有的应用源码，你说要什么，AI 来写。'
-        link: /get-started/what-is-nocobase
+        details: '一条命令生成归你所有的应用源码，你说要什么，AI Agent 来写。'
+        link: /get-started/
       - title: '创建应用'
         details: '敲一行命令生成项目，选好数据库，跑起来。'
         link: /get-started/create-app
-      - title: '让 AI 做第一个功能'
-        details: '说一句「加一个订单管理」，看 AI 把表、接口、页面一起做出来。'
+      - title: '让 AI Agent 做第一个功能'
+        details: '说一句「加一个订单管理」，看 AI Agent 把表、接口、页面一起做出来。'
         link: /get-started/first-feature
 
-  - title: '和 AI 协作'
-    details: '怎么跟 AI 提需求，它写完了怎么检查。'
+  - title: '和 AI Agent 协作'
+    details: '怎么跟 AI Agent 提需求，它写完了怎么检查。'
     items:
       - title: '怎么提需求'
-        details: '话怎么说 AI 才做得对，给几组好的和不好的对比。'
+        details: '话怎么说 AI Agent 才做得对，给几组好的和不好的对比。'
         link: /ai/writing-requirements
-      - title: '检查 AI 的产出'
+      - title: '检查 AI Agent 的产出'
         details: '该看哪几个地方，跑哪几个命令。'
         link: /ai/reviewing-output
       - title: '做复杂功能'
         details: '一句话说不清的需求，怎么拆成几次说。'
         link: /ai/complex-features
       - title: '加上你们团队的规矩'
-        details: '把自己团队的要求写进去，AI 就会照着做。'
+        details: '把自己团队的要求写进去，AI Agent 就会照着做。'
         link: /ai/team-conventions
 
   - title: '应用开发'

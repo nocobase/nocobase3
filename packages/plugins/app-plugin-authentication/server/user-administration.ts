@@ -1,4 +1,9 @@
-import type { DatabaseConnection } from '@nocobase/db';
+import type { Knex } from 'knex';
+import type {
+  DatabaseConnection,
+  FilterBuilder,
+  FilterNode,
+} from '@nocobase/db';
 import type { RealtimeService } from '@nocobase/app-server/realtime';
 
 import type { Auth } from './auth.js';
@@ -55,6 +60,7 @@ export interface UserAdministrationService {
   enable(userId: string): Promise<AdministratedUser>;
   resetPassword(userId: string, password: string): Promise<void>;
   revokeSessions(userId: string): Promise<void>;
+  remove(userId: string, actorId: string): Promise<void>;
 }
 
 export class UserAdministrationError extends Error {
@@ -103,39 +109,50 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   ): Promise<AdministratedUserPage> {
     const page = positiveInteger(input.page, 1);
     const pageSize = Math.min(positiveInteger(input.pageSize, 20), 100);
-    let query = this.options.connection.query.selectFrom('user');
-    if (input.status === 'enabled')
-      query = query.where('disabledAt', 'is', null);
-    if (input.status === 'disabled')
-      query = query.where('disabledAt', 'is not', null);
-    if (input.userIds) {
-      if (input.userIds.length === 0) {
-        return { items: [], total: 0, page, pageSize };
-      }
-      query = query.where('id', 'in', [...input.userIds]);
+    if (input.userIds && input.userIds.length === 0) {
+      return { items: [], total: 0, page, pageSize };
     }
+    const userIds = input.userIds;
     const search = input.search?.trim();
-    if (search) {
-      query = query.where((builder) =>
-        builder.or([
-          builder('name', 'like', `%${search}%`),
-          builder('username', 'like', `%${search}%`),
-          builder('email', 'like', `%${search}%`),
-        ]),
-      );
-    }
-    const countRow = await query
-      .select(({ fn }) => [fn.countAll().as('count')])
-      .executeTakeFirst<{ count: number | string }>();
-    const rows = await query
-      .select(userColumns)
-      .orderBy('createdAt', 'desc')
-      .limit(pageSize)
-      .offset((page - 1) * pageSize)
-      .execute();
+    // Read through the Repository rather than the Query API: its `includes`
+    // matches the search term as literal text, so `%` and `_` typed into the
+    // search box mean themselves instead of acting as SQL wildcards.
+    const users = this.options.connection.repository('user');
+    const condition = (builder: FilterBuilder): FilterNode =>
+      builder.and([
+        builder.date('deletedAt').empty(),
+        ...(input.status === 'enabled'
+          ? [builder.date('disabledAt').empty()]
+          : []),
+        ...(input.status === 'disabled'
+          ? [builder.date('disabledAt').notEmpty()]
+          : []),
+        ...(userIds
+          ? [builder.or(userIds.map((id) => builder.string('id').eq(id)))]
+          : []),
+        ...(search
+          ? [
+              builder.or([
+                builder.string('name').includes(search),
+                builder.string('username').includes(search),
+                builder.string('email').includes(search),
+              ]),
+            ]
+          : []),
+      ]);
+    const total = await users.count({ filter: condition });
+    const rows = await users.findMany({
+      filter: condition,
+      select: (select) => select.fields(...userColumns),
+      // `createdAt` alone is not a total order, so a shared timestamp could
+      // drop or repeat a row across pages; `id` breaks the tie.
+      sort: (sort) => [sort.field('createdAt').desc(), sort.field('id').asc()],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
     return {
-      items: rows.map(toAdministratedUser),
-      total: Number(countRow?.count ?? 0),
+      items: rows.map((row) => toAdministratedUser(row)),
+      total,
       page,
       pageSize,
     };
@@ -146,6 +163,7 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       .selectFrom('user')
       .select(userColumns)
       .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
       .executeTakeFirst();
     return row ? toAdministratedUser(row) : undefined;
   }
@@ -171,7 +189,6 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       )
       .catch(throwIdentityConflict);
     await context.internalAdapter.createAccount({
-      issuer: 'local:credential',
       accountId: user.id,
       providerId: 'credential',
       userId: user.id,
@@ -184,12 +201,16 @@ class DefaultUserAdministrationService implements UserAdministrationService {
     userId: string,
     input: UpdateAdministratedUserInput,
   ): Promise<AdministratedUser> {
-    await this.requireUser(userId);
+    const currentUser = await this.requireUser(userId);
     const context = await this.options.auth.administrationContext();
-    const username =
+    const requestedUsername =
       input.username === undefined
         ? undefined
         : (optionalUsername(input.username ?? undefined) ?? null);
+    const username =
+      requestedUsername === currentUser.username
+        ? undefined
+        : requestedUsername;
     const email =
       input.email === undefined ? undefined : normalizedEmail(input.email);
     await this.assertIdentityAvailable(
@@ -240,7 +261,6 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       await context.internalAdapter.updatePassword(userId, hash);
     } else {
       await context.internalAdapter.linkAccount({
-        issuer: 'local:credential',
         accountId: userId,
         providerId: 'credential',
         userId,
@@ -254,6 +274,25 @@ class DefaultUserAdministrationService implements UserAdministrationService {
     await this.requireUser(userId);
     const context = await this.options.auth.administrationContext();
     await context.internalAdapter.deleteUserSessions(userId);
+    this.options.realtime?.disconnectUser(userId);
+  }
+
+  async remove(userId: string, actorId: string): Promise<void> {
+    if (userId === actorId)
+      throw new TypeError('You cannot delete your own account.');
+    await lockUserForAdministration(this.options.connection, userId);
+    if (!(await this.get(userId))) return;
+    const context = await this.options.auth.administrationContext();
+    await context.internalAdapter.updateUser(userId, {
+      disabledAt: new Date(),
+      deletedAt: new Date(),
+      deletedBy: actorId,
+    });
+    await context.internalAdapter.deleteUserSessions(userId);
+    await this.options.connection.query
+      .deleteFrom('account')
+      .where('userId', '=', userId)
+      .execute();
     this.options.realtime?.disconnectUser(userId);
   }
 
@@ -429,4 +468,23 @@ function validatePassword(
       `Password must be at most ${config.maxPasswordLength} characters`,
     );
   }
+}
+
+/** Serialize account deletion with creation of resources owned by that account. Use inside a transaction. */
+export async function lockUserForAdministration(
+  connection: DatabaseConnection,
+  userId: string,
+): Promise<void> {
+  if (connection.dialect === 'sqlite') {
+    await connection.query
+      .updateTable('user')
+      .set({ id: userId })
+      .where('id', '=', userId)
+      .execute();
+    return;
+  }
+  const physical = await connection.collections.getPhysical('user');
+  if (!physical) throw new Error('User schema is unavailable');
+  const knex = await connection.client<Knex>();
+  await knex(physical.tableName).where({ id: userId }).select('id').forUpdate();
 }

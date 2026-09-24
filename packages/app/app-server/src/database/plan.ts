@@ -1,10 +1,14 @@
+import {
+  resolveQueueMigrationSources,
+  type AppQueueConfig,
+} from '@nocobase/queue';
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { validateDatabaseOwnership } from './ownership.js';
 
-import type { ConfigPaths } from '../config/index.js';
-import type { DatabaseDriverRegistration } from '@nocobase/db';
+import type { AppConfigAccessor, AppPaths } from '../config/index.js';
+import type { DatabaseDriverRegistration, MigrationSource } from '@nocobase/db';
 import type {
   AppDatabaseConfig,
   AppDatabaseMigrationConfig,
@@ -27,9 +31,15 @@ export interface AppDatabaseTaskSelection {
  * than silently planning without its plugins' migrations.
  */
 export interface AppDatabaseTaskPlanOptions extends AppDatabaseTaskSelection {
+  readonly migrationSources?: readonly AppDatabaseMigrationSource[];
   readonly contributions: AppDatabaseTaskContributions;
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
+}
+
+export interface AppDatabaseMigrationSource {
+  readonly connection: string;
+  readonly source: MigrationSource;
 }
 
 export interface AppDatabaseTask {
@@ -57,6 +67,16 @@ export function planAppDatabaseTasks(
     throw new Error('--connection and --all are mutually exclusive.');
   }
   const primary = defaultConnectionName(config);
+  const migrationTargets = kinds.includes('migrations')
+    ? (planOptions.migrationSources ?? [])
+    : [];
+  for (const target of migrationTargets) {
+    if (!Object.hasOwn(config.connections, target.connection)) {
+      throw new Error(
+        `Unknown migration target database connection "${target.connection}".`,
+      );
+    }
+  }
   if (primary === 'none' || !primary) {
     if (selection.connection !== undefined)
       throw new Error('Database is not configured.');
@@ -141,6 +161,11 @@ export function planAppDatabaseTasks(
       // Plugins contribute to the default connection only; they cannot know
       // which additional connections an application happens to define.
       const sources = [
+        ...(kind === 'migrations'
+          ? migrationTargets
+              .filter((target) => target.connection === name)
+              .map((target) => target.source)
+          : []),
         ...appSources,
         ...(name === primary ? contributions[kind] : []),
       ];
@@ -183,5 +208,28 @@ export function planAppDatabaseTasks(
             : undefined,
       };
     });
+  });
+}
+export interface AppRuntimeDatabaseTaskPlanOptions extends AppDatabaseTaskPlanOptions {
+  readonly runtimeConfig?: Pick<AppConfigAccessor, 'get'>;
+}
+
+/** Assemble built-in storage once for both startup and manual database commands. */
+export function planAppRuntimeDatabaseTasks(
+  config: AppDatabaseConfig,
+  kinds: readonly AppDatabaseTaskKind[],
+  options: AppRuntimeDatabaseTaskPlanOptions,
+): AppDatabaseTask[] {
+  const queueSources: readonly AppDatabaseMigrationSource[] = kinds.includes(
+    'migrations',
+  )
+    ? resolveQueueMigrationSources(
+        options.runtimeConfig?.get<AppQueueConfig>('queue'),
+        { defaultDatabaseConnection: defaultConnectionName(config) },
+      )
+    : [];
+  return planAppDatabaseTasks(config, kinds, {
+    ...options,
+    migrationSources: [...queueSources, ...(options.migrationSources ?? [])],
   });
 }

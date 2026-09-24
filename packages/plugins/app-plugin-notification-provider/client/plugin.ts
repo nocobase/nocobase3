@@ -1,3 +1,4 @@
+import locales from './locales/index.js';
 import {
   defineClientPlugin,
   type AppClientPluginFactory,
@@ -17,6 +18,7 @@ export interface NotificationProviderClientOptions {
 const notificationProvider: AppClientPluginFactory<NotificationProviderClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification-provider',
+    locales,
     serviceProviders,
     routes: (options) => (options.demo === false ? [] : routes),
     reactProviders,

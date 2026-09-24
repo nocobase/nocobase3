@@ -9,63 +9,58 @@ import {
 import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
 describe('ChannelManager', () => {
-  it('resolves first, explicit, and all Provider selections', async () => {
+  it('records queued deliveries as failed when the registered channel type differs', async () => {
+    const store = new FakeNotificationStore();
+    const delivery = await seed(store);
+    const send = vi.fn();
     const manager = new ChannelManager({
+      store,
       logger: createLogger({ level: 'silent' }),
-      store: new FakeNotificationStore(),
     });
     manager.register('email', {
       channel: {
-        type: 'email',
-        async prepare(input): Promise<object> {
-          return input.message;
-        },
+        type: 'im',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
+        prepare: async ({ message }) => message,
       },
-      providers: [
-        {
-          name: 'secondary',
-          type: 'fake',
-          async send() {
-            return { status: 'accepted' };
-          },
-        },
-        {
-          name: 'primary',
-          type: 'fake',
-          async send() {
-            return { status: 'accepted' };
-          },
-        },
-      ],
+      provider: { type: 'fake', send },
     });
+    expect(await manager.send(delivery.id)).toMatchObject({
+      status: 'failed',
+      lastError: { code: 'PROVIDER_UNAVAILABLE' },
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
 
-    expect(manager.providerIdentities('email')).toEqual([
-      { name: 'secondary', type: 'fake' },
-    ]);
-    expect(
-      manager.providerIdentities('email', { providerName: 'secondary' }),
-    ).toEqual([{ name: 'secondary', type: 'fake' }]);
-    expect(manager.providerIdentities('email', { all: true })).toEqual([
-      { name: 'secondary', type: 'fake' },
-      { name: 'primary', type: 'fake' },
-    ]);
-    expect(manager.providerCandidates('email')).toEqual([
-      { name: 'secondary', type: 'fake' },
-      { name: 'primary', type: 'fake' },
-    ]);
-    await expect(
-      manager.resolveRecipient(
-        'email',
-        { type: 'phone', number: '123' },
-        { name: 'primary', type: 'fake' },
-      ),
-    ).resolves.toBeUndefined();
+  it('records queued deliveries as failed after the configured channel type changes', async () => {
+    const store = new FakeNotificationStore();
+    const delivery = await seed(store);
+    const send = vi.fn();
+    const manager = new ChannelManager({
+      store,
+      logger: createLogger({ level: 'silent' }),
+    });
+    manager.register('email', {
+      channel: {
+        type: 'im',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
+        prepare: async ({ message }) => message,
+      },
+      provider: { type: 'fake', send },
+    });
+    expect(await manager.send(delivery.id)).toMatchObject({
+      status: 'failed',
+      lastError: {
+        code: 'PROVIDER_UNAVAILABLE',
+        message: 'Notification Channel "email" type has changed.',
+      },
+    });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('does not invoke another Provider when submission result is unknown', async () => {
     const store = new FakeNotificationStore();
     const delivery = await seed(store);
-    const next = vi.fn(async () => ({ status: 'accepted' }) as const);
     const manager = new ChannelManager({
       logger: createLogger({ level: 'silent' }),
       store,
@@ -73,54 +68,23 @@ describe('ChannelManager', () => {
     manager.register('email', {
       channel: {
         type: 'email',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
         async prepare(input): Promise<object> {
           return input.message;
         },
       },
-      providers: [
-        {
-          name: 'primary',
-          type: 'fake',
-          async send() {
-            return {
-              status: 'submission_unknown',
-              error: { message: 'connection closed after submit' },
-            };
-          },
+      provider: {
+        type: 'fake',
+        async send() {
+          return {
+            status: 'submission_unknown',
+            error: { message: 'connection closed after submit' },
+          };
         },
-        { name: 'secondary', type: 'fake', send: next },
-      ],
+      },
     });
 
     expect((await manager.send(delivery.id))?.status).toBe('unknown');
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('matches the persisted Provider by its unique name', async () => {
-    const store = new FakeNotificationStore();
-    const delivery = await seed(store);
-    const primary = vi.fn(async () => ({ status: 'accepted' }) as const);
-    const secondary = vi.fn(async () => ({ status: 'accepted' }) as const);
-    const manager = new ChannelManager({
-      logger: createLogger({ level: 'silent' }),
-      store,
-    });
-    manager.register('email', {
-      channel: {
-        type: 'email',
-        async prepare(input): Promise<object> {
-          return input.message;
-        },
-      },
-      providers: [
-        { name: 'secondary', type: 'fake', send: secondary },
-        { name: 'primary', type: 'fake', send: primary },
-      ],
-    });
-
-    expect((await manager.send(delivery.id))?.status).toBe('accepted');
-    expect(primary).toHaveBeenCalledOnce();
-    expect(secondary).not.toHaveBeenCalled();
   });
 
   it('rejects a Provider whose type no longer matches the Delivery', async () => {
@@ -134,11 +98,12 @@ describe('ChannelManager', () => {
     manager.register('email', {
       channel: {
         type: 'email',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
         async prepare(input): Promise<object> {
           return input.message;
         },
       },
-      providers: [{ name: 'primary', type: 'replacement', send }],
+      provider: { type: 'replacement', send },
     });
 
     expect(await manager.send(delivery.id)).toMatchObject({
@@ -155,40 +120,70 @@ describe('ChannelManager', () => {
     const manager = new ChannelManager({
       logger: createLogger({ level: 'silent' }),
       store,
-      retry: { initialDelayMs: 0, jitterRatio: 0 },
+      retry: { maxAttempts: 2, intervalMs: 0 },
     });
     manager.register('email', {
       channel: {
         type: 'email',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
         async prepare(input): Promise<object> {
           return input.message;
         },
       },
-      providers: [
-        {
-          name: 'primary',
-          type: 'fake',
-          async send() {
-            calls += 1;
-            return calls === 1
-              ? {
-                  status: 'failed',
-                  error: { message: 'temporarily unavailable' },
-                  disposition: 'same_provider',
-                  retryAfterMs: 0,
-                }
-              : { status: 'accepted' };
-          },
+      provider: {
+        type: 'fake',
+        async send() {
+          calls += 1;
+          return calls === 1
+            ? {
+                status: 'failed',
+                error: { message: 'temporarily unavailable' },
+                disposition: 'same_provider',
+              }
+            : { status: 'accepted' };
         },
-      ],
+      },
     });
 
     const scheduled = await manager.send(delivery.id);
-    expect(scheduled).toMatchObject({ status: 'failed' });
+    expect(scheduled).toMatchObject({ status: 'retrying' });
     expect(scheduled?.nextRunAt).toBeDefined();
 
     const accepted = await manager.send(delivery.id);
     expect(accepted?.status).toBe('accepted');
+  });
+
+  it('does not retry by default', async () => {
+    const store = new FakeNotificationStore();
+    const delivery = await seed(store);
+    const send = vi.fn(async (): Promise<ProviderSendResult> => ({
+      status: 'failed',
+      error: { message: 'temporarily unavailable' },
+      disposition: 'same_provider',
+    }));
+    const manager = new ChannelManager({
+      logger: createLogger({ level: 'silent' }),
+      store,
+    });
+    manager.register('email', {
+      channel: {
+        type: 'email',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
+        async prepare(input): Promise<object> {
+          return input.message;
+        },
+      },
+      provider: { type: 'fake', send },
+    });
+
+    await expect(manager.send(delivery.id)).resolves.toMatchObject({
+      status: 'failed',
+      nextRunAt: undefined,
+    });
+    await expect(manager.send(delivery.id)).resolves.toMatchObject({
+      status: 'failed',
+    });
+    expect(send).toHaveBeenCalledOnce();
   });
 
   it('marks a timed-out Provider submission as unknown', async () => {
@@ -202,20 +197,18 @@ describe('ChannelManager', () => {
     manager.register('email', {
       channel: {
         type: 'email',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
         async prepare(input): Promise<object> {
           return input.message;
         },
       },
-      providers: [
-        {
-          name: 'primary',
-          type: 'fake',
-          async send() {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            return { status: 'accepted' } as const;
-          },
+      provider: {
+        type: 'fake',
+        async send() {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return { status: 'accepted' } as const;
         },
-      ],
+      },
     });
 
     expect((await manager.send(delivery.id))?.status).toBe('unknown');
@@ -237,10 +230,10 @@ async function seed(
   const delivery: NotificationDeliveryRecord = {
     id: crypto.randomUUID(),
     notificationId: log.id,
-    channel: 'email',
+    channelName: 'email',
+    channelType: 'email',
     recipientSnapshot: { address: 'test@example.com' },
     messageSnapshot: { subject: 'Hello' },
-    providerName: 'primary',
     providerType: 'fake',
     attemptCount: 0,
     status: 'pending',
@@ -250,3 +243,22 @@ async function seed(
   await store.create({ log, deliveries: [delivery] });
   return delivery;
 }
+
+it('finishes unavailable queued Channels without repeatedly re-enqueueing them', async () => {
+  const store = new FakeNotificationStore();
+  const delivery = await seed(store);
+  const manager = new ChannelManager({
+    store,
+    logger: createLogger({ level: 'silent' }),
+    resolveRuntime: async () => {
+      throw new Error('Channel is disabled');
+    },
+  });
+  expect(await manager.send(delivery.id)).toMatchObject({
+    status: 'failed',
+    nextRunAt: undefined,
+    lastError: { code: 'PROVIDER_UNAVAILABLE' },
+  });
+  expect(await store.listReady(await store.now())).toEqual([]);
+  expect(await store.listAttempts(delivery.id)).toEqual([]);
+});

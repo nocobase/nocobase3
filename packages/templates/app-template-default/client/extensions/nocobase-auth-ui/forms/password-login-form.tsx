@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { usePasswordLogin } from '@nocobase/app-plugin-authentication/client/actions';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState, type FormEvent, type ReactElement } from 'react';
@@ -26,14 +27,21 @@ export interface PasswordLoginFormProps {
   readonly pendingLabel?: string;
 }
 
-export function PasswordLoginForm({
-  action: actionOverride,
-  className,
-  identifierLabel = 'Username or email',
-  passwordLabel = 'Password',
-  submitLabel = 'Sign in',
-  pendingLabel = 'Signing in…',
-}: PasswordLoginFormProps = {}): ReactElement {
+export function PasswordLoginForm(
+  inputProps: PasswordLoginFormProps = {},
+): ReactElement {
+  const { t } = useTranslation();
+  const {
+    action: actionOverride,
+    className,
+    identifierLabel = t('auth.identifier', {
+      defaultValue: 'Username or email',
+    }),
+    passwordLabel = t('auth.password', { defaultValue: 'Password' }),
+    submitLabel = t('auth.signIn', { defaultValue: 'Sign in' }),
+    pendingLabel = t('auth.signingIn', { defaultValue: 'Signing in…' }),
+  } = inputProps;
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -71,7 +79,11 @@ export function PasswordLoginForm({
             value={password}
           />
           <button
-            aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+            aria-label={
+              isPasswordVisible
+                ? t('auth.hidePassword', { defaultValue: 'Hide password' })
+                : t('auth.showPassword', { defaultValue: 'Show password' })
+            }
             aria-pressed={isPasswordVisible}
             className='absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
             onClick={() => setIsPasswordVisible((visible) => !visible)}
@@ -97,13 +109,13 @@ export function PasswordLoginForm({
             className='hover:text-foreground hover:underline'
             href='forgot-password'
           >
-            Forgot password?
+            {t('auth.forgotLink', { defaultValue: 'Forgot password?' })}
           </a>
           <a
             className='font-semibold text-foreground underline underline-offset-4'
             href='register'
           >
-            Sign up
+            {t('auth.signUp', { defaultValue: 'Sign up' })}
           </a>
         </nav>
       </div>

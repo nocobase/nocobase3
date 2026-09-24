@@ -1,3 +1,4 @@
+import singleProviderMigration from '../database/migrations/202609200003_notification_single_provider.js';
 import { resolve } from 'node:path';
 
 import sqlite from '@nocobase/db-sqlite';
@@ -12,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202608190001_create_notification_tables.js';
 import idempotencyMigration from '../database/migrations/202609080001_create_notification_idempotency.js';
+import namesMigration from '../database/migrations/202609200001_notification_channel_names.js';
 import instantMigration from '../database/migrations/202609130001_notification_instant_columns.js';
 
 interface SqliteClient {
@@ -33,6 +35,8 @@ const MIGRATION_NAMES = [
   '202608190001_create_notification_tables',
   '202609080001_create_notification_idempotency',
   '202609130001_notification_instant_columns',
+  '202609200001_notification_channel_names',
+  '202609200003_notification_single_provider',
 ] as const;
 
 interface DispatchRow extends Row {
@@ -326,6 +330,63 @@ describe('notification database migration', () => {
     });
   });
 
+  it('backfills channel identity without changing historical delivery data', async () => {
+    await migrateUp(database);
+    const connection = database.connection();
+    const query = connection.query;
+    await query
+      .insertInto('notificationDeliveries')
+      .values({
+        id: 'legacy',
+        notificationId: 'notice',
+        channel: 'email',
+        recipientSnapshot: {},
+        messageSnapshot: {},
+        providerName: 'primary',
+        providerType: 'smtp',
+        attemptCount: 0,
+        status: 'pending',
+        createdAt: '2026-09-20T00:00:00.000Z',
+        updatedAt: '2026-09-20T00:00:00.000Z',
+      })
+      .execute();
+    const context = { builder: connection.builder, query, connection };
+    await namesMigration.up(context);
+    expect(
+      await query
+        .selectFrom('notificationDeliveries')
+        .selectAll()
+        .executeTakeFirst(),
+    ).toMatchObject({
+      id: 'legacy',
+      channelName: 'email',
+      channelType: 'email',
+      providerName: 'primary',
+    });
+    const client = await connection.client<SqliteClient>();
+    expect(
+      await client.schema.hasColumn('notification_deliveries', 'channel'),
+    ).toBe(false);
+    expect(
+      (await connection.collections.get('notificationDeliveries'))?.fields,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'channelName', nullable: false }),
+        expect.objectContaining({ name: 'channelType', nullable: false }),
+      ]),
+    );
+    await namesMigration.down?.(context);
+    expect(
+      await query
+        .selectFrom('notificationDeliveries')
+        .selectAll()
+        .executeTakeFirst(),
+    ).toMatchObject({ id: 'legacy', channel: 'email' });
+    expect(
+      await client.schema.hasColumn('notification_deliveries', 'channel_name'),
+    ).toBe(false);
+  });
+
   it('runs through the migration runner and records stable history', async () => {
     const historyTable = 'notification_test_migrations';
     const lockTable = 'notification_test_migration_lock';
@@ -341,20 +402,20 @@ describe('notification database migration', () => {
     });
 
     expect(loaded.map(({ name }) => name)).toEqual(MIGRATION_NAMES);
-    expect(loaded.map(({ checksum }) => checksum)).toEqual([
-      expect.stringMatching(/^[a-f0-9]{64}$/),
-      expect.stringMatching(/^[a-f0-9]{64}$/),
-      expect.stringMatching(/^[a-f0-9]{64}$/),
-    ]);
+    expect(loaded.map(({ checksum }) => checksum)).toEqual(
+      MIGRATION_NAMES.map(() => expect.stringMatching(/^[a-f0-9]{64}$/)),
+    );
     await expect(migrator.latest()).resolves.toEqual({
       batch: 1,
       executed: MIGRATION_NAMES,
       skipped: [],
+      warnings: [],
     });
     await expect(migrator.latest()).resolves.toEqual({
       batch: 1,
       executed: [],
       skipped: MIGRATION_NAMES,
+      warnings: [],
     });
 
     const client = await database.connection().client<SqliteClient>();
@@ -370,9 +431,10 @@ describe('notification database migration', () => {
         checksum,
       })),
     );
-    await expect(migrator.rollback()).resolves.toEqual({
+    await expect(migrator.rollback()).resolves.toMatchObject({
       batch: 1,
       rolledBack: [...MIGRATION_NAMES].reverse(),
+      warnings: [],
     });
     await expect(
       Promise.all(
@@ -621,3 +683,54 @@ async function migrateDown(database: DatabaseManager): Promise<void> {
     connection,
   });
 }
+
+it('removes Provider instance names from physical schema and metadata and restores columns on rollback', async () => {
+  const database = createDatabaseManager({
+    drivers: { sqlite },
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  });
+  const connection = database.connection();
+  const context = {
+    connection,
+    builder: connection.builder,
+    query: connection.query,
+  };
+  try {
+    await migration.up(context);
+    await singleProviderMigration.up(context);
+    for (const name of [
+      'notificationDeliveries',
+      'notificationDeliveryAttempts',
+    ]) {
+      expect(
+        (await connection.collections.get(name))?.fields?.some(
+          (field) => field.name === 'providerName',
+        ),
+      ).toBe(false);
+      expect(
+        (await connection.collections.getPhysical(name))?.columns.some(
+          (column) => column.columnName === 'provider_name',
+        ),
+      ).toBe(false);
+    }
+    await singleProviderMigration.down?.(context);
+    for (const name of [
+      'notificationDeliveries',
+      'notificationDeliveryAttempts',
+    ]) {
+      expect((await connection.collections.get(name))?.fields).toContainEqual(
+        expect.objectContaining({ name: 'providerName' }),
+      );
+      expect(
+        (await connection.collections.getPhysical(name))?.columns,
+      ).toContainEqual(
+        expect.objectContaining({
+          columnName: 'provider_name',
+          nullable: false,
+        }),
+      );
+    }
+  } finally {
+    await database.destroy();
+  }
+});

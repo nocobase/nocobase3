@@ -11,13 +11,15 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
     name: 'notifications',
     path: '/notifications',
     navigation: { title: 'nav.notifications', icon: BellRing },
+    breadcrumb: { title: 'nav.notifications' },
     children: [
       {
         name: 'logs',
         path: '/logs',
         navigation: { title: 'nav.logs', icon: FileClock },
-        access: {
-          resource: NOTIFICATION_LOGS_RESOURCE,
+        breadcrumb: { title: 'nav.logs' },
+        authz: {
+          resource: { type: 'page', id: NOTIFICATION_LOGS_RESOURCE },
           action: 'access',
         },
         componentLoader: () => import('./pages/notification-logs-page.js'),

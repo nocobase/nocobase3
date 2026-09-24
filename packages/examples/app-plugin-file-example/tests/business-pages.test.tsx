@@ -20,6 +20,7 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
     await importOriginal<typeof import('@nocobase/app-client')>();
   return {
     ...original,
+    useApiClient: () => state.api,
     useService: (token: unknown) =>
       token === clientFileRepositoryManagerToken ? state.manager : state.api,
   };

@@ -35,8 +35,7 @@ server entry) or `@nocobase/app-plugin-authentication/server`:
 - `userAdministrationServiceToken` resolves `UserAdministrationService`:
   `list`, `get`, `create`, `update`, `disable`, `enable`, `resetPassword`,
   `revokeSessions`, `withConnection`; errors are `UserAdministrationError`.
-- `AuthConfig` is Better Auth's `BetterAuthOptions`, the type of the
-  application's `server/config/auth.ts`.
+- `AuthConfig` is Better Auth's `BetterAuthOptions`, the type of the application's `server/config/auth.ts`. User initialization configuration lives separately under `users.initialAdmin`.
 - `createAuthentication`, `databaseAdapter`, `createAuthStorage` build an
   instance outside the application runtime, mainly in tests.
 
@@ -87,6 +86,10 @@ Read only the reference the task needs.
 - The plugin's `skills/` source is authoritative. `.agents/skills/` is a
   synchronized copy and must not be edited.
 
+## Reversible UI customization
+
+Prefer props and page composition, then new application components outside `client/extensions/nocobase-auth-ui/`, over editing the original extension files. Reuse the headless authentication actions in custom forms. Disabling registration or another feature should preserve its pages and components, conditionally disable the route, and hide its entry points so it can be restored. The server must still reject the disabled operation. Read [client session and pages](references/client-session-and-pages.md) for the implementation and verification rules.
+
 ## Constraints
 
 - Mounting under `/api` authenticates nothing. A route is protected only by
@@ -127,3 +130,11 @@ Read only the reference the task needs.
   test database.
 - The application passes `lint`, `typecheck`, `test`, and `build`. Skill
   synchronization alone proves only that the copy matches this source.
+
+## Trusted plugin API
+
+`Auth.pluginApi<TPlugin>(pluginId)` returns only the registered plugin’s API methods through Better Auth’s normal dispatch, including before and after hooks. It does not expose the full authentication context and does not authenticate a caller. `Auth.forConnection(connection)` binds those operations to a caller-owned transaction. Consumers still enforce authorization; HTTP-specific hooks must explicitly check for `request` or `headers` instead of accidentally denying trusted server calls.
+
+## Initial administrator
+
+Before the first seed run, set `users.initialAdmin.username` and `users.initialAdmin.password` in application configuration to customize the bootstrap account. Omitting the entire node preserves `nocobase/admin123`; an explicit node requires a nonempty password and defaults the username to `nocobase`. Usernames contain 3–30 letters, digits, underscores or dots and are stored lowercase; the email remains `admin@nocobase.com`. Initialization only runs when the user table is empty, hashes the password and grants the newly created account root permission through the authorization plugin. After initialization, configuration changes do not reset accounts or rerun the recorded seeds. The root permission seed selects the administrator by the same configured username. Use the user administration service for subsequent account changes. Do not edit historical seeds or add a competing administrator seed.

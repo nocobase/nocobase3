@@ -1,5 +1,4 @@
-import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
-import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
+import type { ApiClient } from '@nocobase/app-client';
 
 export type NotificationStatus =
   | 'pending'
@@ -8,6 +7,7 @@ export type NotificationStatus =
   | 'partial'
   | 'preparing'
   | 'submitting'
+  | 'retrying'
   | 'accepted'
   | 'failed'
   | 'unknown';
@@ -15,7 +15,6 @@ export type NotificationStatus =
 export interface NotificationAttempt {
   readonly id: string;
   readonly sequence: number;
-  readonly providerName: string;
   readonly providerType: string;
   readonly status: NotificationStatus;
   readonly startedAt: string;
@@ -27,8 +26,8 @@ export interface NotificationAttempt {
 export interface NotificationDeliveryDetails {
   readonly delivery: {
     readonly id: string;
-    readonly channel: string;
-    readonly providerName: string;
+    readonly channelName: string;
+    readonly channelType: string;
     readonly providerType: string;
     readonly attemptCount: number;
     readonly status: NotificationStatus;
@@ -53,47 +52,14 @@ export interface NotificationLogDetails {
 }
 
 export async function fetchNotificationLogs(
+  api: ApiClient,
   signal?: AbortSignal,
 ): Promise<readonly NotificationLogDetails[]> {
-  const response = await request<{ readonly data: NotificationLogDetails[] }>(
-    `${notificationBase()}/logs`,
-    { signal },
-  );
-  return response.data;
-}
-
-function notificationBase(): string {
-  return `${getPortalBase().replace(/\/$/, '')}/api/notifications`;
-}
-
-async function request<T = unknown>(
-  url: string,
-  init: RequestInit = {},
-): Promise<T> {
-  const headers = new Headers(
-    nocobaseClient.getHeaders({
-      method: init.method ?? 'GET',
-      withAclMeta: false,
-      body: init.body,
-    }),
-  );
-  if (init.body) headers.set('content-type', 'application/json');
-  const response = await fetch(url, {
-    credentials: 'include',
-    ...init,
-    headers,
+  const response = await api.request<{
+    readonly data: NotificationLogDetails[];
+  }>({
+    path: 'notifications/logs',
+    signal,
   });
-  const value: unknown = await response.json().catch(() => undefined);
-  if (!response.ok) {
-    const message =
-      isRecord(value) && typeof value.error === 'string'
-        ? value.error
-        : `Notification request failed (${response.status}).`;
-    throw new Error(message);
-  }
-  return value as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
+  return response.data;
 }

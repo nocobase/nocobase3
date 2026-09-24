@@ -98,18 +98,18 @@ export function FileUploadField({
     <>
       <button
         type='button'
-        className='inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50'
+        className='inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm font-medium shadow-2xs hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 cursor-pointer'
         disabled={disabled || busy}
         onClick={() => inputRef.current?.click()}
       >
         {busy ? (
           <LoaderCircle aria-hidden='true' className='size-4 animate-spin' />
         ) : (
-          <UploadCloud aria-hidden='true' className='size-4' />
+          <UploadCloud aria-hidden='true' className='size-4 text-primary' />
         )}
         {busy ? labels.uploading : labels.choose}
       </button>
-      <span className={compact ? 'sr-only' : 'text-sm text-muted-foreground'}>
+      <span className={compact ? 'sr-only' : 'text-xs text-muted-foreground'}>
         {labels.dropHint}
       </span>
       <input
@@ -131,7 +131,11 @@ export function FileUploadField({
         <div className='inline-flex items-center'>{control}</div>
       ) : (
         <div
-          className={`flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3 ${dragging ? 'border-primary bg-primary/5' : ''}`}
+          className={`flex flex-wrap items-center gap-4 rounded-xl border-2 border-dashed p-4 transition-colors ${
+            dragging
+              ? 'border-primary bg-primary/5'
+              : 'border-border/80 bg-card hover:bg-muted/20'
+          }`}
           onDragOver={(event) => {
             event.preventDefault();
             setDragging(true);

@@ -1,3 +1,4 @@
+import { sanitizeLog } from './journal.js';
 import pino, { stdTimeFunctions, type DestinationStream } from 'pino';
 
 import type { Logger, LoggerConfig } from './types.js';
@@ -65,9 +66,46 @@ export function createLogger(
   const redact = resolveRedact(configuredRedact);
   const loggerOptions: pino.LoggerOptions = {
     ...options,
+    serializers: {
+      err: (error: unknown) => sanitizeLog(error),
+      ...options.serializers,
+    },
     timestamp: options.timestamp ?? stdTimeFunctions.isoTime,
     ...(redact ? { redact } : {}),
   };
 
   return destination ? pino(loggerOptions, destination) : pino(loggerOptions);
+}
+
+/** Message-first bridge for runtime infrastructure that also runs before App logging exists. */
+export function createDiagnosticLogger(
+  logger?: Pick<Logger, 'info' | 'warn' | 'error'>,
+): {
+  info(message: string, details?: unknown): void;
+  warn(message: string, details?: unknown): void;
+  error(message: string, details?: unknown): void;
+} {
+  const write = (
+    level: 'info' | 'warn' | 'error',
+    message: string,
+    details?: unknown,
+  ): void => {
+    const fields =
+      details instanceof Error
+        ? { err: details }
+        : details && typeof details === 'object'
+          ? (details as Record<string, unknown>)
+          : { details };
+    if (logger)
+      logger[level](sanitizeLog(fields) as Record<string, unknown>, message);
+    else
+      process.stderr.write(
+        `${level.toUpperCase()} ${message}${details === undefined ? '' : ` ${JSON.stringify(sanitizeLog(fields))}`}\n`,
+      );
+  };
+  return {
+    info: (message, details) => write('info', message, details),
+    warn: (message, details) => write('warn', message, details),
+    error: (message, details) => write('error', message, details),
+  };
 }

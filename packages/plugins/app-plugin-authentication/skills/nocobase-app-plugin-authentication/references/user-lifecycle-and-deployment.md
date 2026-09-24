@@ -101,15 +101,18 @@ token. Rules that apply to any implementation:
 
 **Secret.** `auth.secret` comes from `AUTH_SECRET` or the deployment
 configuration file, is at least 32 characters, is identical on every
-instance, and never appears in source or in a browser build. Without a
-configuration file present the plugin generates a random secret for
-install-mode startups; with one present and no secret it refuses to start.
+instance, and never appears in source or in a browser build. Without one the
+application refuses to start; a standalone start names `pnpm config:init`,
+which generates it. The plugin never invents a secret: one made up at boot changes on
+every restart and silently invalidates every session.
 
 **Public origin.** Set `app.publicOrigin` to the HTTPS address the browser
 sees. Better Auth derives its base URL and callback URLs from it and from the
 application's public base path; a container-internal address breaks OAuth
 callbacks and cookie attributes. The reverse proxy must forward host,
 protocol, and cookies.
+
+**Business request CSRF.** `Auth.required()` and `Auth.optional()` reject cookie-bearing writes unless `Origin` (or, when absent, `Referer`) matches Better Auth's configured base origin or a trusted origin. Configure `app.publicOrigin` for deployed applications and add separate frontend origins through `auth.trustedOrigins`; without a trusted origin, browser writes fail closed with `INVALID_CSRF_ORIGIN`. Cookie-free API key requests can proceed after authentication. A credential header does not exempt a request carrying cookies, including routes that skip session lookup.
 
 **Cookies.** The plugin derives the cookie prefix from the application name
 and the cookie path from the public base path. Override

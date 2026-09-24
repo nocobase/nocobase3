@@ -3,13 +3,17 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { AppAuthorization } from './authorization.js';
-import type { ProtectedPermissionSetRegistry } from './protected-permission-sets.js';
+import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 
-export const authorizationToken: ServiceToken<AppAuthorization> =
-  createServiceToken<AppAuthorization>('@nocobase/app/authorization');
+import type { createAppAuthorization } from './authorization.js';
 
-export const protectedPermissionSetRegistryToken: ServiceToken<ProtectedPermissionSetRegistry> =
-  createServiceToken<ProtectedPermissionSetRegistry>(
-    '@nocobase/app/authorization/protected-permission-sets',
+/** What the application registers: the Authorization with its built-in apis. */
+export type AppAuthorizationService = ReturnType<typeof createAppAuthorization>;
+
+export const authorizationToken: ServiceToken<AppAuthorizationService> =
+  createServiceToken<AppAuthorizationService>('@nocobase/app/authorization');
+
+export const permissionSetsToken: ServiceToken<PermissionSetsApi> =
+  createServiceToken<PermissionSetsApi>(
+    '@nocobase/app/authorization/permission-sets',
   );

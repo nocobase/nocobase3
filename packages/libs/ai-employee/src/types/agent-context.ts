@@ -2,6 +2,7 @@ import type { DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { AIManager } from '../manager/index.js';
 import type { AIMessageInput } from './ai-chat-conversation.type.js';
+import type { SkillsEntity } from '../repository/ai-skill.js';
 
 export interface AgentToolCallResult {
   id: string;
@@ -35,5 +36,7 @@ export interface AgentContext<TRepositories = unknown, TServices = unknown> {
   services: TServices;
   state: AgentState;
   actor: AgentActor;
+  /** Host-owned authorization boundary for loading skill content. */
+  availableSkills?: () => Promise<readonly SkillsEntity[]>;
   translate?: (key: string, options?: Record<string, unknown>) => string;
 }
