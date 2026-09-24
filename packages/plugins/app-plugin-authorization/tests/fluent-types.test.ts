@@ -59,9 +59,9 @@ function typeChecks(authz: AppAuthorization) {
     'visible',
     selection.all(),
   );
-  // @ts-expect-error Rule scope belongs to another action.
   defineDefaultAccessRule('d', reference).scope(
     'view',
+    // @ts-expect-error Rule scope belongs to another action.
     'editable',
     selection.all(),
   );
