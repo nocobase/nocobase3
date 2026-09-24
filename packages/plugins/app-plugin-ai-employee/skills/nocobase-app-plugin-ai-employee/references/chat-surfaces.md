@@ -10,6 +10,7 @@ Everything the browser half needs: getting the UI source into the App, mounting 
 - [The readiness gate](#the-readiness-gate)
 - [Surfaces](#surfaces)
 - [Attachments](#attachments)
+- [Web search toggle](#web-search-toggle)
 - [Tasks and shortcuts](#tasks-and-shortcuts)
 - [Page context](#page-context)
 - [Forms](#forms)
@@ -316,6 +317,69 @@ type AIChatWindowProps = {
 What the assistant then sees is decided server-side, not by the page. Every provider sends images to the model as content blocks; PDFs go as documents on some providers and as loader-extracted text on others, and on a gateway provider a document is accepted only if the endpoint behind it takes one; other recognized document types are extracted to text; anything else produces a message telling the user the type is unsupported. Which provider does what is in [capabilities.md § What each provider can actually do](capabilities.md#what-each-provider-can-actually-do). So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 
 That last one is on you to get right, and nothing checks it. `AIModel` has no field for image input, so neither the selector nor the composer can warn that the selected model will not read the picture. When a flow can start from an image, say so in the employee's description and make the chat's default model one that accepts images — which means `defaultEmployee` here and, on the server, `overrideEnabledModels` plus service `sort`, since the chat opens on the first model of the first enabled service — unless the employee has its own model settings, in which case the chat offers only those of its models that are enabled and opens on the first of them; with none enabled it cannot send at all.
+
+## Web search toggle
+
+The composer has no web search button of its own. `AIChatProvider.webSearch` defaults to `false`, and nothing in the chat switches it, so a chat mounted without a toggle never searches. **Add the toggle to every chat surface you mount**, the way the plugin's `chat` example does — see [source-map.md § Working examples](source-map.md#working-examples): hold the state in the component that renders `AIChatProvider`, pass it as `webSearch`, and add a composer action that flips it.
+
+The action is available only when the selected model searches. Read `currentModel.supportWebSearch` from `useAIChatBase()`, which works only below `AIChatProvider`, and disable the action unless it is `true`; that flag already combines the service's `supportWebSearch` with its `webSearchModels`. Switch the state back off when the user moves to a model that cannot search, or the next message still asks that model to search.
+
+```tsx
+import { useEffect, useMemo, useState } from 'react';
+import { Globe2 } from 'lucide-react';
+import {
+  AIChatProvider,
+  AIChatWindow,
+  useAIChatBase,
+  type AIChatComposerAction,
+} from '@/extensions/nocobase-ai';
+
+function AssistantChat() {
+  const [webSearch, setWebSearch] = useState(false);
+  return (
+    <AIChatProvider
+      id='assistant-chat'
+      defaultEmployee='order-desk'
+      webSearch={webSearch}
+    >
+      <AssistantWindow webSearch={webSearch} onWebSearchChange={setWebSearch} />
+    </AIChatProvider>
+  );
+}
+
+function AssistantWindow({
+  webSearch,
+  onWebSearchChange,
+}: {
+  webSearch: boolean;
+  onWebSearchChange: (enabled: boolean) => void;
+}) {
+  const { currentModel } = useAIChatBase();
+  const canSearch = currentModel.supportWebSearch === true;
+
+  useEffect(() => {
+    if (webSearch && !canSearch) onWebSearchChange(false);
+  }, [canSearch, onWebSearchChange, webSearch]);
+
+  const composerActions = useMemo<AIChatComposerAction[]>(
+    () => [
+      {
+        key: 'web-search',
+        label: canSearch ? 'Web search' : 'This model cannot search the web',
+        icon: <Globe2 />,
+        disabled: !canSearch,
+        active: webSearch,
+        onClick: () => onWebSearchChange(!webSearch),
+      },
+    ],
+    [canSearch, onWebSearchChange, webSearch],
+  );
+
+  return <AIChatWindow enableAttachments composerActions={composerActions} />;
+}
+```
+
+Localize the labels. A task that sets its own `webSearch` overrides the toggle for the turn it sends; see [Tasks and shortcuts](#tasks-and-shortcuts).
 
 ## Tasks and shortcuts
 
