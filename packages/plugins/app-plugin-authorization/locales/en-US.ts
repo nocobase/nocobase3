@@ -9,6 +9,8 @@ const enUS = {
     pages: 'Page permissions',
     business: 'Business permissions',
     administration: 'Administration',
+    other: 'Other',
+    automation: 'Automation',
   },
   resourceTypes: { business: 'Business features' },
   options: {

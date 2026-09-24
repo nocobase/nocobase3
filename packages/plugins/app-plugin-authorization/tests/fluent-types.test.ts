@@ -28,7 +28,7 @@ function typeChecks(authz: AppAuthorization) {
   read.default(recordAccess.allRecords);
   const definition = defineBusinessResource('quotes', (r) =>
     r
-      .group('sales')
+      .section('sales')
       .action('view', (a) => a.grant('visible', read))
       .action('edit', (a) => a.grant('editable', read.update(['amount']))),
   );
@@ -68,7 +68,7 @@ function typeChecks(authz: AppAuthorization) {
   // @ts-expect-error Duplicate resource action.
   definition.action('view', (a) => a.grant('rows', read));
   defineBusinessResource('duplicate', (r) =>
-    r.group('sales').action('view', (a) =>
+    r.section('sales').action('view', (a) =>
       // @ts-expect-error Duplicate binding key.
       a.grant('rows', read).grant('rows', read),
     ),

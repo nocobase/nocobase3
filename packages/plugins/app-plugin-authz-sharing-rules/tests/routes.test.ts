@@ -45,7 +45,7 @@ describe('sharing rules through the authorization dispatcher', () => {
         .get('settings')
         .items?.get('authorization.sharing-rules'),
     ).toMatchObject({
-      group: 'authorization',
+      section: 'authorization',
       actions: ['read', 'create', 'update', 'delete'].map((name) =>
         expect.objectContaining({ name }),
       ),

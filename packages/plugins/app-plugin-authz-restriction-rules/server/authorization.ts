@@ -49,7 +49,7 @@ export function restrictionRules(
       authz.settings.add({
         id: RESTRICTION_RULES_SETTINGS,
         title: { key: 'resourceTitle', ns: NAMESPACE },
-        group: 'authorization',
+        section: 'authorization',
         actions: ['read', 'create', 'update', 'delete'].map((name) => ({
           name,
           title: { key: `options.actions.${name}`, ns: APP_NAMESPACE },

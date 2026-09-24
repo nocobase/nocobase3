@@ -14,7 +14,7 @@ import type { DatabaseApi } from './database/api.js';
  */
 export interface AuthorizationExtensionHost {
   readonly sections: SectionRegistry;
-  readonly groups: ResourceGroupRegistry;
+  readonly resourceGroups: ResourceGroupRegistry;
   readonly resourceTypes: ResourceTypeRegistry;
   readonly recordAccess: RecordAccessRegistry;
   readonly subjects: AuthorizationSubjectRegistry;

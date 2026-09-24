@@ -103,7 +103,7 @@ const deliveryRelations = orderPermission.update((update) =>
 export const projectResource: BusinessResource = {
   name: 'example.sales.projects',
   title: label('sales.projects'),
-  group: 'example.sales',
+  section: 'example.sales',
   actions: [
     {
       name: 'view',
@@ -125,7 +125,7 @@ export const quoteResource = defineBusinessResource(
   'example.sales.quotes',
   (resource) =>
     resource
-      .group('example.sales')
+      .section('example.sales')
       .title(label('sales.quotes'))
       .action('view', (action) =>
         action.title(label('sales.view')).grant('quotes', quotePermission),
@@ -151,7 +151,7 @@ export const orderResource = defineBusinessResource(
   'example.sales.orders',
   (resource) =>
     resource
-      .group('example.delivery')
+      .section('example.delivery')
       .title(label('sales.orders'))
       .action('view', (action) =>
         action.title(label('sales.view')).grant('orders', orderPermission),
@@ -171,9 +171,14 @@ export const orderResource = defineBusinessResource(
       ),
 );
 
-export const salesGroups = [
-  { name: 'example.sales', title: label('sales.group') },
-  { name: 'example.delivery', title: label('sales.delivery') },
+/** Subsections of the business section, one sidebar entry each. */
+export const salesSections = [
+  { name: 'example.sales', title: label('sales.group'), parent: 'business' },
+  {
+    name: 'example.delivery',
+    title: label('sales.delivery'),
+    parent: 'business',
+  },
 ] as const;
 export const salesCollections = [
   {

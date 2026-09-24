@@ -213,7 +213,7 @@ const quoteAccess = defineDatabasePermission((permission) =>
 );
 const businessOrders = defineBusinessResource('sales.orders', (resource) =>
   resource
-    .group('sales')
+    .section('sales')
     .title('Orders')
     .action('view', (action) => action.grant('orders', quoteAccess))
     .action('edit', (action) =>
@@ -225,7 +225,11 @@ async function businessRoutes(
   options: { collection?: string; authorize?: boolean } = {},
 ) {
   const authorization = createAuthorization();
-  authorization.groups.add({ name: 'sales', title: 'Sales' });
+  authorization.sections.add({
+    name: 'sales',
+    title: 'Sales',
+    parent: 'business',
+  });
   authorization.database.collections.add({
     name: 'authzOrders',
     title: 'Orders',
@@ -349,10 +353,14 @@ describe('business operation Repository middleware', () => {
 
   it('rejects multi-scope operations, including two scopes of the same collection', () => {
     const authorization = createAuthorization();
-    authorization.groups.add({ name: 'sales', title: 'Sales' });
+    authorization.sections.add({
+      name: 'sales',
+      title: 'Sales',
+      parent: 'business',
+    });
     for (const target of ['authzOrders', 'authzCustomers']) {
       const complex = defineBusinessResource(`complex.${target}`, (resource) =>
-        resource.group('sales').action('submit', (action) =>
+        resource.section('sales').action('submit', (action) =>
           action.grant('orders', quoteAccess.update(['amount'])).grant(
             'parent',
             defineDatabasePermission((p) => p.collection(target).read(['id'])),
@@ -372,7 +380,11 @@ describe('business operation Repository middleware', () => {
 
   it('rejects an unknown action or a binding without the required database operation', () => {
     const authorization = createAuthorization();
-    authorization.groups.add({ name: 'sales', title: 'Sales' });
+    authorization.sections.add({
+      name: 'sales',
+      title: 'Sales',
+      parent: 'business',
+    });
     authorization.business.define(businessOrders);
     expect(() =>
       authorization.database.authorizeRepository({

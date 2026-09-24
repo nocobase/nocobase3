@@ -1,23 +1,11 @@
 import type {
   AuthorizationTitle,
-  RegisteredResourceType,
   ResourceItemAction,
 } from '@nocobase/authorization/core';
 import { databaseHost } from './database/api.js';
 import { databaseRecordAccessApplicable } from './database/record-access.js';
 import type { AuthorizationExtensionHost } from './host.js';
 import { optionText, type OptionText } from './i18n.js';
-
-export interface AuthorizationOptionsSection {
-  readonly name: string;
-  readonly title: OptionText;
-  readonly order: number;
-}
-
-export interface AuthorizationOptionsGroup {
-  readonly name: string;
-  readonly title: OptionText;
-}
 
 export interface AuthorizationOptionsAction {
   readonly name: string;
@@ -34,26 +22,50 @@ export interface AuthorizationOptionsDataScope {
   readonly defaultValue?: string;
 }
 
-export interface AuthorizationOptionsItem {
+/** One grantable resource, listed on the right when its subsection is selected. */
+export interface AuthorizationOptionsResource {
+  readonly type: string;
   readonly id: string;
   readonly title: OptionText;
   readonly description?: OptionText;
+  /** A name from `resourceGroups`. */
   readonly group?: string;
   readonly actions: readonly AuthorizationOptionsAction[];
-  /** Business items only: the data scopes of each action. */
+  /** Business resources only: the data scopes of each action. */
   readonly dataScopes?: Readonly<
     Record<string, readonly AuthorizationOptionsDataScope[]>
   >;
 }
 
-export interface AuthorizationOptionsResourceType {
-  readonly type: string;
+/** A left-side entry. */
+export interface AuthorizationOptionsSubsection {
+  readonly name: string;
   readonly title: OptionText;
-  readonly section?: string;
-  readonly groups: readonly AuthorizationOptionsGroup[];
-  readonly actions: readonly AuthorizationOptionsAction[];
-  /** Empty for a record type such as `page`. */
-  readonly items: readonly AuthorizationOptionsItem[];
+  /**
+   * Set when the client supplies the resources of a record type, such as
+   * `page` from its route tree; the actions are the type's.
+   */
+  readonly recordType?: {
+    readonly type: string;
+    readonly actions: readonly AuthorizationOptionsAction[];
+  };
+  readonly resources: readonly AuthorizationOptionsResource[];
+}
+
+/** A left-side heading with its subsections, both in order. */
+export interface AuthorizationOptionsSection {
+  readonly name: string;
+  readonly title: OptionText;
+  readonly order: number;
+  readonly subsections: readonly AuthorizationOptionsSubsection[];
+}
+
+/** A right-side heading; `parent` nests it. */
+export interface AuthorizationOptionsResourceGroup {
+  readonly name: string;
+  readonly title: OptionText;
+  readonly parent?: string;
+  readonly order?: number;
 }
 
 export interface AuthorizationOptionsSubjectType {
@@ -72,7 +84,8 @@ export interface AuthorizationOptionsRecordAccess {
 /** What every `options` route answers. */
 export interface AuthorizationOptions {
   readonly sections: readonly AuthorizationOptionsSection[];
-  readonly resourceTypes: readonly AuthorizationOptionsResourceType[];
+  /** The resource groups the listed resources name, with their ancestors. */
+  readonly resourceGroups?: readonly AuthorizationOptionsResourceGroup[];
   readonly subjectTypes: readonly AuthorizationOptionsSubjectType[];
   readonly recordAccess: readonly AuthorizationOptionsRecordAccess[];
   readonly collections: readonly { name: string; fields: readonly string[] }[];
@@ -86,7 +99,8 @@ function actionOption(action: ResourceItemAction): AuthorizationOptionsAction {
 }
 
 /**
- * The workspace catalogue. `rules` narrows it to business items with data
+ * The workspace catalogue: sections, their subsections and each
+ * subsection's resources. `rules` narrows it to business resources with data
  * scopes, which is all a rule plugin can target.
  */
 export async function authorizationOptions(
@@ -102,20 +116,75 @@ export async function authorizationOptions(
   );
   const collections = described.filter((item) => item !== undefined);
   const fields = new Map(collections.map((item) => [item.name, item.fields]));
-  const types = host.resourceTypes
-    .list()
-    .filter((type) =>
-      options.rules ? type.type === 'business' : type.section !== undefined,
-    )
-    .map((type) => resourceTypeOption(host, type, fields, options.rules))
-    .filter((type) => !options.rules || type.items.length > 0);
+  const resources = new Map<string, AuthorizationOptionsResource[]>();
+  const recordTypes = new Map<string, AuthorizationOptionsSubsection[]>();
+  for (const type of host.resourceTypes.list()) {
+    if (type.defaultSection === undefined) continue;
+    if (options.rules && type.type !== 'business') continue;
+    if (!type.items) {
+      recordTypes.set(type.defaultSection, [
+        ...(recordTypes.get(type.defaultSection) ?? []),
+        {
+          name: type.type,
+          title: title(type.title, type.type),
+          recordType: {
+            type: type.type,
+            actions: type.actions.map(actionOption),
+          },
+          resources: [],
+        },
+      ]);
+      continue;
+    }
+    for (const item of type.items.list()) {
+      const dataScopes =
+        type.type === 'business'
+          ? businessDataScopes(host, item.id, fields)
+          : undefined;
+      if (options.rules && !Object.keys(dataScopes ?? {}).length) continue;
+      const section = item.section ?? host.sections.other(type.defaultSection);
+      resources.set(section, [
+        ...(resources.get(section) ?? []),
+        {
+          type: type.type,
+          id: item.id,
+          title: title(item.title, item.id),
+          ...(item.description === undefined
+            ? {}
+            : { description: title(item.description, '') }),
+          ...(item.group === undefined ? {} : { group: item.group }),
+          actions: item.actions.map(actionOption),
+          ...(dataScopes && Object.keys(dataScopes).length
+            ? { dataScopes }
+            : {}),
+        },
+      ]);
+    }
+  }
+  const sections = host.sections.tree().map((section) => ({
+    name: section.name,
+    title: title(section.title, section.name),
+    order: section.order,
+    subsections: [
+      ...(options.rules ? [] : (recordTypes.get(section.name) ?? [])),
+      ...section.subsections.flatMap((subsection) => {
+        const listed = resources.get(subsection.name) ?? [];
+        return listed.length
+          ? [
+              {
+                name: subsection.name,
+                title: title(subsection.title, subsection.name),
+                resources: listed,
+              },
+            ]
+          : [];
+      }),
+    ],
+  }));
+  const resourceGroups = referencedGroups(host, [...resources.values()].flat());
   return {
-    sections: host.sections.list().map((section) => ({
-      name: section.name,
-      title: title(section.title, section.name),
-      order: section.order,
-    })),
-    resourceTypes: types,
+    sections,
+    ...(resourceGroups.length ? { resourceGroups } : {}),
     subjectTypes: host.subjects.list().flatMap((type) => {
       const administration = host.subjects.get(type)?.administration;
       if (!administration) return [];
@@ -142,55 +211,28 @@ export async function authorizationOptions(
   };
 }
 
-function resourceTypeOption(
+/** The groups the resources name, with every ancestor, in registration order. */
+function referencedGroups(
   host: AuthorizationExtensionHost,
-  type: RegisteredResourceType,
-  fields: ReadonlyMap<string, readonly string[]>,
-  rules = false,
-): AuthorizationOptionsResourceType {
-  const items = (type.items?.list() ?? []).flatMap(
-    (item): AuthorizationOptionsItem[] => {
-      const dataScopes =
-        type.type === 'business'
-          ? businessDataScopes(host, item.id, fields)
-          : undefined;
-      if (rules && !Object.keys(dataScopes ?? {}).length) return [];
-      return [
-        {
-          id: item.id,
-          title: title(item.title, item.id),
-          ...(item.description === undefined
-            ? {}
-            : { description: title(item.description, '') }),
-          ...(item.group === undefined ? {} : { group: item.group }),
-          actions: item.actions.map(actionOption),
-          ...(dataScopes && Object.keys(dataScopes).length
-            ? { dataScopes }
-            : {}),
-        },
-      ];
-    },
-  );
-  const actions = new Map<string, AuthorizationOptionsAction>();
-  for (const action of [
-    ...type.actions.map(actionOption),
-    ...items.flatMap((item) => item.actions),
-  ])
-    if (!actions.has(action.name)) actions.set(action.name, action);
-  const groups = [
-    ...new Set(items.flatMap((item) => (item.group ? [item.group] : []))),
-  ].flatMap((name) => {
-    const group = host.groups.get(name);
-    return group ? [{ name, title: title(group.title, name) }] : [];
-  });
-  return {
-    type: type.type,
-    title: title(type.title, type.type),
-    ...(type.section === undefined ? {} : { section: type.section }),
-    groups,
-    actions: [...actions.values()],
-    items,
-  };
+  resources: readonly AuthorizationOptionsResource[],
+): AuthorizationOptionsResourceGroup[] {
+  const wanted = new Set<string>();
+  for (const resource of resources) {
+    let name = resource.group;
+    while (name !== undefined && !wanted.has(name)) {
+      wanted.add(name);
+      name = host.resourceGroups.get(name)?.parent;
+    }
+  }
+  return host.resourceGroups
+    .list()
+    .filter((group) => wanted.has(group.name))
+    .map((group) => ({
+      name: group.name,
+      title: title(group.title, group.name),
+      ...(group.parent === undefined ? {} : { parent: group.parent }),
+      ...(group.order === undefined ? {} : { order: group.order }),
+    }));
 }
 
 function businessDataScopes(

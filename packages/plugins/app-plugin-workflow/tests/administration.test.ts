@@ -8,20 +8,29 @@ import { WorkflowAuthorizationProvider } from '../server/authorization.js';
 import routes from '../client/routes.js';
 
 it.each([false, true])(
-  'adds a settings item to Automation (group exists: %s)',
+  'adds a settings item to the Automation subsection (already added: %s)',
   async (exists) => {
     const authz = createAppAuthorization({});
-    if (exists) authz.groups.add({ name: 'automation', title: 'Automation' });
+    // Workflow and scheduler both add the same subsection.
+    const automation = {
+      name: 'automation',
+      title: {
+        key: 'sections.automation',
+        ns: '@nocobase/app-plugin-authorization',
+      },
+      parent: 'administration',
+    };
+    if (exists) authz.sections.add(automation);
     const container = new ServiceContainer();
     container.instance(authorizationToken, authz);
     await new WorkflowAuthorizationProvider({
       container,
     } as AppPluginApplication).boot();
-    expect(authz.groups.has('automation')).toBe(true);
+    expect(authz.sections.get('automation')).toEqual(automation);
     expect(
       authz.resourceTypes.get('settings').items?.get('workflow'),
     ).toMatchObject({
-      group: 'automation',
+      section: 'automation',
       actions: [expect.objectContaining({ name: 'manage' })],
     });
     expect(authz.settings.grant('workflow', ['manage'])).toEqual({

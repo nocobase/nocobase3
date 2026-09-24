@@ -45,7 +45,7 @@ describe('default access through the authorization dispatcher', () => {
         .get('settings')
         .items?.get('authorization.default-access'),
     ).toMatchObject({
-      group: 'authorization',
+      section: 'authorization',
       actions: ['read', 'create', 'update', 'delete'].map((name) =>
         expect.objectContaining({ name }),
       ),

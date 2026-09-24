@@ -14,7 +14,7 @@ import { settingsPlugin } from '../server/settings.js';
 
 function businessHost() {
   const authz = createAuthorization({ plugins: [businessPlugin()] });
-  authz.groups.add({ name: 'sales', title: 'Sales' });
+  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
   return authz;
 }
 
@@ -28,7 +28,7 @@ it('binds reusable permissions to independent data scopes without leaking writes
   const resource = defineBusinessResource('sales.quotes', (r) =>
     r
       .title('Quotes')
-      .group('sales')
+      .section('sales')
       .action('view', (a) => a.title('View').grant('visible', read))
       .action('edit', (a) =>
         a.title('Edit').grant('editable', read.update(['amount']), {
@@ -73,7 +73,7 @@ it('keeps multi-table selections and defaults through binding and expansion', as
   );
   const resource = defineBusinessResource('submit', (r) =>
     r
-      .group('sales')
+      .section('sales')
       .action('run', (a) =>
         a.grant('quotes', quotes).grant('projects', projects),
       ),
@@ -112,7 +112,7 @@ it('keeps multi-table selections and defaults through binding and expansion', as
       },
     ],
   });
-  authz.groups.add({ name: 'sales', title: 'Sales' });
+  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
   authz.business.define(resource);
   const context = authz.for({ principal: { type: 'user', id: 'alice' } });
   for (const id of ['quotes', 'projects'])
@@ -168,7 +168,7 @@ it('registers settings items and collections and builds page grants', () => {
   settings.authorizationApi!.settings.add({
     id: 'workflow',
     title: 'Workflow',
-    group: 'authorization',
+    section: 'authorization',
     actions: [{ name: 'manage' }],
   });
   expect(

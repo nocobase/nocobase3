@@ -3,7 +3,15 @@ import { ResourceItems } from '@nocobase/authorization/core';
 import { createAppAuthorization } from '../server/index.js';
 import { authorizationOptions } from '../server/options.js';
 
-it('lists sections in order and every displayed type, but no hidden type', async () => {
+const tree = (
+  options: Awaited<ReturnType<typeof authorizationOptions>>,
+): [string, string[]][] =>
+  options.sections.map((section) => [
+    section.name,
+    section.subsections.map((subsection) => subsection.name),
+  ]);
+
+it('lists sections with their subsections, but no type without a default section', async () => {
   const authz = createAppAuthorization({});
   authz.database.collections.add({ name: 'orders', title: 'Orders' });
   const custom = new ResourceItems();
@@ -12,58 +20,110 @@ it('lists sections in order and every displayed type, but no hidden type', async
   authz.resourceTypes.add({
     type: 'hub.app',
     title: 'Apps',
-    section: 'administration',
     actions: ['read'],
   });
-  const options = await authorizationOptions(authz);
-  expect(options.sections.map((section) => section.name)).toEqual([
-    'pages',
-    'business',
-    'administration',
-  ]);
-  expect(options.resourceTypes.map((type) => type.type)).toEqual([
-    'business',
-    'hub.app',
-    'page',
-    'settings',
-  ]);
-  expect(
-    options.resourceTypes.find((type) => type.type === 'page'),
-  ).toMatchObject({
-    section: 'pages',
-    items: [],
-    actions: [{ name: 'access' }],
+  authz.sections.add({
+    name: 'automation',
+    title: 'Automation',
+    parent: 'administration',
   });
-  expect(
-    options.resourceTypes
-      .find((type) => type.type === 'settings')
-      ?.items.map((item) => item.id),
-  ).toEqual(['authorization.permission-sets', 'authorization.inspector']);
-  expect(
-    options.resourceTypes.find((type) => type.type === 'settings')?.groups,
-  ).toEqual([
+  authz.settings.add({
+    id: 'workflow',
+    title: 'Workflow',
+    section: 'automation',
+    actions: [{ name: 'manage' }],
+  });
+  authz.settings.add({
+    id: 'misc',
+    title: 'Misc',
+    actions: [{ name: 'manage' }],
+  });
+  const options = await authorizationOptions(authz);
+  expect(tree(options)).toEqual([
+    ['pages', ['page']],
+    ['business', []],
+    ['administration', ['authorization', 'automation', 'administration.other']],
+  ]);
+  expect(options.sections[0]?.subsections[0]).toMatchObject({
+    name: 'page',
+    recordType: { type: 'page', actions: [{ name: 'access' }] },
+    resources: [],
+  });
+  const administration = options.sections[2]!.subsections;
+  expect(administration[0]).toMatchObject({
+    name: 'authorization',
+    title: expect.objectContaining({
+      key: 'options.settingsModules.authorization',
+    }),
+  });
+  expect(administration[0]?.resources.map((resource) => resource.id)).toEqual([
+    'authorization.permission-sets',
+    'authorization.inspector',
+  ]);
+  expect(administration[1]?.resources).toEqual([
     {
-      name: 'authorization',
-      title: expect.objectContaining({
-        key: 'options.settingsModules.authorization',
-      }),
+      type: 'settings',
+      id: 'workflow',
+      title: 'Workflow',
+      actions: [{ name: 'manage', title: 'manage' }],
     },
   ]);
+  // A resource without a subsection lands in its default section's "Other".
+  expect(administration[2]).toMatchObject({
+    title: expect.objectContaining({ key: 'sections.other' }),
+    resources: [{ type: 'settings', id: 'misc' }],
+  });
+  expect(options.resourceGroups).toBeUndefined();
+});
+
+it('lists the resource groups the resources name, with their ancestors', async () => {
+  const authz = createAppAuthorization({});
+  authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
+  authz.resourceGroups.add({
+    name: 'payables',
+    title: 'Payables',
+    parent: 'ledgers',
+    order: 2,
+  });
+  authz.resourceGroups.add({ name: 'unused', title: 'Unused' });
+  authz.settings.add({
+    id: 'bills',
+    title: 'Bills',
+    actions: [{ name: 'manage' }],
+  });
+  authz.resourceTypes.get('settings').items?.add({
+    id: 'invoices',
+    title: 'Invoices',
+    group: 'payables',
+    actions: ['manage'],
+  });
+  const options = await authorizationOptions(authz);
+  expect(options.resourceGroups).toEqual([
+    { name: 'ledgers', title: 'Ledgers' },
+    { name: 'payables', title: 'Payables', parent: 'ledgers', order: 2 },
+  ]);
+  expect(
+    options.sections[2]?.subsections
+      .flatMap((subsection) => subsection.resources)
+      .find((resource) => resource.id === 'invoices'),
+  ).toMatchObject({ group: 'payables' });
 });
 
 it('describes business data scopes and narrows rule options to them', async () => {
   const authz = createAppAuthorization({});
   authz.database.collections.add({ name: 'orders', title: 'Orders' });
-  authz.groups.add({ name: 'sales', title: 'Sales' });
-  expect(
-    (await authorizationOptions(authz, { rules: true })).resourceTypes,
-  ).toEqual([]);
+  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
+  expect(tree(await authorizationOptions(authz, { rules: true }))).toEqual([
+    ['pages', []],
+    ['business', []],
+    ['administration', []],
+  ]);
   const title = { key: 'sales.title', ns: 'example' };
   const actionTitle = { key: 'sales.view', ns: 'example' };
   authz.business.define({
     name: 'sales.orders',
     title,
-    group: 'sales',
+    section: 'sales',
     actions: [
       {
         name: 'view',
@@ -102,36 +162,42 @@ it('describes business data scopes and narrows rule options to them', async () =
     ],
   });
   const options = await authorizationOptions(authz);
-  const business = options.resourceTypes.find(
-    (type) => type.type === 'business',
-  );
-  expect(business).toMatchObject({
-    section: 'business',
-    groups: [{ name: 'sales', title: 'Sales' }],
-    items: [
+  expect(options.sections[1]).toMatchObject({
+    name: 'business',
+    subsections: [
       {
-        id: 'sales.orders',
-        title: expect.objectContaining(title),
-        group: 'sales',
-        actions: [
-          { name: 'view', title: expect.objectContaining(actionTitle) },
-          { name: 'export', title: 'Export' },
-        ],
-        dataScopes: {
-          view: [
-            {
-              key: 'orders',
-              title: 'Orders',
-              collection: 'orders',
-              fields: [],
-              recordAccess: ['allRecords'],
+        name: 'sales',
+        title: 'Sales',
+        resources: [
+          {
+            type: 'business',
+            id: 'sales.orders',
+            title: expect.objectContaining(title),
+            actions: [
+              { name: 'view', title: expect.objectContaining(actionTitle) },
+              { name: 'export', title: 'Export' },
+            ],
+            dataScopes: {
+              view: [
+                {
+                  key: 'orders',
+                  title: 'Orders',
+                  collection: 'orders',
+                  fields: [],
+                  recordAccess: ['allRecords'],
+                },
+              ],
             },
-          ],
-        },
+          },
+        ],
       },
     ],
   });
   const rules = await authorizationOptions(authz, { rules: true });
-  expect(rules.resourceTypes.map((type) => type.type)).toEqual(['business']);
+  expect(tree(rules)).toEqual([
+    ['pages', []],
+    ['business', ['sales']],
+    ['administration', []],
+  ]);
   expect(rules.recordAccess.map((entry) => entry.key)).toContain('recordsIOwn');
 });

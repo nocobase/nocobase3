@@ -3,7 +3,7 @@ import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/per
 import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
 import type { AuthorizationExtensionHost } from '../host.js';
 import {
-  AUTHORIZATION_SETTINGS_GROUP,
+  AUTHORIZATION_SETTINGS_SECTION,
   type SettingsAuthorizationApi,
 } from '../settings.js';
 import { createInspectorHandler, INSPECTOR_SETTINGS } from './inspector.js';
@@ -28,13 +28,13 @@ export function installAuthorizationAdministration(
   authz.settings.add({
     id: PERMISSION_SETS_SETTINGS,
     title: text('options.settings.permission-sets'),
-    group: AUTHORIZATION_SETTINGS_GROUP,
+    section: AUTHORIZATION_SETTINGS_SECTION,
     actions: ['read', 'create', 'update', 'delete', 'assign'].map(action),
   });
   authz.settings.add({
     id: INSPECTOR_SETTINGS,
     title: text('options.settings.inspector'),
-    group: AUTHORIZATION_SETTINGS_GROUP,
+    section: AUTHORIZATION_SETTINGS_SECTION,
     actions: [action('inspect')],
   });
   authz.routes.add(
