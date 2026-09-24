@@ -17,7 +17,7 @@
       "types": "./src/core/index.ts",
       "import": "./src/core/index.ts"
     },
-    "./permissions": {
+    "./permission-sets": {
       "types": "./src/plugins/permission-sets/index.ts",
       "import": "./src/plugins/permission-sets/index.ts"
     },
@@ -44,7 +44,7 @@
         "types": "./dist/core/index.d.ts",
         "import": "./dist/core/index.js"
       },
-      "./permissions": {
+      "./permission-sets": {
         "types": "./dist/plugins/permission-sets/index.d.ts",
         "import": "./dist/plugins/permission-sets/index.js"
       },

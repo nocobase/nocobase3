@@ -1,91 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAuthorization,
-  defaultAccess,
-  permissionSets,
-  restrictionRules,
-  sharingRules,
+  defaultAccessPlugin,
+  permissionSetsPlugin,
+  restrictionRulesPlugin,
+  selection,
+  sharingRulesPlugin,
   type AccessConstraint,
   type AuthorizationPlugin,
   type DefaultAccessOptions,
   type DefaultAccessRule,
-  type DefaultAccessStore,
   type PermissionSetsOptions,
-  type RestrictionRulesOptions,
-  type SharingRulesOptions,
-  type SharingRule,
-  type SharingRuleStore,
   type RestrictionRule,
-  type RestrictionRuleStore,
+  type RestrictionRulesOptions,
+  type SharingRule,
+  type SharingRulesOptions,
 } from '../src/index.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
-class MockDefaultAccessStore implements DefaultAccessStore {
-  constructor(private readonly rules: readonly DefaultAccessRule[]) {}
-  list(): Promise<readonly DefaultAccessRule[]> {
-    return Promise.resolve(this.rules);
-  }
-  get(type: string, id: string): Promise<DefaultAccessRule | undefined> {
-    return Promise.resolve(
-      this.rules.find(
-        (rule) => rule.resource.type === type && rule.resource.id === id,
-      ),
-    );
-  }
-  set(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
+class MemoryRuleStore<TRule extends { key: string }> {
+  constructor(private rules: readonly TRule[] = []) {}
+  create(rule: TRule): Promise<TRule> {
+    this.rules = [...this.rules, rule];
     return Promise.resolve(rule);
   }
-  delete(): Promise<void> {
+  update(key: string, rule: TRule): Promise<TRule> {
+    this.rules = this.rules.map((entry) => (entry.key === key ? rule : entry));
+    return Promise.resolve(rule);
+  }
+  delete(key: string): Promise<void> {
+    this.rules = this.rules.filter((entry) => entry.key !== key);
     return Promise.resolve();
   }
-  /** In-memory stores have no transactions. */
-  withTransaction(): DefaultAccessStore {
-    return this;
-  }
-}
-
-class MockSharingRuleStore implements SharingRuleStore {
-  constructor(private readonly rules: readonly SharingRule[]) {}
-  create(rule: SharingRule): Promise<SharingRule> {
-    return Promise.resolve(rule);
-  }
-  update(_key: string, rule: SharingRule): Promise<SharingRule> {
-    return Promise.resolve(rule);
-  }
-  delete(): Promise<void> {
-    return Promise.resolve();
-  }
-  get(key: string): Promise<SharingRule | undefined> {
+  get(key: string): Promise<TRule | undefined> {
     return Promise.resolve(this.rules.find((rule) => rule.key === key));
   }
-  list(): Promise<readonly SharingRule[]> {
+  list(): Promise<readonly TRule[]> {
     return Promise.resolve(this.rules);
   }
   /** In-memory stores have no transactions. */
-  withTransaction(): SharingRuleStore {
-    return this;
-  }
-}
-
-class MockRestrictionRuleStore implements RestrictionRuleStore {
-  constructor(private readonly rules: readonly RestrictionRule[]) {}
-  create(rule: RestrictionRule): Promise<RestrictionRule> {
-    return Promise.resolve(rule);
-  }
-  update(_key: string, rule: RestrictionRule): Promise<RestrictionRule> {
-    return Promise.resolve(rule);
-  }
-  delete(): Promise<void> {
-    return Promise.resolve();
-  }
-  get(key: string): Promise<RestrictionRule | undefined> {
-    return Promise.resolve(this.rules.find((rule) => rule.key === key));
-  }
-  list(): Promise<readonly RestrictionRule[]> {
-    return Promise.resolve(this.rules);
-  }
-  /** In-memory stores have no transactions. */
-  withTransaction(): RestrictionRuleStore {
+  withTransaction(): this {
     return this;
   }
 }
@@ -94,6 +48,7 @@ const resource = {
   type: 'database.collection',
   id: 'main.orders',
 } as const;
+const alice = { principal: { type: 'user', id: 'alice' } };
 
 /**
  * A stand-in for a resource plugin: the library hands constraints out as
@@ -112,7 +67,9 @@ function recordingResource(): {
       requiresGrants: true,
       setup(authz): void {
         authz.resourceTypes.add({
-          resourceType: 'database.collection',
+          type: 'database.collection',
+          title: 'Collections',
+          actions: ['read', 'create', 'update', 'delete'],
           async authorize(request, context) {
             const grants = await context.grants.resolve(request);
             if (grants.length === 0) {
@@ -140,7 +97,12 @@ function readerStore(): MockPermissionSetStore {
     permissionSets: [
       {
         key: 'order-reader',
-        grants: [{ resource, actions: [{ action: 'read', policy: {} }] }],
+        grants: [
+          {
+            resource,
+            actions: [{ action: 'read', policy: { type: 'database' } }],
+          },
+        ],
       },
     ],
     assignments: [
@@ -156,23 +118,23 @@ function readerStore(): MockPermissionSetStore {
 describe('official authorization plugins', () => {
   // TypeScript requires the store; this is what a JavaScript caller sees.
   it('requires a store', () => {
-    expect(() => permissionSets({} as PermissionSetsOptions)).toThrow(
+    expect(() => permissionSetsPlugin({} as PermissionSetsOptions)).toThrow(
       /Permission Sets requires a store/,
     );
-    expect(() => defaultAccess({} as DefaultAccessOptions)).toThrow(
+    expect(() => defaultAccessPlugin({} as DefaultAccessOptions)).toThrow(
       /Default Access requires a store/,
     );
-    expect(() => sharingRules({} as SharingRulesOptions)).toThrow(
+    expect(() => sharingRulesPlugin({} as SharingRulesOptions)).toThrow(
       /Sharing Rules requires a store/,
     );
-    expect(() => restrictionRules({} as RestrictionRulesOptions)).toThrow(
+    expect(() => restrictionRulesPlugin({} as RestrictionRulesOptions)).toThrow(
       /Restriction Rules requires a store/,
     );
   });
 
   it('manages permission sets and assignments through the plugin API', async () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: readerStore() })],
+      plugins: [permissionSetsPlugin({ store: readerStore() })],
     });
     await authorization.permissionSets.create({
       key: 'order-creator',
@@ -217,7 +179,7 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store })],
+      plugins: [permissionSetsPlugin({ store })],
     });
     authorization.onGrantsChanged(changed);
 
@@ -264,7 +226,7 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store })],
+      plugins: [permissionSetsPlugin({ store })],
     });
     authorization.onGrantsChanged(changed);
 
@@ -299,7 +261,7 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store })],
+      plugins: [permissionSetsPlugin({ store })],
     });
 
     await expect(
@@ -322,7 +284,7 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store })],
+      plugins: [permissionSetsPlugin({ store })],
     });
 
     await expect(
@@ -340,7 +302,7 @@ describe('official authorization plugins', () => {
 
   it('rejects assignments to an unknown Permission Set', async () => {
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+      plugins: [permissionSetsPlugin({ store: new MockPermissionSetStore() })],
     });
     await expect(
       authorization.permissionSets.assign({
@@ -372,10 +334,12 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store })],
+      plugins: [permissionSetsPlugin({ store })],
     });
     authorization.resourceTypes.add({
-      resourceType: 'test-resource',
+      type: 'test-resource',
+      title: 'Test',
+      actions: ['read', 'delete'],
       async authorize(request, context) {
         await context.grants.resolve(request);
         return { effect: 'permit', reasons: [] };
@@ -393,14 +357,14 @@ describe('official authorization plugins', () => {
       resource: { type: 'test-resource', id: 'second' },
       action: 'read',
     });
-    await authz.permissions();
+    await authz.snapshot();
 
     expect(store.findAssignmentsCalls).toBe(1);
-    expect(store.getPermissionSetCalls).toBe(1);
+    expect(store.getCalls).toBe(1);
   });
 
   it('hands sharing and restriction scopes to the resource handler', async () => {
-    const rules = new MockSharingRuleStore([
+    const rules = new MemoryRuleStore<SharingRule>([
       {
         key: 'shared-order',
         title: 'Shared orders',
@@ -414,7 +378,7 @@ describe('official authorization plugins', () => {
         subjects: [{ type: 'user', id: 'alice' }],
       },
     ]);
-    const restrictions = new MockRestrictionRuleStore([
+    const restrictions = new MemoryRuleStore<RestrictionRule>([
       {
         key: 'owned-only',
         title: { key: 'owned', ns: 'orders' },
@@ -422,7 +386,7 @@ describe('official authorization plugins', () => {
         actions: [
           {
             action: 'read',
-            scope: { type: 'database', recordAccess: 'recordsIOwn' },
+            selection: selection.recordAccess('recordsIOwn'),
           },
         ],
         subjects: [{ type: 'user', id: 'alice' }],
@@ -431,19 +395,15 @@ describe('official authorization plugins', () => {
     const handler = recordingResource();
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({ store: readerStore() }),
-        sharingRules({ store: rules }),
-        restrictionRules({ store: restrictions }),
+        permissionSetsPlugin({ store: readerStore() }),
+        sharingRulesPlugin({ store: rules }),
+        restrictionRulesPlugin({ store: restrictions }),
         handler.plugin,
       ],
     });
 
     await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'alice' },
-        resource,
-        action: 'read',
-      }),
+      authorization.for(alice).authorize({ resource, action: 'read' }),
     ).resolves.toMatchObject({ effect: 'conditional' });
     expect(handler.received).toEqual([
       [
@@ -454,7 +414,7 @@ describe('official authorization plugins', () => {
             title: 'Shared orders',
           },
           effect: 'expand',
-          value: { type: 'ids', ids: ['order-1', 'order-2'] },
+          selection: { type: 'records', ids: ['order-1', 'order-2'] },
         },
         {
           source: {
@@ -463,24 +423,25 @@ describe('official authorization plugins', () => {
             title: { key: 'owned', ns: 'orders' },
           },
           effect: 'restrict',
-          value: { type: 'database', recordAccess: 'recordsIOwn' },
+          selection: { type: 'recordAccess', key: 'recordsIOwn' },
         },
       ],
     ]);
   });
 
   it('resolves independent scopes for each configured action', async () => {
-    const defaults = new MockDefaultAccessStore([
+    const defaults = new MemoryRuleStore<DefaultAccessRule>([
       {
+        key: 'orders',
         resource: { type: 'database.collection', id: 'main.orders' },
         actions: [
-          { action: 'read', scope: { type: 'all' } },
-          { action: 'update', scope: { type: 'ids', ids: ['order-1'] } },
+          { action: 'read', selection: selection.all() },
+          { action: 'update', selection: selection.records(['order-1']) },
         ],
       },
     ]);
     const authorization = createAuthorization({
-      plugins: [defaultAccess({ store: defaults })],
+      plugins: [defaultAccessPlugin({ store: defaults })],
     });
     const input = {
       principal: { type: 'user', id: 'alice' },
@@ -489,41 +450,40 @@ describe('official authorization plugins', () => {
 
     await expect(
       authorization.constraints.resolve({ ...input, action: 'read' }),
-    ).resolves.toMatchObject([{ value: { type: 'all' } }]);
+    ).resolves.toMatchObject([{ selection: { type: 'all' } }]);
     await expect(
       authorization.constraints.resolve({ ...input, action: 'update' }),
-    ).resolves.toMatchObject([{ value: { type: 'ids', ids: ['order-1'] } }]);
+    ).resolves.toMatchObject([
+      { selection: { type: 'records', ids: ['order-1'] } },
+    ]);
   });
 
   it('hands an expanding default access scope to the resource handler', async () => {
-    const defaults = new MockDefaultAccessStore([
-      { resource, actions: [{ action: 'read', scope: { type: 'all' } }] },
+    const defaults = new MemoryRuleStore<DefaultAccessRule>([
+      {
+        key: 'orders-default',
+        resource,
+        actions: [{ action: 'read', selection: selection.all() }],
+      },
     ]);
     const handler = recordingResource();
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({ store: readerStore() }),
-        defaultAccess({ store: defaults }),
+        permissionSetsPlugin({ store: readerStore() }),
+        defaultAccessPlugin({ store: defaults }),
         handler.plugin,
       ],
     });
 
     await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'alice' },
-        resource,
-        action: 'read',
-      }),
+      authorization.for(alice).authorize({ resource, action: 'read' }),
     ).resolves.toMatchObject({ effect: 'conditional' });
     expect(handler.received).toEqual([
       [
         {
-          source: {
-            plugin: 'default-access',
-            id: 'database.collection:main.orders',
-          },
+          source: { plugin: 'default-access', id: 'orders-default' },
           effect: 'expand',
-          value: { type: 'all' },
+          selection: { type: 'all' },
         },
       ],
     ]);
@@ -542,7 +502,7 @@ describe('official authorization plugins', () => {
     expect(() =>
       createAuthorization({
         plugins: [
-          permissionSets({ store: new MockPermissionSetStore() }),
+          permissionSetsPlugin({ store: new MockPermissionSetStore() }),
           roles,
         ],
       }),
@@ -585,7 +545,9 @@ describe('official authorization plugins', () => {
       setup(authz): void {
         const grants = authz.grants;
         authz.resourceTypes.add({
-          resourceType: 'file.object',
+          type: 'file.object',
+          title: 'Files',
+          actions: ['download'],
           async authorize(request) {
             const resolved = await grants.resolve(request);
             resolvedPolicyType = resolved[0]?.policy?.type;
@@ -598,11 +560,10 @@ describe('official authorization plugins', () => {
       },
     };
     const authorization = createAuthorization({
-      plugins: [filePlugin, permissionSets({ store })],
+      plugins: [filePlugin, permissionSetsPlugin({ store })],
     });
     await expect(
-      authorization.can({
-        principal: { type: 'user', id: 'alice' },
+      authorization.for(alice).can({
         resource: { type: 'file.object', id: 'file-123' },
         action: 'download',
       }),
@@ -611,10 +572,10 @@ describe('official authorization plugins', () => {
   });
 });
 
-it('loads built-in rule lists once per inspection scope and reloads them in the next scope', async () => {
-  const defaults = new MockDefaultAccessStore([]);
-  const sharing = new MockSharingRuleStore([]);
-  const restrictions = new MockRestrictionRuleStore([]);
+it('loads rule lists once per context and again in the next one', async () => {
+  const defaults = new MemoryRuleStore<DefaultAccessRule>([]);
+  const sharing = new MemoryRuleStore<SharingRule>([]);
+  const restrictions = new MemoryRuleStore<RestrictionRule>([]);
   const reads = [
     vi.spyOn(defaults, 'list'),
     vi.spyOn(sharing, 'list'),
@@ -622,15 +583,17 @@ it('loads built-in rule lists once per inspection scope and reloads them in the 
   ];
   const authz = createAuthorization({
     plugins: [
-      permissionSets({ store: readerStore() }),
-      defaultAccess({ store: defaults }),
-      sharingRules({ store: sharing }),
-      restrictionRules({ store: restrictions }),
+      permissionSetsPlugin({ store: readerStore() }),
+      defaultAccessPlugin({ store: defaults }),
+      sharingRulesPlugin({ store: sharing }),
+      restrictionRulesPlugin({ store: restrictions }),
       {
         id: 'batch-test',
         setup(authorization) {
           authorization.resourceTypes.add({
-            resourceType: 'batch',
+            type: 'batch',
+            title: 'Batch',
+            actions: ['read'],
             async authorize(request, context) {
               await context.constraints.resolve(request);
               return { effect: 'permit', reasons: [] };
@@ -641,10 +604,10 @@ it('loads built-in rule lists once per inspection scope and reloads them in the 
     ],
   });
   const identity = { principal: { type: 'user', id: 'alice' } };
-  const scope = authz.for(identity);
+  const context = authz.for(identity);
   await Promise.all(
     Array.from({ length: 20 }, (_, i) =>
-      scope.explain({
+      context.authorize({
         resource: { type: 'batch', id: String(i) },
         action: 'read',
       }),
@@ -653,14 +616,82 @@ it('loads built-in rule lists once per inspection scope and reloads them in the 
   reads.forEach((read) => expect(read).toHaveBeenCalledTimes(1));
   await authz
     .for(identity)
-    .explain({ resource: { type: 'batch', id: '0' }, action: 'read' });
+    .authorize({ resource: { type: 'batch', id: '0' }, action: 'read' });
   reads.forEach((read) => expect(read).toHaveBeenCalledTimes(2));
 });
 
 it('does not install application settings or management routes', () => {
   const authorization = createAuthorization({
-    plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+    plugins: [permissionSetsPlugin({ store: new MockPermissionSetStore() })],
   });
   expect(authorization.routes.list()).toEqual([]);
-  expect(authorization.resourceTypes.get('settings')).toBeUndefined();
+  expect(authorization.resourceTypes.has('settings')).toBe(false);
+});
+
+describe('rule services', () => {
+  it('validates rules before they reach the store', async () => {
+    const sharing = new MemoryRuleStore<SharingRule>();
+    const restrictions = new MemoryRuleStore<RestrictionRule>();
+    const authz = createAuthorization({
+      plugins: [
+        sharingRulesPlugin({ store: sharing }),
+        restrictionRulesPlugin({ store: restrictions }),
+      ],
+    });
+    const rule = {
+      key: 'r',
+      resource,
+      subjects: [{ type: 'user', id: 'alice' }],
+      actions: [{ action: 'read', selection: selection.all() }],
+    };
+    await expect(authz.sharingRules.create(rule)).rejects.toThrow(
+      'cannot select all records',
+    );
+    await expect(authz.restrictionRules.create(rule)).resolves.toEqual(rule);
+    const records = {
+      ...rule,
+      actions: [{ action: 'read', selection: selection.records(['o1']) }],
+    };
+    await expect(authz.sharingRules.create(records)).resolves.toEqual(records);
+    await expect(
+      authz.sharingRules.update('r', {
+        ...records,
+        actions: [...records.actions, ...records.actions],
+      }),
+    ).rejects.toThrow('repeats read');
+    await expect(authz.sharingRules.get('r')).resolves.toEqual(records);
+    await authz.sharingRules.delete('r');
+    await expect(authz.sharingRules.list()).resolves.toEqual([]);
+    expect(authz.restrictionRules.withTransaction({})).toBeDefined();
+  });
+
+  it('applies a sharing rule only to the subjects it names', async () => {
+    const authz = createAuthorization({
+      plugins: [
+        sharingRulesPlugin({
+          store: new MemoryRuleStore<SharingRule>([
+            {
+              key: 'r',
+              resource,
+              subjects: [{ type: 'team', id: 'sales' }],
+              actions: [
+                { action: 'read', selection: selection.records(['o1']) },
+              ],
+            },
+          ]),
+        }),
+      ],
+    });
+    const input = { resource, action: 'read' };
+    await expect(
+      authz.constraints.resolve({ ...input, ...alice }),
+    ).resolves.toEqual([]);
+    await expect(
+      authz.constraints.resolve({
+        ...input,
+        ...alice,
+        subjects: [{ type: 'team', id: 'sales' }],
+      }),
+    ).resolves.toHaveLength(1);
+  });
 });

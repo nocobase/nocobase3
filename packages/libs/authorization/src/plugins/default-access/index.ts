@@ -1,4 +1,13 @@
-export * from './model.js';
-export * from './store.js';
-export * from './plugin.js';
-export * from './builder.js';
+export type { DefaultAccessRule } from './model.js';
+export type { DefaultAccessStore } from './store.js';
+export {
+  defaultAccessPlugin,
+  type DefaultAccessApi,
+  type DefaultAccessAuthorizationApi,
+  type DefaultAccessOptions,
+  type DefaultAccessPlugin,
+} from './plugin.js';
+export {
+  DefaultAccessRuleBuilder,
+  defineDefaultAccessRule,
+} from './builder.js';

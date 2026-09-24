@@ -1,49 +1,53 @@
-import type { RecordAccessRegistry } from './record-access.js';
-import type { AuthorizationGrantService } from './grants.js';
-import type {
-  ResourceAuthorizationCheck,
-  ResourceAuthorizationConditions,
-  AuthorizationResources,
-  AuthorizationResourceGroups,
-} from './resources.js';
-import type { ResourceHandlerRegistry } from './registry.js';
-import type { AuthorizationMiddleware } from './middleware.js';
+import type { MiddlewareHandler } from 'hono';
+import type { AuthorizationEnv } from './authorization.js';
+import type { BusinessCheck, BusinessConditions } from './business.js';
 import type { AccessConstraintRegistry } from './constraints.js';
-import type { AuthorizationSubjectRegistry } from './subjects.js';
+import type { AuthorizationGrantService } from './grants.js';
+import type { AuthorizationMiddleware } from './middleware.js';
+import type { RecordAccessRegistry } from './record-access.js';
+import type { ResourceTypeRegistry } from './resource-types.js';
 import type { AuthorizationRouteRegistry } from './routes.js';
+import type { ResourceGroupRegistry, SectionRegistry } from './sections.js';
+import type { AuthorizationSubjectRegistry } from './subjects.js';
 
 export interface AuthorizationPluginSetup<TConnection = unknown> {
-  readonly recordAccess: RecordAccessRegistry;
   /** The handle the host passed to `createAuthorization`, never inspected here. */
   readonly connection?: TConnection;
+  /** The Grant Provider; reading it without one installed throws. */
   readonly grants: AuthorizationGrantService;
-  readonly resources: AuthorizationResources;
-  readonly resourceTypes: ResourceHandlerRegistry;
-  readonly resourceGroups: AuthorizationResourceGroups;
-  readonly getResource: ResourceHandlerRegistry['getResource'];
+  readonly sections: SectionRegistry;
+  readonly groups: ResourceGroupRegistry;
+  readonly resourceTypes: ResourceTypeRegistry;
+  readonly recordAccess: RecordAccessRegistry;
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;
   readonly routes: AuthorizationRouteRegistry;
   use(middleware: AuthorizationMiddleware): void;
+  middleware(): MiddlewareHandler<AuthorizationEnv>;
 }
 
 export interface AuthorizationPlugin<
   TAuthorizationApi extends object = object,
   TConnection = unknown,
+  TRequiredApi extends object = object,
 > {
   id: string;
   dependencies?: readonly string[];
-  /** Supplies the single source of resource grants for this Authorization instance. */
+  /** Supplies the single source of grants for this Authorization instance. */
   grants?: AuthorizationGrantService;
   /** Declares that setup and runtime authorization require a Grant Provider. */
   requiresGrants?: boolean;
-  /** Adds an authorization-owned API to the created Authorization instance. */
+  /** Members added to the created Authorization instance. */
   authorizationApi?: TAuthorizationApi;
-  /** Convert already-resolved composed checks into executable plugin conditions. */
+  /** Turns the resolved checks of a business action into plugin conditions. */
   composeConditions?(
-    checks: readonly ResourceAuthorizationCheck[],
-  ): Partial<Omit<ResourceAuthorizationConditions, 'type' | 'checks'>>;
-  setup?(authz: AuthorizationPluginSetup<TConnection>): void;
+    checks: readonly BusinessCheck[],
+  ): Partial<Omit<BusinessConditions, 'type' | 'checks'>>;
+  /**
+   * Receives the registries plus every installed plugin's API; `TRequiredApi`
+   * types the APIs this plugin needs, whose plugins it lists in `dependencies`.
+   */
+  setup?(authz: AuthorizationPluginSetup<TConnection> & TRequiredApi): void;
 }
 
 export type AuthorizationPluginApi<TPlugin> =
@@ -59,6 +63,7 @@ type UnionToIntersection<T> = (
   ? TIntersection
   : never;
 
+/** Orders plugins so dependencies and the Grant Provider set up first. */
 export function sortAuthorizationPlugins(
   plugins: readonly AuthorizationPlugin[],
 ): AuthorizationPlugin[] {

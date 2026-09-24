@@ -14,7 +14,7 @@ export class MockPermissionSetStore implements PermissionSetStore {
   private readonly permissionSets = new Map<string, PermissionSet>();
   private readonly assignments: PermissionSetAssignment[];
   findAssignmentsCalls = 0;
-  getPermissionSetCalls = 0;
+  getCalls = 0;
 
   constructor(options: MockPermissionSetStoreOptions = {}) {
     for (const permissionSet of options.permissionSets ?? []) {
@@ -23,7 +23,7 @@ export class MockPermissionSetStore implements PermissionSetStore {
     this.assignments = [...(options.assignments ?? [])];
   }
 
-  async listPermissionSets(): Promise<readonly PermissionSet[]> {
+  async list(): Promise<readonly PermissionSet[]> {
     return [...this.permissionSets.values()];
   }
 
@@ -39,12 +39,12 @@ export class MockPermissionSetStore implements PermissionSetStore {
     );
   }
 
-  async getPermissionSet(key: string): Promise<PermissionSet | undefined> {
-    this.getPermissionSetCalls += 1;
+  async get(key: string): Promise<PermissionSet | undefined> {
+    this.getCalls += 1;
     return this.permissionSets.get(key);
   }
 
-  async createPermissionSet(input: PermissionSet): Promise<PermissionSet> {
+  async create(input: PermissionSet): Promise<PermissionSet> {
     if (this.permissionSets.has(input.key)) {
       throw new Error(`Permission Set already exists: ${input.key}`);
     }
@@ -52,10 +52,7 @@ export class MockPermissionSetStore implements PermissionSetStore {
     return input;
   }
 
-  async updatePermissionSet(
-    key: string,
-    input: PermissionSet,
-  ): Promise<PermissionSet> {
+  async update(key: string, input: PermissionSet): Promise<PermissionSet> {
     if (!this.permissionSets.has(key)) {
       throw new Error(`Unknown Permission Set: ${key}`);
     }
@@ -75,7 +72,7 @@ export class MockPermissionSetStore implements PermissionSetStore {
     return input;
   }
 
-  async deletePermissionSet(key: string): Promise<void> {
+  async delete(key: string): Promise<void> {
     this.permissionSets.delete(key);
     for (let index = this.assignments.length - 1; index >= 0; index -= 1) {
       if (this.assignments[index]?.permissionSet === key) {
@@ -84,7 +81,7 @@ export class MockPermissionSetStore implements PermissionSetStore {
     }
   }
 
-  async assignPermissionSet(
+  async assign(
     input: PermissionSetAssignment,
   ): Promise<PermissionSetAssignment> {
     if (this.assignments.some((assignment) => assignment.id === input.id)) {
@@ -94,7 +91,7 @@ export class MockPermissionSetStore implements PermissionSetStore {
     return input;
   }
 
-  async revokeAssignment(id: string): Promise<void> {
+  async revoke(id: string): Promise<void> {
     const index = this.assignments.findIndex(
       (assignment) => assignment.id === id,
     );

@@ -1,5 +1,10 @@
-export * from './model.js';
-export * from './plugin.js';
-export * from './service.js';
-export * from './store.js';
-export * from './builder.js';
+export type { RestrictionRule } from './model.js';
+export type { RestrictionRuleStore } from './store.js';
+export {
+  restrictionRulesPlugin,
+  type RestrictionRulesApi,
+  type RestrictionRulesAuthorizationApi,
+  type RestrictionRulesOptions,
+  type RestrictionRulesPlugin,
+} from './plugin.js';
+export { RestrictionRuleBuilder, defineRestrictionRule } from './builder.js';

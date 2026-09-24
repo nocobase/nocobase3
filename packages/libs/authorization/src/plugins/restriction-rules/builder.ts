@@ -1,40 +1,42 @@
 import type {
-  AuthorizationActions,
-  AuthorizationResourceReference,
-} from '../../core/builders.js';
-import { appendScopedAction } from '../internal/rule-builder.js';
-import type { RestrictionRule, RestrictionRuleAction } from './model.js';
-import type { AccessConstraintValue } from '../../core/constraints.js';
+  BusinessActions,
+  BusinessResourceReference,
+} from '../../core/business.js';
+import type { RecordSelection } from '../../core/selection.js';
 import type { AuthorizationTitle } from '../../core/titles.js';
 import type { AuthorizationSubject } from '../../core/types.js';
+import { appendRuleAction } from '../internal/rules.js';
+import type { RestrictionRule } from './model.js';
 
-export class RestrictionRuleBuilder<A extends AuthorizationActions> {
+export class RestrictionRuleBuilder<A extends BusinessActions> {
   constructor(
-    private readonly resource: AuthorizationResourceReference<A>,
+    private readonly resource: BusinessResourceReference<A>,
     private readonly definition: RestrictionRule,
   ) {}
+
   scope<N extends keyof A & string>(
     action: N,
     scopeKey: keyof A[N] & string,
-    scope: AccessConstraintValue,
+    selection: RecordSelection,
   ): RestrictionRuleBuilder<A> {
+    this.resource.scope(action, scopeKey);
     return new RestrictionRuleBuilder(this.resource, {
       ...this.definition,
-      actions: appendScopedAction<A, N, RestrictionRuleAction>(
-        this.resource,
-        this.definition.actions,
+      actions: appendRuleAction(this.definition.actions, {
         action,
         scopeKey,
-        { action, scopeKey, scope },
-      ),
+        selection,
+      }),
     });
   }
+
   title(title: AuthorizationTitle): RestrictionRuleBuilder<A> {
     return new RestrictionRuleBuilder(this.resource, {
       ...this.definition,
       title,
     });
   }
+
   subjects(
     ...subjects: readonly AuthorizationSubject[]
   ): RestrictionRuleBuilder<A> {
@@ -43,25 +45,28 @@ export class RestrictionRuleBuilder<A extends AuthorizationActions> {
       subjects: [...this.definition.subjects, ...structuredClone(subjects)],
     });
   }
+
   reason(reason: string): RestrictionRuleBuilder<A> {
     return new RestrictionRuleBuilder(this.resource, {
       ...this.definition,
       reason,
     });
   }
+
   build(): RestrictionRule {
     return structuredClone(this.definition);
   }
 }
-export function restrictionRule<A extends AuthorizationActions>(
+
+export function defineRestrictionRule<A extends BusinessActions>(
   key: string,
-  resource: AuthorizationResourceReference<A>,
+  resource: BusinessResourceReference<A>,
 ): RestrictionRuleBuilder<A> {
   if (!key) throw new TypeError('A rule needs a key');
   return new RestrictionRuleBuilder(resource, {
     key,
-    subjects: [],
-    resource: { type: 'resource', id: resource.name },
+    resource: { type: 'business', id: resource.name },
     actions: [],
+    subjects: [],
   });
 }

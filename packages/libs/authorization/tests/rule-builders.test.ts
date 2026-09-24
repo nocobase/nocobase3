@@ -1,87 +1,102 @@
 import { expect, it } from 'vitest';
 import {
-  defineAuthorizationResource,
-  type AuthorizationContribution,
+  defineBusinessResource,
+  selection,
+  type BusinessContribution,
 } from '../src/core/index.js';
-import { permissionSet } from '../src/plugins/permission-sets/index.js';
-import { defaultAccessRule } from '../src/plugins/default-access/index.js';
-import { sharingRule } from '../src/plugins/sharing-rules/index.js';
-import { restrictionRule } from '../src/plugins/restriction-rules/index.js';
+import { definePermissionSet } from '../src/plugins/permission-sets/index.js';
+import { defineDefaultAccessRule } from '../src/plugins/default-access/index.js';
+import { defineSharingRule } from '../src/plugins/sharing-rules/index.js';
+import { defineRestrictionRule } from '../src/plugins/restriction-rules/index.js';
 
-const contribution: AuthorizationContribution<{ quotes: string }> = {
+const contribution: BusinessContribution<{ quotes: string }> = {
   build: () => ({
-    scopes: {
-      quotes: {
-        title: 'Quotes',
-        resource: { type: 'database.collection', id: 'quotes' },
-      },
-    },
+    dataScopes: [{ key: 'quotes', title: 'Quotes', collection: 'quotes' }],
     grants: [
       {
         resource: { type: 'database.collection', id: 'quotes' },
-        actions: [
-          { action: 'read', policy: { type: 'database', scope: 'quotes' } },
-        ],
+        actions: [{ action: 'read', scopeKey: 'quotes' }],
       },
     ],
   }),
 };
-const resource = defineAuthorizationResource('sales.quotes', (resource) =>
+const resource = defineBusinessResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
     .group('sales')
     .action('view', (action) => action.title('View').grant(contribution)),
 ).reference();
 
-it('builds independent permission-set and rule DSL without an application or store', () => {
+it('builds permission sets and rules without an application or store', () => {
   const grant = resource.grant({ view: { quotes: 'own' } });
-  const role = permissionSet('sales').title('Sales');
+  const role = definePermissionSet('sales').title('Sales');
   const configured = role.grant(grant);
   grant.actions = [];
   expect(role.build().grants).toEqual([]);
-  expect(configured.build().grants[0].actions).toHaveLength(1);
-  const scope = { type: 'database', recordAccess: 'own' };
-  const defaults = defaultAccessRule(resource)
-    .scope('view', 'quotes', scope)
+  expect(configured.build().grants[0]?.actions).toHaveLength(1);
+  const own = selection.recordAccess('own');
+  const defaults = defineDefaultAccessRule('quotes-default', resource)
+    .scope('view', 'quotes', own)
     .build();
-  const sharing = sharingRule('selected', resource)
+  const sharing = defineSharingRule('selected', resource)
     .title('Selected')
-    .scope('view', 'quotes', { type: 'records', ids: ['q1'] })
+    .scope('view', 'quotes', selection.records(['q1']))
     .subjects({ type: 'user', id: 'alex' })
     .reason('Handover')
     .build();
-  const restriction = restrictionRule('public', resource)
-    .scope('view', 'quotes', scope)
+  const restriction = defineRestrictionRule('public', resource)
+    .scope('view', 'quotes', own)
     .subjects({ type: 'team', id: 'sales' })
     .build();
-  scope.recordAccess = 'changed';
-  expect(defaults.actions).toEqual([
-    {
-      action: 'view',
-      scopeKey: 'quotes',
-      scope: { type: 'database', recordAccess: 'own' },
-    },
-  ]);
-  expect(sharing.subjects).toEqual([{ type: 'user', id: 'alex' }]);
-  expect(restriction.actions[0].scope).toEqual(defaults.actions[0].scope);
+  expect(defaults).toEqual({
+    key: 'quotes-default',
+    resource: { type: 'business', id: 'sales.quotes' },
+    actions: [
+      {
+        action: 'view',
+        scopeKey: 'quotes',
+        selection: { type: 'recordAccess', key: 'own' },
+      },
+    ],
+  });
+  expect(sharing).toMatchObject({
+    key: 'selected',
+    title: 'Selected',
+    subjects: [{ type: 'user', id: 'alex' }],
+    reason: 'Handover',
+  });
+  expect(restriction.actions[0]?.selection).toEqual(
+    defaults.actions[0]?.selection,
+  );
   for (const definition of [configured.build(), defaults, sharing, restriction])
     expect(JSON.parse(JSON.stringify(definition))).toEqual(definition);
 });
 
 it('rejects ambiguous and unknown rule targets before persistence', () => {
-  const scope = { type: 'all' as const };
+  const all = selection.all();
   expect(() =>
-    defaultAccessRule(resource)
-      .scope('view', 'quotes', scope)
-      .scope('view', 'quotes', scope),
+    defineDefaultAccessRule('d', resource)
+      .scope('view', 'quotes', all)
+      .scope('view', 'quotes', all),
   ).toThrow('Duplicate');
   expect(() =>
-    sharingRule('bad', resource).scope('missing' as never, 'quotes', {
-      type: 'records',
-      ids: [],
-    }),
+    defineSharingRule('bad', resource).scope(
+      'missing' as never,
+      'quotes' as never,
+      selection.records([]),
+    ),
   ).toThrow('Unknown');
   expect(() =>
-    restrictionRule('bad', resource).scope('view', 'wrong' as never, scope),
+    defineRestrictionRule('bad', resource).scope('view', 'wrong' as never, all),
   ).toThrow('Unknown');
+  expect(() =>
+    defineSharingRule('everything', resource).scope('view', 'quotes', all),
+  ).toThrow('cannot select all records');
+  expect(() =>
+    defineRestrictionRule('limit', resource).scope(
+      'view',
+      'quotes',
+      selection.records(['q1']),
+    ),
+  ).not.toThrow();
 });

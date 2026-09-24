@@ -1,19 +1,23 @@
-import type { AuthorizationTitle } from '../../core/titles.js';
 import type {
-  AuthorizationSubjectRegistry,
   AuthorizationGrant,
   AuthorizationGrantService,
   AuthorizationGrantsChangedListener,
-  ResolveAuthorizationGrantsInput,
-  ResolveAllAuthorizationGrantsInput,
-  AuthorizationPlugin,
-  AuthorizationSubject,
-  AuthorizationIdentity,
-  Principal,
-} from '../../core/index.js';
-import { resolveAuthorizationSubjects } from '../../core/index.js';
-import type {
   PermissionGrant,
+  ResolveAllAuthorizationGrantsInput,
+  ResolveAuthorizationGrantsInput,
+} from '../../core/grants.js';
+import type { AuthorizationPlugin } from '../../core/plugin.js';
+import {
+  resolveAuthorizationSubjects,
+  type AuthorizationSubjectRegistry,
+} from '../../core/subjects.js';
+import type { AuthorizationTitle } from '../../core/titles.js';
+import type {
+  AuthorizationIdentity,
+  AuthorizationSubject,
+  Principal,
+} from '../../core/types.js';
+import type {
   PermissionSet,
   PermissionSetAssignment,
   PermissionSetSubject,
@@ -33,6 +37,13 @@ export interface AssignPermissionSetInput {
   permissionSet: string;
 }
 
+export interface ReplaceSubjectAssignmentsInput {
+  subject: PermissionSetSubject;
+  /** The Permission Sets this replacement owns; others are left alone. */
+  managedPermissionSets: readonly string[];
+  permissionSets: readonly string[];
+}
+
 export interface PermissionSetsApi<TTransaction = unknown> {
   create(input: CreatePermissionSetInput): Promise<PermissionSet>;
   update(key: string, input: CreatePermissionSetInput): Promise<PermissionSet>;
@@ -45,18 +56,11 @@ export interface PermissionSetsApi<TTransaction = unknown> {
   listAssignments(
     permissionSet?: string,
   ): Promise<readonly PermissionSetAssignment[]>;
-  replaceSubjectAssignments(input: {
-    subject: PermissionSetSubject;
-    managedPermissionSets: readonly string[];
-    permissionSets: readonly string[];
-  }): Promise<readonly PermissionSetAssignment[]>;
+  replaceSubjectAssignments(
+    input: ReplaceSubjectAssignmentsInput,
+  ): Promise<readonly PermissionSetAssignment[]>;
+  /** Announces a change through `authz.onGrantsChanged`. */
   notifyAssignmentsChanged(subject: PermissionSetSubject): Promise<void>;
-  /**
-   * The Grant Provider contract: subscribes to assignment changes and returns
-   * a function that releases the subscription. Reached through
-   * `Authorization.onGrantsChanged`, so a host does not name this plugin.
-   */
-  onChange(listener: AuthorizationGrantsChangedListener): () => void;
   /**
    * Throws when removing this subject would leave a Permission Set that
    * requires an active assignment without one. Bind this check and the actual
@@ -78,9 +82,6 @@ export interface PermissionSetsApi<TTransaction = unknown> {
   protection(key: string): PermissionSetProtectionInfo | undefined;
   /** Throws PermissionSetProtectedError when the operation is not allowed on a protected Permission Set. */
   assertWritable(key: string, operation: PermissionSetWriteOperation): void;
-  isUnrestricted(key: string): boolean;
-  /** True when the identity holds at least one unrestricted Permission Set. */
-  unrestricted(identity: AuthorizationIdentity): Promise<boolean>;
   getEffective(input: {
     principal: Principal;
     subjects?: readonly AuthorizationSubject[];
@@ -92,7 +93,7 @@ export type PermissionSetWriteOperation =
 
 /** Owner of a protection the library declares on its own behalf. */
 export const PERMISSION_SETS_PROTECTION_OWNER: string =
-  '@nocobase/authorization/permissions';
+  '@nocobase/authorization/permission-sets';
 
 export interface PermissionSetProtection {
   /** Who registers the protection, usually a plugin package name. */
@@ -231,7 +232,7 @@ export type PermissionSetsPlugin<TTransaction = unknown> = AuthorizationPlugin<
   PermissionSetsAuthorizationApi<TTransaction>
 >;
 
-export function permissionSets<TTransaction = unknown>(
+export function permissionSetsPlugin<TTransaction = unknown>(
   options: PermissionSetsOptions<TTransaction>,
 ): PermissionSetsPlugin<TTransaction> {
   const service = new PermissionSetService(
@@ -257,7 +258,7 @@ export function permissionSets<TTransaction = unknown>(
   }
   return {
     id: 'permission-sets',
-    grants: service,
+    grants: service.grantService(),
     authorizationApi: { permissionSets: service },
     setup(authz): void {
       service.useSubjects(authz.subjects);
@@ -279,9 +280,9 @@ function resolveRootSet(
   return typeof rootSet === 'string' ? { key: rootSet } : rootSet;
 }
 
-class PermissionSetService<TTransaction = unknown>
-  implements AuthorizationGrantService, PermissionSetsApi<TTransaction>
-{
+class PermissionSetService<
+  TTransaction = unknown,
+> implements PermissionSetsApi<TTransaction> {
   private readonly protections: Map<string, PermissionSetProtectionInfo>;
 
   constructor(
@@ -300,13 +301,17 @@ class PermissionSetService<TTransaction = unknown>
     this.shared.subjects = subjects;
   }
 
-  isUnrestricted(key: string): boolean {
-    return this.protections.get(key)?.unrestricted === true;
-  }
-
-  async unrestricted(identity: AuthorizationIdentity): Promise<boolean> {
-    if (!this.hasUnrestrictedSets()) return false;
-    return this.setsAreUnrestricted(await this.getEffective(identity));
+  /** The Grant Provider side, kept off the public API. */
+  grantService(): AuthorizationGrantService {
+    return {
+      resolve: (input) => this.resolveGrants(input),
+      resolveAll: (input) => this.resolveAllGrants(input),
+      for: (identity) => this.grantsFor(identity),
+      unrestricted: async (identity) =>
+        this.hasUnrestrictedSets() &&
+        this.setsAreUnrestricted(await this.getEffective(identity)),
+      onChange: (listener) => this.onChange(listener),
+    };
   }
 
   protect(protection: PermissionSetProtection): () => void {
@@ -351,10 +356,10 @@ class PermissionSetService<TTransaction = unknown>
     throw new PermissionSetProtectedError(key, protection.owner, operation);
   }
 
-  async resolve(
+  private async resolveGrants(
     input: ResolveAuthorizationGrantsInput,
   ): Promise<readonly AuthorizationGrant[]> {
-    const grants = await this.resolveAll({
+    const grants = await this.resolveAllGrants({
       principal: input.principal,
       subjects: input.subjects,
     });
@@ -367,13 +372,15 @@ class PermissionSetService<TTransaction = unknown>
       .map((grant) => ({ ...grant, resource: input.resource }));
   }
 
-  async resolveAll(
+  private async resolveAllGrants(
     input: ResolveAllAuthorizationGrantsInput,
   ): Promise<readonly AuthorizationGrant[]> {
     return this.toGrants(await this.getEffective(input));
   }
 
-  scope(identity: AuthorizationIdentity): AuthorizationGrantService {
+  private grantsFor(
+    identity: AuthorizationIdentity,
+  ): AuthorizationGrantService {
     // One store read per request: every derived answer comes from this promise.
     let sets: Promise<readonly PermissionSet[]> | undefined;
     const effective = (): Promise<readonly PermissionSet[]> => {
@@ -409,7 +416,7 @@ class PermissionSetService<TTransaction = unknown>
   }
 
   private setsAreUnrestricted(sets: readonly PermissionSet[]): boolean {
-    return sets.some((set) => this.isUnrestricted(set.key));
+    return sets.some((set) => this.protections.get(set.key)?.unrestricted);
   }
 
   private toGrants(
@@ -439,28 +446,28 @@ class PermissionSetService<TTransaction = unknown>
   }
 
   async create(input: CreatePermissionSetInput): Promise<PermissionSet> {
-    if (await this.store.getPermissionSet(input.key)) {
+    if (await this.store.get(input.key)) {
       throw new PermissionSetConflictError(
         `Permission Set already exists: ${input.key}`,
       );
     }
-    return this.store.createPermissionSet(this.toPermissionSet(input));
+    return this.store.create(this.toPermissionSet(input));
   }
 
   async update(
     key: string,
     input: CreatePermissionSetInput,
   ): Promise<PermissionSet> {
-    if (!(await this.store.getPermissionSet(key))) {
+    if (!(await this.store.get(key))) {
       throw new PermissionSetNotFoundError(key);
     }
-    if (key !== input.key && (await this.store.getPermissionSet(input.key))) {
+    if (key !== input.key && (await this.store.get(input.key))) {
       throw new PermissionSetConflictError(
         `Permission Set already exists: ${input.key}`,
       );
     }
     const affectedSubjects = await this.assignedSubjects(key);
-    const permissionSet = await this.store.updatePermissionSet(
+    const permissionSet = await this.store.update(
       key,
       this.toPermissionSet(input),
     );
@@ -469,30 +476,30 @@ class PermissionSetService<TTransaction = unknown>
   }
 
   async delete(key: string): Promise<void> {
-    if (!(await this.store.getPermissionSet(key))) {
+    if (!(await this.store.get(key))) {
       throw new PermissionSetNotFoundError(key);
     }
     const affectedSubjects = await this.assignedSubjects(key);
-    await this.store.deletePermissionSet(key);
+    await this.store.delete(key);
     await this.notifySubjectsChanged(affectedSubjects);
   }
 
   get(key: string): Promise<PermissionSet | undefined> {
-    return this.store.getPermissionSet(key);
+    return this.store.get(key);
   }
 
   list(): Promise<readonly PermissionSet[]> {
-    return this.store.listPermissionSets();
+    return this.store.list();
   }
 
   async assign(
     input: AssignPermissionSetInput,
   ): Promise<PermissionSetAssignment> {
-    if (!(await this.store.getPermissionSet(input.permissionSet))) {
+    if (!(await this.store.get(input.permissionSet))) {
       throw new PermissionSetNotFoundError(input.permissionSet);
     }
     this.assertAssignableTo(input.permissionSet, input.subject);
-    const assignment = await this.store.assignPermissionSet({
+    const assignment = await this.store.assign({
       id: input.id ?? this.createAssignmentId(input),
       subject: input.subject,
       permissionSet: input.permissionSet,
@@ -516,7 +523,7 @@ class PermissionSetService<TTransaction = unknown>
       (item) => item.id === id,
     );
     if (assignment) await this.assertRetainsAssignment(assignment);
-    await this.store.revokeAssignment(id);
+    await this.store.revoke(id);
     return assignment;
   }
 
@@ -526,11 +533,9 @@ class PermissionSetService<TTransaction = unknown>
     return this.store.listAssignments(permissionSet);
   }
 
-  async replaceSubjectAssignments(input: {
-    subject: PermissionSetSubject;
-    managedPermissionSets: readonly string[];
-    permissionSets: readonly string[];
-  }): Promise<readonly PermissionSetAssignment[]> {
+  async replaceSubjectAssignments(
+    input: ReplaceSubjectAssignmentsInput,
+  ): Promise<readonly PermissionSetAssignment[]> {
     const result = await this.mutateAssignments((service) =>
       service.replaceAssignments(input),
     );
@@ -538,11 +543,9 @@ class PermissionSetService<TTransaction = unknown>
     return result.assignments;
   }
 
-  private async replaceAssignments(input: {
-    subject: PermissionSetSubject;
-    managedPermissionSets: readonly string[];
-    permissionSets: readonly string[];
-  }): Promise<{
+  private async replaceAssignments(
+    input: ReplaceSubjectAssignmentsInput,
+  ): Promise<{
     assignments: readonly PermissionSetAssignment[];
     changed: boolean;
   }> {
@@ -555,7 +558,7 @@ class PermissionSetService<TTransaction = unknown>
       );
     }
     for (const key of requested) {
-      if (!(await this.store.getPermissionSet(key))) {
+      if (!(await this.store.get(key))) {
         throw new PermissionSetNotFoundError(key);
       }
       this.assertAssignableTo(key, input.subject);
@@ -575,7 +578,7 @@ class PermissionSetService<TTransaction = unknown>
       await this.assertRetainsAssignment(assignment);
     }
     for (const assignment of removed) {
-      await this.store.revokeAssignment(assignment.id);
+      await this.store.revoke(assignment.id);
     }
     const existingKeys = new Set(
       existing.map((assignment) => assignment.permissionSet),
@@ -591,7 +594,7 @@ class PermissionSetService<TTransaction = unknown>
         subject: input.subject,
         permissionSet,
       };
-      created.push(await this.store.assignPermissionSet(assignment));
+      created.push(await this.store.assign(assignment));
     }
     const kept = existing.filter((assignment) =>
       requestedSet.has(assignment.permissionSet),
@@ -628,7 +631,7 @@ class PermissionSetService<TTransaction = unknown>
     for (const key of keys) await this.store.lock?.(key);
   }
 
-  onChange(listener: AuthorizationGrantsChangedListener): () => void {
+  private onChange(listener: AuthorizationGrantsChangedListener): () => void {
     this.shared.subscribers.add(listener);
     return (): void => {
       this.shared.subscribers.delete(listener);
@@ -743,9 +746,7 @@ class PermissionSetService<TTransaction = unknown>
       assignments.map((assignment) => assignment.permissionSet),
     );
     const requested = [...keys];
-    const sets = await Promise.all(
-      requested.map((key) => this.store.getPermissionSet(key)),
-    );
+    const sets = await Promise.all(requested.map((key) => this.store.get(key)));
     const missing = sets.findIndex((set) => set === undefined);
     if (missing >= 0) {
       throw new Error(`Unknown Permission Set: ${requested[missing]}`);

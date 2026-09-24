@@ -1,3 +1,5 @@
+import type { AccessConstraint } from './constraints.js';
+import type { RecordSelection } from './selection.js';
 import type { AuthorizationTitle } from './titles.js';
 import type {
   AuthorizationIdentity,
@@ -13,17 +15,41 @@ export interface AuthorizationGrantSource {
   id: string;
 }
 
+/** Interpreted only by the resource type that owns the grant. */
 export interface AuthorizationPolicy {
   type: string;
   [key: string]: unknown;
 }
 
+/** A grant as a Permission Set or a builder writes it. */
+export interface PermissionGrant {
+  resource: ResourceRef;
+  actions: readonly PermissionGrantAction[];
+}
+
+export interface PermissionGrantAction {
+  action: string;
+  policy?: AuthorizationPolicy;
+}
+
+/** The business action a composed grant was expanded from. */
+export interface AuthorizationGrantOrigin {
+  resource: ResourceRef;
+  action: string;
+  /** The data scope of the business action this grant fills. */
+  scopeKey?: string;
+  /** What the business grant selected for that data scope. */
+  selection?: RecordSelection;
+  /** Rule constraints that apply to this business branch only. */
+  constraints?: readonly AccessConstraint[];
+}
+
 export interface AuthorizationGrant {
-  origin?: { resource: ResourceRef; action: string; scopeKey?: string };
   source: AuthorizationGrantSource;
   resource: ResourceRef;
   action: string;
   policy?: AuthorizationPolicy;
+  origin?: AuthorizationGrantOrigin;
 }
 
 export interface ResolveAuthorizationGrantsInput {
@@ -42,6 +68,7 @@ export type AuthorizationGrantsChangedListener = (
   subject: AuthorizationSubject,
 ) => void | Promise<void>;
 
+/** The Grant Provider contract. */
 export interface AuthorizationGrantService {
   resolve(
     input: ResolveAuthorizationGrantsInput,
@@ -49,8 +76,9 @@ export interface AuthorizationGrantService {
   resolveAll(
     input: ResolveAllAuthorizationGrantsInput,
   ): Promise<readonly AuthorizationGrant[]>;
-  scope?(identity: AuthorizationIdentity): AuthorizationGrantService;
-  /** True when the identity has unrestricted access and per-resource authorization is skipped. */
+  /** A service bound to one identity, sharing reads across its checks. */
+  for?(identity: AuthorizationIdentity): AuthorizationGrantService;
+  /** True when the identity skips per-resource authorization. */
   unrestricted?(identity: AuthorizationIdentity): Promise<boolean>;
   /** Notifies when the grants a subject resolves to may have changed. */
   onChange?(listener: AuthorizationGrantsChangedListener): () => void;

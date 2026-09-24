@@ -1,4 +1,5 @@
 import type { AuthorizationGrantSource } from './grants.js';
+import type { RecordSelection } from './selection.js';
 import type {
   AuthorizationIdentity,
   AuthorizationSubject,
@@ -6,23 +7,24 @@ import type {
   ResourceRef,
 } from './types.js';
 
-export interface ResourceAccessScope {
-  type: string;
-  [key: string]: unknown;
+/** One action of a default-access, sharing or restriction rule. */
+export interface RuleAction {
+  action: string;
+  /** The business action's data scope; omit for a collection rule. */
+  scopeKey?: string;
+  selection: RecordSelection;
 }
 
-export type AccessConstraintValue =
-  | { type: 'all' }
-  | { type: 'ids'; ids: readonly string[] }
-  | ResourceAccessScope;
-
+/** A rule's contribution to the records one action reaches. */
 export interface AccessConstraint {
   source: AuthorizationGrantSource;
+  /** `expand` adds records to a grant; `restrict` intersects them. */
   effect: 'expand' | 'restrict';
-  value: AccessConstraintValue;
+  selection: RecordSelection;
 }
 
 export interface ResolveAccessConstraintsInput {
+  /** The business action's data scope, when the check fills one. */
   scopeKey?: string;
   principal: Principal;
   subjects?: readonly AuthorizationSubject[];
@@ -32,8 +34,8 @@ export interface ResolveAccessConstraintsInput {
 
 export interface AccessConstraintResolver {
   id: string;
-  /** Optional request-scoped resolver, shared by all checks for one identity. */
-  scope?(identity: AuthorizationIdentity): AccessConstraintResolver;
+  /** A resolver bound to one identity, shared by all of its checks. */
+  for?(identity: AuthorizationIdentity): AccessConstraintResolver;
   resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]>;
@@ -45,7 +47,7 @@ export interface AccessConstraintService {
   ): Promise<readonly AccessConstraint[]>;
 }
 
-export class AccessConstraintRegistry {
+export class AccessConstraintRegistry implements AccessConstraintService {
   private readonly resolvers = new Map<string, AccessConstraintResolver>();
 
   add(resolver: AccessConstraintResolver): void {
@@ -66,18 +68,24 @@ export class AccessConstraintRegistry {
     return resolved.flat();
   }
 
-  list(): string[] {
+  list(): readonly string[] {
     return [...this.resolvers.keys()].sort();
   }
 
-  scope(identity: AuthorizationIdentity): AccessConstraintService {
+  /** Caches each answer for the lifetime of one identity's context. */
+  for(identity: AuthorizationIdentity): AccessConstraintService {
     const cache = new Map<string, Promise<readonly AccessConstraint[]>>();
     const resolvers = [...this.resolvers.values()].map(
-      (resolver) => resolver.scope?.(identity) ?? resolver,
+      (resolver) => resolver.for?.(identity) ?? resolver,
     );
     return {
       resolve: (input) => {
-        const key = `${input.resource.type}\u0000${input.resource.id}\u0000${input.action}\u0000${input.scopeKey ?? ''}`;
+        const key = JSON.stringify([
+          input.resource.type,
+          input.resource.id,
+          input.action,
+          input.scopeKey ?? null,
+        ]);
         let result = cache.get(key);
         if (!result) {
           result = Promise.all(
