@@ -23,11 +23,15 @@ public override async boot(): Promise<void> {
 }
 ```
 
-The plugin reconciles declarations into `schedule_definitions` and the schedule projection owned by the application's configured `schedule` Queue. The App selects the Queue connection and driver; Scheduler does not force a Database Queue connection. The selected driver must support scheduled jobs, so the `sync` driver is not valid for this queue. Scheduler dispatches targets through a fixed `ScheduleDispatchJob`, records idempotent occurrences through their final target outcome, and provides an authenticated, authorized, read-only Settings page and API. Raw target config is never returned by the API.
+The plugin reconciles declarations into `schedule_definitions` and hands each schedule's rule to the application's schedule service from `@nocobase/app-server/schedule`, on its own `@nocobase/app-plugin-scheduler` scope with one firing at a time and a single attempt. The application's `schedule` configuration selects the backend: `redis` runs every firing once across any number of instances, and `memory` — also the built-in fallback when `schedule.default` is not set — runs on one host only. The application must compose `ScheduleExecuteServiceProvider`. Scheduler records each firing as an idempotent occurrence whose id is the firing's job id, keeps the run count, last run and next run on the definition, and provides an authenticated, authorized, read-only Settings page and API. Raw target config is never returned by the API.
 
 `schedulerServiceToken` is the plugin's whole extension surface, with two methods. `registerTarget()` declares what a schedule can point at: how a config is validated, how a firing starts, and how a run that finishes later is inspected, and it returns the handle that reports a terminal outcome. `defineSchedule(definition)` registers a schedule itself; `key` must be unique within the application and forms the schedule's stable identity. Both are read once when the App syncs during startup, so call them from `register()` or `boot()`. Reading and changing schedules afterward is reachable through the HTTP API and the `scheduler sync` command rather than through the service.
 
-Run a non-destructive synchronization with `pnpm nocobase scheduler sync`. A deployment may run `node dist/cli/index.js scheduler sync --finalize` once per App, from any directory, or `pnpm nocobase scheduler sync --finalize` inside `dist/`, to deactivate declarations missing from the complete manifest. The one-shot command does not start the Schedule worker.
+Run a non-destructive synchronization with `pnpm nocobase scheduler sync`. A deployment may run `node dist/cli/index.js scheduler sync --finalize` once per App, from any directory, or `pnpm nocobase scheduler sync --finalize` inside `dist/`, to deactivate declarations missing from the complete manifest. The one-shot command writes rules without starting the schedule worker. On the `memory` adapter it needs the state file's lock, so it cannot run while the application itself is running.
+
+This version replaces the queue-backed scheduling of earlier releases and
+migrates nothing from `queue_schedules` or `queue_jobs`: rules are written again
+on the next start, and run counts start from zero.
 
 ## Verification
 
@@ -36,4 +40,5 @@ pnpm --filter @nocobase/app-plugin-scheduler lint
 pnpm --filter @nocobase/app-plugin-scheduler typecheck
 pnpm --filter @nocobase/app-plugin-scheduler test
 pnpm --filter @nocobase/app-plugin-scheduler build
+pnpm --filter @nocobase/app-plugin-scheduler test:integration  # needs Docker; runs against Redis
 ```

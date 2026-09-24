@@ -1,47 +1,42 @@
-import { queueMigrationSource } from '@nocobase/queue';
-import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import type { DatabaseManager } from '@nocobase/db';
+import type { ScheduleExecutionContext as FiringContext } from '@nocobase/schedule';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
 import {
-  ScheduleDispatchJob,
-  type ScheduleDispatchPayload,
-} from '../server/jobs/dispatch.js';
+  createScheduleDispatchJob,
+  type ScheduleJobSpec,
+} from '../server/dispatch.js';
 import { ScheduleOccurrenceStore } from '../server/occurrences.js';
 import { ScheduleOccurrenceError } from '../server/occurrences.js';
-import { ScheduleTargetRegistry } from '../server/schedules/registry.js';
+import {
+  ScheduleTargetRegistry,
+  type ScheduleTargetType,
+} from '../server/schedules/registry.js';
 import { DefaultSchedulerService } from '../server/services/scheduler.js';
 import type { ScheduleStore } from '../server/store.js';
+import { createSchedulerDatabase } from './support/scheduler.js';
+
+const SPEC: Omit<ScheduleJobSpec, 'target'> = {
+  id: 'schedule-1',
+  cron: '0 * * * *',
+  timezone: 'UTC',
+  definitionHash: 'hash',
+};
+
+function firing(jobId: string): FiringContext {
+  return {
+    jobId,
+    scheduledAt: new Date('2026-09-24T01:00:00.000Z'),
+    runAt: new Date('2026-09-24T01:00:01.000Z'),
+    signal: new AbortController().signal,
+  };
+}
 
 describe('@nocobase/app-plugin-scheduler', () => {
   let database: DatabaseManager;
 
   beforeEach(async () => {
-    database = createDatabaseManager({
-      drivers: { sqlite },
-      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-    });
-    const connection = database.connection();
-    await database
-      .createMigrator({
-        sources: [
-          {
-            ...queueMigrationSource,
-            parameters: {
-              jobsTable: 'queue_jobs',
-              schedulesTable: 'queue_schedules',
-            },
-            configuration: [{ driver: 'database' }],
-          },
-        ],
-      })
-      .latest();
-    await migration.up({
-      builder: connection.builder,
-      query: connection.query,
-      connection,
-    });
+    database = await createSchedulerDatabase();
     await database
       .query()
       .insertInto('schedule_definitions')
@@ -64,6 +59,28 @@ describe('@nocobase/app-plugin-scheduler', () => {
       })
       .execute();
   });
+
+  function dispatcher(
+    target: ScheduleTargetType,
+    registry: ScheduleTargetRegistry = new ScheduleTargetRegistry(),
+  ) {
+    registry.register(target);
+    const occurrences = new ScheduleOccurrenceStore(database);
+    return createScheduleDispatchJob(
+      { ...SPEC, target: { type: target.type, config: {} } },
+      undefined,
+      { targets: registry, occurrences },
+    );
+  }
+
+  function occurrence(id: string) {
+    return database
+      .query()
+      .selectFrom('schedule_occurrences')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+  }
 
   afterEach(async () => database.destroy());
 
@@ -126,51 +143,53 @@ describe('@nocobase/app-plugin-scheduler', () => {
     },
   );
 
-  it('declares a transport-independent schedule queue contract', () => {
-    expect(ScheduleDispatchJob.options).toEqual({
-      name: 'ScheduleDispatchJob',
-      queue: 'schedule',
-      maxRetries: 0,
+  it('builds the executor job from the schedule', () => {
+    const job = createScheduleDispatchJob(
+      {
+        ...SPEC,
+        from: new Date('2026-10-01T00:00:00.000Z'),
+        to: new Date('2026-12-31T00:00:00.000Z'),
+        target: { type: 'report', config: { reportKey: 'weekly' } },
+      },
+      3,
+      {
+        targets: new ScheduleTargetRegistry(),
+        occurrences: new ScheduleOccurrenceStore(database),
+      },
+    );
+
+    expect(job).toMatchObject({
+      name: 'schedule-1',
+      options: {
+        cron: '0 * * * *',
+        tz: 'UTC',
+        // `from` is inclusive; the executor starts strictly after its date.
+        startDate: new Date('2026-09-30T23:59:59.999Z'),
+        endDate: new Date('2026-12-31T00:00:00.000Z'),
+        limit: 3,
+      },
+      payload: {
+        target: { type: 'report', config: { reportKey: 'weekly' } },
+        definitionHash: 'hash',
+      },
     });
   });
 
-  it('records one occurrence and increments execution count on re-execution', async () => {
+  it('records one occurrence per firing and starts its target once', async () => {
     const start = vi.fn(async () => ({
       state: 'accepted' as const,
       reference: { type: 'queue-job', id: 'job-2' },
     }));
-    const registry = new ScheduleTargetRegistry();
-    registry.register({
+    const job = dispatcher({
       type: 'test',
       title: 'Test',
       validate: () => ({ valid: true }),
       describe: async () => ({ targetLabel: 'Test' }),
       start,
     });
-    const job = new ScheduleDispatchJob(
-      registry,
-      new ScheduleOccurrenceStore(database),
-    );
-    const payload: ScheduleDispatchPayload = {
-      schemaVersion: 1,
-      scheduleId: 'schedule-1',
-      definitionHash: 'hash',
-      target: { type: 'test', config: {} },
-    };
-    const context = {
-      jobId: 'occurrence-1',
-      name: 'ScheduleDispatchJob',
-      attempt: 1,
-      queue: 'schedule',
-      priority: 0,
-      acquiredAt: new Date(),
-      stalledCount: 0,
-      scheduleId: 'schedule-1',
-    };
-    job.$hydrate(payload, context);
-    await job.execute();
-    job.$hydrate(payload, { ...context, stalledCount: 1 });
-    await job.execute();
+
+    await job.execute(firing('occurrence-1'));
+    await job.execute(firing('occurrence-1'));
 
     const rows = await database
       .query()
@@ -186,7 +205,85 @@ describe('@nocobase/app-plugin-scheduler', () => {
       targetReferenceType: 'queue-job',
       targetReferenceId: 'job-2',
     });
+    expect(new Date(rows[0]!.scheduledAt as string).toISOString()).toBe(
+      '2026-09-24T01:00:00.000Z',
+    );
     expect(start).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledWith(
+      {},
+      { scheduleId: 'schedule-1', occurrenceId: 'occurrence-1' },
+    );
+  });
+
+  it('starts a firing delivered twice at once only once', async () => {
+    const occurrences = new ScheduleOccurrenceStore(database);
+    const context = { scheduleId: 'schedule-1', occurrenceId: 'racing' };
+
+    const actions = await Promise.all([
+      occurrences.start(context, 'hash', 'test'),
+      occurrences.start(context, 'hash', 'test'),
+    ]);
+
+    expect(actions.sort()).toEqual(['noop', 'start']);
+  });
+
+  it.each([
+    ['disabled', 'target-disabled'],
+    ['missing', 'target-missing'],
+    ['invalid', 'target-invalid'],
+  ] as const)(
+    'records a skipped occurrence when the target is %s',
+    async (state, reason) => {
+      const start = vi.fn();
+      const job = dispatcher({
+        type: 'test',
+        title: 'Test',
+        validate: () => ({ valid: true }),
+        describe: async () => ({ targetLabel: 'Test', state }),
+        start,
+      });
+
+      await job.execute(firing('occurrence-skipped'));
+      await job.execute(firing('occurrence-skipped'));
+
+      await expect(occurrence('occurrence-skipped')).resolves.toMatchObject({
+        scheduleId: 'schedule-1',
+        status: 'skipped',
+        reason,
+        executionCount: 0,
+        finishedAt: expect.anything(),
+      });
+      expect(start).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      { state: 'completed', outcome: 'succeeded', result: { ok: true } },
+      { status: 'succeeded', resultSummary: JSON.stringify({ ok: true }) },
+    ],
+    [
+      { state: 'skipped', reason: 'nothing-to-do' },
+      { status: 'skipped', reason: 'nothing-to-do' },
+    ],
+    [
+      { state: 'failed', reason: 'rejected' },
+      { status: 'failed', reason: 'rejected' },
+    ],
+  ] as const)('records the target result %o', async (result, expected) => {
+    const job = dispatcher({
+      type: 'test',
+      title: 'Test',
+      validate: () => ({ valid: true }),
+      start: async () => result,
+    });
+
+    await job.execute(firing('occurrence-result'));
+
+    await expect(occurrence('occurrence-result')).resolves.toMatchObject({
+      ...expected,
+      executionCount: 1,
+    });
   });
 
   it('scopes a target handle to occurrences its own target started', async () => {
@@ -239,31 +336,6 @@ describe('@nocobase/app-plugin-scheduler', () => {
         .where('id', '=', 'occurrence-scoped')
         .executeTakeFirst(),
     ).resolves.toMatchObject({ status: 'succeeded' });
-  });
-
-  it('requires Queue-provided occurrence context before writing history', async () => {
-    const job = new ScheduleDispatchJob(
-      new ScheduleTargetRegistry(),
-      new ScheduleOccurrenceStore(database),
-    );
-    job.$hydrate(
-      {
-        schemaVersion: 1,
-        scheduleId: 'schedule-1',
-        definitionHash: 'hash',
-        target: { type: 'missing', config: {} },
-      },
-      {
-        jobId: 'occurrence-1',
-        name: 'ScheduleDispatchJob',
-        attempt: 1,
-        queue: 'schedule',
-        priority: 0,
-        acquiredAt: new Date(),
-        stalledCount: 0,
-      },
-    );
-    await expect(job.execute()).rejects.toThrow('requires a schedule id');
   });
 
   it('reports asynchronous completion idempotently and rejects reference or terminal conflicts', async () => {
@@ -358,8 +430,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
   });
 
   it('records dispatch exceptions instead of leaving an occurrence running', async () => {
-    const registry = new ScheduleTargetRegistry();
-    registry.register({
+    const job = dispatcher({
       type: 'throws',
       title: 'Throws',
       validate: () => ({ valid: true }),
@@ -368,92 +439,41 @@ describe('@nocobase/app-plugin-scheduler', () => {
         throw new Error('boom');
       },
     });
-    const job = new ScheduleDispatchJob(
-      registry,
-      new ScheduleOccurrenceStore(database),
+
+    await expect(job.execute(firing('occurrence-error'))).rejects.toThrow(
+      'boom',
     );
-    job.$hydrate(
-      {
-        schemaVersion: 1,
-        scheduleId: 'schedule-1',
-        definitionHash: 'hash',
-        target: { type: 'throws', config: {} },
-      },
-      {
-        jobId: 'occurrence-error',
-        name: 'ScheduleDispatchJob',
-        attempt: 1,
-        queue: 'schedule',
-        priority: 0,
-        acquiredAt: new Date(),
-        stalledCount: 0,
-        scheduleId: 'schedule-1',
-      },
-    );
-    await expect(job.execute()).rejects.toThrow('boom');
-    await expect(
-      database
-        .query()
-        .selectFrom('schedule_occurrences')
-        .selectAll()
-        .where('id', '=', 'occurrence-error')
-        .executeTakeFirst(),
-    ).resolves.toMatchObject({ status: 'failed', reason: 'dispatch-failed' });
+    await expect(occurrence('occurrence-error')).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'dispatch-failed',
+    });
   });
 
-  // `@boringnode/queue` is an unmodified dependency, so a dispatch carries only
-  // what upstream puts in the context: the job id and the schedule id. This is
-  // the shape a real worker delivers, and it has to be enough to record history.
-  it('records an occurrence from the stock queue occurrence context', async () => {
-    const registry = new ScheduleTargetRegistry();
-    registry.register({
-      type: 'stock',
-      title: 'Stock',
+  it('completes an accepted run the target already finished', async () => {
+    const job = dispatcher({
+      type: 'accepted',
+      title: 'Accepted',
       validate: () => ({ valid: true }),
-      describe: async () => ({ targetLabel: 'Stock' }),
-      start: async () => ({ state: 'completed', result: { ok: true } }),
-      inspect: async () => ({ state: 'unknown', reason: 'not-observed' }),
+      start: async () => ({
+        state: 'accepted',
+        reference: { type: 'x', id: '1' },
+      }),
+      inspect: async () => ({
+        state: 'completed',
+        completion: { status: 'succeeded', result: { rows: 3 } },
+      }),
     });
-    const job = new ScheduleDispatchJob(
-      registry,
-      new ScheduleOccurrenceStore(database),
-    );
-    job.$hydrate(
-      {
-        schemaVersion: 1,
-        scheduleId: 'schedule-1',
-        definitionHash: 'hash',
-        target: { type: 'stock', config: {} },
-      },
-      {
-        jobId: 'stock-context',
-        name: 'ScheduleDispatchJob',
-        attempt: 1,
-        queue: 'schedule',
-        priority: 0,
-        acquiredAt: new Date(),
-        stalledCount: 0,
-        scheduleId: 'schedule-1',
-      },
-    );
-    await job.execute();
-    await expect(
-      database
-        .query()
-        .selectFrom('schedule_occurrences')
-        .selectAll()
-        .where('id', '=', 'stock-context')
-        .executeTakeFirst(),
-    ).resolves.toMatchObject({
-      scheduleId: 'schedule-1',
+
+    await job.execute(firing('occurrence-inspected'));
+
+    await expect(occurrence('occurrence-inspected')).resolves.toMatchObject({
       status: 'succeeded',
-      executionCount: 1,
+      targetReferenceId: '1',
     });
   });
 
   it('preserves the original error when inspection fails after wait', async () => {
-    const registry = new ScheduleTargetRegistry();
-    registry.register({
+    const job = dispatcher({
       type: 'accepted',
       title: 'Accepted',
       validate: () => ({ valid: true }),
@@ -466,29 +486,10 @@ describe('@nocobase/app-plugin-scheduler', () => {
         throw new Error('inspect-boom');
       },
     });
-    const job = new ScheduleDispatchJob(
-      registry,
-      new ScheduleOccurrenceStore(database),
-    );
-    job.$hydrate(
-      {
-        schemaVersion: 1,
-        scheduleId: 'schedule-1',
-        definitionHash: 'hash',
-        target: { type: 'accepted', config: {} },
-      },
-      {
-        jobId: 'occurrence-inspect-error',
-        name: 'ScheduleDispatchJob',
-        attempt: 1,
-        queue: 'schedule',
-        priority: 0,
-        acquiredAt: new Date(),
-        stalledCount: 0,
-        scheduleId: 'schedule-1',
-      },
-    );
-    await expect(job.execute()).rejects.toThrow('inspect-boom');
+
+    await expect(
+      job.execute(firing('occurrence-inspect-error')),
+    ).rejects.toThrow('inspect-boom');
   });
 
   it('reconciles a missed asynchronous completion from the target observer', async () => {
