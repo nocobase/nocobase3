@@ -8,42 +8,29 @@ import { SchedulerAuthorizationProvider } from '../server/authorization.js';
 import routes from '../client/routes.js';
 
 it.each([false, true])(
-  'adds a read resource to Automation (group exists: %s)',
+  'adds a settings item to Automation (group exists: %s)',
   async (exists) => {
     const authz = createAppAuthorization({});
-    if (exists)
-      authz.resourceGroups.add({
-        name: 'automation',
-        title: 'Automation',
-        category: 'administration',
-      });
+    if (exists) authz.groups.add({ name: 'automation', title: 'Automation' });
     const container = new ServiceContainer();
     container.instance(authorizationToken, authz);
     await new SchedulerAuthorizationProvider({
       container,
     } as AppPluginApplication).boot();
+    expect(authz.groups.has('automation')).toBe(true);
     expect(
-      authz.resourceGroups
-        .list()
-        .filter((group) => group.name === 'automation'),
-    ).toHaveLength(1);
-    expect(authz.resources.definitionsList()).toContainEqual(
-      expect.objectContaining({
-        name: 'scheduler.schedules',
-        group: 'automation',
-      }),
-    );
-    expect(
-      authz.resources.operation('scheduler.schedules', 'read')?.grants,
-    ).toEqual([
-      {
-        resource: { type: 'settings', id: 'scheduler.schedules' },
-        actions: [{ action: 'read' }],
-      },
-    ]);
-    expect(
-      authz.resources.operation('scheduler.schedules', 'configure'),
-    ).toBeUndefined();
+      authz.resourceTypes.get('settings').items?.get('scheduler.schedules'),
+    ).toMatchObject({
+      group: 'automation',
+      actions: [expect.objectContaining({ name: 'read' })],
+    });
+    expect(authz.settings.grant('scheduler.schedules', ['read'])).toEqual({
+      resource: { type: 'settings', id: 'scheduler.schedules' },
+      actions: [{ action: 'read' }],
+    });
+    expect(() =>
+      authz.settings.grant('scheduler.schedules', ['configure']),
+    ).toThrow();
   },
 );
 

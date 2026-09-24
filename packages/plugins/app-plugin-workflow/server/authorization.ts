@@ -7,20 +7,17 @@ export class WorkflowAuthorizationProvider extends ServiceProvider<AppPluginAppl
 
   public override async boot(): Promise<void> {
     const authz = this.app.container.resolve(authorizationToken);
-    const title = {
-      key: 'authorization.title',
-      ns: '@nocobase/app-plugin-workflow',
-    };
-    if (!authz.resourceGroups.has('automation')) {
-      authz.resourceGroups.add({
+    if (!authz.groups.has('automation'))
+      authz.groups.add({
         name: 'automation',
         title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
-        category: 'administration',
       });
-    }
-    authz.resources.add({
-      name: 'workflow',
-      title,
+    authz.settings.add({
+      id: 'workflow',
+      title: {
+        key: 'authorization.title',
+        ns: '@nocobase/app-plugin-workflow',
+      },
       group: 'automation',
       actions: [
         {
@@ -29,7 +26,6 @@ export class WorkflowAuthorizationProvider extends ServiceProvider<AppPluginAppl
             key: 'authorization.manage',
             ns: '@nocobase/app-plugin-workflow',
           },
-          grants: [authz.settings.grant('workflow', ['manage'])],
         },
       ],
     });

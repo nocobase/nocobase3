@@ -7,20 +7,17 @@ export class SchedulerAuthorizationProvider extends ServiceProvider<AppPluginApp
 
   public override async boot(): Promise<void> {
     const authz = this.app.container.resolve(authorizationToken);
-    const title = {
-      key: 'authorization.title',
-      ns: '@nocobase/app-plugin-scheduler',
-    };
-    if (!authz.resourceGroups.has('automation')) {
-      authz.resourceGroups.add({
+    if (!authz.groups.has('automation'))
+      authz.groups.add({
         name: 'automation',
         title: { key: 'nav.automation', ns: '@nocobase/app-plugin-scheduler' },
-        category: 'administration',
       });
-    }
-    authz.resources.add({
-      name: 'scheduler.schedules',
-      title,
+    authz.settings.add({
+      id: 'scheduler.schedules',
+      title: {
+        key: 'authorization.title',
+        ns: '@nocobase/app-plugin-scheduler',
+      },
       group: 'automation',
       actions: [
         {
@@ -29,7 +26,6 @@ export class SchedulerAuthorizationProvider extends ServiceProvider<AppPluginApp
             key: 'authorization.read',
             ns: '@nocobase/app-plugin-scheduler',
           },
-          grants: [authz.settings.grant('scheduler.schedules', ['read'])],
         },
       ],
     });
