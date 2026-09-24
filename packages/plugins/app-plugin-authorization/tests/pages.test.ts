@@ -4,6 +4,7 @@ import {
   permissionSetsPlugin,
 } from '@nocobase/authorization';
 import { pagesPlugin } from '../server/pages-authorization.js';
+import { uiPlugin } from '../server/ui.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 function setup() {
@@ -36,7 +37,7 @@ function setup() {
     ],
   });
   const authorization = createAuthorization({
-    plugins: [permissionSetsPlugin({ store }), pagesPlugin()],
+    plugins: [permissionSetsPlugin({ store }), pagesPlugin(), uiPlugin()],
   });
   return authorization.for({ principal: { type: 'user', id: 'alice' } });
 }

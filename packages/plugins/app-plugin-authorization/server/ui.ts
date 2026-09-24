@@ -96,14 +96,6 @@ export interface AuthorizationUiApi {
   ): void;
   /** Lists unplaced resources of `type` under `<section>.other`. */
   defaultSection(type: string, section: string): void;
-  /**
-   * Lists the records of a record type in a subsection. The server knows no
-   * records, so the client fills the subsection, as it fills `pages.page`
-   * from its route tree.
-   */
-  recordTypeSection(type: string, section: string): void;
-  /** The record type a subsection lists, if any. */
-  recordTypeOf(section: string): string | undefined;
   /** The top-level section unplaced resources of `type` land in, if any. */
   defaultSectionOf(type: string): string | undefined;
   /** The explicit placement of a resource, if any. */
@@ -120,9 +112,6 @@ export interface UiAuthorizationApi {
 }
 
 export type UiPlugin = AuthorizationPlugin<UiAuthorizationApi>;
-
-/** The subsection the client fills with pages from its route tree. */
-export const PAGES_SECTION = 'pages.page';
 
 /** The subsection every authorization settings item is listed under. */
 export const AUTHORIZATION_SETTINGS_SECTION = 'authorization';
@@ -271,8 +260,6 @@ class AuthorizationUi implements AuthorizationUiApi {
     { resource: ResourceRef; placement: AuthorizationUiPlacement }
   >();
   private readonly defaults = new Map<string, string>();
-  /** Subsection name to the record type the client lists in it. */
-  private readonly recordSections = new Map<string, string>();
 
   place(
     target: AuthorizationUiTarget,
@@ -325,23 +312,6 @@ class AuthorizationUi implements AuthorizationUiApi {
     this.defaults.set(type, section);
   }
 
-  recordTypeSection(type: string, section: string): void {
-    if (!type) throw new TypeError('A record type section needs a type');
-    if (this.sections.has(section) && !this.sections.isSubsection(section))
-      throw new Error(
-        `Record type ${type} can be listed only in a subsection, not ${section}`,
-      );
-    const existing = this.recordSections.get(section);
-    if (existing === type) return;
-    if (existing !== undefined)
-      throw new Error(`Subsection ${section} already lists ${existing}`);
-    this.recordSections.set(section, type);
-  }
-
-  recordTypeOf(section: string): string | undefined {
-    return this.recordSections.get(section);
-  }
-
   defaultSectionOf(type: string): string | undefined {
     return this.defaults.get(type);
   }
@@ -371,17 +341,6 @@ class AuthorizationUi implements AuthorizationUiApi {
       if (!type?.items?.has(resource.id))
         errors.push(`${label} is placed but not registered`);
     }
-    for (const [section, type] of this.recordSections) {
-      if (!this.sections.isSubsection(section))
-        errors.push(
-          `Record type ${type} is listed in unknown subsection ${section}`,
-        );
-      const registered = host.resourceTypes.has(type)
-        ? host.resourceTypes.get(type)
-        : undefined;
-      if (!registered || registered.items)
-        errors.push(`${type} is listed as a record type but is not one`);
-    }
     for (const type of host.resourceTypes.list()) {
       const section = this.defaults.get(type.type);
       if (section === undefined || !type.items) continue;
@@ -397,9 +356,9 @@ class AuthorizationUi implements AuthorizationUiApi {
 
 /**
  * Registers `authz.ui` with the built-in sections `pages`, `business` and
- * `administration`, the `pages.page` and `authorization` subsections, the
- * `page` records listed in `pages.page`, and the default sections of
- * `composite` and `settings`.
+ * `administration`, the `authorization` subsection, and the default sections
+ * of `composite` and `settings`. `pagesPlugin` adds the `pages.page`
+ * subsection itself.
  */
 export function uiPlugin(): UiPlugin {
   const ui = new AuthorizationUi();
@@ -414,13 +373,6 @@ export function uiPlugin(): UiPlugin {
     parent: 'administration',
     title: text('options.settingsModules.authorization'),
   });
-  ui.sections.add({
-    name: PAGES_SECTION,
-    parent: 'pages',
-    title: text('sections.page'),
-    order: 0,
-  });
-  ui.recordTypeSection('page', PAGES_SECTION);
   ui.defaultSection('composite', 'business');
   ui.defaultSection('settings', 'administration');
   return { id: 'ui', authorizationApi: { ui } };

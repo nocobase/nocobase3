@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defineComposite } from '@nocobase/authorization/core';
+import {
+  createAuthorization,
+  defineComposite,
+} from '@nocobase/authorization/core';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
@@ -11,6 +14,7 @@ import {
   type AppAuthorization,
 } from '../server/index.js';
 import { authorizationOptions } from '../server/options.js';
+import { pagesPlugin } from '../server/pages-authorization.js';
 
 const names = (authz: AppAuthorization): [string, string[]][] =>
   authz.ui.sections
@@ -49,7 +53,6 @@ describe('authz.ui sections', () => {
       order: 100,
     });
     expect(authz.ui.defaultSectionOf('page')).toBeUndefined();
-    expect(authz.ui.recordTypeOf('pages.page')).toBe('page');
     expect(authz.ui.sections.get('pages.page')).toEqual({
       name: 'pages.page',
       title: { key: 'sections.page', ns: AUTHORIZATION_NAMESPACE },
@@ -261,8 +264,8 @@ describe('authz.ui groups and placement', () => {
   });
 });
 
-describe('authz.ui record type subsections', () => {
-  it('marks pages.page for the client to fill, titled in this plugin', async () => {
+describe('the page subsection', () => {
+  it('is registered by pagesPlugin and marked for the client to fill, titled in this plugin', async () => {
     const authz = createAppAuthorization({});
     const options = await authorizationOptions(authz);
     expect(options.sections[0]).toMatchObject({
@@ -283,29 +286,13 @@ describe('authz.ui record type subsections', () => {
       (await authorizationOptions(authz, { rules: true })).sections[0]
         ?.subsections,
     ).toEqual([]);
+    expect(authz.ui.validate(authz).errors).toEqual([]);
   });
 
-  it('lists a plugin record type in its own subsection and validates it', () => {
-    const authz = createAppAuthorization({});
-    authz.resourceTypes.add({ type: 'report', actions: ['read'] });
-    authz.ui.sections.add({
-      name: 'reports',
-      title: 'Reports',
-      parent: 'pages',
-    });
-    authz.ui.recordTypeSection('report', 'reports');
-    authz.ui.recordTypeSection('report', 'reports');
-    expect(() => authz.ui.recordTypeSection('page', 'reports')).toThrow(
-      /already lists report/,
+  it('needs the ui plugin, which pagesPlugin declares as a dependency', () => {
+    expect(() => createAuthorization({ plugins: [pagesPlugin()] })).toThrow(
+      /requires missing plugin "ui"/,
     );
-    expect(() => authz.ui.recordTypeSection('report', 'pages')).toThrow(
-      /only in a subsection/,
-    );
-    authz.ui.recordTypeSection('settings', 'later');
-    expect(authz.ui.validate(authz).errors).toEqual([
-      'Record type settings is listed in unknown subsection later',
-      'settings is listed as a record type but is not one',
-    ]);
   });
 });
 

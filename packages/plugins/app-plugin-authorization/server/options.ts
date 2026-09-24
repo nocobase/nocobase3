@@ -4,6 +4,7 @@ import {
   type ResourceItemAction,
 } from '@nocobase/authorization/core';
 import { databaseHost } from './database/api.js';
+import { PAGE_SECTION } from './pages-authorization.js';
 import { databaseRecordAccessApplicable } from './database/record-access.js';
 import type { AuthorizationExtensionHost } from './host.js';
 import { optionText, type OptionText } from './i18n.js';
@@ -169,13 +170,12 @@ export async function authorizationOptions(
     order: section.order,
     subsections: section.subsections.flatMap(
       (subsection): AuthorizationOptionsSubsection[] => {
-        const recordType = host.ui.recordTypeOf(subsection.name);
         const registered =
-          recordType !== undefined && host.resourceTypes.has(recordType)
-            ? host.resourceTypes.get(recordType)
+          subsection.name === PAGE_SECTION && host.resourceTypes.has('page')
+            ? host.resourceTypes.get('page')
             : undefined;
-        // The client fills a record type's subsection, such as pages.page.
-        if (registered && !registered.items)
+        // The client fills the page subsection from its route tree.
+        if (registered)
           return options.rules
             ? []
             : [
