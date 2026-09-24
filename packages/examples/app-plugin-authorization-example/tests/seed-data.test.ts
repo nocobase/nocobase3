@@ -66,3 +66,30 @@ it('persists the fluent declarations and all per-table fixtures with their relat
     await fixture.database.destroy();
   }
 });
+
+it('seeds once without overwriting edited example records', async () => {
+  const fixture = await createFixture();
+  try {
+    const connection = fixture.database.connection();
+    await connection.query
+      .updateTable(PROJECTS)
+      .set({ notes: 'Keep this edit' })
+      .where('id', '=', 'project-1')
+      .execute();
+    await setupSeed.run({ query: connection.query, connection });
+    expect(
+      await connection.query.selectFrom(PROJECTS).select('id').execute(),
+    ).toHaveLength(5);
+    expect(
+      (
+        await connection.query
+          .selectFrom(PROJECTS)
+          .select('notes')
+          .where('id', '=', 'project-1')
+          .executeTakeFirst()
+      )?.notes,
+    ).toBe('Keep this edit');
+  } finally {
+    await fixture.database.destroy();
+  }
+});

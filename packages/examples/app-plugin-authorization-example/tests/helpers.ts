@@ -13,7 +13,7 @@ import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import setupSeed from '../database/seeds/202609220002_sales_permissions.js';
 import { AuthorizationExampleProvider } from '../server/providers/authorization-example.js';
 import { apiRoutes } from '../server/routes/index.js';
@@ -121,4 +121,35 @@ export async function createFixture() {
         ...(body ? { body: JSON.stringify(body) } : {}),
       }),
   };
+}
+
+export type SalesFixture = Awaited<ReturnType<typeof createFixture>>;
+
+/** A request to `/api/authz/<path>` as the seeded administrator. */
+export function adminRequest(
+  fixture: SalesFixture,
+  path: string,
+  method = 'GET',
+  body?: unknown,
+): Promise<Response> {
+  return fixture.router.request(`/api/authz/${path}`, {
+    method,
+    headers: {
+      'x-test-user': fixture.users.admin,
+      'content-type': 'application/json',
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+/** The ids a sales list answers `user` with, once it has answered 200. */
+export async function listIds(
+  fixture: SalesFixture,
+  user: string,
+  path = 'projects',
+): Promise<string[]> {
+  const response = await fixture.request(user, `sales/${path}`);
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  return body.data.items.map((item: { id: string }) => item.id);
 }
