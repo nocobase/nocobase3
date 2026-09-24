@@ -62,7 +62,7 @@ export type DatabaseAuthorizationPolicy = DatabaseActionGrant & {
   type: 'database';
 };
 
-/** One grant as the authorizer evaluates it, with its business branch's rules. */
+/** One grant as the authorizer evaluates it, with its composite branch's rules. */
 export interface DatabaseGrantConfig extends DatabaseActionGrant {
   branchConstraints?: readonly AccessConstraint[];
 }

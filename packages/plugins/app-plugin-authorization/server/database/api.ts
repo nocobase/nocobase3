@@ -3,13 +3,13 @@ import type {
   AuthorizationContext,
   AuthorizationDecision,
   AuthorizationEnv,
-  BusinessActions,
-  BusinessApi,
-  BusinessCheck,
+  CompositeActions,
+  CompositeApi,
+  CompositeCheck,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection, RepositoryPolicy } from '@nocobase/db';
 import {
-  createBusinessRepositoryAuthorization,
+  createCompositeRepositoryAuthorization,
   type AuthorizeRepositoryOptions,
 } from '../authorize-repository.js';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
@@ -33,8 +33,8 @@ export interface DatabaseApi {
     context: AuthorizationContext,
     operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy>;
-  /** Binds generated Repository routes to business actions. */
-  authorizeRepository<A extends BusinessActions>(
+  /** Binds generated Repository routes to composite actions. */
+  authorizeRepository<A extends CompositeActions>(
     options: AuthorizeRepositoryOptions<A>,
   ): MiddlewareHandler<AuthorizationEnv>;
 }
@@ -45,7 +45,7 @@ export interface DatabaseAuthorizationApi {
 
 /** What the plugin learns during setup; read by the extension routes. */
 export interface DatabaseHost {
-  readonly business: BusinessApi;
+  readonly composites: CompositeApi;
   middleware(): MiddlewareHandler<AuthorizationEnv>;
   readonly connection?: DatabaseConnection;
   describe(name: string): Promise<AuthorizationCollection | undefined>;
@@ -66,7 +66,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     hosts.set(this, host);
   }
 
-  authorizeRepository<A extends BusinessActions>(
+  authorizeRepository<A extends CompositeActions>(
     options: AuthorizeRepositoryOptions<A>,
   ): MiddlewareHandler<AuthorizationEnv> {
     const host = hosts.get(this);
@@ -74,7 +74,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
       throw new Error(
         'The database plugin is not installed in an Authorization',
       );
-    return createBusinessRepositoryAuthorization(host, options);
+    return createCompositeRepositoryAuthorization(host, options);
   }
 
   async policyFor(
@@ -106,7 +106,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
 
 /** Translate resolved checks only; this never runs authorization again. */
 export function composeDatabasePolicies(
-  checks: readonly BusinessCheck[],
+  checks: readonly CompositeCheck[],
 ): Readonly<Record<string, RepositoryPolicy>> {
   type MutablePolicy = {
     -readonly [K in keyof RepositoryPolicy]: RepositoryPolicy[K];
@@ -142,7 +142,7 @@ export function composeDatabasePolicies(
 }
 
 declare module '@nocobase/authorization/core' {
-  interface BusinessConditions {
+  interface CompositeConditions {
     /** Policies for the tables used by this operation; other operations remain denied. */
     database?: Readonly<Record<string, RepositoryPolicy>>;
   }

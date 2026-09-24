@@ -3,7 +3,8 @@ import {
   AuthorizationDeniedError,
   parseAuthorizationTitle,
   type AuthorizationRouteHandler,
-  type BusinessApi,
+  dataScopeTarget,
+  type CompositeApi,
   type PermissionGrant,
   type PermissionGrantAction,
   type Principal,
@@ -213,30 +214,30 @@ function summarize(
 }
 
 /**
- * A business grant's data scope values must name record access that exists
- * and applies to the scope's collection; the business registry checks the rest.
+ * A composite grant's data scope values must name record access that exists
+ * and applies to the scope's target; the composite registry checks the rest.
  */
 function validateGrants(
-  host: { business: BusinessApi; recordAccess: RecordAccessRegistry },
+  host: { composites: CompositeApi; recordAccess: RecordAccessRegistry },
   input: CreatePermissionSetInput,
 ): void {
   for (const grant of input.grants) {
-    if (grant.resource.type !== 'business') continue;
+    if (grant.resource.type !== 'composite') continue;
     for (const entry of grant.actions) {
-      const action = host.business.getAction(grant.resource.id, entry.action);
+      const action = host.composites.getAction(grant.resource.id, entry.action);
       if (!action)
         throw new TypeError(
-          `Unknown business action: ${grant.resource.id}.${entry.action}`,
+          `Unknown composite action: ${grant.resource.id}.${entry.action}`,
         );
       const scopes: unknown = entry.policy?.scopes;
       if (entry.policy === undefined) continue;
       if (
-        entry.policy.type !== 'business' ||
+        entry.policy.type !== 'composite' ||
         !scopes ||
         typeof scopes !== 'object' ||
         Array.isArray(scopes)
       )
-        throw new TypeError('Invalid business grant policy');
+        throw new TypeError('Invalid composite grant policy');
       for (const [key, value] of Object.entries(scopes)) {
         const scope = action.dataScopes?.find((item) => item.key === key);
         if (!scope) throw new TypeError(`Unknown data scope: ${key}`);
@@ -249,6 +250,7 @@ function validateGrants(
               ? Reflect.get(value, 'key')
               : undefined;
         if (recordAccess === undefined) continue;
+        const target = dataScopeTarget(action, key).id;
         const definition =
           typeof recordAccess === 'string'
             ? host.recordAccess.get(recordAccess)
@@ -256,7 +258,7 @@ function validateGrants(
         if (
           !definition ||
           !definition.collections.some(
-            (name) => name === '*' || name === scope.collection,
+            (name) => name === '*' || name === target,
           ) ||
           (scope.options && !scope.options.includes(definition.key))
         )

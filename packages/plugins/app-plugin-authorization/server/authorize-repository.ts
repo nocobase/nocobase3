@@ -1,8 +1,10 @@
-import type {
-  AuthorizationEnv,
-  BusinessActions,
-  BusinessApi,
-  BusinessResourceReference,
+import {
+  COMPOSITE_RESOURCE_TYPE,
+  dataScopeTarget,
+  type AuthorizationEnv,
+  type CompositeActions,
+  type CompositeApi,
+  type CompositeReference,
 } from '@nocobase/authorization/core';
 import {
   addRepositoryRequestConstraint,
@@ -10,9 +12,9 @@ import {
 } from '@nocobase/app-server/router';
 import type { MiddlewareHandler } from 'hono';
 
-export interface AuthorizeRepositoryOptions<A extends BusinessActions> {
+export interface AuthorizeRepositoryOptions<A extends CompositeActions> {
   readonly repository: string;
-  readonly resource: BusinessResourceReference<A>;
+  readonly resource: CompositeReference<A>;
   readonly actions: Partial<
     Record<RepositoryApiAction, NoInfer<keyof A & string>>
   >;
@@ -31,12 +33,12 @@ const operations: Readonly<Record<RepositoryApiAction, string>> = {
 };
 
 export interface RepositoryAuthorizationHost {
-  readonly business: BusinessApi;
+  readonly composites: CompositeApi;
   middleware(): MiddlewareHandler<AuthorizationEnv>;
 }
 
-export function createBusinessRepositoryAuthorization<
-  A extends BusinessActions,
+export function createCompositeRepositoryAuthorization<
+  A extends CompositeActions,
 >(
   authz: RepositoryAuthorizationHost,
   options: AuthorizeRepositoryOptions<A>,
@@ -54,12 +56,16 @@ export function createBusinessRepositoryAuthorization<
     if (!Object.hasOwn(operations, method) || typeof action !== 'string')
       throw new TypeError('Invalid Repository action binding');
 
-    const definition = authz.business.getAction(resource, action);
+    const definition = authz.composites.getAction(resource, action);
     const scopes = definition?.dataScopes ?? [];
-    const collection = scopes[0]?.collection;
+    const target =
+      definition && scopes.length === 1
+        ? dataScopeTarget(definition, scopes[0].key)
+        : undefined;
+    const collection =
+      target?.type === 'database.collection' ? target.id : undefined;
     if (
       !definition ||
-      scopes.length !== 1 ||
       !collection ||
       definition.grants.some(
         (grant) =>
@@ -73,7 +79,7 @@ export function createBusinessRepositoryAuthorization<
       )
     ) {
       throw new TypeError(
-        `Repository ${repository}:${method} requires a single-collection, single-scope business action with the matching database operation`,
+        `Repository ${repository}:${method} requires a single-collection, single-scope composite action with the matching database operation`,
       );
     }
     bindings.set(method, { action, collection });
@@ -94,7 +100,7 @@ export function createBusinessRepositoryAuthorization<
 
     const authorize = async (): Promise<void> => {
       const decision = await context.var.authz.authorize({
-        resource: { type: 'business', id: resource },
+        resource: { type: COMPOSITE_RESOURCE_TYPE, id: resource },
         action: binding.action,
       });
       const policies = decision.conditions?.database;

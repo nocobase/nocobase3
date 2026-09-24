@@ -417,7 +417,7 @@ it.each([
           business: [
             subsection('example.sales', 'Sales', [
               {
-                type: 'business',
+                type: 'composite',
                 value: 'sales.quotes',
                 label: 'Quotes',
                 actions: [view],
@@ -425,7 +425,7 @@ it.each([
             ]),
             subsection('example.delivery', 'Delivery', [
               {
-                type: 'business',
+                type: 'composite',
                 value: 'delivery.orders',
                 label: 'Orders',
                 actions: [view],
@@ -439,7 +439,7 @@ it.each([
       unrestricted,
       types: ['business', 'page'],
       resources: [
-        ...ids.map((id) => ({ type: 'business', id })),
+        ...ids.map((id) => ({ type: 'composite', id })),
         // The same ID under another resource type must not mark the subsection.
         { type: 'page', id: 'delivery.orders' },
       ],
@@ -551,7 +551,7 @@ it('explains business access once and keeps page checks and JSON in one collapse
         business: [
           subsection('business.other', 'Other', [
             {
-              type: 'business',
+              type: 'composite',
               value: 'quotes',
               label: 'Quotes',
               actions: [{ value: 'view', label: 'View' }],
@@ -584,7 +584,7 @@ it('explains business access once and keeps page checks and JSON in one collapse
           ...check,
           decision: {
             effect: 'conditional',
-            conditions: { type: 'business' },
+            conditions: { type: 'composite' },
             reasons: [
               grant,
               {
@@ -743,7 +743,7 @@ it('lists section headers, then one entry per subsection', async () => {
         business: [
           tables,
           subsection('example.delivery', 'Delivery', [
-            { type: 'business', value: 'shipments', label: 'Shipments' },
+            { type: 'composite', value: 'shipments', label: 'Shipments' },
           ]),
         ],
       }),
@@ -774,7 +774,7 @@ it('keeps the selected subsection in the URL across a reload', async () => {
           subsection(
             'example.delivery',
             'Delivery',
-            [{ type: 'business', value: 'shipments', label: 'Shipments' }],
+            [{ type: 'composite', value: 'shipments', label: 'Shipments' }],
             { actions: [view] },
           ),
         ],

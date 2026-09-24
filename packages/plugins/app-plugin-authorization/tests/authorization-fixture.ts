@@ -1,5 +1,5 @@
 import {
-  businessPlugin,
+  compositesPlugin,
   createAuthorization as createCoreAuthorization,
   type AuthorizationContext,
   type AuthorizationDecision,
@@ -8,9 +8,10 @@ import {
 } from '@nocobase/authorization/core';
 import { databasePlugin } from '../server/database/plugin.js';
 import { settingsPlugin } from '../server/settings.js';
+import { uiPlugin } from '../server/ui.js';
 
 /**
- * Core Authorization with the `settings` and `business` plugins installed
+ * Core Authorization with the `settings`, `ui` and `composites` plugins installed
  * first and the authorization settings items registered.
  */
 export const createAuthorization: typeof createCoreAuthorization = (
@@ -21,9 +22,10 @@ export const createAuthorization: typeof createCoreAuthorization = (
     ...options,
     plugins: [
       settings,
-      ...(options.plugins.some((plugin) => plugin.id === 'business')
+      uiPlugin(),
+      ...(options.plugins.some((plugin) => plugin.id === 'composites')
         ? []
-        : [businessPlugin()]),
+        : [compositesPlugin()]),
       ...options.plugins,
     ],
   });
@@ -31,7 +33,6 @@ export const createAuthorization: typeof createCoreAuthorization = (
   api.add({
     id: 'authorization.permission-sets',
     title: 'Permission Sets',
-    group: 'authorization',
     actions: ['read', 'create', 'update', 'delete', 'assign'].map((name) => ({
       name,
     })),
@@ -39,7 +40,6 @@ export const createAuthorization: typeof createCoreAuthorization = (
   api.add({
     id: 'authorization.inspector',
     title: 'Inspector',
-    group: 'authorization',
     actions: [{ name: 'inspect' }],
   });
   return authz;

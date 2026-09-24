@@ -5,7 +5,7 @@ import {
   selectedEntry,
   workspaceEntries,
 } from '../../components/workspace-sections.js';
-import { defaultBusinessPolicy } from './business-policy.js';
+import { defaultCompositePolicy } from './composite-policy.js';
 import { Checkbox } from '../../components/ui/checkbox.js';
 import type {
   AuthorizationOptions,
@@ -134,7 +134,7 @@ export function PermissionSetEditor({
     if (scoped?.length && mode !== 'none' && !next.policies?.[action])
       next.policies = {
         ...next.policies,
-        [action]: defaultBusinessPolicy(scoped),
+        [action]: defaultCompositePolicy(scoped),
       };
     update(next);
   }

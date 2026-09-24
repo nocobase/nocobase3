@@ -55,7 +55,7 @@ export function empty(): Draft {
 export function hasEmptyCustomFilter(draft: Draft): boolean {
   return draft.grants.some((grant) =>
     Object.values(grant.policies ?? {}).some((policy) => {
-      if (policy?.type !== 'business') return false;
+      if (policy?.type !== 'composite') return false;
       const scopes: unknown = policy.scopes;
       return Object.values(
         scopes && typeof scopes === 'object' ? scopes : {},

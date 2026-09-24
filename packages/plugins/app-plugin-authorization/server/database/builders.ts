@@ -4,8 +4,8 @@ import {
 } from './permission-builders.js';
 import type {
   AuthorizationTitle,
-  BindableBusinessPermission,
-  BusinessContribution,
+  BindableCompositePermission,
+  CompositeContribution,
   DataScope,
   PermissionGrant,
   RecordAccessReference,
@@ -46,12 +46,12 @@ function applies(
 
 /**
  * A collection's fields and relations per operation. Binding it to a key makes
- * it a data scope of a business action.
+ * it a data scope of a composite action.
  */
 export class DatabasePermissionBuilder<
   Row = Record<string, unknown>,
   O extends string = string,
-> implements BindableBusinessPermission {
+> implements BindableCompositePermission {
   declare readonly recordAccessSelection?: O | '' | RecordSelection;
   private readonly operations: DatabaseGrantDefinition;
   private readonly label: AuthorizationTitle | undefined;
@@ -193,13 +193,12 @@ export class DatabasePermissionBuilder<
   bind<const K extends string>(
     key: K,
     metadata?: { title?: AuthorizationTitle },
-  ): BusinessContribution<Record<K, O | '' | RecordSelection>> {
+  ): CompositeContribution<Record<K, O | '' | RecordSelection>> {
     if (!key) throw new TypeError('A data scope needs a key');
     const grant = this.build();
     const scope: DataScope = {
       key,
       title: metadata?.title ?? this.label ?? this.name,
-      collection: this.name,
       ...this.choices,
     };
     const contribution = {

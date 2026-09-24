@@ -4,14 +4,14 @@ import type { LocaleResource } from '@nocobase/i18n';
  * Display vocabulary shared by the client and server locale catalogues.
  */
 const enUS = {
-  // Titles the library registers, in its `@nocobase/authorization` namespace.
+  // Workspace sections this plugin registers through `authz.ui`.
   sections: {
     pages: 'Page permissions',
     business: 'Business permissions',
     administration: 'Administration',
     other: 'Other',
   },
-  resourceTypes: { business: 'Business features' },
+  resourceTypes: { composite: 'Business features' },
   options: {
     defaultAndSharing: 'Use default data scope',
     actions: {

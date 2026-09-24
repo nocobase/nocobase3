@@ -7,14 +7,14 @@ import type {
 import { SelectionEditor } from './editors.js';
 import { dataScopeTargets, findResource } from './localized-options.js';
 
-/** One rule action on one data scope of a business action. */
+/** One rule action on one data scope of a composite action. */
 export interface DataScopeRuleAction {
   action: string;
   scopeKey?: string;
   selection: RecordSelection;
 }
 
-/** Each data scope of a business resource, with the selection a rule gives it. */
+/** Each data scope of a composite, with the selection a rule gives it. */
 export function DataScopesEditor({
   options,
   resourceId,
@@ -33,7 +33,7 @@ export function DataScopesEditor({
   /** Sharing rules may not select every record. */
   allowAll?: boolean;
 }): ReactElement {
-  const resource = findResource(options, { type: 'business', id: resourceId });
+  const resource = findResource(options, { type: 'composite', id: resourceId });
   const allTargets = dataScopeTargets(options, resourceId);
   return (
     <div className='divide-y rounded-lg border'>

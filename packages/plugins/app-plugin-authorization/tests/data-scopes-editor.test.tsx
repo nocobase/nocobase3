@@ -23,7 +23,7 @@ const options: AuthorizationOptions = {
     business: [
       subsection('business.other', 'Other', [
         {
-          type: 'business',
+          type: 'composite',
           value: 'sales',
           label: 'Sales',
           actions: [{ value: 'submit', label: 'Submit' }],

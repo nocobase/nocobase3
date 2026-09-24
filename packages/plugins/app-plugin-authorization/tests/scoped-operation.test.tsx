@@ -12,11 +12,11 @@ function Harness({ defaults = false }: { defaults?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [grant, setGrant] = useState<GrantDraft>({
     id: 1,
-    resource: { type: 'business', id: 'quotes' },
+    resource: { type: 'composite', id: 'quotes' },
     actions: ['submit'],
     policies: {
       submit: {
-        type: 'business',
+        type: 'composite',
         scopes: {
           quotes: {
             type: 'recordAccess',

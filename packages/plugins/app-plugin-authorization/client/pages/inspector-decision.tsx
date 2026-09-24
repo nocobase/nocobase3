@@ -51,8 +51,8 @@ export function Decision({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const status = inspectionStatus(value, fields);
-  const business =
-    value.conditions?.type === 'business' || !!value.checks?.length;
+  const composite =
+    value.conditions?.type === 'composite' || !!value.checks?.length;
   const checks =
     value.checks?.filter(
       (check) => check.resource.type === 'database.collection',
@@ -60,7 +60,7 @@ export function Decision({
   const reasons = uniqueReasons(
     value.reasons.filter(
       (reason) =>
-        !business ||
+        !composite ||
         !['SELECTION_EXPANDED', 'SELECTION_RESTRICTED'].includes(reason.code),
     ),
   );
@@ -93,7 +93,7 @@ export function Decision({
           </p>
         )}
       </section>
-      {business && checks.length > 0 && (
+      {composite && checks.length > 0 && (
         <section className='space-y-3'>
           <h3 className='text-sm font-medium'>{t('inspector.dataAccess')}</h3>
           <p className='text-sm text-muted-foreground'>
@@ -148,7 +148,7 @@ export function Decision({
           })}
         </section>
       )}
-      {!business && value.conditions?.type === 'database' && (
+      {!composite && value.conditions?.type === 'database' && (
         <InspectionConditions value={value.conditions} />
       )}
       <details className='border-t pt-3 text-xs text-muted-foreground'>

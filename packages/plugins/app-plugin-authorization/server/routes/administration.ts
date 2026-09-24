@@ -2,10 +2,8 @@ import type { Authorization } from '@nocobase/authorization/core';
 import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permission-sets';
 import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
 import type { AuthorizationExtensionHost } from '../host.js';
-import {
-  AUTHORIZATION_SETTINGS_SECTION,
-  type SettingsAuthorizationApi,
-} from '../settings.js';
+import type { SettingsAuthorizationApi } from '../settings.js';
+import { AUTHORIZATION_SETTINGS_SECTION } from '../ui.js';
 import { createInspectorHandler, INSPECTOR_SETTINGS } from './inspector.js';
 import {
   createPermissionSetHandler,
@@ -28,15 +26,18 @@ export function installAuthorizationAdministration(
   authz.settings.add({
     id: PERMISSION_SETS_SETTINGS,
     title: text('options.settings.permission-sets'),
-    section: AUTHORIZATION_SETTINGS_SECTION,
     actions: ['read', 'create', 'update', 'delete', 'assign'].map(action),
   });
   authz.settings.add({
     id: INSPECTOR_SETTINGS,
     title: text('options.settings.inspector'),
-    section: AUTHORIZATION_SETTINGS_SECTION,
     actions: [action('inspect')],
   });
+  for (const id of [PERMISSION_SETS_SETTINGS, INSPECTOR_SETTINGS])
+    authz.ui.place(
+      { type: 'settings', id },
+      { section: AUTHORIZATION_SETTINGS_SECTION },
+    );
   authz.routes.add(
     '/permission-sets',
     createPermissionSetHandler(authz, authz.permissionSets),

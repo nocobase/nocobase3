@@ -132,7 +132,7 @@ export interface SelectOption {
   description?: string;
 }
 
-/** One data scope of a business action, as the workspace edits it. */
+/** One data scope of a composite action, as the workspace edits it. */
 export interface DataScopeOption {
   key: string;
   label: string;
@@ -150,7 +150,7 @@ export interface ResourceOption extends SelectOption {
   searchText?: string;
   group?: string;
   actions?: readonly SelectOption[];
-  /** Business items only: the data scopes of each action. */
+  /** Composite items only: the data scopes of each action. */
   dataScopes?: Readonly<Record<string, readonly DataScopeOption[]>>;
 }
 

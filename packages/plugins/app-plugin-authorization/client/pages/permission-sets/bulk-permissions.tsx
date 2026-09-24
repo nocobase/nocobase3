@@ -6,7 +6,7 @@ import type {
 } from '../../authorization-client.js';
 import type { Draft, GrantDraft } from './types.js';
 import { newGrantForResource, resourceKey } from './drafts.js';
-import { scopeKey, scopeValue } from './business-policy.js';
+import { scopeKey, scopeValue } from './composite-policy.js';
 
 export function BulkPermissionToggle({
   items,

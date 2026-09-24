@@ -1,4 +1,4 @@
-import { defineBusinessResource } from '@nocobase/authorization/core';
+import { defineComposite } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '../server/index.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
@@ -211,9 +211,8 @@ async function assign(key: string, userId: string): Promise<void> {
 const quoteAccess = defineDatabasePermission((permission) =>
   permission.collection('authzOrders').read(['id', 'ownerId', 'amount']),
 );
-const businessOrders = defineBusinessResource('sales.orders', (resource) =>
+const compositeOrders = defineComposite('sales.orders', (resource) =>
   resource
-    .section('sales')
     .title('Orders')
     .action('view', (action) => action.grant('orders', quoteAccess))
     .action('edit', (action) =>
@@ -221,20 +220,15 @@ const businessOrders = defineBusinessResource('sales.orders', (resource) =>
     ),
 );
 
-async function businessRoutes(
+async function compositeRoutes(
   options: { collection?: string; authorize?: boolean } = {},
 ) {
   const authorization = createAuthorization();
-  authorization.sections.add({
-    name: 'sales',
-    title: 'Sales',
-    parent: 'business',
-  });
   authorization.database.collections.add({
     name: 'authzOrders',
     title: 'Orders',
   });
-  authorization.business.define(businessOrders);
+  authorization.composites.define(compositeOrders);
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
   const router = new Hono();
@@ -247,7 +241,7 @@ async function businessRoutes(
       '*',
       authorization.database.authorizeRepository({
         repository: 'salesOrders',
-        resource: businessOrders.reference(),
+        resource: compositeOrders.reference(),
         actions: { findMany: 'view', count: 'view', updateOne: 'edit' },
       }),
     );
@@ -269,7 +263,7 @@ async function businessRoutes(
 
 async function grantBusinessOrders() {
   await createSet('business', [
-    businessOrders.reference().grant({
+    compositeOrders.reference().grant({
       view: { orders: 'allRecords' },
       edit: { orders: 'recordsIOwn' },
     }),
@@ -281,14 +275,14 @@ describe('business operation Repository middleware', () => {
   it('does not accept collection grants in place of the bound business action', async () => {
     await grantOrders({ recordAccess: ['allRecords'] });
     expect(
-      (await post(await businessRoutes(), '/salesOrders:findMany')).status,
+      (await post(await compositeRoutes(), '/salesOrders:findMany')).status,
     ).toBe(403);
   });
 
   it('uses the exact operation scope and fields even with broad collection grants', async () => {
     await grantBusinessOrders();
     await grantOrders({ recordAccess: ['allRecords'] });
-    const router = await businessRoutes();
+    const router = await compositeRoutes();
     const rows = await post(router, '/salesOrders:findMany');
     expect(rows.status).toBe(200);
     expect((await rows.json()).data).toHaveLength(2);
@@ -325,7 +319,7 @@ describe('business operation Repository middleware', () => {
     await grantBusinessOrders();
     expect(
       (
-        await post(await businessRoutes(), '/salesOrders:deleteOne', {
+        await post(await compositeRoutes(), '/salesOrders:deleteOne', {
           filter: { id: 'order-1' },
         })
       ).status,
@@ -333,7 +327,7 @@ describe('business operation Repository middleware', () => {
     expect(
       (
         await post(
-          await businessRoutes({ collection: 'authzCustomers' }),
+          await compositeRoutes({ collection: 'authzCustomers' }),
           '/salesOrders:findMany',
         )
       ).status,
@@ -344,7 +338,7 @@ describe('business operation Repository middleware', () => {
     expect(
       (
         await post(
-          await businessRoutes({ authorize: false }),
+          await compositeRoutes({ authorize: false }),
           '/salesOrders:findMany',
         )
       ).status,
@@ -353,21 +347,16 @@ describe('business operation Repository middleware', () => {
 
   it('rejects multi-scope operations, including two scopes of the same collection', () => {
     const authorization = createAuthorization();
-    authorization.sections.add({
-      name: 'sales',
-      title: 'Sales',
-      parent: 'business',
-    });
     for (const target of ['authzOrders', 'authzCustomers']) {
-      const complex = defineBusinessResource(`complex.${target}`, (resource) =>
-        resource.section('sales').action('submit', (action) =>
+      const complex = defineComposite(`complex.${target}`, (resource) =>
+        resource.action('submit', (action) =>
           action.grant('orders', quoteAccess.update(['amount'])).grant(
             'parent',
             defineDatabasePermission((p) => p.collection(target).read(['id'])),
           ),
         ),
       );
-      authorization.business.define(complex);
+      authorization.composites.define(complex);
       expect(() =>
         authorization.database.authorizeRepository({
           repository: 'orders',
@@ -380,16 +369,11 @@ describe('business operation Repository middleware', () => {
 
   it('rejects an unknown action or a binding without the required database operation', () => {
     const authorization = createAuthorization();
-    authorization.sections.add({
-      name: 'sales',
-      title: 'Sales',
-      parent: 'business',
-    });
-    authorization.business.define(businessOrders);
+    authorization.composites.define(compositeOrders);
     expect(() =>
       authorization.database.authorizeRepository({
         repository: 'orders',
-        resource: businessOrders.reference(),
+        resource: compositeOrders.reference(),
         actions: { updateOne: 'view' },
       }),
     ).toThrow('matching database operation');

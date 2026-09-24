@@ -8,7 +8,7 @@ import type {
   ResourceOption,
   SelectOption,
 } from '../../authorization-client.js';
-import { scopeKey, scopeValue, withScopeValue } from './business-policy.js';
+import { scopeKey, scopeValue, withScopeValue } from './composite-policy.js';
 import {
   Select,
   SelectContent,

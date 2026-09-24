@@ -1,6 +1,8 @@
-import type {
-  AuthorizationTitle,
-  ResourceItemAction,
+import {
+  COMPOSITE_RESOURCE_TYPE,
+  dataScopeTarget,
+  type AuthorizationTitle,
+  type ResourceItemAction,
 } from '@nocobase/authorization/core';
 import { databaseHost } from './database/api.js';
 import { databaseRecordAccessApplicable } from './database/record-access.js';
@@ -28,10 +30,10 @@ export interface AuthorizationOptionsResource {
   readonly id: string;
   readonly title: OptionText;
   readonly description?: OptionText;
-  /** A name from `resourceGroups`. */
+  /** A name from `ui.groups`. */
   readonly group?: string;
   readonly actions: readonly AuthorizationOptionsAction[];
-  /** Business resources only: the data scopes of each action. */
+  /** Composites only: the data scopes of each action. */
   readonly dataScopes?: Readonly<
     Record<string, readonly AuthorizationOptionsDataScope[]>
   >;
@@ -100,8 +102,8 @@ function actionOption(action: ResourceItemAction): AuthorizationOptionsAction {
 
 /**
  * The workspace catalogue: sections, their subsections and each
- * subsection's resources. `rules` narrows it to business resources with data
- * scopes, which is all a rule plugin can target.
+ * subsection's resources, placed by `authz.ui`. `rules` narrows it to
+ * composites with data scopes, which is all a rule plugin can target.
  */
 export async function authorizationOptions(
   host: AuthorizationExtensionHost,
@@ -119,11 +121,12 @@ export async function authorizationOptions(
   const resources = new Map<string, AuthorizationOptionsResource[]>();
   const recordTypes = new Map<string, AuthorizationOptionsSubsection[]>();
   for (const type of host.resourceTypes.list()) {
-    if (type.defaultSection === undefined) continue;
-    if (options.rules && type.type !== 'business') continue;
+    const defaultSection = host.ui.defaultSectionOf(type.type);
+    if (options.rules && type.type !== COMPOSITE_RESOURCE_TYPE) continue;
     if (!type.items) {
-      recordTypes.set(type.defaultSection, [
-        ...(recordTypes.get(type.defaultSection) ?? []),
+      if (defaultSection === undefined) continue;
+      recordTypes.set(defaultSection, [
+        ...(recordTypes.get(defaultSection) ?? []),
         {
           name: type.type,
           title: title(type.title, type.type),
@@ -137,12 +140,28 @@ export async function authorizationOptions(
       continue;
     }
     for (const item of type.items.list()) {
+      // A placement production startup only warned about falls back to "Other".
+      const found = host.ui.placementOf({ type: type.type, id: item.id });
+      const placement =
+        found && host.ui.sections.isSubsection(found.section)
+          ? found
+          : undefined;
+      // Unplaced items of a type without a default section are not displayed.
+      const section =
+        placement?.section ??
+        (defaultSection === undefined
+          ? undefined
+          : host.ui.sections.other(defaultSection));
+      if (section === undefined) continue;
       const dataScopes =
-        type.type === 'business'
-          ? businessDataScopes(host, item.id, fields)
+        type.type === COMPOSITE_RESOURCE_TYPE
+          ? compositeDataScopes(host, item.id, fields)
           : undefined;
       if (options.rules && !Object.keys(dataScopes ?? {}).length) continue;
-      const section = item.section ?? host.sections.other(type.defaultSection);
+      const group =
+        placement?.group !== undefined && host.ui.groups.has(placement.group)
+          ? placement.group
+          : undefined;
       resources.set(section, [
         ...(resources.get(section) ?? []),
         {
@@ -152,7 +171,7 @@ export async function authorizationOptions(
           ...(item.description === undefined
             ? {}
             : { description: title(item.description, '') }),
-          ...(item.group === undefined ? {} : { group: item.group }),
+          ...(group === undefined ? {} : { group }),
           actions: item.actions.map(actionOption),
           ...(dataScopes && Object.keys(dataScopes).length
             ? { dataScopes }
@@ -161,7 +180,7 @@ export async function authorizationOptions(
       ]);
     }
   }
-  const sections = host.sections.tree().map((section) => ({
+  const sections = host.ui.sections.tree().map((section) => ({
     name: section.name,
     title: title(section.title, section.name),
     order: section.order,
@@ -221,10 +240,10 @@ function referencedGroups(
     let name = resource.group;
     while (name !== undefined && !wanted.has(name)) {
       wanted.add(name);
-      name = host.resourceGroups.get(name)?.parent;
+      name = host.ui.groups.get(name)?.parent;
     }
   }
-  return host.resourceGroups
+  return host.ui.groups
     .list()
     .filter((group) => wanted.has(group.name))
     .map((group) => ({
@@ -235,23 +254,24 @@ function referencedGroups(
     }));
 }
 
-function businessDataScopes(
+function compositeDataScopes(
   host: AuthorizationExtensionHost,
   id: string,
   fields: ReadonlyMap<string, readonly string[]>,
 ): Record<string, readonly AuthorizationOptionsDataScope[]> {
-  const resource = host.business.list().find((entry) => entry.name === id);
+  const resource = host.composites.list().find((entry) => entry.name === id);
   const result: Record<string, readonly AuthorizationOptionsDataScope[]> = {};
   for (const action of resource?.actions ?? []) {
     const scopes = (action.dataScopes ?? []).map((scope) => {
-      const collectionFields = fields.get(scope.collection) ?? [];
+      const collection = dataScopeTarget(action, scope.key).id;
+      const collectionFields = fields.get(collection) ?? [];
       return {
         key: scope.key,
         title: title(scope.title, scope.key),
-        collection: scope.collection,
+        collection,
         fields: collectionFields,
         recordAccess: host.recordAccess
-          .listFor(scope.collection)
+          .listFor(collection)
           .filter((definition) =>
             databaseRecordAccessApplicable(definition, collectionFields),
           )

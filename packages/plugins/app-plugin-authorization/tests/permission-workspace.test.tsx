@@ -96,7 +96,7 @@ describe('permission set workspace', () => {
         business: [
           subsection('example.sales', 'Sales', [
             {
-              type: 'business',
+              type: 'composite',
               value: 'quotes',
               label: 'Quotes',
               actions: [view],
@@ -104,7 +104,7 @@ describe('permission set workspace', () => {
           ]),
           subsection('example.delivery', 'Delivery', [
             {
-              type: 'business',
+              type: 'composite',
               value: 'shipments',
               label: 'Shipments',
               actions: [view],

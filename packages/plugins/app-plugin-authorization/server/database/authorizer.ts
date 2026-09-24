@@ -489,7 +489,7 @@ export class DatabaseResourceAuthorizer {
 }
 
 /**
- * A grant's policy, with its business branch folded in: the selection its data
+ * A grant's policy, with its composite branch folded in: the selection its data
  * scope chose adds records, and the branch's rules apply to it alone.
  */
 function toDatabaseGrant(grant: AuthorizationGrant): DatabaseGrantConfig[] {

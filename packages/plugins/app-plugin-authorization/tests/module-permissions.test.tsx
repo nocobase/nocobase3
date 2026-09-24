@@ -117,7 +117,7 @@ it('marks only the subsections with granted resources as configured', () => {
           label: 'Sales',
           actions: [],
           groups: [],
-          resources: [{ type: 'business', value: 'quotes', label: 'Quotes' }],
+          resources: [{ type: 'composite', value: 'quotes', label: 'Quotes' }],
         },
         {
           value: 'example.delivery',
@@ -127,7 +127,7 @@ it('marks only the subsections with granted resources as configured', () => {
           actions: [],
           groups: [],
           resources: [
-            { type: 'business', value: 'shipments', label: 'Shipments' },
+            { type: 'composite', value: 'shipments', label: 'Shipments' },
           ],
         },
         {
@@ -145,7 +145,7 @@ it('marks only the subsections with granted resources as configured', () => {
       grants={[
         {
           id: 1,
-          resource: { type: 'business', id: 'quotes' },
+          resource: { type: 'composite', id: 'quotes' },
           actions: ['view'],
         },
       ]}
@@ -174,7 +174,7 @@ it('keeps an all-selected bulk indicator limited when an operation has a restric
     <BulkPermissionToggle
       items={[
         {
-          type: 'business',
+          type: 'composite',
           value: 'orders',
           label: 'Orders',
           actions: [read],
@@ -198,10 +198,10 @@ it('keeps an all-selected bulk indicator limited when an operation has a restric
         grants: [
           {
             id: 1,
-            resource: { type: 'business', id: 'orders' },
+            resource: { type: 'composite', id: 'orders' },
             actions: ['read'],
             policies: {
-              read: { type: 'business', scopes: { orders: 'recordsIOwn' } },
+              read: { type: 'composite', scopes: { orders: 'recordsIOwn' } },
             },
           },
         ],

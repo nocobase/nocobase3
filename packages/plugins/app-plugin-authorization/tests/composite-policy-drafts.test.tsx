@@ -13,12 +13,12 @@ const original = {
   title: 'Dispatcher',
   grants: [
     {
-      resource: { type: 'business', id: 'tasks' },
+      resource: { type: 'composite', id: 'tasks' },
       actions: [
         {
           action: 'assign',
           policy: {
-            type: 'business',
+            type: 'composite',
             scopes: { tasks: 'own', people: 'department' },
             futureConstraint: { keep: true },
           },
@@ -90,7 +90,7 @@ it('edits named business scopes in the configuration drawer without discarding t
   fireEvent.mouseUp(option);
   fireEvent.click(option);
   expect(JSON.parse(screen.getByTestId('policy').textContent!)).toEqual({
-    type: 'business',
+    type: 'composite',
     scopes: { tasks: 'all', people: 'department' },
     futureConstraint: { keep: true },
   });

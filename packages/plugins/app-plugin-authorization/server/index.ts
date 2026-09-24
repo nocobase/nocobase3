@@ -26,6 +26,24 @@ export {
   type SettingsPlugin,
 } from './settings.js';
 export {
+  AUTHORIZATION_SETTINGS_SECTION,
+  reportAuthorizationUi,
+  uiPlugin,
+  type AuthorizationUiApi,
+  type AuthorizationUiGroup,
+  type AuthorizationUiGroups,
+  type AuthorizationUiPlacement,
+  type AuthorizationUiReport,
+  type AuthorizationUiReportOptions,
+  type AuthorizationUiSection,
+  type AuthorizationUiSectionDefinition,
+  type AuthorizationUiSectionNode,
+  type AuthorizationUiSections,
+  type AuthorizationUiTarget,
+  type UiAuthorizationApi,
+  type UiPlugin,
+} from './ui.js';
+export {
   DatabasePermissionBuilder,
   DatabasePermissionDefinitionBuilder,
   defineDatabasePermission,

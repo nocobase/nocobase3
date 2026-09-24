@@ -244,7 +244,7 @@ export function resourceActions(
   );
 }
 
-/** The data scopes rules can target on one business item, flattened. */
+/** The data scopes rules can target on one composite item, flattened. */
 export function dataScopeTargets(
   options: AuthorizationOptions,
   resourceId: string,
@@ -255,7 +255,7 @@ export function dataScopeTargets(
   collection: string;
   recordAccess: readonly string[];
 }[] {
-  const item = findResource(options, { type: 'business', id: resourceId });
+  const item = findResource(options, { type: 'composite', id: resourceId });
   return Object.entries(item?.dataScopes ?? {}).flatMap(([action, scopes]) =>
     scopes.map((scope) => ({
       action,

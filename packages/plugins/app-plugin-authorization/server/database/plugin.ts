@@ -1,6 +1,6 @@
 import type {
   AuthorizationPlugin,
-  BusinessAuthorizationApi,
+  CompositeAuthorizationApi,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
@@ -17,7 +17,7 @@ import { builtInRecordAccess } from './record-access.js';
 export type DatabasePlugin = AuthorizationPlugin<
   DatabaseAuthorizationApi,
   DatabaseConnection,
-  BusinessAuthorizationApi
+  CompositeAuthorizationApi
 >;
 
 /** Registers the `database.collection` catalog type and `authz.database`. */
@@ -25,7 +25,7 @@ export function databasePlugin(database?: DatabaseManager): DatabasePlugin {
   const api = new DatabaseAuthorizationService();
   return {
     id: 'database',
-    dependencies: ['business'],
+    dependencies: ['composites'],
     requiresGrants: true,
     composeConditions: (checks) => ({
       database: composeDatabasePolicies(checks),
@@ -50,13 +50,14 @@ export function databasePlugin(database?: DatabaseManager): DatabasePlugin {
         },
         items: api.collections.items,
         actions: ['read', 'create', 'update', 'delete'],
+        recordAccess: true,
         authorize: (request, context) =>
           authorizer.authorize(request, context.grants, context.constraints),
         authorizeUnrestricted: (request) =>
           authorizer.authorizeUnrestricted(request),
       });
       api.attach({
-        business: authz.business,
+        composites: authz.composites,
         middleware: () => authz.middleware(),
         ...(connection ? { connection } : {}),
         describe: async (name) =>

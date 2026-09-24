@@ -1,11 +1,11 @@
 import './subjects.js';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
-  businessPlugin,
+  compositesPlugin,
   createAuthorization,
   type Authorization,
   type AuthorizationPlugin,
-  type BusinessAuthorizationApi,
+  type CompositeAuthorizationApi,
 } from '@nocobase/authorization/core';
 import {
   permissionSetsPlugin,
@@ -20,6 +20,7 @@ import {
 } from './pages-authorization.js';
 import { installAuthorizationAdministration } from './routes/administration.js';
 import { settingsPlugin, type SettingsAuthorizationApi } from './settings.js';
+import { uiPlugin, type UiAuthorizationApi } from './ui.js';
 import { DatabaseConnectionHandle } from './stores/connection.js';
 import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
@@ -50,7 +51,8 @@ export type AppAuthorization = Authorization &
   DatabaseAuthorizationApi &
   PagesAuthorizationApi &
   SettingsAuthorizationApi &
-  BusinessAuthorizationApi;
+  CompositeAuthorizationApi &
+  UiAuthorizationApi;
 
 const DEFAULT_ROOT_SET = 'root';
 const DEFAULT_DEFAULT_SET = 'member';
@@ -80,7 +82,8 @@ export function createAppAuthorization(
       databasePlugin(options.database),
       pagesPlugin(),
       settingsPlugin(),
-      businessPlugin(),
+      compositesPlugin(),
+      uiPlugin(),
       ...(options.config?.plugins ?? []),
     ],
   });

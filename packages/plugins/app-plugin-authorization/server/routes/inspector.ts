@@ -19,7 +19,7 @@ import { authorizationOptions } from '../options.js';
 
 export const INSPECTOR_SETTINGS = 'authorization.inspector';
 
-/** A decision, with the underlying checks of a business action. */
+/** A decision, with the underlying checks of a composite action. */
 export type InspectedDecision = AuthorizationDecision & {
   readonly checks?: readonly unknown[];
 };
@@ -170,7 +170,7 @@ async function decide(
   action: string,
 ): Promise<InspectedDecision> {
   const decision = await context.authorize({ resource, action });
-  if (resource.type !== 'business') return decision;
+  if (resource.type !== 'composite') return decision;
   const checks: unknown = decision.conditions?.checks;
   return { ...decision, checks: Array.isArray(checks) ? checks : [] };
 }

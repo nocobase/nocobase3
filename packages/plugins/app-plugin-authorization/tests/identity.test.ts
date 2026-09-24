@@ -41,7 +41,7 @@ describe('the identity an application resolves for a request', () => {
     const authorization = createAppAuthorization({ connection });
 
     expect(authorization.resourceTypes.list().map((type) => type.type)).toEqual(
-      ['business', 'database.collection', 'page', 'settings'],
+      ['composite', 'database.collection', 'page', 'settings'],
     );
   });
 });

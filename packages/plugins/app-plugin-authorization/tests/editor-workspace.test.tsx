@@ -48,11 +48,16 @@ const workspace: AuthorizationOptions = {
     pages: [pageSubsection([{ value: 'orders', label: 'Orders' }])],
     business: [
       subsection('example.sales', 'Sales', [
-        { type: 'business', value: 'orders', label: 'Orders', actions: [view] },
+        {
+          type: 'composite',
+          value: 'orders',
+          label: 'Orders',
+          actions: [view],
+        },
       ]),
       subsection('example.delivery', 'Delivery', [
         {
-          type: 'business',
+          type: 'composite',
           value: 'shipments',
           label: 'Shipments',
           actions: [view],
@@ -148,7 +153,7 @@ it('marks each subsection holding a grant as configured', () => {
       grants={[
         {
           id: 1,
-          resource: { type: 'business', id: 'shipments' },
+          resource: { type: 'composite', id: 'shipments' },
           actions: ['view'],
         },
         { id: 2, resource: { type: 'page', id: '*' }, actions: ['access'] },
@@ -198,7 +203,7 @@ it('edits page entry independently from a business resource with the same ID', (
       grants={[
         {
           id: 1,
-          resource: { type: 'business', id: 'orders' },
+          resource: { type: 'composite', id: 'orders' },
           actions: ['view'],
         },
       ]}
@@ -228,7 +233,7 @@ it('edits page entry independently from a business resource with the same ID', (
     current?.grants.find((grant) => grant.resource.type === 'page')?.actions,
   ).toEqual(['access']);
   expect(
-    current?.grants.find((grant) => grant.resource.type === 'business')
+    current?.grants.find((grant) => grant.resource.type === 'composite')
       ?.actions,
   ).toEqual(['view']);
   fireEvent.click(access);
@@ -236,7 +241,7 @@ it('edits page entry independently from a business resource with the same ID', (
     current?.grants.find((grant) => grant.resource.type === 'page'),
   ).toBeUndefined();
   expect(
-    current?.grants.find((grant) => grant.resource.type === 'business')
+    current?.grants.find((grant) => grant.resource.type === 'composite')
       ?.actions,
   ).toEqual(['view']);
 });

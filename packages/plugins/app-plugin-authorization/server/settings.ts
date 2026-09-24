@@ -4,7 +4,6 @@ import {
   type AuthorizationPlugin,
   type AuthorizationTitle,
   type PermissionGrant,
-  type SectionRegistry,
 } from '@nocobase/authorization/core';
 import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 
@@ -12,8 +11,6 @@ import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 export interface SettingsItemDefinition {
   readonly id: string;
   readonly title: AuthorizationTitle;
-  /** A subsection from `authz.sections`; omitted, the item is listed under administration's "Other". */
-  readonly section?: string;
   readonly actions: readonly {
     readonly name: string;
     readonly title?: AuthorizationTitle;
@@ -34,9 +31,6 @@ export interface SettingsAuthorizationApi {
 
 export type SettingsPlugin = AuthorizationPlugin<SettingsAuthorizationApi>;
 
-/** The subsection every authorization settings item is listed under. */
-export const AUTHORIZATION_SETTINGS_SECTION = 'authorization';
-
 class SettingsService implements SettingsApi {
   readonly items: ResourceItems = new ResourceItems();
   private readonly definitions = new Map<string, SettingsItemDefinition>();
@@ -51,7 +45,6 @@ class SettingsService implements SettingsApi {
     this.items.add({
       id: item.id,
       title: item.title,
-      ...(item.section === undefined ? {} : { section: item.section }),
       actions: item.actions,
     });
   }
@@ -69,34 +62,24 @@ class SettingsService implements SettingsApi {
   }
 }
 
-/** Registers the `settings` catalog type, its `authorization` subsection and `authz.settings`. */
+/**
+ * Registers the `settings` catalog type and `authz.settings`. Where an item is
+ * listed is `authz.ui.place`'s concern.
+ */
 export function settingsPlugin(): SettingsPlugin {
   const service = new SettingsService();
   return {
     id: 'settings',
     authorizationApi: { settings: service },
     setup(authz): void {
-      addAuthorizationSection(authz.sections);
       authz.resourceTypes.add({
         type: 'settings',
         title: {
           key: 'options.resourceTypes.settings',
           ns: AUTHORIZATION_NAMESPACE,
         },
-        defaultSection: 'administration',
         items: service.items,
       });
     },
   };
-}
-
-function addAuthorizationSection(sections: SectionRegistry): void {
-  sections.add({
-    name: AUTHORIZATION_SETTINGS_SECTION,
-    parent: 'administration',
-    title: {
-      key: 'options.settingsModules.authorization',
-      ns: AUTHORIZATION_NAMESPACE,
-    },
-  });
 }

@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import {
-  BusinessActionBuilder,
-  businessPlugin,
+  CompositeActionBuilder,
+  compositesPlugin,
   createAuthorization,
-  defineBusinessResource,
+  defineComposite,
   defineRecordAccess,
   selection,
 } from '@nocobase/authorization/core';
@@ -12,10 +12,8 @@ import { DatabaseAuthorizationService } from '../server/database/api.js';
 import { pagesPlugin } from '../server/pages-authorization.js';
 import { settingsPlugin } from '../server/settings.js';
 
-function businessHost() {
-  const authz = createAuthorization({ plugins: [businessPlugin()] });
-  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-  return authz;
+function compositeHost() {
+  return createAuthorization({ plugins: [compositesPlugin()] });
 }
 
 it('binds reusable permissions to independent data scopes without leaking writes', () => {
@@ -25,10 +23,9 @@ it('binds reusable permissions to independent data scopes without leaking writes
       .title('Quotes')
       .read(['id']),
   );
-  const resource = defineBusinessResource('sales.quotes', (r) =>
+  const resource = defineComposite('sales.quotes', (r) =>
     r
       .title('Quotes')
-      .section('sales')
       .action('view', (a) => a.title('View').grant('visible', read))
       .action('edit', (a) =>
         a.title('Edit').grant('editable', read.update(['amount']), {
@@ -36,12 +33,12 @@ it('binds reusable permissions to independent data scopes without leaking writes
         }),
       ),
   );
-  const authz = businessHost();
-  authz.business.define(resource);
+  const authz = compositeHost();
+  authz.composites.define(resource);
   expect(read.build().actions).toHaveLength(1);
   expect(read.build().actions[0]).not.toHaveProperty('scopeKey');
   expect(
-    authz.business.getAction('sales.quotes', 'view')?.grants[0]?.actions,
+    authz.composites.getAction('sales.quotes', 'view')?.grants[0]?.actions,
   ).toEqual([
     {
       action: 'read',
@@ -50,7 +47,7 @@ it('binds reusable permissions to independent data scopes without leaking writes
     },
   ]);
   expect(
-    authz.business
+    authz.composites
       .getAction('sales.quotes', 'edit')
       ?.dataScopes?.find((scope) => scope.key === 'editable')?.title,
   ).toBe('Editable quotes');
@@ -71,18 +68,16 @@ it('keeps multi-table selections and defaults through binding and expansion', as
   const projects = defineDatabasePermission((p) =>
     p.collection('projects').read(['id']),
   );
-  const resource = defineBusinessResource('submit', (r) =>
-    r
-      .section('sales')
-      .action('run', (a) =>
-        a.grant('quotes', quotes).grant('projects', projects),
-      ),
+  const resource = defineComposite('submit', (r) =>
+    r.action('run', (a) =>
+      a.grant('quotes', quotes).grant('projects', projects),
+    ),
   );
   const seen: unknown[] = [];
   const grant = resource.reference().grant({ run: { projects: 'regional' } });
   const authz = createAuthorization({
     plugins: [
-      businessPlugin(),
+      compositesPlugin(),
       {
         id: 'grants',
         grants: {
@@ -102,6 +97,7 @@ it('keeps multi-table selections and defaults through binding and expansion', as
             type: 'database.collection',
             title: 'Collections',
             actions: ['read'],
+            recordAccess: true,
             async authorize(request, context) {
               for (const item of await context.grants.resolve(request))
                 seen.push(item.origin?.selection);
@@ -112,8 +108,7 @@ it('keeps multi-table selections and defaults through binding and expansion', as
       },
     ],
   });
-  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-  authz.business.define(resource);
+  authz.composites.define(resource);
   const context = authz.for({ principal: { type: 'user', id: 'alice' } });
   for (const id of ['quotes', 'projects'])
     await context.authorize({
@@ -135,7 +130,7 @@ it('rejects duplicate bindings, malformed declarations and incompatible scope ch
   );
   expect(() => permission.read(['amount'])).toThrow('Duplicate');
   expect(() =>
-    new BusinessActionBuilder()
+    new CompositeActionBuilder()
       .grant('rows', permission)
       .grant('rows' as never, permission),
   ).toThrow('Duplicate');
@@ -168,7 +163,6 @@ it('registers settings items and collections and builds page grants', () => {
   settings.authorizationApi!.settings.add({
     id: 'workflow',
     title: 'Workflow',
-    section: 'authorization',
     actions: [{ name: 'manage' }],
   });
   expect(

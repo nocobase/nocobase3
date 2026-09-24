@@ -1,12 +1,12 @@
 import type { DataScopeOption } from '../../authorization-client.js';
 
-/** The value a business grant stores for one data scope. */
+/** The value a composite grant stores for one data scope. */
 export type DataScopeValue =
   string | { type: string; key?: string; params?: unknown };
 
-/** `{ type: 'business', scopes }`, as a grant draft holds it. */
-export interface BusinessPolicyDraft {
-  readonly type: 'business';
+/** `{ type: 'composite', scopes }`, as a grant draft holds it. */
+export interface CompositePolicyDraft {
+  readonly type: 'composite';
   readonly scopes: Readonly<Record<string, DataScopeValue>>;
   readonly [key: string]: unknown;
 }
@@ -15,7 +15,7 @@ type PolicyDraft = { type: string; [key: string]: unknown } | undefined;
 
 /** The value one data scope stores, or `undefined` when the policy sets none. */
 export function scopeValue(policy: PolicyDraft, key: string): unknown {
-  if (policy?.type !== 'business') return undefined;
+  if (policy?.type !== 'composite') return undefined;
   const scopes: unknown = policy.scopes;
   return scopes && typeof scopes === 'object'
     ? Reflect.get(scopes, key)
@@ -36,12 +36,12 @@ export function withScopeValue(
   policy: PolicyDraft,
   key: string,
   value: DataScopeValue,
-): BusinessPolicyDraft {
-  const scopes: unknown = policy?.type === 'business' ? policy.scopes : {};
+): CompositePolicyDraft {
+  const scopes: unknown = policy?.type === 'composite' ? policy.scopes : {};
   return {
     // Keep what this editor does not own, such as keys a newer server added.
-    ...(policy?.type === 'business' ? policy : {}),
-    type: 'business',
+    ...(policy?.type === 'composite' ? policy : {}),
+    type: 'composite',
     scopes: {
       ...(scopes && typeof scopes === 'object'
         ? (scopes as Record<string, DataScopeValue>)
@@ -52,11 +52,11 @@ export function withScopeValue(
 }
 
 /** The policy a newly granted action starts with: every scope at its default. */
-export function defaultBusinessPolicy(
+export function defaultCompositePolicy(
   scopes: readonly DataScopeOption[],
-): BusinessPolicyDraft {
+): CompositePolicyDraft {
   return {
-    type: 'business',
+    type: 'composite',
     scopes: Object.fromEntries(
       scopes.map((scope) => [scope.key, scope.defaultValue]),
     ),

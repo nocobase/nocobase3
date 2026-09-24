@@ -22,7 +22,7 @@ it('lists sections with their subsections, but no type without a default section
     title: 'Apps',
     actions: ['read'],
   });
-  authz.sections.add({
+  authz.ui.sections.add({
     name: 'automation',
     title: 'Automation',
     parent: 'administration',
@@ -30,9 +30,12 @@ it('lists sections with their subsections, but no type without a default section
   authz.settings.add({
     id: 'workflow',
     title: 'Workflow',
-    section: 'automation',
     actions: [{ name: 'manage' }],
   });
+  authz.ui.place(
+    { type: 'settings', id: 'workflow' },
+    { section: 'automation' },
+  );
   authz.settings.add({
     id: 'misc',
     title: 'Misc',
@@ -78,25 +81,28 @@ it('lists sections with their subsections, but no type without a default section
 
 it('lists the resource groups the resources name, with their ancestors', async () => {
   const authz = createAppAuthorization({});
-  authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
-  authz.resourceGroups.add({
+  authz.ui.groups.add({ name: 'ledgers', title: 'Ledgers' });
+  authz.ui.groups.add({
     name: 'payables',
     title: 'Payables',
     parent: 'ledgers',
     order: 2,
   });
-  authz.resourceGroups.add({ name: 'unused', title: 'Unused' });
+  authz.ui.groups.add({ name: 'unused', title: 'Unused' });
   authz.settings.add({
     id: 'bills',
     title: 'Bills',
     actions: [{ name: 'manage' }],
   });
-  authz.resourceTypes.get('settings').items?.add({
+  authz.settings.add({
     id: 'invoices',
     title: 'Invoices',
-    group: 'payables',
-    actions: ['manage'],
+    actions: [{ name: 'manage' }],
   });
+  authz.ui.place(
+    { type: 'settings', id: 'invoices' },
+    { section: 'authorization', group: 'payables' },
+  );
   const options = await authorizationOptions(authz);
   expect(options.resourceGroups).toEqual([
     { name: 'ledgers', title: 'Ledgers' },
@@ -107,12 +113,17 @@ it('lists the resource groups the resources name, with their ancestors', async (
       .flatMap((subsection) => subsection.resources)
       .find((resource) => resource.id === 'invoices'),
   ).toMatchObject({ group: 'payables' });
+  expect(
+    options.sections[2]?.subsections
+      .find((subsection) => subsection.name === 'authorization')
+      ?.resources.map((resource) => resource.id),
+  ).toContain('invoices');
 });
 
-it('describes business data scopes and narrows rule options to them', async () => {
+it('describes composite data scopes and narrows rule options to them', async () => {
   const authz = createAppAuthorization({});
   authz.database.collections.add({ name: 'orders', title: 'Orders' });
-  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
+  authz.ui.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
   expect(tree(await authorizationOptions(authz, { rules: true }))).toEqual([
     ['pages', []],
     ['business', []],
@@ -120,10 +131,9 @@ it('describes business data scopes and narrows rule options to them', async () =
   ]);
   const title = { key: 'sales.title', ns: 'example' };
   const actionTitle = { key: 'sales.view', ns: 'example' };
-  authz.business.define({
+  const orders = authz.composites.define({
     name: 'sales.orders',
     title,
-    section: 'sales',
     actions: [
       {
         name: 'view',
@@ -132,7 +142,6 @@ it('describes business data scopes and narrows rule options to them', async () =
           {
             key: 'orders',
             title: 'Orders',
-            collection: 'orders',
             options: ['recordsIOwn', 'allRecords'],
           },
         ],
@@ -161,6 +170,7 @@ it('describes business data scopes and narrows rule options to them', async () =
       },
     ],
   });
+  authz.ui.place(orders, { section: 'sales' });
   const options = await authorizationOptions(authz);
   expect(options.sections[1]).toMatchObject({
     name: 'business',
@@ -170,7 +180,7 @@ it('describes business data scopes and narrows rule options to them', async () =
         title: 'Sales',
         resources: [
           {
-            type: 'business',
+            type: 'composite',
             id: 'sales.orders',
             title: expect.objectContaining(title),
             actions: [

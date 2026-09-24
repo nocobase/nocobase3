@@ -38,7 +38,6 @@ export function pagesPlugin(): PagesPlugin {
           key: 'options.resourceTypes.page',
           ns: AUTHORIZATION_NAMESPACE,
         },
-        defaultSection: 'pages',
         actions: [
           {
             name: 'access',
