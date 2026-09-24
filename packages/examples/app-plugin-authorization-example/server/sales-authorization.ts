@@ -12,10 +12,11 @@ export function registerSalesAuthorization(
   authz: AppAuthorization,
   database: DatabaseManager,
 ): void {
-  for (const section of salesSections) authz.sections.add(section);
+  for (const section of salesSections) authz.ui.sections.add(section);
   for (const collection of salesCollections)
     authz.database.collections.add(collection);
-  for (const resource of salesResources) authz.business.define(resource);
+  for (const { resource, section } of salesResources)
+    authz.ui.place(authz.composites.define(resource), { section });
   for (const definition of createSalesRecordAccess(database))
     authz.recordAccess.define(definition);
 }

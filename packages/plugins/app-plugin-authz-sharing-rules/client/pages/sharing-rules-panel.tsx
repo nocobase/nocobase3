@@ -71,7 +71,7 @@ import {
 } from '@nocobase/app-plugin-authorization/client/management';
 import { useSharingRulesClient } from '../api.js';
 
-const BUSINESS = 'business';
+const COMPOSITE = 'composite';
 
 export function SharingRulesPanel({
   options,
@@ -79,7 +79,7 @@ export function SharingRulesPanel({
   options: AuthorizationOptions;
 }): ReactElement {
   const authz = useSharingRulesClient();
-  const loadBusinessRecords = useCallback(
+  const loadCompositeRecords = useCallback(
     (collection: string) => authz.listSharingRecords(collection),
     [authz],
   );
@@ -471,7 +471,7 @@ export function SharingRulesPanel({
                         ...draft,
                         resource,
                         actions:
-                          resource.type === BUSINESS
+                          resource.type === COMPOSITE
                             ? []
                             : firstActions(
                                 options,
@@ -526,14 +526,14 @@ export function SharingRulesPanel({
                     {t('sharingRules.accessDescription')}
                   </p>
                 </div>
-                {draft.resource.type === BUSINESS ? (
+                {draft.resource.type === COMPOSITE ? (
                   <DataScopesEditor
                     options={options}
                     resourceId={draft.resource.id}
                     allowAll={false}
                     value={draft.actions}
                     onChange={(actions) => setDraft({ ...draft, actions })}
-                    loadRecords={loadBusinessRecords}
+                    loadRecords={loadCompositeRecords}
                   />
                 ) : (
                   <SharingActionsEditor
@@ -558,16 +558,16 @@ function fresh(options: AuthorizationOptions): SharingRule {
     (item) => item.resources,
   );
   const first =
-    resources.find((item) => item.type === BUSINESS) ?? resources[0];
+    resources.find((item) => item.type === COMPOSITE) ?? resources[0];
   return {
     key: '',
     title: '',
     resource: {
-      type: first?.type ?? BUSINESS,
+      type: first?.type ?? COMPOSITE,
       id: first?.value ?? '',
     },
     actions:
-      first?.type === BUSINESS
+      first?.type === COMPOSITE
         ? []
         : firstActions(options, first?.type ?? '', first?.value).map(
             (action) => ({

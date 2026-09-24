@@ -45,11 +45,16 @@ describe('default access through the authorization dispatcher', () => {
         .get('settings')
         .items?.get('authorization.default-access'),
     ).toMatchObject({
-      section: 'authorization',
       actions: ['read', 'create', 'update', 'delete'].map((name) =>
         expect.objectContaining({ name }),
       ),
     });
+    expect(
+      authz.ui.placementOf({
+        type: 'settings',
+        id: 'authorization.default-access',
+      }),
+    ).toEqual({ section: 'authorization' });
     expect(authz.routes.list()).toContain('/default-access');
     expect('defaultAccess' in authz).toBe(true);
   });

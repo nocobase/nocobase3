@@ -45,7 +45,7 @@ describe('@nocobase/app-plugin-authz-default-access migration', () => {
       const row = (id: string, key: string) => ({
         id,
         key,
-        resourceType: 'business',
+        resourceType: 'composite',
         resourceId: 'sales.quotes',
         actions: '[]',
         createdAt: new Date(),

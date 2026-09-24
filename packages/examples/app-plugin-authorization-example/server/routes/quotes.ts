@@ -17,7 +17,7 @@ export function createQuoteRoutes(
 
   router.post('/sales/quotes/:id', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'business', id: 'example.sales.quotes' },
+      resource: { type: 'composite', id: 'example.sales.quotes' },
       action: 'edit',
     });
 
@@ -50,7 +50,7 @@ export function createQuoteRoutes(
 
   router.post('/sales/quotes/:id/submit', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'business', id: 'example.sales.quotes' },
+      resource: { type: 'composite', id: 'example.sales.quotes' },
       action: 'submit',
     });
     if (decision.effect === 'deny' || !decision.conditions?.database)

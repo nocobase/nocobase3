@@ -67,7 +67,7 @@ import {
 } from '@nocobase/app-plugin-authorization/client/management';
 import { useRestrictionRulesClient } from '../api.js';
 
-const BUSINESS = 'business';
+const COMPOSITE = 'composite';
 
 export function RestrictionRulesPanel({
   options,
@@ -75,7 +75,7 @@ export function RestrictionRulesPanel({
   options: AuthorizationOptions;
 }): ReactElement {
   const authz = useRestrictionRulesClient();
-  const loadBusinessRecords = useCallback(
+  const loadCompositeRecords = useCallback(
     (collection: string) => authz.listRestrictionRecords(collection),
     [authz],
   );
@@ -107,7 +107,7 @@ export function RestrictionRulesPanel({
     [],
   );
   useEffect(() => {
-    if (!draft?.resource.id || draft.resource.type === BUSINESS) return;
+    if (!draft?.resource.id || draft.resource.type === COMPOSITE) return;
     let active = true;
     void authz.listRestrictionRecords(draft.resource.id).then(
       (items) => {
@@ -483,7 +483,7 @@ export function RestrictionRulesPanel({
                         ...draft,
                         resource,
                         actions:
-                          resource.type === BUSINESS
+                          resource.type === COMPOSITE
                             ? []
                             : firstActions(
                                 options,
@@ -535,13 +535,13 @@ export function RestrictionRulesPanel({
                     {t('restrictionRules.accessDescription')}
                   </p>
                 </div>
-                {draft.resource.type === BUSINESS ? (
+                {draft.resource.type === COMPOSITE ? (
                   <DataScopesEditor
                     options={options}
                     resourceId={draft.resource.id}
                     value={draft.actions}
                     onChange={(actions) => setDraft({ ...draft, actions })}
-                    loadRecords={loadBusinessRecords}
+                    loadRecords={loadCompositeRecords}
                   />
                 ) : (
                   <RuleActionsEditor
@@ -568,16 +568,16 @@ function fresh(options: AuthorizationOptions): RestrictionRule {
     (item) => item.resources,
   );
   const first =
-    resources.find((item) => item.type === BUSINESS) ?? resources[0];
+    resources.find((item) => item.type === COMPOSITE) ?? resources[0];
   return {
     key: '',
     title: '',
     resource: {
-      type: first?.type ?? BUSINESS,
+      type: first?.type ?? COMPOSITE,
       id: first?.value ?? '',
     },
     actions:
-      first?.type === BUSINESS
+      first?.type === COMPOSITE
         ? []
         : firstActions(options, first?.type ?? '', first?.value).map(
             (action) => ({

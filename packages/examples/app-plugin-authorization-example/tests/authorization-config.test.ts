@@ -108,7 +108,7 @@ describe('what an application configures about its own authorization', () => {
     const authorization = createAppAuthorization({ connection });
 
     expect(authorization.resourceTypes.list().map((type) => type.type)).toEqual(
-      ['business', 'database.collection', 'page', 'settings'],
+      ['composite', 'database.collection', 'page', 'settings'],
     );
     expect(authorization.routes.list()).toEqual([
       '/inspector',

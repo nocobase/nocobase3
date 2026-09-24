@@ -12,7 +12,7 @@ import {
   AuthorizationDeniedError,
   defineRecordAccess,
   type AuthorizationContext,
-  type BusinessResource,
+  type Composite,
 } from '@nocobase/authorization/core';
 import { createAppPaths } from '@nocobase/app-server/config';
 import {
@@ -211,16 +211,20 @@ describe('locale-independent option descriptors', () => {
 
   it('includes settings items registered by another settings module', async () => {
     const authz = authorization();
-    authz.sections.add({ name: 'ai', title: 'AI', parent: 'administration' });
+    authz.ui.sections.add({
+      name: 'ai',
+      title: 'AI',
+      parent: 'administration',
+    });
     authz.settings.add({
       id: 'ai.models',
       title: 'Models',
-      section: 'ai',
       actions: [
         { name: 'read', title: 'Read' },
         { name: 'update', title: 'Update' },
       ],
     });
+    authz.ui.place({ type: 'settings', id: 'ai.models' }, { section: 'ai' });
     const router = await mountedRouter(authz);
     const response = await router.request('/api/authz/permission-sets/options');
     const data = await readOptions(response);
@@ -281,8 +285,14 @@ describe('locale-independent option descriptors', () => {
 
   it('sends a registered string as it was written, in every language', async () => {
     const authz = authorization();
-    authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-    authz.business.define(ordersResource('Orders'));
+    authz.ui.sections.add({
+      name: 'sales',
+      title: 'Sales',
+      parent: 'business',
+    });
+    authz.ui.place(authz.composites.define(ordersResource('Orders')), {
+      section: 'sales',
+    });
     const router = await mountedRouter(authz);
 
     const labels = await Promise.all(
@@ -303,12 +313,19 @@ describe('locale-independent option descriptors', () => {
 
   it('resolves a registered key through the catalogue of its namespace', async () => {
     const authz = authorization();
-    authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-    authz.business.define(
-      ordersResource({
-        key: 'options.resourceTypes.collection',
-        ns: AUTHORIZATION_NAMESPACE,
-      }),
+    authz.ui.sections.add({
+      name: 'sales',
+      title: 'Sales',
+      parent: 'business',
+    });
+    authz.ui.place(
+      authz.composites.define(
+        ordersResource({
+          key: 'options.resourceTypes.collection',
+          ns: AUTHORIZATION_NAMESPACE,
+        }),
+      ),
+      { section: 'sales' },
     );
     authz.recordAccess.define(
       defineRecordAccess('regional', (access) =>
@@ -342,11 +359,10 @@ describe('locale-independent option descriptors', () => {
   });
 });
 
-function ordersResource(title: BusinessResource['title']): BusinessResource {
+function ordersResource(title: Composite['title']): Composite {
   return {
     name: 'orders',
     title,
-    section: 'sales',
     actions: [
       {
         name: 'view',

@@ -45,11 +45,16 @@ describe('sharing rules through the authorization dispatcher', () => {
         .get('settings')
         .items?.get('authorization.sharing-rules'),
     ).toMatchObject({
-      section: 'authorization',
       actions: ['read', 'create', 'update', 'delete'].map((name) =>
         expect.objectContaining({ name }),
       ),
     });
+    expect(
+      authz.ui.placementOf({
+        type: 'settings',
+        id: 'authorization.sharing-rules',
+      }),
+    ).toEqual({ section: 'authorization' });
     expect(authz.routes.list()).toContain('/sharing-rules');
     expect('sharingRules' in authz).toBe(true);
   });

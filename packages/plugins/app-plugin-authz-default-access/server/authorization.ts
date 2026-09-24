@@ -1,16 +1,18 @@
 import type { DatabaseConnection } from '@nocobase/db';
 import type {
   AuthorizationPlugin,
-  BusinessAuthorizationApi,
+  CompositeAuthorizationApi,
 } from '@nocobase/authorization/core';
 import {
   defaultAccessPlugin,
   type DefaultAccessAuthorizationApi,
   type DefaultAccessStore,
 } from '@nocobase/authorization/default-access';
-import type {
-  DatabaseAuthorizationApi,
-  SettingsAuthorizationApi,
+import {
+  AUTHORIZATION_SETTINGS_SECTION,
+  type DatabaseAuthorizationApi,
+  type SettingsAuthorizationApi,
+  type UiAuthorizationApi,
 } from '@nocobase/app-plugin-authorization/server';
 import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/extension';
 import {
@@ -33,7 +35,10 @@ export function defaultAccess(
 ): AuthorizationPlugin<
   DefaultAccessAuthorizationApi<DatabaseConnection>,
   DatabaseConnection,
-  SettingsAuthorizationApi & DatabaseAuthorizationApi & BusinessAuthorizationApi
+  SettingsAuthorizationApi &
+    DatabaseAuthorizationApi &
+    CompositeAuthorizationApi &
+    UiAuthorizationApi
 > {
   const connection = new DatabaseConnectionHandle('Default Access');
   const plugin = defaultAccessPlugin<DatabaseConnection>({
@@ -41,19 +46,22 @@ export function defaultAccess(
   });
   return {
     ...plugin,
-    dependencies: ['settings', 'database', 'business'],
+    dependencies: ['settings', 'database', 'composites', 'ui'],
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);
       authz.settings.add({
         id: DEFAULT_ACCESS_SETTINGS,
         title: { key: 'resourceTitle', ns: NAMESPACE },
-        section: 'authorization',
         actions: ['read', 'create', 'update', 'delete'].map((name) => ({
           name,
           title: { key: `options.actions.${name}`, ns: APP_NAMESPACE },
         })),
       });
+      authz.ui.place(
+        { type: 'settings', id: DEFAULT_ACCESS_SETTINGS },
+        { section: AUTHORIZATION_SETTINGS_SECTION },
+      );
       authz.routes.add(
         `/${DEFAULT_ACCESS_RULE}`,
         createDefaultAccessHandler(

@@ -22,7 +22,7 @@ import { PROJECTS, QUOTES } from '../server/sales-authorization.js';
 import { projectReference, quoteResource } from '../server/sales-resources.js';
 import {
   selection,
-  type BusinessConditions,
+  type CompositeConditions,
   type PermissionGrant,
 } from '@nocobase/authorization/core';
 import {
@@ -170,7 +170,7 @@ it('grants page entry separately while data rules govern real endpoints', async 
   ).toBe(401);
 });
 it('saves all three rule types through their production HTTP routes and validates their targets', async () => {
-  const resource = { type: 'business', id: 'example.sales.projects' };
+  const resource = { type: 'composite', id: 'example.sales.projects' };
   const changed = await admin(
     'default-access/example-default-projects',
     'PUT',
@@ -247,7 +247,7 @@ it('saves all three rule types through their production HTTP routes and validate
       wireResources(options)
         .find(
           (item) =>
-            item.type === 'business' && item.id === 'example.sales.projects',
+            item.type === 'composite' && item.id === 'example.sales.projects',
         )
         ?.actions.map((action) => action.name),
     ).toEqual(['view', 'edit']);
@@ -300,7 +300,7 @@ it('saves one operation scope from the real editor without changing view or quot
       : translate(key, params),
   );
   expect(
-    findResource(options, { type: 'business', id: 'example.sales.projects' })
+    findResource(options, { type: 'composite', id: 'example.sales.projects' })
       ?.dataScopes?.edit,
   ).toBeDefined();
   const set = (await authz.permissionSets.get('example-sales-assistant'))!;
@@ -354,12 +354,12 @@ it('saves one operation scope from the real editor without changing view or quot
   expect(
     (await authz.permissionSets.get(set.key))?.grants.find(
       (grant) =>
-        grant.resource.type === 'business' &&
+        grant.resource.type === 'composite' &&
         grant.resource.id === 'example.sales.projects',
     )?.actions,
   ).toContainEqual({
     action: 'edit',
-    policy: { type: 'business', scopes: { projects: 'example.sales.region' } },
+    policy: { type: 'composite', scopes: { projects: 'example.sales.region' } },
   });
   expect(await ids('assistant')).toEqual([
     'project-1',
@@ -629,7 +629,7 @@ it('keeps two shared record lists on one operation separate through HTTP, storag
   await authz.defaultAccess.delete('example-default-quotes');
   const response = await admin('sharing-rules', 'POST', {
     key: 'multi-table',
-    resource: { type: 'business', id: 'example.sales.quotes' },
+    resource: { type: 'composite', id: 'example.sales.quotes' },
     subjects: [{ type: 'user', id: fixture.users.assistant }],
     actions: [
       {
@@ -712,7 +712,7 @@ it('applies defaults and restrictions to the selected business scope without exp
     (
       await admin('default-access/example-default-quotes', 'PUT', {
         key: 'example-default-quotes',
-        resource: { type: 'business', id: 'example.sales.quotes' },
+        resource: { type: 'composite', id: 'example.sales.quotes' },
         actions: [
           {
             action: 'submit',
@@ -732,7 +732,7 @@ it('applies defaults and restrictions to the selected business scope without exp
     (
       await admin('restriction-rules', 'POST', {
         key: 'only-first-quote',
-        resource: { type: 'business', id: 'example.sales.quotes' },
+        resource: { type: 'composite', id: 'example.sales.quotes' },
         subjects: [{ type: 'user', id: fixture.users.assistant }],
         actions: [
           {
@@ -807,12 +807,12 @@ it('narrows business endpoints to their operation while generic data policies ag
       key: 'example-sales-assistant',
       grants: [
         {
-          resource: { type: 'business', id: 'example.sales.projects' },
+          resource: { type: 'composite', id: 'example.sales.projects' },
           actions: [
             {
               action: 'view',
               policy: {
-                type: 'business',
+                type: 'composite',
                 scopes: { projects: 'unknown-policy' },
               },
             },
@@ -846,9 +846,9 @@ it('exposes pages in permission sets and inspection while data rules only list b
         section.subsections.some((item) => item.recordType?.type === 'page'),
       ),
     ).toBe(workspace);
-    // Rule plugins can only target business items with data scopes.
+    // Rule plugins can only target composites with data scopes.
     expect([...new Set(resources.map((item) => item.type))]).toEqual(
-      workspace ? ['business', 'settings'] : ['business'],
+      workspace ? ['composite', 'settings'] : ['composite'],
     );
     expect(subsections('business')).toEqual([
       'example.sales',
@@ -858,7 +858,7 @@ it('exposes pages in permission sets and inspection while data rules only list b
       expect(subsections('administration')).toContain('authorization');
     const project = resources.find(
       (item) =>
-        item.type === 'business' && item.id === 'example.sales.projects',
+        item.type === 'composite' && item.id === 'example.sales.projects',
     )!;
     const choices = project.dataScopes!.view![0]!.recordAccess;
     offered.set(path, choices);
@@ -885,7 +885,7 @@ it('exposes pages in permission sets and inspection while data rules only list b
 it('explains a business action with its granting permission set and branch sharing and restriction rules', async () => {
   const response = await admin('inspector/decision', 'POST', {
     subject: { type: 'user', id: fixture.users.assistant },
-    resource: { type: 'business', id: 'example.sales.projects' },
+    resource: { type: 'composite', id: 'example.sales.projects' },
     action: 'view',
   });
   expect(response.status).toBe(200);
@@ -933,7 +933,7 @@ it('persists localized titles through permission-set and rule HTTP edits', async
       path: 'sharing-rules',
       input: {
         key: 'localized-title',
-        resource: { type: 'business', id: 'example.sales.projects' },
+        resource: { type: 'composite', id: 'example.sales.projects' },
         subjects: [{ type: 'user', id: fixture.users.assistant }],
         actions: [
           {
@@ -948,7 +948,7 @@ it('persists localized titles through permission-set and rule HTTP edits', async
       path: 'restriction-rules',
       input: {
         key: 'localized-title',
-        resource: { type: 'business', id: 'example.sales.projects' },
+        resource: { type: 'composite', id: 'example.sales.projects' },
         subjects: [{ type: 'user', id: fixture.users.assistant }],
         actions: [
           { action: 'view', scopeKey: 'projects', selection: { type: 'all' } },
@@ -1002,13 +1002,13 @@ it('returns executable policies for both submit targets without a second policy 
       principal: { type: 'user', id: fixture.users.engineer },
     });
     const request = {
-      resource: { type: 'business', id: 'example.sales.quotes' },
+      resource: { type: 'composite', id: 'example.sales.quotes' },
       action: 'submit',
     };
     const decision = await scope.authorize(request);
     expect(decision.effect).toBe('conditional');
-    const conditions = decision.conditions as BusinessConditions;
-    expect(conditions.type).toBe('business');
+    const conditions = decision.conditions as CompositeConditions;
+    expect(conditions.type).toBe('composite');
     expect(Object.keys(conditions.database!)).toEqual(
       expect.arrayContaining([PROJECTS, QUOTES]),
     );
@@ -1049,7 +1049,7 @@ it('fails closed for ungranted or unknown composed operations, including root ty
     principal: { type: 'user', id: fixture.users.assistant },
   });
   const denied = await assistant.authorize({
-    resource: { type: 'business', id: 'example.sales.quotes' },
+    resource: { type: 'composite', id: 'example.sales.quotes' },
     action: 'submit',
   });
   expect(denied.effect).toBe('deny');
@@ -1060,13 +1060,13 @@ it('fails closed for ungranted or unknown composed operations, including root ty
   expect(
     (
       await root.authorize({
-        resource: { type: 'business', id: 'example.sales.quotes' },
+        resource: { type: 'composite', id: 'example.sales.quotes' },
         action: 'typo',
       })
     ).effect,
   ).toBe('deny');
   const decision = await root.authorize({
-    resource: { type: 'business', id: 'example.sales.quotes' },
+    resource: { type: 'composite', id: 'example.sales.quotes' },
     action: 'submit',
   });
   expect(decision.conditions?.database?.[PROJECTS]).toEqual({
@@ -1258,7 +1258,7 @@ it('uses team subjects in pickers and inspects a user with the same memberships 
   );
   const response = await admin('inspector/decision', 'POST', {
     subject: { type: 'user', id: fixture.users.proposal },
-    resource: { type: 'business', id: 'example.sales.quotes' },
+    resource: { type: 'composite', id: 'example.sales.quotes' },
     action: 'submit',
   });
   expect(response.status).toBe(200);
@@ -1482,7 +1482,7 @@ it('keeps page grants and business data grants independent in both directions', 
   )!;
   const dataGrant = set.grants.find(
     (grant) =>
-      grant.resource.type === 'business' &&
+      grant.resource.type === 'composite' &&
       grant.resource.id === 'example.sales.projects',
   )!;
   const pageRequest = {
@@ -1500,7 +1500,7 @@ it('keeps page grants and business data grants independent in both directions', 
     200,
   );
   const decision = await authz.for(identity).authorize({
-    resource: { type: 'business', id: 'example.sales.projects' },
+    resource: { type: 'composite', id: 'example.sales.projects' },
     action: 'view',
   });
   expect(
@@ -1696,7 +1696,7 @@ it('answers useCan for a scoped business grant through the real client and snaps
       {children}
     </ClientApplicationContext.Provider>
   );
-  const quotes = { type: 'business', id: 'example.sales.quotes' };
+  const quotes = { type: 'composite', id: 'example.sales.quotes' };
   const { result } = renderHook(
     () => ({
       submit: useCan({ resource: quotes, action: 'submit' }),

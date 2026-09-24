@@ -8,7 +8,7 @@ export class WorkflowAuthorizationProvider extends ServiceProvider<AppPluginAppl
   public override async boot(): Promise<void> {
     const authz = this.app.container.resolve(authorizationToken);
     // Workflow owns the Automation subsection, as it owns the settings group.
-    authz.sections.add({
+    authz.ui.sections.add({
       name: 'automation',
       title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
       parent: 'administration',
@@ -19,7 +19,6 @@ export class WorkflowAuthorizationProvider extends ServiceProvider<AppPluginAppl
         key: 'authorization.title',
         ns: '@nocobase/app-plugin-workflow',
       },
-      section: 'automation',
       actions: [
         {
           name: 'manage',
@@ -30,5 +29,9 @@ export class WorkflowAuthorizationProvider extends ServiceProvider<AppPluginAppl
         },
       ],
     });
+    authz.ui.place(
+      { type: 'settings', id: 'workflow' },
+      { section: 'automation' },
+    );
   }
 }

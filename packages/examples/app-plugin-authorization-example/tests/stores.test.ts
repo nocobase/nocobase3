@@ -115,7 +115,7 @@ describe('authorization plugin database stores', () => {
         restrictionRules(),
       ],
     });
-    const resource = { type: 'business', id: 'sales.submit' };
+    const resource = { type: 'composite', id: 'sales.submit' };
     const actions = [
       {
         action: 'submit',

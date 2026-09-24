@@ -1,9 +1,9 @@
 import { buildFilter } from '@nocobase/repository-input';
 import {
-  BusinessResourceReference,
-  defineBusinessResource,
-  type BusinessActions,
-  type BusinessResource,
+  CompositeReference,
+  defineComposite,
+  type Composite,
+  type CompositeActions,
 } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
 import { label, PROJECTS, QUOTES, ORDERS } from '../catalog.js';
@@ -97,13 +97,12 @@ const deliveryRelations = orderPermission.update((update) =>
 );
 
 /**
- * The object form of a business resource: the same data
- * `defineBusinessResource` builds, written out directly.
+ * The object form of a composite: the same data `defineComposite` builds,
+ * written out directly.
  */
-export const projectResource: BusinessResource = {
+export const projectResource: Composite = {
   name: 'example.sales.projects',
   title: label('sales.projects'),
-  section: 'example.sales',
   actions: [
     {
       name: 'view',
@@ -118,14 +117,13 @@ export const projectResource: BusinessResource = {
   ],
 };
 
-export const projectReference: BusinessResourceReference<BusinessActions> =
-  new BusinessResourceReference(projectResource);
+export const projectReference: CompositeReference<CompositeActions> =
+  new CompositeReference(projectResource);
 
-export const quoteResource = defineBusinessResource(
+export const quoteResource = defineComposite(
   'example.sales.quotes',
   (resource) =>
     resource
-      .section('example.sales')
       .title(label('sales.quotes'))
       .action('view', (action) =>
         action.title(label('sales.view')).grant('quotes', quotePermission),
@@ -147,11 +145,10 @@ export const quoteResource = defineBusinessResource(
       ),
 );
 
-export const orderResource = defineBusinessResource(
+export const orderResource = defineComposite(
   'example.sales.orders',
   (resource) =>
     resource
-      .section('example.delivery')
       .title(label('sales.orders'))
       .action('view', (action) =>
         action.title(label('sales.view')).grant('orders', orderPermission),
@@ -171,7 +168,7 @@ export const orderResource = defineBusinessResource(
       ),
 );
 
-/** Subsections of the business section, one sidebar entry each. */
+/** Subsections of the workspace's business section, one sidebar entry each. */
 export const salesSections = [
   { name: 'example.sales', title: label('sales.group'), parent: 'business' },
   {
@@ -189,8 +186,12 @@ export const salesCollections = [
   { name: QUOTES, title: label('sales.quotes'), actions: ['read', 'update'] },
   { name: ORDERS, title: label('sales.orders'), actions: ['read', 'update'] },
 ];
-export const salesResources: readonly BusinessResource[] = [
-  projectResource,
-  quoteResource.build(),
-  orderResource.build(),
+/** Each composite with the subsection the workspace lists it in. */
+export const salesResources: readonly {
+  readonly resource: Composite;
+  readonly section: (typeof salesSections)[number]['name'];
+}[] = [
+  { resource: projectResource, section: 'example.sales' },
+  { resource: quoteResource.build(), section: 'example.sales' },
+  { resource: orderResource.build(), section: 'example.delivery' },
 ];

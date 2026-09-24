@@ -18,7 +18,7 @@ it.each([false, true])(
     };
     // Scheduler extends the subsection; the owner's title wins either way.
     if (schedulerFirst)
-      authz.sections.add({
+      authz.ui.sections.add({
         ...automation,
         title: { key: 'nav.automation', ns: '@nocobase/app-plugin-scheduler' },
         extend: true,
@@ -28,12 +28,14 @@ it.each([false, true])(
     await new WorkflowAuthorizationProvider({
       container,
     } as AppPluginApplication).boot();
-    expect(authz.sections.get('automation')).toEqual(automation);
+    expect(authz.ui.sections.get('automation')).toEqual(automation);
     expect(
       authz.resourceTypes.get('settings').items?.get('workflow'),
     ).toMatchObject({
-      section: 'automation',
       actions: [expect.objectContaining({ name: 'manage' })],
+    });
+    expect(authz.ui.placementOf({ type: 'settings', id: 'workflow' })).toEqual({
+      section: 'automation',
     });
     expect(authz.settings.grant('workflow', ['manage'])).toEqual({
       resource: { type: 'settings', id: 'workflow' },

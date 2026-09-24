@@ -16,7 +16,7 @@ it.each([false, true])(
       title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
       parent: 'administration',
     };
-    if (workflowFirst) authz.sections.add(workflow);
+    if (workflowFirst) authz.ui.sections.add(workflow);
     const automation = workflowFirst
       ? workflow
       : {
@@ -31,13 +31,15 @@ it.each([false, true])(
     await new SchedulerAuthorizationProvider({
       container,
     } as AppPluginApplication).boot();
-    expect(authz.sections.get('automation')).toEqual(automation);
+    expect(authz.ui.sections.get('automation')).toEqual(automation);
     expect(
       authz.resourceTypes.get('settings').items?.get('scheduler.schedules'),
     ).toMatchObject({
-      section: 'automation',
       actions: [expect.objectContaining({ name: 'read' })],
     });
+    expect(
+      authz.ui.placementOf({ type: 'settings', id: 'scheduler.schedules' }),
+    ).toEqual({ section: 'automation' });
     expect(authz.settings.grant('scheduler.schedules', ['read'])).toEqual({
       resource: { type: 'settings', id: 'scheduler.schedules' },
       actions: [{ action: 'read' }],

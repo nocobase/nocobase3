@@ -161,7 +161,7 @@ async function viewRecords(
   collection: string,
 ) {
   const decision = await scope.authorize({
-    resource: { type: 'business', id: resource },
+    resource: { type: 'composite', id: resource },
     action: 'view',
   });
   if (decision.effect === 'deny' || !decision.conditions?.database)
@@ -204,7 +204,7 @@ async function operationAccess(
   fields: string[],
 ) {
   const decision = await scope.authorize({
-    resource: { type: 'business', id: resource },
+    resource: { type: 'composite', id: resource },
     action,
   });
 
@@ -225,7 +225,7 @@ async function projectSummaries(
   scope: AuthorizationContext,
 ): Promise<Record<string, { title: string; region: string }>> {
   const decision = await scope.authorize({
-    resource: { type: 'business', id: 'example.sales.projects' },
+    resource: { type: 'composite', id: 'example.sales.projects' },
     action: 'view',
   });
   const policy =

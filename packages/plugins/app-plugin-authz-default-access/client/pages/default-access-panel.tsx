@@ -67,7 +67,7 @@ type Row = Omit<DefaultAccessRule, 'key'> & {
   label: string;
 };
 
-const BUSINESS = 'business';
+const COMPOSITE = 'composite';
 
 export function DefaultAccessPanel({
   options,
@@ -75,7 +75,7 @@ export function DefaultAccessPanel({
   options: AuthorizationOptions;
 }): ReactElement {
   const authz = useDefaultAccessClient();
-  const loadBusinessRecords = useCallback(
+  const loadCompositeRecords = useCallback(
     (collection: string) => authz.listDefaultAccessRecords(collection),
     [authz],
   );
@@ -96,8 +96,8 @@ export function DefaultAccessPanel({
   const subsection =
     sections.find((item) => item.value === params.get('section')) ??
     sections[0];
-  const businessSection = Boolean(
-    subsection?.resources.every((item) => item.type === BUSINESS),
+  const compositeSection = Boolean(
+    subsection?.resources.every((item) => item.type === COMPOSITE),
   );
   const inSubsection = (resource: { type: string; id: string }): boolean =>
     Boolean(
@@ -189,7 +189,7 @@ export function DefaultAccessPanel({
   );
   useEffect(() => {
     let active = true;
-    if (!draft?.resource.id || draft.resource.type === BUSINESS) return;
+    if (!draft?.resource.id || draft.resource.type === COMPOSITE) return;
     void authz.listDefaultAccessRecords(draft.resource.id).then(
       (items) => {
         if (active) setRecords(items);
@@ -276,7 +276,7 @@ export function DefaultAccessPanel({
     mode: string,
   ): Promise<void> {
     if (busy || !canConfigure) return;
-    if (mode === 'custom' || row.resource.type === BUSINESS) {
+    if (mode === 'custom' || row.resource.type === COMPOSITE) {
       edit(row);
       return;
     }
@@ -378,7 +378,7 @@ export function DefaultAccessPanel({
                       <TableHead className='w-[32%] px-5 py-3'>
                         {t('common.resource')}
                       </TableHead>
-                      {businessSection ? (
+                      {compositeSection ? (
                         <TableHead className='px-2 py-3'>
                           {t('editors.actions')}
                         </TableHead>
@@ -407,7 +407,7 @@ export function DefaultAccessPanel({
                             <TableRow className='bg-muted/40'>
                               <TableCell
                                 colSpan={
-                                  businessSection ? 2 : actions.length + 1
+                                  compositeSection ? 2 : actions.length + 1
                                 }
                                 className='p-0'
                               >
@@ -447,7 +447,7 @@ export function DefaultAccessPanel({
                                       {row.resource.id}
                                     </p>
                                   </TableCell>
-                                  {row.resource.type === BUSINESS ? (
+                                  {row.resource.type === COMPOSITE ? (
                                     <TableCell className='px-2 py-2'>
                                       <div className='flex flex-wrap gap-x-3 gap-y-1'>
                                         {findResource(
@@ -507,7 +507,7 @@ export function DefaultAccessPanel({
                                           key={action.value}
                                           className='px-2 py-2 text-center'
                                         >
-                                          {row.resource.type === BUSINESS &&
+                                          {row.resource.type === COMPOSITE &&
                                           supported ? (
                                             <button
                                               type='button'
@@ -568,7 +568,7 @@ export function DefaultAccessPanel({
                     })}
                     {!paged.length ? (
                       <EmptyTableRow
-                        colSpan={businessSection ? 2 : actions.length + 1}
+                        colSpan={compositeSection ? 2 : actions.length + 1}
                       >
                         {!loaded
                           ? t('common.loading')
@@ -642,13 +642,13 @@ export function DefaultAccessPanel({
               }
             >
               {error ? <ErrorBox value={error} /> : null}
-              {draft.resource.type === BUSINESS ? (
+              {draft.resource.type === COMPOSITE ? (
                 <DataScopesEditor
                   options={options}
                   resourceId={draft.resource.id}
                   value={draft.actions}
                   onChange={(actions) => setDraft({ ...draft, actions })}
-                  loadRecords={loadBusinessRecords}
+                  loadRecords={loadCompositeRecords}
                 />
               ) : (
                 actions

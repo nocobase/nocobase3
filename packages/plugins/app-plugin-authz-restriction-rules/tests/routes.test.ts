@@ -45,11 +45,16 @@ describe('restriction rules through the authorization dispatcher', () => {
         .get('settings')
         .items?.get('authorization.restriction-rules'),
     ).toMatchObject({
-      section: 'authorization',
       actions: ['read', 'create', 'update', 'delete'].map((name) =>
         expect.objectContaining({ name }),
       ),
     });
+    expect(
+      authz.ui.placementOf({
+        type: 'settings',
+        id: 'authorization.restriction-rules',
+      }),
+    ).toEqual({ section: 'authorization' });
     expect(authz.routes.list()).toContain('/restriction-rules');
     expect('restrictionRules' in authz).toBe(true);
   });
