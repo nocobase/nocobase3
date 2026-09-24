@@ -4,7 +4,7 @@ import {
   defineSettingsRoutes,
 } from '@nocobase/app-client/plugins';
 import routes from '../client/routes.js';
-it('contributes its page to the authorization group with its own namespace', () => {
+it('contributes its page to the authorization group with its own namespace, gated by its settings item', () => {
   const result = resolveAppClientContributions([
     { packageName: '@nocobase/app-plugin-authz-sharing-rules', routes },
     {
@@ -24,5 +24,9 @@ it('contributes its page to the authorization group with its own namespace', () 
     path: '/settings/authorization/sharing-rules',
     packageName: '@nocobase/app-plugin-authz-sharing-rules',
     groupId: 'authorization',
+    authz: {
+      resource: { type: 'settings', id: 'authorization.sharing-rules' },
+      action: 'read',
+    },
   });
 });

@@ -4,7 +4,7 @@ import {
   defineSettingsRoutes,
 } from '@nocobase/app-client/plugins';
 import routes from '../client/routes.js';
-it('contributes its page to the authorization group with its own namespace', () => {
+it('contributes its page to the authorization group with its own namespace, gated by its settings item', () => {
   const result = resolveAppClientContributions([
     { packageName: '@nocobase/app-plugin-authz-default-access', routes },
     {
@@ -24,5 +24,9 @@ it('contributes its page to the authorization group with its own namespace', () 
     path: '/settings/authorization/default-access',
     packageName: '@nocobase/app-plugin-authz-default-access',
     groupId: 'authorization',
+    authz: {
+      resource: { type: 'settings', id: 'authorization.default-access' },
+      action: 'read',
+    },
   });
 });

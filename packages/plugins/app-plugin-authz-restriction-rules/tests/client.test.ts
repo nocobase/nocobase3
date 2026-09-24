@@ -4,7 +4,7 @@ import {
   defineSettingsRoutes,
 } from '@nocobase/app-client/plugins';
 import routes from '../client/routes.js';
-it('contributes its page to the authorization group with its own namespace', () => {
+it('contributes its page to the authorization group with its own namespace, gated by its settings item', () => {
   const result = resolveAppClientContributions([
     { packageName: '@nocobase/app-plugin-authz-restriction-rules', routes },
     {
@@ -24,5 +24,9 @@ it('contributes its page to the authorization group with its own namespace', () 
     path: '/settings/authorization/restriction-rules',
     packageName: '@nocobase/app-plugin-authz-restriction-rules',
     groupId: 'authorization',
+    authz: {
+      resource: { type: 'settings', id: 'authorization.restriction-rules' },
+      action: 'read',
+    },
   });
 });
