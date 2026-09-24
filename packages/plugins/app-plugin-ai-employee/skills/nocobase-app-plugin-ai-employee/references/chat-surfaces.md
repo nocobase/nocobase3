@@ -270,6 +270,7 @@ function FloatingChat() {
         width={450}
       >
         <AIChatWindow
+          enableAttachments
           headerActions={
             <ChatSurfaceActions
               expanded={expanded}
@@ -310,7 +311,7 @@ type AIChatWindowProps = {
 
 ## Attachments
 
-`enableAttachments` is off by default. Turning it on gives the composer a file action, drag-and-drop over the chat window, and paste of files from the clipboard — no extra code. Uploads go to `aiFiles:create` and land on the disk resolved in [capabilities.md § Attachment storage](capabilities.md#attachment-storage-configyml); decide that disk with the user before switching this on.
+**Set `enableAttachments` on every chat surface you mount**, and leave it off only when the user has said they do not want file uploads. The prop defaults to `false`, so omitting it is not a neutral choice: it removes uploads from that chat. Turning it on gives the composer a file action, drag-and-drop over the chat window, and paste of files from the clipboard — no extra code. Uploads go to `aiFiles:create` and land on the disk resolved in [capabilities.md § Attachment storage](capabilities.md#attachment-storage-configyml); tell the user which disk that is and ask whether they want a dedicated one.
 
 What the assistant then sees is decided server-side, not by the page. Every provider sends images to the model as content blocks; PDFs go as documents on some providers and as loader-extracted text on others, and on a gateway provider a document is accepted only if the endpoint behind it takes one; other recognized document types are extracted to text; anything else produces a message telling the user the type is unsupported. Which provider does what is in [capabilities.md § What each provider can actually do](capabilities.md#what-each-provider-can-actually-do). So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 

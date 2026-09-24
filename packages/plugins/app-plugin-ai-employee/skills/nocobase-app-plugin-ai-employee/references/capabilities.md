@@ -604,7 +604,7 @@ ai:
         - ai-files # must already exist in the App's file-storage configuration
 ```
 
-Falling through to the application default is a real decision, not a neutral one: chat attachments can carry contracts, identity documents, or private correspondence, and they land wherever the App's general uploads land, under that disk's retention and access policy. **Raise this with the user and ask whether to configure a dedicated disk now**, before enabling attachments. State which disk the default resolves to, and what would then be sharing it.
+Falling through to the application default is a real decision, not a neutral one: chat attachments can carry contracts, identity documents, or private correspondence, and they land wherever the App's general uploads land, under that disk's retention and access policy. **Raise this with the user and ask whether to configure a dedicated disk now**, when you enable attachments. State which disk the default resolves to, and what would then be sharing it.
 
 What reaches the model, once stored: images are sent as content blocks, so a dropped image is read directly with no extra tool; a PDF is sent as a document or as extracted text depending on the provider — see [What each provider can actually do](#what-each-provider-can-actually-do). Other recognized document types are extracted to text by the document loader. Anything else produces a message telling the user that type is not supported. Whether an image is actually understood still depends on the provider and model.
 
