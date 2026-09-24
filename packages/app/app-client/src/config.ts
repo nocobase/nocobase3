@@ -1,6 +1,7 @@
 import type { AppRuntimeContext } from './runtime/index.js';
 import type { RefineProps } from '@refinedev/core';
 import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
+import type { PublicConfigPath, PublicConfigValue } from './public-config.js';
 
 const FORBIDDEN_CONFIG_KEYS: ReadonlySet<string> = new Set([
   '__proto__',
@@ -26,9 +27,12 @@ export interface AppClientConfigMap {
  * configuration so that handing a whole section to a library never passes them along.
  */
 export interface AppClientPublicConfig {
-  get<T>(path: string): T | undefined;
-  get<T>(path: string, defaultValue: T): T;
-  has(path: string): boolean;
+  get<P extends PublicConfigPath>(path: P): PublicConfigValue<P> | undefined;
+  get<P extends PublicConfigPath>(
+    path: P,
+    defaultValue: PublicConfigValue<P>,
+  ): PublicConfigValue<P>;
+  has(path: PublicConfigPath): boolean;
   raw(): AppClientConfigMap;
 }
 
@@ -119,9 +123,17 @@ class ResolvedAppClientPublicConfig implements AppClientPublicConfig {
     this.value = freezeConfigMap(cloneConfigMap(value));
   }
 
-  public get<T>(path: string): T | undefined;
-  public get<T>(path: string, defaultValue: T): T;
-  public get<T>(path: string, defaultValue?: T): T | undefined {
+  public get<P extends PublicConfigPath>(
+    path: P,
+  ): PublicConfigValue<P> | undefined;
+  public get<P extends PublicConfigPath>(
+    path: P,
+    defaultValue: PublicConfigValue<P>,
+  ): PublicConfigValue<P>;
+  public get<P extends PublicConfigPath>(
+    path: P,
+    defaultValue?: PublicConfigValue<P>,
+  ): PublicConfigValue<P> | undefined {
     const value = readConfigValue(this.value, path);
     if (value === undefined) {
       if (isDevelopment()) {
@@ -136,10 +148,10 @@ class ResolvedAppClientPublicConfig implements AppClientPublicConfig {
       }
       return defaultValue;
     }
-    return cloneConfigValue(value) as T;
+    return cloneConfigValue(value) as PublicConfigValue<P>;
   }
 
-  public has(path: string): boolean {
+  public has(path: PublicConfigPath): boolean {
     return readConfigValue(this.value, path) !== undefined;
   }
 
@@ -177,7 +189,10 @@ class ResolvedAppClientConfig implements AppClientConfig {
     const value = readConfigValue(this.value, path);
     if (value === undefined) {
       // Reading a published value here is the one mistake two entry points invite, and it fails silently.
-      if (isDevelopment() && this.public.has(path)) {
+      if (
+        isDevelopment() &&
+        readConfigValue(this.public.raw(), path) !== undefined
+      ) {
         throw new Error(
           `${path} is published by the server; read it with config.public.get('${path}').`,
         );

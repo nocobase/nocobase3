@@ -1,5 +1,14 @@
 import { useClientApplication } from '@nocobase/app-client';
 
+declare module '@nocobase/app-client' {
+  /** The `auth` fields `defineAuthConfig` publishes; keep in step with `AUTH_PUBLIC_PATHS` on the server. */
+  interface PublicAppConfig {
+    auth: {
+      emailAndPassword?: { enabled?: boolean; disableSignUp?: boolean };
+    };
+  }
+}
+
 /**
  * Whether the server accepts password sign-up, from the `auth` fields it publishes.
  *
@@ -9,10 +18,12 @@ import { useClientApplication } from '@nocobase/app-client';
  */
 export function useSignUpAvailable(): boolean {
   const config = useClientApplication().config.public;
-  const read = (path: string): unknown =>
-    config.has(path) ? config.get<unknown>(path) : undefined;
-  return (
-    read('auth.emailAndPassword.enabled') !== false &&
-    read('auth.emailAndPassword.disableSignUp') !== true
-  );
+  // `has` first, so an application that publishes neither field does not warn on every render.
+  const enabled = config.has('auth.emailAndPassword.enabled')
+    ? config.get('auth.emailAndPassword.enabled')
+    : undefined;
+  const disableSignUp = config.has('auth.emailAndPassword.disableSignUp')
+    ? config.get('auth.emailAndPassword.disableSignUp')
+    : undefined;
+  return enabled !== false && disableSignUp !== true;
 }
