@@ -288,10 +288,10 @@ To package a `dist/` you have already built instead, build it for the image's pl
 
 ```bash
 pnpm build --target linux-x64
-docker build --build-arg DIST=prebuilt -t my-app .
+docker build --platform linux/amd64 --build-arg DIST=prebuilt -t my-app .
 ```
 
-The image build fails unless `dist/` was built for `linux` with glibc, the image's architecture, and Node 24, and unless its client was built for the same `APP_BASE_PATH` the image is given. `dist/.env`, which `pnpm build` fills from your local `.env` files, is never copied in. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
+`--target` and `--platform` must name the same architecture: Docker otherwise builds for the machine it runs on, which on Apple silicon is `linux/arm64`. The image build fails unless `dist/` was built for `linux` with glibc, the image's architecture, and Node 24, and unless its client was built for the same `APP_BASE_PATH` the image is given. `dist/.env`, which `pnpm build` fills from your local `.env` files, is never copied in. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
 
 Run it with the configuration and data mounted, never copied in:
 

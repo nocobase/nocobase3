@@ -14,8 +14,8 @@
 #
 # From a prebuilt `dist/`, which works in the template's own directory too. Build it for the image's platform first:
 #
-#   pnpm build --target linux-arm64
-#   docker build --build-arg DIST=prebuilt -t my-app .
+#   pnpm build --target linux-x64
+#   docker build --platform linux/amd64 --build-arg DIST=prebuilt -t my-app .
 #
 # The image holds code and production dependencies only. Mount the runtime configuration at /app/config.yml and
 # persistent data at /app/storage; neither belongs in the image.
@@ -87,9 +87,17 @@ const target = JSON.parse(fs.readFileSync('dist/package.json', 'utf8')).nocobase
 const arch = { amd64: 'x64', arm64: 'arm64' }[process.env.TARGETARCH];
 const nodeMajor = Number(process.versions.node.split('.')[0]);
 if (target.platform !== 'linux' || target.arch !== arch || target.libc !== 'glibc' || target.nodeMajor !== nodeMajor) {
+  // Docker picks the image platform before this stage runs and defaults to the builder's own architecture, so a
+  // dist/ built for a deployment server usually just needs the image to say the same thing.
+  const platform = { x64: 'linux/amd64', arm64: 'linux/arm64' }[target.arch];
+  const imageFix =
+    target.platform === 'linux' && target.libc === 'glibc' && target.nodeMajor === nodeMajor && platform
+      ? `To build a ${platform} image from this dist/, add --platform ${platform} to docker build. `
+      : '';
   fail(
     `dist/ was built for ${JSON.stringify(target)}, but this image is linux/${arch} glibc with Node ${nodeMajor}. ` +
-      `Rebuild with pnpm build --target linux-${arch} --node-version ${nodeMajor}.`,
+      imageFix +
+      `To keep this image's platform, rebuild with pnpm build --target linux-${arch} --node-version ${nodeMajor}.`,
   );
 }
 const index = fs.readFileSync('dist/client/index.html', 'utf8');

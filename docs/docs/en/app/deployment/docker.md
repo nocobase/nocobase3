@@ -23,10 +23,10 @@ If `dist/` is already built on your machine, skip the build inside the image and
 
 ```bash
 APP_BASE_PATH=/crm pnpm build --target linux-x64
-docker build --build-arg DIST=prebuilt --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
+docker build --platform linux/amd64 --build-arg DIST=prebuilt --build-arg APP_BASE_PATH=/crm -t crm:release-001 .
 ```
 
-The image build checks `dist/`: it must have been built for `linux`, glibc, the image's architecture and Node 24, and its client for the same `APP_BASE_PATH` as the build argument; otherwise the build fails and names the arguments to use. `pnpm build` writes server variables from local `.env` files into `dist/.env`, which can include `DB_PASSWORD`; that file never enters the image. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
+`--target` and `--platform` must name the same architecture: without `--platform`, Docker builds for the machine it runs on, which on Apple silicon is `linux/arm64`. The image build checks `dist/`: it must have been built for `linux`, glibc, the image's architecture and Node 24, and its client for the same `APP_BASE_PATH` as the build argument; otherwise the build fails and names the arguments to use. `pnpm build` writes server variables from local `.env` files into `dist/.env`, which can include `DB_PASSWORD`; that file never enters the image. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
 
 If the application was created with `pnpm create @nocobase/app` before these files existed, copy `Dockerfile` and `Dockerfile.dockerignore` from a newer version of the same template. Use them together: without `Dockerfile.dockerignore`, local configuration and data enter the build context.
 
