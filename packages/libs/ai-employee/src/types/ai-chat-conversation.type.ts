@@ -42,14 +42,9 @@ export type AIChatContext = {
     tool_call_id?: string;
     tool_calls?: AIToolCall[];
   }[];
-  decisions?: {
-    interruptId?: string;
-    decisions: UserDecision[];
-  };
   tools?: any[];
   /** The context `tools` run with; without it a tool that needs one fails when called. */
   toolContext?: ToolRuntimeContext;
-  middleware?: any[];
   structuredOutput?: {
     name: string;
     description?: string;
