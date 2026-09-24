@@ -94,13 +94,17 @@ export function normalizeScheduleJob(job: ScheduleJob): NormalizedScheduleJob {
       `Schedule job "${job.name}": endDate must be later than startDate.`,
     );
   }
+  if (hasCron && options.immediately === true && options.startDate) {
+    throw new Error(
+      `Schedule job "${job.name}": immediately cannot be combined with startDate.`,
+    );
+  }
   if (hasCron) {
     try {
       // The time zone is only applied when a date is computed, so compute one.
-      CronExpressionParser.parse(
-        options.cron,
-        options.tz ? { tz: options.tz } : {},
-      ).next();
+      CronExpressionParser.parse(options.cron, {
+        tz: options.tz ?? 'UTC',
+      }).next();
     } catch (error) {
       throw new Error(
         `Schedule job "${job.name}": Invalid cron expression ${JSON.stringify(options.cron)}${options.tz ? ` in time zone ${options.tz}` : ''}.`,

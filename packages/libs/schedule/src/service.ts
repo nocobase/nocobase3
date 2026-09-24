@@ -1,6 +1,8 @@
 import {
   resolveScheduleExecutorConfig,
   selectScheduleConfig,
+  type ResolvedMemoryScheduleExecutorConfig,
+  type ResolvedRedisScheduleExecutorConfig,
   type ResolvedScheduleExecutorConfig,
   type ScheduleConfig,
 } from './config.js';
@@ -42,14 +44,17 @@ export interface ManagedScheduleExecuteService extends ScheduleExecuteService {
   shutdown(): Promise<void>;
 }
 
-export type ScheduleExecutorFactory = (
-  config: ResolvedScheduleExecutorConfig,
+export type ScheduleExecutorFactory<
+  TConfig extends ResolvedScheduleExecutorConfig =
+    ResolvedScheduleExecutorConfig,
+> = (
+  config: TConfig,
   dependencies: ScheduleExecuteServiceDependencies,
 ) => ScheduleExecutor;
 
 export interface ScheduleExecutorFactories {
-  readonly memory: ScheduleExecutorFactory;
-  readonly redis: ScheduleExecutorFactory;
+  readonly memory: ScheduleExecutorFactory<ResolvedMemoryScheduleExecutorConfig>;
+  readonly redis: ScheduleExecutorFactory<ResolvedRedisScheduleExecutorConfig>;
 }
 
 interface ExecutorEntry {
@@ -98,7 +103,10 @@ export function createScheduleExecuteServiceWith(
         }
         return existing.executor;
       }
-      const executor = factories[resolved.adapter](resolved, dependencies);
+      const executor =
+        resolved.adapter === 'memory'
+          ? factories.memory(resolved, dependencies)
+          : factories.redis(resolved, dependencies);
       executors.set(identity, { executor, config: resolved });
       if (resolved.builtIn) {
         dependencies.onFallback?.({

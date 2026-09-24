@@ -20,7 +20,6 @@ describe('normalizeScheduleJob', () => {
           limit: 3,
           startDate,
           endDate,
-          immediately: true,
         }),
       ),
     ).toEqual({
@@ -32,8 +31,11 @@ describe('normalizeScheduleJob', () => {
         startDate,
         endDate,
       },
-      immediately: true,
+      immediately: false,
     });
+    expect(
+      normalizeScheduleJob(job({ cron: '0 * * * *', immediately: true })),
+    ).toMatchObject({ immediately: true });
   });
 
   it('accepts an interval rule and ignores immediately for it', () => {
@@ -74,6 +76,14 @@ describe('normalizeScheduleJob', () => {
         endDate: new Date('2026-01-01T00:00:00Z'),
       },
       /endDate must be later than startDate/u,
+    ],
+    [
+      {
+        cron: '* * * * *',
+        immediately: true,
+        startDate: new Date('2026-01-01T00:00:00Z'),
+      },
+      /immediately cannot be combined with startDate/u,
     ],
   ] as const)('rejects options %o', (options, message) => {
     expect(() =>

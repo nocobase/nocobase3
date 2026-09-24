@@ -1,4 +1,5 @@
 import type { ScheduleConfig } from './config.js';
+import { createMemoryScheduleExecutor } from './memory/index.js';
 import {
   createScheduleExecuteServiceWith,
   type ManagedScheduleExecuteService,
@@ -22,7 +23,7 @@ export function createScheduleExecuteService(
   dependencies: ScheduleExecuteServiceDependencies,
 ): ManagedScheduleExecuteService {
   return createScheduleExecuteServiceWith(config, dependencies, {
-    memory: unavailable('memory'),
+    memory: createMemoryScheduleExecutor,
     redis: unavailable('redis'),
   });
 }

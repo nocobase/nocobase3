@@ -7,6 +7,7 @@ export type {
   ScheduleRetentionPolicy,
 } from './config.js';
 export { createScheduleExecuteService } from './create.js';
+export { ScheduleHandlerNotRegisteredError } from './executor.js';
 export type {
   ManagedScheduleExecuteService,
   ScheduleExecuteServiceDependencies,
