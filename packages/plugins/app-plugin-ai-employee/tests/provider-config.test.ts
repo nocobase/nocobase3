@@ -155,6 +155,66 @@ describe('AIEmployeeProvider application config', () => {
     await expect(manager.getLLMService('obsolete')).resolves.toBeUndefined();
   });
 
+  it('reapplies an overriding model list over the stored one on start, and keeps the enable switch', async () => {
+    const deps = createTestAppDeps();
+    databases.push(deps.database);
+    await deps.database.connect();
+    await createMigrator({
+      database: deps.database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: new URL('../database/migrations', import.meta.url).pathname,
+    }).latest();
+    await new RepositoryFactory({
+      connection: deps.database.connection(),
+    }).llmServices.create({
+      values: {
+        name: 'openai',
+        title: 'OpenAI',
+        provider: 'openai',
+        options: {},
+        enabledModels: {
+          mode: 'custom',
+          models: [{ label: 'User model', value: 'user-model' }],
+        },
+        modelOptions: {},
+        enabled: false,
+        sort: 0,
+      },
+    });
+    const { provider, container } = await createProvider(
+      () => ({
+        ai: {
+          llmServices: [
+            {
+              name: 'openai',
+              provider: 'openai',
+              enabledModels: [
+                { label: 'Configured model', value: 'configured-model' },
+              ],
+              overrideEnabledModels: true,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+
+    provider.register();
+    await provider.boot();
+
+    await expect(
+      container
+        .resolve(aiManagerToken)
+        .llmServiceManager.getLLMService('openai'),
+    ).resolves.toMatchObject({
+      enabled: false,
+      enabledModels: {
+        mode: 'custom',
+        models: [{ label: 'Configured model', value: 'configured-model' }],
+      },
+    });
+  });
+
   it('synchronizes initial and reloaded snapshots and unsubscribes on shutdown', async () => {
     let current: AIEmployeeConfig = {
       llmServices: [

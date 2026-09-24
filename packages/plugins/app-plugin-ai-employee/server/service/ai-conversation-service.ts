@@ -1375,9 +1375,10 @@ export class AIConversationService {
         transport,
         agent.resumeStream({ userDecisions }),
       );
-    } catch (err: any) {
-      this.logger.error?.(err);
-      sendErrorResponse(target, err.message || 'Tool call error');
+    } catch (err: unknown) {
+      // The resumed run is an agent run, so it reports as a send does.
+      const { message, code } = this.describeFailure(err, transport.translate);
+      sendErrorResponse(target, message || 'Tool call error', code);
       if (!target.writableEnded) target.end();
     }
   }

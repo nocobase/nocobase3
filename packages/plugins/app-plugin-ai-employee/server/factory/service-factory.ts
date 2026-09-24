@@ -175,6 +175,9 @@ export class ServiceFactory {
     await this.ai.llmServiceManager.switchRepository(
       this.repositories.llmServices,
     );
+    // The switch keeps every stored model list, so a service that overrides its
+    // list has it reapplied against the stored rows, as a config reload does.
+    await this.llmServiceConfigSynchronizer.enqueue(initialization.llmServices);
     await loadResources({
       ai: this.ai,
       logger: this.logger,

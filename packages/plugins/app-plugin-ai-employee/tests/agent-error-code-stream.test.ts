@@ -21,15 +21,24 @@ function serviceWhoseAgentCannotStart(error: unknown) {
           .fn()
           .mockResolvedValue({ username: 'order-desk', enabled: true }),
       },
+      aiMessages: {
+        findOne: vi.fn().mockResolvedValue({
+          sessionId: 'session-1',
+          messageId: 'message-1',
+          toolCalls: [{ id: 'call-1', name: 'lookup', args: {} }],
+        }),
+      },
     } as never,
     aiEmployeesManager: {} as never,
     aiConversationsManager: {
       getConversation: vi.fn().mockResolvedValue({
         sessionId: 'session-1',
         title: 'Existing conversation',
+        aiEmployeeUsername: 'order-desk',
         category: 'chat',
         options: {},
       }),
+      getUserDecisions: vi.fn().mockResolvedValue([]),
     } as never,
     builtInManager: {} as never,
     llmStreamCachedManager: {} as never,
@@ -80,6 +89,33 @@ describe('agent failures reported over SSE', () => {
     expect(writes.join('')).toContain('"type":"error"');
     expect(writes.join('')).toContain('"code":"CONFIGURATION_ERROR"');
     expect(writes.join('')).toContain('AI employee model not configured');
+  });
+
+  it('names the failure code, and the root message, when a resumed tool call fails', async () => {
+    const writes: string[] = [];
+    const target = {
+      write: (chunk: unknown) => writes.push(String(chunk)),
+      end: vi.fn(),
+      writableEnded: false,
+    };
+    const failure = new AgentServiceError(
+      'PROVIDER_ERROR',
+      'Agent execution failed',
+      { cause: new Error('Provider rejected the request') },
+    );
+
+    await serviceWhoseAgentCannotStart(failure).resumeToolCall({
+      actor: { id: 'user-1', roles: ['member'], isRoot: false },
+      state: { sessionId: 'session-1' },
+      transport: {
+        translate: (key: string) => key,
+        streamTarget: target,
+      } as never,
+    });
+
+    expect(writes.join('')).toContain('"type":"error"');
+    expect(writes.join('')).toContain('"code":"PROVIDER_ERROR"');
+    expect(writes.join('')).toContain('Provider rejected the request');
   });
 
   it('keeps the agent failure on the error a non-streamed turn throws', async () => {
