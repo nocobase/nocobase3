@@ -1,8 +1,5 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type {
-  AuthorizationPlugin,
-  CompositeAuthorizationApi,
-} from '@nocobase/authorization/core';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import {
   restrictionRulesPlugin,
   type RestrictionRulesAuthorizationApi,
@@ -35,10 +32,7 @@ export function restrictionRules(
 ): AuthorizationPlugin<
   RestrictionRulesAuthorizationApi<DatabaseConnection>,
   DatabaseConnection,
-  SettingsAuthorizationApi &
-    DatabaseAuthorizationApi &
-    CompositeAuthorizationApi &
-    UiAuthorizationApi
+  SettingsAuthorizationApi & DatabaseAuthorizationApi & UiAuthorizationApi
 > {
   const connection = new DatabaseConnectionHandle('Restriction Rules');
   const plugin = restrictionRulesPlugin<DatabaseConnection>({
@@ -47,7 +41,7 @@ export function restrictionRules(
   });
   return {
     ...plugin,
-    dependencies: ['settings', 'database', 'composites', 'ui'],
+    dependencies: ['settings', 'database', 'ui'],
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);

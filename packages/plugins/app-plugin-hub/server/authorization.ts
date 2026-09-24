@@ -83,7 +83,6 @@ export function registerHubResources(
   // Record types: the ids are app and host ids, judged per record.
   authorization.resourceTypes.add({
     type: 'hub.app',
-    title: 'Hub applications',
     actions: [
       ...[...HUB_APP_ACTIONS].filter((action) => action !== 'read-all'),
       {
@@ -113,7 +112,6 @@ export function registerHubResources(
   });
   authorization.resourceTypes.add({
     type: 'hub.host',
-    title: 'Hub host',
     actions: ['read'],
     authorize: grantBacked(),
   });

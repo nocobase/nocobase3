@@ -1,8 +1,5 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type {
-  AuthorizationPlugin,
-  CompositeAuthorizationApi,
-} from '@nocobase/authorization/core';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import {
   defaultAccessPlugin,
   type DefaultAccessAuthorizationApi,
@@ -35,10 +32,7 @@ export function defaultAccess(
 ): AuthorizationPlugin<
   DefaultAccessAuthorizationApi<DatabaseConnection>,
   DatabaseConnection,
-  SettingsAuthorizationApi &
-    DatabaseAuthorizationApi &
-    CompositeAuthorizationApi &
-    UiAuthorizationApi
+  SettingsAuthorizationApi & DatabaseAuthorizationApi & UiAuthorizationApi
 > {
   const connection = new DatabaseConnectionHandle('Default Access');
   const plugin = defaultAccessPlugin<DatabaseConnection>({
@@ -46,7 +40,7 @@ export function defaultAccess(
   });
   return {
     ...plugin,
-    dependencies: ['settings', 'database', 'composites', 'ui'],
+    dependencies: ['settings', 'database', 'ui'],
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);

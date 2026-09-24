@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  compositesPlugin,
   createAuthorization,
   selection,
   type AuthorizationContext,
@@ -31,7 +30,6 @@ function host() {
         grants: { resolve: async () => [], resolveAll: async () => [] },
       },
       settingsPlugin(),
-      compositesPlugin(),
       database,
     ],
   });

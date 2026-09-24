@@ -137,7 +137,6 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
     // scope can clean a deleted user up.
     authorization.resourceTypes.add({
       type: 'user',
-      title: 'Users',
       actions: [...USER_ACTIONS],
       authorize: grantBacked({
         also: async (request) =>

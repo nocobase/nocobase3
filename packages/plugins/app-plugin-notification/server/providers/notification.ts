@@ -94,7 +94,6 @@ export function registerNotificationAuthorization(
   // A record type: only `send` exists, and only the `test` notification sends.
   authorization.resourceTypes.add({
     type: 'notification',
-    title: 'Notifications',
     actions: ['send'],
     authorize: grantBacked({
       also: async (request) => request.resource.id === 'test',

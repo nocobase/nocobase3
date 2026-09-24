@@ -77,7 +77,7 @@ describe('locale-independent option descriptors', () => {
     expect(response.status).toBe(200);
     const data = await readOptions(response);
     expect(outline(data)).toEqual([
-      ['pages', ['page']],
+      ['pages', ['pages.page']],
       ['business', []],
       ['administration', ['authorization']],
     ]);
@@ -259,7 +259,7 @@ describe('locale-independent option descriptors', () => {
 
     const data = await readOptions(response, 'zh-CN');
     expect(outline(data)).toEqual([
-      ['pages', ['page']],
+      ['pages', ['pages.page']],
       ['business', []],
       ['administration', ['authorization']],
     ]);
@@ -321,7 +321,7 @@ describe('locale-independent option descriptors', () => {
     authz.ui.place(
       authz.composites.define(
         ordersResource({
-          key: 'options.resourceTypes.collection',
+          key: 'options.settingsModules.authorization',
           ns: AUTHORIZATION_NAMESPACE,
         }),
       ),
@@ -350,7 +350,7 @@ describe('locale-independent option descriptors', () => {
       subsection(data, 'sales').resources.find(
         (item) => item.value === 'orders',
       )?.label,
-    ).toBe('数据表');
+    ).toBe('权限管理');
     // The key is missing from the catalogue, so the humanized default shows.
     expect(data.recordAccess).toContainEqual({
       value: 'regional',
