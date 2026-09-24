@@ -10,33 +10,25 @@ Put validation, persistence and transactions in the owning service. Routes authe
 
 ## Settings and ordinary pages have different authorization ownership
 
-Settings routes are system administration resources, not ordinary page resources. Use the resource's `settings/read` capability for its entry, children and standalone detail routes, including details declared with `defineAppRoutes`. Do not register `page/access` for these routes or add the Settings route tree to ordinary page permission discovery. Route declaration helpers and URL paths do not decide authorization ownership; the function of the page does.
+A settings page is a settings item, not a page resource. Its entry, children and standalone detail routes check the item's `settings` actions, including details declared with `defineAppRoutes`. Do not declare `page` `access` on these routes; the permission workspace lists as pages only routes that check `page` `access`. Route declaration helpers and URL paths do not decide authorization ownership; the function of the page does.
 
-Group related administration resources by the user's management area. For example, `automation` is the administration group, while Workflow and Schedules are resources inside it; each resource exposes its own `read` action and any management actions its plugin implements. Plugins contributing to a shared group should check `authz.resourceGroups.has('automation')` before registering it so installation order does not cause duplicate registration. Keep page entry checks separate from the server operation checks described below.
+Group related settings items by the user's management area with a display group. For example, `automation` is the group, while Workflow and Schedules are settings items inside it; each item exposes its own `read` action and any management actions its plugin implements. Re-adding an identical group is a no-op, so plugins contributing to a shared group may each add it with the same title; a different title throws. Keep page entry checks separate from the server operation checks described below.
 
 ## Register administration capabilities
 
-Resolve `authorizationToken` in provider boot. Register an administration group and a composed resource. These declarations make actions configurable; an assigned permission set activates them.
+Resolve `authorizationToken` in provider boot and register the item with `authz.settings.add`. Registration makes its actions grantable; an assigned permission set activates them. `settings` is a catalog type: a check or grant on an item or action nobody registered is denied.
 
 ```ts
-authz.resourceGroups.add({
-  name: 'delivery-admin',
-  title: 'Delivery administration',
-  category: 'administration',
-});
-authz.resources.add({
-  name: 'delivery.configuration',
+authz.groups.add({ name: 'delivery-admin', title: 'Delivery administration' });
+authz.settings.add({
+  id: 'delivery.configuration',
   title: 'Delivery configuration',
   group: 'delivery-admin',
-  actions: ['read', 'configure'].map((name) => ({
-    name,
-    title: name,
-    grants: [authz.settings.grant('delivery.configuration', [name])],
-  })),
+  actions: [{ name: 'read' }, { name: 'configure' }],
 });
 ```
 
-Use translated descriptors for real titles. Keep the same stable settings ID in declarations, client checks and server checks. Do not create a separate settings item registry or compose page grants into the administration action. For business data permissions, read `packages/plugins/app-plugin-authorization/skills/nocobase-app-plugin-authorization/SKILL.md` instead of treating all data editing as system administration.
+Use translated `{ key, ns }` titles for real items. Keep the same stable settings id in the registration, the route's `authz`, client checks and server checks. `authz.settings.grant(id, actions)` builds the grant for seeds and provisioning. A business resource composes only collection grants, so settings access is never granted through one. For business data permissions, read `packages/plugins/app-plugin-authorization/skills/nocobase-app-plugin-authorization/SKILL.md` instead of treating all data editing as system administration.
 
 ## Contribute the page
 
@@ -57,7 +49,7 @@ export default defineSettingsRoutes([
 ]);
 ```
 
-Register this contribution through the plugin's client `routes`. Do not include `/settings` or a deployment prefix in the declared path. The page module default-exports a React component. Settings require authentication; the explicit `authz` check controls whether the page is available. Every child route needs the appropriate domain check; dynamic detail URLs must not become a bypass.
+Register this contribution through the plugin's client `routes`. Do not include `/settings` or a deployment prefix in the declared path. The page module default-exports a React component. Settings require authentication; the `authz` check controls whether the page is available. Every page route, children included, must declare `authz`, either the appropriate settings check or `'skip'` under a parent that already checks it; dynamic detail URLs must not become a bypass.
 
 A standalone leaf fits a small configuration surface. A collection workspace can use a sidebar list and child routes for editor, assignments and basic information, as `app-plugin-authorization/client/routes.ts` does. The parent renders an `Outlet`; child Tabs navigate routes, with the URL as the selection state. Do not duplicate route state in local tab state. Independent plugins can join a declared group through entry-level `parent`; the rule plugins use `parent: 'authorization'` while keeping their own translation namespace.
 
@@ -86,7 +78,7 @@ router.put('/delivery-configuration', async (c) => {
 
 Here `service` and `parseConfiguration` belong to the feature. Add request limits, validate identifiers and supported fields, and map `AuthorizationDeniedError` to 403 through the route's error handling. Never return secrets from the read endpoint; define explicit public read shapes for settings containing credentials. A client route's read check does not authorize PUT/DELETE. Protect options, record search, uploads and subject resolution as well as main CRUD endpoints.
 
-If a selector queries another module's directory, it needs that directory's authorization and record constraints. Selection does not authorize assignment. For authorization-specific extensions, use exported `./server/management` and `./client/management` helpers instead of copying handlers or importing private source.
+If a selector queries another module's directory, it needs that directory's authorization and record constraints. Selection does not authorize assignment. For authorization-specific extensions, use the exported `@nocobase/app-plugin-authorization/server/extension` helpers (`requireSettings`, `createRuleSupportRoutes`, `createRouteHandler`, `parse`) and `@nocobase/app-plugin-authorization/client/management` components instead of copying handlers or importing private source. A rule plugin registers its settings item with `authz.settings.add` and its routes with `authz.routes.add`.
 
 ## Editor state and feedback
 

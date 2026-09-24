@@ -26,7 +26,7 @@ describe('@nocobase/app-plugin-users', () => {
     );
 
     expect(skill).toContain('userRoleScopeRegistryToken');
-    expect(skill).toContain('page:users/access');
+    expect(skill).toContain("authz.pages.grant('users')");
     expect(skill).not.toContain('Development draft');
     expect(skill).not.toContain('Describe the App-level');
   });

@@ -56,11 +56,16 @@ const routes: readonly AppClientRouteContribution[] = [
           name: 'workspace',
           path: '/workspace',
           navigation: { title: 'navigation.workspace' },
+          authz: {
+            resource: { type: 'page', id: 'workspace' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/workspace/index.js'),
           children: [
             {
               name: 'workspaceReport',
               path: 'reports/:reportId',
+              authz: 'skip',
               componentLoader: () =>
                 import('./pages/workspace/reports/report.js'),
             },
@@ -222,11 +227,13 @@ Add the route in the application's `client/routes.ts`, inside the `defineAppRout
 {
   name: 'orders',
   path: '/orders',
+  authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
   componentLoader: () => import('./pages/orders.js'),
   children: [
     {
       name: 'orderEdit',
       path: ':orderId/edit',
+      authz: 'skip',
       componentLoader: () => import('./pages/order-edit.js'),
     },
   ],
@@ -369,7 +376,7 @@ Returning `false` keeps the overlay open. The guard applies to the close button,
 
 Use the same page/group shape with `defineSettingsRoutes()` or `defineDevRoutes()`. Do not write `/settings` or `/dev` in their declared paths. A settings page's nested detail or Tab normally omits navigation. Dev routes and modules reachable only from them are excluded from production.
 
-App entry routes choose auth; descendants inherit it. Settings and Dev require sign-in. Every parent access check must pass before a child is rendered. Authenticated App entry pages retain their default `{ resource: { type: 'page', id: name }, action: 'access' }` check; page children add a check only through explicit `authz`. A menu group adds no independent page permission. Client access checks do not replace server authorization.
+App entry routes choose auth; descendants inherit it. Settings and Dev require sign-in. Every page, at any depth and on every surface, declares `authz`: a `{ resource: { type, id }, action }` request or `'skip'`; nothing is inferred from the route name, and a page without it is rejected at registration. Every parent check must pass before a child is rendered, so a child that needs nothing beyond its parent declares `'skip'`. A menu group cannot declare `authz` and adds no page permission. Client access checks do not replace server authorization.
 
 ## Verify
 

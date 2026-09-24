@@ -1,20 +1,20 @@
 # Bind generated Repository routes to business actions
 
-Use `authz.db.authorizeRepository({ repository, resource, actions })` for simple single-collection business operations. Keep `defineRepositoryApiRoutes({ repositories })`, its static `policy`, and its enabled `actions` unchanged. The authorization middleware adds a request constraint; the router intersects it with the static policy or principal-derived policy before executing. It does not grant fields missing from either policy.
+Use `authz.database.authorizeRepository({ repository, resource, actions })` for simple single-collection business operations. Keep `defineRepositoryApiRoutes({ repositories })`, its static `policy`, and its enabled `actions` unchanged. The authorization middleware adds a request constraint; the router intersects it with the static policy or principal-derived policy before executing. It does not grant fields missing from either policy.
 
-`repository` is the exposure name, `resource` is a typed business resource reference, and `actions` maps Repository methods to declared business action names. No additional collection CRUD grant is required. Register the collections and business resource in the provider first, then configure business grants and scopes through seed/backend. The middleware itself registers and assigns nothing.
+`repository` is the exposure name, `resource` is a typed business resource reference, and `actions` maps Repository methods to declared business action names. No additional collection CRUD grant is required. Register the collections and business resource in the provider first, then configure business grants and scopes through seed/backend. The middleware itself registers and assigns nothing. A method with no mapping, or a decision without exactly that collection's policy, answers `403 { code: 'FORBIDDEN' }`.
 
 ## Choose the route boundary
 
-Use the shortcut when one generated Repository operation completes the business action, the action has exactly one database scope on the default connection, and the standard Repository input/output fits the client. Independent input validation such as allowed keys, types and lengths can remain middleware. A single table alone is not enough: an operation that checks persisted workflow state, coordinates records or performs side effects needs a custom business handler.
+Use the shortcut when one generated Repository operation completes the business action, the action has exactly one data scope on the default connection, and the standard Repository input/output fits the client. Independent input validation such as allowed keys, types and lengths can remain middleware. A single table alone is not enough: an operation that checks persisted workflow state, coordinates records or performs side effects needs a custom business handler.
 
-| Business requirement                                                            | Integration                                                     | Reason                                                                                              |
-| ------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Read project records or edit project title/notes                                | `defineRepositoryApiRoutes` with `authz.db.authorizeRepository` | One project scope, standard query/update, independent input validation                              |
-| Show project/quote/order lists with navigation and per-record operation reasons | Custom read handler                                             | Compose authorized data and business presentation; a raw query endpoint may coexist                 |
-| Edit a draft quote                                                              | Custom business handler                                         | Validate persisted draft state and include expected state in the write predicate                    |
-| Submit a quote                                                                  | Custom business handler                                         | Authorize the quote and its actual parent project, validate amount/state, then conditionally update |
-| Arrange order relations or confirm delivery                                     | Custom business handler                                         | Enforce relation capabilities, eligible targets and order state or delivery-reference rules         |
+| Business requirement                                                            | Integration                                                           | Reason                                                                                              |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Read project records or edit project title/notes                                | `defineRepositoryApiRoutes` with `authz.database.authorizeRepository` | One project scope, standard query/update, independent input validation                              |
+| Show project/quote/order lists with navigation and per-record operation reasons | Custom read handler                                                   | Compose authorized data and business presentation; a raw query endpoint may coexist                 |
+| Edit a draft quote                                                              | Custom business handler                                               | Validate persisted draft state and include expected state in the write predicate                    |
+| Submit a quote                                                                  | Custom business handler                                               | Authorize the quote and its actual parent project, validate amount/state, then conditionally update |
+| Arrange order relations or confirm delivery                                     | Custom business handler                                               | Enforce relation capabilities, eligible targets and order state or delivery-reference rules         |
 
 Both paths use the same code-defined business resources and administrator-editable grants/scopes initialized through seeds when needed. Choosing generated CRUD does not introduce another permission model or require separate collection CRUD grants. Choose per action: one resource can expose simple actions through Repository routes and complex actions through custom endpoints.
 
@@ -22,11 +22,11 @@ For custom endpoints, install authentication and `authz.middleware()`, call `c.v
 
 ## Complete example
 
-The application-owned declaration can be defined as follows in `server/sales-resources.ts`; use the customer's real collection name and translated labels. Register the `sales` business group, the collection and `projectResource` in the provider before router creation. Use the same collection name in the route module.
+The application-owned declaration can be defined as follows in `server/sales-resources.ts`; use the customer's real collection name and translated labels. Register the `sales` group, the collection and `projectResource` (with `authz.groups.add`, `authz.database.collections.add` and `authz.business.define`) in the provider before router creation. Use the same collection name in the route module.
 
 ```ts
-import { defineAuthorizationResource } from '@nocobase/authorization/core';
-import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
+import { defineBusinessResource } from '@nocobase/authorization/core';
+import { defineDatabasePermission } from '@nocobase/app-plugin-authorization/server';
 
 const projectData = defineDatabasePermission((p) =>
   p
@@ -34,7 +34,7 @@ const projectData = defineDatabasePermission((p) =>
     .read(['id', 'title', 'region', 'ownerId', 'confidential', 'notes']),
 );
 
-export const projectResource = defineAuthorizationResource(
+export const projectResource = defineBusinessResource(
   'sales.projects',
   (resource) =>
     resource
@@ -101,7 +101,7 @@ export async function createProjectRoutes(
     '*',
     app.container.resolve(authenticationToken).required(),
     bodyLimit({ maxSize: 4096 }),
-    authz.db.authorizeRepository({
+    authz.database.authorizeRepository({
       repository: 'salesProjects',
       resource: projectResource.reference(),
       actions: {
@@ -160,15 +160,15 @@ export function editableValues(body: unknown, fields: readonly string[]): void {
 }
 ```
 
-Use App-owned collection/resource modules. This `server/routes/projects.ts` contribution exposes paths relative to the App API base; if the App adds a route prefix, use that same prefix in client requests. The resource declaration uses `defineAuthorizationResource` and `defineDatabasePermission`, described in the bundled runtime and fluent references. Do not import private files from an installed example package.
+Use App-owned collection/resource modules. This `server/routes/projects.ts` contribution exposes paths relative to the App API base; if the App adds a route prefix, use that same prefix in client requests. The resource declaration uses `defineBusinessResource` and `defineDatabasePermission`, described in the bundled runtime and fluent references. Do not import private files from an installed example package.
 
 The resulting endpoints are POST `salesProjects:findMany`, `salesProjects:findOne`, `salesProjects:count` and `salesProjects:updateOne`. Update input is `{ filter: { id }, values: { notes } }`; the response is Repository's `{ data }` envelope containing the updated record. Hidden/out-of-scope update targets return 404; missing action grants return 403. Client code should refresh data and handle both outcomes. Reading a cloned request in validation leaves the original stream available for the generated route's body-size check and parser; install a body limit before custom validation too.
 
 ## Enforcement and limits
 
 - Mount the middleware on every action of the named exposure. Using `'*'` is appropriate inside an isolated, owned router: the middleware ignores other repository names. A method of its repository with no mapping is denied, including methods added to the generated route later.
-- The middleware reuses an existing request authorization scope or initializes one. Authentication is still the owning route's responsibility.
-- Each bound action must declare exactly one database scope, reference only that collection and contain the mapped CRUD operation. Multi-collection or same-collection multi-scope actions are rejected at integration time. Resource registration must precede router creation.
+- The middleware reuses the request's existing authorization context or initializes one. Authentication is still the owning route's responsibility.
+- Each bound action must declare exactly one data scope, compose grants on that collection only and contain the mapped CRUD operation. Multi-collection or same-collection multi-scope actions are rejected at integration time. Resource registration must precede router creation.
 - One business resource can be bound to several Repository exposures through separate middleware instances. Each mapping is checked at the action level. An exposure's actual collection and database connection must match the request constraint; this adapter currently supports the default connection only.
 - Keep actions requiring workflow state, cross-record relationships, or side effects in custom handlers. Single-scope authorization does not prove that an operation needs no business validation. Quote editing/submission and delivery remain custom in the example.
 - Original Repository routes without this middleware retain their original policy behavior. Middleware must not be omitted from a protected exposure.

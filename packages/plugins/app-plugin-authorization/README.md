@@ -433,7 +433,7 @@ Every path is under `/api/authz` and requires a signed-in user. Settings checks 
 
 `<rule>` is each of `default-access`, `sharing-rules` and `restriction-rules`, present only when that plugin is configured. Options, subjects and records stay per plugin, each gated by that plugin's own settings item. A subject directory may enforce further read checks of its own. The inspector evaluates one subject: a user includes the `authenticated` audience and resolved memberships, while inspecting a team describes that team's grants alone.
 
-`AuthorizationOptions` is `{ sections, groups, resourceTypes: [{ type, title, section, items: [{ id, title, group?, actions: [{ name, title, dataScopes? }] }] }], subjectTypes, recordAccess, collections }`, with every title as sent by the server, either a string or `{ key, ns }`.
+`AuthorizationOptions` is `{ sections, resourceTypes: [{ type, title, section?, groups, actions, items: [{ id, title, description?, group?, actions: [{ name, title }], dataScopes? }] }], subjectTypes, recordAccess, collections }`, where `dataScopes` maps a business action to its data scopes, with every title as sent by the server, either a string or `{ key, ns }`.
 
 Settings action names are semantic. Permission sets declare `read`, `create`, `update`, `delete` and `assign`; the inspector declares `inspect`; each rule plugin declares `read`, `create`, `update` and `delete`.
 
@@ -492,6 +492,15 @@ The root entry `@nocobase/app-plugin-authorization` exports exactly the same nam
 | `SubjectOption`                       | type     | `{ id; title; description? }`                                                                                   | One subject in a picker.                                           |
 | `SubjectSelectionContext`             | type     | `{ authz: AuthorizationContext }`                                                                               | What directory callbacks receive.                                  |
 | `AUTHORIZATION_NAMESPACE`             | const    | `'@nocobase/app-plugin-authorization'`                                                                          | The plugin's translation namespace.                                |
+| `DatabaseAuthorizationApi`            | type     | `{ database: DatabaseApi }`                                                                                     | What `databasePlugin` adds to `authz`.                             |
+| `PagesAuthorizationApi`               | type     | `{ pages: PagesApi }`                                                                                           | What `pagesPlugin` adds to `authz`.                                |
+| `SettingsAuthorizationApi`            | type     | `{ settings: SettingsApi }`                                                                                     | What `settingsPlugin` adds to `authz`.                             |
+| `grantBacked`                         | function | Re-exported from `@nocobase/authorization/core`                                                                 | The default judgement of a resource type.                          |
+| `Authorization`                       | type     | Re-exported from `@nocobase/authorization/core`                                                                 | The authorization instance.                                        |
+| `AuthorizationContext`                | type     | Re-exported from `@nocobase/authorization/core`                                                                 | The request's `authz` variable.                                    |
+| `AuthorizationEnv`                    | type     | Re-exported from `@nocobase/authorization/core`                                                                 | Hono environment carrying `authz`.                                 |
+| `AuthorizationPlugin`                 | type     | Re-exported from `@nocobase/authorization/core`                                                                 | What a configured plugin is.                                       |
+| `PermissionSetsApi`                   | type     | Re-exported from `@nocobase/authorization/permission-sets`                                                      | `authz.permissionSets`.                                            |
 
 ## `@nocobase/app-plugin-authorization/server/extension`
 
@@ -507,7 +516,11 @@ import {
 
 const router = createSettingsRouter();
 router.get('/', async (c) => {
-  await requireSettings(c.env.authorization, 'sharing-rules', 'read');
+  await requireSettings(
+    c.env.authorization,
+    'authorization.sharing-rules',
+    'read',
+  );
   return c.json({ data: await authz.sharingRules.list() });
 });
 authz.routes.add('/sharing-rules', createRouteHandler(router));
@@ -515,44 +528,59 @@ authz.routes.add('/sharing-rules', createRouteHandler(router));
 
 ### Exports
 
-| Export                     | Kind     | Signature                                                                                                                                                | Purpose                                                                              |
-| -------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `createSettingsRouter`     | function | `createSettingsRouter(): Hono<SettingsRouterEnv>`                                                                                                        | A router that maps denials to `403` and malformed input to `400`.                    |
-| `SettingsRouterEnv`        | type     | `{ Bindings: { authorization: AuthorizationContext } }`                                                                                                  | The router's environment.                                                            |
-| `createRouteHandler`       | function | `createRouteHandler(router): AuthorizationRouteHandler`                                                                                                  | Adapts a router to `authz.routes.add`.                                               |
-| `requireSettings`          | function | `requireSettings(authorization, settings, action): Promise<void>`                                                                                        | The one settings check: `settings:authorization.<settings>` `<action>`.              |
-| `createRuleSupportRoutes`  | function | `createRuleSupportRoutes(authz, rule): Hono<SettingsRouterEnv>`                                                                                          | `options`, `subjects` and `records` routes gated by the rule's settings item.        |
-| `parse`                    | const    | `parse.object`, `parse.string`, `parse.strings`, `parse.title`, `parse.resource`, `parse.subjects`, `parse.selection`, `parse.ruleActions`, `parse.rule` | Request body parsers that throw `TypeError`.                                         |
-| `validateDataScopeRule`    | function | `validateDataScopeRule(authz, rule): void`                                                                                                               | Checks a rule's actions, data scopes and record access against the registered model. |
-| `DatabaseConnectionHandle` | class    | `new DatabaseConnectionHandle(owner, connection?)`; `set(connection)`, `resolve()`                                                                       | Late-bound connection for a store created before setup.                              |
-| `describeCollection`       | function | `describeCollection(connection, name): Promise<AuthorizationCollection \| undefined>`                                                                    | Reads a collection's metadata.                                                       |
+| Export                       | Kind     | Signature                                                                                                                                                | Purpose                                                                              |
+| ---------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `createSettingsRouter`       | function | `createSettingsRouter(): Hono<SettingsRouterEnv>`                                                                                                        | A router that maps denials to `403` and malformed input to `400`.                    |
+| `SettingsRouterEnv`          | type     | `{ Bindings: { authorization: AuthorizationContext } }`                                                                                                  | The router's environment.                                                            |
+| `createRouteHandler`         | function | `createRouteHandler(router): AuthorizationRouteHandler`                                                                                                  | Adapts a router to `authz.routes.add`.                                               |
+| `requireSettings`            | function | `requireSettings(authorization, id, action): Promise<void>`                                                                                              | The one settings check: `settings:<id>` `<action>`, with the full settings id.       |
+| `createRuleSupportRoutes`    | function | `createRuleSupportRoutes(authz, rule): Hono<SettingsRouterEnv>`                                                                                          | `options`, `subjects` and `records` routes gated by the rule's settings item.        |
+| `parse`                      | const    | `parse.object`, `parse.string`, `parse.strings`, `parse.title`, `parse.resource`, `parse.subjects`, `parse.selection`, `parse.ruleActions`, `parse.rule` | Request body parsers that throw `TypeError`.                                         |
+| `validateDataScopeRule`      | function | `validateDataScopeRule(authz, rule): void`                                                                                                               | Checks a rule's actions, data scopes and record access against the registered model. |
+| `DatabaseConnectionHandle`   | class    | `new DatabaseConnectionHandle(owner, connection?)`; `set(connection)`, `resolve()`                                                                       | Late-bound connection for a store created before setup.                              |
+| `DatabaseConnectionSource`   | type     | `() => DatabaseConnection`                                                                                                                               | What a handle resolves a connection from.                                            |
+| `describeCollection`         | function | `describeCollection(connection, name): Promise<AuthorizationCollection \| undefined>`                                                                    | Reads a collection's metadata.                                                       |
+| `DataScopeRuleInput`         | type     | `{ resource: ResourceRef; actions: readonly RuleAction[] }`                                                                                              | What `validateDataScopeRule` checks.                                                 |
+| `AuthorizationExtensionHost` | type     | `{ sections, groups, resourceTypes, recordAccess, subjects, business, database }`                                                                        | The part of `authz` the support routes read.                                         |
 
 ## `@nocobase/app-plugin-authorization/client`
 
 ### Exports
 
-| Export                      | Kind     | Signature                                                                                                               | Purpose                                       |
-| --------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `default`                   | plugin   | `defineClientPlugin(...)`                                                                                               | The client plugin to register.                |
-| `AuthorizationClient`       | class    | `can(check)`, `snapshot()`, `revision()`, `invalidate()`, `onInvalidated(listener)`, permission-set and inspector calls | Session-scoped access to `/api/authz`.        |
-| `authorizationClientToken`  | const    | `ServiceToken<AuthorizationClient>`                                                                                     | Resolves the client outside React.            |
-| `useAuthorizationClient`    | function | `useAuthorizationClient(): AuthorizationClient`                                                                         | The client in a component.                    |
-| `useAuthorizationRevision`  | function | `useAuthorizationRevision(): number`                                                                                    | Changes whenever permissions are invalidated. |
-| `useCan`                    | function | `useCan(check \| undefined, { enabled? }): UseCanResult`                                                                | Whether the session may perform a check.      |
-| `UseCanOptions`             | type     | `{ enabled?: boolean }`                                                                                                 | Options of `useCan`.                          |
-| `UseCanResult`              | type     | `{ can; isPending; error; retry() }`                                                                                    | Result of `useCan`.                           |
-| `AuthorizationCheck`        | type     | `{ resource: { type; id }; action }`                                                                                    | One check.                                    |
-| `AuthorizationSnapshot`     | type     | `{ unrestricted; permissions: [{ resource, actions }] }`                                                                | What `GET /permissions` answers.              |
-| `PermissionSet`             | type     | `{ key; title?; grants; protection?; unrestricted? }`                                                                   | A set as the server lists it.                 |
-| `PermissionSetInput`        | type     | `{ key; title?; grants }`                                                                                               | A complete set for create and update.         |
-| `PermissionSetAssignment`   | type     | `{ id; subject; permissionSet }`                                                                                        | An assignment.                                |
-| `PermissionAssignmentInput` | type     | `{ subject: { type; id } }`                                                                                             | Body of an assignment.                        |
-| `AuthorizationOptions`      | type     | `{ sections, groups, resourceTypes, subjectTypes, recordAccess, collections }`                                          | What an `options` route answers.              |
-| `SubjectOption`             | type     | `{ id; title; description? }`                                                                                           | One subject in a picker.                      |
-| `AuthorizationDecision`     | type     | `{ effect; conditions?; reasons; checks? }`                                                                             | What the inspector answers.                   |
-| `AuthorizationInspectInput` | type     | `{ subject; resource; action }`                                                                                         | Body of `POST /inspector/decision`.           |
-| `AuthorizationInspection`   | type     | `{ resource; action; decision }`                                                                                        | One batch or business check.                  |
-| `LocalizedText`             | type     | `string \| { key; ns }`                                                                                                 | A title as the server sends it.               |
+| Export                         | Kind     | Signature                                                                                                               | Purpose                                       |
+| ------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `default`                      | plugin   | `defineClientPlugin(...)`                                                                                               | The client plugin to register.                |
+| `AuthorizationClient`          | class    | `can(check)`, `snapshot()`, `revision()`, `invalidate()`, `onInvalidated(listener)`, permission-set and inspector calls | Session-scoped access to `/api/authz`.        |
+| `authorizationClientToken`     | const    | `ServiceToken<AuthorizationClient>`                                                                                     | Resolves the client outside React.            |
+| `useAuthorizationClient`       | function | `useAuthorizationClient(): AuthorizationClient`                                                                         | The client in a component.                    |
+| `useAuthorizationRevision`     | function | `useAuthorizationRevision(): number`                                                                                    | Changes whenever permissions are invalidated. |
+| `useCan`                       | function | `useCan(check \| undefined, { enabled? }): UseCanResult`                                                                | Whether the session may perform a check.      |
+| `UseCanOptions`                | type     | `{ enabled?: boolean }`                                                                                                 | Options of `useCan`.                          |
+| `UseCanResult`                 | type     | `{ can; isPending; error; retry() }`                                                                                    | Result of `useCan`.                           |
+| `AuthorizationCheck`           | type     | `{ resource: { type; id }; action }`                                                                                    | One check.                                    |
+| `AuthorizationSnapshot`        | type     | `{ unrestricted; permissions: [{ resource, actions }] }`                                                                | What `GET /permissions` answers.              |
+| `PermissionSet`                | type     | `{ key; title?; grants; protection?; unrestricted? }`                                                                   | A set as the server lists it.                 |
+| `PermissionSetInput`           | type     | `{ key; title?; grants }`                                                                                               | A complete set for create and update.         |
+| `PermissionSetAssignment`      | type     | `{ id; subject; permissionSet }`                                                                                        | An assignment.                                |
+| `PermissionAssignmentInput`    | type     | `{ subject: { type; id } }`                                                                                             | Body of an assignment.                        |
+| `AuthorizationOptionsResponse` | type     | `{ sections, resourceTypes, subjectTypes, recordAccess, collections }`                                                  | What an `options` route answers.              |
+| `AuthorizationEffect`          | type     | `'permit' \| 'conditional' \| 'deny'`                                                                                   | A decision's effect.                          |
+| `AuthorizationReason`          | type     | `{ code; message; plugin? }`                                                                                            | Why a decision was made.                      |
+| `AuthorizationPermission`      | type     | `{ resource; actions }`                                                                                                 | One entry of a snapshot.                      |
+| `AuthorizationRecordOption`    | type     | `{ id; label; description? }`                                                                                           | One record in a records route.                |
+| `AuthorizationSubject`         | type     | `{ type; id }`                                                                                                          | A subject.                                    |
+| `ConfiguredAccess`             | type     | `{ unrestricted; types; resources }`                                                                                    | What `inspectConfigured` answers.             |
+| `PermissionGrant`              | type     | `{ resource: { type; id }; actions: PermissionGrantAction[] }`                                                          | One grant of a set.                           |
+| `PermissionGrantAction`        | type     | `{ action; policy? }`                                                                                                   | One action of a grant.                        |
+| `PermissionSetProtection`      | type     | `{ owner; allow: PermissionSetWriteOperation[]; assignableTo? }`                                                        | Who may change a protected set.               |
+| `PermissionSetWriteOperation`  | type     | `'create' \| 'update' \| 'delete' \| 'assign' \| 'revoke'`                                                              | A write a protection allows.                  |
+| `ResourceRef`                  | type     | `{ type; id }`                                                                                                          | The target of a check or grant.               |
+| `SubjectPage`                  | type     | `{ items: SubjectOption[]; total }`                                                                                     | One page of a subject search.                 |
+| `SubjectOption`                | type     | `{ id; title; description? }`                                                                                           | One subject in a picker.                      |
+| `AuthorizationDecision`        | type     | `{ effect; conditions?; reasons; checks? }`                                                                             | What the inspector answers.                   |
+| `AuthorizationInspectInput`    | type     | `{ subject; resource; action }`                                                                                         | Body of `POST /inspector/decision`.           |
+| `AuthorizationInspection`      | type     | `{ resource; action; decision }`                                                                                        | One batch or business check.                  |
+| `LocalizedText`                | type     | `string \| { key; ns }`                                                                                                 | A title as the server sends it.               |
 
 | `AuthorizationClient` method                                                                                                | HTTP                                                                     |
 | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -642,6 +670,7 @@ Exactly what the rule plugins import to build their settings pages; the workspac
 | `AuthorizationRecordOption`   | type      | One record in a records route.                    |
 | `AuthorizationSubject`        | type      | `{ type; id }`.                                   |
 | `RecordSelection`             | type      | A record selection, as the client edits it.       |
+| `DataScopeRuleAction`         | type      | One action of a business rule with its scope.     |
 
 ## `@nocobase/app-plugin-authorization/package.json`
 

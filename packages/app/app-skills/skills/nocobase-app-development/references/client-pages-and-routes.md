@@ -27,6 +27,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'orders',
     path: '/orders',
     auth: 'required',
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
 ]);
@@ -69,7 +70,11 @@ Never write the deployment base path into a route. The application is mounted so
 | `guest`    | Sign-in, registration, password reset. A signed-in user is redirected away    |
 | `optional` | Pages that work signed in or out and adapt themselves                         |
 
-Descendants inherit their entry route’s auth mode and cannot switch it. Authenticated App pages without a page ancestor retain the default `{ resource: { type: 'page', id: name }, action: 'access' }` check; nested pages add a check only when they declare `authz`. Every parent check must pass before its children render. Registration normalizes every route to an explicit `authz` request or `'skip'`; menus, page loaders, and permission discovery consume that result. Omitted authorization on Settings, Dev, guest, and optional pages resolves to `'skip'`. An explicit request is checked independently of `auth`. Route groups cannot declare `authz`.
+Descendants inherit their entry route’s auth mode and cannot switch it.
+
+## Declaring `authz`
+
+Every page route, on every surface and at every depth, declares `authz`: a `{ resource: { type, id }, action }` request or `'skip'`. Nothing is inferred from the route name, and registration rejects a page without it. A product page usually checks `{ resource: { type: 'page', id }, action: 'access' }` with a stable id; a settings page checks the `settings` item its server registered. Every parent check must pass before its children render, so a child that needs nothing more declares `'skip'`. Menus, page loaders and permission discovery all read the declared value. A request is checked independently of `auth`. Route groups cannot declare `authz`.
 
 ### Opting a page out of authorization
 
@@ -89,7 +94,7 @@ defineAppRoutes([
 
 Use `'skip'` for pages such as the signed-in landing page that need no additional authorization. Replacing it with a permission request restricts the page to users granted that permission.
 
-The Permission Sets page lists page resources from normalized `authz` requests and deduplicates their ids. Default checks use the route's `name` as the page resource id; explicit checks use `authz.resource.id`. Renaming a default-authorized route changes its permission identifier, so stored grants must be migrated.
+The Permission Sets page lists every route whose `authz` checks `page` `access`, keyed by `authz.resource.id` and grouped by its navigation group, and deduplicates the ids. The id is what stored grants reference, so changing it requires migrating those grants; renaming the route alone does not.
 
 `auth` governs browser navigation. It is not server security: an endpoint the page calls must authenticate independently. See [server routes](server-routes.md).
 
@@ -119,7 +124,7 @@ defineSettingsRoutes([
 
 `navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `authz` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
-A settings page without `authz` is open to every signed-in user who can reach the settings area. Declare `authz` explicitly on anything sensitive, and enforce the same rule on the server.
+There is no default for a settings page: declare the settings item it belongs to, or `'skip'` for a page every signed-in user may open, and enforce the same rule on the server. The item must be registered on the server with `authz.settings.add`; see the authorization Skill.
 
 ### Dev routes
 
@@ -153,6 +158,7 @@ The owning layout supplies the route tree: `AppLayout` for business pages, `Sett
   path: '/orders',
   navigation: { title: 'navigation.orders', icon: ShoppingCart },
   breadcrumb: { title: 'navigation.orders' },
+  authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
   componentLoader: () => import('./pages/orders/index.js'),
 }
 ```

@@ -266,7 +266,7 @@ function parseCreateOrderInput(value: unknown): CreateOrderInput {
 }
 ```
 
-The current authorization middleware reads the session set by `Auth.required()`, establishes the request identity, and stores an `AuthorizationScope` in `context.get('authz')`. Install middleware in that order. `require()` throws `AuthorizationDeniedError` for a denied decision, so the HTTP boundary must map it to `403` or rely on an App-owned equivalent error mapper.
+The current authorization middleware reads the session set by `Auth.required()`, establishes the request identity, and stores an `AuthorizationContext` in `context.get('authz')`. Install middleware in that order. `require()` throws `AuthorizationDeniedError` for a denied decision, so the HTTP boundary must map it to `403` or rely on an App-owned equivalent error mapper.
 
 The child router is still plugin-owned code, not a new framework contribution API. The framework contribution resolves the owner-exported Tokens and mounts the returned `Hono`.
 

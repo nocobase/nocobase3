@@ -7,7 +7,7 @@ description: 'A common record baseline for existing operation holders.'
 
 Use default access for a stable baseline: everyone with View quotes may consult non-confidential quotes, while Edit remains limited to the preparer.
 
-In Settings → Authorization → Default access, choose the business resource, action and named scope, configure its range and save. Configure different actions and tables separately. Clearing a rule removes that baseline, not action grants or independent sharing.
+In Settings → Authorization → Default access, choose the business resource, action and named scope, configure its range and save. Configure different actions and tables separately. The page keeps one rule per resource; every rule is stored under a unique key, and rules that developers provision keep the key they were created with. Clearing a rule removes that baseline, not action grants or independent sharing.
 
 Defaults combine with role scope and sharing; they are not used only when a role has no selected scope. Do not copy a broad read baseline into editing. Verify both an action holder and a person without that action; the latter must remain denied.
 

@@ -25,7 +25,7 @@ Templates ship their tests into generated applications. Keep them runnable from 
 | A service           | Its domain behavior, with its dependencies supplied directly                                |
 | A job               | `execute()` with a realistic payload; a second run is harmless; failures behave as intended |
 | A page or component | What renders and what happens on interaction                                                |
-| A route declaration | Path, auth mode, and that `componentLoader()` actually resolves                             |
+| A route declaration | Path, auth mode, declared `authz`, and that `componentLoader()` actually resolves           |
 | Translations        | Both languages render real text                                                             |
 
 ## Testing a route

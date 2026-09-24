@@ -4,9 +4,9 @@ Runnable examples of sales collaboration and order delivery permissions. They de
 
 ## Run the examples
 
-Register this package's default client/server plugins with authentication, authorization and the three optional scope-rule plugins, then run the application's normal migrations and seeds. The Examples application includes this composition. Open `/authorization-example` for the guide and `/authorization-example/projects`, `/authorization-example/quotes`, `/authorization-example/orders` for the independently authorized pages; paths are relative to the application mount.
+Register this package's default client/server plugins with authentication, authorization and the three optional rule plugins (default access, sharing rules and restriction rules, with their factories in the application's `server/config/authorization.ts`), then run the application's normal migrations and seeds. The Examples application includes this composition. Open `/authorization-example` for the guide and `/authorization-example/projects`, `/authorization-example/quotes`, `/authorization-example/orders` for the independently authorized pages; paths are relative to the application mount. Each page route declares `authz: { resource: { type: 'page', id }, action: 'access' }` with the ids `example.sales.projects`, `example.sales.quotes` and `example.sales.orders`; the guide declares `authz: 'skip'` and is open to every signed-in user.
 
-Use the seeded demo accounts shown in the guide. Keep demo credentials and practice reset out of a production feature. Seeds initialize missing data without overwriting existing permissions. An unrestricted administrator can reset the fixed business practice records; this preserves permissions, team memberships and additional user-created orders. Restore authorization changes separately before repeating baseline exercises.
+Use the seeded demo accounts shown in the guide. Keep demo credentials and practice reset out of a production feature. The seed runs once, in one transaction, and skips entirely when the example's sales membership table already has rows, so it never overwrites permissions an administrator changed. An unrestricted administrator (`snapshot().unrestricted`) can reset the fixed business practice records; this preserves permissions, team memberships and additional user-created orders. Restore authorization changes separately before repeating baseline exercises.
 
 ## Responsibilities demonstrated
 
@@ -24,18 +24,21 @@ Engineers can edit their own out-of-region drafts without being allowed to submi
 
 ## Source map
 
-| Source                                                                                             | Reuse the pattern for                                                                   |
-| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [sales-resources.ts](server/sales-resources.ts)                                                    | Typed business actions, independent multi-table scopes, fields, relations and pages     |
-| [sales-record-access.ts](server/sales-record-access.ts), [sales-scopes.ts](server/sales-scopes.ts) | Preparer, ownership, region and public-record strategies                                |
-| [sales-authorization.ts](server/sales-authorization.ts)                                            | Explicit registration from the provider                                                 |
-| [sales-teams.ts](server/sales-teams.ts)                                                            | Active team membership resolution and authorized subject selectors                      |
-| [routes](server/routes/index.ts)                                                                   | One composed decision, policy-bound repositories, business transitions and transactions |
-| [seed declarations](database/seed-data)                                                            | Typed permission sets, scope rules, user/team assignments and idempotent provisioning   |
-| [client routes](client/routes.ts)                                                                  | Page access independent from business operations                                        |
-| [tests](tests)                                                                                     | Production routes and persisted allow/deny outcomes                                     |
+| Source                                                                                             | Reuse the pattern for                                                                                                                        |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [sales-resources.ts](server/sales-resources.ts)                                                    | Business resources: `example.sales.projects` in object form, quotes and orders with `defineBusinessResource`; fields, relations, data scopes |
+| [sales-record-access.ts](server/sales-record-access.ts), [sales-scopes.ts](server/sales-scopes.ts) | Preparer, ownership, region and public-record access, resolved through the parent project                                                    |
+| [sales-authorization.ts](server/sales-authorization.ts)                                            | Registration: `authz.groups.add`, `authz.database.collections.add`, `authz.business.define`, `authz.recordAccess.define`                     |
+| [authorization-example.ts](server/providers/authorization-example.ts)                              | Registering everything from the provider's `boot` and releasing the team subject at shutdown                                                 |
+| [sales-teams.ts](server/sales-teams.ts)                                                            | The `example.sales.team` subject type: active membership resolution and a searchable subject picker                                          |
+| [routes](server/routes/index.ts)                                                                   | One business decision, policy-bound repositories, business transitions and transactions                                                      |
+| [seed data](database/seed-data)                                                                    | `definePermissionSet`, `defineDefaultAccessRule`, `defineSharingRule`, `defineRestrictionRule`, user and team assignments                    |
+| [client routes](client/routes.ts)                                                                  | Page access declared on every route, independent from business operations                                                                    |
+| [tests](tests)                                                                                     | Production routes and persisted allow and deny outcomes                                                                                      |
 
-Portable declarations perform no DB work. The provider registers them; seeds reuse typed references. Strategies close over the owning services. A composed Submit decision yields policies for quotes and projects; the route consumes both without resolving aggregate collection grants again. It separately validates positive amount, draft state and the actual parent relationship.
+Portable declarations perform no database work. The provider registers them; seeds reuse typed references such as `quoteResource.reference().grant({ submit: { quotes: 'example.sales.prepared', projects: 'example.sales.region' } })`. Record access closes over the owning services. A Submit decision on `{ type: 'business', id: 'example.sales.quotes' }` yields policies for quotes and projects in `conditions.database`; the route consumes both without resolving collection grants again. It separately validates a positive amount, draft state and the actual parent relationship.
+
+The seeded configuration has four permission sets (`example-sales-assistant`, `-engineer`, `-manager`, `-delivery`), each granting page `access` separately from its business actions; direct user assignments plus the Proposal team (engineer) and Delivery team (delivery); keyed default-access rules for each business resource; sharing rules for regional delivery, selected projects and the quote-7 handover; and "public records only" restriction rules on every business action for the directly assigned users and both teams.
 
 ## Team directory administration
 
@@ -45,7 +48,7 @@ Search and pagination execute in the database, with case-insensitive literal sub
 
 ## Business HTTP API
 
-All routes below are under `/api/authorization-example`, relative to the application mount, and require authentication. Resource IDs use the `example.sales.*` names from the declarations.
+All routes below are under `/api/authorization-example`, relative to the application mount, and require authentication. Business resource and page ids use the `example.sales.*` names from the declarations.
 
 | Method and path                                         | Operation                                                      |
 | ------------------------------------------------------- | -------------------------------------------------------------- |
@@ -109,4 +112,4 @@ Reset business state before repeating transitions and restore changed rule/assig
 | Order relation write/deliver | Keep business handlers: state validation, relation policy enforcement or delivery-reference validation                                     |
 | Context/reset                | Demonstration-specific logic, not generic CRUD                                                                                             |
 
-The project router exposes POST `salesProjects:findMany`, `salesProjects:findOne`, `salesProjects:count` and `salesProjects:updateOne` through `defineRepositoryApiRoutes`; `authz.db.authorizeRepository` binds query methods to `view` and updates to `edit`. The existing GET list retains enriched display data. Project edit sends `{ filter: { id }, values }` and receives the Repository response; hidden targets return 404. Do not replace the existing enriched lists with raw Repository responses or use collection-aggregated grants for business operations. Read the main authorization Skill’s bundled `references/repository-routes.md` for a complete integration example. Multi-scope authorization remains explicit in business handlers.
+The project router exposes POST `salesProjects:findMany`, `salesProjects:findOne`, `salesProjects:count` and `salesProjects:updateOne` through `defineRepositoryApiRoutes`; `authz.database.authorizeRepository` binds query methods to the `view` action of `example.sales.projects` and updates to `edit`. The existing GET list retains enriched display data. Project edit sends `{ filter: { id }, values }` and receives the Repository response; hidden targets return 404. Do not replace the existing enriched lists with raw Repository responses or use collection-aggregated grants for business operations. Read the main authorization Skill’s bundled `references/repository-routes.md` for a complete integration example. Multi-scope authorization remains explicit in business handlers.

@@ -7,7 +7,17 @@ description: 'Configure pages, operations and record scopes around job responsib
 
 A permission set groups reusable capabilities. Name sets after real jobs, such as Sales engineer; express region and ownership as scopes rather than creating a role for every combination.
 
-In Settings → Authorization → Permission sets, create/select a set, enable business operations, configure each operation's scopes, grant page access separately, then assign users or integrated teams. Permissions, assignments and basic information have their own save actions.
+In Settings → Authorization → Permission sets, create or select a set, enable business operations, configure each operation's scopes, grant page access separately, then assign users or integrated teams. Permissions, assignments and basic information have their own save actions.
+
+The permissions of a set are organized in three sections:
+
+| Section              | What it grants                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Page permissions     | Entry to pages, listed from the application's menu and grouped the same way. “All pages” also covers pages added later. |
+| Business permissions | Business operations such as View, Edit or Submit quotes, each with its record scopes                                    |
+| Administration       | Settings pages and their actions, such as reading or changing permission sets, rules and other module settings          |
+
+Only pages, operations and settings that the application declares appear; a section is empty until developers add them. Plugins may add further sections.
 
 | Setting       | Sales engineer example                                                  |
 | ------------- | ----------------------------------------------------------------------- |

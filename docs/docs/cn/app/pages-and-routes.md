@@ -25,6 +25,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'orders',
     path: '/orders',
     navigation: { title: 'Orders', icon: Package },
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
 ]);
@@ -51,6 +52,7 @@ defineAppRoutes([
         name: 'orders',
         path: '/orders',
         navigation: { title: 'Orders', icon: Package },
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
         componentLoader: () => import('./pages/orders.js'),
       },
     ],
@@ -71,6 +73,7 @@ defineAppRoutes([
         name: 'orders',
         path: '/orders',
         navigation: { title: 'Orders' },
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
         componentLoader: () => import('./pages/orders.js'),
       },
     ],
@@ -107,6 +110,7 @@ export default function OrdersPage(): ReactElement {
 - import 路径使用 `.js`，即使页面文件的实际扩展名是 `.tsx`。
 - `path` 只填写应用内部路径，不要加入部署前缀。比如应用部署在 `/main` 下，路由写 `/orders`，浏览器访问地址就是 `/main/orders`。
 - 路由不配置 `navigation` 时，页面仍然可以通过 URL 访问，但不会出现在菜单中，详情页通常采用这种方式。
+- 每个页面都必须声明 `authz`：`{ resource: { type: 'page', id }, action: 'access' }` 让页面出现在权限配置中并按权限显示，`'skip'` 表示不检查（子页面、访客页面常用）。系统不会根据路由名称推断，缺少 `authz` 的页面在注册时报错，详见[路由参考](./reference/routes)。
 
 ## 页面目录和子页面
 
@@ -131,12 +135,14 @@ defineAppRoutes([
     path: '/orders',
     navigation: { title: 'orders.title' },
     breadcrumb: { title: 'orders.title' },
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders/index.js'),
     children: [
       {
         name: 'order-detail',
         path: ':orderId',
         breadcrumb: { title: 'orders.detailTitle' },
+        authz: 'skip',
         componentLoader: () => import('./pages/orders/detail.js'),
       },
     ],
@@ -235,18 +241,21 @@ defineAppRoutes([
     name: 'orders',
     path: '/orders',
     auth: 'required',
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
   {
     name: 'login-help',
     path: '/login-help',
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/login-help.js'),
   },
   {
     name: 'about',
     path: '/about',
     auth: 'optional',
+    authz: 'skip',
     componentLoader: () => import('./pages/about.js'),
   },
 ]);
