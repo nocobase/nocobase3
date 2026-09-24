@@ -148,7 +148,7 @@ describe('@nocobase/app-plugin-hub', () => {
 
   it('derives the product matrix from the grants returned by the server', () => {
     const role = {
-      key: 'hub-viewer',
+      key: 'read-only-role',
       grants: [
         {
           resource: { type: 'hub.app', id: '*' },

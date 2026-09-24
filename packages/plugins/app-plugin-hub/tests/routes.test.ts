@@ -167,8 +167,8 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             grants: [],
           },
           {
-            key: 'hub-viewer',
-            title: 'Hub viewer',
+            key: 'hub-operator',
+            title: 'Hub operator',
             grants: [
               {
                 resource: { type: 'hub.app', id: '*' },
@@ -192,6 +192,16 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             {
               resource: { type: 'user', id: '*' },
               actions: ['read', 'create'],
+            },
+          ],
+        },
+        {
+          key: 'hub-operator',
+          title: 'Hub operator',
+          grants: [
+            {
+              resource: { type: 'hub.app', id: '*' },
+              actions: ['read'],
             },
           ],
         },
