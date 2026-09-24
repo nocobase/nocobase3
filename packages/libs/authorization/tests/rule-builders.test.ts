@@ -1,17 +1,17 @@
 import { expect, it } from 'vitest';
 import {
-  defineBusinessResource,
+  defineComposite,
   selection,
-  type BusinessContribution,
+  type CompositeContribution,
 } from '../src/core/index.js';
 import { definePermissionSet } from '../src/plugins/permission-sets/index.js';
 import { defineDefaultAccessRule } from '../src/plugins/default-access/index.js';
 import { defineSharingRule } from '../src/plugins/sharing-rules/index.js';
 import { defineRestrictionRule } from '../src/plugins/restriction-rules/index.js';
 
-const contribution: BusinessContribution<{ quotes: string }> = {
+const contribution: CompositeContribution<{ quotes: string }> = {
   build: () => ({
-    dataScopes: [{ key: 'quotes', title: 'Quotes', collection: 'quotes' }],
+    dataScopes: [{ key: 'quotes', title: 'Quotes' }],
     grants: [
       {
         resource: { type: 'database.collection', id: 'quotes' },
@@ -20,10 +20,9 @@ const contribution: BusinessContribution<{ quotes: string }> = {
     ],
   }),
 };
-const resource = defineBusinessResource('sales.quotes', (resource) =>
+const resource = defineComposite('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .section('sales')
     .action('view', (action) => action.title('View').grant(contribution)),
 ).reference();
 
@@ -50,7 +49,7 @@ it('builds permission sets and rules without an application or store', () => {
     .build();
   expect(defaults).toEqual({
     key: 'quotes-default',
-    resource: { type: 'business', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     actions: [
       {
         action: 'view',

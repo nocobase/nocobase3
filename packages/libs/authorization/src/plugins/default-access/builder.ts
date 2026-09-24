@@ -1,14 +1,15 @@
-import type {
-  BusinessActions,
-  BusinessResourceReference,
-} from '../../core/business.js';
+import {
+  COMPOSITE_RESOURCE_TYPE,
+  type CompositeActions,
+  type CompositeReference,
+} from '../../core/composite.js';
 import type { RecordSelection } from '../../core/selection.js';
 import { appendRuleAction } from '../internal/rules.js';
 import type { DefaultAccessRule } from './model.js';
 
-export class DefaultAccessRuleBuilder<A extends BusinessActions> {
+export class DefaultAccessRuleBuilder<A extends CompositeActions> {
   constructor(
-    private readonly resource: BusinessResourceReference<A>,
+    private readonly resource: CompositeReference<A>,
     private readonly definition: DefaultAccessRule,
   ) {}
 
@@ -33,14 +34,14 @@ export class DefaultAccessRuleBuilder<A extends BusinessActions> {
   }
 }
 
-export function defineDefaultAccessRule<A extends BusinessActions>(
+export function defineDefaultAccessRule<A extends CompositeActions>(
   key: string,
-  resource: BusinessResourceReference<A>,
+  resource: CompositeReference<A>,
 ): DefaultAccessRuleBuilder<A> {
   if (!key) throw new TypeError('A rule needs a key');
   return new DefaultAccessRuleBuilder(resource, {
     key,
-    resource: { type: 'business', id: resource.name },
+    resource: { type: COMPOSITE_RESOURCE_TYPE, id: resource.name },
     actions: [],
   });
 }

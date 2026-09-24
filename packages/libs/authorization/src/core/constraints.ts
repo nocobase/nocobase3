@@ -10,7 +10,7 @@ import type {
 /** One action of a default-access, sharing or restriction rule. */
 export interface RuleAction {
   action: string;
-  /** The business action's data scope; omit for a collection rule. */
+  /** The composite action's data scope; omit for a rule on the resource itself. */
   scopeKey?: string;
   selection: RecordSelection;
 }
@@ -24,7 +24,7 @@ export interface AccessConstraint {
 }
 
 export interface ResolveAccessConstraintsInput {
-  /** The business action's data scope, when the check fills one. */
+  /** The composite action's data scope, when the check fills one. */
   scopeKey?: string;
   principal: Principal;
   subjects?: readonly AuthorizationSubject[];

@@ -1,16 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  businessPlugin,
+  COMPOSITE_RESOURCE_TYPE,
+  dataScopeTarget,
+  compositesPlugin,
   createAuthorization,
-  defineBusinessResource,
+  defineComposite,
   selection,
   type AccessConstraint,
   type AuthorizationGrant,
   type AuthorizationGrantService,
   type AuthorizationPlugin,
-  type BindableBusinessPermission,
-  type BusinessContribution,
-  type BusinessResource,
+  type BindableCompositePermission,
+  type CompositeContribution,
+  type Composite,
   type PermissionGrant,
   type ResolveAccessConstraintsInput,
 } from '../src/core/index.js';
@@ -18,13 +20,13 @@ import {
 type Access = 'recordsIOwn' | 'allRecords';
 
 /** A stand-in for the database plugin's collection permission. */
-class CollectionPermission implements BindableBusinessPermission {
+class CollectionPermission implements BindableCompositePermission {
   declare readonly recordAccessSelection?: Access;
   constructor(
     private readonly collection: string,
     private readonly actions: readonly string[],
   ) {}
-  bind<K extends string>(key: K): BusinessContribution<Record<K, Access>> {
+  bind<K extends string>(key: K): CompositeContribution<Record<K, Access>> {
     return {
       build: () => ({
         grants: [
@@ -41,7 +43,6 @@ class CollectionPermission implements BindableBusinessPermission {
           {
             key,
             title: this.collection,
-            collection: this.collection,
             options: ['recordsIOwn', 'allRecords'],
             defaultValue: 'recordsIOwn',
           },
@@ -51,10 +52,9 @@ class CollectionPermission implements BindableBusinessPermission {
   }
 }
 
-const quotes = defineBusinessResource('sales.quotes', (resource) =>
+const quotes = defineComposite('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .section('sales')
     .action('submit', (action) =>
       action
         .title('Submit')
@@ -77,10 +77,9 @@ const quotes = defineBusinessResource('sales.quotes', (resource) =>
     ),
 );
 
-const quotesObject: BusinessResource = {
+const quotesObject: Composite = {
   name: 'sales.quotes',
   title: 'Quotes',
-  section: 'sales',
   actions: [
     {
       name: 'submit',
@@ -89,7 +88,6 @@ const quotesObject: BusinessResource = {
         {
           key: 'quotes',
           title: 'quotes',
-          collection: 'quotes',
           options: ['recordsIOwn', 'allRecords'],
           defaultValue: 'recordsIOwn',
         },
@@ -152,16 +150,15 @@ function setup(
 ) {
   const authz = createAuthorization({
     plugins: [
-      businessPlugin(),
+      compositesPlugin(),
       { id: 'grants', grants: provider(grants) },
       ...extra,
     ],
   });
-  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
   return authz;
 }
 
-describe('business resources', () => {
+describe('composites', () => {
   it('builds the same definition in object and builder form', () => {
     expect(quotes.build()).toEqual(quotesObject);
     const built = quotes.build();
@@ -169,111 +166,115 @@ describe('business resources', () => {
     expect(quotes.build().title).toBe('Quotes');
   });
 
-  it('registers either form as an item of the business type', () => {
+  it('registers either form as an item of the composite type', () => {
     for (const definition of [quotes, quotesObject]) {
       const authz = setup();
-      const reference = authz.business.define(definition);
+      const reference = authz.composites.define(definition);
       expect(reference.name).toBe('sales.quotes');
-      expect(authz.business.list()).toEqual([quotesObject]);
-      expect(authz.business.getAction('sales.quotes', 'export')).toEqual(
+      expect(authz.composites.list()).toEqual([quotesObject]);
+      expect(authz.composites.getAction('sales.quotes', 'export')).toEqual(
         quotesObject.actions[1],
       );
-      const business = authz.resourceTypes.get('business');
-      expect(business.defaultSection).toBe('business');
-      expect(business.items.list()).toEqual([
+      const composite = authz.resourceTypes.get(COMPOSITE_RESOURCE_TYPE);
+      expect(composite.type).toBe('composite');
+      expect(composite.items?.list()).toEqual([
         {
           id: 'sales.quotes',
           title: 'Quotes',
-          section: 'sales',
           actions: [
             { name: 'submit', title: 'Submit' },
             { name: 'export', title: 'export' },
           ],
         },
       ]);
-      expect(() => authz.business.define(definition)).toThrow(
+      expect(() => authz.composites.define(definition)).toThrow(
         'already defined',
       );
     }
   });
 
-  it('composes only collection grants', () => {
+  it('composes whatever its definition lists, except another composite', () => {
     const authz = setup();
-    authz.sections.add({
-      name: 'system',
-      title: 'System',
-      parent: 'administration',
+    const view = (type: string) => ({
+      name: `x.${type}`,
+      title: type,
+      actions: [
+        {
+          name: 'view',
+          title: 'View',
+          grants: [
+            { resource: { type, id: 'orders' }, actions: [{ action: 'read' }] },
+          ],
+        },
+      ],
     });
-    for (const type of ['page', 'settings', 'workflow'])
-      expect(() =>
-        authz.business.define({
-          ...quotesObject,
-          name: `x.${type}`,
-          section: 'system',
-          actions: [
-            {
-              name: 'view',
-              title: 'View',
+    for (const type of ['page', 'settings', 'workflow', 'database.collection'])
+      authz.composites.define(view(type));
+    expect(() => authz.composites.define(view('composite'))).toThrow(
+      'cannot compose another composite',
+    );
+    expect(() =>
+      defineComposite('nested', (resource) =>
+        resource.action('run', (action) =>
+          action.grant({
+            build: () => ({
               grants: [
                 {
-                  resource: { type, id: 'orders' },
-                  actions: [{ action: 'read' }],
+                  resource: { type: 'composite', id: 'sales.quotes' },
+                  actions: [{ action: 'export' }],
                 },
               ],
-            },
-          ],
-        }),
-      ).toThrow('may only compose database.collection');
+            }),
+          }),
+        ),
+      ),
+    ).toThrow('cannot compose another composite');
   });
 
-  it('rejects incomplete definitions and unknown subsections', () => {
+  it('rejects incomplete definitions', () => {
     const authz = setup();
+    expect(() => defineComposite('quotes', (resource) => resource)).toThrow(
+      'needs unique, nonempty actions',
+    );
     expect(() =>
-      defineBusinessResource('quotes', (resource) => resource.section('sales')),
-    ).toThrow('needs unique, nonempty actions');
-    expect(() =>
-      defineBusinessResource('quotes', (resource) =>
-        resource.section('sales').action('view', (action) => action),
+      defineComposite('quotes', (resource) =>
+        resource.action('view', (action) => action),
       ),
     ).toThrow('grants nothing');
-    expect(() =>
-      authz.business.define({ ...quotesObject, section: 'missing' }),
-    ).toThrow('unknown subsection');
     const [submit] = quotesObject.actions;
     expect(() =>
-      authz.business.define({
+      authz.composites.define({
         ...quotesObject,
         actions: [{ ...submit!, dataScopes: [] }],
       }),
     ).toThrow('unknown data scope');
     expect(() =>
-      authz.business.define({
+      authz.composites.define({
         ...quotesObject,
         actions: [
           {
             ...submit!,
             dataScopes: [
               ...submit!.dataScopes!,
-              { key: 'orders', title: 'Orders', collection: 'orders' },
+              { key: 'orders', title: 'Orders' },
             ],
           },
         ],
       }),
     ).toThrow('is not used by a grant');
   });
-
   it('builds typed grants whose policy names data scopes', () => {
     const reference = quotes.reference();
     expect(reference.grant('submit', 'export')).toEqual({
-      resource: { type: 'business', id: 'sales.quotes' },
+      resource: { type: 'composite', id: 'sales.quotes' },
       actions: [{ action: 'submit' }, { action: 'export' }],
     });
     expect(reference.grant({ submit: { quotes: 'allRecords' } })).toEqual({
-      resource: { type: 'business', id: 'sales.quotes' },
+      resource: { type: 'composite', id: 'sales.quotes' },
       actions: [
         {
           action: 'submit',
-          policy: { type: 'business', scopes: { quotes: 'allRecords' } },
+          policy: { type: 'composite', scopes: { quotes: 'allRecords' } },
         },
       ],
     });
@@ -285,12 +286,130 @@ describe('business resources', () => {
       reference.grant({ submit: { quotes: 'other' as Access } }),
     ).toThrow('does not offer other');
     expect(() => reference.scope('export', 'quotes' as never)).toThrow(
-      'Unknown business data scope',
+      'Unknown composite data scope',
     );
   });
 });
 
-describe('business authorization', () => {
+describe('data scopes', () => {
+  const scoped = (
+    grants: readonly { type: string; id: string; scopeKey?: string }[],
+  ): Composite => ({
+    name: 'scoped',
+    title: 'Scoped',
+    actions: [
+      {
+        name: 'run',
+        title: 'Run',
+        dataScopes: [{ key: 'records', title: 'Records' }],
+        grants: grants.map(({ type, id, scopeKey }) => ({
+          resource: { type, id },
+          actions: [
+            { action: 'read', ...(scopeKey === undefined ? {} : { scopeKey }) },
+          ],
+        })),
+      },
+    ],
+  });
+  const ledger = (recordAccess: boolean): AuthorizationPlugin => ({
+    id: 'ledger',
+    setup(host) {
+      host.resourceTypes.add({
+        type: 'ledger',
+        title: 'Ledgers',
+        actions: ['read'],
+        recordAccess,
+      });
+    },
+  });
+
+  it('binds to the one resource its grant actions address', () => {
+    const definition = scoped([
+      { type: 'ledger', id: 'a', scopeKey: 'records' },
+      { type: 'ledger', id: 'b' },
+    ]);
+    expect(dataScopeTarget(definition.actions[0]!, 'records')).toEqual({
+      type: 'ledger',
+      id: 'a',
+    });
+    expect(() => dataScopeTarget(definition.actions[0]!, 'missing')).toThrow(
+      'is not used by a grant',
+    );
+    for (const second of [
+      { type: 'ledger', id: 'b', scopeKey: 'records' },
+      { type: 'journal', id: 'a', scopeKey: 'records' },
+    ])
+      expect(() =>
+        setup([], [ledger(true)]).composites.define(
+          scoped([{ type: 'ledger', id: 'a', scopeKey: 'records' }, second]),
+        ),
+      ).toThrow('targets more than one resource');
+  });
+
+  it('rejects a target type without recordAccess at define once it is registered', () => {
+    const definition = scoped([
+      { type: 'ledger', id: 'a', scopeKey: 'records' },
+    ]);
+    expect(() =>
+      setup([], [ledger(false)]).composites.define(definition),
+    ).toThrow('does not declare recordAccess');
+    const authz = setup([], [ledger(true)]);
+    authz.composites.define(definition);
+    expect(authz.composites.validate()).toEqual([]);
+  });
+
+  it('checks a type registered later on validate and on first use', async () => {
+    const definition = scoped([
+      { type: 'ledger', id: 'a', scopeKey: 'records' },
+    ]);
+    const unregistered = setup([
+      {
+        resource: { type: 'composite', id: 'scoped' },
+        actions: [{ action: 'run' }],
+      },
+    ]);
+    unregistered.composites.define(definition);
+    expect(unregistered.composites.validate()).toEqual([
+      'Data scope scoped.run.records targets unregistered resource type ledger',
+    ]);
+    await expect(
+      unregistered.for(alice).authorize({
+        resource: { type: 'composite', id: 'scoped' },
+        action: 'run',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [
+        {
+          code: 'AUTHORIZATION_HANDLER_FAILED',
+          message: expect.stringContaining('unregistered resource type ledger'),
+        },
+      ],
+    });
+    const late = setup(
+      [
+        {
+          resource: { type: 'composite', id: 'scoped' },
+          actions: [{ action: 'run' }],
+        },
+      ],
+      [],
+    );
+    late.composites.define(definition);
+    late.resourceTypes.add({ type: 'ledger', title: 'L', actions: ['read'] });
+    expect(late.composites.validate()).toEqual([
+      'Data scope scoped.run.records targets resource type ledger, which does not declare recordAccess',
+    ]);
+    await expect(
+      late.for(alice).can({
+        resource: { type: 'composite', id: 'scoped' },
+        action: 'run',
+      }),
+    ).resolves.toBe(false);
+  });
+});
+
+describe('composite authorization', () => {
   it('checks each composed collection once, with that action’s grants only', async () => {
     const calls: { action: string; grants: readonly AuthorizationGrant[] }[] =
       [];
@@ -302,6 +421,7 @@ describe('business authorization', () => {
           type: 'database.collection',
           title: 'Collections',
           actions: ['read', 'create', 'update', 'delete'],
+          recordAccess: true,
           async authorize(request, context) {
             const grants = await context.grants.resolve(request);
             calls.push({ action: request.action, grants });
@@ -322,13 +442,13 @@ describe('business authorization', () => {
       ],
       [database],
     );
-    authz.business.define(quotes);
+    authz.composites.define(quotes);
     const decision = await authz.for(alice).authorize({
-      resource: { type: 'business', id: 'sales.quotes' },
+      resource: { type: 'composite', id: 'sales.quotes' },
       action: 'submit',
     });
     expect(decision.effect).toBe('conditional');
-    expect(decision.conditions?.type).toBe('business');
+    expect(decision.conditions?.type).toBe('composite');
     expect(decision.conditions?.checks.map((check) => check.action)).toEqual([
       'read',
       'update',
@@ -340,7 +460,7 @@ describe('business authorization', () => {
         resource: { type: 'database.collection', id: 'quotes' },
         policy: { type: 'database', fields: '*' },
         origin: {
-          resource: { type: 'business', id: 'sales.quotes' },
+          resource: { type: 'composite', id: 'sales.quotes' },
           action: 'submit',
           scopeKey: 'quotes',
           selection: selection.recordAccess('allRecords'),
@@ -350,7 +470,7 @@ describe('business authorization', () => {
     ]);
     await expect(
       authz.for(alice).can({
-        resource: { type: 'business', id: 'sales.quotes' },
+        resource: { type: 'composite', id: 'sales.quotes' },
         action: 'submit',
       }),
     ).resolves.toBe(true);
@@ -378,6 +498,7 @@ describe('business authorization', () => {
                 type: 'database.collection',
                 title: 'Collections',
                 actions: ['read', 'create', 'update', 'delete'],
+                recordAccess: true,
                 async authorize(request, context) {
                   seen.push(...(await context.grants.resolve(request)));
                   return { effect: 'permit', reasons: [] };
@@ -387,10 +508,10 @@ describe('business authorization', () => {
           },
         ],
       );
-      authz.business.define(quotes);
+      authz.composites.define(quotes);
       await expect(
         authz.for(alice).authorize({
-          resource: { type: 'business', id: 'sales.quotes' },
+          resource: { type: 'composite', id: 'sales.quotes' },
           action: 'submit',
         }),
       ).resolves.toMatchObject({ effect: 'permit' });
@@ -401,22 +522,22 @@ describe('business authorization', () => {
     },
   );
 
-  it('denies a stored business policy the definition does not accept', async () => {
+  it('denies a stored composite policy the definition does not accept', async () => {
     const authz = setup([
       {
-        resource: { type: 'business', id: 'sales.quotes' },
+        resource: { type: 'composite', id: 'sales.quotes' },
         actions: [
           {
             action: 'submit',
-            policy: { type: 'business', scopes: { missing: 'allRecords' } },
+            policy: { type: 'composite', scopes: { missing: 'allRecords' } },
           },
         ],
       },
     ]);
-    authz.business.define(quotes);
+    authz.composites.define(quotes);
     await expect(
       authz.for(alice).authorize({
-        resource: { type: 'business', id: 'sales.quotes' },
+        resource: { type: 'composite', id: 'sales.quotes' },
         action: 'submit',
       }),
     ).resolves.toMatchObject({
@@ -450,6 +571,7 @@ describe('business authorization', () => {
           type: 'database.collection',
           title: 'Collections',
           actions: ['read', 'create', 'update', 'delete'],
+          recordAccess: true,
           async authorize(request, context) {
             for (const grant of await context.grants.resolve(request))
               received.push(grant.origin?.constraints);
@@ -459,7 +581,7 @@ describe('business authorization', () => {
       },
     };
     const authz = setup([quotes.reference().grant('submit')], [rules]);
-    authz.business.define(quotes);
+    authz.composites.define(quotes);
     const request = {
       resource: { type: 'database.collection', id: 'quotes' },
       action: 'read',

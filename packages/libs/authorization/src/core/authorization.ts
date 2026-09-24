@@ -1,12 +1,12 @@
 import type { MiddlewareHandler } from 'hono';
 import {
-  BUSINESS_RESOURCE_TYPE,
-  businessRegistryOf,
+  COMPOSITE_RESOURCE_TYPE,
+  compositeRegistryOf,
   composedGrants,
-  type BusinessCheck,
-  type BusinessConditions,
-  type BusinessResourceRegistry,
-} from './business.js';
+  type CompositeCheck,
+  type CompositeConditions,
+  type CompositeRegistry,
+} from './composite.js';
 import {
   AccessConstraintRegistry,
   type AccessConstraintService,
@@ -28,7 +28,6 @@ import {
 import { RecordAccessRegistry } from './record-access.js';
 import { ResourceTypeRegistry, resourceTypeHandler } from './resource-types.js';
 import { AuthorizationRouteRegistry } from './routes.js';
-import { ResourceGroupRegistry, SectionRegistry } from './sections.js';
 import { AuthorizationSubjectRegistry } from './subjects.js';
 import {
   AuthorizationDeniedError,
@@ -61,9 +60,9 @@ export interface AuthorizationContext {
   readonly identity: AuthorizationIdentity;
   authorize(
     request: Omit<AuthorizationCheckRequest, 'resource'> & {
-      resource: { type: 'business'; id: string };
+      resource: { type: 'composite'; id: string };
     },
-  ): Promise<AuthorizationDecision<BusinessConditions>>;
+  ): Promise<AuthorizationDecision<CompositeConditions>>;
   authorize<TParams = undefined>(
     request: AuthorizationCheckRequest<TParams>,
   ): Promise<AuthorizationDecision>;
@@ -96,12 +95,8 @@ interface AuthorizationOptions {
   plugins: readonly AuthorizationPlugin[];
 }
 
-const LIBRARY_NAMESPACE = '@nocobase/authorization';
-
 export class Authorization {
-  readonly sections: SectionRegistry = new SectionRegistry();
-  readonly resourceGroups: ResourceGroupRegistry = new ResourceGroupRegistry();
-  readonly resourceTypes: ResourceTypeRegistry;
+  readonly resourceTypes: ResourceTypeRegistry = new ResourceTypeRegistry();
   readonly recordAccess: RecordAccessRegistry = new RecordAccessRegistry();
   readonly constraints: AccessConstraintRegistry =
     new AccessConstraintRegistry();
@@ -111,28 +106,14 @@ export class Authorization {
     new AuthorizationRouteRegistry();
   private readonly plugins: readonly AuthorizationPlugin[];
   private readonly provider: AuthorizationGrantService;
-  private readonly businessRegistry: BusinessResourceRegistry | undefined;
+  private readonly compositeRegistry: CompositeRegistry | undefined;
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
   constructor(options: AuthorizationOptions) {
-    this.resourceTypes = new ResourceTypeRegistry(
-      this.sections,
-      this.resourceGroups,
-    );
-    for (const [name, order] of [
-      ['pages', 0],
-      ['business', 100],
-      ['administration', 200],
-    ] as const)
-      this.sections.add({
-        name,
-        title: { key: `sections.${name}`, ns: LIBRARY_NAMESPACE },
-        order,
-      });
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
     this.provider = grantProvider?.grants ?? missingGrantService();
-    this.businessRegistry = businessRegistryOf(this.plugins);
+    this.compositeRegistry = compositeRegistryOf(this.plugins);
     this.installApis();
     const apis: Record<string, unknown> = {};
     for (const plugin of this.plugins)
@@ -151,8 +132,6 @@ export class Authorization {
           }
           return grantProvider.grants;
         },
-        sections: this.sections,
-        resourceGroups: this.resourceGroups,
         resourceTypes: this.resourceTypes,
         recordAccess: this.recordAccess,
         constraints: this.constraints,
@@ -201,7 +180,7 @@ export class Authorization {
     const constraints = this.constraints.for(identity);
     const grants = composedGrants(
       this.provider.for?.(identity) ?? this.provider,
-      this.businessRegistry,
+      this.compositeRegistry,
       constraints,
     );
     const request = <TParams>(
@@ -280,10 +259,10 @@ export class Authorization {
       if (
         !resolveConditions ||
         decision.effect === 'deny' ||
-        request.resource.type !== BUSINESS_RESOURCE_TYPE
+        request.resource.type !== COMPOSITE_RESOURCE_TYPE
       )
         return decision;
-      return await this.composeBusiness(stored, decision, grants, constraints);
+      return await this.composeComposite(stored, decision, grants, constraints);
     } catch (error) {
       return deny(
         'AUTHORIZATION_HANDLER_FAILED',
@@ -292,14 +271,14 @@ export class Authorization {
     }
   }
 
-  /** Checks each collection a business action composes, with its grants only. */
-  private async composeBusiness(
+  /** Checks each grant target a composite action composes, with its grants only. */
+  private async composeComposite(
     request: AuthorizationRequest<unknown>,
     decision: AuthorizationDecision,
     grants: AuthorizationGrantService,
     constraints: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
-    const action = this.businessRegistry?.getAction(
+    const action = this.compositeRegistry?.getAction(
       request.resource.id,
       request.action,
     );
@@ -307,7 +286,7 @@ export class Authorization {
     const fromThisAction = (
       grant: Awaited<ReturnType<AuthorizationGrantService['resolve']>>[number],
     ): boolean =>
-      grant.origin?.resource.type === BUSINESS_RESOURCE_TYPE &&
+      grant.origin?.resource.type === COMPOSITE_RESOURCE_TYPE &&
       grant.origin.resource.id === request.resource.id &&
       grant.origin.action === request.action;
     const scoped: AuthorizationGrantService = {
@@ -327,7 +306,7 @@ export class Authorization {
           resource: grant.resource,
           action: entry.action,
         });
-    const checks: BusinessCheck[] = await Promise.all(
+    const checks: CompositeCheck[] = await Promise.all(
       [...targets.values()].map(async (target) => ({
         ...target,
         decision: await this.authorizeWithGrants(
@@ -349,10 +328,10 @@ export class Authorization {
         ),
       })),
     );
-    const conditions: BusinessConditions = { type: 'business', checks };
+    const conditions: CompositeConditions = { type: 'composite', checks };
     for (const plugin of this.plugins)
       Object.assign(conditions, plugin.composeConditions?.(checks));
-    // A denied collection check becomes a policy that reaches no records.
+    // A denied underlying check becomes a policy that reaches no records.
     return {
       effect: checks.every((check) => check.decision.effect === 'permit')
         ? 'permit'

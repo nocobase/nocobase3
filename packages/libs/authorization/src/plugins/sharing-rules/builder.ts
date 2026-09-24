@@ -1,16 +1,17 @@
-import type {
-  BusinessActions,
-  BusinessResourceReference,
-} from '../../core/business.js';
+import {
+  COMPOSITE_RESOURCE_TYPE,
+  type CompositeActions,
+  type CompositeReference,
+} from '../../core/composite.js';
 import type { RecordSelection } from '../../core/selection.js';
 import type { AuthorizationTitle } from '../../core/titles.js';
 import type { AuthorizationSubject } from '../../core/types.js';
 import { appendRuleAction } from '../internal/rules.js';
 import type { SharingRule } from './model.js';
 
-export class SharingRuleBuilder<A extends BusinessActions> {
+export class SharingRuleBuilder<A extends CompositeActions> {
   constructor(
-    private readonly resource: BusinessResourceReference<A>,
+    private readonly resource: CompositeReference<A>,
     private readonly definition: SharingRule,
   ) {}
 
@@ -57,14 +58,14 @@ export class SharingRuleBuilder<A extends BusinessActions> {
   }
 }
 
-export function defineSharingRule<A extends BusinessActions>(
+export function defineSharingRule<A extends CompositeActions>(
   key: string,
-  resource: BusinessResourceReference<A>,
+  resource: CompositeReference<A>,
 ): SharingRuleBuilder<A> {
   if (!key) throw new TypeError('A rule needs a key');
   return new SharingRuleBuilder(resource, {
     key,
-    resource: { type: 'business', id: resource.name },
+    resource: { type: COMPOSITE_RESOURCE_TYPE, id: resource.name },
     actions: [],
     subjects: [],
   });

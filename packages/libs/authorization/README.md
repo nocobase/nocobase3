@@ -1,27 +1,24 @@
 # @nocobase/authorization
 
-Authorization decisions, resource types, business resources, Permission Sets and record-scope rules for Node applications. A NocoBase application normally resolves `authorizationToken` from `@nocobase/app-plugin-authorization/server`, which builds on this library and adds database enforcement, persistence, pages, settings, HTTP management and the React UI. Use this library directly to embed authorization in a host of your own, to write an authorization plugin, or to read the contracts the application plugin implements.
+Authorization decisions, resource types, composite resources, Permission Sets and record-scope rules for Node applications. A NocoBase application normally resolves `authorizationToken` from `@nocobase/app-plugin-authorization/server`, which builds on this library and adds database enforcement, persistence, pages, settings, HTTP management and the React UI. Use this library directly to embed authorization in a host of your own, to write an authorization plugin, or to read the contracts the application plugin implements.
 
 ## Terminology
 
 Every word below has exactly one meaning in this package.
 
-| Term                  | Meaning                                                                                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resource ref          | `{ type, id }`: the target of a check or a grant. Every grant states its type; there is no default type.                                                                                     |
-| Resource type         | The only unit of judgement, never displayed: an optional item registry, declared actions, an authorize function and an optional `defaultSection`. Registered with `authz.resourceTypes.add`. |
-| Item                  | One grantable thing of a resource type, `{ id, title, actions, section?, group? }`. Only a catalog type has items; there an unregistered `(type, id, action)` is denied.                     |
-| Business resource     | A user-facing feature, stored under type `business`, whose actions compose `database.collection` grants. Registered with `authz.business.define`.                                            |
-| Data scope            | A named slot on a business action, `{ key, title, collection, options?, defaultValue? }`, that a grant or rule fills with a record selection.                                                |
-| Record selection      | `{ type: 'all' } \| { type: 'records', ids } \| { type: 'recordAccess', key, params? }`: which records of a collection an action reaches.                                                    |
-| Record access         | A named, code-defined way to select records, such as "records I own". Registered with `authz.recordAccess.define`.                                                                           |
-| Section               | A top-level heading on the left of the permission workspace, `{ name, title, order }`. Display only.                                                                                         |
-| Subsection            | A left-side entry under a section, `{ name, title, parent, order? }`; items name one with `section`. Display only.                                                                           |
-| Resource group        | A right-side heading items are listed under, `{ name, title, parent?, order? }`, nested to any depth. Display only.                                                                          |
-| Grant                 | One `(resource, action, policy?)` a Grant Provider resolves for an identity. A Permission Set stores grants.                                                                                 |
-| Constraint            | A rule's `expand` or `restrict` contribution of a record selection to one action.                                                                                                            |
-| Authorization context | `authz.for(identity)`: every check for one identity, sharing grant and rule reads between them.                                                                                              |
-| Snapshot              | `context.snapshot()`: what the client may show, `{ unrestricted, permissions }`.                                                                                                             |
+| Term                  | Meaning                                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Resource ref          | `{ type, id }`: the target of a check or a grant. Every grant states its type; there is no default type.                                                                                                                                                                 |
+| Resource type         | The only unit of judgement, never displayed: an optional item registry, declared actions, an authorize function and the `recordAccess` capability. Registered with `authz.resourceTypes.add`.                                                                            |
+| Item                  | One grantable thing of a resource type, `{ id, title, description?, actions }`. Only a catalog type has items; there an unregistered `(type, id, action)` is denied.                                                                                                     |
+| Composite resource    | A resource whose actions expand into a set of underlying grants, each optionally bound to a named data scope. Stored under type `composite` and registered with `authz.composites.define`; it composes exactly the grants its definition lists, never another composite. |
+| Data scope            | A named slot on a composite action, `{ key, title, options?, defaultValue? }`, that a grant or rule fills with a record selection. Its target is the one resource the grant actions naming it address, and that resource's type must declare `recordAccess`.             |
+| Record selection      | `{ type: 'all' } \| { type: 'records', ids } \| { type: 'recordAccess', key, params? }`: which records of a collection an action reaches.                                                                                                                                |
+| Record access         | A named, code-defined way to select records, such as "records I own". Registered with `authz.recordAccess.define`.                                                                                                                                                       |
+| Grant                 | One `(resource, action, policy?)` a Grant Provider resolves for an identity. A Permission Set stores grants.                                                                                                                                                             |
+| Constraint            | A rule's `expand` or `restrict` contribution of a record selection to one action.                                                                                                                                                                                        |
+| Authorization context | `authz.for(identity)`: every check for one identity, sharing grant and rule reads between them.                                                                                                                                                                          |
+| Snapshot              | `context.snapshot()`: what the client may show, `{ unrestricted, permissions }`.                                                                                                                                                                                         |
 
 ## Layers
 
@@ -29,25 +26,25 @@ Every word below has exactly one meaning in this package.
  storage                     judgement                                   use
  ───────────────────────     ──────────────────────────────────────      ───────────────────────────
  Permission Sets ──grants──▶ Grant Provider                             authz.for(identity)
-                             └▶ business expansion ──┐                    ├ authorize(request)
+                             └▶ composite expansion ─┐                    ├ authorize(request)
  Default access  ─┐                                  ▼                    ├ can(request)
  Sharing rules   ─┼─constraints──────────────▶ resource type             ├ require(request)
  Restriction     ─┘                              (items + authorize)      └ snapshot()
                              record access ──▶ resolved by the adapter   authz.middleware(), authz.routes
-
- display (separate, never read by authorize): sections ─▶ subsections ─▶ resource groups ─▶ items
 ```
+
+The library has no display concepts. Where a resource is listed in a workspace is the host's concern; the application plugin provides `authz.ui` for it.
 
 ## Entry points
 
-| Import                                      | Contents                                                                                                 |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `@nocobase/authorization`                   | Everything below, re-exported.                                                                           |
-| `@nocobase/authorization/core`              | `createAuthorization`, registries, resource types, business resources, record access, selections, types. |
-| `@nocobase/authorization/permission-sets`   | `permissionSetsPlugin`, `definePermissionSet`, the Permission Set store contract and errors.             |
-| `@nocobase/authorization/default-access`    | `defaultAccessPlugin`, `defineDefaultAccessRule` and the default-access store contract.                  |
-| `@nocobase/authorization/sharing-rules`     | `sharingRulesPlugin`, `defineSharingRule` and the sharing-rule store contract.                           |
-| `@nocobase/authorization/restriction-rules` | `restrictionRulesPlugin`, `defineRestrictionRule` and the restriction-rule store contract.               |
+| Import                                      | Contents                                                                                                  |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `@nocobase/authorization`                   | Everything below, re-exported.                                                                            |
+| `@nocobase/authorization/core`              | `createAuthorization`, registries, resource types, composite resources, record access, selections, types. |
+| `@nocobase/authorization/permission-sets`   | `permissionSetsPlugin`, `definePermissionSet`, the Permission Set store contract and errors.              |
+| `@nocobase/authorization/default-access`    | `defaultAccessPlugin`, `defineDefaultAccessRule` and the default-access store contract.                   |
+| `@nocobase/authorization/sharing-rules`     | `sharingRulesPlugin`, `defineSharingRule` and the sharing-rule store contract.                            |
+| `@nocobase/authorization/restriction-rules` | `restrictionRulesPlugin`, `defineRestrictionRule` and the restriction-rule store contract.                |
 
 The library ships no store and no HTTP handler. Each plugin factory takes a `store` implementing its store interface; the application plugin supplies database-backed ones.
 
@@ -70,7 +67,6 @@ const reports = new ResourceItems();
 authz.resourceTypes.add({
   type: 'report',
   title: 'Reports',
-  defaultSection: 'administration',
   items: reports,
 });
 reports.add({ id: 'sales', title: 'Sales report', actions: ['view'] });
@@ -98,13 +94,13 @@ await context.require({
 
 The principal is the authenticated actor; `subjects` adds verified memberships such as teams, and the principal itself also matches grants. `authz.for(identity)` uses the identity it is given: resolve memberships before calling it, or install identity middleware and use `authz.middleware()`, which resolves them per request.
 
-| `AuthorizationContext` member | Result                                                                                                                                |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`                    | The identity the context was created for.                                                                                             |
-| `authorize(request)`          | The full decision: `permit`, `deny`, or `conditional` with `conditions`. For type `business` the conditions are `BusinessConditions`. |
-| `can(request)`                | `true` only for `permit`. A conditional decision counts as `false`.                                                                   |
-| `require(request)`            | Throws `AuthorizationDeniedError` unless the decision is `permit`.                                                                    |
-| `snapshot()`                  | `{ unrestricted, permissions }` for the client; see [Snapshot](#snapshot).                                                            |
+| `AuthorizationContext` member | Result                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`                    | The identity the context was created for.                                                                                               |
+| `authorize(request)`          | The full decision: `permit`, `deny`, or `conditional` with `conditions`. For type `composite` the conditions are `CompositeConditions`. |
+| `can(request)`                | `true` only for `permit`. A conditional decision counts as `false`.                                                                     |
+| `require(request)`            | Throws `AuthorizationDeniedError` unless the decision is `permit`.                                                                      |
+| `snapshot()`                  | `{ unrestricted, permissions }` for the client; see [Snapshot](#snapshot).                                                              |
 
 Create one context per request and reuse it within that request only. Unknown types, conditional decisions without conditions and handler failures deny. Execute a conditional decision only through the adapter that understands its conditions.
 
@@ -129,7 +125,7 @@ router.get('/reports/:id', async (c) => {
     action: 'view',
   });
   const decision = await context.authorize({
-    resource: { type: 'business', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     action: 'submit',
   });
   return c.json({ effect: decision.effect });
@@ -142,10 +138,10 @@ Plugins register HTTP handlers with `authz.routes.add(path, handler)`; the host 
 
 A resource type comes in one of two shapes, told apart only by whether it has an item registry.
 
-- A **catalog type** passes `items`. A check passes only for a registered item and one of its actions; anything else is denied with `RESOURCE_ACTION_NOT_SUPPORTED`. `settings`, `business` and `database.collection` are catalog types.
+- A **catalog type** passes `items`. A check passes only for a registered item and one of its actions; anything else is denied with `RESOURCE_ACTION_NOT_SUPPORTED`. `settings`, `composite` and `database.collection` are catalog types.
 - A **record type** declares only type-level `actions`. Only the action is validated: an undeclared action is denied, while the id is a runtime record id that the type's `authorize` judges per record. `page`, `hub.app`, `user` and `notification` are record types, and their grants use `id: '*'` to mean every record.
 
-`resourceTypes.add` returns `{ type, title, defaultSection?, actions, items? }`. The default judgement is `grantBacked()`: permit when a grant without a policy matches. Pass `also` for a further check once a grant matches.
+`resourceTypes.add` returns `{ type, title, actions, recordAccess, items? }`. Set `recordAccess: true` on a type whose grants can be narrowed to records, as `database.collection` does; only such a type can be the target of a composite's data scope. The default judgement is `grantBacked()`: permit when a grant without a policy matches. Pass `also` for a further check once a grant matches.
 
 ```ts
 import { ResourceItems, grantBacked } from '@nocobase/authorization/core';
@@ -159,85 +155,37 @@ authz.resourceTypes.add({
   }),
 });
 
-authz.sections.add({
-  name: 'automation',
-  title: 'Automation',
-  parent: 'administration',
-});
 const settings = new ResourceItems();
 authz.resourceTypes.add({
   type: 'settings',
   title: 'Settings',
-  defaultSection: 'administration',
   items: settings,
 });
-settings.add({
-  id: 'workflow',
-  title: 'Workflow',
-  section: 'automation',
-  actions: ['manage'],
-});
+settings.add({ id: 'workflow', title: 'Workflow', actions: ['manage'] });
 ```
 
 In a catalog type an item that omits `actions` inherits the type's declared actions and their titles; a catalog type that declares none requires actions on every item. A type action may carry its own `authorize` and `authorizeUnrestricted`. Unsupported items and actions stay denied even for unrestricted identities.
 
-## Sections, subsections and resource groups
+## Composite resources and data scopes
 
-```ts
-authz.sections.add({
-  name: 'reports',
-  title: { key: 'sections.reports', ns: 'my-plugin' },
-  order: 50,
-});
-authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
-authz.resourceGroups.add({
-  name: 'payables',
-  title: 'Payables',
-  parent: 'ledgers',
-});
-```
+`compositesPlugin()` registers the `composite` resource type and adds `authz.composites`. A composite is a resource whose actions expand into a set of underlying grants, each optionally bound to a named data scope. It composes exactly what its definition lists, on any resource type; the one structural rule is that no underlying grant may target another composite, so composites never nest and never cycle. Business operations are defined as composite resources.
 
-The workspace lists sections on the left, each with its subsections as entries, and the selected subsection's items on the right, under their resource groups. `createAuthorization` registers the top-level sections `pages` (order 0), `business` (100) and `administration` (200) through the same `sections.add`, with titles in the `@nocobase/authorization` namespace. A top-level section needs an `order`; a subsection names a top-level `parent`, may omit `order` to follow the ordered ones, and cannot have subsections of its own. Resource groups nest to any depth. Re-adding a deep-equal section or resource group is a no-op; any other re-add throws, as does an unknown parent. A plugin that contributes to a subsection another plugin owns passes `extend: true`, mirroring a client settings group declared with `extend`: the add does nothing when the subsection exists and creates it otherwise, and the owner's add replaces an extension's title and order whichever boots first. Only the owner's parent must match; two owners with different definitions still throw.
-
-```ts
-// workflow, the owner
-authz.sections.add({
-  name: 'automation',
-  title: workflowTitle,
-  parent: 'administration',
-});
-// scheduler, an extension
-authz.sections.add({
-  name: 'automation',
-  title: schedulerTitle,
-  parent: 'administration',
-  extend: true,
-});
-```
-
-An item names its subsection with `section` and its resource group with `group`; both are validated when the item is added. An item that names no subsection is listed under the "Other" subsection of its type's `defaultSection`, which `sections.other(parent)` creates on first use as `<parent>.other`. A type without `defaultSection` is never displayed. Resource types themselves are never displayed, and none of this affects a decision.
-
-## Business resources and data scopes
-
-`businessPlugin()` registers the `business` resource type with default section `business` and adds `authz.business`. A business action composes `database.collection` grants only; `page`, `settings` and every other type are rejected. Each grant action may name a data scope with `scopeKey`, and each data scope must be used by a grant on its collection.
+A grant action names a data scope with `scopeKey`. Every grant action naming the same scope must address the same one resource, and that resource is the scope's target; `dataScopeTarget(action, key)` returns it and throws when no grant action or more than one resource names the scope. The target's type must declare `recordAccess: true`. `define` checks this when the target type is already registered and throws otherwise; a type registered later is checked by `authz.composites.validate()`, which lists every unfit data scope, and on first use, when expanding the composite throws and the check denies with `AUTHORIZATION_HANDLER_FAILED`.
 
 Object form:
 
 ```ts
 import {
-  businessPlugin,
+  compositesPlugin,
   createAuthorization,
 } from '@nocobase/authorization/core';
 
 const authz = createAuthorization({
-  plugins: [permissionSetsPlugin({ store }), businessPlugin()],
+  plugins: [permissionSetsPlugin({ store }), compositesPlugin()],
 });
-authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-authz.business.define({
+authz.composites.define({
   name: 'sales.quotes',
   title: 'Quotes',
-  section: 'sales',
   actions: [
     {
       name: 'submit',
@@ -246,7 +194,6 @@ authz.business.define({
         {
           key: 'quotes',
           title: 'Quotes',
-          collection: 'quotes',
           options: ['recordsIOwn', 'allRecords'],
           defaultValue: 'recordsIOwn',
         },
@@ -268,33 +215,32 @@ authz.business.define({
 });
 ```
 
-Builder form, where a `BindableBusinessPermission` such as the application plugin's `defineDatabasePermission(...)` becomes a data scope when bound to a key:
+Builder form, where a `BindableCompositePermission` such as the application plugin's `defineDatabasePermission(...)` becomes a data scope when bound to a key:
 
 ```ts
-import { defineBusinessResource } from '@nocobase/authorization/core';
+import { defineComposite } from '@nocobase/authorization/core';
 
-export const quotes = defineBusinessResource('sales.quotes', (resource) =>
+export const quotes = defineComposite('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .section('sales')
     .action('submit', (action) =>
       action.title('Submit').grant('quotes', quoteData, { title: 'Quotes' }),
     ),
 );
-const reference = authz.business.define(quotes);
+const reference = authz.composites.define(quotes);
 ```
 
-A builder result keeps `.build()` and `.reference()`; `define` accepts either form and returns a `BusinessResourceReference`. The reference builds type-safe grants and rule targets:
+A builder result keeps `.build()` and `.reference()`; `define` accepts either form and returns a `CompositeReference`. The reference builds type-safe grants and rule targets:
 
 ```ts
 reference.grant('submit');
-// { resource: { type: 'business', id: 'sales.quotes' }, actions: [{ action: 'submit' }] }
+// { resource: { type: 'composite', id: 'sales.quotes' }, actions: [{ action: 'submit' }] }
 reference.grant({ submit: { quotes: 'allRecords' } });
-// actions: [{ action: 'submit', policy: { type: 'business', scopes: { quotes: 'allRecords' } } }]
+// actions: [{ action: 'submit', policy: { type: 'composite', scopes: { quotes: 'allRecords' } } }]
 reference.scope('submit', 'quotes'); // { action: 'submit', scopeKey: 'quotes' }
 ```
 
-A data scope value is a `RecordSelection` or, as shorthand, a record access key; `options` limits the keys a grant may choose. When a business grant resolves, each composed grant carries `origin: { resource, action, scopeKey?, selection?, constraints? }`, where `selection` is the grant's value or the scope's `defaultValue`, and `constraints` are the rules that apply to that business branch only. Authorizing a business action checks every composed collection once, with that action's grants only, and answers `BusinessConditions { type: 'business', checks, ...plugin contributions }`; a plugin contributes through `composeConditions(checks)`. A denied collection check makes the decision `conditional`, with a policy that reaches no records, rather than denying the whole feature.
+A data scope value is a `RecordSelection` or, as shorthand, a record access key; `options` limits the keys a grant may choose. When a composite grant resolves, each composed grant carries `origin: { resource, action, scopeKey?, selection?, constraints? }`, where `selection` is the grant's value or the scope's `defaultValue`, and `constraints` are the rules that apply to that composite branch only. Authorizing a composite action checks every composed target once, with that action's grants only, and answers `CompositeConditions { type: 'composite', checks, ...plugin contributions }`; a plugin contributes through `composeConditions(checks)`. A denied underlying check makes the decision `conditional`, with a policy that reaches no records, rather than denying the whole composite.
 
 ## Record access
 
@@ -346,11 +292,11 @@ await authz.restrictionRules.create(
 );
 ```
 
-The three rules share one shape. `DefaultAccessRule` is `{ key, resource, actions }`; `SharingRule` and `RestrictionRule` add `title?`, `subjects` and `reason?`. Each action is a `RuleAction { action, scopeKey?, selection }`. A rule on a business resource names the data scope in `scopeKey` and applies to that business branch only; a rule on a `database.collection` omits it and applies across every branch. Default access expands every identity's records; sharing expands the listed subjects' records and rejects `all`; restriction intersects the listed subjects' records and accepts every selection. No rule grants an action that no grant allows. An unrestricted identity skips every rule.
+The three rules share one shape. `DefaultAccessRule` is `{ key, resource, actions }`; `SharingRule` and `RestrictionRule` add `title?`, `subjects` and `reason?`. Each action is a `RuleAction { action, scopeKey?, selection }`. A rule on a composite names the data scope in `scopeKey` and applies to that composite branch only; a rule on the scope's target resource itself omits it and applies across every branch. Default access expands every identity's records; sharing expands the listed subjects' records and rejects `all`; restriction intersects the listed subjects' records and accepts every selection. No rule grants an action that no grant allows. An unrestricted identity skips every rule.
 
 ## Snapshot
 
-`snapshot().permissions` lists `(type, id, action)` exactly when `context.can({ resource: { type, id }, action })` is true. The candidates are the identity's grants after business expansion, deduplicated, with `id: '*'` kept as written; each candidate is decided the way `can()` decides it. As a result the snapshot leaves out:
+`snapshot().permissions` lists `(type, id, action)` exactly when `context.can({ resource: { type, id }, action })` is true. The candidates are the identity's grants after composite expansion, deduplicated, with `id: '*'` kept as written; each candidate is decided the way `can()` decides it. As a result the snapshot leaves out:
 
 - `database.collection` grants with record access, whose decision is `conditional`;
 - row-level visibility, which only the adapter's policy can answer;
@@ -366,113 +312,109 @@ The library defines no HTTP route. `authz.routes` only dispatches the routes plu
 
 ### Exports
 
-| Export                               | Kind     | Signature                                                                                                                                                                              | Purpose                                                                     |
-| ------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `createAuthorization`                | function | `createAuthorization({ connection?, plugins }): Authorization & AuthorizationPluginApis<plugins>`                                                                                      | Creates an instance and runs every plugin's `setup` in dependency order.    |
-| `Authorization`                      | class    | `sections`, `resourceGroups`, `resourceTypes`, `recordAccess`, `constraints`, `subjects`, `routes`; `use(m)`, `middleware()`, `for(identity)`, `onGrantsChanged(listener)`             | The instance; plugin APIs such as `permissionSets` are added to it.         |
-| `AuthorizationContext`               | type     | `{ identity, authorize(request), can(request), require(request), snapshot() }`                                                                                                         | Checks for one identity.                                                    |
-| `AuthorizationCheckRequest`          | type     | `{ resource: ResourceRef; action: string; params? }`                                                                                                                                   | A request made through a context, which supplies the identity.              |
-| `AuthorizationSnapshot`              | type     | `{ unrestricted: boolean; permissions: readonly AuthorizationPermission[] }`                                                                                                           | What the client may show.                                                   |
-| `AuthorizationPermission`            | type     | `{ resource: ResourceRef; actions: readonly string[] }`                                                                                                                                | One snapshot entry.                                                         |
-| `AuthorizationEnv`                   | type     | `{ Variables: { authz: AuthorizationContext } }`                                                                                                                                       | Hono environment of `middleware()`.                                         |
-| `CreateAuthorizationOptions`         | type     | `{ connection?: TConnection; plugins: TPlugins }`                                                                                                                                      | Options of `createAuthorization`.                                           |
-| `AuthorizationPlugin`                | type     | `AuthorizationPlugin<TApi, TConnection, TRequiredApi>`: `{ id, dependencies?, grants?, requiresGrants?, authorizationApi?, composeConditions?(checks), setup?(setup & TRequiredApi) }` | A plugin; `setup` also receives every installed plugin's API.               |
-| `AuthorizationPluginSetup`           | type     | `{ connection?, grants, sections, resourceGroups, resourceTypes, recordAccess, constraints, subjects, routes, use(m), middleware() }`                                                  | What `setup` receives.                                                      |
-| `AuthorizationPluginApi`             | type     | `AuthorizationPluginApi<TPlugin>`                                                                                                                                                      | The `authorizationApi` type of one plugin.                                  |
-| `AuthorizationPluginApis`            | type     | `AuthorizationPluginApis<TPlugins>`                                                                                                                                                    | The intersection of every plugin API.                                       |
-| `AuthorizationMiddleware`            | type     | `(request: AuthorizationMiddlewareRequest, next) => Promise<void>`                                                                                                                     | One identity step registered with `use`.                                    |
-| `AuthorizationMiddlewareRequest`     | type     | `{ http: Context; principal?: Principal; subjects: AuthorizationSubjectCollection }`                                                                                                   | What an identity step fills in.                                             |
-| `AuthorizationMiddlewareNext`        | type     | `() => Promise<void>`                                                                                                                                                                  | Continues to the next identity step.                                        |
-| `AuthorizationSubjectCollection`     | type     | `{ add(subject): void; values(): readonly AuthorizationSubject[] }`                                                                                                                    | Deduplicated subjects of one request.                                       |
-| `AuthorizationRouteRegistry`         | class    | `add(path, handler)`, `list()`, `handle(input): Promise<Response> \| undefined`                                                                                                        | Plugin HTTP handlers under one dispatcher.                                  |
-| `AuthorizationRouteHandler`          | type     | `(input: AuthorizationRouteRequest) => Promise<Response>`                                                                                                                              | A plugin HTTP handler.                                                      |
-| `AuthorizationRouteRequest`          | type     | `{ request: Request; path: string; authorization: AuthorizationContext }`                                                                                                              | What a route handler receives; `path` is relative to the mount.             |
-| `SectionRegistry`                    | class    | `add(definition: SectionDefinition)`, `has(name)`, `isSubsection(name)`, `get(name)`, `other(parent)`, `tree()`                                                                        | Sections and one level of subsections.                                      |
-| `Section`                            | type     | `{ name: string; title: AuthorizationTitle; order?: number; parent?: string }`                                                                                                         | A section, or a subsection when `parent` is set.                            |
-| `SectionDefinition`                  | type     | `Section & { extend?: boolean }`                                                                                                                                                       | What `sections.add` takes; `extend` joins a subsection another plugin owns. |
-| `SectionTreeNode`                    | type     | `Section & { order: number; subsections: readonly Section[] }`                                                                                                                         | A top-level section with its subsections.                                   |
-| `ResourceGroupRegistry`              | class    | `add(group)`, `has(name)`, `get(name)`, `list()`                                                                                                                                       | Add-only resource groups, nested to any depth.                              |
-| `ResourceGroup`                      | type     | `{ name: string; title: AuthorizationTitle; parent?: string; order?: number }`                                                                                                         | A right-side display heading.                                               |
-| `ResourceTypeRegistry`               | class    | `add(definition): RegisteredResourceType`, `has(type)`, `get(type)`, `list()`                                                                                                          | Every resource type; `get` throws for an unregistered type.                 |
-| `ResourceTypeDefinition`             | type     | `{ type, title, defaultSection?, actions?, items?, authorize?, authorizeUnrestricted? }`                                                                                               | What `resourceTypes.add` takes.                                             |
-| `ResourceTypeAction`                 | type     | `{ name, title?, authorize?, authorizeUnrestricted? }`                                                                                                                                 | A declared action, optionally with its own judgement.                       |
-| `RegisteredResourceType`             | type     | `{ type, title, defaultSection?, actions, items? }`                                                                                                                                    | A registered type.                                                          |
-| `ResourceItems`                      | class    | `add(definition)`, `has(id)`, `get(id)`, `list()`                                                                                                                                      | The items of one type.                                                      |
-| `ResourceItem`                       | type     | `{ id, title, description?, actions: readonly ResourceItemAction[], section?, group? }`                                                                                                | A registered item with resolved action titles and subsection.               |
-| `ResourceItemDefinition`             | type     | `{ id, title, description?, actions?: (string \| ResourceItemAction)[], section?, group? }`                                                                                            | What `items.add` takes.                                                     |
-| `ResourceItemAction`                 | type     | `{ name: string; title?: AuthorizationTitle }`                                                                                                                                         | One action of an item.                                                      |
-| `ResourceAuthorize`                  | type     | `(request: AuthorizationRequest<TParams>, context: AuthorizationRuntimeContext) => Promise<AuthorizationDecision>`                                                                     | A type's judgement.                                                         |
-| `ResourceAuthorizeUnrestricted`      | type     | `(request: AuthorizationRequest<TParams>) => Promise<AuthorizationDecision>`                                                                                                           | A type's decision for an unrestricted identity.                             |
-| `AuthorizationRuntimeContext`        | type     | `{ grants: AuthorizationGrantService; constraints: AccessConstraintService }`                                                                                                          | What a judgement reads, bound to the current context.                       |
-| `grantBacked`                        | function | `grantBacked(options?: GrantBackedOptions): ResourceAuthorize`                                                                                                                         | Permits when a policy-less grant matches; the default judgement.            |
-| `GrantBackedOptions`                 | type     | `{ also?(request, grants): Promise<boolean> }`                                                                                                                                         | A further check once a grant matches.                                       |
-| `businessPlugin`                     | function | `businessPlugin(): BusinessPlugin`                                                                                                                                                     | Registers the `business` type and `authz.business`.                         |
-| `BusinessPlugin`                     | type     | `AuthorizationPlugin<BusinessAuthorizationApi>`                                                                                                                                        | The plugin `businessPlugin` returns.                                        |
-| `BusinessAuthorizationApi`           | type     | `{ business: BusinessApi }`                                                                                                                                                            | What the plugin adds to the instance.                                       |
-| `BusinessApi`                        | type     | `define(objectOrBuilder): BusinessResourceReference`, `getAction(id, action)`, `list()`                                                                                                | The business resource registry.                                             |
-| `defineBusinessResource`             | function | `defineBusinessResource(name, configure): BusinessResourceBuilder`                                                                                                                     | Builds a business resource without registering it.                          |
-| `BusinessResourceBuilder`            | class    | `title(t)`, `section(name)`, `action(name, configure)`, `build()`, `reference()`                                                                                                       | Immutable business resource builder.                                        |
-| `BusinessActionBuilder`              | class    | `title(t)`, `grant(key, permission, { title? })`, `grant(contribution)`, `build()`                                                                                                     | Immutable business action builder.                                          |
-| `BusinessResourceReference`          | class    | `name`, `grant(...actions)`, `grant({ action: { scopeKey: value } })`, `scope(action, scopeKey)`                                                                                       | Type-safe grants and rule targets.                                          |
-| `BusinessResource`                   | type     | `{ name, title, section?, actions: readonly BusinessAction[] }`                                                                                                                        | A business resource definition.                                             |
-| `BusinessAction`                     | type     | `{ name, title, dataScopes?, grants: readonly BusinessGrant[] }`                                                                                                                       | One business action.                                                        |
-| `BusinessActionData`                 | type     | `{ title?, grants, dataScopes }`                                                                                                                                                       | What `BusinessActionBuilder.build` returns.                                 |
-| `BusinessGrant`                      | type     | `{ resource: ResourceRef; actions: readonly BusinessGrantAction[] }`                                                                                                                   | A composed collection grant.                                                |
-| `BusinessGrantAction`                | type     | `{ action, policy?, scopeKey? }`                                                                                                                                                       | One composed action and the data scope that selects its records.            |
-| `BusinessPolicy`                     | type     | `{ type: 'business'; scopes: Record<string, DataScopeValue> }`                                                                                                                         | The policy of a business grant.                                             |
-| `BusinessActions`                    | type     | `Record<string, Record<string, DataScopeValue>>`                                                                                                                                       | Data scope value types per action, as references carry them.                |
-| `BusinessActionAssignments`          | type     | `{ [action]?: Partial<scope values> }`                                                                                                                                                 | The object form of `reference.grant`.                                       |
-| `BusinessScopeTarget`                | type     | `{ action: N; scopeKey: K }`                                                                                                                                                           | What `reference.scope` returns.                                             |
-| `BusinessContribution`               | type     | `{ build(): BusinessContributionData; scopeSelections? }`                                                                                                                              | Anything a business action can be granted from.                             |
-| `BusinessContributionData`           | type     | `{ grants: readonly BusinessGrant[]; dataScopes? }`                                                                                                                                    | What a contribution builds.                                                 |
-| `BindableBusinessPermission`         | type     | `{ recordAccessSelection?; bind(key, { title? }): BusinessContribution }`                                                                                                              | A permission that becomes a data scope when bound to a key.                 |
-| `BusinessCheck`                      | type     | `{ resource: ResourceRef; action: string; decision: AuthorizationDecision }`                                                                                                           | One underlying check of a business action.                                  |
-| `BusinessConditions`                 | type     | `{ type: 'business'; checks: readonly BusinessCheck[] }` plus plugin fields                                                                                                            | Conditions of a business decision.                                          |
-| `DataScope`                          | type     | `{ key, title, collection, options?, defaultValue? }`                                                                                                                                  | A named slot a grant or rule fills with records.                            |
-| `DataScopeValue`                     | type     | `RecordSelection \| string`                                                                                                                                                            | A selection, or a record access key as shorthand.                           |
-| `RecordSelection`                    | type     | `{ type: 'all' } \| { type: 'records'; ids } \| { type: 'recordAccess'; key; params? }`                                                                                                | Which records an action reaches.                                            |
-| `RecordSelectionHelpers`             | type     | `{ all(), records(ids), recordAccess(key, params?) }`                                                                                                                                  | The type of `selection`.                                                    |
-| `selection`                          | const    | `selection.all()`, `selection.records(ids)`, `selection.recordAccess(key, params?)`                                                                                                    | Builds record selections.                                                   |
-| `parseRecordSelection`               | function | `parseRecordSelection(value: unknown): RecordSelection`                                                                                                                                | Validates an untrusted selection, throwing `TypeError`.                     |
-| `RecordAccessRegistry`               | class    | `define(objectOrBuilder): RecordAccessReference`, `get(key)`, `list()`, `listFor(collection)`, `resolve(key, context)`                                                                 | Registered record access.                                                   |
-| `defineRecordAccess`                 | function | `defineRecordAccess(key, configure): RecordAccessBuilder`                                                                                                                              | Builds record access without registering it.                                |
-| `RecordAccessBuilder`                | class    | `title(t)`, `description(t)`, `collections(...names)`, `params<P>(schema?)`, `resolver(fn)`, `build()`, `reference()`                                                                  | Immutable record access builder.                                            |
-| `RecordAccessDefinition`             | type     | `{ key, title?, description?, collections, paramsSchema?, resolve(context) }`                                                                                                          | A record access definition.                                                 |
-| `RecordAccessReference`              | type     | `{ key: K; collections: readonly string[] }`                                                                                                                                           | The serializable half of a definition.                                      |
-| `RecordAccessContext`                | type     | `{ principal, collection, action, params }`                                                                                                                                            | What a resolver receives.                                                   |
-| `AccessConstraintRegistry`           | class    | `add(resolver)`, `resolve(input)`, `list()`, `for(identity)`                                                                                                                           | Rule resolvers; `for` caches answers for one identity.                      |
-| `AccessConstraintResolver`           | type     | `{ id; for?(identity); resolve(input) }`                                                                                                                                               | One source of constraints, such as a rule plugin.                           |
-| `AccessConstraintService`            | type     | `{ resolve(input): Promise<readonly AccessConstraint[]> }`                                                                                                                             | Constraint lookup a judgement reads.                                        |
-| `AccessConstraint`                   | type     | `{ source: AuthorizationGrantSource; effect: 'expand' \| 'restrict'; selection: RecordSelection }`                                                                                     | One rule contribution.                                                      |
-| `ResolveAccessConstraintsInput`      | type     | `{ scopeKey?, principal, subjects?, resource, action }`                                                                                                                                | What constraints are resolved for.                                          |
-| `RuleAction`                         | type     | `{ action: string; scopeKey?: string; selection: RecordSelection }`                                                                                                                    | One action of any rule.                                                     |
-| `AuthorizationGrantService`          | type     | `{ resolve(input); resolveAll(input); for?(identity); unrestricted?(identity); onChange?(listener) }`                                                                                  | The Grant Provider contract.                                                |
-| `AuthorizationGrant`                 | type     | `{ source, resource, action, policy?, origin? }`                                                                                                                                       | One resolved grant.                                                         |
-| `AuthorizationGrantOrigin`           | type     | `{ resource, action, scopeKey?, selection?, constraints? }`                                                                                                                            | The business action a composed grant came from.                             |
-| `AuthorizationGrantSource`           | type     | `{ plugin: string; id: string; title? }`                                                                                                                                               | Where a grant or constraint came from.                                      |
-| `AuthorizationGrantsChangedListener` | type     | `(subject: AuthorizationSubject) => void \| Promise<void>`                                                                                                                             | Listener of `onGrantsChanged`.                                              |
-| `AuthorizationPolicy`                | type     | `{ type: string; [key: string]: unknown }`                                                                                                                                             | A grant policy, interpreted by its resource type.                           |
-| `PermissionGrant`                    | type     | `{ resource: ResourceRef; actions: readonly PermissionGrantAction[] }`                                                                                                                 | A grant as a Permission Set or builder writes it.                           |
-| `PermissionGrantAction`              | type     | `{ action: string; policy?: AuthorizationPolicy }`                                                                                                                                     | One action of a written grant.                                              |
-| `ResolveAuthorizationGrantsInput`    | type     | `{ principal, subjects?, resource, action }`                                                                                                                                           | Input of `resolve`.                                                         |
-| `ResolveAllAuthorizationGrantsInput` | type     | `{ principal, subjects? }`                                                                                                                                                             | Input of `resolveAll`.                                                      |
-| `AuthorizationSubjectRegistry`       | class    | `add(type, definition): () => void`, `get(type)`, `list()`, `resolveFor(principal)`, `filterActive(subjects, transaction?)`                                                            | Subject types the application declares.                                     |
-| `AuthorizationSubjectType`           | type     | `{ resolveFor?(principal); filterActive(ids, transaction?) }` plus extensions                                                                                                          | One subject type.                                                           |
-| `AuthorizationSubjectTypeExtensions` | type     | `interface AuthorizationSubjectTypeExtensions {}`                                                                                                                                      | Augment to add host metadata to subject types.                              |
-| `AuthorizationTitle`                 | type     | `string \| { key: string; ns: string }`                                                                                                                                                | A display title; `ns` is required.                                          |
-| `parseAuthorizationTitle`            | function | `parseAuthorizationTitle(value: unknown): AuthorizationTitle \| undefined`                                                                                                             | Validates an untrusted title.                                               |
-| `encodeAuthorizationTitle`           | function | `encodeAuthorizationTitle(title?): string \| null`                                                                                                                                     | Serializes a title for storage.                                             |
-| `decodeAuthorizationTitle`           | function | `decodeAuthorizationTitle(value: unknown): AuthorizationTitle \| undefined`                                                                                                            | Reads a stored title.                                                       |
-| `AuthorizationDeniedError`           | class    | `new AuthorizationDeniedError(decision)`; `decision`                                                                                                                                   | Thrown by `require`.                                                        |
-| `AuthorizationDecision`              | type     | `{ effect: AuthorizationEffect; conditions?; reasons: readonly AuthorizationReason[] }`                                                                                                | A decision.                                                                 |
-| `AuthorizationEffect`                | type     | `'permit' \| 'conditional' \| 'deny'`                                                                                                                                                  | A decision's effect.                                                        |
-| `AuthorizationConditions`            | type     | `{ type: string; [key: string]: unknown }`                                                                                                                                             | What a conditional decision holds.                                          |
-| `AuthorizationReason`                | type     | `{ code, message, plugin?, details? }`                                                                                                                                                 | Why a decision came out as it did.                                          |
-| `AuthorizationRequest`               | type     | `{ principal, subjects?, resource, action, params? }`                                                                                                                                  | A request with its identity.                                                |
-| `AuthorizationIdentity`              | type     | `{ principal: Principal; subjects?: readonly AuthorizationSubject[] }`                                                                                                                 | Who is asking.                                                              |
-| `AuthorizationSubject`               | type     | `{ type: string; id: string }`                                                                                                                                                         | A principal or a membership.                                                |
-| `Principal`                          | type     | `{ type: string; id: string; attributes? }`                                                                                                                                            | The authenticated actor.                                                    |
-| `ResourceRef`                        | type     | `{ type: string; id: string }`                                                                                                                                                         | The target of a check or grant.                                             |
+| Export                               | Kind     | Signature                                                                                                                                                                              | Purpose                                                                                                         |
+| ------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `createAuthorization`                | function | `createAuthorization({ connection?, plugins }): Authorization & AuthorizationPluginApis<plugins>`                                                                                      | Creates an instance and runs every plugin's `setup` in dependency order.                                        |
+| `Authorization`                      | class    | `resourceTypes`, `recordAccess`, `constraints`, `subjects`, `routes`; `use(m)`, `middleware()`, `for(identity)`, `onGrantsChanged(listener)`                                           | The instance; plugin APIs such as `permissionSets` are added to it.                                             |
+| `AuthorizationContext`               | type     | `{ identity, authorize(request), can(request), require(request), snapshot() }`                                                                                                         | Checks for one identity.                                                                                        |
+| `AuthorizationCheckRequest`          | type     | `{ resource: ResourceRef; action: string; params? }`                                                                                                                                   | A request made through a context, which supplies the identity.                                                  |
+| `AuthorizationSnapshot`              | type     | `{ unrestricted: boolean; permissions: readonly AuthorizationPermission[] }`                                                                                                           | What the client may show.                                                                                       |
+| `AuthorizationPermission`            | type     | `{ resource: ResourceRef; actions: readonly string[] }`                                                                                                                                | One snapshot entry.                                                                                             |
+| `AuthorizationEnv`                   | type     | `{ Variables: { authz: AuthorizationContext } }`                                                                                                                                       | Hono environment of `middleware()`.                                                                             |
+| `CreateAuthorizationOptions`         | type     | `{ connection?: TConnection; plugins: TPlugins }`                                                                                                                                      | Options of `createAuthorization`.                                                                               |
+| `AuthorizationPlugin`                | type     | `AuthorizationPlugin<TApi, TConnection, TRequiredApi>`: `{ id, dependencies?, grants?, requiresGrants?, authorizationApi?, composeConditions?(checks), setup?(setup & TRequiredApi) }` | A plugin; `setup` also receives every installed plugin's API.                                                   |
+| `AuthorizationPluginSetup`           | type     | `{ connection?, grants, resourceTypes, recordAccess, constraints, subjects, routes, use(m), middleware() }` plus every installed plugin's API                                          | What `setup` receives.                                                                                          |
+| `AuthorizationPluginApi`             | type     | `AuthorizationPluginApi<TPlugin>`                                                                                                                                                      | The `authorizationApi` type of one plugin.                                                                      |
+| `AuthorizationPluginApis`            | type     | `AuthorizationPluginApis<TPlugins>`                                                                                                                                                    | The intersection of every plugin API.                                                                           |
+| `AuthorizationMiddleware`            | type     | `(request: AuthorizationMiddlewareRequest, next) => Promise<void>`                                                                                                                     | One identity step registered with `use`.                                                                        |
+| `AuthorizationMiddlewareRequest`     | type     | `{ http: Context; principal?: Principal; subjects: AuthorizationSubjectCollection }`                                                                                                   | What an identity step fills in.                                                                                 |
+| `AuthorizationMiddlewareNext`        | type     | `() => Promise<void>`                                                                                                                                                                  | Continues to the next identity step.                                                                            |
+| `AuthorizationSubjectCollection`     | type     | `{ add(subject): void; values(): readonly AuthorizationSubject[] }`                                                                                                                    | Deduplicated subjects of one request.                                                                           |
+| `AuthorizationRouteRegistry`         | class    | `add(path, handler)`, `list()`, `handle(input): Promise<Response> \| undefined`                                                                                                        | Plugin HTTP handlers under one dispatcher.                                                                      |
+| `AuthorizationRouteHandler`          | type     | `(input: AuthorizationRouteRequest) => Promise<Response>`                                                                                                                              | A plugin HTTP handler.                                                                                          |
+| `AuthorizationRouteRequest`          | type     | `{ request: Request; path: string; authorization: AuthorizationContext }`                                                                                                              | What a route handler receives; `path` is relative to the mount.                                                 |
+| `ResourceTypeRegistry`               | class    | `add(definition): RegisteredResourceType`, `has(type)`, `get(type)`, `list()`                                                                                                          | Every resource type; `get` throws for an unregistered type.                                                     |
+| `ResourceTypeDefinition`             | type     | `{ type, title, actions?, recordAccess?, items?, authorize?, authorizeUnrestricted? }`                                                                                                 | What `resourceTypes.add` takes.                                                                                 |
+| `ResourceTypeAction`                 | type     | `{ name, title?, authorize?, authorizeUnrestricted? }`                                                                                                                                 | A declared action, optionally with its own judgement.                                                           |
+| `RegisteredResourceType`             | type     | `{ type, title, actions, recordAccess: boolean, items? }`                                                                                                                              | A registered type.                                                                                              |
+| `ResourceItems`                      | class    | `add(definition)`, `has(id)`, `get(id)`, `list()`                                                                                                                                      | The items of one type.                                                                                          |
+| `ResourceItem`                       | type     | `{ id, title, description?, actions: readonly ResourceItemAction[] }`                                                                                                                  | A registered item with resolved action titles.                                                                  |
+| `ResourceItemDefinition`             | type     | `{ id, title, description?, actions?: (string \| ResourceItemAction)[] }`                                                                                                              | What `items.add` takes.                                                                                         |
+| `ResourceItemAction`                 | type     | `{ name: string; title?: AuthorizationTitle }`                                                                                                                                         | One action of an item.                                                                                          |
+| `ResourceAuthorize`                  | type     | `(request: AuthorizationRequest<TParams>, context: AuthorizationRuntimeContext) => Promise<AuthorizationDecision>`                                                                     | A type's judgement.                                                                                             |
+| `ResourceAuthorizeUnrestricted`      | type     | `(request: AuthorizationRequest<TParams>) => Promise<AuthorizationDecision>`                                                                                                           | A type's decision for an unrestricted identity.                                                                 |
+| `AuthorizationRuntimeContext`        | type     | `{ grants: AuthorizationGrantService; constraints: AccessConstraintService }`                                                                                                          | What a judgement reads, bound to the current context.                                                           |
+| `grantBacked`                        | function | `grantBacked(options?: GrantBackedOptions): ResourceAuthorize`                                                                                                                         | Permits when a policy-less grant matches; the default judgement.                                                |
+| `GrantBackedOptions`                 | type     | `{ also?(request, grants): Promise<boolean> }`                                                                                                                                         | A further check once a grant matches.                                                                           |
+| `COMPOSITE_RESOURCE_TYPE`            | constant | `'composite'`                                                                                                                                                                          | The stored type of every composite.                                                                             |
+| `compositesPlugin`                   | function | `compositesPlugin(): CompositePlugin`                                                                                                                                                  | Registers the `composite` type and `authz.composites`.                                                          |
+| `CompositePlugin`                    | type     | `AuthorizationPlugin<CompositeAuthorizationApi>`                                                                                                                                       | The plugin `compositesPlugin` returns.                                                                          |
+| `CompositeAuthorizationApi`          | type     | `{ composites: CompositeApi }`                                                                                                                                                         | What the plugin adds to the instance.                                                                           |
+| `CompositeApi`                       | type     | `define(objectOrBuilder): CompositeReference`, `getAction(id, action)`, `list()`, `validate(): readonly string[]`                                                                      | The composite registry; `validate` lists data scopes whose target type is unregistered or lacks `recordAccess`. |
+| `defineComposite`                    | function | `defineComposite(name, configure): CompositeBuilder`                                                                                                                                   | Builds a composite without registering it.                                                                      |
+| `CompositeBuilder`                   | class    | `title(t)`, `action(name, configure)`, `build()`, `reference()`                                                                                                                        | Immutable composite builder.                                                                                    |
+| `CompositeActionBuilder`             | class    | `title(t)`, `grant(key, permission, { title? })`, `grant(contribution)`, `build()`                                                                                                     | Immutable composite action builder.                                                                             |
+| `CompositeReference`                 | class    | `name`, `grant(...actions)`, `grant({ action: { scopeKey: value } })`, `scope(action, scopeKey)`                                                                                       | Type-safe grants and rule targets.                                                                              |
+| `Composite`                          | type     | `{ name, title, actions: readonly CompositeAction[] }`                                                                                                                                 | A composite definition.                                                                                         |
+| `CompositeAction`                    | type     | `{ name, title, dataScopes?, grants: readonly CompositeGrant[] }`                                                                                                                      | One composite action.                                                                                           |
+| `CompositeActionData`                | type     | `{ title?, grants, dataScopes }`                                                                                                                                                       | What `CompositeActionBuilder.build` returns.                                                                    |
+| `CompositeGrant`                     | type     | `{ resource: ResourceRef; actions: readonly CompositeGrantAction[] }`                                                                                                                  | A composed grant.                                                                                               |
+| `CompositeGrantAction`               | type     | `{ action, policy?, scopeKey? }`                                                                                                                                                       | One composed action and the data scope that selects its records.                                                |
+| `CompositePolicy`                    | type     | `{ type: 'composite'; scopes: Record<string, DataScopeValue> }`                                                                                                                        | The policy of a composite grant.                                                                                |
+| `CompositeActions`                   | type     | `Record<string, Record<string, DataScopeValue>>`                                                                                                                                       | Data scope value types per action, as references carry them.                                                    |
+| `CompositeActionAssignments`         | type     | `{ [action]?: Partial<scope values> }`                                                                                                                                                 | The object form of `reference.grant`.                                                                           |
+| `CompositeScopeTarget`               | type     | `{ action: N; scopeKey: K }`                                                                                                                                                           | What `reference.scope` returns.                                                                                 |
+| `CompositeContribution`              | type     | `{ build(): CompositeContributionData; scopeSelections? }`                                                                                                                             | Anything a composite action can be granted from.                                                                |
+| `CompositeContributionData`          | type     | `{ grants: readonly CompositeGrant[]; dataScopes? }`                                                                                                                                   | What a contribution builds.                                                                                     |
+| `BindableCompositePermission`        | type     | `{ recordAccessSelection?; bind(key, { title? }): CompositeContribution }`                                                                                                             | A permission that becomes a data scope when bound to a key.                                                     |
+| `CompositeCheck`                     | type     | `{ resource: ResourceRef; action: string; decision: AuthorizationDecision }`                                                                                                           | One underlying check of a composite action.                                                                     |
+| `CompositeConditions`                | type     | `{ type: 'composite'; checks: readonly CompositeCheck[] }` plus plugin fields                                                                                                          | Conditions of a composite decision.                                                                             |
+| `DataScope`                          | type     | `{ key, title, options?, defaultValue? }`                                                                                                                                              | A named slot a grant or rule fills with records.                                                                |
+| `dataScopeTarget`                    | function | `dataScopeTarget(action, key): ResourceRef`                                                                                                                                            | The one resource the grant actions naming the scope address; throws when there is none or more than one.        |
+| `DataScopeValue`                     | type     | `RecordSelection \| string`                                                                                                                                                            | A selection, or a record access key as shorthand.                                                               |
+| `RecordSelection`                    | type     | `{ type: 'all' } \| { type: 'records'; ids } \| { type: 'recordAccess'; key; params? }`                                                                                                | Which records an action reaches.                                                                                |
+| `RecordSelectionHelpers`             | type     | `{ all(), records(ids), recordAccess(key, params?) }`                                                                                                                                  | The type of `selection`.                                                                                        |
+| `selection`                          | const    | `selection.all()`, `selection.records(ids)`, `selection.recordAccess(key, params?)`                                                                                                    | Builds record selections.                                                                                       |
+| `parseRecordSelection`               | function | `parseRecordSelection(value: unknown): RecordSelection`                                                                                                                                | Validates an untrusted selection, throwing `TypeError`.                                                         |
+| `RecordAccessRegistry`               | class    | `define(objectOrBuilder): RecordAccessReference`, `get(key)`, `list()`, `listFor(collection)`, `resolve(key, context)`                                                                 | Registered record access.                                                                                       |
+| `defineRecordAccess`                 | function | `defineRecordAccess(key, configure): RecordAccessBuilder`                                                                                                                              | Builds record access without registering it.                                                                    |
+| `RecordAccessBuilder`                | class    | `title(t)`, `description(t)`, `collections(...names)`, `params<P>(schema?)`, `resolver(fn)`, `build()`, `reference()`                                                                  | Immutable record access builder.                                                                                |
+| `RecordAccessDefinition`             | type     | `{ key, title?, description?, collections, paramsSchema?, resolve(context) }`                                                                                                          | A record access definition.                                                                                     |
+| `RecordAccessReference`              | type     | `{ key: K; collections: readonly string[] }`                                                                                                                                           | The serializable half of a definition.                                                                          |
+| `RecordAccessContext`                | type     | `{ principal, collection, action, params }`                                                                                                                                            | What a resolver receives.                                                                                       |
+| `AccessConstraintRegistry`           | class    | `add(resolver)`, `resolve(input)`, `list()`, `for(identity)`                                                                                                                           | Rule resolvers; `for` caches answers for one identity.                                                          |
+| `AccessConstraintResolver`           | type     | `{ id; for?(identity); resolve(input) }`                                                                                                                                               | One source of constraints, such as a rule plugin.                                                               |
+| `AccessConstraintService`            | type     | `{ resolve(input): Promise<readonly AccessConstraint[]> }`                                                                                                                             | Constraint lookup a judgement reads.                                                                            |
+| `AccessConstraint`                   | type     | `{ source: AuthorizationGrantSource; effect: 'expand' \| 'restrict'; selection: RecordSelection }`                                                                                     | One rule contribution.                                                                                          |
+| `ResolveAccessConstraintsInput`      | type     | `{ scopeKey?, principal, subjects?, resource, action }`                                                                                                                                | What constraints are resolved for.                                                                              |
+| `RuleAction`                         | type     | `{ action: string; scopeKey?: string; selection: RecordSelection }`                                                                                                                    | One action of any rule.                                                                                         |
+| `AuthorizationGrantService`          | type     | `{ resolve(input); resolveAll(input); for?(identity); unrestricted?(identity); onChange?(listener) }`                                                                                  | The Grant Provider contract.                                                                                    |
+| `AuthorizationGrant`                 | type     | `{ source, resource, action, policy?, origin? }`                                                                                                                                       | One resolved grant.                                                                                             |
+| `AuthorizationGrantOrigin`           | type     | `{ resource, action, scopeKey?, selection?, constraints? }`                                                                                                                            | The composite action a composed grant came from.                                                                |
+| `AuthorizationGrantSource`           | type     | `{ plugin: string; id: string; title? }`                                                                                                                                               | Where a grant or constraint came from.                                                                          |
+| `AuthorizationGrantsChangedListener` | type     | `(subject: AuthorizationSubject) => void \| Promise<void>`                                                                                                                             | Listener of `onGrantsChanged`.                                                                                  |
+| `AuthorizationPolicy`                | type     | `{ type: string; [key: string]: unknown }`                                                                                                                                             | A grant policy, interpreted by its resource type.                                                               |
+| `PermissionGrant`                    | type     | `{ resource: ResourceRef; actions: readonly PermissionGrantAction[] }`                                                                                                                 | A grant as a Permission Set or builder writes it.                                                               |
+| `PermissionGrantAction`              | type     | `{ action: string; policy?: AuthorizationPolicy }`                                                                                                                                     | One action of a written grant.                                                                                  |
+| `ResolveAuthorizationGrantsInput`    | type     | `{ principal, subjects?, resource, action }`                                                                                                                                           | Input of `resolve`.                                                                                             |
+| `ResolveAllAuthorizationGrantsInput` | type     | `{ principal, subjects? }`                                                                                                                                                             | Input of `resolveAll`.                                                                                          |
+| `AuthorizationSubjectRegistry`       | class    | `add(type, definition): () => void`, `get(type)`, `list()`, `resolveFor(principal)`, `filterActive(subjects, transaction?)`                                                            | Subject types the application declares.                                                                         |
+| `AuthorizationSubjectType`           | type     | `{ resolveFor?(principal); filterActive(ids, transaction?) }` plus extensions                                                                                                          | One subject type.                                                                                               |
+| `AuthorizationSubjectTypeExtensions` | type     | `interface AuthorizationSubjectTypeExtensions {}`                                                                                                                                      | Augment to add host metadata to subject types.                                                                  |
+| `AuthorizationTitle`                 | type     | `string \| { key: string; ns: string }`                                                                                                                                                | A display title; `ns` is required.                                                                              |
+| `parseAuthorizationTitle`            | function | `parseAuthorizationTitle(value: unknown): AuthorizationTitle \| undefined`                                                                                                             | Validates an untrusted title.                                                                                   |
+| `encodeAuthorizationTitle`           | function | `encodeAuthorizationTitle(title?): string \| null`                                                                                                                                     | Serializes a title for storage.                                                                                 |
+| `decodeAuthorizationTitle`           | function | `decodeAuthorizationTitle(value: unknown): AuthorizationTitle \| undefined`                                                                                                            | Reads a stored title.                                                                                           |
+| `AuthorizationDeniedError`           | class    | `new AuthorizationDeniedError(decision)`; `decision`                                                                                                                                   | Thrown by `require`.                                                                                            |
+| `AuthorizationDecision`              | type     | `{ effect: AuthorizationEffect; conditions?; reasons: readonly AuthorizationReason[] }`                                                                                                | A decision.                                                                                                     |
+| `AuthorizationEffect`                | type     | `'permit' \| 'conditional' \| 'deny'`                                                                                                                                                  | A decision's effect.                                                                                            |
+| `AuthorizationConditions`            | type     | `{ type: string; [key: string]: unknown }`                                                                                                                                             | What a conditional decision holds.                                                                              |
+| `AuthorizationReason`                | type     | `{ code, message, plugin?, details? }`                                                                                                                                                 | Why a decision came out as it did.                                                                              |
+| `AuthorizationRequest`               | type     | `{ principal, subjects?, resource, action, params? }`                                                                                                                                  | A request with its identity.                                                                                    |
+| `AuthorizationIdentity`              | type     | `{ principal: Principal; subjects?: readonly AuthorizationSubject[] }`                                                                                                                 | Who is asking.                                                                                                  |
+| `AuthorizationSubject`               | type     | `{ type: string; id: string }`                                                                                                                                                         | A principal or a membership.                                                                                    |
+| `Principal`                          | type     | `{ type: string; id: string; attributes? }`                                                                                                                                            | The authenticated actor.                                                                                        |
+| `ResourceRef`                        | type     | `{ type: string; id: string }`                                                                                                                                                         | The target of a check or grant.                                                                                 |
 
 ## `@nocobase/authorization/permission-sets`
 
@@ -575,7 +517,7 @@ await authz.permissionSets.notifyAssignmentsChanged(subject);
 | `DefaultAccessApi`              | type     | `create(rule)`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()`, `withTransaction(t)` | `authz.defaultAccess`; writes validate the rule first. |
 | `DefaultAccessStore`            | type     | `create`, `update`, `delete`, `get`, `list`, `withTransaction`                                 | The persistence contract.                              |
 | `DefaultAccessRule`             | type     | `{ key: string; resource: ResourceRef; actions: readonly RuleAction[] }`                       | A default-access rule.                                 |
-| `defineDefaultAccessRule`       | function | `defineDefaultAccessRule(key, reference): DefaultAccessRuleBuilder`                            | Builds a rule on a business resource.                  |
+| `defineDefaultAccessRule`       | function | `defineDefaultAccessRule(key, reference): DefaultAccessRuleBuilder`                            | Builds a rule on a composite.                          |
 | `DefaultAccessRuleBuilder`      | class    | `scope(action, scopeKey, selection)`, `build()`                                                | Immutable rule builder; validates the data scope.      |
 | `DefaultAccessConflictError`    | class    | `new DefaultAccessConflictError(resource, existing)`; `existing`                               | A second rule on a resource that already has one.      |
 
@@ -594,7 +536,7 @@ await authz.permissionSets.notifyAssignmentsChanged(subject);
 | `SharingRulesApi`              | type     | `create(rule)`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()`, `withTransaction(t)`       | `authz.sharingRules`; writes validate the rule first. |
 | `SharingRuleStore`             | type     | `create`, `update`, `delete`, `get`, `list`, `withTransaction`                                       | The persistence contract.                             |
 | `SharingRule`                  | type     | `DefaultAccessRule & { title?; subjects: readonly AuthorizationSubject[]; reason? }`                 | A sharing rule.                                       |
-| `defineSharingRule`            | function | `defineSharingRule(key, reference): SharingRuleBuilder`                                              | Builds a rule on a business resource.                 |
+| `defineSharingRule`            | function | `defineSharingRule(key, reference): SharingRuleBuilder`                                              | Builds a rule on a composite.                         |
 | `SharingRuleBuilder`           | class    | `scope(action, scopeKey, selection)`, `title(t)`, `subjects(...subjects)`, `reason(text)`, `build()` | Immutable rule builder; rejects `all`.                |
 
 ## `@nocobase/authorization/restriction-rules`
@@ -612,7 +554,7 @@ await authz.permissionSets.notifyAssignmentsChanged(subject);
 | `RestrictionRulesApi`              | type     | `create(rule)`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()`, `withTransaction(t)`       | `authz.restrictionRules`; writes validate the rule first. |
 | `RestrictionRuleStore`             | type     | `create`, `update`, `delete`, `get`, `list`, `withTransaction`                                       | The persistence contract.                                 |
 | `RestrictionRule`                  | type     | `DefaultAccessRule & { title?; subjects: readonly AuthorizationSubject[]; reason? }`                 | A restriction rule.                                       |
-| `defineRestrictionRule`            | function | `defineRestrictionRule(key, reference): RestrictionRuleBuilder`                                      | Builds a rule on a business resource.                     |
+| `defineRestrictionRule`            | function | `defineRestrictionRule(key, reference): RestrictionRuleBuilder`                                      | Builds a rule on a composite.                             |
 | `RestrictionRuleBuilder`           | class    | `scope(action, scopeKey, selection)`, `title(t)`, `subjects(...subjects)`, `reason(text)`, `build()` | Immutable rule builder.                                   |
 
 ## `@nocobase/authorization`

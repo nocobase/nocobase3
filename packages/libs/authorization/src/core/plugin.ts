@@ -1,13 +1,12 @@
 import type { MiddlewareHandler } from 'hono';
 import type { AuthorizationEnv } from './authorization.js';
-import type { BusinessCheck, BusinessConditions } from './business.js';
+import type { CompositeCheck, CompositeConditions } from './composite.js';
 import type { AccessConstraintRegistry } from './constraints.js';
 import type { AuthorizationGrantService } from './grants.js';
 import type { AuthorizationMiddleware } from './middleware.js';
 import type { RecordAccessRegistry } from './record-access.js';
 import type { ResourceTypeRegistry } from './resource-types.js';
 import type { AuthorizationRouteRegistry } from './routes.js';
-import type { ResourceGroupRegistry, SectionRegistry } from './sections.js';
 import type { AuthorizationSubjectRegistry } from './subjects.js';
 
 export interface AuthorizationPluginSetup<TConnection = unknown> {
@@ -15,8 +14,6 @@ export interface AuthorizationPluginSetup<TConnection = unknown> {
   readonly connection?: TConnection;
   /** The Grant Provider; reading it without one installed throws. */
   readonly grants: AuthorizationGrantService;
-  readonly sections: SectionRegistry;
-  readonly resourceGroups: ResourceGroupRegistry;
   readonly resourceTypes: ResourceTypeRegistry;
   readonly recordAccess: RecordAccessRegistry;
   readonly constraints: AccessConstraintRegistry;
@@ -39,10 +36,10 @@ export interface AuthorizationPlugin<
   requiresGrants?: boolean;
   /** Members added to the created Authorization instance. */
   authorizationApi?: TAuthorizationApi;
-  /** Turns the resolved checks of a business action into plugin conditions. */
+  /** Turns the resolved checks of a composite action into plugin conditions. */
   composeConditions?(
-    checks: readonly BusinessCheck[],
-  ): Partial<Omit<BusinessConditions, 'type' | 'checks'>>;
+    checks: readonly CompositeCheck[],
+  ): Partial<Omit<CompositeConditions, 'type' | 'checks'>>;
   /**
    * Receives the registries plus every installed plugin's API; `TRequiredApi`
    * types the APIs this plugin needs, whose plugins it lists in `dependencies`.

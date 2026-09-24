@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
-  businessPlugin,
+  compositesPlugin,
   createAuthorization,
-  defineBusinessResource,
+  defineComposite,
   grantBacked,
   ResourceItems,
   type AuthorizationGrant,
   type AuthorizationPlugin,
-  type BusinessContribution,
+  type CompositeContribution,
   type PermissionGrant,
 } from '../src/core/index.js';
 import { permissionSetsPlugin } from '../src/plugins/permission-sets/index.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
-const quotesScope: BusinessContribution<{ quotes: string }> = {
+const quotesScope: CompositeContribution<{ quotes: string }> = {
   build: () => ({
-    dataScopes: [{ key: 'quotes', title: 'Quotes', collection: 'quotes' }],
+    dataScopes: [{ key: 'quotes', title: 'Quotes' }],
     grants: [
       {
         resource: { type: 'database.collection', id: 'quotes' },
@@ -26,10 +26,9 @@ const quotesScope: BusinessContribution<{ quotes: string }> = {
     ],
   }),
 };
-const quotes = defineBusinessResource('sales.quotes', (resource) =>
+const quotes = defineComposite('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .section('sales')
     .action('submit', (action) => action.grant(quotesScope)),
 );
 
@@ -48,6 +47,7 @@ const database: AuthorizationPlugin = {
       items: collections,
       title: 'Collections',
       actions: ['read', 'update'],
+      recordAccess: true,
       async authorize(request, context) {
         const grants = await context.grants.resolve(request);
         if (!grants.length) return { effect: 'deny', reasons: [] };
@@ -85,7 +85,7 @@ function setup(grants: readonly PermissionGrant[], unrestricted = false) {
     }),
   });
   const authz = createAuthorization({
-    plugins: [permissionSets, businessPlugin(), database],
+    plugins: [permissionSets, compositesPlugin(), database],
   });
   if (unrestricted)
     authz.permissionSets.protect({
@@ -93,8 +93,7 @@ function setup(grants: readonly PermissionGrant[], unrestricted = false) {
       keys: ['sales'],
       unrestricted: true,
     });
-  authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-  authz.business.define(quotes);
+  authz.composites.define(quotes);
   return authz;
 }
 
@@ -122,11 +121,11 @@ const grants: readonly PermissionGrant[] = [
 ];
 
 describe('the snapshot', () => {
-  it('lists a scoped business grant', async () => {
+  it('lists a scoped composite grant', async () => {
     const snapshot = await setup(grants).for(alice).snapshot();
     expect(snapshot.unrestricted).toBe(false);
     expect(snapshot.permissions).toContainEqual({
-      resource: { type: 'business', id: 'sales.quotes' },
+      resource: { type: 'composite', id: 'sales.quotes' },
       actions: ['submit'],
     });
   });
@@ -135,7 +134,7 @@ describe('the snapshot', () => {
     const snapshot = await setup(grants).for(alice).snapshot();
     expect(snapshot.permissions).toEqual([
       {
-        resource: { type: 'business', id: 'sales.quotes' },
+        resource: { type: 'composite', id: 'sales.quotes' },
         actions: ['submit'],
       },
       {

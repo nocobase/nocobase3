@@ -7,7 +7,7 @@ import type {
   PermissionGrantAction,
 } from './grants.js';
 import type { AuthorizationPlugin } from './plugin.js';
-import { ResourceItems } from './resource-types.js';
+import { ResourceItems, type ResourceTypeRegistry } from './resource-types.js';
 import { parseRecordSelection, type RecordSelection } from './selection.js';
 import type { AuthorizationTitle } from './titles.js';
 import type {
@@ -16,15 +16,17 @@ import type {
   ResourceRef,
 } from './types.js';
 
-/** The stored resource type of every business resource. */
-export const BUSINESS_RESOURCE_TYPE = 'business';
-const COLLECTION_TYPE = 'database.collection';
+/** The stored resource type of every composite. */
+export const COMPOSITE_RESOURCE_TYPE = 'composite';
 
-/** A named slot on a business action that a grant or rule fills with records. */
+/**
+ * A named slot on a composite action that a grant or rule fills with records.
+ * Its target is the one resource the grant actions naming it address; see
+ * `dataScopeTarget`.
+ */
 export interface DataScope {
   readonly key: string;
   readonly title: AuthorizationTitle;
-  readonly collection: string;
   /** Record access keys a grant may choose from. Absent means any. */
   readonly options?: readonly string[];
   /** The record access key used when a grant chooses nothing. */
@@ -37,108 +39,109 @@ export interface DataScope {
  */
 export type DataScopeValue = RecordSelection | string;
 
-export interface BusinessGrantAction extends PermissionGrantAction {
+export interface CompositeGrantAction extends PermissionGrantAction {
   /** The data scope this action's records are chosen by. */
   scopeKey?: string;
 }
 
-export interface BusinessGrant {
+export interface CompositeGrant {
   resource: ResourceRef;
-  actions: readonly BusinessGrantAction[];
+  actions: readonly CompositeGrantAction[];
 }
 
-export interface BusinessAction {
+export interface CompositeAction {
   name: string;
   title: AuthorizationTitle;
   dataScopes?: readonly DataScope[];
-  grants: readonly BusinessGrant[];
+  grants: readonly CompositeGrant[];
 }
 
-/** A user-facing feature composed from collection grants. */
-export interface BusinessResource {
+/**
+ * A resource whose actions expand into a set of underlying grants, each
+ * optionally bound to a named data scope.
+ */
+export interface Composite {
   name: string;
   title: AuthorizationTitle;
-  /** The subsection it is listed under; omitted, it lands in the business section's "Other". */
-  section?: string;
-  actions: readonly BusinessAction[];
+  actions: readonly CompositeAction[];
 }
 
-/** The policy of a business grant: one value per data scope it sets. */
-export interface BusinessPolicy extends AuthorizationPolicy {
-  type: 'business';
+/** The policy of a composite grant: one value per data scope it sets. */
+export interface CompositePolicy extends AuthorizationPolicy {
+  type: 'composite';
   scopes: Readonly<Record<string, DataScopeValue>>;
 }
 
-/** One underlying check of a business action, made with that action's grants. */
-export interface BusinessCheck {
+/** One underlying check of a composite action, made with that action's grants. */
+export interface CompositeCheck {
   resource: ResourceRef;
   action: string;
   decision: AuthorizationDecision;
 }
 
 /** Plugins extend this through `composeConditions`. */
-export interface BusinessConditions extends AuthorizationConditions {
-  type: 'business';
-  checks: readonly BusinessCheck[];
+export interface CompositeConditions extends AuthorizationConditions {
+  type: 'composite';
+  checks: readonly CompositeCheck[];
 }
 
-export interface BusinessContributionData {
-  grants: readonly BusinessGrant[];
+export interface CompositeContributionData {
+  grants: readonly CompositeGrant[];
   dataScopes?: readonly DataScope[];
 }
 
-/** What a business action is built from; `S` carries data scope value types. */
-export interface BusinessContribution<
+/** What a composite action is built from; `S` carries data scope value types. */
+export interface CompositeContribution<
   S extends Record<string, DataScopeValue> = Record<never, never>,
 > {
-  build(): BusinessContributionData;
+  build(): CompositeContributionData;
   /** Type-only: the values each data scope of this contribution accepts. */
   readonly scopeSelections?: S;
 }
 
 /** A plugin-owned permission that becomes a data scope once bound to a key. */
-export interface BindableBusinessPermission {
+export interface BindableCompositePermission {
   /** Type-only: the values the bound data scope accepts. */
   readonly recordAccessSelection?: DataScopeValue;
   bind<K extends string>(
     key: K,
     metadata?: { title?: AuthorizationTitle },
-  ): BusinessContribution<Record<K, DataScopeValue>>;
+  ): CompositeContribution<Record<K, DataScopeValue>>;
 }
 
-type ContributionScopes<C extends BusinessContribution> =
+type ContributionScopes<C extends CompositeContribution> =
   'scopeSelections' extends keyof C
     ? NonNullable<C['scopeSelections']>
     : Record<never, never>;
 
-export interface BusinessActionData {
+export interface CompositeActionData {
   title?: AuthorizationTitle;
-  grants: readonly BusinessGrant[];
+  grants: readonly CompositeGrant[];
   dataScopes: readonly DataScope[];
 }
 
-export class BusinessActionBuilder<
+export class CompositeActionBuilder<
   S extends Record<string, DataScopeValue> = Record<never, never>,
-> implements BusinessContribution<S> {
+> implements CompositeContribution<S> {
   declare readonly scopeSelections?: S;
-  private readonly data: BusinessActionData;
+  private readonly data: CompositeActionData;
 
-  constructor(data: BusinessActionData = { grants: [], dataScopes: [] }) {
+  constructor(data: CompositeActionData = { grants: [], dataScopes: [] }) {
     this.data = structuredClone(data);
   }
 
-  title(title: AuthorizationTitle): BusinessActionBuilder<S> {
-    return new BusinessActionBuilder({ ...this.data, title });
+  title(title: AuthorizationTitle): CompositeActionBuilder<S> {
+    return new CompositeActionBuilder({ ...this.data, title });
   }
 
-  grant<C extends BusinessContribution>(
+  grant<C extends CompositeContribution>(
     contribution: C,
-  ): BusinessActionBuilder<S & ContributionScopes<C>>;
-  grant<const K extends string, P extends BindableBusinessPermission>(
+  ): CompositeActionBuilder<S & ContributionScopes<C>>;
+  grant<const K extends string, P extends BindableCompositePermission>(
     key: K extends keyof S ? never : K,
     permission: P,
     metadata?: { title?: AuthorizationTitle },
-  ): BusinessActionBuilder<
+  ): CompositeActionBuilder<
     S &
       Record<
         K,
@@ -148,10 +151,10 @@ export class BusinessActionBuilder<
       >
   >;
   grant(
-    valueOrKey: BusinessContribution | string,
-    permission?: BindableBusinessPermission,
+    valueOrKey: CompositeContribution | string,
+    permission?: BindableCompositePermission,
     metadata?: { title?: AuthorizationTitle },
-  ): BusinessActionBuilder<S> {
+  ): CompositeActionBuilder<S> {
     const contribution =
       typeof valueOrKey === 'string'
         ? permission?.bind(valueOrKey, metadata)
@@ -164,39 +167,39 @@ export class BusinessActionBuilder<
         throw new TypeError(`Duplicate data scope: ${scope.key}`);
       dataScopes.push(scope);
     }
-    return new BusinessActionBuilder({
+    return new CompositeActionBuilder({
       ...this.data,
       grants: [...this.data.grants, ...built.grants],
       dataScopes,
     });
   }
 
-  build(): BusinessActionData {
+  build(): CompositeActionData {
     return structuredClone(this.data);
   }
 }
 
 /** Data scope values per action, as the reference types them. */
-export type BusinessActions = Record<string, Record<string, DataScopeValue>>;
+export type CompositeActions = Record<string, Record<string, DataScopeValue>>;
 
 type ScopeAssignments<S> = keyof S extends never
   ? Record<string, never>
   : Partial<S>;
 
-export type BusinessActionAssignments<A extends BusinessActions> = {
+export type CompositeActionAssignments<A extends CompositeActions> = {
   [K in keyof A]?: ScopeAssignments<A[K]>;
 };
 
-export interface BusinessScopeTarget<N extends string, K extends string> {
+export interface CompositeScopeTarget<N extends string, K extends string> {
   action: N;
   scopeKey: K;
 }
 
-/** Type-safe grants and rule targets for one business resource. */
-export class BusinessResourceReference<A extends BusinessActions> {
-  private readonly definition: BusinessResource;
+/** Type-safe grants and rule targets for one composite. */
+export class CompositeReference<A extends CompositeActions> {
+  private readonly definition: Composite;
 
-  constructor(definition: BusinessResource) {
+  constructor(definition: Composite) {
     this.definition = structuredClone(definition);
   }
 
@@ -207,13 +210,13 @@ export class BusinessResourceReference<A extends BusinessActions> {
   scope<N extends keyof A & string, K extends keyof A[N] & string>(
     action: N,
     key: K,
-  ): BusinessScopeTarget<N, K> {
+  ): CompositeScopeTarget<N, K> {
     if (
       !this.definition.actions
         .find((entry) => entry.name === action)
         ?.dataScopes?.some((scope) => scope.key === key)
     )
-      throw new TypeError(`Unknown business data scope: ${action}.${key}`);
+      throw new TypeError(`Unknown composite data scope: ${action}.${key}`);
     return { action, scopeKey: key };
   }
 
@@ -221,8 +224,8 @@ export class BusinessResourceReference<A extends BusinessActions> {
     action: keyof A & string,
     ...actions: (keyof A & string)[]
   ): PermissionGrant;
-  grant(actions: BusinessActionAssignments<A>): PermissionGrant;
-  grant(...input: (string | BusinessActionAssignments<A>)[]): PermissionGrant {
+  grant(actions: CompositeActionAssignments<A>): PermissionGrant;
+  grant(...input: (string | CompositeActionAssignments<A>)[]): PermissionGrant {
     const first = input[0];
     const entries: [string, Readonly<Record<string, DataScopeValue>>][] =
       typeof first === 'object'
@@ -231,100 +234,94 @@ export class BusinessResourceReference<A extends BusinessActions> {
             (scopes ?? {}) as Readonly<Record<string, DataScopeValue>>,
           ])
         : (input as string[]).map((action) => [action, {}]);
-    return businessGrant(this.definition, entries);
+    return compositeGrant(this.definition, entries);
   }
 }
 
-function businessGrant(
-  definition: BusinessResource,
+function compositeGrant(
+  definition: Composite,
   entries: readonly [string, Readonly<Record<string, DataScopeValue>>][],
 ): PermissionGrant {
   const actions = entries.map(([name, scopes]): PermissionGrantAction => {
     const action = definition.actions.find((entry) => entry.name === name);
     if (!action)
       throw new TypeError(
-        `Unknown business action: ${definition.name}.${name}`,
+        `Unknown composite action: ${definition.name}.${name}`,
       );
     for (const [key, value] of Object.entries(scopes))
       validateScopeValue(action, key, value);
     return Object.keys(scopes).length
       ? {
           action: name,
-          policy: { type: 'business', scopes: structuredClone(scopes) },
+          policy: { type: 'composite', scopes: structuredClone(scopes) },
         }
       : { action: name };
   });
   return {
-    resource: { type: BUSINESS_RESOURCE_TYPE, id: definition.name },
+    resource: { type: COMPOSITE_RESOURCE_TYPE, id: definition.name },
     actions,
   };
 }
 
-export class BusinessResourceBuilder<
-  A extends BusinessActions = Record<never, never>,
+export class CompositeBuilder<
+  A extends CompositeActions = Record<never, never>,
 > {
-  private readonly definition: BusinessResource;
+  private readonly definition: Composite;
 
-  constructor(definition: BusinessResource) {
+  constructor(definition: Composite) {
     this.definition = structuredClone(definition);
   }
 
-  title(title: AuthorizationTitle): BusinessResourceBuilder<A> {
-    return new BusinessResourceBuilder({ ...this.definition, title });
+  title(title: AuthorizationTitle): CompositeBuilder<A> {
+    return new CompositeBuilder({ ...this.definition, title });
   }
 
-  section(section: string): BusinessResourceBuilder<A> {
-    return new BusinessResourceBuilder({ ...this.definition, section });
-  }
-
-  action<const N extends string, C extends BusinessContribution>(
+  action<const N extends string, C extends CompositeContribution>(
     name: N extends keyof A ? never : N,
-    configure: (action: BusinessActionBuilder) => C,
-  ): BusinessResourceBuilder<A & Record<N, ContributionScopes<C>>> {
+    configure: (action: CompositeActionBuilder) => C,
+  ): CompositeBuilder<A & Record<N, ContributionScopes<C>>> {
     if (!name || this.definition.actions.some((action) => action.name === name))
-      throw new TypeError(`Duplicate or empty business action: ${name}`);
-    const built = configure(new BusinessActionBuilder()).build();
+      throw new TypeError(`Duplicate or empty composite action: ${name}`);
+    const built = configure(new CompositeActionBuilder()).build();
     const title =
       'title' in built && built.title !== undefined
         ? (built.title as AuthorizationTitle)
         : name;
-    const action: BusinessAction = {
+    const action: CompositeAction = {
       name,
       title,
       grants: built.grants,
       ...(built.dataScopes?.length ? { dataScopes: built.dataScopes } : {}),
     };
-    return new BusinessResourceBuilder({
+    return new CompositeBuilder({
       ...this.definition,
       actions: [...this.definition.actions, action],
     });
   }
 
-  build(): BusinessResource {
-    return validateBusinessResource(structuredClone(this.definition));
+  build(): Composite {
+    return validateComposite(structuredClone(this.definition));
   }
 
-  reference(): BusinessResourceReference<A> {
-    return new BusinessResourceReference(this.build());
+  reference(): CompositeReference<A> {
+    return new CompositeReference(this.build());
   }
 }
 
-/** Builds a business resource; `authz.business.define` registers it. */
-export function defineBusinessResource<A extends BusinessActions>(
+/** Builds a composite; `authz.composites.define` registers it. */
+export function defineComposite<A extends CompositeActions>(
   name: string,
-  configure: (resource: BusinessResourceBuilder) => BusinessResourceBuilder<A>,
-): BusinessResourceBuilder<A> {
-  if (!name) throw new TypeError('A business resource needs a name');
+  configure: (resource: CompositeBuilder) => CompositeBuilder<A>,
+): CompositeBuilder<A> {
+  if (!name) throw new TypeError('A composite needs a name');
   const result = configure(
-    new BusinessResourceBuilder({ name, title: name, actions: [] }),
+    new CompositeBuilder({ name, title: name, actions: [] }),
   );
-  return new BusinessResourceBuilder<A>(result.build());
+  return new CompositeBuilder<A>(result.build());
 }
 
-function validateBusinessResource(
-  definition: BusinessResource,
-): BusinessResource {
-  if (!definition.name) throw new TypeError('A business resource needs a name');
+function validateComposite(definition: Composite): Composite {
+  if (!definition.name) throw new TypeError('A composite needs a name');
   const names = definition.actions.map((action) => action.name);
   if (
     !names.length ||
@@ -332,28 +329,27 @@ function validateBusinessResource(
     new Set(names).size !== names.length
   )
     throw new TypeError(
-      `Business resource ${definition.name} needs unique, nonempty actions`,
+      `Composite resource ${definition.name} needs unique, nonempty actions`,
     );
-  for (const action of definition.actions) validateBusinessAction(action);
+  for (const action of definition.actions) validateCompositeAction(action);
   return definition;
 }
 
-function validateBusinessAction(action: BusinessAction): void {
+function validateCompositeAction(action: CompositeAction): void {
   if (!action.grants.length)
-    throw new TypeError(`Business action ${action.name} grants nothing`);
+    throw new TypeError(`Composite action ${action.name} grants nothing`);
   for (const grant of action.grants)
-    if (grant.resource.type !== COLLECTION_TYPE)
+    if (grant.resource.type === COMPOSITE_RESOURCE_TYPE)
       throw new TypeError(
-        `Business action ${action.name} may only compose ${COLLECTION_TYPE} grants, not ${grant.resource.type}`,
+        `Composite action ${action.name} cannot compose another composite: ${grant.resource.id}`,
       );
   const scopes = action.dataScopes ?? [];
   const keys = scopes.map((scope) => scope.key);
   if (keys.some((key) => !key) || new Set(keys).size !== keys.length)
-    throw new TypeError(`Business action ${action.name} repeats a data scope`);
+    throw new TypeError(`Composite action ${action.name} repeats a data scope`);
   for (const scope of scopes) {
     const options = scope.options;
     if (
-      !scope.collection ||
       (options !== undefined &&
         (!options.length || new Set(options).size !== options.length)) ||
       (scope.defaultValue !== undefined &&
@@ -361,26 +357,45 @@ function validateBusinessAction(action: BusinessAction): void {
         !options.includes(scope.defaultValue))
     )
       throw new TypeError(`Invalid data scope: ${action.name}.${scope.key}`);
-    if (
-      !action.grants.some(
-        (grant) =>
-          grant.resource.id === scope.collection &&
-          grant.actions.some((entry) => entry.scopeKey === scope.key),
-      )
-    )
-      throw new TypeError(
-        `Data scope ${action.name}.${scope.key} is not used by a grant on ${scope.collection}`,
-      );
+    dataScopeTarget(action, scope.key);
   }
   for (const grant of action.grants)
-    for (const entry of grant.actions) {
-      if (entry.scopeKey === undefined) continue;
-      const scope = scopes.find((item) => item.key === entry.scopeKey);
-      if (!scope || scope.collection !== grant.resource.id)
+    for (const entry of grant.actions)
+      if (
+        entry.scopeKey !== undefined &&
+        !scopes.some((item) => item.key === entry.scopeKey)
+      )
         throw new TypeError(
-          `Grant on ${grant.resource.id} names an unknown data scope: ${entry.scopeKey}`,
+          `Grant on ${grant.resource.type}:${grant.resource.id} names an unknown data scope: ${entry.scopeKey}`,
         );
-    }
+}
+
+/**
+ * The one resource a data scope of `action` selects records of: every grant
+ * action naming the scope must address it. Throws when none does or when
+ * they address different resources.
+ */
+export function dataScopeTarget(
+  action: Pick<CompositeAction, 'name' | 'grants'>,
+  key: string,
+): ResourceRef {
+  let target: ResourceRef | undefined;
+  for (const grant of action.grants) {
+    if (!grant.actions.some((entry) => entry.scopeKey === key)) continue;
+    if (
+      target &&
+      (target.type !== grant.resource.type || target.id !== grant.resource.id)
+    )
+      throw new TypeError(
+        `Data scope ${action.name}.${key} targets more than one resource: ${target.type}:${target.id} and ${grant.resource.type}:${grant.resource.id}`,
+      );
+    target = { type: grant.resource.type, id: grant.resource.id };
+  }
+  if (!target)
+    throw new TypeError(
+      `Data scope ${action.name}.${key} is not used by a grant`,
+    );
+  return target;
 }
 
 function normalizeScopeValue(value: DataScopeValue): RecordSelection {
@@ -390,7 +405,7 @@ function normalizeScopeValue(value: DataScopeValue): RecordSelection {
 }
 
 function validateScopeValue(
-  action: BusinessAction,
+  action: CompositeAction,
   key: string,
   value: unknown,
 ): RecordSelection | undefined {
@@ -411,55 +426,103 @@ function validateScopeValue(
   return selection;
 }
 
-export interface BusinessApi {
-  /** Registers a definition object or a `defineBusinessResource` result. */
-  define<A extends BusinessActions = BusinessActions>(
-    definition: BusinessResource | BusinessResourceBuilder<A>,
-  ): BusinessResourceReference<A>;
-  getAction(id: string, action: string): BusinessAction | undefined;
-  list(): readonly BusinessResource[];
+export interface CompositeApi {
+  /** Registers a definition object or a `defineComposite` result. */
+  define<A extends CompositeActions = CompositeActions>(
+    definition: Composite | CompositeBuilder<A>,
+  ): CompositeReference<A>;
+  getAction(id: string, action: string): CompositeAction | undefined;
+  list(): readonly Composite[];
+  /**
+   * The data scopes whose target type is unregistered or lacks
+   * `recordAccess`, one message each. `define` rejects these when the type is
+   * already registered; a type registered later is checked here and on first
+   * use.
+   */
+  validate(): readonly string[];
 }
 
-export class BusinessResourceRegistry implements BusinessApi {
-  private readonly definitions = new Map<string, BusinessResource>();
-  private host?: { items: ResourceItems };
+export class CompositeRegistry implements CompositeApi {
+  private readonly definitions = new Map<string, Composite>();
+  /** Composites whose data scope targets have passed the `recordAccess` check. */
+  private readonly verified = new Set<string>();
+  private host?: { items: ResourceItems; resourceTypes: ResourceTypeRegistry };
 
-  attach(items: ResourceItems): void {
-    this.host = { items };
+  attach(items: ResourceItems, resourceTypes: ResourceTypeRegistry): void {
+    this.host = { items, resourceTypes };
   }
 
-  define<A extends BusinessActions = BusinessActions>(
-    definition: BusinessResource | BusinessResourceBuilder<A>,
-  ): BusinessResourceReference<A> {
+  define<A extends CompositeActions = CompositeActions>(
+    definition: Composite | CompositeBuilder<A>,
+  ): CompositeReference<A> {
     if (!this.host)
       throw new Error(
-        'The business plugin is not installed in an Authorization',
+        'The composites plugin is not installed in an Authorization',
       );
-    const resource = validateBusinessResource(
-      definition instanceof BusinessResourceBuilder
+    const resource = validateComposite(
+      definition instanceof CompositeBuilder
         ? definition.build()
         : structuredClone(definition),
     );
     if (this.definitions.has(resource.name))
-      throw new Error(`Business resource already defined: ${resource.name}`);
+      throw new Error(`Composite already defined: ${resource.name}`);
+    const problems = this.scopeProblems(resource, false);
+    if (problems.length) throw new TypeError(problems[0]);
     this.host.items.add({
       id: resource.name,
       title: resource.title,
-      ...(resource.section === undefined ? {} : { section: resource.section }),
       actions: resource.actions.map(({ name, title }) => ({ name, title })),
     });
     this.definitions.set(resource.name, resource);
-    return new BusinessResourceReference<A>(resource);
+    return new CompositeReference<A>(resource);
   }
 
-  getAction(id: string, action: string): BusinessAction | undefined {
+  validate(): readonly string[] {
+    return [...this.definitions.values()].flatMap((resource) =>
+      this.scopeProblems(resource, true),
+    );
+  }
+
+  /**
+   * Data scopes whose target type lacks `recordAccess`; with `strict`, also
+   * those whose type is not registered yet.
+   */
+  private scopeProblems(resource: Composite, strict: boolean): string[] {
+    const types = this.host?.resourceTypes;
+    if (!types) return [];
+    return resource.actions.flatMap((action) =>
+      (action.dataScopes ?? []).flatMap((scope) => {
+        const target = dataScopeTarget(action, scope.key);
+        const label = `Data scope ${resource.name}.${action.name}.${scope.key}`;
+        if (!types.has(target.type))
+          return strict
+            ? [`${label} targets unregistered resource type ${target.type}`]
+            : [];
+        return types.get(target.type).recordAccess
+          ? []
+          : [
+              `${label} targets resource type ${target.type}, which does not declare recordAccess`,
+            ];
+      }),
+    );
+  }
+
+  /** Throws on first use when a data scope's target type is still unfit. */
+  private verify(resource: Composite): void {
+    if (this.verified.has(resource.name)) return;
+    const problems = this.scopeProblems(resource, true);
+    if (problems.length) throw new TypeError(problems[0]);
+    this.verified.add(resource.name);
+  }
+
+  getAction(id: string, action: string): CompositeAction | undefined {
     const found = this.definitions
       .get(id)
       ?.actions.find((entry) => entry.name === action);
     return found && structuredClone(found);
   }
 
-  list(): readonly BusinessResource[] {
+  list(): readonly Composite[] {
     return structuredClone([...this.definitions.values()]);
   }
 
@@ -467,17 +530,19 @@ export class BusinessResourceRegistry implements BusinessApi {
     return this.definitions.size;
   }
 
-  /** A business grant followed by the collection grants it composes. */
+  /** A composite grant followed by the grants it composes. */
   expand(grant: AuthorizationGrant): readonly AuthorizationGrant[] {
-    if (grant.resource.type !== BUSINESS_RESOURCE_TYPE) return [grant];
-    const action = this.definitions
-      .get(grant.resource.id)
-      ?.actions.find((entry) => entry.name === grant.action);
-    if (!action)
+    if (grant.resource.type !== COMPOSITE_RESOURCE_TYPE) return [grant];
+    const resource = this.definitions.get(grant.resource.id);
+    const action = resource?.actions.find(
+      (entry) => entry.name === grant.action,
+    );
+    if (!resource || !action)
       throw new TypeError(
-        `Unknown business action: ${grant.resource.id}.${grant.action}`,
+        `Unknown composite action: ${grant.resource.id}.${grant.action}`,
       );
-    const scopes = businessScopes(grant.policy);
+    this.verify(resource);
+    const scopes = compositeScopes(grant.policy);
     const selections = new Map<string, RecordSelection | undefined>();
     for (const [key, value] of Object.entries(scopes))
       selections.set(key, validateScopeValue(action, key, value));
@@ -512,27 +577,27 @@ export class BusinessResourceRegistry implements BusinessApi {
   }
 }
 
-function businessScopes(
+function compositeScopes(
   policy: AuthorizationPolicy | undefined,
 ): Readonly<Record<string, unknown>> {
   if (policy === undefined) return {};
   const scopes: unknown = policy.scopes;
   if (
-    policy.type !== 'business' ||
+    policy.type !== COMPOSITE_RESOURCE_TYPE ||
     typeof scopes !== 'object' ||
     scopes === null ||
     Array.isArray(scopes)
   )
-    throw new TypeError('Invalid business grant policy');
+    throw new TypeError('Invalid composite grant policy');
   return scopes as Readonly<Record<string, unknown>>;
 }
 
-const registries = new WeakMap<AuthorizationPlugin, BusinessResourceRegistry>();
+const registries = new WeakMap<AuthorizationPlugin, CompositeRegistry>();
 
-/** Package-internal: finds the installed business registry. */
-export function businessRegistryOf(
+/** Package-internal: finds the installed composite registry. */
+export function compositeRegistryOf(
   plugins: readonly AuthorizationPlugin[],
-): BusinessResourceRegistry | undefined {
+): CompositeRegistry | undefined {
   for (const plugin of plugins) {
     const registry = registries.get(plugin);
     if (registry) return registry;
@@ -540,25 +605,27 @@ export function businessRegistryOf(
   return undefined;
 }
 
-export interface BusinessAuthorizationApi {
-  business: BusinessApi;
+export interface CompositeAuthorizationApi {
+  composites: CompositeApi;
 }
 
-export type BusinessPlugin = AuthorizationPlugin<BusinessAuthorizationApi>;
+export type CompositePlugin = AuthorizationPlugin<CompositeAuthorizationApi>;
 
-/** Registers the `business` resource type and `authz.business`. */
-export function businessPlugin(): BusinessPlugin {
-  const registry = new BusinessResourceRegistry();
-  const plugin: BusinessPlugin = {
-    id: 'business',
-    authorizationApi: { business: registry },
+/** Registers the `composite` resource type and `authz.composites`. */
+export function compositesPlugin(): CompositePlugin {
+  const registry = new CompositeRegistry();
+  const plugin: CompositePlugin = {
+    id: 'composites',
+    authorizationApi: { composites: registry },
     setup(authz): void {
       const items = new ResourceItems();
       authz.resourceTypes.add({
-        type: BUSINESS_RESOURCE_TYPE,
+        type: COMPOSITE_RESOURCE_TYPE,
         items,
-        title: { key: 'resourceTypes.business', ns: '@nocobase/authorization' },
-        defaultSection: 'business',
+        title: {
+          key: 'resourceTypes.composite',
+          ns: '@nocobase/authorization',
+        },
         async authorize(request, context) {
           const grants = await context.grants.resolve({
             principal: request.principal,
@@ -574,7 +641,7 @@ export function businessPlugin(): BusinessPlugin {
                 reasons: grants.map((grant) => ({
                   code: 'GRANT_MATCHED',
                   message: `${grant.source.plugin}:${grant.source.id} allows ${request.resource.id}.${request.action}`,
-                  plugin: 'business',
+                  plugin: 'composites',
                   details: { source: grant.source, policy: grant.policy },
                 })),
               }
@@ -584,23 +651,23 @@ export function businessPlugin(): BusinessPlugin {
                   {
                     code: 'NO_MATCHING_GRANT',
                     message: `No grant allows ${request.resource.id}.${request.action}`,
-                    plugin: 'business',
+                    plugin: 'composites',
                   },
                 ],
               };
         },
       });
-      registry.attach(items);
+      registry.attach(items, authz.resourceTypes);
     },
   };
   registries.set(plugin, registry);
   return plugin;
 }
 
-/** Wraps a Grant Provider so business grants resolve with what they compose. */
+/** Wraps a Grant Provider so composite grants resolve with what they compose. */
 export function composedGrants(
   provider: AuthorizationGrantService,
-  registry: BusinessResourceRegistry | undefined,
+  registry: CompositeRegistry | undefined,
   constraints: AccessConstraintService,
 ): AuthorizationGrantService {
   if (!registry) return provider;
@@ -627,16 +694,16 @@ export function composedGrants(
       expand(await provider.resolveAll(input), input),
     resolve: async (input) => {
       const direct = await provider.resolve(input);
-      if (input.resource.type === BUSINESS_RESOURCE_TYPE) {
+      if (input.resource.type === COMPOSITE_RESOURCE_TYPE) {
         // Checking the feature alone still validates its stored policies.
         direct.forEach((grant) => registry.expand(grant));
         return direct;
       }
       if (!registry.size) return direct;
-      const business = (await provider.resolveAll(input)).filter(
-        (grant) => grant.resource.type === BUSINESS_RESOURCE_TYPE,
+      const composites = (await provider.resolveAll(input)).filter(
+        (grant) => grant.resource.type === COMPOSITE_RESOURCE_TYPE,
       );
-      const composed = (await expand(business, input)).filter(
+      const composed = (await expand(composites, input)).filter(
         (grant) =>
           grant.resource.type === input.resource.type &&
           (grant.resource.id === '*' ||

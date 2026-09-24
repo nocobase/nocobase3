@@ -32,15 +32,15 @@ export interface PermissionGrantAction {
   policy?: AuthorizationPolicy;
 }
 
-/** The business action a composed grant was expanded from. */
+/** The composite action a composed grant was expanded from. */
 export interface AuthorizationGrantOrigin {
   resource: ResourceRef;
   action: string;
-  /** The data scope of the business action this grant fills. */
+  /** The data scope of the composite action this grant fills. */
   scopeKey?: string;
-  /** What the business grant selected for that data scope. */
+  /** What the composite grant selected for that data scope. */
   selection?: RecordSelection;
-  /** Rule constraints that apply to this business branch only. */
+  /** Rule constraints that apply to this composite branch only. */
   constraints?: readonly AccessConstraint[];
 }
 
