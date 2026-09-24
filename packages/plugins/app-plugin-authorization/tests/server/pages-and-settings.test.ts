@@ -3,9 +3,10 @@ import {
   createAuthorization,
   permissionSetsPlugin,
 } from '@nocobase/authorization';
-import { pagesPlugin } from '../server/pages-authorization.js';
-import { uiPlugin } from '../server/ui.js';
-import { MockPermissionSetStore } from './mock-permission-set-store.js';
+import { pagesPlugin } from '../../server/pages-authorization.js';
+import { settingsPlugin } from '../../server/settings.js';
+import { uiPlugin } from '../../server/ui.js';
+import { MockPermissionSetStore } from '../helpers/mock-permission-set-store.js';
 
 function setup() {
   const store = new MockPermissionSetStore({
@@ -42,8 +43,8 @@ function setup() {
   return authorization.for({ principal: { type: 'user', id: 'alice' } });
 }
 
-describe('Pages', () => {
-  it('is a record type: any page id, only the access action', async () => {
+describe('pages and settings', () => {
+  it('is a record type: any page id, only the access action, listed in the snapshot exactly as can() permits', async () => {
     const authz = setup();
 
     await expect(
@@ -64,10 +65,7 @@ describe('Pages', () => {
       effect: 'deny',
       reasons: [{ code: 'RESOURCE_ACTION_NOT_SUPPORTED' }],
     });
-  });
-
-  it('lists exactly the pages can() permits in the snapshot', async () => {
-    await expect(setup().snapshot()).resolves.toEqual({
+    await expect(authz.snapshot()).resolves.toEqual({
       unrestricted: false,
       permissions: [
         { resource: { type: 'page', id: 'home' }, actions: ['access'] },
@@ -76,10 +74,29 @@ describe('Pages', () => {
     });
   });
 
-  it('builds access grants', () => {
+  it('builds page access and settings grants', () => {
     expect(pagesPlugin().authorizationApi?.pages.grant('orders')).toEqual({
       resource: { type: 'page', id: 'orders' },
       actions: [{ action: 'access' }],
     });
+    const settings = settingsPlugin();
+    createAuthorization({ plugins: [settings] });
+    settings.authorizationApi!.settings.add({
+      id: 'workflow',
+      title: 'Workflow',
+      actions: [{ name: 'manage' }],
+    });
+    expect(
+      settings.authorizationApi!.settings.grant('workflow', ['manage']),
+    ).toEqual({
+      resource: { type: 'settings', id: 'workflow' },
+      actions: [{ action: 'manage' }],
+    });
+    expect(() =>
+      settings.authorizationApi!.settings.grant('workflow', ['delete']),
+    ).toThrow('has no action delete');
+    expect(() =>
+      settings.authorizationApi!.settings.grant('missing', ['manage']),
+    ).toThrow('Unknown settings item');
   });
 });

@@ -1,11 +1,11 @@
-import { selectOption } from './select-option.js';
+import { selectOption } from './helpers/select-option.js';
 // @vitest-environment jsdom
 import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import type { FilterNode } from '@nocobase/db';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import { FilterEditor } from '../client/components/filter-editor.js';

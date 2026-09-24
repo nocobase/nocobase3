@@ -1,4 +1,4 @@
-import { createAuthorization } from '../../../plugins/app-plugin-authorization/tests/authorization-fixture.js';
+import { createAuthorization } from '../../../plugins/app-plugin-authorization/tests/helpers/authorization-fixture.js';
 import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

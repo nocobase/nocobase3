@@ -3,14 +3,14 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
 import EditPage from '../client/pages/permission-set-edit-page.js';
-import { translate } from './locale-harness.js';
+import { translate } from './helpers/locale-harness.js';
 
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),

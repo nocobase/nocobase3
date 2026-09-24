@@ -4,13 +4,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
-import { pageSubsection, withSubsections } from './workspace-options.js';
+import {
+  pageSubsection,
+  withSubsections,
+} from './helpers/workspace-options.js';
 const options: AuthorizationOptions = {
   sections: withSubsections({
     pages: [

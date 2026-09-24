@@ -5,7 +5,7 @@ import { expect, it, vi } from 'vitest';
 import { ScopedOperation } from '../client/pages/permission-sets/scoped-operation.js';
 import type { GrantDraft } from '../client/pages/permission-sets/types.js';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 function Harness({ defaults = false }: { defaults?: boolean }) {

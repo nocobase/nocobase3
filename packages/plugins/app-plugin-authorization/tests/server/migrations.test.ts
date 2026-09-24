@@ -11,14 +11,23 @@ import {
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it } from 'vitest';
+import permissionSetTables from '../../database/migrations/202608210001_create_permission_set_tables.js';
+import {
+  createSqliteDatabase,
+  migrationContext,
+} from '../helpers/database-fixture.js';
+
+interface SqliteClient {
+  readonly schema: { hasTable(name: string): Promise<boolean> };
+}
 
 describe('@nocobase/app-plugin-authorization database', () => {
   it('loads the permission set migrations and the built-in role seeds', async () => {
     const migrationsDirectory = fileURLToPath(
-      new URL('../database/migrations', import.meta.url),
+      new URL('../../database/migrations', import.meta.url),
     );
     const seedsDirectory = fileURLToPath(
-      new URL('../database/seeds', import.meta.url),
+      new URL('../../database/seeds', import.meta.url),
     );
 
     await expect(
@@ -44,7 +53,7 @@ describe('@nocobase/app-plugin-authorization database', () => {
     const source = (plugin: string, kind: 'migrations' | 'seeds') => ({
       packageName: `@nocobase/${plugin}`,
       directory: fileURLToPath(
-        new URL(`../../${plugin}/database/${kind}`, import.meta.url),
+        new URL(`../../../${plugin}/database/${kind}`, import.meta.url),
       ),
     });
     try {
@@ -88,6 +97,28 @@ describe('@nocobase/app-plugin-authorization database', () => {
           .where('permissionSetKey', '=', 'root')
           .execute(),
       ).toEqual([{ subjectId: 'initial-admin', permissionSetKey: 'root' }]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('creates and removes the permission set tables on up and down', async () => {
+    const database = createSqliteDatabase();
+    try {
+      const connection = database.connection();
+      const client = await connection.client<SqliteClient>();
+      const tables = (): Promise<boolean[]> =>
+        Promise.all(
+          [
+            'authorization_permission_sets',
+            'authorization_permission_set_assignments',
+          ].map((table) => client.schema.hasTable(table)),
+        );
+
+      await permissionSetTables.up(migrationContext(connection));
+      expect(await tables()).toEqual([true, true]);
+      await permissionSetTables.down?.(migrationContext(connection));
+      expect(await tables()).toEqual([false, false]);
     } finally {
       await database.destroy();
     }

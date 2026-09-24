@@ -3,13 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 
 import { TablePager } from '../client/components/management-ui.js';
 import { pageRangeLabel, pageSlice } from '../client/components/pagination.js';
-import { translate } from './locale-harness.js';
+import { translate } from './helpers/locale-harness.js';
 
 describe('pagination helpers', () => {
   const rows = Array.from({ length: 23 }, (_, index) => index + 1);

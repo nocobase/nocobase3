@@ -13,9 +13,9 @@ import {
   type DataScopeRuleAction,
 } from '../client/components/data-scopes-editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
-import { subsection, withSubsections } from './workspace-options.js';
+import { subsection, withSubsections } from './helpers/workspace-options.js';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 const options: AuthorizationOptions = {

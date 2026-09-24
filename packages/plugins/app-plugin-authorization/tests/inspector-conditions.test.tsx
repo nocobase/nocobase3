@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import { InspectionConditions } from '../client/pages/inspector-conditions.js';

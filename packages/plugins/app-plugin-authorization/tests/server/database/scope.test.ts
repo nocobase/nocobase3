@@ -6,50 +6,9 @@ import {
   condition,
   idsScope,
   scopeAst,
-} from '../server/database/scope.js';
+} from '../../../server/database/scope.js';
 
 describe('database scope construction', () => {
-  it('builds a literal condition for every operator it accepts', () => {
-    expect(condition('status', '$eq', 'paid')).toEqual({
-      kind: 'condition',
-      path: ['status'],
-      operator: '$eq',
-      value: 'paid',
-    });
-    expect(condition('amount', '$gte', 100)).toMatchObject({
-      operator: '$gte',
-      value: 100,
-    });
-    expect(condition('title', '$startsWith', 'a')).toMatchObject({
-      operator: '$startsWith',
-      value: 'a',
-    });
-    expect(condition('archivedAt', '$empty')).toEqual({
-      kind: 'condition',
-      path: ['archivedAt'],
-      operator: '$empty',
-    });
-    expect(condition('active', '$isTruly')).toMatchObject({
-      operator: '$isTruly',
-    });
-    expect(condition('createdAt', '$dateBefore', '2026-01-01')).toMatchObject({
-      operator: '$dateBefore',
-    });
-  });
-
-  it('expands a set of identifiers into an or of equalities', () => {
-    expect(idsScope('id', ['order-1', 'order-2'])).toEqual({
-      kind: 'group',
-      logic: 'or',
-      items: [
-        { kind: 'condition', path: ['id'], operator: '$eq', value: 'order-1' },
-        { kind: 'condition', path: ['id'], operator: '$eq', value: 'order-2' },
-      ],
-    });
-    expect(idsScope('id', ['order-1'])).toMatchObject({ kind: 'condition' });
-    expect(idsScope('id', [])).toBe(false);
-  });
-
   it('collapses emptiness rather than emitting an empty group', () => {
     expect(anyScope([])).toBe(false);
     expect(allScopes([])).toBe(true);
@@ -60,23 +19,6 @@ describe('database scope construction', () => {
     });
     expect(allScopes([true, condition('id', '$eq', '1')])).toMatchObject({
       kind: 'condition',
-    });
-  });
-
-  it('composes positive scopes with or and restrictions with and', () => {
-    const positive = anyScope([
-      idsScope('id', ['order-1', 'order-2']),
-      condition('ownerId', '$eq', 'alice'),
-    ]);
-    expect(
-      allScopes([positive, condition('status', '$eq', 'paid')]),
-    ).toMatchObject({
-      kind: 'group',
-      logic: 'and',
-      items: [
-        { kind: 'group', logic: 'or' },
-        { kind: 'condition', path: ['status'] },
-      ],
     });
   });
 

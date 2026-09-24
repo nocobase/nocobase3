@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createOrdersDatabase,
   orderFields,
-} from '../../../plugins/app-plugin-authorization/tests/orders-database.js';
+} from '../../../plugins/app-plugin-authorization/tests/helpers/orders-database.js';
 
 import {
   createAppAuthorization,
@@ -37,7 +37,7 @@ import type { AuthorizationConfig } from '../../../plugins/app-plugin-authorizat
 import { apiRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
 import { authorizationToken } from '../../../plugins/app-plugin-authorization/server/tokens.js';
 import type { AppAuthorization as AppAuthorizationService } from '../../../plugins/app-plugin-authorization/server/authorization.js';
-import { authorizeAs } from '../../../plugins/app-plugin-authorization/tests/authorization-fixture.js';
+import { authorizeAs } from '../../../plugins/app-plugin-authorization/tests/helpers/authorization-fixture.js';
 
 /** Collection metadata comes from db, so the options endpoints need a real one. */
 let database: DatabaseManager;

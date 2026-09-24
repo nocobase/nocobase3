@@ -16,7 +16,7 @@ vi.mock(
     useDefaultAccessClient: () => authz,
   }),
 );
-import { selectOption } from '../../../plugins/app-plugin-authorization/tests/select-option.js';
+import { selectOption } from '../../../plugins/app-plugin-authorization/tests/helpers/select-option.js';
 // @vitest-environment jsdom
 import {
   fireEvent,
@@ -31,7 +31,7 @@ import type { AuthorizationOptions } from '../../../plugins/app-plugin-authoriza
 import {
   subsection,
   withSubsections,
-} from '../../../plugins/app-plugin-authorization/tests/workspace-options.js';
+} from '../../../plugins/app-plugin-authorization/tests/helpers/workspace-options.js';
 const authz = vi.hoisted(() => ({
   can: vi.fn(async () => true),
   revision: () => 0,

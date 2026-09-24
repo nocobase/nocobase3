@@ -8,7 +8,7 @@ import { ModulePermissions } from '../client/pages/permission-sets/module-permis
 import { resourceRows } from '../client/pages/permission-sets/resource-groups.js';
 import { empty } from '../client/pages/permission-sets/drafts.js';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 const read = { value: 'read', label: 'Read' };

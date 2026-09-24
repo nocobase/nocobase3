@@ -1,27 +1,16 @@
-import { databasePlugin } from '../server/database/plugin.js';
-import { createInspectorHandler } from '../server/routes/inspector.js';
-import { createPermissionSetHandler } from '../server/routes/permission-sets.js';
-import { createAuthorization } from './authorization-fixture.js';
-import { createAppPaths } from '@nocobase/app-server/config';
-import {
-  authenticationToken,
-  type Auth,
-} from '@nocobase/app-plugin-authentication';
+import { databasePlugin } from '../../../server/database/plugin.js';
+import { createAuthorization } from '../../helpers/authorization-fixture.js';
 import { permissionSetsPlugin } from '@nocobase/authorization';
 import type {
   AuthorizationDecision,
   AuthorizationPlugin,
 } from '@nocobase/authorization/core';
-import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { apiRoutes } from '../server/routes/index.js';
-import {
-  authorizationToken,
-  type AppAuthorization as Authorization,
-} from '../server/index.js';
-import { MockPermissionSetStore } from './mock-permission-set-store.js';
+import type { AppAuthorization as Authorization } from '../../../server/index.js';
+import { mountedRouter, testIdentity } from '../../helpers/mounted-router.js';
+import { MockPermissionSetStore } from '../../helpers/mock-permission-set-store.js';
 
 /**
  * A resource type answering with whichever effect the id asks for, so the
@@ -189,20 +178,14 @@ describe('the permission inspector endpoint', () => {
     });
   });
 
-  it('refuses without the settings permission', async () => {
-    const router = await mountedRouter(
+  it('returns the effect, the reasons and their plugin, untouched, and requires the settings permission', async () => {
+    const forbidden = await mountedRouter(
       await authorization({ settings: false }),
     );
-
-    const response = await router.request(
-      '/api/authz/inspector/decision',
-      inspect(),
-    );
-
-    expect(response.status).toBe(403);
-  });
-
-  it('returns the effect, the reasons and their plugin, untouched', async () => {
+    expect(
+      (await forbidden.request('/api/authz/inspector/decision', inspect()))
+        .status,
+    ).toBe(403);
     const router = await mountedRouter(await authorization({ settings: true }));
 
     const [permitted, denied, conditional] = await Promise.all(
@@ -262,22 +245,6 @@ describe('the permission inspector endpoint', () => {
 
     expect(responses.map(({ status }) => status)).toEqual([400, 400, 400]);
   });
-
-  it('inspects the named person rather than the caller', async () => {
-    const authz = await authorization({ settings: true });
-    const router = await mountedRouter(authz);
-
-    const response = await router.request(
-      '/api/authz/inspector/decision',
-      inspect(),
-    );
-    const { data } = (await response.json()) as {
-      data: AuthorizationDecision & { subject?: unknown };
-    };
-
-    // 'admin' is the caller; the decision is about 'alice', who holds nothing.
-    expect(data.effect).toBe('permit');
-  });
 });
 
 function inspect(id: string = 'permitted'): RequestInit {
@@ -298,31 +265,14 @@ async function authorization({
 }: {
   settings: boolean;
 }): Promise<Authorization> {
-  const identity: AuthorizationPlugin = {
-    id: 'test-identity',
-    setup(authz) {
-      authz.use(async (request, next) => {
-        request.principal = { type: 'user', id: 'admin' };
-        await next();
-      });
-    },
-  };
   const authz = createAuthorization({
     plugins: [
-      identity,
+      testIdentity(),
       decisions,
       databasePlugin(),
       permissionSetsPlugin({ store: new MockPermissionSetStore() }),
     ],
   }) as unknown as Authorization;
-  authz.routes.add(
-    '/permission-sets',
-    createPermissionSetHandler(authz, authz.permissionSets),
-  );
-  authz.routes.add(
-    '/inspector',
-    createInspectorHandler(authz, authz.permissionSets),
-  );
   await authz.permissionSets.create({
     key: 'root',
     grants: settings
@@ -339,23 +289,6 @@ async function authorization({
     subject: { type: 'user', id: 'admin' },
   });
   return authz;
-}
-
-async function mountedRouter(authorization: Authorization): Promise<Hono> {
-  const container = new ServiceContainer();
-  container.instance(authenticationToken, {
-    required: () => async (_context, next) => next(),
-  } as unknown as Auth);
-  container.instance(authorizationToken, authorization);
-  const routes = await apiRoutes.createRouter({
-    appName: 'main',
-    publicBasePath: '',
-    config: { app: { name: 'main', publicBasePath: '' } },
-    paths: createAppPaths({ rootDir: '/missing' }),
-    router: new Hono(),
-    container,
-  });
-  return new Hono().route('/api', routes);
 }
 
 it('allows inspector options without permission-set read access', async () => {

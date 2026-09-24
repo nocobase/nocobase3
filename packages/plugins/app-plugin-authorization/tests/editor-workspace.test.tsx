@@ -4,7 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
@@ -15,7 +15,7 @@ import {
   sections,
   subsection,
   withSubsections,
-} from './workspace-options.js';
+} from './helpers/workspace-options.js';
 
 const read = { value: 'read', label: 'Read' };
 const view = { value: 'view', label: 'View' };

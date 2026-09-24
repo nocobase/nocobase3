@@ -8,7 +8,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '../client/components/ui/dialog.js';
-import { selectOption } from './select-option.js';
+import { selectOption } from './helpers/select-option.js';
 
 function Editor() {
   const [value, setValue] = useState('');

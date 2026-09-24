@@ -22,7 +22,7 @@ vi.mock('../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => api,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
@@ -31,7 +31,7 @@ import NewPage from '../client/pages/permission-set-new-page.js';
 import DetailsPage from '../client/pages/permission-set-details-page.js';
 import AssignmentsPage from '../client/pages/permission-set-assignments-page.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
-import { subsection, withSubsections } from './workspace-options.js';
+import { subsection, withSubsections } from './helpers/workspace-options.js';
 const options: AuthorizationOptions = {
   sections: withSubsections({
     administration: [

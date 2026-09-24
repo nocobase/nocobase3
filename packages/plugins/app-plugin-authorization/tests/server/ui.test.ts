@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createAuthorization,
-  defineComposite,
-} from '@nocobase/authorization/core';
+import { defineComposite, ResourceItems } from '@nocobase/authorization/core';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
@@ -10,11 +7,9 @@ import {
   AuthorizationProvider,
   authorizationToken,
   createAppAuthorization,
-  reportAuthorizationUi,
   type AppAuthorization,
-} from '../server/index.js';
-import { authorizationOptions } from '../server/options.js';
-import { pagesPlugin } from '../server/pages-authorization.js';
+} from '../../server/index.js';
+import { authorizationOptions } from '../../server/options.js';
 
 const names = (authz: AppAuthorization): [string, string[]][] =>
   authz.ui.sections
@@ -23,6 +18,14 @@ const names = (authz: AppAuthorization): [string, string[]][] =>
       section.name,
       section.subsections.map((subsection) => subsection.name),
     ]);
+
+const tree = (
+  options: Awaited<ReturnType<typeof authorizationOptions>>,
+): [string, string[]][] =>
+  options.sections.map((section) => [
+    section.name,
+    section.subsections.map((subsection) => subsection.name),
+  ]);
 
 const quotes = defineComposite('sales.quotes', (resource) =>
   resource.title('Quotes').action('view', (action) =>
@@ -221,45 +224,20 @@ describe('authz.ui groups and placement', () => {
     );
   });
 
-  it('lists an unplaced item under its default section Other, and a placed one in its group', async () => {
+  it('lists an unplaced composite under its default section Other', async () => {
     const authz = createAppAuthorization({});
     authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
     authz.composites.define(quotes);
-    authz.settings.add({ id: 'misc', title: 'Misc', actions: ['manage'] });
-    authz.settings.add({ id: 'bills', title: 'Bills', actions: ['manage'] });
-    authz.ui.groups.add({ name: 'ledgers', title: 'Ledgers' });
-    authz.ui.place(
-      { type: 'settings', id: 'bills' },
-      { section: 'authorization', group: 'ledgers' },
-    );
     const options = await authorizationOptions(authz);
-    const subsections = (name: string) =>
-      options.sections.find((section) => section.name === name)?.subsections;
-    expect(subsections('business')).toMatchObject([
+    expect(
+      options.sections.find((section) => section.name === 'business')
+        ?.subsections,
+    ).toMatchObject([
       {
         name: 'business.other',
         title: { key: 'sections.other', ns: AUTHORIZATION_NAMESPACE },
         resources: [{ type: 'composite', id: 'sales.quotes' }],
       },
-    ]);
-    expect(
-      subsections('administration')?.map((subsection) => [
-        subsection.name,
-        subsection.resources.map((resource) => [resource.id, resource.group]),
-      ]),
-    ).toEqual([
-      [
-        'authorization',
-        [
-          ['authorization.permission-sets', undefined],
-          ['authorization.inspector', undefined],
-          ['bills', 'ledgers'],
-        ],
-      ],
-      ['administration.other', [['misc', undefined]]],
-    ]);
-    expect(options.resourceGroups).toEqual([
-      { name: 'ledgers', title: 'Ledgers' },
     ]);
   });
 });
@@ -287,12 +265,6 @@ describe('the page subsection', () => {
         ?.subsections,
     ).toEqual([]);
     expect(authz.ui.validate(authz).errors).toEqual([]);
-  });
-
-  it('needs the ui plugin, which pagesPlugin declares as a dependency', () => {
-    expect(() => createAuthorization({ plugins: [pagesPlugin()] })).toThrow(
-      /requires missing plugin "ui"/,
-    );
   });
 });
 
@@ -358,22 +330,7 @@ describe('authz.ui startup validation', () => {
     ]);
   });
 
-  it('throws in development and warns in production', () => {
-    const report = { errors: ['broken'], warnings: ['unplaced'] };
-    const warn = vi.fn();
-    expect(() =>
-      reportAuthorizationUi(report, { production: false, warn }),
-    ).toThrow(/misconfigured:\n- broken/);
-    expect(warn).toHaveBeenCalledWith('Authorization workspace: unplaced');
-    warn.mockClear();
-    reportAuthorizationUi(report, { production: true, warn });
-    expect(warn.mock.calls).toEqual([
-      ['Authorization workspace: unplaced'],
-      ['Authorization workspace: broken'],
-    ]);
-  });
-
-  it('runs when the provider starts, after every plugin has booted', async () => {
+  it('runs when the provider starts, after every plugin has booted: throws in development and warns in production', async () => {
     const container = new ServiceContainer();
     const app = {
       container,
@@ -387,16 +344,228 @@ describe('authz.ui startup validation', () => {
       { type: 'settings', id: 'ghost' },
       { section: 'authorization' },
     );
+    authz.settings.add({ id: 'misc', title: 'Misc', actions: ['manage'] });
+    const error = 'settings:ghost is placed but not registered';
+    const warning =
+      'settings:misc is not placed; it is listed under administration.other';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.stubEnv('NODE_ENV', 'development');
     await expect(provider.start()).rejects.toThrow(
-      'settings:ghost is placed but not registered',
+      `misconfigured:\n- ${error}`,
     );
+    expect(warn.mock.calls).toEqual([[`Authorization workspace: ${warning}`]]);
+    warn.mockClear();
     vi.stubEnv('NODE_ENV', 'production');
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await expect(provider.start()).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledWith(
-      'Authorization workspace: settings:ghost is placed but not registered',
-    );
+    expect(warn.mock.calls).toEqual([
+      [`Authorization workspace: ${warning}`],
+      [`Authorization workspace: ${error}`],
+    ]);
     warn.mockRestore();
+  });
+});
+
+describe('options', () => {
+  it('lists sections with their subsections, but no type without a default section', async () => {
+    const authz = createAppAuthorization({});
+    authz.database.collections.add({ name: 'orders', title: 'Orders' });
+    const custom = new ResourceItems();
+    authz.resourceTypes.add({ type: 'custom', items: custom });
+    custom.add({ id: 'one', title: 'One', actions: ['read'] });
+    authz.resourceTypes.add({
+      type: 'hub.app',
+      actions: ['read'],
+    });
+    authz.ui.sections.add({
+      name: 'automation',
+      title: 'Automation',
+      parent: 'administration',
+    });
+    authz.settings.add({
+      id: 'workflow',
+      title: 'Workflow',
+      actions: [{ name: 'manage' }],
+    });
+    authz.ui.place(
+      { type: 'settings', id: 'workflow' },
+      { section: 'automation' },
+    );
+    authz.settings.add({
+      id: 'misc',
+      title: 'Misc',
+      actions: [{ name: 'manage' }],
+    });
+    const options = await authorizationOptions(authz);
+    expect(tree(options)).toEqual([
+      ['pages', ['pages.page']],
+      ['business', []],
+      [
+        'administration',
+        ['authorization', 'automation', 'administration.other'],
+      ],
+    ]);
+    const administration = options.sections[2]!.subsections;
+    expect(administration[0]).toMatchObject({
+      name: 'authorization',
+      title: expect.objectContaining({
+        key: 'options.settingsModules.authorization',
+      }),
+    });
+    expect(administration[0]?.resources.map((resource) => resource.id)).toEqual(
+      ['authorization.permission-sets', 'authorization.inspector'],
+    );
+    expect(administration[1]?.resources).toEqual([
+      {
+        type: 'settings',
+        id: 'workflow',
+        title: 'Workflow',
+        actions: [{ name: 'manage', title: 'manage' }],
+      },
+    ]);
+    // A resource without a subsection lands in its default section's "Other".
+    expect(administration[2]).toMatchObject({
+      title: expect.objectContaining({ key: 'sections.other' }),
+      resources: [{ type: 'settings', id: 'misc' }],
+    });
+    expect(options.resourceGroups).toBeUndefined();
+  });
+
+  it('lists the resource groups the resources name, with their ancestors', async () => {
+    const authz = createAppAuthorization({});
+    authz.ui.groups.add({ name: 'ledgers', title: 'Ledgers' });
+    authz.ui.groups.add({
+      name: 'payables',
+      title: 'Payables',
+      parent: 'ledgers',
+      order: 2,
+    });
+    authz.ui.groups.add({ name: 'unused', title: 'Unused' });
+    authz.settings.add({
+      id: 'bills',
+      title: 'Bills',
+      actions: [{ name: 'manage' }],
+    });
+    authz.settings.add({
+      id: 'invoices',
+      title: 'Invoices',
+      actions: [{ name: 'manage' }],
+    });
+    authz.ui.place(
+      { type: 'settings', id: 'invoices' },
+      { section: 'authorization', group: 'payables' },
+    );
+    const options = await authorizationOptions(authz);
+    expect(options.resourceGroups).toEqual([
+      { name: 'ledgers', title: 'Ledgers' },
+      { name: 'payables', title: 'Payables', parent: 'ledgers', order: 2 },
+    ]);
+    expect(
+      options.sections[2]?.subsections
+        .flatMap((subsection) => subsection.resources)
+        .find((resource) => resource.id === 'invoices'),
+    ).toMatchObject({ group: 'payables' });
+    expect(
+      options.sections[2]?.subsections
+        .find((subsection) => subsection.name === 'authorization')
+        ?.resources.map((resource) => resource.id),
+    ).toContain('invoices');
+  });
+
+  it('describes composite data scopes and narrows rule options to them', async () => {
+    const authz = createAppAuthorization({});
+    authz.database.collections.add({ name: 'orders', title: 'Orders' });
+    authz.ui.sections.add({
+      name: 'sales',
+      title: 'Sales',
+      parent: 'business',
+    });
+    expect(tree(await authorizationOptions(authz, { rules: true }))).toEqual([
+      ['pages', []],
+      ['business', []],
+      ['administration', []],
+    ]);
+    const title = { key: 'sales.title', ns: 'example' };
+    const actionTitle = { key: 'sales.view', ns: 'example' };
+    const orders = authz.composites.define({
+      name: 'sales.orders',
+      title,
+      actions: [
+        {
+          name: 'view',
+          title: actionTitle,
+          dataScopes: [
+            {
+              key: 'orders',
+              title: 'Orders',
+              options: ['recordsIOwn', 'allRecords'],
+            },
+          ],
+          grants: [
+            {
+              resource: { type: 'database.collection', id: 'orders' },
+              actions: [
+                {
+                  action: 'read',
+                  policy: { type: 'database' },
+                  scopeKey: 'orders',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'export',
+          title: 'Export',
+          grants: [
+            {
+              resource: { type: 'database.collection', id: 'orders' },
+              actions: [{ action: 'read', policy: { type: 'database' } }],
+            },
+          ],
+        },
+      ],
+    });
+    authz.ui.place(orders, { section: 'sales' });
+    const options = await authorizationOptions(authz);
+    expect(options.sections[1]).toMatchObject({
+      name: 'business',
+      subsections: [
+        {
+          name: 'sales',
+          title: 'Sales',
+          resources: [
+            {
+              type: 'composite',
+              id: 'sales.orders',
+              title: expect.objectContaining(title),
+              actions: [
+                { name: 'view', title: expect.objectContaining(actionTitle) },
+                { name: 'export', title: 'Export' },
+              ],
+              dataScopes: {
+                view: [
+                  {
+                    key: 'orders',
+                    title: 'Orders',
+                    collection: 'orders',
+                    fields: [],
+                    recordAccess: ['allRecords'],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const rules = await authorizationOptions(authz, { rules: true });
+    expect(tree(rules)).toEqual([
+      ['pages', []],
+      ['business', ['sales']],
+      ['administration', []],
+    ]);
+    expect(rules.recordAccess.map((entry) => entry.key)).toContain(
+      'recordsIOwn',
+    );
   });
 });

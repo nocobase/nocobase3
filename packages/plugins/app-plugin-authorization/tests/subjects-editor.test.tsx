@@ -14,7 +14,7 @@ vi.mock('../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => authz,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import { SubjectsEditor } from '../client/components/subjects-editor.js';

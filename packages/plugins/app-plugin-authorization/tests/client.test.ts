@@ -32,12 +32,12 @@ import {
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import { authorizationClientToken } from '../client/tokens.js';
-import { translate } from './locale-harness.js';
+import { translate } from './helpers/locale-harness.js';
 import {
   pageSubsection,
   subsection,
   withSubsections,
-} from './workspace-options.js';
+} from './helpers/workspace-options.js';
 
 describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {

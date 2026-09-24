@@ -1,4 +1,4 @@
-import { selectOption } from './select-option.js';
+import { selectOption } from './helpers/select-option.js';
 // @vitest-environment jsdom
 import {
   render,
@@ -29,7 +29,7 @@ vi.mock('../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => mocks,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('./locale-harness.js');
+  const { translate } = await import('./helpers/locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 import InspectorPage from '../client/pages/inspector-page.js';
@@ -40,7 +40,7 @@ import {
   subsection,
   wire,
   withSubsections,
-} from './workspace-options.js';
+} from './helpers/workspace-options.js';
 const read = { value: 'read', label: 'Read' };
 const view = { value: 'view', label: 'View' };
 const tables = subsection(

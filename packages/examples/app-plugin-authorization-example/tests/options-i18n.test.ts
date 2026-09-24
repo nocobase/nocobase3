@@ -37,7 +37,7 @@ import {
 import serverLocales from '../../../plugins/app-plugin-authorization/server/locales/index.js';
 import { apiRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
 import { authorizationToken } from '../../../plugins/app-plugin-authorization/server/tokens.js';
-import { createOrdersDatabase } from '../../../plugins/app-plugin-authorization/tests/orders-database.js';
+import { createOrdersDatabase } from '../../../plugins/app-plugin-authorization/tests/helpers/orders-database.js';
 
 let database: DatabaseManager;
 let connection: DatabaseConnection;

@@ -5,9 +5,9 @@ import {
   type AuthorizationIdentity,
   type AuthorizationRequest,
 } from '@nocobase/authorization/core';
-import { databasePlugin } from '../server/database/plugin.js';
-import { settingsPlugin } from '../server/settings.js';
-import { uiPlugin } from '../server/ui.js';
+import { databasePlugin } from '../../server/database/plugin.js';
+import { settingsPlugin } from '../../server/settings.js';
+import { uiPlugin } from '../../server/ui.js';
 
 /**
  * Core Authorization with the `settings` and `ui` plugins installed

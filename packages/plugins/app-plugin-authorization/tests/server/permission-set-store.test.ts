@@ -1,33 +1,24 @@
-import { createAuthorization } from './authorization-fixture.js';
-import sqlite from '@nocobase/db-sqlite';
-import { createDatabaseManager } from '@nocobase/db';
+import { createAuthorization } from '../helpers/authorization-fixture.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import permissionSetMigration from '../database/migrations/202608210001_create_permission_set_tables.js';
+import permissionSetMigration from '../../database/migrations/202608210001_create_permission_set_tables.js';
 import {
   permissionSetsPlugin,
   PermissionSetLastAssignmentError,
 } from '@nocobase/authorization/permission-sets';
-import { databasePlugin } from '../server/database/plugin.js';
-import { defineDatabasePermission } from '../server/database/builders.js';
-import { DatabasePermissionSetStore } from '../server/stores/permission-sets.js';
+import { databasePlugin } from '../../server/database/plugin.js';
+import { defineDatabasePermission } from '../../server/database/builders.js';
+import { DatabasePermissionSetStore } from '../../server/stores/permission-sets.js';
+import { createAppAuthorization } from '../../server/authorization.js';
+import {
+  createSqliteDatabase,
+  migrationContext,
+} from '../helpers/database-fixture.js';
 
 describe('authorization plugin database stores', () => {
-  const database = createDatabaseManager({
-    drivers: { sqlite },
-    default: 'main',
-    connections: {
-      main: { dialect: 'sqlite', filename: ':memory:' },
-    },
-  });
+  const database = createSqliteDatabase();
 
   beforeAll(async () => {
-    const connection = database.connection();
-    const context = {
-      builder: connection.builder,
-      query: connection.query,
-      connection,
-    };
-    await permissionSetMigration.up(context);
+    await permissionSetMigration.up(migrationContext(database.connection()));
   });
 
   afterAll(async () => {
@@ -232,5 +223,62 @@ describe('authorization plugin database stores', () => {
         principal: { type: 'user', id: 'alice' },
       }),
     ).resolves.toEqual([]);
+  });
+
+  it('passes the store transaction to filterActive', async () => {
+    await database.connection().builder.createCollection('user', (user) => {
+      user.string('id', { length: 64 }).primary();
+      user.date('disabledAt', { nullable: true });
+    });
+    await database
+      .connection()
+      .query.insertInto('user')
+      .values([
+        { id: 'root', disabledAt: null },
+        { id: 'retired', disabledAt: new Date() },
+      ])
+      .execute();
+    const authorization = createAppAuthorization({
+      connection: database.connection(),
+      config: { permissionSets: { rootSet: 'active-root' } },
+    });
+    const received: unknown[] = [];
+    authorization.subjects.add('user', {
+      filterActive: async (ids, connection) => {
+        received.push(connection);
+        // SQLite has one pooled connection, so a read outside the
+        // transaction would wait for the writer that is waiting on it.
+        const rows = await (connection ?? database.connection()).query
+          .selectFrom('user')
+          .select(['id'])
+          .where('id', 'in', [...ids])
+          .where('disabledAt', 'is', null)
+          .execute();
+        return rows.map((row) => String(row.id));
+      },
+    });
+    await authorization.permissionSets.create({
+      key: 'active-root',
+      grants: [],
+    });
+    for (const id of ['root', 'retired'])
+      await authorization.permissionSets.assign({
+        subject: { type: 'user', id },
+        permissionSet: 'active-root',
+      });
+
+    // Two assignments exist, but only one of them belongs to an account that
+    // can still sign in.
+    await expect(
+      authorization.permissionSets.revoke('user:root:active-root'),
+    ).rejects.toBeInstanceOf(PermissionSetLastAssignmentError);
+    await expect(
+      authorization.permissionSets.revoke('user:retired:active-root'),
+    ).resolves.toBeUndefined();
+    expect(received.length).toBeGreaterThan(0);
+    for (const connection of received) {
+      expect(connection).toBeDefined();
+      expect(connection).not.toBe(database.connection());
+    }
   });
 });

@@ -6,7 +6,7 @@ import type {
   SectionOption,
   SelectOption,
   SubsectionOption,
-} from '../client/authorization-client.js';
+} from '../../client/authorization-client.js';
 
 const builtIn: readonly Omit<SectionOption, 'subsections'>[] = [
   { value: 'pages', label: 'Page permissions', order: 0 },
