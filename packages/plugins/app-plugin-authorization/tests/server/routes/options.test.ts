@@ -2,7 +2,7 @@ import {
   AuthorizationDeniedError,
   defineRecordAccess,
   type AuthorizationContext,
-  type Composite,
+  type CompositeResource,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import { createI18nMiddleware, I18nRuntime } from '@nocobase/i18n/server';
@@ -89,7 +89,7 @@ async function options(
     .data;
 }
 
-function ordersResource(title: Composite['title']): Composite {
+function ordersResource(title: CompositeResource['title']): CompositeResource {
   return {
     name: 'orders',
     title,
@@ -129,11 +129,14 @@ describe('the options and subject routes', () => {
       parent: 'business',
     });
     const key = { key: 'options.settingsModules.authorization', ns: 'app' };
-    authz.ui.place(authz.composites.define(ordersResource('Orders')), {
+    authz.ui.place(authz.compositeResources.define(ordersResource('Orders')), {
       section: 'sales',
     });
     authz.ui.place(
-      authz.composites.define({ ...ordersResource(key), name: 'invoices' }),
+      authz.compositeResources.define({
+        ...ordersResource(key),
+        name: 'invoices',
+      }),
       { section: 'sales' },
     );
     authz.recordAccess.define(

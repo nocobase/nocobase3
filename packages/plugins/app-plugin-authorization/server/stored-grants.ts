@@ -12,7 +12,7 @@ export async function storedGrantProblems(
   return sets.flatMap((set) =>
     set.grants.flatMap((grant) =>
       grant.actions.flatMap((action) => {
-        const reason = authz.composites.validateGrant({
+        const reason = authz.compositeResources.validateGrant({
           resource: grant.resource,
           action: action.action,
           ...(action.policy === undefined ? {} : { policy: action.policy }),

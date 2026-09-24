@@ -25,13 +25,15 @@ const COLLECTION_ACTIONS: readonly string[] = [
 export function validateDataScopeRule(
   authz: Pick<
     AuthorizationExtensionHost,
-    'composites' | 'database' | 'recordAccess'
+    'compositeResources' | 'database' | 'recordAccess'
   >,
   rule: DataScopeRuleInput,
 ): void {
   const composite =
     rule.resource.type === 'composite'
-      ? authz.composites.list().find((item) => item.name === rule.resource.id)
+      ? authz.compositeResources
+          .list()
+          .find((item) => item.name === rule.resource.id)
       : undefined;
   if (rule.resource.type === 'composite' && !composite)
     throw new TypeError('Unknown composite');
@@ -71,7 +73,7 @@ export function validateDataScopeRule(
         scopeTarget.type !== 'database.collection' ||
         !authz.database.collections.has(scopeTarget.id)
       )
-        throw new TypeError('Unknown composite data scope');
+        throw new TypeError('Unknown composite resource data scope');
     } else if (entry.scopeKey !== undefined)
       throw new TypeError('Collection rules do not accept scopeKey');
     if (entry.selection.type !== 'recordAccess') continue;

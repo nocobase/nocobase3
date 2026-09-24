@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   dataScopeTarget,
   createAuthorization,
-  defineComposite,
+  defineCompositeResource,
   selection,
   type AccessConstraint,
   type AuthorizationGrant,
   type AuthorizationPlugin,
-  type BindableCompositePermission,
-  type CompositeContribution,
-  type Composite,
+  type BindableCompositeResourcePermission,
+  type CompositeResourceContribution,
+  type CompositeResource,
   type PermissionGrant,
   type ResolveAccessConstraintsInput,
 } from '../src/core/index.js';
@@ -18,13 +18,15 @@ import { flattenGrants, grantProvider } from './helpers/grant-provider.js';
 type Access = 'recordsIOwn' | 'allRecords';
 
 /** A stand-in for the database plugin's collection permission. */
-class CollectionPermission implements BindableCompositePermission {
+class CollectionPermission implements BindableCompositeResourcePermission {
   declare readonly recordAccessSelection?: Access;
   constructor(
     private readonly collection: string,
     private readonly actions: readonly string[],
   ) {}
-  bind<K extends string>(key: K): CompositeContribution<Record<K, Access>> {
+  bind<K extends string>(
+    key: K,
+  ): CompositeResourceContribution<Record<K, Access>> {
     return {
       build: () => ({
         grants: [
@@ -50,7 +52,7 @@ class CollectionPermission implements BindableCompositePermission {
   }
 }
 
-const quotes = defineComposite('sales.quotes', (resource) =>
+const quotes = defineCompositeResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
     .action('submit', (action) =>
@@ -75,7 +77,7 @@ const quotes = defineComposite('sales.quotes', (resource) =>
     ),
 );
 
-const quotesObject: Composite = {
+const quotesObject: CompositeResource = {
   name: 'sales.quotes',
   title: 'Quotes',
   actions: [
@@ -129,7 +131,7 @@ function setup(
   return authz;
 }
 
-describe('composites', () => {
+describe('compositeResources', () => {
   it('are built in: available without any plugin, and handed to every plugin setup', () => {
     let seen: unknown;
     const authz = createAuthorization({
@@ -137,21 +139,21 @@ describe('composites', () => {
         {
           id: 'reader',
           setup(host) {
-            seen = host.composites;
+            seen = host.compositeResources;
           },
         },
       ],
     });
-    expect(seen).toBe(authz.composites);
-    const reference = authz.composites.define(quotes);
+    expect(seen).toBe(authz.compositeResources);
+    const reference = authz.compositeResources.define(quotes);
     expect(reference.name).toBe('sales.quotes');
-    expect(authz.composites.list().map((item) => item.name)).toEqual([
+    expect(authz.compositeResources.list().map((item) => item.name)).toEqual([
       'sales.quotes',
     ]);
-    expect(authz.composites.getAction('sales.quotes', 'export')?.name).toBe(
-      'export',
-    );
-    expect(authz.composites.validate()).toEqual([
+    expect(
+      authz.compositeResources.getAction('sales.quotes', 'export')?.name,
+    ).toBe('export');
+    expect(authz.compositeResources.validate()).toEqual([
       'Data scope sales.quotes.submit.quotes targets unregistered resource type database.collection',
     ]);
     expect(
@@ -169,12 +171,12 @@ describe('composites', () => {
   it('registers either form as an item of the composite type', () => {
     for (const definition of [quotes, quotesObject]) {
       const authz = setup();
-      const reference = authz.composites.define(definition);
+      const reference = authz.compositeResources.define(definition);
       expect(reference.name).toBe('sales.quotes');
-      expect(authz.composites.list()).toEqual([quotesObject]);
-      expect(authz.composites.getAction('sales.quotes', 'export')).toEqual(
-        quotesObject.actions[1],
-      );
+      expect(authz.compositeResources.list()).toEqual([quotesObject]);
+      expect(
+        authz.compositeResources.getAction('sales.quotes', 'export'),
+      ).toEqual(quotesObject.actions[1]);
       const composite = authz.resourceTypes.get('composite');
       expect(composite.type).toBe('composite');
       expect(composite.items?.list()).toEqual([
@@ -187,7 +189,7 @@ describe('composites', () => {
           ],
         },
       ]);
-      expect(() => authz.composites.define(definition)).toThrow(
+      expect(() => authz.compositeResources.define(definition)).toThrow(
         'already defined',
       );
     }
@@ -209,12 +211,12 @@ describe('composites', () => {
       ],
     });
     for (const type of ['page', 'settings', 'workflow', 'database.collection'])
-      authz.composites.define(view(type));
-    expect(() => authz.composites.define(view('composite'))).toThrow(
-      'cannot compose another composite',
+      authz.compositeResources.define(view(type));
+    expect(() => authz.compositeResources.define(view('composite'))).toThrow(
+      'cannot compose another composite resource',
     );
     expect(() =>
-      defineComposite('nested', (resource) =>
+      defineCompositeResource('nested', (resource) =>
         resource.action('run', (action) =>
           action.grant({
             build: () => ({
@@ -228,28 +230,28 @@ describe('composites', () => {
           }),
         ),
       ),
-    ).toThrow('cannot compose another composite');
+    ).toThrow('cannot compose another composite resource');
   });
 
   it('rejects incomplete definitions', () => {
     const authz = setup();
-    expect(() => defineComposite('quotes', (resource) => resource)).toThrow(
-      'needs unique, nonempty actions',
-    );
     expect(() =>
-      defineComposite('quotes', (resource) =>
+      defineCompositeResource('quotes', (resource) => resource),
+    ).toThrow('needs unique, nonempty actions');
+    expect(() =>
+      defineCompositeResource('quotes', (resource) =>
         resource.action('view', (action) => action),
       ),
     ).toThrow('grants nothing');
     const [submit] = quotesObject.actions;
     expect(() =>
-      authz.composites.define({
+      authz.compositeResources.define({
         ...quotesObject,
         actions: [{ ...submit!, dataScopes: [] }],
       }),
     ).toThrow('unknown data scope');
     expect(() =>
-      authz.composites.define({
+      authz.compositeResources.define({
         ...quotesObject,
         actions: [
           {
@@ -286,7 +288,7 @@ describe('composites', () => {
       reference.grant({ submit: { quotes: 'other' as Access } }),
     ).toThrow('does not offer other');
     expect(() => reference.scope('export', 'quotes' as never)).toThrow(
-      'Unknown composite data scope',
+      'Unknown composite resource data scope',
     );
   });
 });
@@ -294,7 +296,7 @@ describe('composites', () => {
 describe('data scopes', () => {
   const scoped = (
     grants: readonly { type: string; id: string; scopeKey?: string }[],
-  ): Composite => ({
+  ): CompositeResource => ({
     name: 'scoped',
     title: 'Scoped',
     actions: [
@@ -339,7 +341,7 @@ describe('data scopes', () => {
       { type: 'journal', id: 'a', scopeKey: 'records' },
     ])
       expect(() =>
-        setup([], [ledger(true)]).composites.define(
+        setup([], [ledger(true)]).compositeResources.define(
           scoped([{ type: 'ledger', id: 'a', scopeKey: 'records' }, second]),
         ),
       ).toThrow('targets more than one resource');
@@ -350,11 +352,11 @@ describe('data scopes', () => {
       { type: 'ledger', id: 'a', scopeKey: 'records' },
     ]);
     expect(() =>
-      setup([], [ledger(false)]).composites.define(definition),
+      setup([], [ledger(false)]).compositeResources.define(definition),
     ).toThrow('does not declare recordAccess');
     const authz = setup([], [ledger(true)]);
-    authz.composites.define(definition);
-    expect(authz.composites.validate()).toEqual([]);
+    authz.compositeResources.define(definition);
+    expect(authz.compositeResources.validate()).toEqual([]);
   });
 
   it('checks a type registered later on validate and on first use', async () => {
@@ -367,8 +369,8 @@ describe('data scopes', () => {
         actions: [{ action: 'run' }],
       },
     ]);
-    unregistered.composites.define(definition);
-    expect(unregistered.composites.validate()).toEqual([
+    unregistered.compositeResources.define(definition);
+    expect(unregistered.compositeResources.validate()).toEqual([
       'Data scope scoped.run.records targets unregistered resource type ledger',
     ]);
     await expect(
@@ -394,9 +396,9 @@ describe('data scopes', () => {
       ],
       [],
     );
-    late.composites.define(definition);
+    late.compositeResources.define(definition);
     late.resourceTypes.add({ type: 'ledger', actions: ['read'] });
-    expect(late.composites.validate()).toEqual([
+    expect(late.compositeResources.validate()).toEqual([
       'Data scope scoped.run.records targets resource type ledger, which does not declare recordAccess',
     ]);
     await expect(
@@ -440,7 +442,7 @@ describe('composite authorization', () => {
       ],
       [database],
     );
-    authz.composites.define(quotes);
+    authz.compositeResources.define(quotes);
     const decision = await authz.for(alice).authorize({
       resource: { type: 'composite', id: 'sales.quotes' },
       action: 'submit',
@@ -505,7 +507,7 @@ describe('composite authorization', () => {
           },
         ],
       );
-      authz.composites.define(quotes);
+      authz.compositeResources.define(quotes);
       await expect(
         authz.for(alice).authorize({
           resource: { type: 'composite', id: 'sales.quotes' },
@@ -531,7 +533,7 @@ describe('composite authorization', () => {
         ],
       },
     ]);
-    authz.composites.define(quotes);
+    authz.compositeResources.define(quotes);
     await expect(
       authz.for(alice).authorize({
         resource: { type: 'composite', id: 'sales.quotes' },
@@ -583,7 +585,7 @@ describe('composite authorization', () => {
       },
     };
     const authz = setup([quotes.reference().grant('submit')], [rules]);
-    authz.composites.define(quotes);
+    authz.compositeResources.define(quotes);
     const request = {
       resource: { type: 'database.collection', id: 'quotes' },
       action: 'read',

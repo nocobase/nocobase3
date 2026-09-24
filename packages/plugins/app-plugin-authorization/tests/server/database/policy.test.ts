@@ -1,4 +1,4 @@
-import { defineComposite } from '@nocobase/authorization/core';
+import { defineCompositeResource } from '@nocobase/authorization/core';
 import { permissionSetsPlugin } from '@nocobase/authorization';
 import {
   databaseManagerToken,
@@ -536,7 +536,7 @@ async function assign(key: string, userId: string): Promise<void> {
 const quoteAccess = defineDatabasePermission((permission) =>
   permission.collection('authzOrders').read(['id', 'ownerId', 'amount']),
 );
-const compositeOrders = defineComposite('sales.orders', (resource) =>
+const compositeOrders = defineCompositeResource('sales.orders', (resource) =>
   resource
     .title('Orders')
     .action('view', (action) => action.grant('orders', quoteAccess))
@@ -553,7 +553,7 @@ async function compositeRoutes(
     name: 'authzOrders',
     title: 'Orders',
   });
-  authorization.composites.define(compositeOrders);
+  authorization.compositeResources.define(compositeOrders);
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
   const router = new Hono();
@@ -663,7 +663,7 @@ describe('business operation Repository middleware', () => {
   it('rejects multi-scope operations, including two scopes of the same collection', () => {
     const authorization = appAuthorization();
     for (const target of ['authzOrders', 'authzCustomers']) {
-      const complex = defineComposite(`complex.${target}`, (resource) =>
+      const complex = defineCompositeResource(`complex.${target}`, (resource) =>
         resource.action('submit', (action) =>
           action.grant('orders', quoteAccess.update(['amount'])).grant(
             'parent',
@@ -671,7 +671,7 @@ describe('business operation Repository middleware', () => {
           ),
         ),
       );
-      authorization.composites.define(complex);
+      authorization.compositeResources.define(complex);
       expect(() =>
         authorization.database.authorizeRepository({
           repository: 'orders',
@@ -684,7 +684,7 @@ describe('business operation Repository middleware', () => {
 
   it('rejects an unknown action or a binding without the required database operation', () => {
     const authorization = appAuthorization();
-    authorization.composites.define(compositeOrders);
+    authorization.compositeResources.define(compositeOrders);
     expect(() =>
       authorization.database.authorizeRepository({
         repository: 'orders',

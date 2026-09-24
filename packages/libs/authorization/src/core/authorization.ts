@@ -1,11 +1,11 @@
 import type { MiddlewareHandler } from 'hono';
 import {
   COMPOSITE_RESOURCE_TYPE,
-  CompositeRegistry,
+  CompositeResourceRegistry,
   composedGrants,
-  type CompositeApi,
-  type CompositeCheck,
-  type CompositeConditions,
+  type CompositeResourceApi,
+  type CompositeResourceCheck,
+  type CompositeResourceConditions,
   type InvalidGrant,
 } from './composite.js';
 import {
@@ -63,7 +63,7 @@ export interface AuthorizationContext {
     request: Omit<AuthorizationCheckRequest, 'resource'> & {
       resource: { type: 'composite'; id: string };
     },
-  ): Promise<AuthorizationDecision<CompositeConditions>>;
+  ): Promise<AuthorizationDecision<CompositeResourceConditions>>;
   authorize<TParams = undefined>(
     request: AuthorizationCheckRequest<TParams>,
   ): Promise<AuthorizationDecision>;
@@ -106,7 +106,7 @@ interface AuthorizationOptions {
 export class Authorization {
   readonly resourceTypes: ResourceTypeRegistry = new ResourceTypeRegistry();
   /** Built in: composites and the reserved `composite` resource type. */
-  readonly composites: CompositeApi;
+  readonly compositeResources: CompositeResourceApi;
   readonly recordAccess: RecordAccessRegistry = new RecordAccessRegistry();
   readonly constraints: AccessConstraintRegistry =
     new AccessConstraintRegistry();
@@ -116,18 +116,18 @@ export class Authorization {
     new AuthorizationRouteRegistry();
   private readonly plugins: readonly AuthorizationPlugin[];
   private readonly provider: AuthorizationGrantService;
-  private readonly compositeRegistry: CompositeRegistry;
+  private readonly compositeResourceRegistry: CompositeResourceRegistry;
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
   constructor(options: AuthorizationOptions) {
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
     this.provider = grantProvider?.grants ?? missingGrantService();
-    this.compositeRegistry = new CompositeRegistry(
+    this.compositeResourceRegistry = new CompositeResourceRegistry(
       this.resourceTypes,
       options.onInvalidGrant,
     );
-    this.composites = this.compositeRegistry;
+    this.compositeResources = this.compositeResourceRegistry;
     this.installApis();
     const apis: Record<string, unknown> = {};
     for (const plugin of this.plugins)
@@ -147,7 +147,7 @@ export class Authorization {
           return grantProvider.grants;
         },
         resourceTypes: this.resourceTypes,
-        composites: this.composites,
+        compositeResources: this.compositeResources,
         recordAccess: this.recordAccess,
         constraints: this.constraints,
         subjects: this.subjects,
@@ -195,7 +195,7 @@ export class Authorization {
     const constraints = this.constraints.for(identity);
     const grants = composedGrants(
       this.provider.for?.(identity) ?? this.provider,
-      this.compositeRegistry,
+      this.compositeResourceRegistry,
       constraints,
     );
     const request = <TParams>(
@@ -293,7 +293,7 @@ export class Authorization {
     grants: AuthorizationGrantService,
     constraints: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
-    const action = this.compositeRegistry.getAction(
+    const action = this.compositeResourceRegistry.getAction(
       request.resource.id,
       request.action,
     );
@@ -321,7 +321,7 @@ export class Authorization {
           resource: grant.resource,
           action: entry.action,
         });
-    const checks: CompositeCheck[] = await Promise.all(
+    const checks: CompositeResourceCheck[] = await Promise.all(
       [...targets.values()].map(async (target) => ({
         ...target,
         decision: await this.authorizeWithGrants(
@@ -343,7 +343,10 @@ export class Authorization {
         ),
       })),
     );
-    const conditions: CompositeConditions = { type: 'composite', checks };
+    const conditions: CompositeResourceConditions = {
+      type: 'composite',
+      checks,
+    };
     for (const plugin of this.plugins)
       Object.assign(conditions, plugin.composeConditions?.(checks));
     // A denied underlying check becomes a policy that reaches no records.

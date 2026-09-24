@@ -245,7 +245,7 @@ describe('the authorization provider', () => {
       provider.register();
       await provider.boot();
       const authorization = container.resolve(authorizationToken);
-      authorization.composites.define({
+      authorization.compositeResources.define({
         name: 'sales.quotes',
         title: 'Quotes',
         actions: [

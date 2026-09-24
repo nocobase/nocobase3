@@ -18,7 +18,7 @@ Resolve unclear cases before granting access: may users consult colleagues' quot
 
 Model ownership and preparer ids, project relations, region membership and team membership as business data. Make membership changes an authorized business API. Keep credentials and fixture accounts out of production feature seeds.
 
-Create `server/sales-resources.ts` using the complete `quotes` declaration in [runtime integration](runtime-api.md#declare-a-business-operation). `defineDatabasePermission` declares fields and relation capabilities; `defineComposite` binds them to data scope keys. A `submit` action binds `quotes` to quote read and status update and `projects` to parent read. Give independently controlled collections separate keys even when a workflow edits only one of them.
+Create `server/sales-resources.ts` using the complete `quotes` declaration in [runtime integration](runtime-api.md#declare-a-business-operation). `defineDatabasePermission` declares fields and relation capabilities; `defineCompositeResource` binds them to data scope keys. A `submit` action binds `quotes` to quote read and status update and `projects` to parent read. Give independently controlled collections separate keys even when a workflow edits only one of them.
 
 Keep portable declarations free of database queries so seeds and provisioning can reuse `quotes.reference().grant(...)`. Return fluent builders from callbacks. Define translations in the owning package and use `{ key, ns }` for persisted titles. Do not repeat resource and action strings in permission sets when a typed reference is available.
 

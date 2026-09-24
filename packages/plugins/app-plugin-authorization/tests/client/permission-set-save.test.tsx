@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {
-  defineComposite,
+  defineCompositeResource,
   defineRecordAccess,
 } from '@nocobase/authorization/core';
 import type { DatabaseManager } from '@nocobase/db';
@@ -41,7 +41,7 @@ const projects = defineDatabasePermission((permission) =>
     .title('Projects')
     .read(['id', 'ownerId', 'region', 'notes']),
 );
-const projectResource = defineComposite('sales.projects', (resource) =>
+const projectResource = defineCompositeResource('sales.projects', (resource) =>
   resource
     .title('Projects')
     .action('view', (action) =>
@@ -87,7 +87,7 @@ beforeEach(async () => {
     ),
   );
   authz.ui.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
-  authz.ui.place(authz.composites.define(projectResource), {
+  authz.ui.place(authz.compositeResources.define(projectResource), {
     section: 'sales',
   });
   await authz.permissionSets.create({ key: 'root', grants: [] });

@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   createAuthorization,
-  defineComposite,
+  defineCompositeResource,
   grantBacked,
   ResourceItems,
   type AuthorizationGrant,
   type AuthorizationPlugin,
-  type CompositeContribution,
+  type CompositeResourceContribution,
   type PermissionGrant,
 } from '../src/core/index.js';
 import { permissionSetsPlugin } from '../src/plugins/permission-sets/index.js';
 import { MockPermissionSetStore } from './helpers/mock-permission-set-store.js';
 
-const quotesScope: CompositeContribution<{ quotes: string }> = {
+const quotesScope: CompositeResourceContribution<{ quotes: string }> = {
   build: () => ({
     dataScopes: [{ key: 'quotes', title: 'Quotes' }],
     grants: [
@@ -25,7 +25,7 @@ const quotesScope: CompositeContribution<{ quotes: string }> = {
     ],
   }),
 };
-const quotes = defineComposite('sales.quotes', (resource) =>
+const quotes = defineCompositeResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
     .action('submit', (action) => action.grant(quotesScope)),
@@ -90,7 +90,7 @@ function setup(grants: readonly PermissionGrant[], unrestricted = false) {
       keys: ['sales'],
       unrestricted: true,
     });
-  authz.composites.define(quotes);
+  authz.compositeResources.define(quotes);
   return authz;
 }
 
@@ -207,7 +207,7 @@ describe('a stored composite grant that no longer expands', () => {
       ],
       onInvalidGrant: (grant) => reported.push(grant),
     });
-    authz.composites.define(quotes);
+    authz.compositeResources.define(quotes);
     const bob = authz.for({ principal: { type: 'user', id: 'bob' } });
     const both = authz.for({
       principal: { type: 'user', id: 'bob' },

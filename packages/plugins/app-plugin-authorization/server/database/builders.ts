@@ -4,8 +4,8 @@ import {
 } from './permission-builders.js';
 import type {
   AuthorizationTitle,
-  BindableCompositePermission,
-  CompositeContribution,
+  BindableCompositeResourcePermission,
+  CompositeResourceContribution,
   DataScope,
   PermissionGrant,
   RecordAccessReference,
@@ -51,7 +51,7 @@ function applies(
 export class DatabasePermissionBuilder<
   Row = Record<string, unknown>,
   O extends string = string,
-> implements BindableCompositePermission {
+> implements BindableCompositeResourcePermission {
   declare readonly recordAccessSelection?: O | '' | RecordSelection;
   private readonly operations: DatabaseGrantDefinition;
   private readonly label: AuthorizationTitle | undefined;
@@ -193,7 +193,7 @@ export class DatabasePermissionBuilder<
   bind<const K extends string>(
     key: K,
     metadata?: { title?: AuthorizationTitle },
-  ): CompositeContribution<Record<K, O | '' | RecordSelection>> {
+  ): CompositeResourceContribution<Record<K, O | '' | RecordSelection>> {
     if (!key) throw new TypeError('A data scope needs a key');
     const grant = this.build();
     const scope: DataScope = {

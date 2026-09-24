@@ -1,9 +1,9 @@
 import type { MiddlewareHandler } from 'hono';
 import type { AuthorizationEnv } from './authorization.js';
 import type {
-  CompositeApi,
-  CompositeCheck,
-  CompositeConditions,
+  CompositeResourceApi,
+  CompositeResourceCheck,
+  CompositeResourceConditions,
 } from './composite.js';
 import type { AccessConstraintRegistry } from './constraints.js';
 import type { AuthorizationGrantService } from './grants.js';
@@ -20,7 +20,7 @@ export interface AuthorizationPluginSetup<TConnection = unknown> {
   readonly grants: AuthorizationGrantService;
   readonly resourceTypes: ResourceTypeRegistry;
   /** Built in: define composites and read their actions. */
-  readonly composites: CompositeApi;
+  readonly compositeResources: CompositeResourceApi;
   readonly recordAccess: RecordAccessRegistry;
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;
@@ -44,8 +44,8 @@ export interface AuthorizationPlugin<
   authorizationApi?: TAuthorizationApi;
   /** Turns the resolved checks of a composite action into plugin conditions. */
   composeConditions?(
-    checks: readonly CompositeCheck[],
-  ): Partial<Omit<CompositeConditions, 'type' | 'checks'>>;
+    checks: readonly CompositeResourceCheck[],
+  ): Partial<Omit<CompositeResourceConditions, 'type' | 'checks'>>;
   /**
    * Receives the registries plus every installed plugin's API; `TRequiredApi`
    * types the APIs this plugin needs, whose plugins it lists in `dependencies`.

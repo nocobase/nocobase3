@@ -3,9 +3,9 @@ import type {
   AuthorizationContext,
   AuthorizationDecision,
   AuthorizationEnv,
-  CompositeActions,
-  CompositeApi,
-  CompositeCheck,
+  CompositeResourceActions,
+  CompositeResourceApi,
+  CompositeResourceCheck,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection, RepositoryPolicy } from '@nocobase/db';
 import {
@@ -34,7 +34,7 @@ export interface DatabaseApi {
     operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy>;
   /** Binds generated Repository routes to composite actions. */
-  authorizeRepository<A extends CompositeActions>(
+  authorizeRepository<A extends CompositeResourceActions>(
     options: AuthorizeRepositoryOptions<A>,
   ): MiddlewareHandler<AuthorizationEnv>;
 }
@@ -45,7 +45,7 @@ export interface DatabaseAuthorizationApi {
 
 /** What the plugin learns during setup; read by the extension routes. */
 export interface DatabaseHost {
-  readonly composites: CompositeApi;
+  readonly compositeResources: CompositeResourceApi;
   middleware(): MiddlewareHandler<AuthorizationEnv>;
   readonly connection?: DatabaseConnection;
   describe(name: string): Promise<AuthorizationCollection | undefined>;
@@ -66,7 +66,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     hosts.set(this, host);
   }
 
-  authorizeRepository<A extends CompositeActions>(
+  authorizeRepository<A extends CompositeResourceActions>(
     options: AuthorizeRepositoryOptions<A>,
   ): MiddlewareHandler<AuthorizationEnv> {
     const host = hosts.get(this);
@@ -106,7 +106,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
 
 /** Translate resolved checks only; this never runs authorization again. */
 export function composeDatabasePolicies(
-  checks: readonly CompositeCheck[],
+  checks: readonly CompositeResourceCheck[],
 ): Readonly<Record<string, RepositoryPolicy>> {
   type MutablePolicy = {
     -readonly [K in keyof RepositoryPolicy]: RepositoryPolicy[K];
@@ -142,7 +142,7 @@ export function composeDatabasePolicies(
 }
 
 declare module '@nocobase/authorization/core' {
-  interface CompositeConditions {
+  interface CompositeResourceConditions {
     /** Policies for the tables used by this operation; other operations remain denied. */
     database?: Readonly<Record<string, RepositoryPolicy>>;
   }

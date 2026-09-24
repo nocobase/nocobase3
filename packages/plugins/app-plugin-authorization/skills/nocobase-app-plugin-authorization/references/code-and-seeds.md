@@ -33,7 +33,7 @@ When developing or changing the model, also complete its initial or adjusted per
 
 ## Share declarations, not runtime instances
 
-Keep a portable feature module such as `server/sales-resources.ts` with `defineComposite` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
+Keep a portable feature module such as `server/sales-resources.ts` with `defineCompositeResource` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
 
 ```ts
 import { definePermissionSet } from '@nocobase/authorization/permission-sets';

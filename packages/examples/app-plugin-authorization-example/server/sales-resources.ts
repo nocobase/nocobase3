@@ -1,9 +1,9 @@
 import { buildFilter } from '@nocobase/repository-input';
 import {
-  CompositeReference,
-  defineComposite,
-  type Composite,
-  type CompositeActions,
+  CompositeResourceReference,
+  defineCompositeResource,
+  type CompositeResource,
+  type CompositeResourceActions,
 } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
 import { label, PROJECTS, QUOTES, ORDERS } from '../catalog.js';
@@ -97,10 +97,10 @@ const deliveryRelations = orderPermission.update((update) =>
 );
 
 /**
- * The object form of a composite: the same data `defineComposite` builds,
+ * The object form of a composite: the same data `defineCompositeResource` builds,
  * written out directly.
  */
-export const projectResource: Composite = {
+export const projectResource: CompositeResource = {
   name: 'example.sales.projects',
   title: label('sales.projects'),
   actions: [
@@ -117,10 +117,10 @@ export const projectResource: Composite = {
   ],
 };
 
-export const projectReference: CompositeReference<CompositeActions> =
-  new CompositeReference(projectResource);
+export const projectReference: CompositeResourceReference<CompositeResourceActions> =
+  new CompositeResourceReference(projectResource);
 
-export const quoteResource = defineComposite(
+export const quoteResource = defineCompositeResource(
   'example.sales.quotes',
   (resource) =>
     resource
@@ -145,7 +145,7 @@ export const quoteResource = defineComposite(
       ),
 );
 
-export const orderResource = defineComposite(
+export const orderResource = defineCompositeResource(
   'example.sales.orders',
   (resource) =>
     resource
@@ -188,7 +188,7 @@ export const salesCollections = [
 ];
 /** Each composite with the subsection the workspace lists it in. */
 export const salesResources: readonly {
-  readonly resource: Composite;
+  readonly resource: CompositeResource;
   readonly section: (typeof salesSections)[number]['name'];
 }[] = [
   { resource: projectResource, section: 'example.sales' },

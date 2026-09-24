@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
 import {
-  CompositeActionBuilder,
+  CompositeResourceActionBuilder,
   createAuthorization,
-  defineComposite,
+  defineCompositeResource,
   defineRecordAccess,
   selection,
 } from '@nocobase/authorization/core';
@@ -23,7 +23,7 @@ it('binds reusable permissions to independent data scopes without leaking writes
       .title('Quotes')
       .read(['id']),
   );
-  const resource = defineComposite('sales.quotes', (r) =>
+  const resource = defineCompositeResource('sales.quotes', (r) =>
     r
       .title('Quotes')
       .action('view', (a) => a.title('View').grant('visible', read))
@@ -34,11 +34,12 @@ it('binds reusable permissions to independent data scopes without leaking writes
       ),
   );
   const authz = compositeHost();
-  authz.composites.define(resource);
+  authz.compositeResources.define(resource);
   expect(read.build().actions).toHaveLength(1);
   expect(read.build().actions[0]).not.toHaveProperty('scopeKey');
   expect(
-    authz.composites.getAction('sales.quotes', 'view')?.grants[0]?.actions,
+    authz.compositeResources.getAction('sales.quotes', 'view')?.grants[0]
+      ?.actions,
   ).toEqual([
     {
       action: 'read',
@@ -47,7 +48,7 @@ it('binds reusable permissions to independent data scopes without leaking writes
     },
   ]);
   expect(
-    authz.composites
+    authz.compositeResources
       .getAction('sales.quotes', 'edit')
       ?.dataScopes?.find((scope) => scope.key === 'editable')?.title,
   ).toBe('Editable quotes');
@@ -68,7 +69,7 @@ it('keeps multi-table selections and defaults through binding and expansion', as
   const projects = defineDatabasePermission((p) =>
     p.collection('projects').read(['id']),
   );
-  const resource = defineComposite('submit', (r) =>
+  const resource = defineCompositeResource('submit', (r) =>
     r.action('run', (a) =>
       a.grant('quotes', quotes).grant('projects', projects),
     ),
@@ -106,7 +107,7 @@ it('keeps multi-table selections and defaults through binding and expansion', as
       },
     ],
   });
-  authz.composites.define(resource);
+  authz.compositeResources.define(resource);
   const context = authz.for({ principal: { type: 'user', id: 'alice' } });
   for (const id of ['quotes', 'projects'])
     await context.authorize({
@@ -128,7 +129,7 @@ it('rejects duplicate bindings, malformed declarations and incompatible scope ch
   );
   expect(() => permission.read(['amount'])).toThrow('Duplicate');
   expect(() =>
-    new CompositeActionBuilder()
+    new CompositeResourceActionBuilder()
       .grant('rows', permission)
       .grant('rows' as never, permission),
   ).toThrow('Duplicate');

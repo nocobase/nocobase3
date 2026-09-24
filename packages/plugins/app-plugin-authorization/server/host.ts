@@ -1,6 +1,6 @@
 import type {
   AuthorizationSubjectRegistry,
-  CompositeApi,
+  CompositeResourceApi,
   RecordAccessRegistry,
   ResourceTypeRegistry,
 } from '@nocobase/authorization/core';
@@ -17,6 +17,6 @@ export interface AuthorizationExtensionHost {
   readonly resourceTypes: ResourceTypeRegistry;
   readonly recordAccess: RecordAccessRegistry;
   readonly subjects: AuthorizationSubjectRegistry;
-  readonly composites: CompositeApi;
+  readonly compositeResources: CompositeResourceApi;
   readonly database: DatabaseApi;
 }

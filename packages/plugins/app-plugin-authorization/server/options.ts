@@ -261,7 +261,9 @@ function compositeDataScopes(
   id: string,
   fields: ReadonlyMap<string, readonly string[]>,
 ): Record<string, readonly AuthorizationOptionsDataScope[]> {
-  const resource = host.composites.list().find((entry) => entry.name === id);
+  const resource = host.compositeResources
+    .list()
+    .find((entry) => entry.name === id);
   const result: Record<string, readonly AuthorizationOptionsDataScope[]> = {};
   for (const action of resource?.actions ?? []) {
     const scopes = (action.dataScopes ?? []).map((scope) => {

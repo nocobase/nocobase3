@@ -1,9 +1,9 @@
 import {
   dataScopeTarget,
   type AuthorizationEnv,
-  type CompositeActions,
-  type CompositeApi,
-  type CompositeReference,
+  type CompositeResourceActions,
+  type CompositeResourceApi,
+  type CompositeResourceReference,
 } from '@nocobase/authorization/core';
 import {
   addRepositoryRequestConstraint,
@@ -11,9 +11,11 @@ import {
 } from '@nocobase/app-server/router';
 import type { MiddlewareHandler } from 'hono';
 
-export interface AuthorizeRepositoryOptions<A extends CompositeActions> {
+export interface AuthorizeRepositoryOptions<
+  A extends CompositeResourceActions,
+> {
   readonly repository: string;
-  readonly resource: CompositeReference<A>;
+  readonly resource: CompositeResourceReference<A>;
   readonly actions: Partial<
     Record<RepositoryApiAction, NoInfer<keyof A & string>>
   >;
@@ -32,12 +34,12 @@ const operations: Readonly<Record<RepositoryApiAction, string>> = {
 };
 
 export interface RepositoryAuthorizationHost {
-  readonly composites: CompositeApi;
+  readonly compositeResources: CompositeResourceApi;
   middleware(): MiddlewareHandler<AuthorizationEnv>;
 }
 
 export function createCompositeRepositoryAuthorization<
-  A extends CompositeActions,
+  A extends CompositeResourceActions,
 >(
   authz: RepositoryAuthorizationHost,
   options: AuthorizeRepositoryOptions<A>,
@@ -55,7 +57,7 @@ export function createCompositeRepositoryAuthorization<
     if (!Object.hasOwn(operations, method) || typeof action !== 'string')
       throw new TypeError('Invalid Repository action binding');
 
-    const definition = authz.composites.getAction(resource, action);
+    const definition = authz.compositeResources.getAction(resource, action);
     const scopes = definition?.dataScopes ?? [];
     const target =
       definition && scopes.length === 1

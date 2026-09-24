@@ -259,7 +259,7 @@ export function resourceTypeHandler(
 const RESERVED_TYPE = 'composite';
 let addingReserved = false;
 
-/** Package-internal: registers the reserved `composite` type for `authz.composites`. */
+/** Package-internal: registers the reserved `composite` type for `authz.compositeResources`. */
 export function addReservedResourceType<TParams>(
   registry: ResourceTypeRegistry,
   definition: ResourceTypeDefinition<TParams>,
@@ -294,7 +294,7 @@ export class ResourceTypeRegistry {
     if (!type) throw new TypeError('A resource type needs a name');
     if (type === RESERVED_TYPE && !addingReserved)
       throw new Error(
-        `Resource type ${RESERVED_TYPE} is reserved for composites; use authz.composites.define`,
+        `Resource type ${RESERVED_TYPE} is reserved for composite resources; use authz.compositeResources.define`,
       );
     if (this.registered.has(type))
       throw new Error(`Resource type already registered: ${type}`);

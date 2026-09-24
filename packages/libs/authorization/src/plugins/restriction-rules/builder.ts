@@ -1,7 +1,7 @@
 import {
   COMPOSITE_RESOURCE_TYPE,
-  type CompositeActions,
-  type CompositeReference,
+  type CompositeResourceActions,
+  type CompositeResourceReference,
 } from '../../core/composite.js';
 import type { RecordSelection } from '../../core/selection.js';
 import type { AuthorizationTitle } from '../../core/titles.js';
@@ -9,9 +9,9 @@ import type { AuthorizationSubject } from '../../core/types.js';
 import { appendRuleAction } from '../internal/rules.js';
 import type { RestrictionRule } from './model.js';
 
-export class RestrictionRuleBuilder<A extends CompositeActions> {
+export class RestrictionRuleBuilder<A extends CompositeResourceActions> {
   constructor(
-    private readonly resource: CompositeReference<A>,
+    private readonly resource: CompositeResourceReference<A>,
     private readonly definition: RestrictionRule,
   ) {}
 
@@ -59,9 +59,9 @@ export class RestrictionRuleBuilder<A extends CompositeActions> {
   }
 }
 
-export function defineRestrictionRule<A extends CompositeActions>(
+export function defineRestrictionRule<A extends CompositeResourceActions>(
   key: string,
-  resource: CompositeReference<A>,
+  resource: CompositeResourceReference<A>,
 ): RestrictionRuleBuilder<A> {
   if (!key) throw new TypeError('A rule needs a key');
   return new RestrictionRuleBuilder(resource, {

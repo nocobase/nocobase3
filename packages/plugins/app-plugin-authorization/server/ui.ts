@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
-  CompositeReference,
+  CompositeResourceReference,
   type AuthorizationPlugin,
   type AuthorizationTitle,
-  type CompositeActions,
-  type CompositeApi,
+  type CompositeResourceActions,
+  type CompositeResourceApi,
   type ResourceRef,
   type ResourceTypeRegistry,
 } from '@nocobase/authorization/core';
@@ -52,7 +52,7 @@ export interface AuthorizationUiPlacement {
 
 /** A resource to place: a ref, or the reference `composites.define` returns. */
 export type AuthorizationUiTarget =
-  ResourceRef | CompositeReference<CompositeActions>;
+  ResourceRef | CompositeResourceReference<CompositeResourceActions>;
 
 /** `ui.sections`. */
 export interface AuthorizationUiSections {
@@ -103,7 +103,7 @@ export interface AuthorizationUiApi {
   /** Checks every placement against the registered types, items and composites. */
   validate(host: {
     readonly resourceTypes: ResourceTypeRegistry;
-    readonly composites?: CompositeApi;
+    readonly compositeResources?: CompositeResourceApi;
   }): AuthorizationUiReport;
 }
 
@@ -266,7 +266,7 @@ class AuthorizationUi implements AuthorizationUiApi {
     placement: AuthorizationUiPlacement,
   ): void {
     const resource: ResourceRef =
-      target instanceof CompositeReference
+      target instanceof CompositeResourceReference
         ? { type: 'composite', id: target.name }
         : { type: target.type, id: target.id };
     if (!resource.type || !resource.id)
@@ -323,9 +323,9 @@ class AuthorizationUi implements AuthorizationUiApi {
 
   validate(host: {
     readonly resourceTypes: ResourceTypeRegistry;
-    readonly composites?: CompositeApi;
+    readonly compositeResources?: CompositeResourceApi;
   }): AuthorizationUiReport {
-    const errors: string[] = [...(host.composites?.validate() ?? [])];
+    const errors: string[] = [...(host.compositeResources?.validate() ?? [])];
     const warnings: string[] = [];
     for (const { resource, placement } of this.placements.values()) {
       const label = `${resource.type}:${resource.id}`;

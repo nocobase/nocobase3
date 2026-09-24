@@ -4,7 +4,7 @@ import {
   parseAuthorizationTitle,
   type AuthorizationRouteHandler,
   dataScopeTarget,
-  type CompositeApi,
+  type CompositeResourceApi,
   type PermissionGrant,
   type PermissionGrantAction,
   type Principal,
@@ -218,16 +218,22 @@ function summarize(
  * and applies to the scope's target; the composite registry checks the rest.
  */
 function validateGrants(
-  host: { composites: CompositeApi; recordAccess: RecordAccessRegistry },
+  host: {
+    compositeResources: CompositeResourceApi;
+    recordAccess: RecordAccessRegistry;
+  },
   input: CreatePermissionSetInput,
 ): void {
   for (const grant of input.grants) {
     if (grant.resource.type !== 'composite') continue;
     for (const entry of grant.actions) {
-      const action = host.composites.getAction(grant.resource.id, entry.action);
+      const action = host.compositeResources.getAction(
+        grant.resource.id,
+        entry.action,
+      );
       if (!action)
         throw new TypeError(
-          `Unknown composite action: ${grant.resource.id}.${entry.action}`,
+          `Unknown composite resource action: ${grant.resource.id}.${entry.action}`,
         );
       const scopes: unknown = entry.policy?.scopes;
       if (entry.policy === undefined) continue;
@@ -237,7 +243,7 @@ function validateGrants(
         typeof scopes !== 'object' ||
         Array.isArray(scopes)
       )
-        throw new TypeError('Invalid composite grant policy');
+        throw new TypeError('Invalid composite resource grant policy');
       for (const [key, value] of Object.entries(scopes)) {
         const scope = action.dataScopes?.find((item) => item.key === key);
         if (!scope) throw new TypeError(`Unknown data scope: ${key}`);

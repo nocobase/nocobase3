@@ -47,7 +47,7 @@ export function databasePlugin(database?: DatabaseManager): DatabasePlugin {
           authorizer.authorizeUnrestricted(request),
       });
       api.attach({
-        composites: authz.composites,
+        compositeResources: authz.compositeResources,
         middleware: () => authz.middleware(),
         ...(connection ? { connection } : {}),
         describe: async (name) =>

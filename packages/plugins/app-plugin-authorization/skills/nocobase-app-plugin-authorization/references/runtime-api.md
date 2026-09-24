@@ -37,11 +37,11 @@ export default defineServerPlugins([authentication, authorization]);
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `./server`: `authorizationToken`                                                                       | Resolve the application's `AppAuthorization`                                                                  |
 | `./server`: `defineDatabasePermission`, `recordAccess`, `condition`                                    | Typed collection permissions, the built-in record access and record access filters                            |
-| `@nocobase/authorization/core`: `defineComposite`, `defineRecordAccess`, `selection`                   | Composite resources, custom record access and rule selections                                                 |
+| `@nocobase/authorization/core`: `defineCompositeResource`, `defineRecordAccess`, `selection`           | Composite resources, custom record access and rule selections                                                 |
 | `authz.middleware()`, `authz.for(identity)`                                                            | The request's `AuthorizationContext`; see [request checks](core-api.md)                                       |
 | `authz.permissionSets`                                                                                 | Definitions, assignments, protection and transactions; see [permission sets](core-api.md#permission-sets)     |
 | `authz.ui.sections.add`, `authz.ui.groups.add`, `authz.ui.place(reference, { section, group? })`       | Workspace sections, subsections and groups, and where each composite or settings item is listed; display only |
-| `authz.composites.define(resource)`                                                                    | Register a composite resource; returns a `CompositeReference`                                                 |
+| `authz.compositeResources.define(resource)`                                                            | Register a composite resource; returns a `CompositeResourceReference`                                         |
 | `authz.recordAccess.define(access)`                                                                    | Register a named way to select records                                                                        |
 | `authz.database.collections.add(definition)`                                                           | Opt a collection into the permission model                                                                    |
 | `authz.database.policyFor(collection, context, operation?)`                                            | Fold the CRUD decisions of one collection into a `RepositoryPolicy`                                           |
@@ -56,7 +56,7 @@ export default defineServerPlugins([authentication, authorization]);
 A business operation is a composite resource. Use stable names (`sales.quotes`, `submit`) and a separate data scope key for every independently controlled collection; a data scope targets the one collection its grants name. Builders are immutable; return the builder from each callback. They perform no registration or persistence.
 
 ```ts
-import { defineComposite } from '@nocobase/authorization/core';
+import { defineCompositeResource } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '@nocobase/app-plugin-authorization/server';
 
 interface Quote {
@@ -80,7 +80,7 @@ const quoteData = defineDatabasePermission((p) =>
 const projectData = defineDatabasePermission((p) =>
   p.collection<Project>('projects').title('Projects').read(['id', 'title']),
 );
-export const quotes = defineComposite('sales.quotes', (r) =>
+export const quotes = defineCompositeResource('sales.quotes', (r) =>
   r
     .title('Quotes')
     .action('view', (a) => a.title('View').grant('quotes', quoteData))
@@ -98,7 +98,7 @@ export const quotes = defineComposite('sales.quotes', (r) =>
 // In the owning provider's boot method:
 authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
 authz.database.collections.add({ name: 'projects', title: 'Projects' });
-const reference = authz.composites.define(quotes);
+const reference = authz.compositeResources.define(quotes);
 authz.ui.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
 authz.ui.place(reference, { section: 'sales' });
 ```

@@ -45,109 +45,111 @@ export interface DataScope {
  */
 export type DataScopeValue = RecordSelection | string;
 
-export interface CompositeGrantAction extends PermissionGrantAction {
+export interface CompositeResourceGrantAction extends PermissionGrantAction {
   /** The data scope this action's records are chosen by. */
   scopeKey?: string;
 }
 
-export interface CompositeGrant {
+export interface CompositeResourceGrant {
   resource: ResourceRef;
-  actions: readonly CompositeGrantAction[];
+  actions: readonly CompositeResourceGrantAction[];
 }
 
-export interface CompositeAction {
+export interface CompositeResourceAction {
   name: string;
   title: AuthorizationTitle;
   dataScopes?: readonly DataScope[];
-  grants: readonly CompositeGrant[];
+  grants: readonly CompositeResourceGrant[];
 }
 
 /**
  * A resource whose actions expand into a set of underlying grants, each
  * optionally bound to a named data scope.
  */
-export interface Composite {
+export interface CompositeResource {
   name: string;
   title: AuthorizationTitle;
-  actions: readonly CompositeAction[];
+  actions: readonly CompositeResourceAction[];
 }
 
 /** The policy of a composite grant: one value per data scope it sets. */
-export interface CompositePolicy extends AuthorizationPolicy {
+export interface CompositeResourcePolicy extends AuthorizationPolicy {
   type: 'composite';
   scopes: Readonly<Record<string, DataScopeValue>>;
 }
 
 /** One underlying check of a composite action, made with that action's grants. */
-export interface CompositeCheck {
+export interface CompositeResourceCheck {
   resource: ResourceRef;
   action: string;
   decision: AuthorizationDecision;
 }
 
 /** Plugins extend this through `composeConditions`. */
-export interface CompositeConditions extends AuthorizationConditions {
+export interface CompositeResourceConditions extends AuthorizationConditions {
   type: 'composite';
-  checks: readonly CompositeCheck[];
+  checks: readonly CompositeResourceCheck[];
 }
 
-export interface CompositeContributionData {
-  grants: readonly CompositeGrant[];
+export interface CompositeResourceContributionData {
+  grants: readonly CompositeResourceGrant[];
   dataScopes?: readonly DataScope[];
 }
 
 /** What a composite action is built from; `S` carries data scope value types. */
-export interface CompositeContribution<
+export interface CompositeResourceContribution<
   S extends Record<string, DataScopeValue> = Record<never, never>,
 > {
-  build(): CompositeContributionData;
+  build(): CompositeResourceContributionData;
   /** Type-only: the values each data scope of this contribution accepts. */
   readonly scopeSelections?: S;
 }
 
 /** A plugin-owned permission that becomes a data scope once bound to a key. */
-export interface BindableCompositePermission {
+export interface BindableCompositeResourcePermission {
   /** Type-only: the values the bound data scope accepts. */
   readonly recordAccessSelection?: DataScopeValue;
   bind<K extends string>(
     key: K,
     metadata?: { title?: AuthorizationTitle },
-  ): CompositeContribution<Record<K, DataScopeValue>>;
+  ): CompositeResourceContribution<Record<K, DataScopeValue>>;
 }
 
-type ContributionScopes<C extends CompositeContribution> =
+type ContributionScopes<C extends CompositeResourceContribution> =
   'scopeSelections' extends keyof C
     ? NonNullable<C['scopeSelections']>
     : Record<never, never>;
 
-export interface CompositeActionData {
+export interface CompositeResourceActionData {
   title?: AuthorizationTitle;
-  grants: readonly CompositeGrant[];
+  grants: readonly CompositeResourceGrant[];
   dataScopes: readonly DataScope[];
 }
 
-export class CompositeActionBuilder<
+export class CompositeResourceActionBuilder<
   S extends Record<string, DataScopeValue> = Record<never, never>,
-> implements CompositeContribution<S> {
+> implements CompositeResourceContribution<S> {
   declare readonly scopeSelections?: S;
-  private readonly data: CompositeActionData;
+  private readonly data: CompositeResourceActionData;
 
-  constructor(data: CompositeActionData = { grants: [], dataScopes: [] }) {
+  constructor(
+    data: CompositeResourceActionData = { grants: [], dataScopes: [] },
+  ) {
     this.data = structuredClone(data);
   }
 
-  title(title: AuthorizationTitle): CompositeActionBuilder<S> {
-    return new CompositeActionBuilder({ ...this.data, title });
+  title(title: AuthorizationTitle): CompositeResourceActionBuilder<S> {
+    return new CompositeResourceActionBuilder({ ...this.data, title });
   }
 
-  grant<C extends CompositeContribution>(
+  grant<C extends CompositeResourceContribution>(
     contribution: C,
-  ): CompositeActionBuilder<S & ContributionScopes<C>>;
-  grant<const K extends string, P extends BindableCompositePermission>(
+  ): CompositeResourceActionBuilder<S & ContributionScopes<C>>;
+  grant<const K extends string, P extends BindableCompositeResourcePermission>(
     key: K extends keyof S ? never : K,
     permission: P,
     metadata?: { title?: AuthorizationTitle },
-  ): CompositeActionBuilder<
+  ): CompositeResourceActionBuilder<
     S &
       Record<
         K,
@@ -157,10 +159,10 @@ export class CompositeActionBuilder<
       >
   >;
   grant(
-    valueOrKey: CompositeContribution | string,
-    permission?: BindableCompositePermission,
+    valueOrKey: CompositeResourceContribution | string,
+    permission?: BindableCompositeResourcePermission,
     metadata?: { title?: AuthorizationTitle },
-  ): CompositeActionBuilder<S> {
+  ): CompositeResourceActionBuilder<S> {
     const contribution =
       typeof valueOrKey === 'string'
         ? permission?.bind(valueOrKey, metadata)
@@ -173,39 +175,47 @@ export class CompositeActionBuilder<
         throw new TypeError(`Duplicate data scope: ${scope.key}`);
       dataScopes.push(scope);
     }
-    return new CompositeActionBuilder({
+    return new CompositeResourceActionBuilder({
       ...this.data,
       grants: [...this.data.grants, ...built.grants],
       dataScopes,
     });
   }
 
-  build(): CompositeActionData {
+  build(): CompositeResourceActionData {
     return structuredClone(this.data);
   }
 }
 
 /** Data scope values per action, as the reference types them. */
-export type CompositeActions = Record<string, Record<string, DataScopeValue>>;
+export type CompositeResourceActions = Record<
+  string,
+  Record<string, DataScopeValue>
+>;
 
 type ScopeAssignments<S> = keyof S extends never
   ? Record<string, never>
   : Partial<S>;
 
-export type CompositeActionAssignments<A extends CompositeActions> = {
+export type CompositeResourceActionAssignments<
+  A extends CompositeResourceActions,
+> = {
   [K in keyof A]?: ScopeAssignments<A[K]>;
 };
 
-export interface CompositeScopeTarget<N extends string, K extends string> {
+export interface CompositeResourceScopeTarget<
+  N extends string,
+  K extends string,
+> {
   action: N;
   scopeKey: K;
 }
 
 /** Type-safe grants and rule targets for one composite. */
-export class CompositeReference<A extends CompositeActions> {
-  private readonly definition: Composite;
+export class CompositeResourceReference<A extends CompositeResourceActions> {
+  private readonly definition: CompositeResource;
 
-  constructor(definition: Composite) {
+  constructor(definition: CompositeResource) {
     this.definition = structuredClone(definition);
   }
 
@@ -216,13 +226,15 @@ export class CompositeReference<A extends CompositeActions> {
   scope<N extends keyof A & string, K extends keyof A[N] & string>(
     action: N,
     key: K,
-  ): CompositeScopeTarget<N, K> {
+  ): CompositeResourceScopeTarget<N, K> {
     if (
       !this.definition.actions
         .find((entry) => entry.name === action)
         ?.dataScopes?.some((scope) => scope.key === key)
     )
-      throw new TypeError(`Unknown composite data scope: ${action}.${key}`);
+      throw new TypeError(
+        `Unknown composite resource data scope: ${action}.${key}`,
+      );
     return { action, scopeKey: key };
   }
 
@@ -230,8 +242,10 @@ export class CompositeReference<A extends CompositeActions> {
     action: keyof A & string,
     ...actions: (keyof A & string)[]
   ): PermissionGrant;
-  grant(actions: CompositeActionAssignments<A>): PermissionGrant;
-  grant(...input: (string | CompositeActionAssignments<A>)[]): PermissionGrant {
+  grant(actions: CompositeResourceActionAssignments<A>): PermissionGrant;
+  grant(
+    ...input: (string | CompositeResourceActionAssignments<A>)[]
+  ): PermissionGrant {
     const first = input[0];
     const entries: [string, Readonly<Record<string, DataScopeValue>>][] =
       typeof first === 'object'
@@ -245,14 +259,14 @@ export class CompositeReference<A extends CompositeActions> {
 }
 
 function compositeGrant(
-  definition: Composite,
+  definition: CompositeResource,
   entries: readonly [string, Readonly<Record<string, DataScopeValue>>][],
 ): PermissionGrant {
   const actions = entries.map(([name, scopes]): PermissionGrantAction => {
     const action = definition.actions.find((entry) => entry.name === name);
     if (!action)
       throw new TypeError(
-        `Unknown composite action: ${definition.name}.${name}`,
+        `Unknown composite resource action: ${definition.name}.${name}`,
       );
     for (const [key, value] of Object.entries(scopes))
       validateScopeValue(action, key, value);
@@ -269,65 +283,70 @@ function compositeGrant(
   };
 }
 
-export class CompositeBuilder<
-  A extends CompositeActions = Record<never, never>,
+export class CompositeResourceBuilder<
+  A extends CompositeResourceActions = Record<never, never>,
 > {
-  private readonly definition: Composite;
+  private readonly definition: CompositeResource;
 
-  constructor(definition: Composite) {
+  constructor(definition: CompositeResource) {
     this.definition = structuredClone(definition);
   }
 
-  title(title: AuthorizationTitle): CompositeBuilder<A> {
-    return new CompositeBuilder({ ...this.definition, title });
+  title(title: AuthorizationTitle): CompositeResourceBuilder<A> {
+    return new CompositeResourceBuilder({ ...this.definition, title });
   }
 
-  action<const N extends string, C extends CompositeContribution>(
+  action<const N extends string, C extends CompositeResourceContribution>(
     name: N extends keyof A ? never : N,
-    configure: (action: CompositeActionBuilder) => C,
-  ): CompositeBuilder<A & Record<N, ContributionScopes<C>>> {
+    configure: (action: CompositeResourceActionBuilder) => C,
+  ): CompositeResourceBuilder<A & Record<N, ContributionScopes<C>>> {
     if (!name || this.definition.actions.some((action) => action.name === name))
-      throw new TypeError(`Duplicate or empty composite action: ${name}`);
-    const built = configure(new CompositeActionBuilder()).build();
+      throw new TypeError(
+        `Duplicate or empty composite resource action: ${name}`,
+      );
+    const built = configure(new CompositeResourceActionBuilder()).build();
     const title =
       'title' in built && built.title !== undefined
         ? (built.title as AuthorizationTitle)
         : name;
-    const action: CompositeAction = {
+    const action: CompositeResourceAction = {
       name,
       title,
       grants: built.grants,
       ...(built.dataScopes?.length ? { dataScopes: built.dataScopes } : {}),
     };
-    return new CompositeBuilder({
+    return new CompositeResourceBuilder({
       ...this.definition,
       actions: [...this.definition.actions, action],
     });
   }
 
-  build(): Composite {
+  build(): CompositeResource {
     return validateComposite(structuredClone(this.definition));
   }
 
-  reference(): CompositeReference<A> {
-    return new CompositeReference(this.build());
+  reference(): CompositeResourceReference<A> {
+    return new CompositeResourceReference(this.build());
   }
 }
 
-/** Builds a composite; `authz.composites.define` registers it. */
-export function defineComposite<A extends CompositeActions>(
+/** Builds a composite; `authz.compositeResources.define` registers it. */
+export function defineCompositeResource<A extends CompositeResourceActions>(
   name: string,
-  configure: (resource: CompositeBuilder) => CompositeBuilder<A>,
-): CompositeBuilder<A> {
-  if (!name) throw new TypeError('A composite needs a name');
+  configure: (
+    resource: CompositeResourceBuilder,
+  ) => CompositeResourceBuilder<A>,
+): CompositeResourceBuilder<A> {
+  if (!name) throw new TypeError('A composite resource needs a name');
   const result = configure(
-    new CompositeBuilder({ name, title: name, actions: [] }),
+    new CompositeResourceBuilder({ name, title: name, actions: [] }),
   );
-  return new CompositeBuilder<A>(result.build());
+  return new CompositeResourceBuilder<A>(result.build());
 }
 
-function validateComposite(definition: Composite): Composite {
-  if (!definition.name) throw new TypeError('A composite needs a name');
+function validateComposite(definition: CompositeResource): CompositeResource {
+  if (!definition.name)
+    throw new TypeError('A composite resource needs a name');
   const names = definition.actions.map((action) => action.name);
   if (
     !names.length ||
@@ -341,18 +360,22 @@ function validateComposite(definition: Composite): Composite {
   return definition;
 }
 
-function validateCompositeAction(action: CompositeAction): void {
+function validateCompositeAction(action: CompositeResourceAction): void {
   if (!action.grants.length)
-    throw new TypeError(`Composite action ${action.name} grants nothing`);
+    throw new TypeError(
+      `Composite resource action ${action.name} grants nothing`,
+    );
   for (const grant of action.grants)
     if (grant.resource.type === COMPOSITE_RESOURCE_TYPE)
       throw new TypeError(
-        `Composite action ${action.name} cannot compose another composite: ${grant.resource.id}`,
+        `Composite resource action ${action.name} cannot compose another composite resource: ${grant.resource.id}`,
       );
   const scopes = action.dataScopes ?? [];
   const keys = scopes.map((scope) => scope.key);
   if (keys.some((key) => !key) || new Set(keys).size !== keys.length)
-    throw new TypeError(`Composite action ${action.name} repeats a data scope`);
+    throw new TypeError(
+      `Composite resource action ${action.name} repeats a data scope`,
+    );
   for (const scope of scopes) {
     const options = scope.options;
     if (
@@ -382,7 +405,7 @@ function validateCompositeAction(action: CompositeAction): void {
  * they address different resources.
  */
 export function dataScopeTarget(
-  action: Pick<CompositeAction, 'name' | 'grants'>,
+  action: Pick<CompositeResourceAction, 'name' | 'grants'>,
   key: string,
 ): ResourceRef {
   let target: ResourceRef | undefined;
@@ -411,7 +434,7 @@ function normalizeScopeValue(value: DataScopeValue): RecordSelection {
 }
 
 function validateScopeValue(
-  action: CompositeAction,
+  action: CompositeResourceAction,
   key: string,
   value: unknown,
 ): RecordSelection | undefined {
@@ -432,13 +455,13 @@ function validateScopeValue(
   return selection;
 }
 
-export interface CompositeApi {
-  /** Registers a definition object or a `defineComposite` result. */
-  define<A extends CompositeActions = CompositeActions>(
-    definition: Composite | CompositeBuilder<A>,
-  ): CompositeReference<A>;
-  getAction(id: string, action: string): CompositeAction | undefined;
-  list(): readonly Composite[];
+export interface CompositeResourceApi {
+  /** Registers a definition object or a `defineCompositeResource` result. */
+  define<A extends CompositeResourceActions = CompositeResourceActions>(
+    definition: CompositeResource | CompositeResourceBuilder<A>,
+  ): CompositeResourceReference<A>;
+  getAction(id: string, action: string): CompositeResourceAction | undefined;
+  list(): readonly CompositeResource[];
   /**
    * The data scopes whose target type is unregistered or lacks
    * `recordAccess`, one message each. `define` rejects these when the type is
@@ -451,11 +474,11 @@ export interface CompositeApi {
    * definitions — an unknown action, an unknown or invalid data scope, or a
    * malformed policy — or `undefined` when it is valid.
    */
-  validateGrant(grant: CompositeGrantInput): string | undefined;
+  validateGrant(grant: CompositeResourceGrantInput): string | undefined;
 }
 
 /** A composite grant as a Permission Set stores it: one action and its policy. */
-export interface CompositeGrantInput {
+export interface CompositeResourceGrantInput {
   readonly resource: ResourceRef;
   readonly action: string;
   readonly policy?: AuthorizationPolicy;
@@ -470,11 +493,11 @@ export interface InvalidGrant {
 }
 
 /**
- * Package-internal: `authz.composites`. It registers the reserved `composite`
+ * Package-internal: `authz.compositeResources`. It registers the reserved `composite`
  * resource type itself, so it is always available.
  */
-export class CompositeRegistry implements CompositeApi {
-  private readonly definitions = new Map<string, Composite>();
+export class CompositeResourceRegistry implements CompositeResourceApi {
+  private readonly definitions = new Map<string, CompositeResource>();
   /** Composites whose data scope targets have passed the `recordAccess` check. */
   private readonly verified = new Set<string>();
   private readonly items: ResourceItems = new ResourceItems();
@@ -493,16 +516,16 @@ export class CompositeRegistry implements CompositeApi {
     });
   }
 
-  define<A extends CompositeActions = CompositeActions>(
-    definition: Composite | CompositeBuilder<A>,
-  ): CompositeReference<A> {
+  define<A extends CompositeResourceActions = CompositeResourceActions>(
+    definition: CompositeResource | CompositeResourceBuilder<A>,
+  ): CompositeResourceReference<A> {
     const resource = validateComposite(
-      definition instanceof CompositeBuilder
+      definition instanceof CompositeResourceBuilder
         ? definition.build()
         : structuredClone(definition),
     );
     if (this.definitions.has(resource.name))
-      throw new Error(`Composite already defined: ${resource.name}`);
+      throw new Error(`Composite resource already defined: ${resource.name}`);
     const problems = this.scopeProblems(resource, false);
     if (problems.length) throw new TypeError(problems[0]);
     this.items.add({
@@ -511,7 +534,7 @@ export class CompositeRegistry implements CompositeApi {
       actions: resource.actions.map(({ name, title }) => ({ name, title })),
     });
     this.definitions.set(resource.name, resource);
-    return new CompositeReference<A>(resource);
+    return new CompositeResourceReference<A>(resource);
   }
 
   validate(): readonly string[] {
@@ -524,7 +547,10 @@ export class CompositeRegistry implements CompositeApi {
    * Data scopes whose target type lacks `recordAccess`; with `strict`, also
    * those whose type is not registered yet.
    */
-  private scopeProblems(resource: Composite, strict: boolean): string[] {
+  private scopeProblems(
+    resource: CompositeResource,
+    strict: boolean,
+  ): string[] {
     const types = this.resourceTypes;
     return resource.actions.flatMap((action) =>
       (action.dataScopes ?? []).flatMap((scope) => {
@@ -544,21 +570,21 @@ export class CompositeRegistry implements CompositeApi {
   }
 
   /** Throws on first use when a data scope's target type is still unfit. */
-  private verify(resource: Composite): void {
+  private verify(resource: CompositeResource): void {
     if (this.verified.has(resource.name)) return;
     const problems = this.scopeProblems(resource, true);
     if (problems.length) throw new TypeError(problems[0]);
     this.verified.add(resource.name);
   }
 
-  getAction(id: string, action: string): CompositeAction | undefined {
+  getAction(id: string, action: string): CompositeResourceAction | undefined {
     const found = this.definitions
       .get(id)
       ?.actions.find((entry) => entry.name === action);
     return found && structuredClone(found);
   }
 
-  list(): readonly Composite[] {
+  list(): readonly CompositeResource[] {
     return structuredClone([...this.definitions.values()]);
   }
 
@@ -566,7 +592,7 @@ export class CompositeRegistry implements CompositeApi {
     return this.definitions.size;
   }
 
-  validateGrant(grant: CompositeGrantInput): string | undefined {
+  validateGrant(grant: CompositeResourceGrantInput): string | undefined {
     if (grant.resource.type !== COMPOSITE_RESOURCE_TYPE) return undefined;
     try {
       this.expand({ ...grant, source: { plugin: '', id: '' } });
@@ -615,7 +641,7 @@ export class CompositeRegistry implements CompositeApi {
     );
     if (!resource || !action)
       throw new TypeError(
-        `Unknown composite action: ${grant.resource.id}.${grant.action}`,
+        `Unknown composite resource action: ${grant.resource.id}.${grant.action}`,
       );
     this.verify(resource);
     const scopes = compositeScopes(grant.policy);
@@ -664,7 +690,7 @@ function compositeScopes(
     scopes === null ||
     Array.isArray(scopes)
   )
-    throw new TypeError('Invalid composite grant policy');
+    throw new TypeError('Invalid composite resource grant policy');
   return scopes as Readonly<Record<string, unknown>>;
 }
 
@@ -673,7 +699,7 @@ function compositeScopes(
  * checked separately. A stored grant that no longer expands permits nothing.
  */
 async function authorizeComposite(
-  registry: CompositeRegistry,
+  registry: CompositeResourceRegistry,
   request: AuthorizationRequest<unknown>,
   context: AuthorizationRuntimeContext,
 ): Promise<AuthorizationDecision> {
@@ -721,7 +747,7 @@ async function authorizeComposite(
 /** Wraps a Grant Provider so composite grants resolve with what they compose. */
 export function composedGrants(
   provider: AuthorizationGrantService,
-  registry: CompositeRegistry,
+  registry: CompositeResourceRegistry,
   constraints: AccessConstraintService,
 ): AuthorizationGrantService {
   const expand = (

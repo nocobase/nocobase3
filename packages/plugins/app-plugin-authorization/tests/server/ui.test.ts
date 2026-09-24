@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defineComposite, ResourceItems } from '@nocobase/authorization/core';
+import {
+  defineCompositeResource,
+  ResourceItems,
+} from '@nocobase/authorization/core';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
@@ -27,7 +30,7 @@ const tree = (
     section.subsections.map((subsection) => subsection.name),
   ]);
 
-const quotes = defineComposite('sales.quotes', (resource) =>
+const quotes = defineCompositeResource('sales.quotes', (resource) =>
   resource.title('Quotes').action('view', (action) =>
     action.grant({
       build: () => ({
@@ -187,7 +190,7 @@ describe('authz.ui groups and placement', () => {
   it('places a ref or a composite reference in a subsection only', () => {
     const authz = createAppAuthorization({});
     authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
-    const reference = authz.composites.define(quotes);
+    const reference = authz.compositeResources.define(quotes);
     authz.ui.sections.add({
       name: 'sales',
       title: 'Sales',
@@ -227,7 +230,7 @@ describe('authz.ui groups and placement', () => {
   it('lists an unplaced composite under its default section Other', async () => {
     const authz = createAppAuthorization({});
     authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
-    authz.composites.define(quotes);
+    authz.compositeResources.define(quotes);
     const options = await authorizationOptions(authz);
     expect(
       options.sections.find((section) => section.name === 'business')
@@ -276,7 +279,7 @@ describe('authz.ui startup validation', () => {
   it('reports unknown subsections, groups and resources, and warns about unplaced items', () => {
     const authz = createAppAuthorization({});
     authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
-    authz.composites.define(quotes);
+    authz.compositeResources.define(quotes);
     authz.settings.add({ id: 'misc', title: 'Misc', actions: ['manage'] });
     authz.ui.place({ type: 'settings', id: 'misc' }, { section: 'nowhere' });
     authz.settings.add({ id: 'bills', title: 'Bills', actions: ['manage'] });
@@ -303,7 +306,7 @@ describe('authz.ui startup validation', () => {
 
   it('includes composites whose data scope targets a type without recordAccess', () => {
     const authz = createAppAuthorization({});
-    authz.composites.define({
+    authz.compositeResources.define({
       name: 'ledger.view',
       title: 'Ledger',
       actions: [
@@ -486,7 +489,7 @@ describe('options', () => {
     ]);
     const title = { key: 'sales.title', ns: 'example' };
     const actionTitle = { key: 'sales.view', ns: 'example' };
-    const orders = authz.composites.define({
+    const orders = authz.compositeResources.define({
       name: 'sales.orders',
       title,
       actions: [

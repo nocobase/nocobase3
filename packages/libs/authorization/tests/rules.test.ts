@@ -3,14 +3,14 @@ import {
   createAuthorization,
   DefaultAccessConflictError,
   defaultAccessPlugin,
-  defineComposite,
+  defineCompositeResource,
   permissionSetsPlugin,
   restrictionRulesPlugin,
   selection,
   sharingRulesPlugin,
   type AccessConstraint,
   type AuthorizationPlugin,
-  type CompositeContribution,
+  type CompositeResourceContribution,
   type DefaultAccessRule,
   type RestrictionRule,
   type SharingRule,
@@ -287,7 +287,7 @@ describe('rule plugins', () => {
   });
 });
 
-const contribution: CompositeContribution<{ quotes: string }> = {
+const contribution: CompositeResourceContribution<{ quotes: string }> = {
   build: () => ({
     dataScopes: [{ key: 'quotes', title: 'Quotes' }],
     grants: [
@@ -298,7 +298,7 @@ const contribution: CompositeContribution<{ quotes: string }> = {
     ],
   }),
 };
-const quotes = defineComposite('sales.quotes', (resource) =>
+const quotes = defineCompositeResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
     .action('view', (action) => action.title('View').grant(contribution)),

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { CompositeConditions } from '@nocobase/authorization/core';
+import type { CompositeResourceConditions } from '@nocobase/authorization/core';
 import type {
   AuthorizationOptionsResponse,
   PermissionSet,
@@ -428,7 +428,7 @@ it('returns executable policies for both submit targets without a second policy 
     };
     const decision = await scope.authorize(request);
     expect(decision.effect).toBe('conditional');
-    const conditions = decision.conditions as CompositeConditions;
+    const conditions = decision.conditions as CompositeResourceConditions;
     expect(conditions.type).toBe('composite');
     expect(Object.keys(conditions.database!)).toEqual(
       expect.arrayContaining([PROJECTS, QUOTES]),

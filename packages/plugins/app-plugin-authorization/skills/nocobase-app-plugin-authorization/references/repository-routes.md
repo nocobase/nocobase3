@@ -22,10 +22,10 @@ For custom endpoints, install authentication and `authz.middleware()`, call `c.v
 
 ## Complete example
 
-The application-owned declaration can be defined as follows in `server/sales-resources.ts`; use the customer's real collection name and translated labels. Register the collection and `projectResource` (with `authz.database.collections.add` and `authz.composites.define`) in the provider before router creation, and list the composite in the `sales` workspace subsection with `authz.ui.sections.add` and `authz.ui.place`. Use the same collection name in the route module.
+The application-owned declaration can be defined as follows in `server/sales-resources.ts`; use the customer's real collection name and translated labels. Register the collection and `projectResource` (with `authz.database.collections.add` and `authz.compositeResources.define`) in the provider before router creation, and list the composite in the `sales` workspace subsection with `authz.ui.sections.add` and `authz.ui.place`. Use the same collection name in the route module.
 
 ```ts
-import { defineComposite } from '@nocobase/authorization/core';
+import { defineCompositeResource } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '@nocobase/app-plugin-authorization/server';
 
 const projectData = defineDatabasePermission((p) =>
@@ -34,13 +34,15 @@ const projectData = defineDatabasePermission((p) =>
     .read(['id', 'title', 'region', 'ownerId', 'confidential', 'notes']),
 );
 
-export const projectResource = defineComposite('sales.projects', (resource) =>
-  resource
-    .title('Projects')
-    .action('view', (action) => action.grant('projects', projectData))
-    .action('edit', (action) =>
-      action.grant('projects', projectData.update(['title', 'notes'])),
-    ),
+export const projectResource = defineCompositeResource(
+  'sales.projects',
+  (resource) =>
+    resource
+      .title('Projects')
+      .action('view', (action) => action.grant('projects', projectData))
+      .action('edit', (action) =>
+        action.grant('projects', projectData.update(['title', 'notes'])),
+      ),
 );
 ```
 
@@ -157,7 +159,7 @@ export function editableValues(body: unknown, fields: readonly string[]): void {
 }
 ```
 
-Use App-owned collection/resource modules. This `server/routes/projects.ts` contribution exposes paths relative to the App API base; if the App adds a route prefix, use that same prefix in client requests. The resource declaration uses `defineComposite` and `defineDatabasePermission`, described in the bundled runtime and fluent references. Do not import private files from an installed example package.
+Use App-owned collection/resource modules. This `server/routes/projects.ts` contribution exposes paths relative to the App API base; if the App adds a route prefix, use that same prefix in client requests. The resource declaration uses `defineCompositeResource` and `defineDatabasePermission`, described in the bundled runtime and fluent references. Do not import private files from an installed example package.
 
 The resulting endpoints are POST `salesProjects:findMany`, `salesProjects:findOne`, `salesProjects:count` and `salesProjects:updateOne`. Update input is `{ filter: { id }, values: { notes } }`; the response is Repository's `{ data }` envelope containing the updated record. Hidden/out-of-scope update targets return 404; missing action grants return 403. Client code should refresh data and handle both outcomes. Reading a cloned request in validation leaves the original stream available for the generated route's body-size check and parser; install a body limit before custom validation too.
 

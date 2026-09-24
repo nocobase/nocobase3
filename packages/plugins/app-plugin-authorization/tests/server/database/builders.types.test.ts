@@ -1,6 +1,9 @@
 import type { AppAuthorization } from '../../../server/index.js';
 import { it, expectTypeOf } from 'vitest';
-import { defineComposite, selection } from '@nocobase/authorization/core';
+import {
+  defineCompositeResource,
+  selection,
+} from '@nocobase/authorization/core';
 import { defineDefaultAccessRule } from '@nocobase/authorization/default-access';
 import type { DatabaseActionGrant } from '../../../server/database/model.js';
 import { defineDatabasePermission } from '../../../server/database/builders.js';
@@ -27,7 +30,7 @@ function typeChecks(authz: AppAuthorization) {
   read.update(['ammount']);
   // @ts-expect-error Default must be an allowed option.
   read.default(recordAccess.allRecords);
-  const definition = defineComposite('quotes', (r) =>
+  const definition = defineCompositeResource('quotes', (r) =>
     r
       .action('view', (a) => a.grant('visible', read))
       .action('edit', (a) => a.grant('editable', read.update(['amount']))),
@@ -67,7 +70,7 @@ function typeChecks(authz: AppAuthorization) {
   );
   // @ts-expect-error Duplicate resource action.
   definition.action('view', (a) => a.grant('rows', read));
-  defineComposite('duplicate', (r) =>
+  defineCompositeResource('duplicate', (r) =>
     r.action('view', (a) =>
       // @ts-expect-error Duplicate binding key.
       a.grant('rows', read).grant('rows', read),

@@ -16,7 +16,7 @@ export function registerSalesAuthorization(
   for (const collection of salesCollections)
     authz.database.collections.add(collection);
   for (const { resource, section } of salesResources)
-    authz.ui.place(authz.composites.define(resource), { section });
+    authz.ui.place(authz.compositeResources.define(resource), { section });
   for (const definition of createSalesRecordAccess(database))
     authz.recordAccess.define(definition);
 }

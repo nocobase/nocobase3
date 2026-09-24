@@ -57,7 +57,7 @@ describe('the reserved composite type', () => {
     ]);
     expect(() =>
       authz.resourceTypes.add({ type: 'composite', actions: ['run'] }),
-    ).toThrow(/reserved for composites/);
+    ).toThrow(/reserved for composite resources/);
     expect(() =>
       createAuthorization({
         plugins: [
@@ -69,7 +69,7 @@ describe('the reserved composite type', () => {
           },
         ],
       }),
-    ).toThrow(/reserved for composites/);
+    ).toThrow(/reserved for composite resources/);
   });
 });
 
