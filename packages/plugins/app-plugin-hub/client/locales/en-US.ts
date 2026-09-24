@@ -563,15 +563,12 @@ const enUS = {
     names: {
       'hub-administrator': 'Platform Administrator',
       'hub-operator': 'Application Administrator',
-      'hub-viewer': 'Viewer (legacy)',
     },
     descriptions: {
       'hub-administrator':
         'Manage all applications, publishing API Keys, and user permissions',
       'hub-operator':
         'Manage applications you create and your own publishing API Keys',
-      'hub-viewer':
-        'Read-only access to permitted applications and runtime status',
     },
     groups: {
       visibility: 'Applications and status',

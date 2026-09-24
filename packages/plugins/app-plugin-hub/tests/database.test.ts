@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import appTablesMigration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import permissionSetsMigration from '../database/migrations/202609080001_create_hub_permission_sets.js';
+import removeViewerMigration from '../database/migrations/202609230001_remove_hub_viewer_permission_set.js';
 import administratorSeed from '../database/seeds/202609080002_assign_hub_administrator.js';
 
 interface SqliteClient {
@@ -452,6 +453,87 @@ describe('@nocobase/app-plugin-hub database migration', () => {
         .where('key', 'in', ['hub-administrator', 'hub-operator', 'hub-viewer'])
         .execute(),
     ).resolves.toEqual([]);
+  });
+
+  it('removes the Viewer Permission Set with its assignments and restores the set on rollback', async () => {
+    await createAuthorizationTables(database);
+    const query = database.connection().query;
+    await migrate(permissionSetsMigration, 'up', database);
+    const now = new Date();
+    await query
+      .insertInto('authorizationPermissionSetAssignments')
+      .values([
+        {
+          id: 'user:viewer-1:hub-viewer',
+          subjectType: 'user',
+          subjectId: 'viewer-1',
+          permissionSetKey: 'hub-viewer',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'user:operator-1:hub-operator',
+          subjectType: 'user',
+          subjectId: 'operator-1',
+          permissionSetKey: 'hub-operator',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .execute();
+
+    await migrate(removeViewerMigration, 'up', database);
+    await migrate(removeViewerMigration, 'up', database);
+
+    const keys = async (): Promise<readonly string[]> =>
+      (
+        await query
+          .selectFrom('authorizationPermissionSets')
+          .select('key')
+          .orderBy('key', 'asc')
+          .execute()
+      ).map(({ key }) => String(key));
+    expect(await keys()).toEqual(['hub-administrator', 'hub-operator']);
+    expect(
+      (
+        await query
+          .selectFrom('authorizationPermissionSetAssignments')
+          .select('permissionSetKey')
+          .execute()
+      ).map(({ permissionSetKey }) => String(permissionSetKey)),
+    ).toEqual(['hub-operator']);
+
+    await migrate(removeViewerMigration, 'down', database);
+
+    expect(await keys()).toEqual([
+      'hub-administrator',
+      'hub-operator',
+      'hub-viewer',
+    ]);
+    const restored = await query
+      .selectFrom('authorizationPermissionSets')
+      .select(['title', 'grants'])
+      .where('key', '=', 'hub-viewer')
+      .executeTakeFirstOrThrow();
+    expect(restored.title).toBe(
+      JSON.stringify({
+        key: 'roles.names.hub-viewer',
+        ns: '@nocobase/app-plugin-hub',
+      }),
+    );
+    expect(grantActions(restored.grants, 'hub.app')).toEqual([
+      'read',
+      'read-release',
+      'read-deployment',
+    ]);
+    // The assignments it carried are gone for good; a rollback only restores the set.
+    expect(
+      await query
+        .selectFrom('authorizationPermissionSetAssignments')
+        .select('permissionSetKey')
+        .where('permissionSetKey', '=', 'hub-viewer')
+        .execute(),
+    ).toEqual([]);
   });
 
   it('assigns the initial superuser after all seeds have run', async () => {

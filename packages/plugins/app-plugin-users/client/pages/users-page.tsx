@@ -288,7 +288,7 @@ export default function UsersPage(): ReactElement {
               setPage(1);
             }}
           >
-            <SelectTrigger className='w-48'>
+            <SelectTrigger className='w-56'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
