@@ -26,7 +26,6 @@
     "@nocobase/app-plugin-template-print": "workspace:*",
     "@nocobase/app-skills": "workspace:*",
     "@nocobase/app-websocket": "workspace:^",
-    "@nocobase/cron": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
