@@ -335,3 +335,34 @@ describe('database section rules', () => {
     ]);
   });
 });
+
+describe('database connection options', () => {
+  it('asks the dialect driver whether it accepts the options, without connecting', async () => {
+    const { defineAppDatabaseConfig } =
+      await import('../src/database/index.js');
+    const { default: sqlite } = await import('@nocobase/db-sqlite');
+    const config = await createConfig({
+      database: defineAppDatabaseConfig(() => ({
+        default: 'main',
+        drivers: { sqlite },
+        connections: {
+          main: { dialect: 'sqlite', filename: ':memory:' },
+          broken: {
+            dialect: 'sqlite',
+            filename: ':memory:',
+            driverOptions: { filename: 'elsewhere.sqlite' },
+          },
+        },
+      })),
+    });
+
+    expect(await config.validate()).toEqual([
+      {
+        level: 'error',
+        path: 'database.connections.broken',
+        message:
+          'Database driverOptions cannot include filename. Use flattened connection parameters.',
+      },
+    ]);
+  });
+});
