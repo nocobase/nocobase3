@@ -123,18 +123,19 @@ database:
 
 ### 配置初始管理员
 
-首次启动前，可在运行配置中设置管理员用户名和密码。独立应用、Hub 平台和 Hub 托管业务应用均使用以下字段，各应用分别初始化自己的账号：
+首次启动前，可在运行配置中设置管理员用户名、邮箱和密码。独立应用、Hub 平台和 Hub 托管业务应用均使用以下字段，各应用分别初始化自己的账号：
 
 ```yaml
 users:
   initialAdmin:
     username: my_admin
+    email: admin@example.com
     password: REPLACE_WITH_INITIAL_ADMIN_PASSWORD
 ```
 
-用户名支持 3–30 个字母、数字、下划线或点，保存时转为小写。显式配置 `users.initialAdmin` 时必须提供非空密码；省略用户名时使用 `nocobase`。
+用户名支持 3–30 个字母、数字、下划线或点，邮箱须为有效地址，两者保存时均转为小写，均可用于登录。显式配置 `users.initialAdmin` 时必须提供非空密码；省略用户名时使用 `nocobase`，省略邮箱时使用 `admin@nocobase.com`。
 
-默认模板提供的用户名为 `nocobase`，密码为 `admin123`，部署前应替换。此配置仅在默认初始化任务执行且用户表为空时生效；已有应用修改这些字段不会重置账号或密码。
+默认模板提供的用户名为 `nocobase`，邮箱为 `admin@nocobase.com`，密码为 `admin123`，部署前应替换。此配置仅在默认初始化任务执行且用户表为空时生效；已有应用修改这些字段不会重置账号或密码。
 
 ### 配置认证与会话密钥
 

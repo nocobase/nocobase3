@@ -60,7 +60,7 @@ Prepare the complete runtime configuration before starting the service. At minim
 
 - Database dialect, host, port, database, credentials, schema and migration policy. A container's `localhost` means that container, not the host or another service.
 - A unique stable `auth.secret` and `session.secret`. Keep them unchanged across restarts and upgrades and out of artifacts, source control, and logs.
-- `users.initialAdmin.username` and `users.initialAdmin.password` for a new empty user table. These settings apply only during the initial seed and do not reset an existing account.
+- `users.initialAdmin.username`, `users.initialAdmin.email` and `users.initialAdmin.password` for a new empty user table. These settings apply only during the initial seed and do not reset an existing account.
 - `APP_PUBLIC_ORIGIN` as the external scheme and host without the application path, and `APP_BASE_PATH` as the public mount path used at build time and runtime.
 - `APP_SERVER_HOST` and `APP_SERVER_PORT`, with containers normally listening on `0.0.0.0` and the proxy controlling external exposure.
 - Persistent storage paths, file permissions, service identity, and any external database, object storage, mail, or callback settings.

@@ -106,7 +106,7 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 | `session.secret`                     | 同样生成随机值并替换占位值                                                                                                   |
 | `database.connections.main.database` | 使用 SQLite 时保留模板值 `hub/database/main.sqlite`，相对路径按持久目录解析，等价于容器内的 `/data/hub/database/main.sqlite` |
 
-首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名和密码。
+首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名、邮箱和密码。
 
 `database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像——驱动要在构建前进入应用的 `dependencies`，镜像构建完成后无法补装。
 
@@ -268,12 +268,13 @@ Hub 允许上传最大 256 MiB 的 Release 压缩包，这里为发布请求中�
 
 打开 `https://apps.example.com/hub/`，使用运行配置中 `users.initialAdmin` 设置的用户名和密码登录。未修改默认配置时：
 
-| 项目   | 默认值     |
-| ------ | ---------- |
-| 用户名 | `nocobase` |
-| 密码   | `admin123` |
+| 项目   | 默认值               |
+| ------ | -------------------- |
+| 用户名 | `nocobase`           |
+| 邮箱   | `admin@nocobase.com` |
+| 密码   | `admin123`           |
 
-也可使用邮箱 `admin@nocobase.com` 登录。使用默认密码时，首次登录后请修改密码。
+用户名和邮箱均可登录。使用默认密码时，首次登录后请修改密码。
 
 ![首次登录后的 Hub 控制台，应用列表为空](https://static-docs.nocobase.com/20260921171832.png)
 
