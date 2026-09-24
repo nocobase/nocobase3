@@ -9,15 +9,27 @@ import { Card } from './ui/card.js';
 export function PermissionsPage({
   title,
   description,
+  fill = false,
   children,
 }: {
   title: string;
   description: string;
+  /**
+   * Fill the host's scroll viewport on large screens so a page with its own
+   * scroll regions does not also scroll the page around them. Below the floor
+   * the whole page grows and the host scrolls it once, rather than squeezing
+   * the content past the page padding.
+   */
+  fill?: boolean;
   children: ReactNode;
 }): ReactElement {
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-background p-5 sm:p-8'>
-      <div className='min-w-0 space-y-5'>
+    <main
+      className={`min-h-[calc(100svh-4rem)] bg-background p-5 sm:p-8 ${fill ? 'lg:flex lg:h-full lg:min-h-[36rem] lg:flex-col' : ''}`}
+    >
+      <div
+        className={`min-w-0 space-y-5 ${fill ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''}`}
+      >
         <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
           <div className='min-w-0'>
             <h1 className='font-heading text-3xl font-semibold tracking-[-0.035em]'>
