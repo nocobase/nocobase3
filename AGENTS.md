@@ -431,6 +431,7 @@ Library packages that emit `.d.ts` files (`declaration: true`) enable both `isol
 | `packages/libs/snowflake/tsconfig.json`                    | Snowflake ID library       |
 | `packages/libs/logging/tsconfig.json`                      | Logging library            |
 | `packages/libs/queue/tsconfig.json`                        | Queue library              |
+| `packages/libs/schedule/tsconfig.json`                     | Schedule library           |
 | `packages/libs/session/tsconfig.json`                      | Session library            |
 
 Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.

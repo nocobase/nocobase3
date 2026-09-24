@@ -111,6 +111,9 @@ allowBuilds:
   '@parcel/watcher': false
   '@biomejs/biome': true
   '@swc/core': true
+  # Pulled in by BullMQ through @nocobase/schedule. Its install script only locates the prebuilt binary that its
+  # platform package already ships, and msgpackr falls back to JavaScript when the accelerator is missing.
+  msgpackr-extract: false
 
 # Reports a dependency whose install script was skipped as a warning instead of failing the install.
 # allowBuilds decides the packages known today; this keeps a newly introduced transitive dependency

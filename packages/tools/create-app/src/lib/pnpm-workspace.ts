@@ -24,7 +24,9 @@ export interface AllowBuildsEntry {
  * `better-sqlite3`, `esbuild`, and `oracledb` compile native code. Database drivers are written whichever database
  * was chosen: listing them costs nothing and means switching an app's database later just works, instead of failing
  * at runtime because a native addon was not built. `tesseract.js` arrives through `officeparser` in the AI runtime
- * and its `postinstall` only prints an OpenCollective donation notice, so it is skipped. The list mirrors the
+ * and its `postinstall` only prints an OpenCollective donation notice, so it is skipped. `msgpackr-extract` arrives
+ * through BullMQ in `@nocobase/schedule`; its install script only looks for the prebuilt binary its platform package
+ * already ships, and `msgpackr` falls back to JavaScript without it, so it is skipped too. The list mirrors the
  * repository's own `pnpm-workspace.yaml`, so an application and the monorepo decide the same packages the same way.
  */
 export const ALLOWED_BUILDS: readonly AllowBuildsEntry[] = [
@@ -32,6 +34,7 @@ export const ALLOWED_BUILDS: readonly AllowBuildsEntry[] = [
   { name: 'esbuild', allowed: true },
   { name: 'oracledb', allowed: true },
   { name: 'tesseract.js', allowed: false },
+  { name: 'msgpackr-extract', allowed: false },
 ];
 
 /** YAML needs quotes around a scoped name, whose leading `@` would otherwise start a reserved indicator. */
