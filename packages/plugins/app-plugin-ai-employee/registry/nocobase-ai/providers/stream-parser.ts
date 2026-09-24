@@ -11,6 +11,8 @@ export type NocoBaseStreamEvent = {
   from?: string;
   username?: string;
   errorName?: string;
+  /** On an `error` event from a failed agent run, its `AgentServiceError` code. */
+  code?: string;
 };
 
 const MAX_SSE_BUFFER_SIZE = 16 * 1024 * 1024;

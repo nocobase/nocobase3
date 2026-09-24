@@ -18,7 +18,7 @@ describe('suggestions tool', () => {
       suggestions.invoke(
         {
           state: { messageId: 'message-1' },
-          repositories: { aiMessages: { findOne, update } },
+          deps: { repositories: { aiMessages: { findOne, update } } },
         } as any,
         { options: ['Draft email'], option: 'Draft email' },
         { toolCallId: 'tool-call-1' } as any,

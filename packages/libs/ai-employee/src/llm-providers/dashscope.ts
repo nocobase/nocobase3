@@ -165,17 +165,6 @@ export const dashscopeProviderOptions = {
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
   supportWebSearch: true,
   models: {
-    [SupportedModel.LLM]: [
-      'qwen-long',
-      'qwq-plus',
-      'qwen-max',
-      'qwen-plus',
-      'qwen-turbo',
-      'qwen-math-plus',
-      'qwen-math-turbo',
-      'qwen-coder-plus',
-      'qwen-coder-turbo',
-    ],
     [SupportedModel.EMBEDDING]: [
       'text-embedding-v4',
       'text-embedding-v3',

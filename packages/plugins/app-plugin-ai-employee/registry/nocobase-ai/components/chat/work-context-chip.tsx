@@ -11,6 +11,7 @@ import { MousePointer2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { AIWorkContextItem } from '../../providers/index.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
+import { toText } from '../../shared/text.js';
 
 const formatContextContent = (content: unknown, emptyText: string) => {
   if (content === undefined) return emptyText;
@@ -18,7 +19,7 @@ const formatContextContent = (content: unknown, emptyText: string) => {
   try {
     return JSON.stringify(content, null, 2);
   } catch {
-    return String(content);
+    return toText(content, emptyText);
   }
 };
 

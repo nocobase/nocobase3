@@ -257,7 +257,6 @@ export const googleGenAIProviderOptions: LLMProviderMeta = {
   title: 'Google generative AI',
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
   models: {
-    [SupportedModel.LLM]: ['models/gemini-3.0-pro-preview'],
     [SupportedModel.EMBEDDING]: ['gemini-embedding-001'],
   },
   provider: GoogleGenAIProvider,

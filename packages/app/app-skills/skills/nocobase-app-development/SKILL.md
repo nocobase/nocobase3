@@ -41,16 +41,17 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 NocoBase packages may publish Skills under `.agents/skills/`. Current application templates run `pnpm skills:sync` automatically through `postinstall`; run it manually if install scripts were disabled or that directory is missing or stale. Confirm that the package is a direct `@nocobase/*` dependency or a registered plugin before relying on its Skill. The common capability mappings are:
 
-| The requirement sounds like                               | Read the Skill for                    |
-| --------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y"  | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages                             | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication` |
-| File upload and metadata through Repository               | `@nocobase/app-plugin-file`           |
-| Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
-| User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
-| Reading or writing data, schema changes, migrations       | `@nocobase/db`                        |
+| The requirement sounds like                                                                   | Read the Skill for                    |
+| --------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y"                                      | `@nocobase/app-plugin-workflow`       |
+| An assistant in the app: chat, reading files dropped into it, acting through tools you define | `@nocobase/app-plugin-ai-employee`    |
+| Email, IM, or in-app messages                                                                 | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, per-user or per-record access                                             | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                                                               | `@nocobase/app-plugin-authentication` |
+| File upload and metadata through Repository                                                   | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                                                        | `@nocobase/app-plugin-i18n`           |
+| User administration and application-owned role assignment                                     | `@nocobase/app-plugin-users`          |
+| Reading or writing data, schema changes, migrations                                           | `@nocobase/db`                        |
 
 Read the relevant Skill before writing the feature, but treat this table as a map rather than an installed-package list. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
@@ -70,51 +71,33 @@ Run `pnpm package:remove @nocobase/example`. The command uses the application's 
 
 If an older application has the command but not the script, use `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; on a version that already has `skills:sync`, a compatibility fallback is to remove the package with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, verify that the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing an already-absent package to `package:remove` cleans recorded historical Skill ownership without uninstalling or cleaning another package.
 
-## Start from a worked page
+## Frontend work
 
-Check for `client/pages/reference/` before writing UI of your own. Every current template ships it, so an application generated from any of them carries it; one generated before it existed does not, and its absence is not a defect.
+Before writing or changing anything under `client/` — pages, components, styles, copy — read [the frontend workflow](references/frontend/ui-workflow.md). It decides whether the change takes the full workflow (a design file reviewed once, then an independent acceptance review) or a quick change (edit directly, static checks only), and which parts of [the UI guidelines](references/frontend/ui-guidelines.md) and [the frontend handbook](references/frontend/frontend-dev.md) to read at each step.
 
-It is source kept to be read. Nothing routes it, so a build never reaches it and no user sees it. Its `README.md` is the index: one table maps the screen you are asked for to the example page and the block inside it that shows the pattern, and a second maps the interaction you need to the component page that demonstrates the primitive. Read that file first rather than listing the directory.
-
-Then work through it in this order:
-
-1. Pick the closest example page from the README table — a list screen starts from `examples/orders`, a record editor from `examples/product-form`, a settings screen from `examples/team-settings` — and read the module comment at the top of its `.tsx`. It names the patterns the page demonstrates, the component that holds each one, and the parts that are demonstration filler.
-2. Open only the blocks the task needs. The example pages are 600 to 1000 lines each because they show several patterns at once; a real screen usually needs two or three of them, and copying the whole page produces an overbuilt one.
-3. Confirm each primitive the block uses is in `client/components/ui/`, and each composition in `client/components/`. If one is missing, add it with `pnpm exec shadcn add` rather than inlining a copy.
-4. Copy the skeleton — `PageContainer` and `PageHeader`, the token classes, the state shape, the `render` prop and `data-icon` conventions — and leave behind the mock data module, the `ExamplePage` frame from `shared.tsx`, and the filler the header comment names.
-5. Move the strings into `client/locales/` under the application's own keys. The reference wording lives in `client/pages/reference/locales/` and never reaches a build.
-
-Do not import from `client/pages/reference/` in a page you ship, and do not give one a route — it is reference material, not a feature.
+The handbook routes each frontend task to its document: pages, routes and navigation; child routes and Tabs; dialogs, drawers and confirmations; forms and validation; calling endpoints; lists and tables; styling, header actions and dark mode; theme tokens and presets; copy and translations; frontend tests. Its styling document explains how to start a screen from the worked pages in `client/pages/reference/`.
 
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
 
-| Task                                                                                | Read                                                             |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Copy a worked screen instead of designing one from nothing                          | `client/pages/reference/README.md` in the application            |
-| Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
-| Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
-| Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
-| Add or change frontend form validation, field errors, or validation schemas         | [React Hook Form and Zod](references/react-hook-form.md)         |
-| Add or change top-right header buttons, tooltips, menus, or configuration panels    | [header action interactions](references/header-actions.md)       |
-| Add an API endpoint, a webhook, or a callback; authenticate and authorize it        | [server routes](references/server-routes.md)                     |
-| Call an API from the frontend using the application's HTTP client                   | [client API requests](references/client-api.md)                  |
-| Query or write data, resolve the database, work with transactions                   | [database and data access](references/database-and-data.md)      |
-| Create a table, alter a column, add an index, write required initial data           | [migrations and seeds](references/migrations.md)                 |
-| Switch the database, register a dialect, add a second connection                    | [database connections](references/database-connections.md)       |
-| Name translation keys, add a locale, reword a plugin's string                       | [internationalization](references/i18n.md)                       |
-| Add a reusable service, share it across routes, run background or scheduled work    | [services and jobs](references/services-and-jobs.md)             |
-| Write tests, choose a test layer, verify before finishing                           | [testing and verification](references/testing.md)                |
-| Understand behavior inherited from an official application template                 | [template variants](references/template-variants.md)             |
+| Task                                                                                                 | Read                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Anything under `client/`: pages, routes, components, styling, forms, API calls, copy, frontend tests | [frontend workflow](references/frontend/ui-workflow.md), then [frontend handbook](references/frontend/frontend-dev.md) |
+| Add an API endpoint, a webhook, or a callback; authenticate and authorize it                         | [server routes](references/server-routes.md)                                                                           |
+| Query or write data, resolve the database, work with transactions                                    | [database and data access](references/database-and-data.md)                                                            |
+| Create a table, alter a column, add an index, write required initial data                            | [migrations and seeds](references/migrations.md)                                                                       |
+| Switch the database, register a dialect, add a second connection                                     | [database connections](references/database-connections.md)                                                             |
+| Translate server-produced text, add a language, set the default language                             | [internationalization](references/i18n.md)                                                                             |
+| Add a reusable service, share it across routes, run background or scheduled work                     | [services and jobs](references/services-and-jobs.md)                                                                   |
+| Write server and migration tests, choose a test layer, verify before finishing                       | [testing and verification](references/testing.md)                                                                      |
+| Understand behavior inherited from an official application template                                  | [template variants](references/template-variants.md)                                                                   |
 
-A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
+A feature with a page and an API usually needs migrations, server routes, and a frontend change that follows the frontend workflow.
 
 The three database pages above are the application side — where the files live, which commands run them, how connections are configured. The database API they are written against belongs to `@nocobase/db` and is documented by the `nocobase-db` Skill synchronized alongside this one. Read that Skill before writing a migration, a seed, or a query.
 
-For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
-
-When a task involves frontend form validation, read the relevant sections of [React Hook Form and Zod](references/react-hook-form.md) before implementing it. Use it for schema validation, field error rendering, and accessibility; adapt examples to the application's installed dependencies, component APIs, and translation keys. Frontend validation complements server-side validation and does not replace it.
+Style with the shared theme tokens in [themes and tokens](references/frontend/references/theme.md) so AI-authored components respond to theme changes; the same document covers creating, editing and removing presets. Frontend forms follow [forms](references/frontend/references/form.md). Frontend validation complements server-side validation and does not replace it.
 
 ## Business permissions
 
@@ -166,9 +149,9 @@ Reach a plugin's capability only through its documented package exports. Never i
 
 ## Reversible customization
 
-When customizing template or registry UI, prefer existing props and composition, then new application components outside `client/extensions/`. Keep the original extension implementation as the reusable baseline; edit it only when explicitly requested or when composition cannot reasonably meet the requirement, and explain that choice. See [components and styling](references/components-and-styling.md#customize-template-and-registry-components).
+When customizing template or registry UI, prefer existing props and composition, then new application components outside `client/extensions/`. Keep the original extension implementation as the reusable baseline; edit it only when explicitly requested or when composition cannot reasonably meet the requirement, and explain that choice. See [styling](references/frontend/references/styling.md).
 
-Treat disabling a feature as a reversible availability change by default: preserve its page and component source, conditionally exclude or guard its route, and hide its links and actions. A hidden navigation item alone does not disable direct URL access. Enforce the same feature policy on the server so direct API calls cannot execute the disabled operation. Do not delete feature code merely to remove it from the current UI; explicit permanent removal can justify deletion. See [client pages and routes](references/client-pages-and-routes.md#disable-a-feature-without-deleting-its-pages).
+Treat disabling a feature as a reversible availability change by default: preserve its page and component source, conditionally exclude or guard its route, and hide its links and actions. A hidden navigation item alone does not disable direct URL access. Enforce the same feature policy on the server so direct API calls cannot execute the disabled operation. Do not delete feature code merely to remove it from the current UI; explicit permanent removal can justify deletion. See [pages and routes](references/frontend/references/page.md).
 
 ## Non-negotiables
 
@@ -177,7 +160,7 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
-- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [components and styling](references/components-and-styling.md#page-container).
+- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [styling](references/frontend/references/styling.md).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
@@ -213,7 +196,7 @@ Verify observable behavior, not just that the commands passed. [Testing and veri
 
 After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone and exits nonzero until the lists align. A client-only language is still supported at runtime and the server falls back to English; add matching server translations when server-produced text should use that language.
 
-Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See the i18n and themes references.
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See [internationalization](references/i18n.md), [frontend copy](references/frontend/references/i18n.md) and [themes and tokens](references/frontend/references/theme.md).
 
 Navigation groups retain their expanded or collapsed state while the navigation tree stays mounted. Selecting a new page expands its ancestor groups without collapsing other groups; users can still collapse the active group manually. Keep this behavior aligned across the application, Settings, and Dev tools navigation.
 

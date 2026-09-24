@@ -22,6 +22,14 @@ export interface LLMServiceSyncSummary {
   readonly deleted: number;
 }
 
+/**
+ * A configured service plus the one decision the manager does not take: whether
+ * `config.yml` reapplies its model list over what an administrator curated.
+ */
+export type NormalizedLLMServiceConfig = LLMServiceOptions & {
+  readonly overrideEnabledModels?: boolean;
+};
+
 export class LLMServiceConfigSynchronizer {
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -43,25 +51,33 @@ export class LLMServiceConfigSynchronizer {
   ): Promise<LLMServiceSyncSummary> {
     const normalized = normalizeLLMServiceConfig(services);
     const existing = await this.manager.listLLMServices();
-    const existingNames = new Set(existing.map((service) => service.name));
+    const existingByName = new Map(
+      existing.map((service) => [service.name, service]),
+    );
     const configuredNames = new Set(normalized.map((service) => service.name));
     let created = 0;
     let updated = 0;
 
-    for (const service of normalized) {
-      const configuredService = existingNames.has(service.name)
+    for (const { overrideEnabledModels, ...service } of normalized) {
+      const current = existingByName.get(service.name);
+      const configuredService = current
         ? {
             ...service,
             title: service.title ?? service.name,
             options: service.options ?? {},
             modelOptions: service.modelOptions ?? DEFAULT_MODEL_OPTIONS,
             sort: service.sort ?? 0,
+            // Reapplying the model list must not also reset the enable switch,
+            // which is a separate administrator decision.
+            ...(overrideEnabledModels === true
+              ? { enabled: current.enabled }
+              : {}),
           }
         : service;
       await this.manager.registerLLMService(configuredService, {
-        preserveUserState: true,
+        preserveUserState: overrideEnabledModels !== true,
       });
-      if (existingNames.has(service.name)) updated += 1;
+      if (current) updated += 1;
       else created += 1;
     }
 
@@ -88,14 +104,14 @@ export class LLMServiceConfigSynchronizer {
 
 export function normalizeLLMServiceConfig(
   services: readonly AIEmployeeLLMServiceConfig[] | undefined,
-): LLMServiceOptions[] {
+): NormalizedLLMServiceConfig[] {
   const values = services ?? [];
   if (!Array.isArray(values)) {
     throw new Error('Invalid ai.llmServices config: expected an array.');
   }
 
   const names = new Set<string>();
-  const normalized: LLMServiceOptions[] = [];
+  const normalized: NormalizedLLMServiceConfig[] = [];
   for (const [index, service] of values.entries()) {
     assertLLMServiceConfig(service, index);
     if (names.has(service.name)) {
@@ -171,6 +187,14 @@ function assertLLMServiceConfig(
   }
   if (value.sort !== undefined && typeof value.sort !== 'number') {
     throw new Error(`Invalid ai.llmServices.${index}.sort: expected a number.`);
+  }
+  if (
+    value.overrideEnabledModels !== undefined &&
+    typeof value.overrideEnabledModels !== 'boolean'
+  ) {
+    throw new Error(
+      `Invalid ai.llmServices.${index}.overrideEnabledModels: expected a boolean.`,
+    );
   }
 }
 

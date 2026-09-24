@@ -7,7 +7,16 @@ export {
   type OfficialDialect,
   type ResolvedDatabaseConfig,
 } from './resolve-config.js';
-export { defineAppDatabaseConfig } from './define-app-database-config.js';
+export {
+  defineAppDatabaseConfig,
+  validateAppDatabaseConfig,
+} from './define-app-database-config.js';
+export {
+  checkConnections,
+  type CheckConnectionsOptions,
+  type ConnectionCheckResult,
+  type ConnectionCheckStatus,
+} from './connection-check.js';
 export {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,

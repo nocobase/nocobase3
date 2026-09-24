@@ -19,10 +19,11 @@ export default function EChartsPreview({
 
   useEffect(() => {
     let active = true;
-    setError(undefined);
     void prepareEChartsRuntime(options)
       .then(() => {
-        if (active) setPreparedSignature(signature);
+        if (!active) return;
+        setError(undefined);
+        setPreparedSignature(signature);
       })
       .catch((runtimeError: unknown) => {
         if (active) setError(runtimeError);

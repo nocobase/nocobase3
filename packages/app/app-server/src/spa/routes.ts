@@ -5,7 +5,7 @@ import { joinBasePath, normalizeBasePath } from '../support/paths.js';
 import { injectSpaRuntimeHtml } from './runtime-globals.js';
 import { serveSpaIndex } from './serve-index.js';
 import { serveSpaAsset } from './static-assets.js';
-import type { RegisterSpaRoutesOptions } from './types.js';
+import type { RegisterSpaRoutesOptions, SpaClientConfigMap } from './types.js';
 
 export function registerSpaRoutes(
   router: Hono,
@@ -47,6 +47,7 @@ export function registerSpaRoutes(
       options.indexPath,
       options.runtimeGlobals,
       options.clientConfig,
+      resolvePublicConfig(options),
     ),
   );
   router.get(`${basePath}/*`, () =>
@@ -54,6 +55,7 @@ export function registerSpaRoutes(
       options.indexPath,
       options.runtimeGlobals,
       options.clientConfig,
+      resolvePublicConfig(options),
     ),
   );
 }
@@ -76,8 +78,17 @@ async function serveSpaHandler(
   return new Response(
     injectSpaRuntimeHtml(await response.text(), {
       clientConfig: options.clientConfig,
+      publicConfig: resolvePublicConfig(options),
       runtimeGlobals: options.runtimeGlobals,
     }),
     { headers, status: response.status, statusText: response.statusText },
   );
+}
+
+function resolvePublicConfig(
+  options: RegisterSpaRoutesOptions,
+): SpaClientConfigMap | undefined {
+  return typeof options.publicConfig === 'function'
+    ? options.publicConfig()
+    : options.publicConfig;
 }

@@ -49,9 +49,15 @@ describe('AI employee runtime architecture boundaries', () => {
     expect(
       source(new URL('../server/route/ai-conversations.ts', import.meta.url)),
     ).toContain("from 'hono'");
-    expect(
-      source(new URL('../server/agent/context.ts', import.meta.url)),
-    ).toContain('AppAgentContext');
+    // The route is the only place that knows about HTTP. What a tool receives
+    // is the library's own narrow context, not a request object.
+    const agentContext = source(
+      new URL('../server/agent/context.ts', import.meta.url),
+    );
+    expect(agentContext).not.toContain("from 'hono'");
+    expect(agentContext).toMatch(
+      /import type \{[^}]*\bAgentContext\b[^}]*\} from '@nocobase\/ai-employee'/,
+    );
   });
 
   it('does not restore legacy task conversation execution', () => {

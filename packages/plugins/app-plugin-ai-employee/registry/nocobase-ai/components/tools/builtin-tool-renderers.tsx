@@ -1,4 +1,4 @@
-import type { AIToolRendererMap } from './tool-renderer-provider.js';
+import type { AIToolRendererMap } from './tool-renderer-context.js';
 import { BusinessReportRenderer } from './business-report-renderer.js';
 import { ChartRenderer } from './chart-renderer.js';
 import { SubAgentRenderer } from './sub-agent-renderer.js';

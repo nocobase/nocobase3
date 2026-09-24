@@ -112,7 +112,7 @@ describe('AI Employee Registry contract', () => {
         upgradePolicy: 'three-way-merge',
         nocobase: {
           requiresPlugins: {
-            '@nocobase/app-plugin-ai-employee': '>=0.0.1 <0.1.0',
+            '@nocobase/app-plugin-ai-employee': '>=0.1.0-beta.0 <1.0.0',
           },
         },
       },

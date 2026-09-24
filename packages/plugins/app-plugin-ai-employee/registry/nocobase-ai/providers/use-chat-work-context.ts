@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AIWorkContextItem } from './types.js';
 
 const EMPTY_CONTEXT: AIWorkContextItem[] = [];
@@ -9,7 +9,9 @@ const contextItemKey = (item: AIWorkContextItem) =>
 export function useChatWorkContext(activeConversationId: string) {
   const [drafts, setDrafts] = useState<Record<string, AIWorkContextItem[]>>({});
   const draftsRef = useRef(drafts);
-  draftsRef.current = drafts;
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
 
   const setConversationWorkContext = useCallback(
     (

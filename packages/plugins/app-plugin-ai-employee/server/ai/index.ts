@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  MCPLoader,
   SkillsLoader,
   type AIManager,
   type AIEmployeeManager,
@@ -16,7 +15,6 @@ import tools from './tools/index.js';
 
 export interface AIResourceRegistrarOptions {
   readonly logger?: Logger;
-  readonly mcpDirectory?: string;
   readonly skillsDirectories?: readonly (string | AISkillDirectory)[];
   readonly source?: string;
 }
@@ -30,12 +28,10 @@ export interface AISkillDirectory {
 /** Explicit lifecycle contract for application-owned AI resources. */
 export abstract class AIResourceRegistrar {
   private readonly logger?: Logger;
-  private readonly mcpDirectory?: string;
   private readonly skillsDirectories: readonly AISkillDirectory[];
 
   public constructor(options: AIResourceRegistrarOptions = {}) {
     this.logger = options.logger;
-    this.mcpDirectory = options.mcpDirectory;
     this.skillsDirectories = normalizeDirectories(
       options.skillsDirectories ?? [],
       options.source ?? 'application',
@@ -45,8 +41,6 @@ export abstract class AIResourceRegistrar {
   public async registerAIResources(ai: AIManager): Promise<void> {
     await this.registerTools(ai.toolsManager);
     this.logStage('tools', await ai.toolsManager.listTools({}));
-    await this.loadMCP(ai);
-    this.logStage('mcp', await ai.mcpServerManager.listMCP({}));
     await this.loadSkills(ai);
     this.logStage('skills', await ai.skillsManager.listSkills());
     await this.registerAIEmployees(ai.employeeManager);
@@ -58,17 +52,6 @@ export abstract class AIResourceRegistrar {
   ): Promise<void>;
 
   protected abstract registerTools(toolsManager: ToolsManager): Promise<void>;
-
-  protected async loadMCP(ai: AIManager): Promise<void> {
-    if (!this.mcpDirectory) return;
-    await new MCPLoader(ai, {
-      scan: {
-        basePath: this.mcpDirectory,
-        pattern: ['*.ts', '*.js', '!*.d.ts'],
-      },
-      logger: this.logger,
-    }).load();
-  }
 
   protected async loadSkills(ai: AIManager): Promise<void> {
     for (const { directory, source, optional } of this.skillsDirectories) {

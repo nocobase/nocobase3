@@ -6,7 +6,7 @@ keywords: 'AI Employee,storage,disk,attachment,NocoBase file storage'
 
 # 附件存储配置
 
-聊天框启用 `enableAttachments` 后，用户可以选择文件、拖放文件或粘贴图片。AI 员工不直接写本地路径，而是使用 NocoBase 文件存储中已经注册的 Disk，并单独保存附件元数据。
+聊天框启用 `enableAttachments` 后，用户可以选择文件、把文件拖进聊天窗口，或者从剪贴板粘贴文件。AI 员工不直接写本地路径，而是使用 NocoBase 文件存储中已经注册的 Disk，并单独保存附件元数据。
 
 ## 配置员工附件 Disk
 

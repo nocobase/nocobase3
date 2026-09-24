@@ -20,6 +20,7 @@ export function AIChatWindow({
   showModelSelector = true,
   showUserPrompt = true,
   enableAttachments = false,
+  enableWebSearch = false,
   attachmentActionIndex = 0,
   placeholder,
   disclaimer,
@@ -100,6 +101,7 @@ export function AIChatWindow({
           showEmployeeSelector={showEmployeeSelector}
           showModelSelector={showModelSelector}
           enableAttachments={enableAttachments}
+          enableWebSearch={enableWebSearch}
           attachmentActionIndex={attachmentActionIndex}
           placeholder={placeholder}
           disclaimer={disclaimer}
@@ -119,6 +121,7 @@ export type AIChatWindowProps = {
   showModelSelector?: boolean;
   showUserPrompt?: boolean;
   enableAttachments?: boolean;
+  enableWebSearch?: boolean;
   attachmentActionIndex?: number;
   placeholder?: string;
   disclaimer?: ReactNode | false;

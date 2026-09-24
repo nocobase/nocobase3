@@ -1,6 +1,6 @@
+import { AgentServiceError } from '../agent/types.js';
 import { DomainError } from '../types.js';
-import type { Auth, AuthSession } from '@nocobase/app-plugin-authentication';
-import { APIError } from 'better-auth';
+import type { AuthEnv, AuthSession } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
 import type { Actor } from '../types.js';
 import type { Context as HonoContext, MiddlewareHandler } from 'hono';
@@ -18,11 +18,12 @@ export interface AIRequestMiddlewareOptions {
   readonly logger: Logger;
 }
 
-export function createAIActorMiddleware(auth: Auth): MiddlewareHandler {
+/** Runs after `authentication.required()`, which has already set the session. */
+export function createAIActorMiddleware(): MiddlewareHandler<AuthEnv> {
   return async (context, next) => {
     context.set(
       'currentUser',
-      await resolveAuthenticatedUser(auth, context.req.raw),
+      actorFromSession(context.var.auth, context.req.raw),
     );
     await next();
   };
@@ -72,12 +73,21 @@ async function runSSEAction(
     await handler();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const code = agentErrorCode(error);
     target.write(
-      `data: ${JSON.stringify({ type: 'error', body: message })}\n\n`,
+      `data: ${JSON.stringify({ type: 'error', body: message, ...(code ? { code } : {}) })}\n\n`,
     );
   } finally {
     target.end();
   }
+}
+
+// The agent failure behind an error, if there is one: the stream always
+// answers 200, so its error event is where a caller tells failures apart.
+function agentErrorCode(error: unknown): string | undefined {
+  if (error instanceof AgentServiceError) return error.code;
+  const cause = (error as { cause?: unknown } | undefined)?.cause;
+  return cause instanceof AgentServiceError ? cause.code : undefined;
 }
 
 export function errorResponse(error: unknown): Response {
@@ -111,19 +121,10 @@ function statusForError(message: string): number {
   return 500;
 }
 
-async function resolveAuthenticatedUser(
-  auth: Auth,
-  request: Request,
-): Promise<Actor> {
-  let session: AuthSession = null;
-  try {
-    session = await auth.getSession(request.headers);
-  } catch (error) {
-    // A refused credential (Better Auth APIError) is not signed in, here.
-    if (!(error instanceof APIError)) throw error;
-  }
+function actorFromSession(session: AuthSession, request: Request): Actor {
   const user = session?.user;
-  if (!user?.id) return { id: 'anonymous', roles: ['member'], isRoot: false };
+  // Unreachable once `required()` runs first; fail closed if it ever does not.
+  if (!user?.id) throw new Error('AI actions require an authenticated session');
   const profile = user as typeof user & Record<string, unknown>;
   const roles = Array.isArray(profile.roles)
     ? profile.roles.filter((role): role is string => typeof role === 'string')

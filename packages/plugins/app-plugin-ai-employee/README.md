@@ -13,8 +13,8 @@ helpers. The dependency is one-way; the core package does not import this plugin
 
 - `server/plugin.ts` is the only server runtime entry and contributes provider lifecycle, routes, and migration location.
 - `server/provider/ai-employee.ts` registers App-container-scoped repository and service factories, initializes package resources before the application's external `ai/` directory, and synchronizes `ai.llmServices` on configuration reload.
-- `server/route/index.ts` creates the authenticated `/api/ai` child router. Routes parse HTTP input and map responses while domain behavior is delegated to factory-owned services.
-- `server/service/ai-mcp-server-service.ts` synchronizes MCP servers from `ai.mcpServers` in `config.yml` and exposes read, test, and tool-inspection operations.
+- `server/route/index.ts` creates the authenticated `/api/ai` child router. Every action requires a signed-in session and answers 401 without one; the actions behind the AI settings page — those listed in `server/route/settings-access.ts`, plus the conversation, skill and tool management reads with guards of their own — also require `{ resource: { type: 'page', id: 'ai.settings' }, action: 'access' }` and answer 403 without it, while chat actions stay open to every signed-in user. `tests/app/settings-access.test.ts` classifies every registered action and fails on one that is in no group, so a new action has to be placed deliberately. Routes parse HTTP input and map responses while domain behavior is delegated to factory-owned services.
+- `server/service/ai-mcp-server-service.ts` synchronizes MCP servers from `ai.mcpServers` in `config.yml` and exposes read, test, enable-switch, tool-inspection, and tool-permission operations.
 - `database/collections` defines the AI Employee collection layout, and
   `database/migrations` creates it through the App migration system.
 
@@ -33,13 +33,18 @@ ai:
       enabledModels:
         - label: GPT-4.1
           value: gpt-4.1
+      overrideEnabledModels: false
       enabled: true
       sort: 10
 ```
 
+The configured service name set is authoritative, including an empty array. Changes to `config.yml`, `.env`, or the environment variables it references take effect when the server restarts; on load the configured set reconciles additions, structural updates, and removals, and existing records preserve the user-managed `enabled` and `enabledModels` values — so those two take effect from configuration only when a service record is first created. Every other field of an existing record is rewritten from configuration on each load, and replaced rather than merged: an entry without `options` resets them to `{}`, and one without `modelOptions` resets them to the defaults. A service that sets `overrideEnabledModels: true` has its configured `enabledModels` reapplied on every load instead, overwriting what the settings page holds; the switch is per service, defaults to `false`, and governs the model list alone, leaving `enabled` with the administrator. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Environment references are expanded recursively after validation; missing variables become empty strings.
+
+`enabledModels` is the menu a service offers, not an access control boundary. It decides what the model selector and `ai:listAllEnabledModels` list, and which model `resolveModel()` falls back to when a caller names none; a service with an empty list offers nothing and disappears from the selector. It is not checked when a caller does name a model, so a request or a stored employee configuration naming an unlisted model still runs.
+
 ## MCP server configuration
 
-Declare MCP servers in the application's `config.yml`; the settings page is read-only:
+Declare MCP servers in the application's `config.yml`; the settings page cannot create, edit, or delete a connection:
 
 ```yaml
 ai:
@@ -60,9 +65,7 @@ ai:
         Authorization: Bearer ${MCP_SERVER_TOKEN}
 ```
 
-Configuration reload synchronizes the configured server set and rebuilds the MCP client. The UI only provides connection testing and viewing the tools discovered from each configured server.
-
-The configured name set is authoritative, including an empty array. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory. Existing records preserve the user-managed `enabled` and `enabledModels` values. Environment references are expanded recursively after validation; missing variables become empty strings.
+Each start synchronizes the configured server set and rebuilds the MCP client. Servers are stored in `aiMcpClients`; an existing server keeps the enable switch an administrator set, and tool permissions are saved on the server's row, so both survive restarts. The settings page switches each server on or off, lists the tools discovered from each configured server, sets each tool's permission (`ASK` or `ALLOW`), and tests connections; the switch and the permissions are both persisted. A connection test names a configured server, or gives an inline `http`/`sse` URL, and never runs an inline `stdio` command. Removing or renaming a server in `config.yml` discards its switch and tool permissions. The configured server name set is authoritative, including an empty array.
 
 ## Conversation center
 
@@ -74,7 +77,7 @@ The management endpoints are `GET /api/ai/aiConversations:listAll` (`keyword`, `
 
 ## Skills catalog
 
-The **Skills** menu immediately follows **AI Employees** in the AI settings group. It opens a standalone read-only, responsive card catalog of all discoverable AI employee skills, rather than only the skills assigned to one employee. Each card presents the title, identifier, and description above a tools footer with a Wrench icon and wrapping tool badges. The management endpoints `GET /api/ai/aiSkills:listAll` and `GET /api/ai/aiSkills:getDetails?name=<skill-name>` require authentication and the Authorization permission `{ resource: { type: 'page', id: 'ai.settings' }, action: 'access' }`, matching the page's client access policy. The list returns skill titles, names, descriptions, and associated tool metadata without Markdown content. Clicking a card or activating its title button with the keyboard loads its details into a drawer with the title, description, safely rendered skill Markdown, and tool list. Closing the drawer returns focus to that card's title button. Unavailable tool references remain visible rather than being silently omitted. Search filters skill metadata and tool names locally; loading, empty, no-match, and retryable error states are supported. Viewing a skill never executes its tools. The existing runtime skills endpoints remain unchanged, and the page does not expose mutations or list application-development Agent Skills.
+The **Skills** menu immediately follows **AI Employees** in the AI settings group. It opens a standalone read-only, responsive card catalog of all discoverable AI employee skills, rather than only the skills assigned to one employee. Each card presents the title, identifier, and description above a tools footer with a Wrench icon and wrapping tool badges. The management endpoints `GET /api/ai/aiSkills:listAll` and `GET /api/ai/aiSkills:getDetails?name=<skill-name>` require authentication and the Authorization permission `{ resource: { type: 'page', id: 'ai.settings' }, action: 'access' }`, matching the page's client access policy. The list returns skill titles, names, descriptions, and associated tool metadata without Markdown content. Clicking a card or activating its title button with the keyboard loads its details into a drawer with the title, description, safely rendered skill Markdown, and tool list. Closing the drawer returns focus to that card's title button. Unavailable tool references remain visible rather than being silently omitted. Search filters skill metadata and tool names locally; loading, empty, no-match, and retryable error states are supported. Viewing a skill never executes its tools. The runtime skills endpoints keep their response contracts and require the same AI settings access, and the page does not expose mutations or list application-development Agent Skills.
 
 ## Employee tool selection
 
@@ -86,7 +89,7 @@ The employee's **Tools** tab shows one flat list of every catalog source and sco
 
 The **Tools** menu immediately follows **Skills** in the AI settings group at `/settings/ai/tools`. Its read-only cards show each registered tool's title, identifier, description, and declared scope/source when present. Search filters titles, names, and descriptions locally. Opening a card loads a right-side drawer with a fixed header, safely rendered About Markdown, and an inert JSON view of the input schema. A missing schema is shown as unavailable; an empty schema remains `{}`. Schema references are displayed as text, never fetched or executed. Keyboard activation, Escape dismissal, focus return, loading, retryable errors, empty results, and request cancellation are supported. There are no execution or mutation controls.
 
-`GET /api/ai/aiTools:listAll` returns `{ rows: ManagedToolSummary[] }`, where each summary contains `name`, `title`, `description`, `scope`, and `source` strings. `GET /api/ai/aiTools:getDetails?name=<tool-name>` returns the detail directly, adding `about: string` and `inputSchema: Record<string, unknown> | null`. Both endpoints require authentication and the Authorization permission `{ resource: { type: 'page', id: 'ai.settings' }, action: 'access' }`, corresponding to the client route's explicit `ai.settings/read` policy. The existing runtime `aiTools:list` response contract is unchanged.
+`GET /api/ai/aiTools:listAll` returns `{ rows: ManagedToolSummary[] }`, where each summary contains `name`, `title`, `description`, `scope`, and `source` strings. `GET /api/ai/aiTools:getDetails?name=<tool-name>` returns the detail directly, adding `about: string` and `inputSchema: Record<string, unknown> | null`. Both endpoints require authentication and the Authorization permission `{ resource: { type: 'page', id: 'ai.settings' }, action: 'access' }`, corresponding to the client route's explicit `ai.settings/read` policy. The runtime `aiTools:list` response contract is unchanged, and it requires the same AI settings access.
 
 ## Development showcases
 

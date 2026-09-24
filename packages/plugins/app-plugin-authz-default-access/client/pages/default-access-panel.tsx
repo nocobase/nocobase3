@@ -300,10 +300,10 @@ export function DefaultAccessPanel({
     <>
       {error ? <ErrorBox value={error} /> : null}
       <>
-        <div className='flex min-h-[60vh] gap-3'>
+        <div className='flex min-h-[60vh] gap-3 lg:min-h-0 lg:flex-1'>
           <nav
             aria-label={t('editors.resourceGroup')}
-            className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
+            className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2 lg:overflow-y-auto'
           >
             {sections.map((item) => (
               <button
@@ -332,7 +332,7 @@ export function DefaultAccessPanel({
               </button>
             ))}
           </nav>
-          <div className='min-w-0 flex-1 space-y-3'>
+          <div className='min-w-0 flex-1 space-y-3 lg:flex lg:min-h-0 lg:flex-col'>
             <FilterBar>
               <SearchField
                 label={t('permissionSets.picker.searchResources')}
@@ -370,8 +370,10 @@ export function DefaultAccessPanel({
                 <span role='status'>{t('defaultAccess.saved')}</span>
               ) : null}
             </div>
-            <ManagementTable>
-              <div className='max-h-[65vh] overflow-auto'>
+            {/* Below lg the viewport cap keeps the table's header sticky without lengthening the page; from lg the
+              page passes its height down, so the card keeps its content height and scrolls only when space runs out. */}
+            <ManagementTable className='lg:flex lg:min-h-0 lg:flex-col'>
+              <div className='max-h-[65vh] overflow-auto lg:max-h-none lg:min-h-0'>
                 <Table className='min-w-[36rem] table-fixed'>
                   <TableHeader className='sticky top-0 z-10 bg-card'>
                     <TableRow>

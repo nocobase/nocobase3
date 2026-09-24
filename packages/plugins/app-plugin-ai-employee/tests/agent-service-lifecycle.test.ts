@@ -32,6 +32,7 @@ const createProviders = (
     conversation: createTestConversationProvider(),
     logger: { warn: vi.fn(), error: vi.fn() } as never,
     context: {
+      agentContext: { state: { sessionId: 'test-session' } },
       currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
       resolveLLM: vi.fn(async () => llm),
       getSystemPrompt: vi.fn(async () => {
@@ -99,7 +100,13 @@ describe('AgentService execution-local LLM lifecycle', () => {
         await expect(execution).rejects.toMatchObject({
           name: 'GraphInterrupt',
         });
-      else await expect(execution).rejects.toThrow('Agent execution failed');
+      // The prepare phase failed, so this is a provider failure carrying the
+      // real message — the same one the stream path has always reported.
+      else
+        await expect(execution).rejects.toMatchObject({
+          code: 'PROVIDER_ERROR',
+          message: 'prepare failed',
+        });
       expect(dispose).not.toHaveBeenCalled();
       if (mode === 'abort') {
         expect(saveAssistantMessage).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
 import { useState } from 'react';
-import { getNocoBaseToolCallMetadata } from '../chat/tool-call-card.js';
+import { getNocoBaseToolCallMetadata } from '../chat/tool-call-utils.js';
 import type { AIToolRendererProps } from './tool-renderer-provider.js';
 import { asRecord, parseArray } from './tool-renderer-utils.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';

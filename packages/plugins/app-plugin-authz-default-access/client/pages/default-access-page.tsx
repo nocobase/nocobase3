@@ -14,6 +14,7 @@ export default function DefaultAccessPage(): ReactElement {
     <PermissionsPage
       title={t('defaultAccess.page.title')}
       description={t('defaultAccess.page.description')}
+      fill
     >
       {page.options ? (
         <DefaultAccessPanel options={page.options} />

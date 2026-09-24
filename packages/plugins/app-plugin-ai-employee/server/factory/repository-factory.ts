@@ -1,11 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { databaseManagerToken, type DatabaseConnection } from '@nocobase/db';
-import {
-  createServiceToken,
-  type ServiceResolver,
-  type ServiceToken,
-} from '@nocobase/service-provider';
+import type { ServiceResolver } from '@nocobase/service-provider';
 
 import type {
   AIConversationEntity,
@@ -40,11 +36,9 @@ import type { DatabaseRepositoryFactory } from '../repository/runtime-factory.js
 import { DatabaseAIEmployeeRepository } from '../repository/database/ai-employee.js';
 import { DatabaseAIUsageEventRepository } from '../repository/database/ai-usage-event.js';
 import { BaseCollectionRepository } from '../repository/database/base-collection-repository.js';
+import { repositoryFactoryToken } from '../tokens.js';
 
-export const repositoryFactoryToken: ServiceToken<RepositoryFactory> =
-  createServiceToken<RepositoryFactory>(
-    '@nocobase/app-plugin-ai-employee/internal/repositories',
-  );
+export { repositoryFactoryToken };
 
 export interface RepositoryFactoryOptions {
   readonly container: ServiceResolver;

@@ -1,5 +1,13 @@
-import type { DatabaseDriverRegistration } from '@nocobase/db';
-import type { AppConfigFactory } from '../config/define-app-config.js';
+import {
+  resolveDatabaseDriver,
+  type ConnectionConfig,
+  type DatabaseDriverRegistration,
+} from '@nocobase/db';
+
+import type {
+  AppConfigFactory,
+  ConfigValidator,
+} from '../config/define-app-config.js';
 import type {
   AppDatabaseConfig,
   AppDatabaseConfigFromDrivers,
@@ -74,5 +82,84 @@ export function defineAppDatabaseConfig<
 export function defineAppDatabaseConfig(
   factory: AppConfigFactory<AppDatabaseConfig>,
 ): AppConfigFactory<AppDatabaseConfig> {
-  return factory;
+  const configure = (
+    runtime: Parameters<typeof factory>[0],
+  ): AppDatabaseConfig => factory(runtime);
+  return Object.assign(configure, {
+    rules: {
+      validators: [
+        ...(factory.rules?.validators ?? []),
+        validateAppDatabaseConfig,
+      ] as readonly ConfigValidator<never>[],
+      public: factory.rules?.public ?? [],
+    },
+  });
+}
+
+/**
+ * What can be said about the `database` section from its value alone. Whether each database can be reached is left to
+ * `config:check`, which connects; a start connects anyway and reports the driver's own error.
+ */
+export const validateAppDatabaseConfig: ConfigValidator<AppDatabaseConfig> = (
+  database,
+  context,
+) => {
+  const connections = isRecord(database.connections)
+    ? database.connections
+    : {};
+  const names = Object.keys(connections);
+  if (
+    database.default !== undefined &&
+    database.default !== 'none' &&
+    !Object.hasOwn(connections, database.default)
+  ) {
+    context.error(
+      'default',
+      names.length > 0
+        ? `names the connection "${database.default}", which is not configured. Configured connections: ${names.join(', ')}.`
+        : `names the connection "${database.default}", but no connection is configured.`,
+    );
+  }
+  for (const [name, connection] of Object.entries(connections)) {
+    const dialect = isRecord(connection) ? connection.dialect : undefined;
+    if (typeof dialect !== 'string' || dialect.trim() === '') {
+      context.error(`connections.${name}.dialect`, 'is not set.');
+      continue;
+    }
+    const message = connectionOptionsProblem(
+      name,
+      connection as unknown as ConnectionConfig,
+      database.drivers,
+    );
+    if (message) context.error(`connections.${name}`, message);
+  }
+};
+
+/**
+ * Asks the connection's own dialect driver whether it accepts the options, the way a start would when it opens the
+ * connection. Both steps are pure — `normalizeConnection` fills in defaults and `resolveConnection` builds the native
+ * driver's options, rejecting what that driver cannot take — so the question is answered without connecting.
+ *
+ * A dialect whose driver is not installed is skipped here; loading the configuration already reports it.
+ */
+function connectionOptionsProblem(
+  name: string,
+  connection: ConnectionConfig,
+  drivers: AppDatabaseConfig['drivers'],
+): string | undefined {
+  try {
+    const driver = resolveDatabaseDriver(connection, drivers, name);
+    if (!driver?.resolveConnection) return undefined;
+    const normalized = driver.normalizeConnection
+      ? driver.normalizeConnection(connection, {})
+      : connection;
+    driver.resolveConnection(normalized);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

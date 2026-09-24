@@ -3,14 +3,10 @@ name: Hub Docker image
 on:
   workflow_call:
     inputs:
-      create_app_version:
-        description: 'Version or tag of @nocobase/create-app'
+      ref:
+        description: 'Git ref of nocobase3 to build the Hub image from'
         type: string
-        default: latest
-      hub_template_version:
-        description: 'Version or tag of @nocobase/app-template-hub'
-        type: string
-        default: latest
+        required: true
       image_tag:
         description: 'Image tag to publish to both GHCR and Alibaba Cloud'
         type: string
@@ -24,16 +20,11 @@ on:
         required: true
   workflow_dispatch:
     inputs:
-      create_app_version:
-        description: 'Version or tag of @nocobase/create-app'
+      ref:
+        description: 'Git ref of nocobase3 to build the Hub image from'
         type: string
         required: true
-        default: latest
-      hub_template_version:
-        description: 'Version or tag of @nocobase/app-template-hub'
-        type: string
-        required: true
-        default: latest
+        default: develop
       image_tag:
         description: 'Image tag to publish to both GHCR and Alibaba Cloud'
         type: string
@@ -58,6 +49,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       - name: Check Alibaba Cloud credentials
@@ -73,6 +65,8 @@ jobs:
             fi
           done
 
+      # The build stage runs on the runner's own architecture and cross-targets native modules, so emulation only
+      # executes the runtime stage's few commands for arm64.
       - name: Set up QEMU for ARM64
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
         with:
@@ -94,15 +88,14 @@ jobs:
             type=raw,value=run-${{ github.run_id }}-${{ github.run_attempt }}
 
       # The image is started once on the runner before anything is pushed. Building it is not proof that it runs:
-      # config resolution, the packaged native modules, and the pnpm start entry are only exercised by a container
-      # that answers its health check. Only the runner's own platform is built here; the multi-arch build below
-      # repeats the build stage rather than reusing these layers, because both steps pin `no-cache-filters: build`
-      # so every pushed layer resolves the moving registry tags itself.
+      # config resolution, the packaged native modules, and the start entry are only exercised by a container that
+      # answers its health check. Only the runner's own platform is built here; the multi-arch build below reuses
+      # its build stage through the shared cache.
       - name: Build Hub image for the runner platform
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          file: Dockerfile.hub
+          file: packages/templates/app-template-hub/Dockerfile
           platforms: linux/amd64
           load: true
           push: false
@@ -110,10 +103,7 @@ jobs:
           sbom: false
           tags: nocobase/hub:smoke
           build-args: |
-            CREATE_APP_VERSION=${{ inputs.create_app_version }}
-            HUB_TEMPLATE_VERSION=${{ inputs.hub_template_version }}
-          # Every run must resolve moving registry tags again, including latest.
-          no-cache-filters: build
+            APP_DIR=packages/templates/app-template-hub
           cache-from: type=gha,scope=hub-multiarch
           cache-to: type=gha,mode=max,scope=hub-multiarch
 
@@ -128,12 +118,11 @@ jobs:
           mkdir -p "$SMOKE_DIR/storage"
           cd "$SMOKE_DIR"
 
-          # The same steps the deployment guide gives: take the example configuration from the image, replace the
-          # placeholder secrets, and point the SQLite database at the persistent mount.
+          # The same steps the deployment guide gives: take the example configuration from the image and replace the
+          # placeholder secrets. Its relative SQLite path resolves under /app/storage, the persistent mount.
           docker run --rm --entrypoint cat "$HUB_IMAGE" /app/config.example.yml > config.example.yml
           test -s config.example.yml
           sed -e "s|replace-with-a-unique-secret|$(openssl rand -hex 32)|" \
-              -e "s|^\([[:space:]]*\)database: hub/database/main.sqlite$|\1database: /data/hub/database/main.sqlite|" \
               config.example.yml > config.yml
           if grep -q 'replace-with-a-unique-secret' config.yml; then
             echo "::error::config.yml still carries a placeholder secret"
@@ -150,16 +139,12 @@ jobs:
           }
           trap cleanup EXIT
 
-          docker run -d --name hub-smoke \
+          # Only what a deployment has to supply: the image already defaults the mount path, listener, and config path.
+          docker run -d --name hub-smoke --init \
             -p "127.0.0.1:$HUB_PORT:13000" \
-            -e APP_CONFIG_FILE=/app/config.yml \
-            -e HUB_STORAGE_DIR=/data \
-            -e APP_BASE_PATH=/hub \
             -e APP_PUBLIC_ORIGIN="http://127.0.0.1:$HUB_PORT" \
-            -e APP_SERVER_HOST=0.0.0.0 \
-            -e APP_SERVER_PORT=13000 \
             -v "$SMOKE_DIR/config.yml:/app/config.yml:ro" \
-            -v "$SMOKE_DIR/storage:/data" \
+            -v "$SMOKE_DIR/storage:/app/storage" \
             "$HUB_IMAGE"
 
           HEALTH_URL="http://127.0.0.1:$HUB_PORT/hub/api/healthz"
@@ -198,7 +183,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          file: Dockerfile.hub
+          file: packages/templates/app-template-hub/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           # Alibaba Cloud rejects attestation manifests using application/vnd.oci.empty.v1+json.
@@ -207,9 +192,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            CREATE_APP_VERSION=${{ inputs.create_app_version }}
-            HUB_TEMPLATE_VERSION=${{ inputs.hub_template_version }}
-          # Every run must resolve moving registry tags again, including latest.
-          no-cache-filters: build
+            APP_DIR=packages/templates/app-template-hub
           cache-from: type=gha,scope=hub-multiarch
           cache-to: type=gha,mode=max,scope=hub-multiarch

@@ -97,7 +97,8 @@ export type AIEmployeeTask = {
 export type AIEmployeeTasks = Record<string, AIEmployeeTask[]>;
 
 export type AIEmployeeTaskTrigger = {
-  aiEmployee: string | AIEmployee;
+  /** Omitted: the chat's `defaultEmployee`, or its first employee without one. */
+  aiEmployee?: string | AIEmployee;
   task?: AIEmployeeTask;
   tasks?: AIEmployeeTask[];
   context?: AIWorkContextItem[];
@@ -145,10 +146,11 @@ export type AIToolCallInvocationContext = {
   automatic?: boolean;
 };
 
+/** The result is awaited, so an invoker may return a promise. */
 export type AIToolInvoker = (
   input: unknown,
   context: AIToolCallInvocationContext,
-) => unknown | Promise<unknown>;
+) => unknown;
 
 export type AIToolInvokerMap = Record<string, AIToolInvoker>;
 

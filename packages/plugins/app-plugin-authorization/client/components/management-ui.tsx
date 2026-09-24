@@ -11,6 +11,7 @@ import {
   pageRangeLabel,
 } from './pagination.js';
 import { Button } from './ui/button.js';
+import { cn } from '../lib/utils.js';
 import { Card } from './ui/card.js';
 import { TableCell, TableRow } from './ui/table.js';
 
@@ -119,11 +120,13 @@ export function TablePager({
 }
 
 export function ManagementTable({
+  className,
   children,
 }: {
+  className?: string;
   children: ReactNode;
 }): ReactElement {
-  return <Card className='overflow-hidden'>{children}</Card>;
+  return <Card className={cn('overflow-hidden', className)}>{children}</Card>;
 }
 
 export function EmptyTableRow({

@@ -25,11 +25,11 @@ AI 员工并不局限于一个聊天窗口。你可以把完整对话放在独�
 
 AI 员工相关内容分别属于应用源码、应用配置和管理后台。三者解决的问题不同。
 
-| 位置                                                         | 适合放什么                                                            | 何时生效                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------- |
-| `server/ai/`、`ai/skills/`、`client/extensions/nocobase-ai/` | 员工定义、后端 Tool、Skill 和前端组件                                 | 修改 TypeScript 或静态资源后重启开发服务      |
-| `config.yml`                                                 | LLM 连接、MCP 连接、附件存储和额外 Skill 目录                         | AI 配置支持重载；快速开始统一通过重启服务生效 |
-| 「AI Employee」管理页                                        | 员工启用状态、角色设定、可用模型、Skill、Tool、知识库和 MCP Tool 权限 | 保存后生效                                    |
+| 位置                                                         | 适合放什么                                                            | 何时生效                                 |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------- |
+| `server/ai/`、`ai/skills/`、`client/extensions/nocobase-ai/` | 员工定义、后端 Tool、Skill 和前端组件                                 | 修改 TypeScript 或静态资源后重启开发服务 |
+| `config.yml`                                                 | LLM 连接、MCP 连接、附件存储和额外 Skill 目录                         | 修改后重启服务生效                       |
+| 设置页的「AI」分组                                           | 员工启用状态、角色设定、可用模型、Skill、Tool、知识库和 MCP Tool 权限 | 保存后生效                               |
 
 应用运行时只有一个由 AI 员工插件注册的 `AIManager`。应用资源应接入这个实例，不要另外调用 `createAIManager()` 建一套平行运行时。普通前端对话使用插件提供的 `nocobase-ai` Registry 安装副本；安装后由其中的 Service 和 Transport 处理会话、文件上传、流式响应、Tool 审批和断线恢复。
 
@@ -46,12 +46,12 @@ server/
 │   └── index.ts            # 静态聚合并注册 Employee 和 Tool
 └── providers/              # 把应用 AI 资源接入运行时
 ai/
-└── skills/<name>/SKILL.md  # Skill 及其可选局部 Tool
+└── skills/<name>/SKILL.md  # Skill 的工作说明，不包含 Tool 代码
 client/
 └── extensions/nocobase-ai/ # 应用拥有的 AI 前端 Registry 源码
 ```
 
-Employee 和 Tool 通过静态 import 注册，Skill 使用 `SkillsLoader` 从 `SKILL.md` 加载。MCP 连接只通过 `config.yml` 的 `ai.mcpServers` 配置。应用源码资源按 Tool、Skill、Employee 的顺序准备，让员工注册时引用的能力已经存在。
+Employee 和 Tool 通过静态 import 注册，Skill 使用 `SkillsLoader` 从 `SKILL.md` 加载。MCP 连接只通过 `config.yml` 的 `ai.mcpServers` 配置。Skill 目录不定义 Tool，Skill 的 `tools` 只写已经在代码中注册的 Tool 名称。员工引用的 Skill 和 Tool 在运行时按名称查找，和注册的先后顺序无关，详见 [定义自己的 AI 员工](./development/index.md#每类资源在哪里注册)。
 
 ## 相关链接
 

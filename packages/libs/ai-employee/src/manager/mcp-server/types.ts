@@ -1,13 +1,18 @@
 import type { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import type { Logger } from '@nocobase/logging';
 import type { DynamicToolsProvider, Permission } from '../tools/types.js';
-import type { MCPEntity } from '../../repository/index.js';
+import type { AIMCPRepository, MCPEntity } from '../../repository/index.js';
 
 export type MCPRuntime = {
   logger?: Pick<Logger, 'error' | 'warn'>;
 };
 
 export interface MCPServerManager extends MCPRegistration {
+  /**
+   * Moves the manager onto a persistent repository, carrying over any server
+   * registered before the switch, so administrator changes survive a restart.
+   */
+  switchRepository(repository: AIMCPRepository): Promise<void>;
   getMCP(name: string): Promise<MCPEntity | undefined>;
   listMCP(filter?: MCPFilter): Promise<MCPEntity[]>;
   deleteMCP(name: string): Promise<void>;

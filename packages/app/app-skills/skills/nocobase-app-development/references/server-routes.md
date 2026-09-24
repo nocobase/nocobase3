@@ -173,7 +173,7 @@ Declaration modules must not connect to the database, start workers, or execute 
 
 ## Calling from the browser
 
-In React components and custom Hooks, use `useApiClient()` from `@nocobase/app-client` to obtain the application's HTTP client so requests follow the configured `api.baseURL`. Outside React, resolve `apiClientToken` from the application's services or pass the client explicitly. Request paths are relative to that base; do not hardcode `/api` or the deployment mount path. See [client API requests](client-api.md) for client resolution, custom requests, uploads, cancellation, errors and remote Repository operations.
+In React components and custom Hooks, use `useApiClient()` from `@nocobase/app-client` to obtain the application's HTTP client so requests follow the configured `api.baseURL`. Outside React, resolve `apiClientToken` from the application's services or pass the client explicitly. Request paths are relative to that base; do not hardcode `/api` or the deployment mount path. See [client API requests](frontend/references/api.md) for client resolution, custom requests, uploads, cancellation, errors and remote Repository operations.
 
 ## Verify
 

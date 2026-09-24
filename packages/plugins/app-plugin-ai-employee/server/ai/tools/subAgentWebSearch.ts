@@ -7,10 +7,11 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import { defineTools, type AIManager } from '@nocobase/ai-employee';
 import { z } from 'zod';
+import { aiManagerToken } from '../../tokens.js';
 
-export default defineTools<AgentContext<{}, {}>>({
+export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
@@ -31,6 +32,7 @@ export default defineTools<AgentContext<{}, {}>>({
         ),
     }),
   },
+  dependencies: { ai: aiManagerToken },
   invoke: async (ctx, args: { query: string[] }) => {
     const { model } = ctx.state;
     if (
@@ -39,7 +41,15 @@ export default defineTools<AgentContext<{}, {}>>({
     ) {
       throw new Error('Web search model is not configured');
     }
-    const { provider } = await ctx.ai.llmProviderManager.getLLMService({
+    // Searching is the provider's capability, not this tool's. Without it the
+    // request below still reaches a model, and a model handed a retrieval
+    // prompt answers from training data with sources that look real. Refuse
+    // instead: a caller can act on "no search ran", not on a plausible answer.
+    const unsupported = await describeUnsupportedWebSearch(ctx.deps.ai, model);
+    if (unsupported) {
+      return { status: 'error', content: unsupported };
+    }
+    const { provider } = await ctx.deps.ai.llmProviderManager.getLLMService({
       llmService: model.llmService,
       model: model.model,
       webSearch: true,
@@ -72,8 +82,8 @@ export default defineTools<AgentContext<{}, {}>>({
             tags: ['langsmith:nostream'],
           },
         )
-        .then((content) => content.text as string)
-        .then((result) => ({ query, result })),
+        .then((content: { text: unknown }) => content.text as string)
+        .then((result: string) => ({ query, result })),
     );
 
     const result = await Promise.all(running);
@@ -83,6 +93,34 @@ export default defineTools<AgentContext<{}, {}>>({
     };
   },
 });
+
+/**
+ * Why this turn cannot search, or `undefined` when it can. Provider metadata is
+ * the only record of the capability: `builtIn.webSearch` is silently ignored by
+ * a provider that does not implement it.
+ */
+async function describeUnsupportedWebSearch(
+  ai: AIManager,
+  model: { llmService: string; model: string },
+): Promise<string | undefined> {
+  const service = await ai.llmServiceManager.getLLMService(model.llmService);
+  if (!service) {
+    return `Web search did not run: LLM service "${model.llmService}" is not configured.`;
+  }
+  const provider = ai.llmProviderManager
+    .listLLMProviders()
+    .find((candidate) => candidate.name === service.provider);
+  if (!provider?.supportWebSearch) {
+    return `Web search did not run: provider "${service.provider}" has no built-in web search, so no results were retrieved. Do not answer from memory. Use a configured MCP search server, or switch this conversation to a model whose provider supports web search.`;
+  }
+  if (
+    provider.webSearchModels &&
+    !provider.webSearchModels.includes(model.model)
+  ) {
+    return `Web search did not run: model "${model.model}" does not support web search on provider "${service.provider}". Supported models: ${provider.webSearchModels.join(', ')}.`;
+  }
+  return undefined;
+}
 
 const WEB_SEARCH_SYSTEM_PROMPT = `You are a web search retrieval assistant.
 

@@ -1,9 +1,9 @@
 ---
-title: 'Before you start'
+title: 'Overview'
 description: 'Create a NocoBase 3 application, sign in, and build your first order feature with an AI Agent.'
 ---
 
-# Before you start
+# Overview
 
 Create your first NocoBase 3 application here. Start a local project, then ask your AI Agent to build a small order feature that saves real data.
 
@@ -46,13 +46,7 @@ Choose [Create with an AI Agent](./create-app) or [Create manually](./create-app
 
 Create the project once and continue working in it. You do not initialize another application for every feature.
 
-## Choose your next section
-
-| Your goal                                                   | Read                                        |
-| ----------------------------------------------------------- | ------------------------------------------- |
-| Try the product and get it running                          | This Get started section                    |
-| Describe requirements clearly and review AI Agent output    | [Work with an AI Agent](../ai/)             |
-| Connect data, pages, permissions, and processes in one case | [Order application tutorial](../tutorials/) |
+After your first feature, the "Working with an AI Agent" pages help you describe requirements clearly, review the result, and move on to larger features. To connect data, pages, permissions, and processes in one case, follow the [order application tutorial](../tutorials/).
 
 ## Start through Hub
 

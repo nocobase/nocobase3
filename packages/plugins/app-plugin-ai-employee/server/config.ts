@@ -56,6 +56,13 @@ export type AIEmployeeLLMServiceConfig = Omit<
   'enabledModels'
 > & {
   readonly enabledModels?: readonly AIEmployeeEnabledModelConfig[];
+  /**
+   * Whether this service's `enabledModels` is reapplied on every configuration
+   * load. Off by default, because the model list is normally curated in AI
+   * settings and a reload must not discard that. Turn it on to keep the list in
+   * `config.yml` instead, and expect edits made in the UI to be overwritten.
+   */
+  readonly overrideEnabledModels?: boolean;
 };
 
 export interface AIApplicationConfig {

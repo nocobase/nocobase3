@@ -277,10 +277,12 @@ describe('AI employee list disclosure', () => {
       'lg:grid-cols-[32px_minmax(0,1fr)]',
       'lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]',
       'h-[clamp(52rem,85dvh,68rem)]',
-      'lg:h-[clamp(40rem,80dvh,64rem)]',
+      'lg:h-auto',
+      'lg:flex-1',
       'min-h-0',
       'overflow-hidden',
     );
+    expect(screen.getByRole('main')).not.toHaveClass('lg:min-h-[32rem]');
     const tabList = screen.getByRole('tablist');
     expect(tabList).toHaveClass('shrink-0');
     const content = tabList.nextElementSibling;

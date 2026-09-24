@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 
 import { SubAgentsDispatcher } from '../server/manager/sub-agents/dispatcher.js';
 
@@ -52,13 +51,16 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     expect(getUserDecisions).toHaveBeenCalledWith('sub-message');
   });
 
-  it('passes the resolved execution context to sub-agent tools', async () => {
+  it('passes the inherited state to sub-agent tools', async () => {
     const invoke = vi.fn().mockResolvedValue({
-      messages: [{ content: 'Search result' }],
+      message: {
+        role: 'assistant',
+        content: { type: 'text', content: 'Search result' },
+      },
     });
     const resolvedModel = { llmService: 'openai', model: 'gpt-5' };
+    const runtime = { logger: { error: vi.fn() } } as never;
     const createAIEmployee = vi.fn().mockResolvedValue({ invoke });
-    const has = vi.fn(() => false);
     const dispatcher = new SubAgentsDispatcher({
       ai: {} as never,
       database: {} as never,
@@ -82,7 +84,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       workContextHandler: {} as never,
       documentLoaders: {} as never,
       container: {
-        has,
+        has: vi.fn(() => false),
         resolve: vi.fn(() => ({ createAIEmployee })),
       } as never,
     });
@@ -95,7 +97,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
           model: resolvedModel,
           question: 'Find current information',
           webSearch: true,
-          messages: [
+          handoffMessages: [
             {
               role: 'user',
               content: { type: 'text', content: 'Parent context' },
@@ -104,28 +106,32 @@ describe('SubAgentsDispatcher direct dependencies', () => {
         },
         {
           actor: { id: 'user-1', roles: ['member'], isRoot: false },
-          execution: { timezone: 'Asia/Shanghai' },
+          state: { sessionId: 'main-session', timezone: 'Asia/Shanghai' },
+          runtime,
         },
       ),
     ).resolves.toBe('Search result');
 
-    const request = invoke.mock.calls[0][0];
-    expect(request.context.agentContext.state).toMatchObject({
-      sessionId: 'sub-session',
-      model: resolvedModel,
-      webSearch: true,
-      timezone: 'Asia/Shanghai',
-    });
-    expect(request.context.agentContext.state.messages).toHaveLength(1);
-    expect(has).toHaveBeenCalledWith(authorizationToken);
-    expect(request.context.agentContext.actor.id).toBe('user-1');
+    // The sub-agent inherits the dispatching agent's state and runs it in its
+    // own session: the session is the one change this dispatcher makes.
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
         actor: { id: 'user-1', roles: ['member'], isRoot: false },
+        from: 'sub-agent',
+        runtime,
+        state: expect.objectContaining({
+          sessionId: 'sub-session',
+          timezone: 'Asia/Shanghai',
+          model: resolvedModel,
+          webSearch: true,
+        }),
       }),
     );
-    await expect(
-      request.context.agentContext.services.data.getDataSources({}),
-    ).rejects.toThrow('Data access denied');
+    expect(
+      createAIEmployee.mock.calls[0][0].state.handoffMessages,
+    ).toHaveLength(1);
+    const request = invoke.mock.calls[0][0];
+    expect(request).not.toHaveProperty('model');
+    expect(request).not.toHaveProperty('context');
   });
 });

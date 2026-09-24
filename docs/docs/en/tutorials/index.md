@@ -17,7 +17,7 @@ Build a small order application: a salesperson selects a customer and creates an
 | Prerequisites        | Run terminal commands, open a project, switch accounts, and describe business rules                 |
 | Learning outcome     | Understand how a business feature connects data structures, user actions, and background processing |
 
-If you have not run an application yet, complete [Get started](../get-started/). For help describing requirements and checking AI Agent output, read [Work with an AI Agent](../ai/) alongside this tutorial.
+If you have not run an application yet, complete [Get started](../get-started/). For help describing requirements and checking AI Agent output, read [Work with an AI Agent](../get-started/ai-agent/writing-requirements.md) alongside this tutorial.
 
 ## The business problem
 

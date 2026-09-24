@@ -42,10 +42,16 @@ export {
   type AppClientConfigMap,
   type AppClientConfigPrimitive,
   type AppClientConfigValue,
+  type AppClientPublicConfig,
   type AppClientReactProvider,
   type AppClientRefineConfig,
   type AppClientRenderConfig,
 } from './config.js';
+export type {
+  PublicAppConfig,
+  PublicConfigPath,
+  PublicConfigValue,
+} from './public-config.js';
 export {
   createAppI18nRuntime,
   readStoredLocale,

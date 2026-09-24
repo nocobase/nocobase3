@@ -21,6 +21,7 @@ const createProviders = (
   const context = {
     resolveLLM: vi.fn(),
     getSystemPrompt: vi.fn(),
+    agentContext: { state: { sessionId: 'test-session' } },
     currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
     discoveredTools: vi.fn(),
   };

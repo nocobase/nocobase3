@@ -1,24 +1,29 @@
 ---
 title: '管理 AI 服务'
-description: '使用 NocoBase AI Employee 设置页管理员工、LLM 服务和 MCP 服务。'
-keywords: 'AI Employee settings,LLM Service,MCP,ai.settings'
+description: '在 NocoBase 设置页的 AI 分组中管理员工、Skill、Tool、LLM 服务、MCP 服务和会话记录。'
+keywords: 'AI Employee settings,Skills,Tools,LLM Service,MCP,Conversations,ai.settings'
 ---
 
 # 管理 AI 服务
 
-打开 `/settings/ai` 进入「AI Employee」设置页。实际 URL 会自动带上应用部署的 base path，例如默认本地环境可能是 `/main/settings/ai`。
+AI 相关的设置位于设置页侧栏的「AI」分组中，每一项都是独立页面，下文按界面上的名称称呼它们。下面的路径都相对于应用部署的 base path，比如默认本地环境中的 `/settings/ai` 实际可能是 `/main/settings/ai`。
 
-![AI Employee 设置页](https://static-docs.nocobase.com/20260914111142-ai-employee-settings.png)
+![AI 员工设置页](https://static-docs.nocobase.com/20260914111142-ai-employee-settings.png)
 
-页面包含三个核心 Tab：
+| 页面     | 路径                         | 用途                                               |
+| -------- | ---------------------------- | -------------------------------------------------- |
+| AI 员工  | `/settings/ai`               | 启用员工，调整角色、模型、Skill、Tool 和知识库     |
+| 技能     | `/settings/ai/skills`        | 浏览已加载的 Skill，查看使用说明和关联的 Tool      |
+| 工具     | `/settings/ai/tools`         | 浏览已注册的 Tool，查看使用说明和输入参数          |
+| LLM 服务 | `/settings/ai/llm-services`  | 查看配置的服务，启用服务并选择模型                 |
+| MCP 服务 | `/settings/ai/mcp-services`  | 查看配置的连接，启用服务并设置发现 Tool 的权限     |
+| 会话     | `/settings/ai/conversations` | 查看所有用户与 AI 员工的会话、消息和 Tool 调用记录 |
 
-| Tab         | 用途                                           |
-| ----------- | ---------------------------------------------- |
-| AI Employee | 启用员工，调整角色、模型、Skill、Tool 和知识库 |
-| LLM Service | 查看配置服务，启用服务并选择模型               |
-| MCP         | 查看配置连接，启用服务并设置发现 Tool 的权限   |
+「技能」和「工具」两页只用于浏览，不能在这里创建或编辑 Skill 和 Tool。「会话」页是会话中心，它不在侧栏中显示，直接打开它的路径即可；在这里查看会话不会改变会话的已读状态。
 
-设置 Route 要求 `ai.settings:read`。修改操作还要通过相应 API 的服务端授权；看不到页面时，先检查当前角色的设置页访问权限。
+以前的 `/settings/ai?tab=llm-service`、`?tab=mcp`、`?tab=conversations` 这类带 `tab` 参数的链接会自动跳转到对应的独立页面。
+
+这些页面和它们调用的接口都要求登录，并且要有 `ai.settings` 页面的访问权限：没有登录返回 401，没有这项权限返回 403。聊天相关的接口不受这项权限限制，所有登录用户都可以使用。看不到页面或保存时报 403，先检查当前用户的设置页访问权限。
 
 ## 配置和管理页的边界
 

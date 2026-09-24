@@ -425,8 +425,14 @@ describe('Skills management API', () => {
     }
   });
 
-  it('preserves the legacy list and key-based get response contracts and policy', async () => {
+  it('refuses the legacy list and get without AI settings access', async () => {
     sessionUser = { id: 'ungranted' };
+    expect((await request('list')).status).toBe(403);
+    expect((await request('get', 'key=general-skill')).status).toBe(403);
+  });
+
+  it('preserves the legacy list and key-based get response contracts for AI settings access', async () => {
+    sessionUser = { id: 'exact-reader' };
     const list = await request('list');
     expect(list.status).toBe(200);
     expect(await list.json()).toEqual(

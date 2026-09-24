@@ -326,6 +326,11 @@ run('Rewrite server path aliases', 'pnpm', [
 // deployment resolves every external Collection without titles or relations and reports nothing wrong. Only
 // `metadata.json` is copied: `collection.json` and `schema.json` are derived output nothing reads back.
 copyCollectionMetadata();
+// Same reason, different asset: a Skill is a `SKILL.md`, and the AI Employee plugin reads the application's from
+// `<applicationRoot>/ai/skills`, which is `dist` once deployed.
+run('Copy application AI Skills', 'node', [
+  fileURLToPath(new URL('./utils/copy-ai-skills.mjs', import.meta.url)),
+]);
 runHookStage(buildHooks, 'afterServerBuild', run);
 await generateDatabaseManifests({
   sourceDir: path.join(rootDir, 'database'),
