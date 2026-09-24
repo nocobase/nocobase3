@@ -20,16 +20,33 @@ export interface AppClientConfigMap {
   readonly [key: string]: AppClientConfigValue;
 }
 
+/**
+ * The values the server publishes through `public` in its configuration sections, read at the same path they have on
+ * the server, such as `auth.emailAndPassword.disableSignUp`. Read-only, and kept apart from the client's own
+ * configuration so that handing a whole section to a library never passes them along.
+ */
+export interface AppClientPublicConfig {
+  get<T>(path: string): T | undefined;
+  get<T>(path: string, defaultValue: T): T;
+  has(path: string): boolean;
+  raw(): AppClientConfigMap;
+}
+
 export interface AppClientConfig {
+  /** Client defaults and the `client` section of the configuration file. Server-published values are in `public`. */
   get<T>(path: string): T | undefined;
   get<T>(path: string, defaultValue: T): T;
   has(path: string): boolean;
   raw(): AppClientConfigMap;
   mergeDefaults(values: AppClientConfigMap): void;
+  /** Values the server publishes. `get` never returns them. */
+  readonly public: AppClientPublicConfig;
 }
 
 export interface AppClientConfigContext {
   readonly rawConfig: unknown;
+  /** The server's published values; an empty object when omitted. */
+  readonly rawPublicConfig?: unknown;
 }
 
 export type AppClientConfigFactory = (
@@ -50,7 +67,14 @@ export function createAppClientConfig(
   context: AppClientConfigContext,
 ): AppClientConfig {
   const rawConfig = assertConfigMap(context.rawConfig, 'Client config');
-  return new ResolvedAppClientConfig(rawConfig);
+  const rawPublicConfig = assertConfigMap(
+    context.rawPublicConfig ?? {},
+    'Public client config',
+  );
+  return new ResolvedAppClientConfig(
+    rawConfig,
+    new ResolvedAppClientPublicConfig(rawPublicConfig),
+  );
 }
 
 export function defineAppClientRenderConfig(
@@ -75,12 +99,66 @@ export function normalizeAppClientBasename(
   return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
 }
 
+/**
+ * `import.meta.env` is read through a local type and an optional access, as in `defineDevRoutes`: consumers compile
+ * this module without bundler ambient types, and Vitest runs it where `import.meta.env` is undefined — a development
+ * context, which is where these checks are meant to speak up.
+ */
+interface ImportMetaWithBundlerEnv {
+  readonly env?: { readonly PROD?: boolean };
+}
+
+function isDevelopment(): boolean {
+  return !(import.meta as ImportMetaWithBundlerEnv).env?.PROD;
+}
+
+class ResolvedAppClientPublicConfig implements AppClientPublicConfig {
+  private readonly value: AppClientConfigMap;
+
+  public constructor(value: AppClientConfigMap) {
+    this.value = freezeConfigMap(cloneConfigMap(value));
+  }
+
+  public get<T>(path: string): T | undefined;
+  public get<T>(path: string, defaultValue: T): T;
+  public get<T>(path: string, defaultValue?: T): T | undefined {
+    const value = readConfigValue(this.value, path);
+    if (value === undefined) {
+      if (isDevelopment()) {
+        const published = listLeafPaths(this.value);
+        console.warn(
+          `${path} is not published by the server.${
+            published.length > 0
+              ? ` Published paths: ${published.join(', ')}.`
+              : ''
+          } Add it to public in the section's defineAppConfig on the server if the browser needs it.`,
+        );
+      }
+      return defaultValue;
+    }
+    return cloneConfigValue(value) as T;
+  }
+
+  public has(path: string): boolean {
+    return readConfigValue(this.value, path) !== undefined;
+  }
+
+  public raw(): AppClientConfigMap {
+    return cloneConfigMap(this.value);
+  }
+}
+
 class ResolvedAppClientConfig implements AppClientConfig {
+  public readonly public: AppClientPublicConfig;
   private value: AppClientConfigMap;
   private defaults: AppClientConfigMap;
   private readonly overrides: AppClientConfigMap;
 
-  public constructor(overrides: AppClientConfigMap) {
+  public constructor(
+    overrides: AppClientConfigMap,
+    publicConfig: AppClientPublicConfig,
+  ) {
+    this.public = publicConfig;
     this.defaults = {};
     this.overrides = cloneConfigMap(overrides);
     this.value = freezeConfigMap(cloneConfigMap(overrides));
@@ -96,35 +174,59 @@ class ResolvedAppClientConfig implements AppClientConfig {
   public get<T>(path: string): T | undefined;
   public get<T>(path: string, defaultValue: T): T;
   public get<T>(path: string, defaultValue?: T): T | undefined {
-    const segments = path ? normalizeConfigPath(path).split('.') : [];
-    let value: AppClientConfigValue = this.value;
-    for (const segment of segments) {
-      if (isConfigArray(value)) {
-        if (!/^\d+$/u.test(segment)) {
-          return defaultValue;
-        }
-        const item: AppClientConfigValue | undefined = value[Number(segment)];
-        if (item === undefined) {
-          return defaultValue;
-        }
-        value = item;
-        continue;
+    const value = readConfigValue(this.value, path);
+    if (value === undefined) {
+      // Reading a published value here is the one mistake two entry points invite, and it fails silently.
+      if (isDevelopment() && this.public.has(path)) {
+        throw new Error(
+          `${path} is published by the server; read it with config.public.get('${path}').`,
+        );
       }
-      if (!isConfigMap(value) || !Object.hasOwn(value, segment)) {
-        return defaultValue;
-      }
-      value = value[segment];
+      return defaultValue;
     }
     return cloneConfigValue(value) as T;
   }
 
   public has(path: string): boolean {
-    return this.get(path) !== undefined;
+    return readConfigValue(this.value, path) !== undefined;
   }
 
   public raw(): AppClientConfigMap {
     return cloneConfigMap(this.value);
   }
+}
+
+function readConfigValue(
+  root: AppClientConfigMap,
+  path: string,
+): AppClientConfigValue | undefined {
+  const segments = path ? normalizeConfigPath(path).split('.') : [];
+  let value: AppClientConfigValue = root;
+  for (const segment of segments) {
+    if (isConfigArray(value)) {
+      if (!/^\d+$/u.test(segment)) {
+        return undefined;
+      }
+      const item: AppClientConfigValue | undefined = value[Number(segment)];
+      if (item === undefined) {
+        return undefined;
+      }
+      value = item;
+      continue;
+    }
+    if (!isConfigMap(value) || !Object.hasOwn(value, segment)) {
+      return undefined;
+    }
+    value = value[segment];
+  }
+  return value;
+}
+
+function listLeafPaths(root: AppClientConfigMap, prefix = ''): string[] {
+  return Object.entries(root).flatMap(([key, value]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return isConfigMap(value) ? listLeafPaths(value, path) : [path];
+  });
 }
 
 function normalizeConfigPath(path: string): string {

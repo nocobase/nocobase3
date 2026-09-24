@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-authentication
 
+## 1.0.0-beta.22
+
+### Minor Changes
+
+- d7543b5: Support users.initialAdmin.email for fresh installations, defaulting to admin@nocobase.com when omitted, and document every initial administrator field in the template configuration examples.
+
 ## 1.0.0-beta.21
 
 ### Major Changes

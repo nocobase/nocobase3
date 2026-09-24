@@ -66,6 +66,15 @@ Also try creating another `ORD-001` and entering a negative amount. Both must be
 
 ## Keep working when a check fails
 
-Give the AI Agent the actual command and full error. Ask it to explain and fix the cause, then run the check again. Removing checks or ignoring failures does not complete the feature.
+Tell the AI Agent what you did, what you expected, and what actually happened, then check again after it fixes the cause. See [Return specific feedback](./ai-agent/reviewing-output.md#return-specific-feedback) for how to describe the problem.
 
-Continue with [reviewing AI Agent output](../ai/reviewing-output.md), or learn how to [write clearer requirements](../ai/writing-requirements.md).
+## What comes next
+
+This page walked through one complete collaboration cycle: describe a requirement, change code, check the result, and request corrections. Build later features the same way: keep each round bounded and checkable before widening the scope. Pick a page by the problem you run into:
+
+| Problem you are facing                                        | Read                                                     |
+| ------------------------------------------------------------- | -------------------------------------------------------- |
+| The feature does not match what you wanted                    | [Write requirements](./ai-agent/writing-requirements.md) |
+| The AI Agent says it is done and you do not know how to check | [Review AI Agent output](./ai-agent/reviewing-output.md) |
+| One requirement spans many pages and rules                    | [Build complex features](./ai-agent/complex-features.md) |
+| You keep repeating the same project rules                     | [Add team conventions](./ai-agent/team-conventions.md)   |

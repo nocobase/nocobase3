@@ -1,7 +1,10 @@
 import type { AppRuntimeLogging } from '../logging/config.js';
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
-import { type AppIdentityConfig } from '../config/index.js';
+import {
+  AppConfigInvalidError,
+  type AppIdentityConfig,
+} from '../config/index.js';
 
 import type { AppPaths } from '../config/index.js';
 import {
@@ -248,12 +251,25 @@ export class Application<
   }
 
   private async startServiceProviders(): Promise<void> {
+    await this.validateConfig();
     this.registerProviders();
     await this.registerLocales();
     await this.providerRegistry.bootAll();
     await this.registerRoutes();
     await this.providerRegistry.startAll();
     await this.providerRegistry.readyAll();
+  }
+
+  /**
+   * Refuses to start on a configuration that breaks a rule its sections declare. It runs here rather than when the
+   * runtime is resolved, so commands that only read the configuration, such as `config:init` and `config:check`, still
+   * load it and can report what is wrong.
+   */
+  private async validateConfig(): Promise<void> {
+    const issues = (await this.config.validate?.()) ?? [];
+    if (issues.some((issue) => issue.level === 'error')) {
+      throw new AppConfigInvalidError(issues);
+    }
   }
 
   /**

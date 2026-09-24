@@ -1,8 +1,6 @@
-import type { AppPaths } from '@nocobase/app-server/config';
-import {
-  createAppDatabaseManager,
-  type AppDatabaseConfig,
-} from '@nocobase/app-server/database';
+import type { AppPaths } from '../config/index.js';
+import { createAppDatabaseManager } from './manager.js';
+import type { AppDatabaseConfig } from './types.js';
 
 export type ConnectionCheckStatus = 'ok' | 'failed' | 'skipped';
 

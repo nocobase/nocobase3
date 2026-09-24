@@ -1,11 +1,6 @@
 [
   {
     "type": "file",
-    "name": "index",
-    "label": "和 AI Agent 协作"
-  },
-  {
-    "type": "file",
     "name": "writing-requirements",
     "label": "怎么提需求"
   },
