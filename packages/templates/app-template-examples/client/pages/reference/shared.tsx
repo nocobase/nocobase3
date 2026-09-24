@@ -2,8 +2,8 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { ExternalLinkIcon } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

@@ -1,14 +1,18 @@
 import {
+  Blocks,
   Check,
   Copy,
   Monitor,
   Moon,
+  PanelRight,
+  PanelTop,
   RefreshCw,
   Search,
   ShieldCheck,
   Smartphone,
   Sun,
   Tablet,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   createContext,
@@ -44,6 +48,8 @@ import {
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
 import { AuthenticationUiDemo } from './demo/auth/auth-ui';
+import { PageUiDemo } from './demo/page/page-ui';
+import { RouteOverlayUiDemo } from './demo/page/route-overlay-ui';
 
 interface RegistryItem {
   name: string;
@@ -65,6 +71,19 @@ const authUiItem: RegistryItem = {
     iframeHeight: 720,
   },
   type: 'registry:block',
+};
+
+interface ItemPreview {
+  /** The demo route rendered in the item's preview frame. */
+  readonly path: string;
+  readonly icon: LucideIcon;
+}
+
+// Items are not discovered: each one is wired here, and routed to its demo in `AppContent`.
+const itemPreviews: Record<string, ItemPreview> = {
+  'auth-ui': { path: '/demo/auth/auth-ui/login', icon: ShieldCheck },
+  'page-ui': { path: '/demo/page/page-ui', icon: PanelTop },
+  'route-overlay-ui': { path: '/demo/page/route-overlay-ui', icon: PanelRight },
 };
 
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -105,8 +124,15 @@ export function App(): ReactElement {
 }
 
 function AppContent(): ReactElement {
-  if (window.location.pathname.startsWith('/demo/auth/auth-ui')) {
+  const { pathname } = window.location;
+  if (pathname.startsWith('/demo/auth/auth-ui')) {
     return <AuthenticationUiDemo />;
+  }
+  if (pathname.startsWith('/demo/page/page-ui')) {
+    return <PageUiDemo />;
+  }
+  if (pathname.startsWith('/demo/page/route-overlay-ui')) {
+    return <RouteOverlayUiDemo />;
   }
 
   return <RegistryDocs />;
@@ -343,6 +369,7 @@ function RegistrySidebarItem({
 }): ReactElement {
   const { setOpenMobile } = useSidebar();
   const label = item.title ?? item.name;
+  const Icon = itemPreviews[item.name]?.icon ?? Blocks;
 
   return (
     <SidebarMenuItem>
@@ -361,7 +388,7 @@ function RegistrySidebarItem({
         }
         tooltip={label}
       >
-        <ShieldCheck aria-hidden='true' />
+        <Icon aria-hidden='true' />
         <span className='group-data-[collapsible=icon]:hidden'>{label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -373,8 +400,7 @@ function RegistryPreviewSection({
 }: {
   item: RegistryItem;
 }): ReactElement {
-  const previewPath =
-    item.name === 'auth-ui' ? '/demo/auth/auth-ui/login' : undefined;
+  const previewPath = itemPreviews[item.name]?.path;
 
   return (
     <section className='scroll-mt-4' data-registry-item='true' id={item.name}>
@@ -534,6 +560,7 @@ function RegistryPreview({
             path={previewPath}
             reloadKey={refreshKey}
             theme={resolved}
+            title={`${item.title ?? item.name} preview`}
             viewport={viewport}
           />
         </CardContent>
@@ -583,12 +610,14 @@ function PreviewCanvas({
   path,
   reloadKey,
   theme,
+  title,
   viewport,
 }: {
   height: number;
   path: string;
   reloadKey: number;
   theme: ResolvedTheme;
+  title: string;
   viewport: PreviewViewport;
 }): ReactElement {
   const viewportStyle: CSSProperties =
@@ -620,7 +649,7 @@ function PreviewCanvas({
         }}
         src={`${path}?theme=${theme}&preview=${theme}-${reloadKey}`}
         style={{ ...viewportStyle, height }}
-        title='Password authentication preview'
+        title={title}
       />
     </div>
   );

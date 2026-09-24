@@ -18,7 +18,7 @@ This document shows how to write overlays. For the rules on choosing and stackin
 - `RouteChildPage` covers the content area and is not modal, so the sidebar and header stay usable; see `child-routes.md`.
 - Stacking: a drawer can open dialogs and confirmation dialogs on top of it; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer (guideline I1).
 
-Component locations: `@/components/route-dialog`, `@/components/route-drawer`, `@/components/use-route-overlay`, `@/components/ui/alert-dialog`, `@/components/ui/sheet`.
+Component locations: `@/extensions/nocobase-route-overlay-ui/components/route-dialog`, `@/extensions/nocobase-route-overlay-ui/components/route-drawer`, `@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay`, `@/components/ui/alert-dialog`, `@/components/ui/sheet`. The route overlays are the application's copy of the NocoBase UI Library item `route-overlay-ui`; when they need to behave or look different, follow "Customize template and registry components" in `styling.md`.
 
 ## 2. Overlays as child routes
 
@@ -177,7 +177,7 @@ What the components already do:
 
 - **Size**: a dialog is centered, is the screen width minus 2rem wide on narrow screens, and has a maximum height of `100svh - 2rem`; a drawer sits against the right edge at full height and takes the full width on narrow screens. The title area and the bottom button area are fixed and only the content area scrolls, so the bottom buttons stay reachable on narrow screens too (guideline A4); there is no need to add `max-h` or `overflow` to the panel.
 - **Content container**: the content area already has `p-4` padding. Do not nest a `PageContainer` inside it, and do not add outer padding of your own.
-- **Ways to close**: a close button is built into the top-right corner (its accessible name comes from `actions.close`); Esc and clicking the backdrop close the overlay too. Each overlay layer has its own backdrop, and when layers stack only the topmost one closes.
+- **Ways to close**: a close button is built into the top-right corner (its accessible name comes from `routeOverlay.close`); Esc and clicking the backdrop close the overlay too. Each overlay layer has its own backdrop, and when layers stack only the topmost one closes.
 - **Closing is navigation**: closing first calls `beforeClose`, then navigates to `closeTo` with `replace`. Because it uses `replace`, pressing the browser's "Forward" after closing does not reopen the overlay.
 - **Focus**: on open, focus moves into the overlay; when the focused element inside the overlay disappears (for example, a button is replaced by a skeleton after clicking "Retry"), focus returns to the overlay panel; after closing, focus returns to the element that had focus before opening (usually the link that opened it). When a nested overlay closes, focus returns to the element in the parent layer that opened it, or to the parent layer's panel if that element is gone; when `/projects/12/edit` is opened directly, both layers mount at once, and after the dialog closes, focus is on the drawer panel.
 - When the element that focus should return to is no longer on the page after closing (for example, the list row disappears after a delete), the component cannot handle it. Move focus to a stable place yourself; see `afterDelete` above (guideline A6).
@@ -234,7 +234,7 @@ export default function NewProjectPage(): ReactElement {
 import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, useRef, useState } from 'react';
 
-import { RouteDialog } from '@/components/route-dialog';
+import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -323,10 +323,10 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router';
 
-import { RouteDialog } from '@/components/route-dialog';
+import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { useRouteOverlay } from '@/components/use-route-overlay';
+import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
 
 import { ProjectForm } from './project-form.js';
 import type { ProjectsOutletContext } from './types.js';
@@ -425,8 +425,8 @@ import {
   useParams,
 } from 'react-router';
 
-import { RouteDrawer } from '@/components/route-drawer';
-import { useRouteOverlay } from '@/components/use-route-overlay';
+import { RouteDrawer } from '@/extensions/nocobase-route-overlay-ui/components/route-drawer';
+import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -669,8 +669,8 @@ import { AlertCircleIcon } from 'lucide-react';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useParams } from 'react-router';
 
-import { RouteDialog } from '@/components/route-dialog';
-import { useRouteOverlay } from '@/components/use-route-overlay';
+import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
+import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

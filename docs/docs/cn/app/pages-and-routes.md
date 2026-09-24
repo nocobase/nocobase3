@@ -150,7 +150,7 @@ defineAppRoutes([
 // client/pages/orders/index.tsx
 import { useTranslation } from '@nocobase/i18n/client';
 import { Link, Outlet } from 'react-router';
-import { PageHeader } from '@/components/page-header';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 
 export default function OrdersPage() {
   const { t } = useTranslation();
@@ -169,7 +169,7 @@ export default function OrdersPage() {
 
 子页面可以直接返回内容，在 `Outlet` 位置内嵌显示。页面内的 Tab 通常采用这种方式：每个 Tab 声明为子路由，用链接切换，以 URL 决定当前选中项。
 
-需要覆盖父页面时，由子页面选择展示组件：
+需要覆盖父页面时，由子页面选择展示组件。它们由模板预装在 `client/extensions/nocobase-route-overlay-ui/` 中：
 
 | 组件             | 展示方式             | 是否模态 |
 | ---------------- | -------------------- | -------- |
@@ -184,8 +184,8 @@ export default function OrdersPage() {
 import { useTranslation } from '@nocobase/i18n/client';
 import { useParams } from 'react-router';
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { PageHeader } from '@/components/page-header';
-import { RouteChildPage } from '@/components/route-child-page';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
+import { RouteChildPage } from '@/extensions/nocobase-route-overlay-ui/components/route-child-page';
 
 export default function OrderDetailPage() {
   const { t } = useTranslation();

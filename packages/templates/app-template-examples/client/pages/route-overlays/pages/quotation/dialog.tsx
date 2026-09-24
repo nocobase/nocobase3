@@ -1,6 +1,6 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { RouteDialog } from '@/components/route-dialog';
-import { useRouteOverlay } from '@/components/use-route-overlay';
+import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
+import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
 import { Button } from '@/components/ui/button';
 
 function CloseAction() {

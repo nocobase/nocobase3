@@ -143,8 +143,8 @@ import {
   useResolvedPath,
 } from 'react-router';
 
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -307,8 +307,8 @@ import {
 } from 'react-router';
 
 import { Loading } from '@/components/loading';
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -398,9 +398,9 @@ import type { ReactElement } from 'react';
 import { Outlet } from 'react-router';
 
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
-import { RouteChildPage } from '@/components/route-child-page';
+import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
+import { RouteChildPage } from '@/extensions/nocobase-route-overlay-ui/components/route-child-page';
 
 export default function ProjectImportPage(): ReactElement {
   const { t } = useTranslation();

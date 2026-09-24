@@ -6,8 +6,8 @@ import {
   useTranslation,
 } from '@nocobase/i18n/client';
 
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {

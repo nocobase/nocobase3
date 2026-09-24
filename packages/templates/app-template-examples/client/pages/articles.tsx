@@ -1,5 +1,5 @@
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/extensions/nocobase-page-ui/components/page-container';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 import { useApiClient } from '@nocobase/app-client';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from '@nocobase/i18n/client';

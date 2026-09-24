@@ -38,7 +38,7 @@ First [copy the required page components into the plugin](client-components.md#c
 ```tsx
 // client/pages/orders.tsx
 import type { ReactElement } from 'react';
-import { PageContainer } from '../components/page-container.js';
+import { PageContainer } from '../extensions/nocobase-page-ui/components/page-container.js';
 
 export default function OrdersPage(): ReactElement {
   return <PageContainer>...</PageContainer>;

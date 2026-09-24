@@ -9,9 +9,9 @@ import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import { RouteDialog } from '../../client/components/route-dialog';
-import { RouteDrawer } from '../../client/components/route-drawer';
-import { useRouteOverlay } from '../../client/components/use-route-overlay';
+import { RouteDialog } from '../../client/extensions/nocobase-route-overlay-ui/components/route-dialog';
+import { RouteDrawer } from '../../client/extensions/nocobase-route-overlay-ui/components/route-drawer';
+import { useRouteOverlay } from '../../client/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -96,7 +96,7 @@ describe('route overlays', () => {
   it('uses the explicit target without merging query', async () => {
     const router = setup(undefined, '/other');
     fireEvent.click(
-      await screen.findByRole('button', { name: 'actions.close' }),
+      await screen.findByRole('button', { name: 'routeOverlay.close' }),
     );
     await waitFor(() =>
       expect(router.state.location.pathname).toBe('/main/other'),
@@ -113,7 +113,7 @@ describe('route overlays', () => {
     );
     const router = setup(check);
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'actions.close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'routeOverlay.close' }));
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
     await act(async () => {
@@ -273,7 +273,7 @@ describe('route overlay interactions', () => {
     try {
       const router = setup(() => Promise.reject(failure));
       fireEvent.click(
-        await screen.findByRole('button', { name: 'actions.close' }),
+        await screen.findByRole('button', { name: 'routeOverlay.close' }),
       );
       await waitFor(() =>
         expect(log).toHaveBeenCalledWith(

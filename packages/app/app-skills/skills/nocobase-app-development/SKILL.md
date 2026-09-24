@@ -159,7 +159,7 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
-- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [styling](references/frontend/references/styling.md).
+- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/extensions/nocobase-page-ui/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [styling](references/frontend/references/styling.md).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.

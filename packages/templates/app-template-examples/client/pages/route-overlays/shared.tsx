@@ -1,9 +1,9 @@
 import { useTranslation } from '@nocobase/i18n/client';
 import { useId, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { RouteDialog } from '@/components/route-dialog';
-import { RouteDrawer } from '@/components/route-drawer';
-import { useRouteOverlay } from '@/components/use-route-overlay';
+import { RouteDialog } from '@/extensions/nocobase-route-overlay-ui/components/route-dialog';
+import { RouteDrawer } from '@/extensions/nocobase-route-overlay-ui/components/route-drawer';
+import { useRouteOverlay } from '@/extensions/nocobase-route-overlay-ui/hooks/use-route-overlay';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';

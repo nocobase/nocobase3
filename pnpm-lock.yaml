@@ -5350,6 +5350,9 @@ importers:
       simple-icons:
         specifier: ^16.30.0
         version: 16.30.0
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
     devDependencies:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^

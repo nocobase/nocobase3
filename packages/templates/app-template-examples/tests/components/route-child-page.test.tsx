@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { RouteChildPage } from '../../client/components/route-child-page.js';
+import { RouteChildPage } from '../../client/extensions/nocobase-route-overlay-ui/components/route-child-page.js';
 
 describe('RouteChildPage', () => {
   it('covers the content area and scrolls its own content', () => {

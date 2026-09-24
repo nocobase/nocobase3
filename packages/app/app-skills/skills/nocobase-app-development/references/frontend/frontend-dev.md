@@ -28,7 +28,7 @@ Write the logic a page needs (loading data, the search box, error checks) direct
 - Pass `items` (`{ value, label }[]`) to `Select`, or the trigger will not show the selected item's text; `onValueChange` may pass `null`, so check before using the value.
 - `DropdownMenuLabel` must be placed inside a `DropdownMenuGroup`.
 
-**Page container**: wrap page content in `PageContainer` (`@/components/page-container`), which provides the page padding and the spacing between sections. Inline child pages and tab content do not add another one; a covering child page places its own inside `RouteChildPage`; dialogs and drawers use the container that comes with the overlay.
+**Page container**: wrap page content in `PageContainer` (`@/extensions/nocobase-page-ui/components/page-container`), which provides the page padding and the spacing between sections. Inline child pages and tab content do not add another one; a covering child page places its own inside `RouteChildPage`; dialogs and drawers use the container that comes with the overlay.
 
 **Overlays**: create, edit and detail views are child routes by default, using `RouteDialog` / `RouteDrawer`, so a link opens them directly and a refresh restores them. Only a confirmation for a single action (`AlertDialog`) and a temporary panel (`Sheet`) use open state inside the component. See `references/overlay.md`.
 

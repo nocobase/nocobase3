@@ -114,6 +114,7 @@ const enUS = {
   'navigation.brandHome': 'NocoBase home',
   'navigation.brandApps': 'NocoBase applications',
   'auth.passwordMismatch': "Passwords don't match.",
+  'routeOverlay.close': 'Close',
   'status.deniedDescription': 'You do not have permission to access {{label}}.',
   'status.routeFailedDescription':
     'Route {{label}} from {{packageName}} could not be loaded.',

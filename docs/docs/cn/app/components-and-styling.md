@@ -6,7 +6,7 @@ keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,图标'
 
 # 界面和样式
 
-NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。
+NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。从 [NocoBase UI Library](http://ui.nocobase.com) 安装的组件放在 `client/extensions/nocobase-<item>/`，模板已预装页面框架 `page-ui`、路由浮层 `route-overlay-ui` 和认证界面 `auth-ui`；安装后这些源码归应用所有。
 
 普通界面样式使用主题变量。这样同一套组件可以适配浅色主题、深色主题和其他主题预设。
 
@@ -72,12 +72,12 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 
 ## 页面标题和操作区
 
-模板提供 `PageHeader`，统一排列页面标题、描述和操作区。`title` 必填，`description` 和 `actions` 可选：
+模板在 `client/extensions/nocobase-page-ui/` 中预装了 `PageHeader`，统一排列页面标题、描述和操作区。`title` 必填，`description` 和 `actions` 可选：
 
 ```tsx
 import { useTranslation } from '@nocobase/i18n/client';
 import { Link } from 'react-router';
-import { PageHeader } from '@/components/page-header';
+import { PageHeader } from '@/extensions/nocobase-page-ui/components/page-header';
 import { Button } from '@/components/ui/button';
 
 export function OrdersHeader() {

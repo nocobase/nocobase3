@@ -45,7 +45,7 @@ The dry run lists every file shadcn would create or overwrite and every dependen
 4. **Merge the translations.** An item ships its translations in its `locales/` directory, and shadcn does not add them to your locale resources. Spread each file into the matching file in `client/locales/`, before your own keys so that yours can reword them; the item's README shows how. Without this step the item renders its English defaults in every language.
 5. **Run the application's checks**: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build`.
 
-An application created from one of the templates already contains `auth-ui` in `client/extensions/nocobase-auth-ui/`. Do not add it again; to take a newer version, see [Upgrading an item](#upgrading-an-item).
+An application created from one of the templates already contains `auth-ui`, `page-ui` and `route-overlay-ui`, each in its `client/extensions/nocobase-<item>/` directory. Do not add them again; to take a newer version, see [Upgrading an item](#upgrading-an-item).
 
 ## Add an item to a plugin
 
