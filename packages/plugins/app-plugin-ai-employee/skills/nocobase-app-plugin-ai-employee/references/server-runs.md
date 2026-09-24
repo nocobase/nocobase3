@@ -94,7 +94,7 @@ const conversations = container.resolve(aiConversationsManagerToken);
 const factory = container.resolve(agentServiceFactoryToken);
 ```
 
-These two, plus `aiManagerToken`, are the whole public server surface, along with the `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, `AgentInvokeInterrupt`, `AgentInterruptAction`, `AgentStreamEvent`, and `AgentServiceErrorCode` types and the `AgentServiceError` class exported from the same entry. The plugin's internal factories — its repository, manager, service, and data-service tokens — are not exported and are not part of the contract; an App tool declares the App's own service tokens instead. Never deep-import a plugin server or agent source file.
+These two and `aiManagerToken` are what an App runs agents through. The same entry also exports `AIResourceRegistrar`, `aiConversationsManagerToken` and its `CreateAIConversationParams` and `CreatedAIConversation` types, the config types and helpers, the `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, `AgentInvokeInterrupt`, `AgentInterruptAction`, `AgentStreamEvent`, and `AgentServiceErrorCode` types, and the `AgentServiceError` class. The plugin's internal factories — its repository, manager, service, and data-service tokens — are not exported and are not part of the contract; an App tool declares the App's own service tokens instead. Never deep-import a plugin server or agent source file.
 
 `AgentServiceFactory` is an App-level singleton, but every `createAIEmployee()` or `createAgent()` call produces a new session-scoped `AgentService` with its own private context and conversation objects. Do not cache an `AgentService` globally or register one as a singleton.
 
@@ -128,18 +128,18 @@ type CreateAIConversationParams = {
   userId?: string | number;
   aiEmployee?: { username: string };     // omit for a model-only createAgent() session
   title?: string;
-  options?: AIConversationsOptions;      // systemMessage, skillSettings,
+  options?: CreateAIConversationParams['options']; // systemMessage, skillSettings,
                                          // conversationSettings, modelSettings, frontendTools
   from?: 'main-agent' | 'sub-agent';
   scope?: string;
   transaction?: DatabaseConnection;      // only when the caller already owns one
 };
 
-create(options: CreateAIConversationParams): Promise<AIConversationEntity>;
+create(options: CreateAIConversationParams): Promise<CreatedAIConversation>; // the row, with its sessionId
 update(options: { userId; sessionId; title?; options? }): Promise<AIConversationEntity | null>;
 getConversation(options: { sessionId; userId? }): Promise<AIConversationEntity | null>;
 getMessages(options: { userId; sessionId; cursor?; paginate?; updateRead? }):
-  Promise<{ rows: HistoryMessage[]; hasMore?: boolean; cursor?: string | null }>;
+  Promise<{ rows: any[]; hasMore?: boolean; cursor?: string | null }>; // rows shaped as below
 ```
 
 `userId` is the owning application user — never a user id a model supplied. Always pass `userId` when reading or mutating a user-owned conversation; a missing or mismatched owner is not a successful lookup.
@@ -153,7 +153,7 @@ interface CreateEmployeeOptions {
   readonly username: string;
   readonly state: AgentState; // its sessionId is the conversation the agent runs in
   readonly actor: Actor; // required; there is no implicit root
-  readonly runtime: AgentRuntime; // required; logger, and the caller's locale and headers
+  readonly runtime: AgentRuntime; // required; logger, and optionally translate and the caller's headers
   readonly from?: 'main-agent' | 'sub-agent';
   readonly systemPrompt?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
@@ -162,9 +162,9 @@ interface CreateEmployeeOptions {
 
 - `username` must identify an accessible employee. Do not copy a built-in definition into the App to reach one.
 - `state` is what the execution _is_, built where the request is parsed rather than assembled field by field at the call site. It becomes the agent context every backend tool receives. Its `frontendTools` is a serializable manifest of available browser tools — never callbacks, DOM nodes, or functions.
-- `actor` comes from the authenticated request or a trusted server job context, never from request JSON. There is no implicit root: neither factory fills a missing actor in.
+- `actor` comes from the authenticated request or a trusted server job context, never from request JSON. Its `locale` is the language the run uses. There is no implicit root: neither factory fills a missing actor in.
 - `systemPrompt` and `skillSettings` are the conversation's own configuration. They narrow or extend the employee's capabilities without bypassing permission checks.
-- The model is the employee's, not the caller's. The factory resolves `state.model` against the employee's policy once, when the agent is created — honouring a requested model only when the employee's configuration allows it, and resolving the employee's own when the state names none.
+- The model is the employee's, not the caller's. The factory resolves `state.model` against the employee's policy once, when the agent is created — honouring a requested model only when the employee's configuration allows it, and resolving the employee's own when the state names none. An employee with its own models replaces a model it does not allow with the first of them that is enabled; an employee without model settings runs the requested model as given, unchecked, so a disabled or unknown one fails when the run starts.
 
 **The tool context is fixed here.** `AgentServiceFactory` builds it once from `actor`, `state`, and `runtime`, and the service supplies the same one on every execution. A caller never passes it, and an `agentContext` key on `AgentRequest.runtime` is ignored — so request data cannot substitute another actor, session, or set of dependencies. A tool that needs the session id or the resolved model reads `ctx.state`, which is why an integration that activates tools must supply a real `state` rather than an empty one.
 
@@ -355,7 +355,7 @@ try {
 }
 ```
 
-Where a model problem surfaces depends on the factory method. `createAgent()` resolves its model and LLM service completely when the agent is created, so a missing or unusable model rejects there with `CONFIGURATION_ERROR`, before `invoke()` is reached. `createAIEmployee()` rejects at creation with `CONFIGURATION_ERROR` only when no model is usable at all: the employee lists models of its own and none of them is enabled, or it lists none and no service has an enabled model. A model that resolves but points at a service that cannot run — its provider no longer registered, say — fails when `invoke()` or `stream()` runs, with the same code. So handle `CONFIGURATION_ERROR` from both creation and the run. An unknown employee `username` rejects at creation with a plain `Error`, since it is a mistake in the caller rather than a state to retry.
+Where a model problem surfaces depends on the factory method. `createAgent()` resolves its model and LLM service completely when the agent is created, so a missing or unusable model rejects there with `CONFIGURATION_ERROR`, before `invoke()` is reached. `createAIEmployee()` rejects at creation with `CONFIGURATION_ERROR` only when no model is usable at all: the employee's own model settings are on but name no model, or name models none of which is enabled, or the employee has no model settings and no service has an enabled model. A model that resolves but points at a service that cannot run — its provider no longer registered, say — fails when `invoke()` or `stream()` runs, with the same code. So handle `CONFIGURATION_ERROR` from both creation and the run. An unknown employee `username` rejects at creation with a plain `Error`, since it is a mistake in the caller rather than a state to retry.
 
 `retryable` says whether an immediate second attempt could plausibly differ:
 

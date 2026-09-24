@@ -24,12 +24,11 @@ The current directory is the App root when it holds `client/`, `server/`, and `p
 
 Read these App-local files when present, before writing anything:
 
-- `README.md` — setup and development notes.
+- `README.MD` — setup and development notes; the templates spell the extension in capitals.
 - `AGENTS.md` — App-specific coding rules; they outrank this Skill's defaults.
 - `package.json` — dependencies and scripts. Plugin registration is in `server/plugins.ts` and `client/plugins.ts`, not here.
 - `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml). It is written by `pnpm config:init`, so its absence means that has not run yet, not that the App needs no configuration.
 - `.gitignore` — confirm `config.yml` and `.env` are ignored and untracked before a key goes near either; see [capabilities.md § Where the key lives](capabilities.md#where-the-key-lives).
-- `ai/README.md` — the AI resource layer and its build behavior.
 - `client/extensions/nocobase-ai/README.md` — the installed AI frontend. Its absence means the Registry item is not installed yet, not that the App cannot have AI UI.
 
 ## App AI resources
@@ -52,7 +51,7 @@ There is no filesystem scan for employees or tools, and no employee-local prompt
 
 ## App frontend
 
-App source lives under `client/`. The usual extension points are `client/routes.ts`, `client/providers.ts`, `client/pages/`, `client/locales/`, and the installed `client/extensions/nocobase-ai/`.
+App source lives under `client/`. The usual extension points are `client/routes.ts`, `client/react-providers.ts` for React providers, `client/pages/`, `client/locales/`, and the installed `client/extensions/nocobase-ai/`.
 
 Inside the extension, the files worth opening:
 
@@ -97,7 +96,7 @@ Where to read them:
 
 Copy the wiring, not the demo around it. Every page carries scaffolding an App must not keep:
 
-- **Imports.** The demos reach the Registry through relative paths such as `../../../registry/nocobase-ai/providers/index.js`; an App imports the same names from its installed copy, `@/extensions/nocobase-ai` or its `components` and `providers` modules.
+- **Imports.** The demos reach the Registry through relative paths such as `../../../registry/nocobase-ai/providers/index.js`; an App imports the same names from its installed copy, `@/extensions/nocobase-ai` or its `components` and `providers` modules. Two kinds are not re-exported there: the react-hook-form adapter comes from `@/extensions/nocobase-ai/adapters/react-hook-form`, and the demos' `shared/ui/*` components are the extension's internal primitives — build App UI from the App's own `client/components/ui`.
 - **The configuration gate.** `AIConfigurationGate` renders the page on a preview service with invented employees and a placeholder model when nothing is configured, so a demo looks alive without a server. An App never does this: use the readiness gate in [chat-surfaces.md § The readiness gate](chat-surfaces.md#the-readiness-gate), which shows an actionable message instead.
 - **`defaultEmployee`.** Several demos leave it out and open on whichever employee sorts first. An App passes its own employee's username.
 - **Presentation.** `PageHeader`, `PromptCard`, the `demo.*` translation keys and the sample business data exist only to explain the page; use the App's own layout, locales and data.
@@ -124,7 +123,7 @@ The root also covers employee and tool managers, `AgentContext`, resource loader
 
 Two exports look useful and are not. `createAIManager()` builds a second manager; it is only for an isolated worker, CLI, or test that deliberately wants no App runtime. `defineMCP()` belongs to the loader, not to an App: configure MCP in `config.yml` `ai.mcpServers`, which is the one supported path.
 
-The enabled plugin exposes its server entry at `@nocobase/app-plugin-ai-employee/server`. Import only `aiManagerToken`, `aiConversationsManagerToken`, `agentServiceFactoryToken`, `AIResourceRegistrar`, the config types and helpers, and the agent request/result types.
+The enabled plugin exposes its server entry at `@nocobase/app-plugin-ai-employee/server`. Import only `aiManagerToken`, `aiConversationsManagerToken`, `agentServiceFactoryToken`, `AIResourceRegistrar`, the config types and helpers, the agent request/result types, and the `AgentServiceError` class for `instanceof` checks.
 
 Never import `@nocobase/ai-employee/src/...` or a plugin-private server, agent, or factory path. An importable subpath is not a runtime contribution: importing the server entry registers nothing, and registration happens only in the App's own Provider.
 

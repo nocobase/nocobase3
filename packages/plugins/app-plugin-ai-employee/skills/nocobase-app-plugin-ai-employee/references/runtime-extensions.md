@@ -58,7 +58,7 @@ ai.toolsManager.registerDynamicTools(async (register, filter) => {
 });
 ```
 
-- The provider runs on every lookup, and what it registers is not kept, so it is cheap and repeatable or it is neither.
+- The provider runs whenever tools are listed, and on a lookup by name that no fixed tool answers; `isToolsExisted()` never runs it. What it registers is not kept, so it is cheap and repeatable or it is neither.
 - `filter` is the lookup's own: `scope`, `defaultPermission`, `silence`, `sessionId`, and `ctx`. An employee run passes its `AgentContext` as `ctx`. `createAgent()` looks its tools up by name without one, so a provider that returns nothing without `ctx` gives a fixed agent nothing.
 - A `GENERAL` tool produced this way reaches every employee whose tool selection has never been saved, like any other `GENERAL` tool; see [capabilities.md § How Skills and Tools relate](capabilities.md#how-skills-and-tools-relate).
 
@@ -107,7 +107,7 @@ export class CompanyProvider extends LLMProvider {
 ```
 
 - The LangChain model package — `@langchain/openai` here — is imported by the App's server code, so it goes in the App's `dependencies`, not `devDependencies`.
-- `serviceOptions` is the service's `options` from `config.yml`, with `${NAME}` already expanded; `modelOptions` holds the selected `model` and the service's model options.
+- `serviceOptions` is the service's `options` from `config.yml`, with `${NAME}` already expanded; `modelOptions` holds the `llmService` and the selected `model`, plus `builtIn: { webSearch: true }` when search was asked for; the service's model options are not in it.
 - The manager also constructs the class with no options, to read its capabilities. `createModel()` runs only when `modelOptions` is given, so neither the constructor nor a field initializer may require a key or a model.
 - `getResolvedBaseURL()` returns the service's `options.baseURL` when set, otherwise the class's `baseURL`, checked against the URL whitelist. Build request URLs with it, or with `buildRequestURL(path)`, never by hand.
 
@@ -132,14 +132,14 @@ export class CompanyEmbeddingProvider extends EmbeddingProvider {
 }
 ```
 
-`apiKey`, `model` and `baseURL` throw when the service does not supply them.
+`apiKey` and `model` throw when the service does not supply them; `baseURL` falls back to the class's own, and throws only when neither is set or the URL fails the whitelist.
 
 **Register it** under a key, with its metadata:
 
 ```ts
 import { SupportedModel, type LLMProviderMeta } from '@nocobase/ai-employee';
 
-const companyProviderOptions: LLMProviderMeta = {
+export const companyProviderOptions: LLMProviderMeta = {
   title: 'Company LLM',
   provider: CompanyProvider,
   embedding: CompanyEmbeddingProvider,
@@ -147,9 +147,9 @@ const companyProviderOptions: LLMProviderMeta = {
   models: { [SupportedModel.EMBEDDING]: ['company-embedding'] },
   supportWebSearch: false,
 };
-
-ai.llmProviderManager.registerLLMProvider('company', companyProviderOptions);
 ```
+
+The Provider in [Reaching the manager](#reaching-the-manager) registers it from `boot()`; never at module level, where there is no manager yet.
 
 - `supportedModel` decides where the provider is offered; list both kinds explicitly when both exist.
 - `models` suggests embedding model ids for the embedding picker, and nothing else. Chat models are always fetched from the provider's own API through `ai:listProviderModels`.
@@ -198,7 +198,7 @@ const reply = await provider.invoke({
 ```
 
 - `messages` is sent as it is. The system prompt is a `role: 'system'` message at its start; there is no separate field.
-- `structuredOutput` binds a JSON schema. `tools` binds tools built from their definitions; pass `toolContext: { agentContext, container }` to give each tool the context and declared dependencies an agent would — without it a tool that needs a context fails when it is called. A direct call runs no tool loop, so the reply's tool calls are the caller's to handle.
+- `structuredOutput` binds a JSON schema. `tools` takes registered tool entities, such as those `toolsManager.getTools()` and `listTools()` return — not bare `{ name, description, schema }` definitions, which type-check and fail when called; pass `toolContext: { agentContext, container }` to give each tool the context and declared dependencies an agent would — without it a tool that needs a context fails when it is called. A direct call runs no tool loop, so the reply's tool calls are the caller's to handle.
 - Built-in web search (`webSearch: true`) is for a call without tools: passing both logs a warning, and on a provider that cannot combine them the tools are not bound.
 
 Anything that needs tools to run, a pause for approval, or a stored conversation is an agent, not a direct call; see [server-runs.md](server-runs.md#when-to-drive-an-agent-directly).
@@ -207,5 +207,5 @@ Anything that needs tools to run, a pause for approval, or a stored conversation
 
 - **`ai.features.enableFeatures()`** is how a capability plugin, such as the knowledge base, attaches its implementation; an App provides none of them.
 - **MCP servers from code**: `mcpServerManager.registerMCP()` works, but the configuration sync deletes every server `config.yml` does not list. MCP belongs in `ai.mcpServers`; see [capabilities.md § MCP servers](capabilities.md#mcp-servers-configyml).
-- **`switchRepository()`** on any manager moves where the plugin stores its state. The plugin does this at start; an App never does.
+- **`switchRepository()`** on the employee, LLM service and MCP server managers moves where the plugin stores their state. The plugin does this at start; an App never does.
 - **A second `AIManager`** from `createAIManager()`; see [source-map.md § The installed dependency](source-map.md#the-installed-dependency).

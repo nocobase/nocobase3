@@ -105,15 +105,12 @@ Never rerun an installer over an installed copy; both refuse precisely because t
 ## Provider hierarchy
 
 ```tsx
-<NocoBaseAIRootProvider
-  service={nocobaseAIService}
-  toolRenderers={appToolRenderers}
->
+<NocoBaseAIRootProvider toolRenderers={appToolRenderers}>
   <YourApplication />
 </NocoBaseAIRootProvider>
 ```
 
-It composes `AIProvider`, `AIToolRendererProvider`, and `AIPageElementProvider` in the required order, and it reads the App's API client, so it must sit under the App's existing client providers. Reach for the lower-level providers only when deliberately replacing one layer, and keep the ordering.
+It composes `AIProvider`, `AIToolRendererProvider`, and `AIPageElementProvider` in the required order, and without a `service` it talks to the server through the App's own API client — its configured base URL and the user's language — so it must sit under the App's existing client providers. Do not pass `service={nocobaseAIService}`: that singleton builds a client of its own and bypasses both. Reach for the lower-level providers only when deliberately replacing one layer, and keep the ordering.
 
 ```ts
 type NocoBaseAIRootProviderProps = AIProviderProps & {
@@ -124,7 +121,7 @@ type NocoBaseAIRootProviderProps = AIProviderProps & {
 type AIProviderProps = PropsWithChildren<{
   employees?: AIEmployee[]; // omit to let the service load them
   models?: AIModel[]; // omit to let the service load them
-  service?: AIService; // defaults to nocobaseAIService
+  service?: AIService; // the root provider defaults to the App's API client; a bare AIProvider to nocobaseAIService
   toolInvokers?: AIToolInvokerMap;
   globalController?: AIChatController;
 }>;
@@ -144,9 +141,7 @@ import {
   AIChatWindow,
   ChatInline,
   NocoBaseAIRootProvider,
-  nocobaseAIService,
   useAI,
-  useAIChatController,
 } from '@/extensions/nocobase-ai';
 
 function ConfiguredChat() {
@@ -157,7 +152,6 @@ function ConfiguredChat() {
     employees,
     hasEnabledModels,
   } = useAI();
-  const controller = useAIChatController();
 
   if (configurationStatus === 'loading') {
     return <p role='status'>Loading AI configuration...</p>;
@@ -192,11 +186,7 @@ function ConfiguredChat() {
   }
 
   return (
-    <AIChatProvider
-      id='assistant-chat'
-      controller={controller}
-      defaultEmployee='order-desk'
-    >
+    <AIChatProvider id='assistant-chat' defaultEmployee='order-desk'>
       <ChatInline>
         <AIChatWindow enableAttachments enableWebSearch />
       </ChatInline>
@@ -206,14 +196,14 @@ function ConfiguredChat() {
 
 export default function AssistantPage() {
   return (
-    <NocoBaseAIRootProvider service={nocobaseAIService}>
+    <NocoBaseAIRootProvider>
       <ConfiguredChat />
     </NocoBaseAIRootProvider>
   );
 }
 ```
 
-Use the App's real import alias and localize the messages. If a root AI provider already wraps the route, mount `ConfiguredChat` under it rather than nesting a second root. Call hooks unconditionally before the guards return, and keep the controller identity stable. Do not key the chat by employee or model to force re-initialization — that discards conversation state. Recovery from a configuration error is a page reload, not an employee or model switch.
+Use the App's real import alias and localize the messages. If a root AI provider already wraps the route, mount `ConfiguredChat` under it rather than nesting a second root. Call hooks unconditionally before the guards return. An inline chat takes no controller: a controller starts closed, and a chat whose controller is never opened keeps its conversations marked unread. `!employees.length` guards employees passed in as a prop; when discovery finds none it reports `configurationStatus: 'error'` instead. Do not key the chat by employee or model to force re-initialization — that discards conversation state. Recovery from a configuration error is a page reload, not an employee or model switch.
 
 `defaultEmployee` is not optional in practice. Without it the chat opens on `employees[0]`, which is the lowest `sort` across every enabled employee — and the built-in `atlas` ships with `sort: 0`, so a page built to talk to the App's own employee opens on the router instead. The readiness gate passes either way and the first send works, so nothing looks wrong; the conversation is just with the wrong assistant. Pass the username explicitly.
 
@@ -232,7 +222,7 @@ type AIChatProviderProps = PropsWithChildren<{
 
 `ChatInline`, `ChatPage`, `ChatDialog`, `ChatSidePanel`, and the variant-switching `ChatSurface` are the available containers. To expand a chat from side panel to dialog, change `ChatSurface.variant` rather than remounting: that preserves messages, composer, scroll, and tool state.
 
-`ChatDialog`, `ChatSidePanel`, and `ChatSurface` are controlled: `open` and `onOpenChange` are required, and none of them reads the controller on its own. A floating trigger opens the chat by calling `controller.setOpen(true)`, so the surface opens only when its `open` comes from `useAIChatControllerState(controller).open` and its `onOpenChange` calls `controller.setOpen`. A surface given its own `useState` instead never sees the trigger's click. Create the controller in the component that renders `AIChatProvider`, pass the same controller to the provider and the trigger, and keep the trigger and the surface outside `AIChatWindow`:
+`ChatDialog`, `ChatSidePanel`, and `ChatSurface` are controlled: `open` and `onOpenChange` are required, and none of them reads the controller on its own. A floating trigger calls `controller.triggerTask({ open: true })`; the `AIChatProvider` holding that controller opens it and starts a new conversation, so each click lands on a fresh draft with the page's scope as its context, not on the conversation that was open. The surface opens only when its `open` comes from `useAIChatControllerState(controller).open` and its `onOpenChange` calls `controller.setOpen`. A surface given its own `useState` instead never sees the trigger's click. Create the controller in the component that renders `AIChatProvider`, pass the same controller to the provider and the trigger, and keep the trigger and the surface outside `AIChatWindow`:
 
 ```tsx
 import { useState } from 'react';
@@ -314,7 +304,7 @@ type AIChatWindowProps = {
 
 ## Attachments
 
-**Set `enableAttachments` on every chat surface you mount**, and leave it off only when the user has said they do not want file uploads. The prop defaults to `false`, so omitting it is not a neutral choice: it removes uploads from that chat. Turning it on gives the composer a file action, drag-and-drop over the chat window, and paste of files from the clipboard — no extra code. Uploads go to `aiFiles:create` and land on the disk resolved in [capabilities.md § Attachment storage](capabilities.md#attachment-storage-configyml); tell the user which disk that is and ask whether they want a dedicated one.
+**Set `enableAttachments` on every chat surface you mount**, and leave it off only when the user has said they do not want file uploads. The prop defaults to `false`, so omitting it is not a neutral choice: it removes uploads from that chat. Turning it on gives the composer a file action and paste of files from the clipboard, and `AIChatWindow` also accepts files dropped on it — no extra code. `AIChatCompact`, the smaller window, and `ChatComposer`, the composer alone, take the same `enableAttachments` and `enableWebSearch` props; neither accepts a drop. Uploads go to `aiFiles:create` and land on the disk resolved in [capabilities.md § Attachment storage](capabilities.md#attachment-storage-configyml); tell the user which disk that is and ask whether they want a dedicated one.
 
 What the assistant then sees is decided server-side, not by the page. Every provider sends images to the model as content blocks; PDFs go as documents on some providers and as loader-extracted text on others, and on a gateway provider a document is accepted only if the endpoint behind it takes one; other recognized document types are extracted to text; anything else produces a message telling the user the type is unsupported. Which provider does what is in [capabilities.md § What each provider can actually do](capabilities.md#what-each-provider-can-actually-do). So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 
@@ -322,9 +312,9 @@ That last one is on you to get right, and nothing checks it. `AIModel` has no fi
 
 ## Web search toggle
 
-**Set `enableWebSearch` on every chat surface you mount**, beside `enableAttachments`, and leave it off only when the user has said they do not want web search. It defaults to `false` and adds a toggle to the composer, next to the file action; without it nothing in the chat switches web search on. The toggle starts off, or at `AIChatProvider.webSearch` when that is set, and is usable only when the selected model searches: on a model whose `supportWebSearch` is not `true` it is disabled with a note saying so, and moving to such a model switches it off. That flag already combines the service's `supportWebSearch` with its `webSearchModels`, so the page checks nothing itself.
+**Set `enableWebSearch` on every chat surface you mount**, beside `enableAttachments`, and leave it off only when the user has said they do not want web search. It defaults to `false` and adds a toggle to the composer, next to the file action. The toggle starts off, or at `AIChatProvider.webSearch` when that is set, and is usable only when the selected model searches: on a model whose `supportWebSearch` is not `true` it is disabled with a note saying so, and moving to such a model switches it off. That flag already combines the service's `supportWebSearch` with its `webSearchModels`, so the page checks nothing itself.
 
-A page that needs the state elsewhere reads `webSearch` and `setWebSearch` from `useAIChatBase()`, below `AIChatProvider`. A task that sets its own `webSearch` overrides the toggle for the turn it sends; see [Tasks and shortcuts](#tasks-and-shortcuts).
+A page that needs the state elsewhere reads `webSearch` and `setWebSearch` from `useAIChatBase()`, below `AIChatProvider`. Without the toggle, whatever `AIChatProvider.webSearch` or `setWebSearch()` set is sent on every turn and nothing checks the model, so a model that cannot search is still asked to. A task that sets its own `webSearch` overrides the toggle from the turn it sends until the conversation changes; see [Tasks and shortcuts](#tasks-and-shortcuts).
 
 ## Tasks and shortcuts
 
@@ -343,15 +333,17 @@ type AIEmployeeTask = {
 };
 ```
 
-Use `AIChatProvider.employeeTasks` for empty-state presets and `AIEmployeeShortcut` for an entry point outside the chat, keeping both on the same controller. `message.user` is the prompt, `message.system` is background, and `message.workContext` holds references rather than resolved data. Use `autoSend: false` when the user should review the context or the generated request first. An explicit `task.message.workContext` overrides the trigger's context and the surrounding scope.
+Use `AIChatProvider.employeeTasks` for empty-state presets and `AIEmployeeShortcut` for an entry point outside the chat, keeping both on the same controller. `message.user` is the prompt, `message.system` is background, and `message.workContext` holds references rather than resolved data. A task only fills the composer by default, so the user reviews the context and the request before sending; set `autoSend: true` for one that sends at once. An explicit `task.message.workContext` overrides the trigger's context and the surrounding scope.
 
-`skillSettings.tools` is an allowlist: a non-empty list is every tool the conversation may use, and it is stored on the conversation, so it holds for every later turn too. Leave it out unless the task genuinely has to be narrowed — without it the employee keeps all of its tools. When a task does narrow its tools and its context references a form, the chat adds `formFiller` to that list itself.
+`skillSettings.tools` is an allowlist: a non-empty list is every tool the conversation may use besides the system tools — `getSkill`, `subAgentWebSearch`, `knowledge-base-retrieve`, `aiEmployeeWorkflowTaskOutput` — and the frontend-tool pair `loadFrontendTool` and `executeFrontendTool`, which it never removes. It is stored on the conversation, so it holds for every later turn too. Leave it out unless the task genuinely has to be narrowed — without it the employee keeps all of its tools. When a task does narrow its tools and its context references a form, the chat adds `formFiller` to that list itself.
 
 `AIEmployeeShortcut` takes `aiEmployee` (username or object, required), `tasks?` (`[]`), `context?`, `target?` (defaults to the global controller), `auto?`, `size?` (48), `label?`, `showNotice?` (false), `className?`, and `onTrigger?`.
 
 ## Page context
 
-**`AIPageContextScope` must be an ancestor of the chat, not of the element it describes.** It is a React context provider, and `AIChatProvider` reads the nearest one above itself when it mounts. Wrapping the described element instead compiles, renders, and sends an empty context forever, with nothing reported. The `ref` goes on the visible element; the scope goes around the chat.
+**`AIPageContextScope` must be an ancestor of the chat, not of the element it describes.** It is a React context provider that `AIChatProvider` reads from above itself, so wrapping the described element instead compiles, renders, and sends an empty context forever, with nothing reported. The `ref` goes on the visible element; the scope goes around the chat.
+
+**The scope reaches a message only through an entry point that starts a conversation.** A floating trigger or `triggerTask()` puts it in the new conversation's draft, and a task from `employeeTasks` or `defaultTasks`, or an `AIEmployeeShortcut`, carries it. A message typed into an inline chat that no such entry point opened carries only the context already in the draft. For that chat to see the element, add the reference to the draft with `addWorkContext()` from `useAIChatBase()`, let the user pick it with `useAIPageElementPicker()`, or offer a task.
 
 ```tsx
 const customer = useAIPageElementHandle({
@@ -401,7 +393,7 @@ const formRef = useAIForm({
 
 Attach the returned ref to the visible form. `applyReactHookFormValues` is the shipped react-hook-form adapter, imported from `@/extensions/nocobase-ai/adapters/react-hook-form` — it is not part of the extension's `index.ts`, so importing it from the package root fails to compile.
 
-`useAIForm` returns a ref and nothing else. Registering the form does not put it in the conversation, and there is no context handle to pass along, so a chat on the same page still sees nothing until the form is referenced. Build the reference yourself and scope it around the chat:
+`useAIForm` returns a ref and nothing else. Registering the form does not put it in the conversation, and there is no context handle to pass along, so a chat on the same page still sees nothing until the form is referenced. Build the reference yourself, scope it around the chat, and send it through one of the entry points in [Page context](#page-context):
 
 ```tsx
 const formRef = useAIForm({ id: 'order-form', title: 'Order form', ... });
@@ -418,7 +410,7 @@ return (
 );
 ```
 
-Sending that context is what activates the built-in `formFiller`; do not add a duplicate App tool and do not list `formFiller` in a task's skill settings. The alternative is to leave the form unreferenced and let the user pick it with `useAIPageElementPicker()`, which is the right choice when a page has several forms and only one is meant at a time.
+Once that reference reaches a message, the built-in `formFiller` can fill the form; do not add a duplicate App tool and do not list `formFiller` in a task's skill settings. The alternative is to leave the form unreferenced and let the user pick it with `useAIPageElementPicker()`, which is the right choice when a page has several forms and only one is meant at a time.
 
 Field `name` values must be unique. `AIFormField` accepts `name`, `title?`, `type?`, `description?`, `readonly?`, `required?`, `enum?`, and extra keys. Built-in type validation covers string/text/textarea/email/url/date/datetime, number/percent, integer, boolean/checkbox, array, and object. `setValues` receives only declared, editable, type- and enum-compatible fields, the runtime reports what it applied and skipped, and it never submits or saves — submission stays an explicit user or App action.
 
@@ -442,7 +434,12 @@ const quote = useAIPageElementHandle({
         properties: { percent: { type: 'number' } },
         required: ['percent'],
       },
-      execute: async ({ percent }) => {
+      // The arguments arrive unchecked from the model, typed `unknown`.
+      execute: async (args: unknown) => {
+        const percent = (args as { percent?: unknown } | null)?.percent;
+        if (typeof percent !== 'number') {
+          return { status: 'error', content: 'Provide a numeric percent.' };
+        }
         setDiscount(percent);
         return { status: 'success', content: { percent } };
       },
@@ -461,7 +458,7 @@ Pass App-specific renderers through `NocoBaseAIRootProvider.toolRenderers`, keye
 
 ```ts
 type AIToolRendererProps = {
-  part: ToolCallPart;
+  part: ToolCallPart; // not exported; refer to it as AIToolRendererProps['part']
   disabled: boolean;
   onEdit: (input: unknown) => void | Promise<void>;
   onApprove: () => void | Promise<void>;
@@ -474,6 +471,12 @@ type AIToolRendererDefinition = {
   handlesApproval?: boolean; // the renderer presents approval controls itself
   standalone?: boolean; // rendered outside the generic card layout
 };
+
+// Each entry is a definition, or the component alone.
+type AIToolRendererMap = Record<
+  string,
+  React.ComponentType<AIToolRendererProps> | AIToolRendererDefinition
+>;
 ```
 
 A renderer controls presentation only. It must call the supplied callbacks rather than mutating persisted tool state, and must preserve invocation status, approval/edit/reject, resume behavior, and disabled state.
@@ -506,5 +509,5 @@ AI Employees at `/settings/ai` is employee-only and renders no cross-feature tab
 - Open the page with discovery delayed. A loading status is visible and the chat neither mounts nor offers a send action until both employee and model discovery finish.
 - Once ready, leave the displayed default employee and model alone, type, and send. Conversation creation and the stream request use those defaults, the draft clears, and the message appears.
 - Reload and repeat the first send without switching anything — this tests a fresh mount, not a warm one.
-- Simulate each failure separately: employee discovery failure, no accessible employees, model discovery failure, and no enabled models including an unconfigured placeholder. Each shows its own actionable alert instead of a composer that looks usable. After fixing configuration and reloading, the first send works.
+- Simulate each failure separately: employee discovery failure, no enabled employees (discovery reports it as a configuration error), model discovery failure, and no enabled models including an unconfigured placeholder. Each shows an actionable alert instead of a composer that looks usable. After fixing configuration and reloading, the first send works.
 - Run these against the real service and transport. A mocked composer callback proves neither conversation creation nor sending.

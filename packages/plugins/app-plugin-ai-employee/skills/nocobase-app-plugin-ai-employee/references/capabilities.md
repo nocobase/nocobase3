@@ -37,7 +37,7 @@ There is one registration path per resource kind. A second path does not exist, 
 
 There is no filesystem scan for employees or tools, and a Skill directory carries no tool definitions — a Skill's `tools` array names tools that are already registered in code. So the order is: write the tool, register it, then write the Skill that names it. See [server-runs.md § Register App resources](server-runs.md#register-app-resources) for the registrar and the Provider that calls it.
 
-Registration runs in one fixed order: tools, MCP, skills, employees. That order is not why a name resolves, though — names are looked up at execution time, so an employee may name a tool or skill registered anywhere, including one the plugin registers before the App's own Provider runs.
+Registration runs in one fixed order: tools, skills, employees, with the MCP connections rebuilt afterwards. That order is not why a name resolves, though — names are looked up at execution time, so an employee may name a tool or skill registered anywhere, including one the plugin registers before the App's own Provider runs.
 
 ## Employees
 
@@ -366,7 +366,7 @@ Nineteen, in six families. All are `backend` unless the table says otherwise, an
 
 One: `atlas`, `sort: 0`. It is a router — it analyses a request, decides whether it can answer directly, and delegates to a specialist only when one is materially better suited, through the three sub-agent tools. Use it as-is; do not copy its definition into the App to modify it.
 
-Its `sort: 0` has a practical consequence: it is `employees[0]` for any application that does not give an employee a lower sort, and a chat without `defaultEmployee` opens on it.
+Its `sort: 0` has a practical consequence: employees are ordered by the user's own sort, then `sort`, so an App employee whose `sort` is omitted or `0` ties with it and the tie falls to storage order. A chat without `defaultEmployee` can therefore open on `atlas`.
 
 ## What the data tools can see
 
@@ -403,7 +403,7 @@ There are two mechanisms, not three, and the difference between them is smaller 
 
 **Web search is one tool with two switches.** `webSearch: true` — on `AIChatProvider`, on a task, or in the agent state — does not make the main model call search. All it does is add the `subAgentWebSearch` tool to this conversation. The other switch is listing `subAgentWebSearch` in an employee's `tools`. Either way the same tool runs: one separate provider call per query, in parallel, results returned to the agent.
 
-**Both depend on the provider having built-in search**, because that is the only searching that happens anywhere. The tool asks its provider for a model with search enabled; a provider that does not implement it ignores the request without error. See the capability table above for which providers do — and note that `openai-completions`, the key a gateway normally uses, is not one of them.
+**Both depend on the provider having built-in search**, because that is the only searching that happens anywhere. The tool asks its provider for a model with search enabled; a provider that does not implement it ignores the request without error. See the [capability table](#what-each-provider-can-actually-do) for which providers do — and note that `openai-completions`, the key a gateway normally uses, is not one of them.
 
 On a provider that cannot search, the tool returns `status: 'error'` saying no search ran. That refusal is deliberate. Without it the request still reached a model, and a model given a retrieval prompt produces findings and a source list from training data; the answer looks researched and cites URLs that were never fetched. If an App needs search on such a provider, give it an MCP search server instead.
 
@@ -521,7 +521,7 @@ Two capabilities vary by provider and neither is visible from the configuration.
 | `ollama`                                    | text-extracted                             | **no**              |
 | `kimi`, `mistral`, `orcarouter`             | text-extracted                             | **no**              |
 
-Every provider in the list sends images to the model. The PDF column says what the plugin sends, not what the far end does with it. "as a document" means a `file` content block the model sees as a document; "text-extracted" means the PDF goes through the document loader and arrives as text — usually fine, but layout and figures are lost. `openai-completions`, `xai` and `shengsuanyun` speak to whatever endpoint the service points at, so whether a `file` block is accepted is that endpoint's decision; one that rejects it fails the whole turn with `PROVIDER_ERROR` rather than falling back to text, so try a PDF against the real endpoint before relying on it. `deepseek` supports web search only on the models its own capability table marks, and rejects the rest with a clear error rather than silently.
+Every provider in the list sends images to the model. The PDF column says what the plugin sends, not what the far end does with it. "as a document" means a content block the model sees as a document — a `file` block on the OpenAI-shaped providers, a base64 `document` block on `anthropic`, and a block typed by MIME type on `google-genai`; "text-extracted" means the PDF goes through the document loader and arrives as text — usually fine, but layout and figures are lost. `openai-completions`, `xai` and `shengsuanyun` speak to whatever endpoint the service points at, so whether a `file` block is accepted is that endpoint's decision; one that rejects it fails the whole turn with `PROVIDER_ERROR` rather than falling back to text, so try a PDF against the real endpoint before relying on it. `deepseek` supports web search only on the models its own capability table marks, and rejects the rest with a clear error rather than silently.
 
 Web search is the one to check first, because there is no capability check anywhere else: only the composer's web search toggle reads `AIModel.supportWebSearch` — see [chat-surfaces.md § Web search toggle](chat-surfaces.md#web-search-toggle) — so web search switched on through `AIChatProvider.webSearch`, a task, or the agent state looks identical on a provider that cannot search. The `subAgentWebSearch` tool refuses on those providers rather than answering from memory, which is what makes the gap visible at all.
 
@@ -617,9 +617,9 @@ ai:
       - packages/shared-ai-skills/skills
 ```
 
-Paths may be absolute or relative to the App root; they are trimmed and de-duplicated, and a missing directory is skipped without a message. This affects Skill loading only — it does not discover employees or tools.
+Paths may be absolute or relative to the App root; they are trimmed and de-duplicated, and a missing directory is skipped with a warning, `AI Skill directory does not exist; skipping`; only the App's own `ai/skills` is skipped quietly. This affects Skill loading only — it does not discover employees or tools.
 
-The App root is not the same directory in both places. In development it is the source root; a built server runs from `dist/`, so a relative path resolves inside `dist/`, where the build has copied nothing, and the directory is skipped in silence. The build copies only the App's own `ai/skills`. For a deployment, list an absolute path the deployment itself provides.
+The App root is not the same directory in both places. In development it is the source root; a built server runs from `dist/`, so a relative path resolves inside `dist/`, where the build has copied nothing, and the directory is skipped with that warning. The build copies only the App's own `ai/skills`. For a deployment, list an absolute path the deployment itself provides.
 
 ## Knowledge base
 
@@ -627,6 +627,6 @@ The App root is not the same directory in both places. In development it is the 
 
 The plugin exposes the retrieval half: an employee bound to a knowledge base in AI settings can call the built-in `knowledge-base-retrieve` tool, which resolves the conversation's employee and returns matching passages.
 
-Configuration lives under `ai.aiKnowledgeBase` in `config.yml` — `vectorDatabases[]` (each with a `key`, optional `name`, `provider`, and a `connection`), `manifests[]`, and its own `storage.disk`, which has multi-disk semantics that differ from the attachment rule above; do not infer one from the other. A vector database and an embedding service with working credentials must both exist before retrieval returns anything.
+Configuration lives under `ai.aiKnowledgeBase` in `config.yml` — `vectorDatabases[]` (each with a `key` and a `connection`, and optional `name`, `provider`, `databaseSpec` and `enabled`), `manifests[]`, and its own `storage.disk`, which has multi-disk semantics that differ from the attachment rule above; do not infer one from the other. A vector database and an embedding service with working credentials must both exist before retrieval returns anything.
 
 Do not treat a bound knowledge base as an authorization boundary for business data. Reading current business records is what the data tools are for.

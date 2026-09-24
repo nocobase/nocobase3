@@ -19,7 +19,6 @@ import {
 } from '../registry/nocobase-ai/providers/ai-provider.js';
 import { useAI } from '../registry/nocobase-ai/providers/ai-context.js';
 import { useAIChat } from '../registry/nocobase-ai/providers/chat-context.js';
-import { useAIChatController } from '../registry/nocobase-ai/providers/chat-controller.js';
 import { AIChatProvider } from '../registry/nocobase-ai/providers/chat-provider.js';
 import type {
   AIEmployee,
@@ -146,12 +145,12 @@ function executeExample(
     AIChatProvider,
     AIChatWindow: ChatProbe,
     ChatInline: ({ children }: PropsWithChildren) => <>{children}</>,
+    // Without a `service` the real root talks through the App's API client;
+    // this service stands in for it.
     NocoBaseAIRootProvider: (props: AIProviderProps) => (
-      <AIProvider {...props} {...configuration} />
+      <AIProvider service={service} {...props} {...configuration} />
     ),
-    nocobaseAIService: service,
     useAI,
-    useAIChatController,
   };
   const { outputText, diagnostics } = ts.transpileModule(source, {
     fileName: 'sales-chat-page.tsx',

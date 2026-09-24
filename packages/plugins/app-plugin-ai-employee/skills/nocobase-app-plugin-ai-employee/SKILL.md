@@ -100,7 +100,8 @@ Do these in order; each step depends on the one before it.
 - The web search toggle is disabled on a model without built-in search and usable on one that has it; switching to a model that cannot search turns it off.
 - If web search is activated: ask something that needs it and confirm the answer is retrieved rather than recalled. On a provider without built-in search the tool reports that no search ran; that error is the correct outcome, not a bug to route around.
 - If a knowledge base is bound: ask something only its documents can answer, and confirm the answer cites them rather than general knowledge.
-- If attachments are enabled: dropping an image and pasting a document both reach the assistant, and the reply shows it read them.
+- If the assistant should see the page or fill a form: start the conversation the way the page offers — trigger, task, shortcut, or a context chip in the draft — and confirm the reply uses what is on screen. A message typed into an inline chat carries no page context of its own; see [chat-surfaces.md § Page context](references/chat-surfaces.md#page-context).
+- If attachments are enabled: attaching an image and pasting a document both reach the assistant, and the reply shows it read them.
 - If an agent runs unattended: run the same job twice and find no duplicate record; abort one mid-run and find a conversation whose state explains how far it got; and trigger a tool that asks, confirming the run either never reaches it or resolves the interrupt the way the caller decided.
 - App-local `lint`, `typecheck`, `test`, and `build` pass.
 - No App file imports a plugin private path, and no changed file lives under `.agents/skills/`.
