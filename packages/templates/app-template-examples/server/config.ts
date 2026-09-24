@@ -1,5 +1,3 @@
-import { environmentMappings } from './environment.js';
-import { environmentProvider } from '@nocobase/config/providers/env';
 import {
   AppConfig,
   resolveDefaultAppConfigFile,
@@ -18,11 +16,9 @@ export function createAppConfig(
       ? resolveDefaultAppConfigFile(context.paths)
       : context.paths.root(configuredPath);
 
+  // Environment variables are declared by the sections they set, in `env` of each `defineAppConfig`, and loaded
+  // above this file once the sections are known. `pnpm config:env` lists them.
   config.loadFile(configPath, { optional: configuredPath === undefined });
-
-  config.load(
-    environmentProvider(context.environment, { mappings: environmentMappings }),
-  );
 
   return config;
 }

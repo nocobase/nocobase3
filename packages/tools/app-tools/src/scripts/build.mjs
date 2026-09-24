@@ -96,7 +96,7 @@ function copyCollectionMetadata() {
 
 const envOutputPath = path.join(distDir, '.env');
 // The variables a deployed server reads from `dist/.env`: the base path the runtime scope reads itself, and the server
-// settings the templates map in `server/environment.ts`. A key belongs here only while something reads it — a key
+// settings the templates' `server` section declares in `env`. A key belongs here only while something reads it — a key
 // copied into `dist/.env` that nothing reads looks like a setting and does nothing.
 const serverEnvKeys = new Set([
   'NODE_ENV',

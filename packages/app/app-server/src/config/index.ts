@@ -28,4 +28,8 @@ export * from './context.js';
 export * from './not-configured.js';
 export * from './placeholder-secret.js';
 export * from './paths.js';
+export {
+  RUNTIME_ENVIRONMENT_VARIABLES,
+  type RuntimeEnvironmentVariable,
+} from './runtime-environment.js';
 export type * from './types.js';

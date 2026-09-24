@@ -2,14 +2,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import defaultConfigs from '../../server/config/index.ts';
-import { environmentMappings } from '../../server/environment.ts';
+import { RUNTIME_ENVIRONMENT_VARIABLES } from '@nocobase/app-server/config';
 
-/**
- * Variables read outside any mapping. `APP_BASE_PATH` is read by the standalone runtime scope itself
- * (`createStandaloneScope` in `@nocobase/app-server/node`), which derives the application name from it.
- */
-const READ_BY_RUNTIME = ['APP_BASE_PATH'];
+import defaultConfigs from '../../server/config/index.ts';
 
 /**
  * `.env.example` is what a generated Hub's `.env` is copied from, so every variable it names — set or commented out —
@@ -27,10 +22,10 @@ describe('.env.example', () => {
     const sectionVariables = [
       ...(defaultConfigs.sections?.values() ?? []),
     ].flatMap((rules) => Object.keys(rules.env ?? {}));
+    // The same list `pnpm config:env` prints.
     const read = new Set([
-      ...Object.keys(environmentMappings),
       ...sectionVariables,
-      ...READ_BY_RUNTIME,
+      ...RUNTIME_ENVIRONMENT_VARIABLES.map((variable) => variable.name),
     ]);
 
     expect(named.length).toBeGreaterThan(0);

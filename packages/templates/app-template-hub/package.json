@@ -152,6 +152,7 @@
     "config:init": "tsx ./cli/index.ts app config init",
     "config:check": "tsx ./cli/index.ts app config check",
     "config:set": "tsx ./cli/index.ts app config set",
+    "config:env": "tsx ./cli/index.ts app config env",
     "collections:generate": "tsx ./cli/index.ts app collections generate",
     "db:apply": "tsx ./cli/index.ts app db apply",
     "db:reset": "tsx ./cli/index.ts app db reset",

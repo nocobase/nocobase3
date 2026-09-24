@@ -37,7 +37,7 @@ export interface AppConfigDefinition<T extends object> {
   /**
    * Environment variables that set fields of this section, with paths relative to it, such as
    * `{ AUTH_SECRET: envString('secret') }`. The owner of the section declares them here so that whoever reads a
-   * setting also maps it; an application's own `server/environment.ts` then carries only its deployment keys.
+   * setting also maps it. `pnpm config:env` lists every declared variable.
    */
   readonly env?: Readonly<Record<string, EnvironmentMapping>>;
 }
