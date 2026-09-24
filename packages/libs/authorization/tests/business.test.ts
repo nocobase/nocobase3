@@ -352,40 +352,50 @@ describe('business authorization', () => {
     ).resolves.toBe(true);
   });
 
-  it('fills an unset data scope with its default', async () => {
-    const reference = quotes.reference();
-    const seen: AuthorizationGrant[] = [];
-    const authz = setup(
-      [reference.grant('submit')],
-      [
-        {
-          id: 'database',
-          setup(host) {
-            host.resourceTypes.add({
-              type: 'database.collection',
-              title: 'Collections',
-              actions: ['read', 'create', 'update', 'delete'],
-              async authorize(request, context) {
-                seen.push(...(await context.grants.resolve(request)));
-                return { effect: 'permit', reasons: [] };
-              },
-            });
+  it.each([
+    [undefined, selection.recordAccess('recordsIOwn')],
+    ['', undefined],
+  ] as const)(
+    'fills an unset data scope with its default (%j)',
+    async (value, expected) => {
+      const reference = quotes.reference();
+      const seen: AuthorizationGrant[] = [];
+      const authz = setup(
+        [
+          value === undefined
+            ? reference.grant('submit')
+            : reference.grant({ submit: { quotes: value } }),
+        ],
+        [
+          {
+            id: 'database',
+            setup(host) {
+              host.resourceTypes.add({
+                type: 'database.collection',
+                title: 'Collections',
+                actions: ['read', 'create', 'update', 'delete'],
+                async authorize(request, context) {
+                  seen.push(...(await context.grants.resolve(request)));
+                  return { effect: 'permit', reasons: [] };
+                },
+              });
+            },
           },
-        },
-      ],
-    );
-    authz.business.define(quotes);
-    await expect(
-      authz.for(alice).authorize({
-        resource: { type: 'business', id: 'sales.quotes' },
-        action: 'submit',
-      }),
-    ).resolves.toMatchObject({ effect: 'permit' });
-    expect(seen.map((grant) => grant.origin?.selection)).toEqual([
-      selection.recordAccess('recordsIOwn'),
-      selection.recordAccess('recordsIOwn'),
-    ]);
-  });
+        ],
+      );
+      authz.business.define(quotes);
+      await expect(
+        authz.for(alice).authorize({
+          resource: { type: 'business', id: 'sales.quotes' },
+          action: 'submit',
+        }),
+      ).resolves.toMatchObject({ effect: 'permit' });
+      expect(seen.map((grant) => grant.origin?.selection)).toEqual([
+        expected,
+        expected,
+      ]);
+    },
+  );
 
   it('denies a stored business policy the definition does not accept', async () => {
     const authz = setup([

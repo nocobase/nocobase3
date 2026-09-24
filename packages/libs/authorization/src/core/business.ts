@@ -32,7 +32,10 @@ export interface DataScope {
   readonly defaultValue?: string;
 }
 
-/** A record selection, or a record access key as shorthand. */
+/**
+ * A record selection, or a record access key as shorthand. The empty string
+ * selects nothing, not even the scope's default: only rules apply.
+ */
 export type DataScopeValue = RecordSelection | string;
 
 export interface BusinessGrantAction extends PermissionGrantAction {
@@ -392,9 +395,10 @@ function validateScopeValue(
   action: BusinessAction,
   key: string,
   value: unknown,
-): RecordSelection {
+): RecordSelection | undefined {
   const scope = action.dataScopes?.find((entry) => entry.key === key);
   if (!scope) throw new TypeError(`Unknown data scope: ${action.name}.${key}`);
+  if (value === '') return undefined;
   if (typeof value !== 'string' && (typeof value !== 'object' || !value))
     throw new TypeError(`Invalid value for data scope ${action.name}.${key}`);
   const selection = normalizeScopeValue(value as DataScopeValue);
@@ -480,7 +484,7 @@ export class BusinessResourceRegistry implements BusinessApi {
         `Unknown business action: ${grant.resource.id}.${grant.action}`,
       );
     const scopes = businessScopes(grant.policy);
-    const selections = new Map<string, RecordSelection>();
+    const selections = new Map<string, RecordSelection | undefined>();
     for (const [key, value] of Object.entries(scopes))
       selections.set(key, validateScopeValue(action, key, value));
     for (const scope of action.dataScopes ?? [])
