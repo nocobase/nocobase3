@@ -47,7 +47,16 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 
 构建成功后生成 `storage/exports/dist.tar.gz`，后续通过管理页面或 CLI 上传此文件。
 
-`--target` 应与 Hub 所在的运行环境一致。例如，Linux ARM64 使用 `linux-arm64`；不能直接采用开发电脑的平台。完整构建说明见[构建部署包](./standalone#构建部署包)。
+`--target` 和 `--node-version` 要匹配 Hub 进程实际运行的环境，不能采用开发电脑的平台，也不是宿主机的环境：
+
+| Hub 的部署方式 | 构建参数                                                                |
+| -------------- | ----------------------------------------------------------------------- |
+| Docker（推荐） | `--target linux-x64`，ARM64 服务器用 `linux-arm64`；`--node-version 24` |
+| 应用模板       | 按运行 Hub 的那个环境的平台、libc 和 Node 大版本填写                    |
+
+Docker 部署的 Hub 运行在容器内，容器基于 Debian bookworm 并固定 Node 24，因此宿主机安装的 Node 版本、宿主机是不是 Alpine 都不影响这两个参数。不确定 Hub 的部署方式或需要确认命令时，见[运行环境](./hub#运行环境)。完整构建说明见[构建部署包](./standalone#构建部署包)。
+
+参数与 Hub 运行环境不一致时，上传和部署都会成功，应用启动时才会因原生模块 ABI 不匹配而失败，排查见[备份恢复与排障](./operations#故障排查)。
 
 ## 通过管理页面部署
 

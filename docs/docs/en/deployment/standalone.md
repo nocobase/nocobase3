@@ -9,7 +9,15 @@ This page covers the Node.js deployment flow without Hub. For containers, build 
 
 ## Environment and directories
 
-Build and run on Node.js 24, with the pnpm version the project's `packageManager` names. Confirm the server's CPU architecture, operating system and libc. This page assumes Linux x64 with glibc; choose `linux-arm64` for ARM64, and for musl environments such as Alpine pick the matching target and verify the native dependencies.
+Build and run on Node.js 24, with the pnpm version the project's `packageManager` names. This page assumes Linux x64 with glibc; choose `linux-arm64` for ARM64, and for musl environments such as Alpine pick the matching target and verify the native dependencies.
+
+The build flags need the server's CPU architecture, Node major version and libc. Confirm them on the target server:
+
+```bash
+uname -sm
+node -p "process.versions.node + ' ABI ' + process.versions.modules"
+ldd --version 2>&1 | head -1   # musl in the output means an Alpine-like environment
+```
 
 Keep three kinds of content apart: `dist` is replaceable code, `config.yml` is the target environment's configuration, and `storage` is data to preserve, such as the database, uploaded files and logs. Sessions are held in memory by default, so a restart signs everyone out. This page uses a fixed deployment root and replaces only `dist` on an upgrade, never the configuration or `storage`.
 
