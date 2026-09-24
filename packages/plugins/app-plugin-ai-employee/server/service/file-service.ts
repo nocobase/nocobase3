@@ -130,7 +130,7 @@ export class AIFileService {
   }
 
   private createPreviewUrl(id: string | number): string {
-    return `${this.apiBasePath}/aiFiles:preview?id=${id}`;
+    return aiFilePreviewUrl(this.apiBasePath, id);
   }
 
   private toUploadResult(
@@ -156,4 +156,72 @@ export class AIFileService {
       },
     };
   }
+}
+
+/** Where an `aiFiles` attachment is read back, relative to the AI API. */
+export function aiFilePreviewUrl(
+  apiBasePath: string,
+  id: string | number,
+): string {
+  return `${apiBasePath}/aiFiles:preview?id=${id}`;
+}
+
+type HistoryMessage = {
+  content?: {
+    attachments?: unknown;
+    subAgentConversations?: unknown;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+/**
+ * Gives each `aiFiles` attachment of a history page the preview address its
+ * upload returned. A message stores the file's record, which holds no address
+ * because the API's base path belongs to the deployment rather than the file.
+ */
+export function withAIFilePreviews<T extends { rows: unknown[] }>(
+  page: T,
+  apiBasePath: string,
+): T {
+  const withPreview = (attachment: unknown): unknown => {
+    if (!isRecord(attachment)) return attachment;
+    const source = attachment.source;
+    const id = attachment.id;
+    if (
+      !isRecord(source) ||
+      source.collectionName !== 'aiFiles' ||
+      (typeof id !== 'string' && typeof id !== 'number') ||
+      typeof attachment.preview === 'string'
+    )
+      return attachment;
+    const preview = aiFilePreviewUrl(apiBasePath, id);
+    return {
+      ...attachment,
+      preview,
+      url: typeof attachment.url === 'string' ? attachment.url : preview,
+    };
+  };
+  const withPreviews = (message: unknown): unknown => {
+    if (!isRecord(message) || !isRecord(message.content)) return message;
+    const content = { ...(message as HistoryMessage).content };
+    if (Array.isArray(content.attachments))
+      content.attachments = content.attachments.map(withPreview);
+    if (Array.isArray(content.subAgentConversations))
+      content.subAgentConversations = content.subAgentConversations.map(
+        (conversation: unknown) =>
+          isRecord(conversation) && Array.isArray(conversation.messages)
+            ? {
+                ...conversation,
+                messages: conversation.messages.map(withPreviews),
+              }
+            : conversation,
+      );
+    return { ...message, content };
+  };
+  return { ...page, rows: page.rows.map(withPreviews) };
 }

@@ -111,6 +111,27 @@ describe('aiFiles:preview access', () => {
     expect((await preview('member')).status).toBe(403);
   });
 
+  it('keeps a Chinese file name, and sends it in an RFC 6266 header', async () => {
+    sessionUser = { id: 'uploader' };
+    const form = new FormData();
+    form.set('file', new File(['截图'], '客户截图.png', { type: 'image/png' }));
+    const uploaded = await app.request('/api/ai/aiFiles:create', {
+      method: 'POST',
+      body: form,
+    });
+    const body = (await uploaded.json()) as {
+      id: string;
+      filename: string;
+      extname: string;
+    };
+    expect(body).toMatchObject({ filename: '客户截图.png', extname: '.png' });
+
+    const response = await app.request(`/api/ai/aiFiles:preview?id=${body.id}`);
+    expect(response.headers.get('content-disposition')).toBe(
+      `inline; filename=".png"; filename*=UTF-8''${encodeURIComponent('客户截图.png')}`,
+    );
+  });
+
   it("shows another user's file to a user with AI settings access", async () => {
     const response = await preview('settings-admin');
     expect(response.status).toBe(200);

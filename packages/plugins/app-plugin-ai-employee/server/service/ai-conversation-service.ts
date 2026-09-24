@@ -29,7 +29,12 @@ import type {
   ConversationManagementActor,
   Translate,
 } from '../types.js';
-import { ResourceActionError, sendStreamError } from '../types.js';
+import {
+  AI_API_BASE_PATH,
+  ResourceActionError,
+  sendStreamError,
+} from '../types.js';
+import { withAIFilePreviews } from './file-service.js';
 import {
   AgentServiceError,
   type AgentRequest,
@@ -534,10 +539,13 @@ export class AIConversationService {
       throw new ResourceActionError(400, 'Invalid cursor');
     }
     try {
-      return await this.aiConversationsManager.getAllMessages({
-        sessionId,
-        cursor,
-      });
+      return withAIFilePreviews(
+        await this.aiConversationsManager.getAllMessages({
+          sessionId,
+          cursor,
+        }),
+        AI_API_BASE_PATH,
+      );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'invalid sessionId') {
         throw new ResourceActionError(404, 'Conversation not found');
@@ -725,13 +733,16 @@ export class AIConversationService {
     const paginate = options.paginate !== false;
     const updateRead = options.updateRead === true;
     try {
-      return await this.aiConversationsManager.getMessages({
-        userId,
-        sessionId,
-        cursor,
-        paginate,
-        updateRead,
-      });
+      return withAIFilePreviews(
+        await this.aiConversationsManager.getMessages({
+          userId,
+          sessionId,
+          cursor,
+          paginate,
+          updateRead,
+        }),
+        AI_API_BASE_PATH,
+      );
     } catch (error: any) {
       if (error.message === 'invalid sessionId') {
         throw new ResourceActionError(400, 'Invalid request');

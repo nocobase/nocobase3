@@ -1,6 +1,8 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
 
+import { normalizeFilename } from '@nocobase/ai-employee';
+
 import { requiredString } from './utils.js';
 
 export function createAIFilesRouter(app: Hono, services: ServiceFactory): void {
@@ -24,8 +26,20 @@ export function createAIFilesRouter(app: Hono, services: ServiceFactory): void {
     return new Response(result.stream, {
       headers: {
         'Content-Type': result.contentType,
-        'Content-Disposition': `inline; filename="${encodeURIComponent(result.filename)}"`,
+        'Content-Disposition': inlineContentDisposition(result.filename),
       },
     });
   });
+}
+
+/**
+ * `filename` is a quoted ASCII fallback for clients that read nothing else;
+ * `filename*` carries the real name, in any script, as RFC 6266 describes.
+ */
+function inlineContentDisposition(filename: string): string {
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `inline; filename="${normalizeFilename(filename)}"; filename*=UTF-8''${encoded}`;
 }

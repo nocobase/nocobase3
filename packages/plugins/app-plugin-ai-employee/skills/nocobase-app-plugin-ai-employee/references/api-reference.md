@@ -678,11 +678,11 @@ Updates matching persisted tool-call arguments and returns `null`. This does not
 
 ### `POST aiFiles:create`
 
-Multipart form data with exactly one field named `file` whose value is a browser `File`. Returns file metadata such as id/uid, filename, size, mimetype, URL, or preview depending on storage implementation. The Registry resolves returned relative URLs.
+Multipart form data with exactly one field named `file` whose value is a browser `File`. Returns file metadata such as id/uid, filename, size, mimetype, URL, or preview depending on storage implementation. `filename` is the name the file was uploaded with, in any script, minus any directory part. The Registry resolves returned relative URLs.
 
 ### `GET aiFiles:preview`
 
-Query `{ id: string }`. Returns a file preview response, not a JSON envelope. The user who uploaded the file can preview it; anyone else, and anyone previewing a file that records no uploader, needs AI settings access, and gets 403 without it.
+Query `{ id: string }`. Returns a file preview response, not a JSON envelope, served inline with the original file name in `Content-Disposition`. An attachment stored by `aiFiles:create` comes back in history with `preview` and `url` pointing here. The user who uploaded the file can preview it; anyone else, and anyone previewing a file that records no uploader, needs AI settings access, and gets 403 without it.
 
 ## Management resources
 
