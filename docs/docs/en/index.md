@@ -91,10 +91,7 @@ features:
         link: /tutorials/
       - title: 'Deployment'
         details: 'How to package the application and put it on a server.'
-        link: /deployment/
-      - title: 'Reference'
-        details: 'Commands, configuration options, style tokens and the glossary.'
-        link: /reference/
+        link: /app/deployment/
       - title: 'Plugin development'
         details: 'Only needed when you want to publish a package others can install.'
         link: /plugin-development/

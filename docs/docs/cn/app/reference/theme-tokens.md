@@ -194,9 +194,9 @@ Tailwind v4 会扫描应用代码；`styles.css` 还通过 `@source "./component
 pnpm exec vitest run tests/logic/theme-tokens.test.ts tests/logic/theme-preferences.test.ts tests/logic/client-theme.test.tsx
 ```
 
-再在浏览器中检查浅色、深色、窄屏布局、长文本和键盘焦点。新增字体还要检查实际字体资源是否已加载。主题预设的完整创建、修改和删除流程见[主题](../capabilities/theme)。
+再在浏览器中检查浅色、深色、窄屏布局、长文本和键盘焦点。新增字体还要检查实际字体资源是否已加载。主题预设的完整创建、修改和删除流程见[主题](../../capabilities/theme)。
 
 ## 相关链接
 
-- [界面和样式](../app/components-and-styling)：使用组件和主题变量编写页面
-- [主题](../capabilities/theme)：新增、修改和删除主题预设
+- [界面和样式](../components-and-styling)：使用组件和主题变量编写页面
+- [主题](../../capabilities/theme)：新增、修改和删除主题预设

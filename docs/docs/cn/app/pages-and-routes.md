@@ -259,5 +259,5 @@ defineAppRoutes([
 - [界面和样式](./components-and-styling) — 使用 shadcn/ui 组件和主题变量编写页面
 - [多语言](./i18n) — 为页面文案添加翻译
 - [服务端路由](./server-routes) — 为页面调用的接口声明服务端路由
-- [路由参考](../reference/routes) — 查看客户端和服务端路由的类型与路径规则
-- [主题变量](../reference/theme-tokens) — 查看颜色、字体、间距、圆角和阴影等主题变量
+- [路由参考](./reference/routes) — 查看客户端和服务端路由的类型与路径规则
+- [主题变量](./reference/theme-tokens) — 查看颜色、字体、间距、圆角和阴影等主题变量
