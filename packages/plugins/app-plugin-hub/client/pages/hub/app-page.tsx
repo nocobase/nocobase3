@@ -154,7 +154,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   const reportError = useCallback(
     (reason: unknown): void => {
       if (reason instanceof ApiClientError && reason.status === 403) {
-        authorization.invalidatePermissions();
+        authorization.invalidate();
       }
       setError(readError(reason));
     },

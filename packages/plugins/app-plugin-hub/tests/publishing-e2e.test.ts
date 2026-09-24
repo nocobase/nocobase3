@@ -34,7 +34,6 @@ import {
 import {
   authorizationToken,
   createAppAuthorization,
-  permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
@@ -175,7 +174,6 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
     const container = new ServiceContainer();
     container.instance(authenticationToken, authentication);
     container.instance(authorizationToken, authorization);
-    container.instance(permissionSetsToken, authorization.permissionSets);
     container.instance(hubApiKeyServiceToken, hubApiKeys);
     container.instance(hubServiceToken, service);
     const router = await apiRoutes.createRouter({

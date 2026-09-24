@@ -5,7 +5,7 @@ import {
   createAppAuthorization,
   type Authorization,
 } from '@nocobase/app-plugin-authorization';
-import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permissions';
+import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permission-sets';
 import {
   createDatabaseManager,
   createMigrator,

@@ -1,6 +1,7 @@
 import { databaseManagerToken } from '@nocobase/db';
 import {
   authorizationToken,
+  grantBacked,
   type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
@@ -90,47 +91,13 @@ export class NotificationProvider<
 export function registerNotificationAuthorization(
   authorization: Pick<Authorization, 'resourceTypes'>,
 ): void {
+  // A record type: only `send` exists, and only the `test` notification sends.
   authorization.resourceTypes.add({
-    resourceType: 'notification',
-    async authorize(request, context) {
-      if (request.resource.id !== 'test' || request.action !== 'send') {
-        return {
-          effect: 'deny',
-          reasons: [
-            {
-              code: 'NOTIFICATION_ACTION_NOT_SUPPORTED',
-              message: `Notification authorization does not support "${request.resource.id}:${request.action}"`,
-              plugin: 'notification',
-            },
-          ],
-        };
-      }
-      const grants = await context.grants.resolve({
-        principal: request.principal,
-        subjects: request.subjects,
-        resource: request.resource,
-        action: request.action,
-      });
-      const staticGrants = grants.filter((grant) => grant.policy === undefined);
-      return staticGrants.length > 0
-        ? {
-            effect: 'permit',
-            reasons: staticGrants.map((grant) => ({
-              code: 'NOTIFICATION_TEST_SEND_GRANTED',
-              message: `${grant.source.plugin}:${grant.source.id} allows notification test sending`,
-              plugin: 'notification',
-            })),
-          }
-        : {
-            effect: 'deny',
-            reasons: [
-              {
-                code: 'NOTIFICATION_TEST_SEND_DENIED',
-                message: 'Notification test sending is not allowed',
-                plugin: 'notification',
-              },
-            ],
-          };
-    },
+    type: 'notification',
+    title: 'Notifications',
+    actions: ['send'],
+    authorize: grantBacked({
+      also: async (request) => request.resource.id === 'test',
+    }),
   });
 }

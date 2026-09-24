@@ -4,7 +4,7 @@ import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import {
   createAppAuthorization,
-  type AppAuthorizationService,
+  type AppAuthorization,
 } from '@nocobase/app-plugin-authorization/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDataServices } from '../server/service/data-services.js';
@@ -16,6 +16,24 @@ import {
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
 import type { DataServices } from '../server/service/data-contracts.js';
 
+/** A collection grant as a Permission Set stores it. */
+function collectionGrant(
+  collection: string,
+  definition: Record<string, Record<string, unknown>>,
+) {
+  return {
+    resource: { type: 'database.collection', id: collection },
+    actions: Object.entries(definition).map(([action, config]) => ({
+      action,
+      policy: { type: 'database', ...config },
+    })),
+  };
+}
+
+function recordAccessSelection(value: { key: string; params?: unknown }) {
+  return { type: 'recordAccess' as const, ...value };
+}
+
 const managers: DatabaseManager[] = [];
 afterEach(async () => {
   await Promise.all(managers.splice(0).map((manager) => manager.destroy()));
@@ -23,7 +41,7 @@ afterEach(async () => {
 
 async function fixture(): Promise<{
   database: DatabaseManager;
-  authorization: AppAuthorizationService;
+  authorization: AppAuthorization;
   alice: DataServices;
   bob: DataServices;
 }> {
@@ -75,7 +93,8 @@ async function fixture(): Promise<{
       collection.boolean('active');
       collection.text('notes');
     });
-    authorization.db.collections.add({
+    authorization.database.collections.add({
+      title: 'Collection',
       name: `${source}.orders`,
       actions: ['read'],
     });
@@ -122,7 +141,7 @@ async function fixture(): Promise<{
   const permission = await authorization.permissionSets.create({
     key: 'orders-read',
     grants: [
-      authorization.db.grant('main.orders', {
+      collectionGrant('main.orders', {
         read: {
           fields: [
             'id',
@@ -167,7 +186,7 @@ describe('actor-bound data services with real SQLite and authorization', () => {
     const grant = await authorization.permissionSets.create({
       key: 'remote-read',
       grants: [
-        authorization.db.grant('other.orders', {
+        collectionGrant('other.orders', {
           read: { fields: ['id'], recordAccess: ['allRecords'] },
         }),
       ],
@@ -428,18 +447,20 @@ describe('actor-bound data services with real SQLite and authorization', () => {
       database,
       connection: database.connection(),
     });
-    relationAuthz.db.collections.add({
+    relationAuthz.database.collections.add({
+      title: 'Collection',
       name: 'main.orders',
       actions: ['read'],
     });
-    relationAuthz.db.collections.add({
+    relationAuthz.database.collections.add({
+      title: 'Collection',
       name: 'main.lines',
       actions: ['read'],
     });
     const permission = await relationAuthz.permissionSets.create({
       key: 'lines-read',
       grants: [
-        relationAuthz.db.grant('main.orders', {
+        collectionGrant('main.orders', {
           read: {
             fields: ['id', 'ownerId'],
             relations: {
@@ -451,7 +472,7 @@ describe('actor-bound data services with real SQLite and authorization', () => {
             recordAccess: ['recordsIOwn'],
           },
         }),
-        relationAuthz.db.grant('main.lines', {
+        collectionGrant('main.lines', {
           read: {
             fields: ['id', 'orderId', 'ownerId', 'description'],
             recordAccess: ['recordsIOwn'],
@@ -544,7 +565,7 @@ describe('actor-bound data services with real SQLite and authorization', () => {
       actions: [
         {
           action: 'read',
-          scope: authorization.db.scope({
+          selection: recordAccessSelection({
             key: 'customFilter',
             params: {
               filter: {
@@ -656,7 +677,7 @@ describe('data input and output safety', () => {
       actions: [
         {
           action: 'read',
-          scope: authorization.db.scope({
+          selection: recordAccessSelection({
             key: 'customFilter',
             params: { filter: false },
           }),
@@ -684,7 +705,7 @@ describe('data input and output safety', () => {
       actions: [
         {
           action: 'read',
-          scope: secondAuthz.db.scope({
+          selection: recordAccessSelection({
             key: 'customFilter',
             params: {
               filter: { $and: [{ region: { $in: [null, 'north'] } }] },
@@ -773,7 +794,7 @@ describe('empty authorization predicates', () => {
         actions: [
           {
             action: 'read',
-            scope: authorization.db.scope({
+            selection: recordAccessSelection({
               key: 'customFilter',
               params: { filter: { $and: [filter] } },
             }),

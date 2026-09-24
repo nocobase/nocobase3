@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   client: { request: vi.fn() },
   authorization: {
     can: vi.fn(async () => true),
-    onPermissionsInvalidated: vi.fn(() => () => undefined),
+    onInvalidated: vi.fn(() => () => undefined),
   },
 }));
 vi.mock('@nocobase/app-client', () => ({

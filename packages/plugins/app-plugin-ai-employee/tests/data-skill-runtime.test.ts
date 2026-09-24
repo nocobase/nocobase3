@@ -25,6 +25,20 @@ import { createTestAgentContext } from './app/test-context.js';
 import { MemoryConversationPersistence } from './memory-conversation-persistence.js';
 import { createMockServer } from './mock-server.js';
 
+/** A collection grant as a Permission Set stores it. */
+function grant(
+  collection: string,
+  definition: Record<string, Record<string, unknown>>,
+) {
+  return {
+    resource: { type: 'database.collection', id: collection },
+    actions: Object.entries(definition).map(([action, config]) => ({
+      action,
+      policy: { type: 'database', ...config },
+    })),
+  };
+}
+
 const skillTools = {
   'data-metadata': [
     'getDataSources',
@@ -682,14 +696,15 @@ it('runs the activated query/report chain against real SQLite and real user auth
       connection: database.connection(),
       database,
     });
-    authorization.db.collections.add({
+    authorization.database.collections.add({
+      title: 'Collection',
       name: 'main.orders',
       actions: ['read'],
     });
     await authorization.permissionSets.create({
       key: 'own-orders',
       grants: [
-        authorization.db.grant('main.orders', {
+        grant('main.orders', {
           read: {
             fields: ['id', 'amount'],
             recordAccess: ['recordsIOwn'],

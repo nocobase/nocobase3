@@ -6,7 +6,7 @@
  * `AIEmployee` streaming / invocation flows.
  */
 
-import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import type { ConversationExecution } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
@@ -235,7 +235,7 @@ export interface AIConversationServiceOptions {
   readonly ai: AIManager;
   readonly database: DatabaseConnection;
   readonly databaseManager: DatabaseManager;
-  readonly authorization?: AppAuthorizationService;
+  readonly authorization?: AppAuthorization;
   readonly logger: Logger;
   readonly caching: Caching;
   readonly fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
@@ -256,7 +256,7 @@ export class AIConversationService {
   private readonly ai: AIManager;
   private readonly database: DatabaseConnection;
   private readonly databaseManager: DatabaseManager;
-  private readonly authorization?: AppAuthorizationService;
+  private readonly authorization?: AppAuthorization;
   private readonly logger: Logger;
   private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;

@@ -495,6 +495,7 @@ describe('AI settings page navigation', () => {
               parent: 'aiGroup',
               name: tab,
               path: `/ai/${tab}`,
+              authz: 'skip',
               componentLoader: async () => ({
                 default: () => <div>Standalone content</div>,
               }),
@@ -596,6 +597,7 @@ describe('AI settings page navigation', () => {
             {
               name: `${tab}-detail`,
               path: `/ai/${tab}/:id`,
+              authz: 'skip',
               componentLoader: async () => ({
                 default: withAISettingsShell(() => <div>Detail content</div>),
               }),

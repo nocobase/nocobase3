@@ -1,5 +1,5 @@
 import type {
-  AppAuthorizationService,
+  AppAuthorization,
   DatabaseAuthorizationConditions,
   DatabaseAuthorizationParams,
 } from '@nocobase/app-plugin-authorization/server';
@@ -82,7 +82,7 @@ export function createDataServices(
 }
 
 class ActorDataServices implements DataServices {
-  private readonly authorization?: AppAuthorizationService;
+  private readonly authorization?: AppAuthorization;
   private readonly principalId: string;
   private get timezone(): string {
     return this.options.timezone ?? 'UTC';
@@ -96,7 +96,7 @@ class ActorDataServices implements DataServices {
         : String(options.actor.id);
   }
 
-  private requireAuthorization(): AppAuthorizationService {
+  private requireAuthorization(): AppAuthorization {
     if (
       !this.authorization ||
       !this.principalId.trim() ||
@@ -107,7 +107,8 @@ class ActorDataServices implements DataServices {
   }
 
   private mappings(): Array<{ source: string; name: string }> {
-    const registered = this.requireAuthorization().db.collections.list();
+    const authz = this.requireAuthorization();
+    const registered = authz.database.collections.list();
     if (registered.length > 1000)
       throw new DataAccessError('Data catalog exceeds the supported size');
     return registered
@@ -117,10 +118,7 @@ class ActorDataServices implements DataServices {
           parts.every(
             (part) => safeName.test(part) && !unsupportedNames.has(part),
           ) &&
-          this.requireAuthorization().db.collections.actionRegistry.resolve(
-            item.name,
-            'read',
-          )
+          readable(authz, item.name)
           ? [{ source: parts[0], name: parts[1] }]
           : [];
       })
@@ -138,13 +136,13 @@ class ActorDataServices implements DataServices {
   ): Promise<Access> {
     const authz = this.requireAuthorization();
     const resourceId = `${source}.${name}`;
-    const registered = authz.db.collections
+    const registered = authz.database.collections
       .list()
       .find((item) => item.name === resourceId);
     if (
       !registered ||
       registered.name !== resourceId ||
-      !authz.db.collections.actionRegistry.resolve(resourceId, 'read')
+      !readable(authz, resourceId)
     )
       throw new DataAccessError();
     const decision = await authz
@@ -587,4 +585,14 @@ function descriptions(value: { title?: string; description?: string }): {
       ? { description: value.description.slice(0, 512) }
       : {}),
   };
+}
+
+/** Whether a registered collection exposes `read`. */
+function readable(authz: AppAuthorization, collection: string): boolean {
+  return (
+    authz.resourceTypes
+      .get('database.collection')
+      .items?.get(collection)
+      ?.actions.some((action) => action.name === 'read') ?? false
+  );
 }

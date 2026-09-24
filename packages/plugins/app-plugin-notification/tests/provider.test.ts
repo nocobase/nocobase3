@@ -85,32 +85,37 @@ describe('@nocobase/app-plugin-notification provider', () => {
       typeof vi.fn
     >;
     const handler = add.mock.calls[0]?.[0] as {
+      type: string;
+      actions: readonly string[];
       authorize(
         request: object,
         context: object,
       ): Promise<{ readonly effect: string }>;
     };
+    expect(handler).toMatchObject({ type: 'notification', actions: ['send'] });
+    const context = {
+      grants: {
+        resolve: () =>
+          Promise.resolve([
+            {
+              source: { plugin: 'permission-sets', id: 'operators' },
+              resource: { type: 'notification', id: '*' },
+              action: 'send',
+            },
+          ]),
+      },
+    };
+    const request = (id: string) => ({
+      principal: { type: 'user', id: 'user-1' },
+      resource: { type: 'notification', id },
+      action: 'send',
+    });
     await expect(
-      handler.authorize(
-        {
-          principal: { type: 'user', id: 'user-1' },
-          resource: { type: 'notification', id: 'test' },
-          action: 'send',
-        },
-        {
-          grants: {
-            resolve: () =>
-              Promise.resolve([
-                {
-                  source: { plugin: 'permission-sets', id: 'operators' },
-                  resource: { type: 'notification', id: 'test' },
-                  action: 'send',
-                },
-              ]),
-          },
-        },
-      ),
+      handler.authorize(request('test'), context),
     ).resolves.toMatchObject({ effect: 'permit' });
+    await expect(
+      handler.authorize(request('other'), context),
+    ).resolves.toMatchObject({ effect: 'deny' });
   });
 
   it('fails fast when the required database dependency is missing', () => {
