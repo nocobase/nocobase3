@@ -1,4 +1,9 @@
-import type { DatabaseDriverRegistration } from '@nocobase/db';
+import {
+  resolveDatabaseDriver,
+  type ConnectionConfig,
+  type DatabaseDriverRegistration,
+} from '@nocobase/db';
+
 import type {
   AppConfigFactory,
   ConfigValidator,
@@ -119,9 +124,41 @@ export const validateAppDatabaseConfig: ConfigValidator<AppDatabaseConfig> = (
     const dialect = isRecord(connection) ? connection.dialect : undefined;
     if (typeof dialect !== 'string' || dialect.trim() === '') {
       context.error(`connections.${name}.dialect`, 'is not set.');
+      continue;
     }
+    const message = connectionOptionsProblem(
+      name,
+      connection as unknown as ConnectionConfig,
+      database.drivers,
+    );
+    if (message) context.error(`connections.${name}`, message);
   }
 };
+
+/**
+ * Asks the connection's own dialect driver whether it accepts the options, the way a start would when it opens the
+ * connection. Both steps are pure — `normalizeConnection` fills in defaults and `resolveConnection` builds the native
+ * driver's options, rejecting what that driver cannot take — so the question is answered without connecting.
+ *
+ * A dialect whose driver is not installed is skipped here; loading the configuration already reports it.
+ */
+function connectionOptionsProblem(
+  name: string,
+  connection: ConnectionConfig,
+  drivers: AppDatabaseConfig['drivers'],
+): string | undefined {
+  try {
+    const driver = resolveDatabaseDriver(connection, drivers, name);
+    if (!driver?.resolveConnection) return undefined;
+    const normalized = driver.normalizeConnection
+      ? driver.normalizeConnection(connection, {})
+      : connection;
+    driver.resolveConnection(normalized);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
