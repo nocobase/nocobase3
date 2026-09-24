@@ -30,11 +30,13 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { AuthorizationOptions } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 const authz = vi.hoisted(() => ({
   can: vi.fn(async () => true),
-  getPermissionsRevision: () => 0,
-  onPermissionsInvalidated: vi.fn(() => () => {}),
+  revision: () => 0,
+  onInvalidated: vi.fn(() => () => {}),
   listDefaultAccess: vi.fn(),
   listDefaultAccessRecords: vi.fn(),
-  setDefaultAccess: vi.fn(),
+  createDefaultAccess: vi.fn(),
+  updateDefaultAccess: vi.fn(),
+  deleteDefaultAccess: vi.fn(),
   listRestrictionRules: vi.fn(),
   listRestrictionRecords: vi.fn(),
   listSharingRules: vi.fn(),
@@ -56,10 +58,10 @@ import { SharingRulesPanel } from '../../../plugins/app-plugin-authz-sharing-rul
 import en from './rule-locales.js';
 const resource = { type: 'database.collection', id: 'orders' };
 const options: AuthorizationOptions = {
-  plugins: [],
+  sections: [],
   subjectTypes: [],
   collections: [{ name: 'orders', fields: ['id', 'name'] }],
-  recordAccessPolicies: [],
+  recordAccess: [],
   resourceTypes: [
     {
       value: resource.type,
@@ -85,7 +87,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   authz.listDefaultAccess.mockResolvedValue([]);
   authz.listDefaultAccessRecords.mockResolvedValue([]);
-  authz.setDefaultAccess.mockResolvedValue(undefined);
+  authz.createDefaultAccess.mockResolvedValue(undefined);
+  authz.updateDefaultAccess.mockResolvedValue(undefined);
+  authz.deleteDefaultAccess.mockResolvedValue(undefined);
   authz.listRestrictionRecords.mockResolvedValue([]);
   authz.listSharingRecords.mockResolvedValue([]);
 });
@@ -103,9 +107,10 @@ it('saves simple scopes inline without opening a dialog', async () => {
     await screen.findByRole('menuitem', { name: en.labels.allRecords }),
   );
   await waitFor(() =>
-    expect(authz.setDefaultAccess).toHaveBeenCalledWith({
+    expect(authz.createDefaultAccess).toHaveBeenCalledWith({
+      key: 'database.collection.orders',
       resource,
-      actions: [{ action: 'read', scope: { type: 'all' } }],
+      actions: [{ action: 'read', selection: { type: 'all' } }],
     }),
   );
   expect(screen.queryByRole('dialog')).toBeNull();
@@ -138,7 +143,7 @@ it('opens a drawer and preserves search and page on close', async () => {
       '?search=Orders&page=2',
     ),
   );
-  expect(authz.setDefaultAccess).not.toHaveBeenCalled();
+  expect(authz.createDefaultAccess).not.toHaveBeenCalled();
 });
 it.each(['sharing', 'restriction'] as const)(
   'restores a %s rule from the URL with all editor sections visible',
@@ -158,7 +163,7 @@ it.each(['sharing', 'restriction'] as const)(
       },
     ]);
     authz.listRestrictionRules.mockResolvedValue([
-      { ...base, actions: [{ action: 'read', scope: { type: 'all' } }] },
+      { ...base, actions: [{ action: 'read', selection: { type: 'all' } }] },
     ]);
     const Panel =
       kind === 'sharing' ? SharingRulesPanel : RestrictionRulesPanel;
@@ -192,7 +197,11 @@ it.each(['sharing', 'restriction'] as const)(
 
 it('groups resources in the table and filters configured resources', async () => {
   authz.listDefaultAccess.mockResolvedValue([
-    { resource, actions: [{ action: 'read', scope: { type: 'all' } }] },
+    {
+      key: 'orders-default',
+      resource,
+      actions: [{ action: 'read', selection: { type: 'all' } }],
+    },
   ]);
   const grouped: AuthorizationOptions = {
     ...options,
@@ -239,11 +248,13 @@ it('groups resources in the table and filters configured resources', async () =>
 
 it('preserves other actions and retains the old scope when an inline save fails', async () => {
   const actions = [
-    { action: 'read', scope: { type: 'all' } },
-    { action: 'update', scope: { type: 'ids', ids: ['1'] } },
+    { action: 'read', selection: { type: 'all' } },
+    { action: 'update', selection: { type: 'records', ids: ['1'] } },
   ];
-  authz.listDefaultAccess.mockResolvedValue([{ resource, actions }]);
-  authz.setDefaultAccess.mockRejectedValue(new Error('Save failed'));
+  authz.listDefaultAccess.mockResolvedValue([
+    { key: 'orders-default', resource, actions },
+  ]);
+  authz.updateDefaultAccess.mockRejectedValue(new Error('Save failed'));
   render(
     <MemoryRouter>
       <DefaultAccessPanel options={options} />
@@ -258,7 +269,8 @@ it('preserves other actions and retains the old scope when an inline save fails'
     await screen.findByRole('menuitem', { name: en.defaultAccess.noDefault }),
   );
   await waitFor(() =>
-    expect(authz.setDefaultAccess).toHaveBeenCalledWith({
+    expect(authz.updateDefaultAccess).toHaveBeenCalledWith('orders-default', {
+      key: 'orders-default',
       resource,
       actions: [actions[1]],
     }),

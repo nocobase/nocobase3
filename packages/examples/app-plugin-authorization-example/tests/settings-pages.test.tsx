@@ -21,13 +21,13 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthorizationOptions } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
+import type { AuthorizationOptionsResponse } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 
 const mocks = vi.hoisted(() => ({
   authz: {
     can: vi.fn(async () => true),
-    getPermissionsRevision: () => 0,
-    onPermissionsInvalidated: vi.fn(() => () => {}),
+    revision: () => 0,
+    onInvalidated: vi.fn(() => () => {}),
     loadOptions: vi.fn(),
     listUsers: vi.fn(),
     listPermissionSets: vi.fn(),
@@ -57,12 +57,12 @@ import PermissionSetsPage from '../../../plugins/app-plugin-authorization/client
 import RestrictionRulesPage from '../../../plugins/app-plugin-authz-restriction-rules/client/pages/restriction-rules-page.js';
 import SharingRulesPage from '../../../plugins/app-plugin-authz-sharing-rules/client/pages/sharing-rules-page.js';
 
-const options: AuthorizationOptions = {
-  plugins: [],
+const options: AuthorizationOptionsResponse = {
+  sections: [],
   resourceTypes: [],
   subjectTypes: [],
   collections: [],
-  recordAccessPolicies: [],
+  recordAccess: [],
 };
 
 const pages = [

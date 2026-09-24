@@ -1,9 +1,6 @@
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
-import defaultRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
-import sharingRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
-import restrictionRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
 import { apiRoutes as authorizationRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
 import path from 'node:path';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
@@ -109,12 +106,6 @@ export async function createFixture() {
   await new AuthorizationExampleProvider(app).boot();
   router.route('/api', await apiRoutes.createRouter(app));
   router.route('/api', await authorizationRoutes.createRouter(app));
-  for (const route of [
-    ...defaultRoutes,
-    ...sharingRoutes,
-    ...restrictionRoutes,
-  ])
-    router.route('/api', await route.createRouter(app));
   return {
     database,
     authorization,

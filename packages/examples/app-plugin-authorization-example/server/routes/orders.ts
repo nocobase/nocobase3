@@ -21,7 +21,7 @@ export function createOrderRoutes(
 
   router.get('/sales/orders/:id/relations', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'business', id: 'example.sales.orders' },
       action: 'view',
     });
     if (decision.effect === 'deny' || !decision.conditions?.database)
@@ -42,7 +42,7 @@ export function createOrderRoutes(
     if (!order) return c.json({ code: 'FORBIDDEN' }, 403);
 
     const manage = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'business', id: 'example.sales.orders' },
       action: 'manageRelations',
     });
 
@@ -121,7 +121,7 @@ export function createOrderRoutes(
 
   router.post('/sales/orders/:id/relations', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'business', id: 'example.sales.orders' },
       action: 'manageRelations',
     });
     if (decision.effect === 'deny' || !decision.conditions?.database)
@@ -160,7 +160,7 @@ export function createOrderRoutes(
 
   router.post('/sales/orders/:id/deliver', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'business', id: 'example.sales.orders' },
       action: 'deliver',
     });
 

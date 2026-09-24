@@ -6,10 +6,11 @@ import permissionSetMigration from '../../../plugins/app-plugin-authorization/da
 import defaultAccessMigration from '../../../plugins/app-plugin-authz-default-access/database/migrations/202608210002_create_default_access_rules.js';
 import sharingRulesMigration from '../../../plugins/app-plugin-authz-sharing-rules/database/migrations/202608210003_create_sharing_rules.js';
 import restrictionRulesMigration from '../../../plugins/app-plugin-authz-restriction-rules/database/migrations/202608210004_create_restriction_rules.js';
-import { permissionSets } from '@nocobase/authorization/permissions';
+import { permissionSetsPlugin } from '@nocobase/authorization/permission-sets';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
+import { databasePlugin } from '../../../plugins/app-plugin-authorization/server/database/plugin.js';
 import { DatabasePermissionSetStore } from '../../../plugins/app-plugin-authorization/server/stores/permission-sets.js';
 
 describe('authorization plugin database stores', () => {
@@ -42,9 +43,10 @@ describe('authorization plugin database stores', () => {
     const authorization = createAuthorization({
       connection: database.connection(),
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new DatabasePermissionSetStore(() => database.connection()),
         }),
+        databasePlugin(),
         defaultAccess(),
         sharingRules(),
         restrictionRules(),
@@ -52,9 +54,10 @@ describe('authorization plugin database stores', () => {
     });
     const resource = { type: 'database.collection', id: 'orders' };
 
-    await authorization.defaultAccess.set({
+    await authorization.defaultAccess.create({
+      key: 'orders-default',
       resource,
-      actions: [{ action: 'read', scope: { type: 'all' } }],
+      actions: [{ action: 'read', selection: { type: 'all' } }],
     });
     await authorization.sharingRules.create({
       key: 'shared-orders',
@@ -73,19 +76,16 @@ describe('authorization plugin database stores', () => {
       actions: [
         {
           action: 'read',
-          scope: {
-            type: 'database',
-            recordAccess: 'recordsIOwn',
-          },
+          selection: { type: 'recordAccess', key: 'recordsIOwn' },
         },
       ],
       subjects: [{ type: 'user', id: 'alice' }],
     });
 
     await expect(
-      authorization.defaultAccess.get(resource.type, resource.id),
+      authorization.defaultAccess.get('orders-default'),
     ).resolves.toMatchObject({
-      actions: [{ action: 'read', scope: { type: 'all' } }],
+      actions: [{ action: 'read', selection: { type: 'all' } }],
     });
     await expect(authorization.sharingRules.list()).resolves.toMatchObject([
       {
@@ -106,39 +106,46 @@ describe('authorization plugin database stores', () => {
     const authorization = createAuthorization({
       connection: database.connection(),
       plugins: [
-        permissionSets({
+        permissionSetsPlugin({
           store: new DatabasePermissionSetStore(() => database.connection()),
         }),
+        databasePlugin(),
         defaultAccess(),
         sharingRules(),
         restrictionRules(),
       ],
     });
-    const resource = { type: 'resource', id: 'sales.submit' };
+    const resource = { type: 'business', id: 'sales.submit' };
     const actions = [
       {
         action: 'submit',
         scopeKey: 'projects',
-        scope: { type: 'ids', ids: ['shared-id', 'project-2'] },
+        selection: {
+          type: 'records' as const,
+          ids: ['shared-id', 'project-2'],
+        },
       },
       {
         action: 'submit',
         scopeKey: 'quotes',
-        scope: { type: 'ids', ids: ['shared-id', 'quote-2'] },
+        selection: {
+          type: 'records' as const,
+          ids: ['shared-id', 'quote-2'],
+        },
       },
     ];
-    await authorization.defaultAccess.set({ resource, actions });
+    await authorization.defaultAccess.create({
+      key: 'scoped-default',
+      resource,
+      actions,
+    });
     await authorization.restrictionRules.create({
       key: 'scoped-restrictions',
       resource,
       actions,
       subjects: [],
     });
-    const sharingActions = actions.map(({ action, scopeKey, scope }) => ({
-      action,
-      scopeKey,
-      selection: { type: 'records' as const, ids: scope.ids },
-    }));
+    const sharingActions = actions;
     await authorization.sharingRules.create({
       key: 'scoped-sharing',
       resource,
@@ -146,7 +153,7 @@ describe('authorization plugin database stores', () => {
       subjects: [],
     });
     await expect(
-      authorization.defaultAccess.get(resource.type, resource.id),
+      authorization.defaultAccess.get('scoped-default'),
     ).resolves.toMatchObject({ actions });
     await expect(
       authorization.restrictionRules.get('scoped-restrictions'),
@@ -154,11 +161,11 @@ describe('authorization plugin database stores', () => {
     await expect(
       authorization.sharingRules.get('scoped-sharing'),
     ).resolves.toMatchObject({ actions: sharingActions });
-    await authorization.defaultAccess.delete(resource.type, resource.id);
+    await authorization.defaultAccess.delete('scoped-default');
     await authorization.restrictionRules.delete('scoped-restrictions');
     await authorization.sharingRules.delete('scoped-sharing');
     await expect(
-      authorization.defaultAccess.get(resource.type, resource.id),
+      authorization.defaultAccess.get('scoped-default'),
     ).resolves.toBeUndefined();
     await expect(
       authorization.restrictionRules.get('scoped-restrictions'),

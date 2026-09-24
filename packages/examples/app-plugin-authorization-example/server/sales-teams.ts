@@ -1,4 +1,4 @@
-import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization';
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import { buildFilter } from '@nocobase/repository-input';
 import { label } from '../catalog.js';
@@ -7,10 +7,10 @@ export const TEAM_SUBJECT = 'example.sales.team';
 const TEAMS = 'authorizationExampleTeams';
 
 export function registerSalesTeams(
-  authz: AppAuthorizationService,
+  authz: AppAuthorization,
   database: DatabaseManager,
 ): () => void {
-  return authz.subjects.define<DatabaseConnection>(TEAM_SUBJECT, {
+  return authz.subjects.add<DatabaseConnection>(TEAM_SUBJECT, {
     async resolveFor(principal) {
       if (principal.type !== 'user') return [];
       const memberships = await database

@@ -1,24 +1,18 @@
 import { buildFilter } from '@nocobase/repository-input';
-import { defineAuthorizationResource } from '@nocobase/authorization/core';
+import {
+  BusinessResourceReference,
+  defineBusinessResource,
+  type BusinessActions,
+  type BusinessResource,
+} from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
 import { label, PROJECTS, QUOTES, ORDERS } from '../catalog.js';
 import type { Project, Quote, Order } from './sales-records.js';
 
-export const projectPage = {
-  name: 'example.sales.projects',
-  title: label('sales.projects'),
-  actions: ['access'],
-};
-export const quotePage = {
-  name: 'example.sales.quotes',
-  title: label('sales.quotes'),
-  actions: ['access'],
-};
-export const orderPage = {
-  name: 'example.sales.orders',
-  title: label('sales.orders'),
-  actions: ['access'],
-};
+/** Page ids, as the client routes declare them in `authz`. */
+export const projectPage = { name: 'example.sales.projects' } as const;
+export const quotePage = { name: 'example.sales.quotes' } as const;
+export const orderPage = { name: 'example.sales.orders' } as const;
 
 const projectFields = [
   'id',
@@ -102,23 +96,32 @@ const deliveryRelations = orderPermission.update((update) =>
     ),
 );
 
-export const projectResource = defineAuthorizationResource(
-  'example.sales.projects',
-  (resource) =>
-    resource
-      .group('example.sales')
-      .title(label('sales.projects'))
-      .action('view', (action) =>
-        action.title(label('sales.view')).grant('projects', projectPermission),
-      )
-      .action('edit', (action) =>
-        action
-          .title(label('sales.editProject'))
-          .grant('projects', projectPermission.update(['title', 'notes'])),
-      ),
-);
+/**
+ * The object form of a business resource: the same data
+ * `defineBusinessResource` builds, written out directly.
+ */
+export const projectResource: BusinessResource = {
+  name: 'example.sales.projects',
+  title: label('sales.projects'),
+  group: 'example.sales',
+  actions: [
+    {
+      name: 'view',
+      title: label('sales.view'),
+      ...projectPermission.bind('projects').build(),
+    },
+    {
+      name: 'edit',
+      title: label('sales.editProject'),
+      ...projectPermission.update(['title', 'notes']).bind('projects').build(),
+    },
+  ],
+};
 
-export const quoteResource = defineAuthorizationResource(
+export const projectReference: BusinessResourceReference<BusinessActions> =
+  new BusinessResourceReference(projectResource);
+
+export const quoteResource = defineBusinessResource(
   'example.sales.quotes',
   (resource) =>
     resource
@@ -144,7 +147,7 @@ export const quoteResource = defineAuthorizationResource(
       ),
 );
 
-export const orderResource = defineAuthorizationResource(
+export const orderResource = defineBusinessResource(
   'example.sales.orders',
   (resource) =>
     resource
@@ -169,14 +172,9 @@ export const orderResource = defineAuthorizationResource(
 );
 
 export const salesGroups = [
-  { name: 'example.sales', category: 'business', title: label('sales.group') },
-  {
-    name: 'example.delivery',
-    category: 'business',
-    title: label('sales.delivery'),
-  },
+  { name: 'example.sales', title: label('sales.group') },
+  { name: 'example.delivery', title: label('sales.delivery') },
 ] as const;
-export const salesPages = [projectPage, quotePage, orderPage];
 export const salesCollections = [
   {
     name: PROJECTS,
@@ -186,4 +184,8 @@ export const salesCollections = [
   { name: QUOTES, title: label('sales.quotes'), actions: ['read', 'update'] },
   { name: ORDERS, title: label('sales.orders'), actions: ['read', 'update'] },
 ];
-export const salesResources = [projectResource, quoteResource, orderResource];
+export const salesResources: readonly BusinessResource[] = [
+  projectResource,
+  quoteResource.build(),
+  orderResource.build(),
+];

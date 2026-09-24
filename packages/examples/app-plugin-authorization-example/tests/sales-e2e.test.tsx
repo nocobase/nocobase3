@@ -19,6 +19,25 @@ type SalesAuthorization = Awaited<
   SharingRulesAuthorizationApi &
   RestrictionRulesAuthorizationApi;
 import { PROJECTS, QUOTES } from '../server/sales-authorization.js';
+import { projectReference, quoteResource } from '../server/sales-resources.js';
+import {
+  selection,
+  type BusinessConditions,
+  type PermissionGrant,
+} from '@nocobase/authorization/core';
+import {
+  ClientApplicationContext,
+  createApiClient,
+  type ClientApplication,
+} from '@nocobase/app-client';
+import { ServiceContainer } from '@nocobase/service-provider';
+import type { PropsWithChildren } from 'react';
+import { renderHook } from '@testing-library/react';
+import {
+  AuthorizationClient,
+  authorizationClientToken,
+  useCan,
+} from '../../../plugins/app-plugin-authorization/client/index.js';
 import { PermissionSetEditor } from '../../../plugins/app-plugin-authorization/client/pages/permission-sets/editor.js';
 import {
   fromSet,
@@ -26,8 +45,7 @@ import {
 } from '../../../plugins/app-plugin-authorization/client/pages/permission-sets/drafts.js';
 import { localizeOptions } from '../../../plugins/app-plugin-authorization/client/components/localized-options.js';
 import type {
-  AuthorizationOptions,
-  LocalizedText,
+  AuthorizationOptionsResponse,
   PermissionSet,
 } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 vi.mock('@nocobase/i18n/client', async () => {
@@ -148,16 +166,25 @@ it('grants page entry separately while data rules govern real endpoints', async 
   ).toBe(401);
 });
 it('saves all three rule types through their production HTTP routes and validates their targets', async () => {
-  const resource = { type: 'resource', id: 'example.sales.projects' };
-  const changed = await admin('default-access', 'PUT', {
-    resource,
-    actions: [{ action: 'view', scopeKey: 'projects', scope: { type: 'all' } }],
-  });
-  expect(await changed.json()).toMatchObject({
-    data: {
+  const resource = { type: 'business', id: 'example.sales.projects' };
+  const changed = await admin(
+    'default-access/example-default-projects',
+    'PUT',
+    {
+      key: 'example-default-projects',
       resource,
       actions: [
-        { action: 'view', scopeKey: 'projects', scope: { type: 'all' } },
+        { action: 'view', scopeKey: 'projects', selection: { type: 'all' } },
+      ],
+    },
+  );
+  expect(changed.status).toBe(200);
+  expect(await changed.json()).toMatchObject({
+    data: {
+      key: 'example-default-projects',
+      resource,
+      actions: [
+        { action: 'view', scopeKey: 'projects', selection: { type: 'all' } },
       ],
     },
   });
@@ -182,9 +209,10 @@ it('saves all three rule types through their production HTTP routes and validate
     'project-4',
     'project-8',
   ]);
+  // Default access is keyed now: removing the rule clears the baseline.
   expect(
-    (await admin('default-access', 'PUT', { resource, actions: [] })).status,
-  ).toBe(200);
+    (await admin('default-access/example-default-projects', 'DELETE')).status,
+  ).toBe(204);
   expect(
     (await admin('sharing-rules/example-selected-projects', 'DELETE')).status,
   ).toBe(204);
@@ -209,21 +237,22 @@ it('saves all three rule types through their production HTTP routes and validate
   for (const path of ['default-access', 'sharing-rules', 'restriction-rules']) {
     const response = await admin(`${path}/options`);
     expect(response.status).toBe(200);
-    const options = (await response.json()).data;
+    const options = (await response.json())
+      .data as AuthorizationOptionsResponse;
     expect(
-      options.resourceTypes[0].resources
-        .find(
-          (item: { value: string }) => item.value === 'example.sales.projects',
-        )
-        .actions.map((action: { value: string }) => action.value),
+      options.resourceTypes
+        .find((type) => type.type === 'business')
+        ?.items.find((item) => item.id === 'example.sales.projects')
+        ?.actions.map((action) => action.name),
     ).toEqual(['view', 'edit']);
   }
   expect(
     (
-      await admin('default-access', 'PUT', {
-        resource: { type: 'resource', id: 'example.sales.projects' },
+      await admin('default-access', 'POST', {
+        key: 'invalid',
+        resource,
         actions: [
-          { action: 'view', scopeKey: 'missing', scope: { type: 'all' } },
+          { action: 'view', scopeKey: 'missing', selection: { type: 'all' } },
         ],
       })
     ).status,
@@ -246,8 +275,7 @@ it('saves all three rule types through their production HTTP routes and validate
 });
 it('saves one operation scope from the real editor without changing view or quote scopes', async () => {
   const response = await admin('permission-sets/options');
-  const raw = (await response.json())
-    .data as AuthorizationOptions<LocalizedText>;
+  const raw = (await response.json()).data as AuthorizationOptionsResponse;
   const { translate } = await import('./locale-harness.js');
   const example = (await import('../client/locales/en-US.js')).default;
   const options = localizeOptions(raw, (key, params) =>
@@ -267,10 +295,10 @@ it('saves one operation scope from the real editor without changing view or quot
   );
   expect(
     options.resourceTypes
-      .find((type) => type.value === 'resource')
+      .find((type) => type.value === 'business')
       ?.resources.find(
         (resource) => resource.value === 'example.sales.projects',
-      )?.actionScopes?.edit,
+      )?.dataScopes?.edit,
   ).toBeDefined();
   const set = (await authz.permissionSets.get('example-sales-assistant'))!;
   let saved = false;
@@ -297,9 +325,6 @@ it('saves one operation scope from the real editor without changing view or quot
   }
   render(<Editor />);
   fireEvent.click(
-    screen.getByRole('button', { name: 'Sales collaboration', exact: true }),
-  );
-  fireEvent.click(
     screen.getByRole('button', { name: 'Projects: Edit project information' }),
   );
   fireEvent.click(
@@ -324,12 +349,12 @@ it('saves one operation scope from the real editor without changing view or quot
   expect(
     (await authz.permissionSets.get(set.key))?.grants.find(
       (grant) =>
-        grant.resource.type === 'resource' &&
+        grant.resource.type === 'business' &&
         grant.resource.id === 'example.sales.projects',
     )?.actions,
   ).toContainEqual({
     action: 'edit',
-    policy: { type: 'resource', projects: 'example.sales.region' },
+    policy: { type: 'business', scopes: { projects: 'example.sales.region' } },
   });
   expect(await ids('assistant')).toEqual([
     'project-1',
@@ -356,9 +381,10 @@ it('saves one operation scope from the real editor without changing view or quot
       })
     ).status,
   ).toBe(200);
-  await authz.defaultAccess.set({
+  await authz.defaultAccess.create({
+    key: 'all-quotes',
     resource: { type: 'database.collection', id: QUOTES },
-    actions: [{ action: 'read', scope: { type: 'all' } }],
+    actions: [{ action: 'read', selection: selection.all() }],
   });
   expect(await ids('assistant', 'quotes')).toEqual([
     'quote-1',
@@ -377,11 +403,7 @@ it('saves one operation scope from the real editor without changing view or quot
 it('keeps all-region read separate from engineer edit, including direct repository policies', async () => {
   await authz.permissionSets.create({
     key: 'extra-read',
-    grants: [
-      authz.resources.grant('example.sales.projects', {
-        view: { projects: 'allRecords' },
-      }),
-    ],
+    grants: [projectReference.grant({ view: { projects: 'allRecords' } })],
   });
   await authz.permissionSets.assign({
     subject: { type: 'user', id: fixture.users.engineer },
@@ -406,7 +428,7 @@ it('keeps all-region read separate from engineer edit, including direct reposito
   const scope = authz.for({
     principal: { type: 'user', id: fixture.users.engineer },
   });
-  const policy = await authz.db.policyFor(PROJECTS, scope);
+  const policy = await authz.database.policyFor(PROJECTS, scope);
   await expect(
     fixture.database
       .repository(PROJECTS)
@@ -529,20 +551,19 @@ it('does not combine broad note access with narrow title access into broad title
   await authz.permissionSets.update('example-sales-assistant', {
     key: 'example-sales-assistant',
     grants: [
-      authz.resources.grant('example.sales.projects', ['view']),
-      authz.db.grant(PROJECTS, {
-        update: { fields: ['notes'], recordAccess: ['allRecords'] },
+      projectReference.grant('view'),
+      databaseGrant(PROJECTS, 'update', {
+        fields: ['notes'],
+        recordAccess: ['allRecords'],
       }),
     ],
   });
   await authz.permissionSets.create({
     key: 'own-titles',
     grants: [
-      authz.db.grant(PROJECTS, {
-        update: {
-          fields: ['title'],
-          recordAccess: ['recordsIOwn'],
-        },
+      databaseGrant(PROJECTS, 'update', {
+        fields: ['title'],
+        recordAccess: ['recordsIOwn'],
       }),
     ],
   });
@@ -550,7 +571,7 @@ it('does not combine broad note access with narrow title access into broad title
     subject: { type: 'user', id: fixture.users.assistant },
     permissionSet: 'own-titles',
   });
-  const policy = await authz.db.policyFor(
+  const policy = await authz.database.policyFor(
     PROJECTS,
     authz.for({ principal: { type: 'user', id: fixture.users.assistant } }),
   );
@@ -598,12 +619,12 @@ it('creates and removes all example schema through the real migrator', async () 
 it('keeps two shared record lists on one operation separate through HTTP, storage and repository checks', async () => {
   await authz.permissionSets.update('example-sales-assistant', {
     key: 'example-sales-assistant',
-    grants: [authz.resources.grant('example.sales.quotes', ['submit'])],
+    grants: [quoteResource.reference().grant('submit')],
   });
-  await authz.defaultAccess.delete('resource', 'example.sales.quotes');
+  await authz.defaultAccess.delete('example-default-quotes');
   const response = await admin('sharing-rules', 'POST', {
     key: 'multi-table',
-    resource: { type: 'resource', id: 'example.sales.quotes' },
+    resource: { type: 'business', id: 'example.sales.quotes' },
     subjects: [{ type: 'user', id: fixture.users.assistant }],
     actions: [
       {
@@ -637,10 +658,10 @@ it('keeps two shared record lists on one operation separate through HTTP, storag
   });
   const projects = await fixture.database
     .repository(PROJECTS)
-    .withPolicy(await authz.db.policyFor(PROJECTS, scope))
+    .withPolicy(await authz.database.policyFor(PROJECTS, scope))
     .findMany();
   expect(projects.map((item) => item.id)).toEqual(['project-2']);
-  const quotePolicy = await authz.db.policyFor(QUOTES, scope);
+  const quotePolicy = await authz.database.policyFor(QUOTES, scope);
   await expect(
     fixture.database
       .repository(QUOTES)
@@ -680,22 +701,23 @@ it('keeps two shared record lists on one operation separate through HTTP, storag
 it('applies defaults and restrictions to the selected business scope without expanding sibling scopes', async () => {
   await authz.permissionSets.update('example-sales-assistant', {
     key: 'example-sales-assistant',
-    grants: [authz.resources.grant('example.sales.quotes', ['submit'])],
+    grants: [quoteResource.reference().grant('submit')],
   });
   expect(
     (
-      await admin('default-access', 'PUT', {
-        resource: { type: 'resource', id: 'example.sales.quotes' },
+      await admin('default-access/example-default-quotes', 'PUT', {
+        key: 'example-default-quotes',
+        resource: { type: 'business', id: 'example.sales.quotes' },
         actions: [
           {
             action: 'submit',
             scopeKey: 'projects',
-            scope: { type: 'ids', ids: ['project-2'] },
+            selection: { type: 'records', ids: ['project-2'] },
           },
           {
             action: 'submit',
             scopeKey: 'quotes',
-            scope: { type: 'ids', ids: ['quote-1', 'quote-2'] },
+            selection: { type: 'records', ids: ['quote-1', 'quote-2'] },
           },
         ],
       })
@@ -705,13 +727,13 @@ it('applies defaults and restrictions to the selected business scope without exp
     (
       await admin('restriction-rules', 'POST', {
         key: 'only-first-quote',
-        resource: { type: 'resource', id: 'example.sales.quotes' },
+        resource: { type: 'business', id: 'example.sales.quotes' },
         subjects: [{ type: 'user', id: fixture.users.assistant }],
         actions: [
           {
             action: 'submit',
             scopeKey: 'quotes',
-            scope: { type: 'ids', ids: ['quote-1'] },
+            selection: { type: 'records', ids: ['quote-1'] },
           },
         ],
       })
@@ -720,7 +742,7 @@ it('applies defaults and restrictions to the selected business scope without exp
   const scope = authz.for({
     principal: { type: 'user', id: fixture.users.assistant },
   });
-  const policy = await authz.db.policyFor(QUOTES, scope);
+  const policy = await authz.database.policyFor(QUOTES, scope);
   await expect(
     fixture.database
       .repository(QUOTES)
@@ -736,20 +758,18 @@ it('applies defaults and restrictions to the selected business scope without exp
     .updateOne({ filter: { id: 'quote-1' }, values: { status: 'submitted' } });
   const projects = await fixture.database
     .repository(PROJECTS)
-    .withPolicy(await authz.db.policyFor(PROJECTS, scope))
+    .withPolicy(await authz.database.policyFor(PROJECTS, scope))
     .findMany();
   expect(projects.map((item) => item.id)).toEqual(['project-2']);
 });
 
 it('narrows business endpoints to their operation while generic data policies aggregate grants', async () => {
-  await authz.defaultAccess.delete('resource', 'example.sales.quotes');
+  await authz.defaultAccess.delete('example-default-quotes');
   await authz.permissionSets.update('example-sales-assistant', {
     key: 'example-sales-assistant',
     grants: [
-      authz.resources.grant('example.sales.projects', {
-        view: { projects: 'allRecords' },
-      }),
-      authz.resources.grant('example.sales.quotes', {
+      projectReference.grant({ view: { projects: 'allRecords' } }),
+      quoteResource.reference().grant({
         submit: { quotes: 'allRecords', projects: 'recordsIOwn' },
       }),
     ],
@@ -759,7 +779,7 @@ it('narrows business endpoints to their operation while generic data policies ag
   });
   const generic = await fixture.database
     .repository(PROJECTS)
-    .withPolicy(await authz.db.policyFor(PROJECTS, scope))
+    .withPolicy(await authz.database.policyFor(PROJECTS, scope))
     .findMany();
   expect(generic.map((item) => item.id).sort()).toEqual([
     'project-1',
@@ -782,11 +802,14 @@ it('narrows business endpoints to their operation while generic data policies ag
       key: 'example-sales-assistant',
       grants: [
         {
-          resource: { type: 'resource', id: 'example.sales.projects' },
+          resource: { type: 'business', id: 'example.sales.projects' },
           actions: [
             {
               action: 'view',
-              policy: { type: 'resource', projects: 'unknown-policy' },
+              policy: {
+                type: 'business',
+                scopes: { projects: 'unknown-policy' },
+              },
             },
           ],
         },
@@ -797,6 +820,7 @@ it('narrows business endpoints to their operation while generic data policies ag
 });
 
 it('exposes pages in permission sets and inspection while data rules only list business scopes', async () => {
+  const offered = new Map<string, readonly string[]>();
   for (const path of [
     'permission-sets',
     'default-access',
@@ -805,33 +829,46 @@ it('exposes pages in permission sets and inspection while data rules only list b
     'inspector',
   ]) {
     const options = (await (await admin(`${path}/options`)).json())
-      .data as AuthorizationOptions<LocalizedText>;
-    expect(options.resourceTypes.some((type) => type.value === 'page')).toBe(
-      path === 'permission-sets' || path === 'inspector',
+      .data as AuthorizationOptionsResponse;
+    const workspace = path === 'permission-sets' || path === 'inspector';
+    expect(options.resourceTypes.some((type) => type.type === 'page')).toBe(
+      workspace,
     );
-    expect(options.resourceTypes.map((type) => type.value)).not.toContain(
+    expect(options.resourceTypes.map((type) => type.type)).not.toContain(
       'database.collection',
     );
-    expect(options.resourceGroups?.map((group) => group.value)).toEqual([
-      'authorization',
+    // Rule plugins can only target business items with data scopes.
+    expect(options.resourceTypes.map((type) => type.type)).toEqual(
+      workspace ? ['business', 'page', 'settings'] : ['business'],
+    );
+    const business = options.resourceTypes.find(
+      (type) => type.type === 'business',
+    )!;
+    expect(business.groups.map((group) => group.name)).toEqual([
       'example.sales',
       'example.delivery',
     ]);
-    const project = options.resourceTypes
-      .find((type) => type.value === 'resource')!
-      .resources.find((item) => item.value === 'example.sales.projects')!;
-    const choices = project
-      .actionScopes!.view.fields[0].options.map((option) => option.value)
-      .filter(Boolean);
-    expect(choices).toEqual(
-      project.ruleScopes!.find((scope) => scope.action === 'view')!.policies,
-    );
+    if (workspace)
+      expect(
+        options.resourceTypes
+          .find((type) => type.type === 'settings')
+          ?.groups.map((group) => group.name),
+      ).toContain('authorization');
+    const project = business.items.find(
+      (item) => item.id === 'example.sales.projects',
+    )!;
+    const choices = project.dataScopes!.view![0]!.recordAccess;
+    offered.set(path, choices);
     expect(choices).toContain('recordsIOwn');
     expect(choices).toContain('example.sales.public');
     expect(choices).toContain('customFilter');
     expect(choices).not.toContain('recordsICreated');
     expect(choices).not.toContain('example.sales.own');
   }
+  // Permission Sets and every rule plugin offer the same record access.
+  expect(
+    new Set([...offered.values()].map((choices) => choices.join())),
+  ).toHaveProperty('size', 1);
   const sets = (await (await admin('permission-sets')).json())
     .data as PermissionSet[];
   expect(
@@ -843,9 +880,9 @@ it('exposes pages in permission sets and inspection while data rules only list b
 });
 
 it('explains a business action with its granting permission set and branch sharing and restriction rules', async () => {
-  const response = await admin('inspect', 'POST', {
+  const response = await admin('inspector/decision', 'POST', {
     subject: { type: 'user', id: fixture.users.assistant },
-    resource: { type: 'resource', id: 'example.sales.projects' },
+    resource: { type: 'business', id: 'example.sales.projects' },
     action: 'view',
   });
   expect(response.status).toBe(200);
@@ -867,13 +904,13 @@ it('explains a business action with its granting permission set and branch shari
   expect(database.decision.reasons).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        code: 'SCOPE_EXPANDED',
+        code: 'SELECTION_EXPANDED',
         details: expect.objectContaining({
           source: expect.objectContaining({ plugin: 'sharing-rules' }),
         }),
       }),
       expect.objectContaining({
-        code: 'SCOPE_RESTRICTED',
+        code: 'SELECTION_RESTRICTED',
         details: expect.objectContaining({
           source: expect.objectContaining({ plugin: 'restriction-rules' }),
         }),
@@ -893,7 +930,7 @@ it('persists localized titles through permission-set and rule HTTP edits', async
       path: 'sharing-rules',
       input: {
         key: 'localized-title',
-        resource: { type: 'resource', id: 'example.sales.projects' },
+        resource: { type: 'business', id: 'example.sales.projects' },
         subjects: [{ type: 'user', id: fixture.users.assistant }],
         actions: [
           {
@@ -908,10 +945,10 @@ it('persists localized titles through permission-set and rule HTTP edits', async
       path: 'restriction-rules',
       input: {
         key: 'localized-title',
-        resource: { type: 'resource', id: 'example.sales.projects' },
+        resource: { type: 'business', id: 'example.sales.projects' },
         subjects: [{ type: 'user', id: fixture.users.assistant }],
         actions: [
-          { action: 'view', scopeKey: 'projects', scope: { type: 'all' } },
+          { action: 'view', scopeKey: 'projects', selection: { type: 'all' } },
         ],
       },
     },
@@ -955,24 +992,25 @@ it('persists localized titles through permission-set and rule HTTP edits', async
 
 it('returns executable policies for both submit targets without a second policy lookup', async () => {
   const policyLookup = vi
-    .spyOn(authz.db, 'policyFor')
+    .spyOn(authz.database, 'policyFor')
     .mockRejectedValue(new Error('Unexpected second authorization'));
   try {
     const scope = authz.for({
       principal: { type: 'user', id: fixture.users.engineer },
     });
     const request = {
-      resource: { type: 'resource' as const, id: 'example.sales.quotes' },
+      resource: { type: 'business', id: 'example.sales.quotes' },
       action: 'submit',
     };
     const decision = await scope.authorize(request);
     expect(decision.effect).toBe('conditional');
-    expect(decision.conditions?.type).toBe('resource');
-    expect(Object.keys(decision.conditions!.database!)).toEqual(
+    const conditions = decision.conditions as BusinessConditions;
+    expect(conditions.type).toBe('business');
+    expect(Object.keys(conditions.database!)).toEqual(
       expect.arrayContaining([PROJECTS, QUOTES]),
     );
-    const quotes = decision.conditions!.database![QUOTES];
-    const projects = decision.conditions!.database![PROJECTS];
+    const quotes = conditions.database![QUOTES]!;
+    const projects = conditions.database![PROJECTS];
     expect(quotes).toMatchObject({
       create: false,
       delete: false,
@@ -1008,7 +1046,7 @@ it('fails closed for ungranted or unknown composed operations, including root ty
     principal: { type: 'user', id: fixture.users.assistant },
   });
   const denied = await assistant.authorize({
-    resource: { type: 'resource', id: 'example.sales.quotes' },
+    resource: { type: 'business', id: 'example.sales.quotes' },
     action: 'submit',
   });
   expect(denied.effect).toBe('deny');
@@ -1019,13 +1057,13 @@ it('fails closed for ungranted or unknown composed operations, including root ty
   expect(
     (
       await root.authorize({
-        resource: { type: 'resource', id: 'example.sales.quotes' },
+        resource: { type: 'business', id: 'example.sales.quotes' },
         action: 'typo',
       })
     ).effect,
   ).toBe('deny');
   const decision = await root.authorize({
-    resource: { type: 'resource', id: 'example.sales.quotes' },
+    resource: { type: 'business', id: 'example.sales.quotes' },
     action: 'submit',
   });
   expect(decision.conditions?.database?.[PROJECTS]).toEqual({
@@ -1215,9 +1253,9 @@ it('uses team subjects in pickers and inspects a user with the same memberships 
       expect.objectContaining({ id: 'delivery' }),
     ]),
   );
-  const response = await admin('inspect', 'POST', {
+  const response = await admin('inspector/decision', 'POST', {
     subject: { type: 'user', id: fixture.users.proposal },
-    resource: { type: 'resource', id: 'example.sales.quotes' },
+    resource: { type: 'business', id: 'example.sales.quotes' },
     action: 'submit',
   });
   expect(response.status).toBe(200);
@@ -1226,12 +1264,12 @@ it('uses team subjects in pickers and inspects a user with the same memberships 
   expect(decision.reasons).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        code: 'SCOPE_EXPANDED',
+        code: 'SELECTION_EXPANDED',
         details: expect.objectContaining({
           source: expect.objectContaining({ plugin: 'sharing-rules' }),
         }),
       }),
-      expect.objectContaining({ code: 'SCOPE_RESTRICTED' }),
+      expect.objectContaining({ code: 'SELECTION_RESTRICTED' }),
     ]),
   );
   expect((await fixture.request('dispatch', 'sales/projects')).status).toBe(
@@ -1441,7 +1479,7 @@ it('keeps page grants and business data grants independent in both directions', 
   )!;
   const dataGrant = set.grants.find(
     (grant) =>
-      grant.resource.type === 'resource' &&
+      grant.resource.type === 'business' &&
       grant.resource.id === 'example.sales.projects',
   )!;
   const pageRequest = {
@@ -1459,7 +1497,7 @@ it('keeps page grants and business data grants independent in both directions', 
     200,
   );
   const decision = await authz.for(identity).authorize({
-    resource: { type: 'resource', id: 'example.sales.projects' },
+    resource: { type: 'business', id: 'example.sales.projects' },
     action: 'view',
   });
   expect(
@@ -1533,8 +1571,12 @@ it('retains the coordinator personal project when the shared team role is revoke
     ).status,
   ).toBe(200);
   expect(
-    (await admin('permission-sets/assignments/example-team:proposal', 'DELETE'))
-      .status,
+    (
+      await admin(
+        'permission-sets/example-sales-engineer/assignments/example-team:proposal',
+        'DELETE',
+      )
+    ).status,
   ).toBe(204);
   expect(await ids('coordinator')).toEqual(['project-8']);
   expect(
@@ -1614,3 +1656,76 @@ it('resets only practice orders and preserves additional orders and their relati
   ).toMatchObject([{ orderId: 'custom-order', note: 'Keep' }]);
   expect(await ids('coordinator')).toContain('project-8');
 });
+
+it('answers useCan for a scoped business grant through the real client and snapshot route', async () => {
+  const user = 'scoped-submitter';
+  await authz.permissionSets.create({
+    key: 'scoped-submit',
+    grants: [
+      quoteResource.reference().grant({
+        submit: { quotes: selection.recordAccess('example.sales.prepared') },
+      }),
+    ],
+  });
+  await authz.permissionSets.assign({
+    subject: { type: 'user', id: user },
+    permissionSet: 'scoped-submit',
+  });
+  const fetch = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+      fixture.router.request(
+        input instanceof Request ? input : String(input),
+        init,
+      ),
+  );
+  const client = new AuthorizationClient(
+    createApiClient({
+      baseURL: 'http://example.test/api',
+      fetch,
+      headers: { 'x-test-user': user },
+    }),
+  );
+  const services = new ServiceContainer();
+  services.instance(authorizationClientToken, client);
+  const app = { services } as unknown as ClientApplication;
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <ClientApplicationContext.Provider value={app}>
+      {children}
+    </ClientApplicationContext.Provider>
+  );
+  const quotes = { type: 'business', id: 'example.sales.quotes' };
+  const { result } = renderHook(
+    () => ({
+      submit: useCan({ resource: quotes, action: 'submit' }),
+      edit: useCan({ resource: quotes, action: 'edit' }),
+    }),
+    { wrapper },
+  );
+  await waitFor(() => expect(result.current.submit.can).toBe(true));
+  await waitFor(() => expect(result.current.edit.isPending).toBe(false));
+  expect(result.current.edit.can).toBe(false);
+  expect(result.current.submit.error).toBeUndefined();
+  expect(result.current.edit.error).toBeUndefined();
+  // Both hooks share one snapshot from the real route.
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(String(fetch.mock.calls[0]![0])).toBe(
+    'http://example.test/api/authz/permissions',
+  );
+  const snapshot = await client.snapshot();
+  expect(snapshot.unrestricted).toBe(false);
+  expect(snapshot.permissions).toContainEqual({
+    resource: quotes,
+    actions: ['submit'],
+  });
+});
+
+function databaseGrant(
+  collection: string,
+  action: string,
+  policy: { fields: string[]; recordAccess: string[] },
+): PermissionGrant {
+  return {
+    resource: { type: 'database.collection', id: collection },
+    actions: [{ action, policy: { type: 'database', ...policy } }],
+  };
+}

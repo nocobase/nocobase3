@@ -1,6 +1,3 @@
-import defaultAccessRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
-import sharingRulesRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
-import restrictionRulesRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
@@ -8,7 +5,7 @@ import {
   PERMISSION_SETS_PROTECTION_OWNER,
   type PermissionSetsApi,
   type PermissionSetsAuthorizationApi,
-} from '@nocobase/authorization/permissions';
+} from '@nocobase/authorization/permission-sets';
 import {
   databaseManagerToken,
   type DatabaseConnection,
@@ -38,10 +35,9 @@ import type {
 
 import type { AuthorizationConfig } from '../../../plugins/app-plugin-authorization/server/authorization.js';
 import { apiRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
-import {
-  authorizationToken,
-  type AppAuthorizationService,
-} from '../../../plugins/app-plugin-authorization/server/tokens.js';
+import { authorizationToken } from '../../../plugins/app-plugin-authorization/server/tokens.js';
+import type { AppAuthorization as AppAuthorizationService } from '../../../plugins/app-plugin-authorization/server/authorization.js';
+import { authorizeAs } from '../../../plugins/app-plugin-authorization/tests/authorization-fixture.js';
 
 /** Collection metadata comes from db, so the options endpoints need a real one. */
 let database: DatabaseManager;
@@ -94,7 +90,9 @@ describe('what an application configures about its own authorization', () => {
       plugins: [],
     });
 
-    expect(authorization.permissionSets.isUnrestricted('owner')).toBe(true);
+    expect(authorization.permissionSets.protection('owner')?.unrestricted).toBe(
+      true,
+    );
     expect(authorization.permissionSets.protection('owner')).toMatchObject({
       assignableTo: ['user'],
     });
@@ -109,16 +107,18 @@ describe('what an application configures about its own authorization', () => {
   it('installs the built-in plugins alone when the application configures nothing', async () => {
     const authorization = createAppAuthorization({ connection });
 
-    expect(authorization.describe().plugins).toEqual([
-      'permission-sets',
-      'database',
-      'pages',
+    expect(authorization.resourceTypes.list().map((type) => type.type)).toEqual(
+      ['business', 'database.collection', 'page', 'settings'],
+    );
+    expect(authorization.routes.list()).toEqual([
+      '/inspector',
+      '/permission-sets',
     ]);
     vi.spyOn(authorization.permissionSets, 'getEffective').mockResolvedValue(
       [],
     );
     await expect(
-      authorization.authorize({
+      authorizeAs(authorization, {
         principal: { type: 'user', id: 'alice' },
         subjects: [],
         resource: { type: 'page', id: 'home' },
@@ -126,7 +126,7 @@ describe('what an application configures about its own authorization', () => {
       }),
     ).resolves.toMatchObject({
       effect: 'deny',
-      reasons: [expect.objectContaining({ code: 'PAGE_ACCESS_DENIED' })],
+      reasons: [expect.objectContaining({ code: 'NO_MATCHING_GRANT' })],
     });
     vi.mocked(authorization.permissionSets.getEffective).mockResolvedValue([
       {
@@ -140,7 +140,7 @@ describe('what an application configures about its own authorization', () => {
       },
     ]);
     await expect(
-      authorization.authorize({
+      authorizeAs(authorization, {
         principal: { type: 'user', id: 'alice' },
         resource: { type: 'page', id: 'home' },
         action: 'access',
@@ -153,36 +153,25 @@ describe('what an application configures about its own authorization', () => {
       plugins: [defaultAccess(), restrictionRules()],
     });
 
-    const plugins = authorization.describe().plugins;
-    expect(plugins).not.toContain('sharing-rules');
-    expect(plugins).toContain('restriction-rules');
+    expect('sharingRules' in authorization).toBe(false);
+    expect('restrictionRules' in authorization).toBe(true);
+    expect(authorization.routes.list()).not.toContain('/sharing-rules');
+    expect(authorization.routes.list()).toContain('/restriction-rules');
   });
 
   it('has a Grant Provider whatever the application lists', () => {
-    expect(authorizationWith({ plugins: [] }).describe().plugins).toEqual([
-      'permission-sets',
-      'database',
-      'pages',
-    ]);
+    expect('permissionSets' in authorizationWith({ plugins: [] })).toBe(true);
   });
 
-  // `db` is a member of the returned type, so no accessor stands between the
-  // application and the api.
+  // `database` is a member of the returned type, so no accessor stands
+  // between the application and the api.
   it('exposes the database api with an empty registry', () => {
     const authorization = createAppAuthorization({ connection });
 
+    expect(authorization.database.collections.list()).toEqual([]);
     expect(
-      authorization.getResource('database.collection').items.list(),
+      authorization.resourceTypes.get('database.collection').items?.list(),
     ).toEqual([]);
-  });
-
-  it('identifies a database resource by the collection name alone', () => {
-    const authorization = authorizationWith({});
-
-    expect(authorization.db.grant('orders', { read: {} }).resource).toEqual({
-      type: 'database.collection',
-      id: 'orders',
-    });
   });
 
   it('tells the application whose permissions an assignment changed', async () => {
@@ -240,9 +229,7 @@ describe('what an application configures about its own authorization', () => {
 
   it('answers its own options and record endpoints ahead of the plugin routes', async () => {
     const authorization = authorizationWith({ plugins: templatePlugins() });
-    authorization
-      .getResource('database.collection')
-      .items.add({ name: 'orders', title: 'Orders' });
+    authorization.database.collections.add({ name: 'orders', title: 'Orders' });
     const router = await mountedRouter(authorization);
 
     const [options, records] = await Promise.all([
@@ -253,7 +240,6 @@ describe('what an application configures about its own authorization', () => {
     expect([options.status, records.status]).toEqual([200, 200]);
     await expect(options.json()).resolves.toMatchObject({
       data: {
-        plugins: ['database'],
         // Only what the application registered; db supplies the fields.
         collections: [{ name: 'orders', fields: orderFields }],
         resourceTypes: [],
@@ -330,25 +316,14 @@ async function mountedRouter(
     required: () => async (_context, next) => next(),
   } as unknown as Auth);
   container.instance(authorizationToken, alwaysPermitted(authorization));
-  const routes = new Hono();
-  for (const contribution of [
-    apiRoutes,
-    ...defaultAccessRoutes,
-    ...sharingRulesRoutes,
-    ...restrictionRulesRoutes,
-  ]) {
-    routes.route(
-      '/',
-      await contribution.createRouter({
-        appName: 'main',
-        publicBasePath: '',
-        config: { app: { name: 'main', publicBasePath: '' } },
-        paths: createAppPaths({ rootDir: '/missing' }),
-        router: new Hono(),
-        container,
-      }),
-    );
-  }
+  const routes = await apiRoutes.createRouter({
+    appName: 'main',
+    publicBasePath: '',
+    config: { app: { name: 'main', publicBasePath: '' } },
+    paths: createAppPaths({ rootDir: '/missing' }),
+    router: new Hono(),
+    container,
+  });
   return new Hono().route('/api', routes);
 }
 
@@ -374,7 +349,7 @@ function authorizationScopeThatPermitsEverything(): ReturnType<
     require: () => Promise.resolve(),
     can: () => Promise.resolve(true),
     authorize: () => Promise.resolve({ effect: 'permit' }),
-    permissions: () => Promise.resolve({}),
+    snapshot: () => Promise.resolve({}),
   };
   return scope as unknown as ReturnType<Authorization['for']>;
 }

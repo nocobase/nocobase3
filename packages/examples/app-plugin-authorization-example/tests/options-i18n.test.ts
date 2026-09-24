@@ -1,26 +1,24 @@
 import { localizeOptions } from '../../../plugins/app-plugin-authorization/client/components/localized-options.js';
 import type {
   AuthorizationOptions,
-  LocalizedText,
+  AuthorizationOptionsResponse,
 } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 import en from '../../../plugins/app-plugin-authorization/locales/en-US.js';
 import zh from '../../../plugins/app-plugin-authorization/locales/zh-CN.js';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
-import defaultAccessRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
-import sharingRulesRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
-import restrictionRulesRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
 import {
   AuthorizationDeniedError,
-  type AuthorizationScope,
+  defineRecordAccess,
+  type AuthorizationContext,
+  type BusinessResource,
 } from '@nocobase/authorization/core';
 import { createAppPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import type { Authorization } from '@nocobase/authorization/core';
 import {
   databaseManagerToken,
   type DatabaseConnection,
@@ -32,14 +30,13 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AUTHORIZATION_NAMESPACE } from '../../../plugins/app-plugin-authorization/shared.js';
-import { createAppAuthorization } from '../../../plugins/app-plugin-authorization/server/authorization.js';
-import { defineRecordAccess } from '@nocobase/authorization/core';
+import {
+  createAppAuthorization,
+  type AppAuthorization,
+} from '../../../plugins/app-plugin-authorization/server/authorization.js';
 import serverLocales from '../../../plugins/app-plugin-authorization/server/locales/index.js';
 import { apiRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
-import {
-  authorizationToken,
-  type AppAuthorizationService,
-} from '../../../plugins/app-plugin-authorization/server/tokens.js';
+import { authorizationToken } from '../../../plugins/app-plugin-authorization/server/tokens.js';
 import { createOrdersDatabase } from '../../../plugins/app-plugin-authorization/tests/orders-database.js';
 
 let database: DatabaseManager;
@@ -54,28 +51,6 @@ afterAll(async () => {
   await database.destroy();
 });
 
-/** The options body, read down to the parts these tests name. */
-interface OptionsBody {
-  data: {
-    resourceTypes: readonly {
-      value: string;
-      label: string;
-      resources: readonly {
-        value: string;
-        label: string;
-        description?: string;
-      }[];
-      actions: readonly { value: string; label: string }[];
-    }[];
-    subjectTypes: readonly { value: string; label: string }[];
-    recordAccessPolicies: readonly {
-      value: string;
-      label: string;
-      description?: string;
-    }[];
-  };
-}
-
 describe('locale-independent option descriptors', () => {
   it('returns identical descriptors for English and Chinese requests', async () => {
     const router = await mountedRouter(authorization());
@@ -88,37 +63,40 @@ describe('locale-independent option descriptors', () => {
       })
     ).json();
     expect(zh).toEqual(en);
-    expect(en.data.subjectTypes[0].label).toMatchObject({
+    expect(en.data.subjectTypes[0].title).toMatchObject({
       key: 'options.subjectTypes.authenticated',
       ns: AUTHORIZATION_NAMESPACE,
     });
   });
+
   it('answers in English by default', async () => {
     const router = await mountedRouter(authorization());
 
     const response = await router.request('/api/authz/permission-sets/options');
 
     expect(response.status).toBe(200);
-    const { data } = await readOptions(response);
+    const data = await readOptions(response);
     expect(data.resourceTypes.map((type) => type.value)).toEqual([
-      'resource',
+      'business',
       'page',
+      'settings',
     ]);
-    const settings = resourceType(data, 'resource');
+    const settings = resourceType(data, 'settings');
+    expect(settings.section).toBe('administration');
     expect(settings.groups).toContainEqual({
       value: 'authorization',
       label: 'Authorization',
-      category: 'administration',
     });
-    expect(settings.resources[0]).toMatchObject({
-      value: 'authorization.permission-sets',
-      label: 'Permission Sets',
-    });
+    expect(
+      settings.resources.find(
+        (item) => item.value === 'authorization.permission-sets',
+      ),
+    ).toMatchObject({ label: 'Permission Sets', group: 'authorization' });
     expect(data.subjectTypes[0]).toMatchObject({
       value: 'authenticated',
       label: 'All signed-in users',
     });
-    expect(data.recordAccessPolicies).toContainEqual({
+    expect(data.recordAccess).toContainEqual({
       value: 'customFilter',
       label: 'Custom Filter',
       description: 'Select records with a custom filter condition.',
@@ -127,7 +105,7 @@ describe('locale-independent option descriptors', () => {
 
   it('publishes registered subject selectors and dispatches paged queries and resolution', async () => {
     const authz = authorization();
-    authz.subjects.define('department', {
+    authz.subjects.add('department', {
       filterActive: async (ids) => ids,
       administration: {
         title: 'Departments',
@@ -155,8 +133,8 @@ describe('locale-independent option descriptors', () => {
     });
     const router = await mountedRouter(authz);
     const options = await router.request('/api/authz/sharing-rules/options');
-    const body = await readOptions(options);
-    expect(body.data.subjectTypes).toContainEqual({
+    const data = await readOptions(options);
+    expect(data.subjectTypes).toContainEqual({
       value: 'department',
       label: 'Departments',
       selection: { type: 'collection' },
@@ -197,7 +175,7 @@ describe('locale-independent option descriptors', () => {
       const authz = authorization();
       const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
       const resolve = vi.fn().mockResolvedValue([]);
-      authz.subjects.define('department', {
+      authz.subjects.add('department', {
         filterActive: async (ids) => ids,
         administration: {
           title: 'Departments',
@@ -235,44 +213,26 @@ describe('locale-independent option descriptors', () => {
     },
   );
 
-  it('includes resources registered by another settings module', async () => {
+  it('includes settings items registered by another settings module', async () => {
     const authz = authorization();
-    authz.resourceGroups.add({
-      name: 'ai',
-      title: 'AI',
-      category: 'administration',
-    });
-    authz.resources.add({
-      name: 'ai.models',
+    authz.groups.add({ name: 'ai', title: 'AI' });
+    authz.settings.add({
+      id: 'ai.models',
       title: 'Models',
       group: 'ai',
       actions: [
-        {
-          name: 'read',
-          title: 'Read',
-          grants: [authz.settings.grant('ai.models', ['read'])],
-        },
-        {
-          name: 'update',
-          title: 'Update',
-          grants: [authz.settings.grant('ai.models', ['update'])],
-        },
+        { name: 'read', title: 'Read' },
+        { name: 'update', title: 'Update' },
       ],
     });
     const router = await mountedRouter(authz);
     const response = await router.request('/api/authz/permission-sets/options');
-    const { data } = await readOptions(response);
-    const settings = resourceType(data, 'resource');
-    expect(settings).toMatchObject({
-      groups: [
-        {
-          value: 'authorization',
-          label: 'Authorization',
-          category: 'administration',
-        },
-        { value: 'ai', label: 'AI', category: 'administration' },
-      ],
-    });
+    const data = await readOptions(response);
+    const settings = resourceType(data, 'settings');
+    expect(settings.groups).toEqual([
+      { value: 'authorization', label: 'Authorization' },
+      { value: 'ai', label: 'AI' },
+    ]);
     expect(settings.resources).toContainEqual(
       expect.objectContaining({
         value: 'ai.models',
@@ -294,23 +254,29 @@ describe('locale-independent option descriptors', () => {
       { headers: { 'accept-language': 'zh-CN' } },
     );
 
-    const { data } = await readOptions(response, 'zh-CN');
+    const data = await readOptions(response, 'zh-CN');
     expect(data.resourceTypes.map((type) => type.value)).toEqual([
-      'resource',
+      'business',
       'page',
+      'settings',
     ]);
-    const settings = resourceType(data, 'resource');
+    expect(data.sections.map((section) => section.label)).toEqual([
+      '页面权限',
+      '业务权限',
+      zh.sections.administration,
+    ]);
+    const settings = resourceType(data, 'settings');
     expect(settings.groups).toContainEqual({
       value: 'authorization',
       label: '权限管理',
-      category: 'administration',
     });
-    expect(settings.resources[0]).toMatchObject({
-      value: 'authorization.permission-sets',
-      label: '权限集',
-    });
+    expect(
+      settings.resources.find(
+        (item) => item.value === 'authorization.permission-sets',
+      ),
+    ).toMatchObject({ label: '权限集' });
     expect(data.subjectTypes[0]?.label).toBe('所有已登录用户');
-    expect(data.recordAccessPolicies).toContainEqual({
+    expect(data.recordAccess).toContainEqual({
       value: 'customFilter',
       label: '自定义筛选',
       description: '使用自定义筛选条件选择记录。',
@@ -319,19 +285,8 @@ describe('locale-independent option descriptors', () => {
 
   it('sends a registered string as it was written, in every language', async () => {
     const authz = authorization();
-    authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
-    authz.resources.add({
-      name: 'orders',
-      title: 'Orders',
-      group: 'sales',
-      actions: [
-        {
-          name: 'view',
-          title: 'View',
-          grants: [authz.db.grant('orders', { read: {} })],
-        },
-      ],
-    });
+    authz.groups.add({ name: 'sales', title: 'Sales' });
+    authz.business.define(ordersResource('Orders'));
     const router = await mountedRouter(authz);
 
     const labels = await Promise.all(
@@ -340,8 +295,8 @@ describe('locale-independent option descriptors', () => {
           '/api/authz/permission-sets/options',
           locale ? { headers: { 'accept-language': locale } } : undefined,
         );
-        const { data } = await readOptions(response);
-        return resourceType(data, 'resource').resources.find(
+        const data = await readOptions(response, locale);
+        return resourceType(data, 'business').resources.find(
           (item) => item.value === 'orders',
         )?.label;
       }),
@@ -352,25 +307,22 @@ describe('locale-independent option descriptors', () => {
 
   it('resolves a registered key through the catalogue of its namespace', async () => {
     const authz = authorization();
-    authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
-    authz.resources.add({
-      name: 'orders',
-      title: { key: 'options.resourceTypes.collection' },
-      group: 'sales',
-      actions: [
-        {
-          name: 'view',
-          title: 'View',
-          grants: [authz.db.grant('orders', { read: {} })],
-        },
-      ],
-    });
-    authz.recordAccess.add(
+    authz.groups.add({ name: 'sales', title: 'Sales' });
+    authz.business.define(
+      ordersResource({
+        key: 'options.resourceTypes.collection',
+        ns: AUTHORIZATION_NAMESPACE,
+      }),
+    );
+    authz.recordAccess.define(
       defineRecordAccess('regional', (access) =>
         access
-          .resources({ type: 'database.collection', id: '*' })
-          .title({ key: 'options.recordAccessPolicies.myRegion' })
-          .resolve(() => true),
+          .title({
+            key: 'options.recordAccessPolicies.myRegion',
+            ns: AUTHORIZATION_NAMESPACE,
+          })
+          .collections('*')
+          .resolver(() => true),
       ),
     );
     const router = await mountedRouter(authz);
@@ -380,39 +332,65 @@ describe('locale-independent option descriptors', () => {
       { headers: { 'accept-language': 'zh-CN' } },
     );
 
-    const { data } = await readOptions(response, 'zh-CN');
+    const data = await readOptions(response, 'zh-CN');
     expect(
-      resourceType(data, 'resource').resources.find(
+      resourceType(data, 'business').resources.find(
         (item) => item.value === 'orders',
       )?.label,
     ).toBe('数据表');
-    expect(data.recordAccessPolicies).toContainEqual({
+    // The key is missing from the catalogue, so the humanized default shows.
+    expect(data.recordAccess).toContainEqual({
       value: 'regional',
       label: 'My Region',
     });
   });
 });
 
+function ordersResource(title: BusinessResource['title']): BusinessResource {
+  return {
+    name: 'orders',
+    title,
+    group: 'sales',
+    actions: [
+      {
+        name: 'view',
+        title: 'View',
+        grants: [
+          {
+            resource: { type: 'database.collection', id: 'orders' },
+            actions: [
+              { action: 'read', policy: { type: 'database', fields: '*' } },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function resourceType(
-  data: OptionsBody['data'],
+  data: AuthorizationOptions,
   value: string,
-): OptionsBody['data']['resourceTypes'][number] {
+): AuthorizationOptions['resourceTypes'][number] {
   const found = data.resourceTypes.find((item) => item.value === value);
   if (!found) throw new Error(`No resource type ${value} in the options`);
   return found;
 }
 
-function authorization(): AppAuthorizationService {
-  return createAppAuthorization({
+function authorization(): AppAuthorization {
+  const authz = createAppAuthorization({
     config: { plugins: [defaultAccess(), sharingRules(), restrictionRules()] },
     connection,
+    database,
   });
+  authz.database.collections.add({ name: 'orders', title: 'Orders' });
+  return authz;
 }
 
 /** The plugin routes under `/api`, behind the i18n middleware an application mounts. */
 async function mountedRouter(
-  authorization: AppAuthorizationService,
-  require?: AuthorizationScope['require'],
+  authorization: AppAuthorization,
+  require?: AuthorizationContext['require'],
 ): Promise<Hono> {
   const runtime = new I18nRuntime({
     defaultLocale: 'en-US',
@@ -429,42 +407,33 @@ async function mountedRouter(
     authorizationToken,
     alwaysPermitted(authorization, require),
   );
-  const routes = new Hono();
-  for (const contribution of [
-    apiRoutes,
-    ...defaultAccessRoutes,
-    ...sharingRulesRoutes,
-    ...restrictionRulesRoutes,
-  ]) {
-    routes.route(
-      '/',
-      await contribution.createRouter({
-        appName: 'main',
-        publicBasePath: '',
-        config: { app: { name: 'main', publicBasePath: '' } },
-        paths: createAppPaths({ rootDir: '/missing' }),
-        router: new Hono(),
-        container,
-      }),
-    );
-  }
+  // Rule plugins serve their routes through `authz.routes`, so the
+  // authorization contribution alone mounts every `/api/authz` path.
+  const routes = await apiRoutes.createRouter({
+    appName: 'main',
+    publicBasePath: '',
+    config: { app: { name: 'main', publicBasePath: '' } },
+    paths: createAppPaths({ rootDir: '/missing' }),
+    router: new Hono(),
+    container,
+  });
   const router = new Hono();
   router.use('*', createI18nMiddleware(runtime));
   return router.route('/api', routes);
 }
 
 function alwaysPermitted(
-  authorization: AppAuthorizationService,
-  require?: AuthorizationScope['require'],
-): AppAuthorizationService {
-  const permitted = Object.create(authorization) as AppAuthorizationService;
+  authorization: AppAuthorization,
+  require?: AuthorizationContext['require'],
+): AppAuthorization {
+  const permitted = Object.create(authorization) as AppAuthorization;
   permitted.middleware = () => async (context, next) => {
     context.set('authz', {
       require: require ?? (() => Promise.resolve()),
       can: () => Promise.resolve(true),
-      authorize: () => Promise.resolve({ effect: 'permit' }),
-      permissions: () => Promise.resolve({}),
-    } as unknown as ReturnType<Authorization['for']>);
+      authorize: () => Promise.resolve({ effect: 'permit', reasons: [] }),
+      snapshot: () => Promise.resolve({ unrestricted: true, permissions: [] }),
+    } as unknown as AuthorizationContext);
     await next();
   };
   return permitted;
@@ -473,24 +442,22 @@ function alwaysPermitted(
 async function readOptions(
   response: Response,
   locale = 'en-US',
-): Promise<OptionsBody> {
+): Promise<AuthorizationOptions> {
   const { data } = (await response.json()) as {
-    data: AuthorizationOptions<LocalizedText>;
+    data: AuthorizationOptionsResponse;
   };
-  return {
-    data: localizeOptions(data, (key, options) => {
-      const value = key
-        .split('.')
-        .reduce<unknown>(
-          (node, part) =>
-            node && typeof node === 'object'
-              ? Reflect.get(node, part)
-              : undefined,
-          locale === 'zh-CN' ? zh : en,
-        );
-      return typeof value === 'string'
-        ? value
-        : String(options?.defaultValue ?? key);
-    }),
-  };
+  return localizeOptions(data, (key, options) => {
+    const value = key
+      .split('.')
+      .reduce<unknown>(
+        (node, part) =>
+          node && typeof node === 'object'
+            ? Reflect.get(node, part)
+            : undefined,
+        locale === 'zh-CN' ? zh : en,
+      );
+    return typeof value === 'string'
+      ? value
+      : String(options?.defaultValue ?? key);
+  });
 }

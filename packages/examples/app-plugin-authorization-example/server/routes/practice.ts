@@ -1,6 +1,6 @@
 import type {
   AuthorizationEnv,
-  AppAuthorizationService,
+  AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { DatabaseManager } from '@nocobase/db';
 import { Hono } from 'hono';
@@ -10,7 +10,7 @@ import { PROJECTS, QUOTES, ORDERS } from '../sales-authorization.js';
 
 export function createPracticeRoutes(
   database: DatabaseManager,
-  authz: AppAuthorizationService,
+  authz: AppAuthorization,
 ): Hono<AuthorizationEnv> {
   const router = new Hono<AuthorizationEnv>();
 
@@ -22,7 +22,7 @@ export function createPracticeRoutes(
 
     return c.json({
       data: {
-        canReset: (await c.var.authz.permissions()).unrestricted,
+        canReset: (await c.var.authz.snapshot()).unrestricted,
         roles: sets.map((set) => ({
           key: set.key,
           title: set.title,
@@ -43,7 +43,7 @@ export function createPracticeRoutes(
   });
 
   router.post('/reset', async (c) => {
-    if (!(await c.var.authz.permissions()).unrestricted)
+    if (!(await c.var.authz.snapshot()).unrestricted)
       return c.json({ code: 'FORBIDDEN' }, 403);
 
     await database.transaction(async (connection) => {
