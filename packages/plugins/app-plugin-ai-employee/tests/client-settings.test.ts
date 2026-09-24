@@ -71,6 +71,16 @@ test('groups employees, conversations, and standalone services as sibling pages'
             componentLoader: expect.any(Function),
           },
           {
+            name: 'aiUsage',
+            path: '/ai/usage',
+            navigation: { title: 'Usage statistics' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
+            componentLoader: expect.any(Function),
+          },
+          {
             name: 'aiSettings',
             path: '/ai/settings',
             authz: {
@@ -86,11 +96,11 @@ test('groups employees, conversations, and standalone services as sibling pages'
   expect(settings.routes).toHaveLength(1);
   expect(settings.routes[0]).not.toHaveProperty('path');
   expect(settings.routes[0]).not.toHaveProperty('componentLoader');
-  expect(settings.routes[0]?.children).toHaveLength(7);
+  expect(settings.routes[0]?.children).toHaveLength(8);
   for (const child of settings.routes[0]?.children ?? []) {
     expect(child).not.toHaveProperty('children');
   }
-  expect(settings.routes[0]?.children?.[6]).not.toHaveProperty('navigation');
+  expect(settings.routes[0]?.children?.[7]).not.toHaveProperty('navigation');
 });
 
 test('resolves the AI navigation group without changing page URLs or identities', () => {
@@ -108,6 +118,7 @@ test('resolves the AI navigation group without changing page URLs or identities'
         { id: 'aiConversations', path: '/settings/ai/conversations' },
         { id: 'aiLLMServices', path: '/settings/ai/llm-services' },
         { id: 'aiMCPServices', path: '/settings/ai/mcp-services' },
+        { id: 'aiUsage', path: '/settings/ai/usage' },
         { id: 'aiSettings', path: '/settings/ai/settings' },
       ],
     },
@@ -175,6 +186,16 @@ test('resolves the AI navigation group without changing page URLs or identities'
       id: 'aiMCPServices',
       path: '/settings/ai/mcp-services',
       title: 'MCP services',
+      navigation: true,
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
+    },
+    {
+      id: 'aiUsage',
+      path: '/settings/ai/usage',
+      title: 'Usage statistics',
       navigation: true,
       authz: {
         resource: { type: 'page', id: 'ai.settings' },

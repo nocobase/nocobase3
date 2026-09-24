@@ -244,6 +244,7 @@ describe('AI settings page navigation', () => {
       'Tools',
       'LLM services',
       'MCP services',
+      'Usage statistics',
     ]);
     expect(menu.getByRole('link', { name: activeLabel })).toHaveAttribute(
       'aria-current',

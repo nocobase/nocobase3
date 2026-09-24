@@ -27,6 +27,7 @@ import { AIEmployeeService } from '../service/ai-employee-service.js';
 import { AIMCPServerService } from '../service/ai-mcp-server-service.js';
 import { AISkillService } from '../service/ai-skill-service.js';
 import { AIToolService } from '../service/ai-tool-service.js';
+import { AIUsageStatisticsService } from '../service/ai-usage-statistics-service.js';
 import { AIFileService } from '../service/file-service.js';
 import { LLMService } from '../service/llm-service.js';
 import { ModelService } from '../service/model-service.js';
@@ -59,6 +60,7 @@ export class ServiceFactory {
   private llmServiceValue: LLMService | undefined;
   private mcpServerServiceValue: AIMCPServerService | undefined;
   private conversationServiceValue: AIConversationService | undefined;
+  private usageStatisticsServiceValue: AIUsageStatisticsService | undefined;
   private synchronizerValue: LLMServiceConfigSynchronizer | undefined;
 
   public constructor({ container }: ServiceFactoryOptions) {
@@ -125,6 +127,13 @@ export class ServiceFactory {
 
   public get llmService(): LLMService {
     return (this.llmServiceValue ??= new LLMService({ ai: this.ai }));
+  }
+
+  public get usageStatisticsService(): AIUsageStatisticsService {
+    return (this.usageStatisticsServiceValue ??= new AIUsageStatisticsService({
+      repositories: this.repositories,
+      database: this.container.resolve(databaseManagerToken).connection(),
+    }));
   }
 
   public get mcpServerService(): AIMCPServerService {

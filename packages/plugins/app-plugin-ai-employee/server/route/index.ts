@@ -8,6 +8,7 @@ import { createAIConversationsRouter } from './ai-conversations.js';
 import { requireConversationManagement } from './conversation-management.js';
 import { requireSkillsManagement } from './skills-management.js';
 import { requireToolsManagement } from './tools-management.js';
+import { requireUsageStatistics } from './usage-statistics-management.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
 import { createAIFilesRouter } from './ai-files.js';
 import { createAIMCPServersRouter } from './ai-mcp-servers.js';
@@ -20,6 +21,10 @@ import {
   errorResponse,
 } from './utils.js';
 import { createLLMServicesRouter } from './llm-services.js';
+import {
+  AI_USAGE_STATISTICS_PATHS,
+  createAIUsageStatisticsRouter,
+} from './usage-statistics.js';
 
 export * from './contracts.js';
 
@@ -62,6 +67,14 @@ export function createAIEmployeeRoutes(
       requireToolsManagement(),
     );
   }
+  for (const path of AI_USAGE_STATISTICS_PATHS) {
+    routes.use(
+      path,
+      options.authentication.required(),
+      options.authorization.middleware(),
+      requireUsageStatistics(),
+    );
+  }
   routes.use('*', createAIActorMiddleware(options.authentication));
   routes.use(
     '*',
@@ -78,5 +91,6 @@ export function createAIEmployeeRoutes(
   createAISkillsRouter(routes, options.services);
   createLLMServicesRouter(routes, options.services);
   createAIMCPServersRouter(routes, options.services);
+  createAIUsageStatisticsRouter(routes, options.services);
   return routes;
 }

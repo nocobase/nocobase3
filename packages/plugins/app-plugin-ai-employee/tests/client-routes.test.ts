@@ -29,6 +29,7 @@ describe('AI Employee client routes', () => {
             { name: 'aiConversations', path: '/ai/conversations' },
             { name: 'aiLLMServices', path: '/ai/llm-services' },
             { name: 'aiMCPServices', path: '/ai/mcp-services' },
+            { name: 'aiUsage', path: '/ai/usage' },
             { name: 'aiSettings', path: '/ai/settings' },
           ],
         },
@@ -62,7 +63,7 @@ describe('AI Employee client routes', () => {
         return route.componentLoader();
       }),
     );
-    expect(settingsPages).toHaveLength(7);
+    expect(settingsPages).toHaveLength(8);
     for (const page of settingsPages) {
       expect(page.default).toEqual(expect.any(Function));
     }
