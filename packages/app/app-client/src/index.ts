@@ -42,6 +42,7 @@ export {
   type AppClientConfigMap,
   type AppClientConfigPrimitive,
   type AppClientConfigValue,
+  type AppClientPublicConfig,
   type AppClientReactProvider,
   type AppClientRefineConfig,
   type AppClientRenderConfig,

@@ -1,9 +1,72 @@
 import {
   ApplicationNotConfiguredError,
   assertSecretIsNotPlaceholder,
+  defineAppConfig,
+  type AppConfigDefinition,
+  type AppConfigFactory,
+  type ConfigValidator,
 } from '@nocobase/app-server/config';
 
 export type AuthConfig = import('better-auth').BetterAuthOptions;
+
+/**
+ * The `auth` fields the browser may read, through `config.public`. `useSignUpAvailable()` on the client combines them;
+ * keep the two in step.
+ */
+export const AUTH_PUBLIC_PATHS: readonly string[] = [
+  'emailAndPassword.enabled',
+  'emailAndPassword.disableSignUp',
+];
+
+const BOOLEAN_FIELDS = ['enabled', 'disableSignUp', 'autoSignIn'] as const;
+
+/** The rules this plugin holds the `auth` section to, whichever application declares it. */
+export const validateAuthConfig: ConfigValidator<AuthConfig> = (
+  auth,
+  context,
+) => {
+  const emailAndPassword: Record<string, unknown> =
+    (auth.emailAndPassword as Record<string, unknown> | undefined) ?? {};
+  for (const field of BOOLEAN_FIELDS) {
+    const value = emailAndPassword[field];
+    if (value !== undefined && typeof value !== 'boolean') {
+      context.error(`emailAndPassword.${field}`, 'must be true or false.');
+    }
+  }
+  if (
+    emailAndPassword.enabled === false &&
+    emailAndPassword.disableSignUp === false &&
+    context.isUserProvided('emailAndPassword.disableSignUp')
+  ) {
+    context.warning(
+      'emailAndPassword.disableSignUp',
+      'has no effect while emailAndPassword.enabled is false.',
+    );
+  }
+};
+
+/**
+ * Declares the `auth` section with this plugin's validation and public fields, in place of `defineAppConfig`.
+ *
+ * An application that keeps a plain `defineAppConfig` still starts, but its `auth` settings go unchecked and the
+ * browser cannot tell whether sign-up is open, so the plugin warns about it at startup. A `validate` given here runs
+ * after the plugin's own.
+ */
+export function defineAuthConfig(
+  definition: AppConfigDefinition<AuthConfig>,
+): AppConfigFactory<AuthConfig> {
+  const extra =
+    definition.validate === undefined
+      ? []
+      : Array.isArray(definition.validate)
+        ? (definition.validate as readonly ConfigValidator<AuthConfig>[])
+        : [definition.validate as ConfigValidator<AuthConfig>];
+  return defineAppConfig<AuthConfig>({
+    defaults: definition.defaults,
+    validate: [validateAuthConfig, ...extra],
+    public: [...new Set([...AUTH_PUBLIC_PATHS, ...(definition.public ?? [])])],
+  });
+}
 
 /**
  * The secret sessions and tokens are signed with, or a refusal to start without one.

@@ -4,19 +4,17 @@ import path from 'node:path';
 
 import { createAppPaths } from '@nocobase/app-server/config';
 import {
+  checkConnections,
   OFFICIAL_DIALECTS,
   resolveDatabaseConfig,
   type AppDatabaseConfig,
+  type ConnectionCheckResult,
   type OfficialDialect,
 } from '@nocobase/app-server/database';
 import { parseDocument } from 'yaml';
 
 import { buildConfigFile } from './config-file.js';
 import { configureDatabase } from './database-config.js';
-import {
-  checkConnections,
-  type ConnectionCheckResult,
-} from './database-connections.js';
 
 /**
  * Where the command is running, which decides both what it may offer and what it can tell the user to do about a
