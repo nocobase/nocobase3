@@ -10,17 +10,16 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 `.agents/skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
 
-| Task                                             | Reference                               |
-| ------------------------------------------------ | --------------------------------------- |
-| Add a page, route, or navigation entry           | `references/client-pages-and-routes.md` |
-| Build or style UI                                | `references/components-and-styling.md`  |
-| Add an HTTP endpoint                             | `references/server-routes.md`           |
-| Read or write data                               | `references/database-and-data.md`       |
-| Change the schema                                | `references/migrations.md`              |
-| Switch or add a database connection              | `references/database-connections.md`    |
-| Add translatable text                            | `references/i18n.md`                    |
-| Add a service, background job, or scheduled task | `references/services-and-jobs.md`       |
-| Write tests and verify                           | `references/testing.md`                 |
+| Task                                                         | Reference                            |
+| ------------------------------------------------------------ | ------------------------------------ |
+| Any frontend change: pages, routes, components, styles, copy | `references/frontend/ui-workflow.md` |
+| Add an HTTP endpoint                                         | `references/server-routes.md`        |
+| Read or write data                                           | `references/database-and-data.md`    |
+| Change the schema                                            | `references/migrations.md`           |
+| Switch or add a database connection                          | `references/database-connections.md` |
+| Translate server-produced text or add a language             | `references/i18n.md`                 |
+| Add a service, background job, or scheduled task             | `references/services-and-jobs.md`    |
+| Write tests and verify                                       | `references/testing.md`              |
 
 Read the one page your task needs, not the whole directory.
 
@@ -48,7 +47,7 @@ cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
-A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](.agents/skills/nocobase-app-development/references/client-child-routes.md) for examples.
+A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](.agents/skills/nocobase-app-development/references/frontend/child-routes.md) for examples.
 
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
@@ -60,7 +59,7 @@ A feature with a page and an API touches five places: a migration for the table,
 
 `server/standalone.ts` configures a listener-level proxy outside the Hub public base path. The exact base path and its descendants belong to Hub; all other HTTP and WebSocket requests forward unchanged to `hubServiceToken.getHostProxyTarget()`. Keep this before the public mount adapter and independent of Hub session middleware. Host lifecycle stays in the Hub plugin, and unavailable Host requests must not start a process. Visit App links use `hub.publicHostUrl: /`. This composition is specific to Hub; Default and Examples do not enable it.
 
-Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](.agents/skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
+Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [pages and routes](.agents/skills/nocobase-app-development/references/frontend/page.md) for each layout's scope.
 
 `client/layouts/components/layout-header.tsx` and `layout-sidebar.tsx` are presentation containers accepting children. App, Settings and Dev layouts own menus, branding, permissions, redirects, sidebar arrangement and mobile close controls; sidebar contents own scrolling and collapsed presentation. Desktop icon mode uses tooltips for leaf labels and hover popovers for groups, preserving filtered navigation, parent-page links and inline nested groups. Keep this behavior aligned across layouts. Desktop collapse state is shared through `useSidebarPreference` at `nocobase:sidebar:collapsed` across applications on the same origin; mobile visibility stays local to each layout.
 
@@ -100,7 +99,7 @@ Use `defineSettingsRoutes()` for administrative pages, which mount under `/setti
 
 **Declare navigation on the route.** App, Settings and Dev menus read `navigation: { title: 'navigation.orders' }`; titles resolve in the owning locale namespace. Add the translation in `client/locales/`. Refine resources remain for CRUD and do not add menu entries.
 
-Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For URL-addressable dialogs and drawers, declare the child in `defineAppRoutes()` in `client/routes.ts`, place the owning page's `Outlet`, then render `RouteDialog` or `RouteDrawer`. Call `useRouteOverlay()` only from a descendant rendered inside the overlay, including its footer, never from the page returning the wrapper. Read `.agents/skills/nocobase-app-development/references/client-child-routes.md` before implementing overlays or close guards.
+Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For URL-addressable dialogs and drawers, declare the child in `defineAppRoutes()` in `client/routes.ts`, place the owning page's `Outlet`, then render `RouteDialog` or `RouteDrawer`. Call `useRouteOverlay()` only from a descendant rendered inside the overlay, including its footer, never from the page returning the wrapper. Read `.agents/skills/nocobase-app-development/references/frontend/overlay.md` before implementing overlays or close guards.
 
 `authz` controls page authorization: use `{ resource: { type: 'page', id: 'orders' }, action: 'access' }` or `'skip'`. Without an explicit rule, authenticated App pages with no page ancestor check their route name as a page resource; child pages, Settings, Dev, guest and optional pages add no check. Parent guards still apply when a child skips. Menus and loaders use the same normalized rule; endpoints enforce authorization independently. Route names identify stored page grants, so renaming one requires migrating grants that reference it.
 
@@ -355,9 +354,7 @@ Report which checks ran, their scope, and any unverified behavior. See the appli
 
 Add tests for what you changed: a route's authenticated, unauthenticated, and unauthorized responses; a migration's `up` and `down` against a real database; a page's actual behavior. Tests belong in `tests/`, or in `e2e/` when they need a real server. Never place a test beside the source it covers.
 
-For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` (from the application root).
-
-For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+For UI styling and for creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/frontend/theme.md` (from the application root). It defines the shared color, font, size, spacing, radius and shadow contract; prefer its Tailwind utilities so components respond to theme changes, and keep deliberate fixed-size exceptions explicit.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
 
