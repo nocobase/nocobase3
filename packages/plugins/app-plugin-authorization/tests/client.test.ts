@@ -89,7 +89,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(
       firstActions(
         {
-          plugins: ['database'],
+          sections: [],
           resourceTypes: [
             {
               value: 'database.collection',
@@ -104,7 +104,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
           ],
           subjectTypes: [],
           collections: [],
-          recordAccessPolicies: [],
+          recordAccess: [],
         },
         'database.collection',
       ),
@@ -115,7 +115,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(
       firstActions(
         {
-          plugins: [],
+          sections: [],
           resourceTypes: [
             {
               value: 'settings',
@@ -135,7 +135,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
           ],
           subjectTypes: [],
           collections: [],
-          recordAccessPolicies: [],
+          recordAccess: [],
         },
         'settings',
         'audit-log',
@@ -146,13 +146,13 @@ describe('@nocobase/app-plugin-authorization client', () => {
   it('notifies consumers when the cached permission snapshot is invalidated', () => {
     const client = new AuthorizationClient({ request: vi.fn() } as never);
     const listener = vi.fn();
-    const unsubscribe = client.onPermissionsInvalidated(listener);
+    const unsubscribe = client.onInvalidated(listener);
 
-    client.invalidatePermissions();
+    client.invalidate();
     expect(listener).toHaveBeenCalledOnce();
 
     unsubscribe();
-    client.invalidatePermissions();
+    client.invalidate();
     expect(listener).toHaveBeenCalledOnce();
   });
 
@@ -250,7 +250,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
       key: 'root',
       grants: [],
       protection: {
-        owner: '@nocobase/authorization/permissions',
+        owner: '@nocobase/authorization/permission-sets',
         allow: ['assign', 'revoke'],
         assignableTo: ['user'],
       },
@@ -293,7 +293,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ).toBe('Network down');
   });
 
-  it('uses route groups for server-declared pages while retaining server metadata', () => {
+  it('replaces the page type with the route pages and their groups', () => {
     const groups = [
       {
         value: 'business',
@@ -303,17 +303,16 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ];
     const merged = withPageResources(
       options(),
-      [{ value: '*', label: 'Route title', group: 'sales' }],
+      [{ value: 'orders', label: 'Orders', group: 'sales' }],
       groups,
     );
     const pages = merged.resourceTypes.find((type) => type.value === 'page')!;
     expect(pages.groups).toEqual(groups);
-    expect(pages.resources[0]).toMatchObject({
-      ...options().resourceTypes[0].resources[0],
-      group: 'sales',
-    });
+    expect(pages.resources).toEqual([
+      { value: 'orders', label: 'Orders', group: 'sales' },
+    ]);
     const refreshed = withPageResources(merged, [
-      { value: '*', label: 'Route title' },
+      { value: 'orders', label: 'Orders' },
     ]);
     expect(refreshed.resourceTypes[0].groups).toEqual([]);
     expect(refreshed.resourceTypes[0].resources[0].group).toBeUndefined();
@@ -348,6 +347,34 @@ describe('@nocobase/app-plugin-authorization client', () => {
       { name: 'home' },
     ]);
     expect(grantablePages(routes)[1]).not.toHaveProperty('group');
+  });
+
+  it('lists pages and groups in menu order', () => {
+    const routes = [
+      route({ name: 'late', navigation: { title: 'Late', order: 20 } }),
+      route({
+        name: 'group',
+        componentLoader: undefined,
+        navigation: { title: 'Group', order: 10 },
+        children: [
+          route({ name: 'second', navigation: { title: 'Second', order: 2 } }),
+          route({ name: 'first', navigation: { title: 'First', order: 1 } }),
+        ],
+      }),
+      route({ name: 'unordered', navigation: { title: 'Unordered' } }),
+      route({ name: 'early', navigation: { title: 'Early', order: -1 } }),
+    ];
+    expect(grantablePages(routes).map((page) => page.name)).toEqual([
+      'early',
+      // No order counts as 0.
+      'unordered',
+      'first',
+      'second',
+      'late',
+    ]);
+    expect(pageGroups(routes, (title) => title)).toEqual([
+      { value: 'group', label: 'Group' },
+    ]);
   });
 
   it('offers only the routes a page grant can name', () => {
@@ -402,8 +429,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
   it('adds the discovered pages to the page resource type and leaves the rest alone', () => {
     const merged = withPageResources(options(), [
       { value: 'orders', label: 'Orders' },
-      // The server already reports the wildcard; it keeps its own entry and its description.
-      { value: '*', label: 'Everything' },
+      { value: 'reports', label: 'Reports' },
     ]);
 
     expect(
@@ -412,12 +438,9 @@ describe('@nocobase/app-plugin-authorization client', () => {
         resources: resourceType.resources.map((resource) => resource.value),
       })),
     ).toEqual([
-      { value: 'page', resources: ['*', 'orders'] },
+      { value: 'page', resources: ['orders', 'reports'] },
       { value: 'database.collection', resources: ['orders'] },
     ]);
-    expect(merged.resourceTypes[0].resources[0].description).toBe(
-      'Allow access to every page, including pages added later.',
-    );
     expect(merged.collections).toEqual(options().collections);
   });
 });
@@ -439,20 +462,13 @@ function route(
 
 function options(): AuthorizationOptions {
   return {
-    plugins: ['permission-sets', 'pages', 'database'],
+    sections: [{ value: 'pages', label: 'Pages', order: 0 }],
     resourceTypes: [
       {
         value: 'page',
         label: 'Pages',
-        resources: [
-          {
-            value: '*',
-            label: 'All pages',
-            description:
-              'Allow access to every page, including pages added later.',
-            actions: [{ value: 'access', label: 'Access' }],
-          },
-        ],
+        section: 'pages',
+        resources: [],
         actions: [{ value: 'access', label: 'Access' }],
       },
       {
@@ -464,7 +480,7 @@ function options(): AuthorizationOptions {
     ],
     subjectTypes: [{ value: 'user', label: 'User' }],
     collections: [],
-    recordAccessPolicies: [],
+    recordAccess: [],
   };
 }
 
@@ -485,12 +501,12 @@ describe('permission snapshot lifecycle', () => {
     expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(request).toHaveBeenCalledTimes(1);
-    client.invalidatePermissions();
+    client.invalidate();
     expect(await client.can({ resource, action: 'access' })).toBe(false);
-    client.invalidatePermissions();
+    client.invalidate();
     expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(request).toHaveBeenCalledTimes(3);
-    expect(client.getPermissionsRevision()).toBe(2);
+    expect(client.revision()).toBe(2);
   });
 
   it.each(['resolve', 'reject'] as const)(
@@ -503,7 +519,7 @@ describe('permission snapshot lifecycle', () => {
         .mockResolvedValueOnce(denied);
       const client = new AuthorizationClient({ request } as never);
       const oldCheck = client.can({ resource, action: 'access' });
-      client.invalidatePermissions();
+      client.invalidate();
       expect(await client.can({ resource, action: 'access' })).toBe(false);
       if (outcome === 'resolve') old.resolve(granted);
       else old.reject(new Error('Previous session expired'));

@@ -1,6 +1,6 @@
 import type {
-  AccessScope,
   AuthorizationOptions,
+  RecordSelection,
 } from '../authorization-client.js';
 import type { Translate } from '../i18n.js';
 
@@ -67,20 +67,17 @@ export function collectionFields(
   );
 }
 
-export function accessScopeLabel(
+/** What a record selection reads as. */
+export function selectionLabel(
   t: Translate,
-  scope: AccessScope,
+  selection: RecordSelection,
   options: AuthorizationOptions,
 ): string {
-  if (scope.type === 'all') return t('labels.allRecords');
-  if (scope.type === 'ids')
-    return t('labels.selectedRecords', { count: scope.ids.length });
-  const key =
-    typeof scope.recordAccess === 'string'
-      ? scope.recordAccess
-      : scope.recordAccess.key;
+  if (selection.type === 'all') return t('labels.allRecords');
+  if (selection.type === 'records')
+    return t('labels.selectedRecords', { count: selection.ids.length });
   return (
-    options.recordAccessPolicies.find((item) => item.value === key)?.label ??
-    key
+    options.recordAccess.find((item) => item.value === selection.key)?.label ??
+    selection.key
   );
 }

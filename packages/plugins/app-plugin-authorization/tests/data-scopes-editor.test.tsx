@@ -9,46 +9,42 @@ import {
 } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import {
-  BusinessRuleScopes,
-  type BusinessRuleScope,
-} from '../client/components/business-rule-scopes.js';
+  DataScopesEditor,
+  type DataScopeRuleAction,
+} from '../client/components/data-scopes-editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 const options: AuthorizationOptions = {
-  plugins: [],
+  sections: [],
   subjectTypes: [],
-  recordAccessPolicies: [],
+  recordAccess: [],
   collections: [
     { name: 'projects', fields: ['id', 'title'] },
     { name: 'quotes', fields: ['id', 'amount'] },
   ],
   resourceTypes: [
     {
-      value: 'resource',
-      label: 'Features',
+      value: 'business',
+      label: 'Business',
       actions: [],
       resources: [
         {
           value: 'sales',
           label: 'Sales',
           actions: [{ value: 'submit', label: 'Submit' }],
-          ruleScopes: [
-            {
-              action: 'submit',
-              scopeKey: 'projects',
-              label: 'Projects',
-              collection: 'projects',
-            },
-            {
-              action: 'submit',
-              scopeKey: 'quotes',
-              label: 'Quotes',
-              collection: 'quotes',
-            },
-          ],
+          dataScopes: {
+            submit: ['projects', 'quotes'].map((key) => ({
+              key,
+              label: key === 'projects' ? 'Projects' : 'Quotes',
+              collection: key,
+              collectionFields: [],
+              defaultValue: '',
+              options: [{ value: '', label: 'Defaults' }],
+            })),
+          },
         },
       ],
     },
@@ -59,21 +55,21 @@ it('uses the declared table for each record picker and preserves its sibling sco
     { id: `${collection}-1`, label: `${collection} record` },
   ]);
   function Harness() {
-    const [value, setValue] = useState<readonly BusinessRuleScope[]>([
+    const [value, setValue] = useState<readonly DataScopeRuleAction[]>([
       {
         action: 'submit',
         scopeKey: 'projects',
-        scope: { type: 'ids', ids: [] },
+        selection: { type: 'records', ids: [] },
       },
       {
         action: 'submit',
         scopeKey: 'quotes',
-        scope: { type: 'ids', ids: ['quotes-1'] },
+        selection: { type: 'records', ids: ['quotes-1'] },
       },
     ]);
     return (
       <>
-        <BusinessRuleScopes
+        <DataScopesEditor
           options={options}
           resourceId='sales'
           value={value}
@@ -100,7 +96,7 @@ it('uses the declared table for each record picker and preserves its sibling sco
     {
       action: 'submit',
       scopeKey: 'quotes',
-      scope: { type: 'ids', ids: ['quotes-1'] },
+      selection: { type: 'records', ids: ['quotes-1'] },
     },
   ]);
 });

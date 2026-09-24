@@ -9,22 +9,18 @@ vi.mock('@nocobase/i18n/client', async () => {
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
+import { sections } from './workspace-options.js';
 const options: AuthorizationOptions = {
-  plugins: [],
+  sections,
   subjectTypes: [],
-  recordAccessPolicies: [],
+  recordAccess: [],
   collections: [],
   resourceTypes: [
     {
-      value: 'resource',
-      label: 'Administration',
-      groups: [
-        {
-          value: 'administration',
-          label: 'Administration',
-          category: 'administration',
-        },
-      ],
+      value: 'settings',
+      label: 'Admin settings',
+      section: 'administration',
+      groups: [{ value: 'administration', label: 'Authorization' }],
       actions: [{ value: 'read', label: 'Read' }],
       resources: [
         {
@@ -79,22 +75,23 @@ describe('scope controls', () => {
 
 it('edits page entry independently from a business resource with the same ID', () => {
   const options: AuthorizationOptions = {
-    plugins: [],
+    sections,
     subjectTypes: [],
-    recordAccessPolicies: [],
+    recordAccess: [],
     collections: [],
     resourceTypes: [
       {
-        value: 'resource',
+        value: 'business',
         label: 'Business',
-        groups: [{ value: 'sales', label: 'Sales', category: 'business' }],
+        section: 'business',
+        groups: [{ value: 'sales', label: 'Sales' }],
         actions: [{ value: 'view', label: 'View' }],
         resources: [{ value: 'orders', group: 'sales', label: 'Orders' }],
       },
       {
         value: 'page',
         label: 'Pages',
-        category: 'pages',
+        section: 'pages',
         actions: [{ value: 'access', label: 'Access' }],
         resources: [{ value: 'orders', label: 'Orders' }],
       },
@@ -107,7 +104,7 @@ it('edits page entry independently from a business resource with the same ID', (
     grants: [
       {
         id: 1,
-        resource: { type: 'resource', id: 'orders' },
+        resource: { type: 'business', id: 'orders' },
         actions: ['view'],
       },
     ],
@@ -138,7 +135,9 @@ it('edits page entry independently from a business resource with the same ID', (
       .getAllByRole('group', { name: 'Orders' })[0]
       .querySelectorAll('button'),
   ).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Sales', exact: true }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Business', exact: true }),
+  );
   expect(screen.getByRole('button', { name: 'Orders: View' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -151,24 +150,45 @@ it('edits page entry independently from a business resource with the same ID', (
     current.grants.find((grant) => grant.resource.type === 'page')?.actions,
   ).toEqual(['access']);
   expect(
-    current.grants.find((grant) => grant.resource.type === 'resource')?.actions,
+    current.grants.find((grant) => grant.resource.type === 'business')?.actions,
   ).toEqual(['view']);
   fireEvent.click(access);
   expect(
     current.grants.find((grant) => grant.resource.type === 'page'),
   ).toBeUndefined();
   expect(
-    current.grants.find((grant) => grant.resource.type === 'resource')?.actions,
+    current.grants.find((grant) => grant.resource.type === 'business')?.actions,
   ).toEqual(['view']);
 });
 
-it('keeps page and business categories discoverable before resources are developed', () => {
-  render(<Harness resourceOptions={{ ...options, resourceTypes: [] }} />);
-  expect(
-    screen.getByRole('button', { name: 'Page permissions' }),
-  ).toBeVisible();
+it('keeps empty page and business types discoverable with development guidance', () => {
+  render(
+    <Harness
+      resourceOptions={{
+        ...options,
+        resourceTypes: [
+          {
+            value: 'page',
+            label: 'Pages',
+            section: 'pages',
+            actions: [],
+            resources: [],
+          },
+          {
+            value: 'business',
+            label: 'Business features',
+            section: 'business',
+            actions: [],
+            resources: [],
+          },
+        ],
+      }}
+    />,
+  );
+  expect(screen.getByText('Page permissions')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Pages' })).toBeVisible();
   expect(screen.getByText(/No pages requiring authorization/)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Business permissions' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Business features' }));
   expect(
     screen.getByText(/No business permissions have been defined/),
   ).toBeVisible();

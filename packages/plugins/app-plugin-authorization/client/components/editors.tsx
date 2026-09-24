@@ -1,4 +1,3 @@
-import { resourceSections } from './resource-sections.js';
 import { Checkbox } from './ui/checkbox.js';
 import { SelectField } from './select-field.js';
 import { CustomFilterEditor } from './filter-editor.js';
@@ -10,9 +9,10 @@ import { useAuthorizationTranslation } from '../i18n.js';
 import { SearchField } from './filters.js';
 import { Label } from './ui/label.js';
 import type {
-  AccessScope,
   AuthorizationOptions,
   AuthorizationRecordOption,
+  RecordSelection,
+  ResourceOption,
 } from '../authorization-client.js';
 
 const selectClass =
@@ -48,7 +48,7 @@ export function ResourceEditor({
   onChange: (value: { type: string; id: string }) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const sections = resourceSections(options);
+  const sections = resourceChoices(options);
   const selected =
     sections.find(
       (item) =>
@@ -154,11 +154,13 @@ export function ActionsEditor({
   );
 }
 
-export function ScopeEditor({
+/** Edits one record selection: every record, chosen records or record access. */
+export function SelectionEditor({
   compact = false,
   options,
   fields = [],
-  allowIds = true,
+  allowRecords = true,
+  allowAll = true,
   records = [],
   value,
   onChange,
@@ -166,12 +168,34 @@ export function ScopeEditor({
   compact?: boolean;
   options: AuthorizationOptions;
   fields?: readonly string[];
-  allowIds?: boolean;
+  allowRecords?: boolean;
+  /** Sharing rules may not select every record. */
+  allowAll?: boolean;
   records?: readonly AuthorizationRecordOption[];
-  value: AccessScope;
-  onChange: (value: AccessScope) => void;
+  value: RecordSelection;
+  onChange: (value: RecordSelection) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
+  const recordAccess = (key: string): RecordSelection =>
+    key === 'customFilter'
+      ? {
+          type: 'recordAccess',
+          key,
+          params: { filter: emptyFilter() },
+        }
+      : { type: 'recordAccess', key };
+  const customFilter =
+    value.type === 'recordAccess' && value.key === 'customFilter' ? (
+      <CustomFilterEditor fields={fields} value={value} onChange={onChange} />
+    ) : null;
+  const recordPicker =
+    value.type === 'records' ? (
+      <RecordSelectionEditor
+        records={records}
+        value={value.ids}
+        onChange={(ids) => onChange({ type: 'records', ids })}
+      />
+    ) : null;
   if (compact)
     return (
       <div className='min-w-0 space-y-2 text-sm font-normal'>
@@ -179,60 +203,38 @@ export function ScopeEditor({
           aria-label={t('editors.recordScope')}
           className={selectClass}
           value={
-            value.type === 'database'
-              ? recordAccessKey(value.recordAccess) === 'allRecords'
+            value.type === 'recordAccess'
+              ? value.key === 'allRecords' && allowAll
                 ? 'all'
-                : `policy:${recordAccessKey(value.recordAccess)}`
+                : `policy:${value.key}`
               : value.type
           }
           options={[
-            { value: 'all', label: t('labels.allRecords') },
-            ...(allowIds
-              ? [{ value: 'ids', label: t('editors.specificRecordIds') }]
+            ...(allowAll
+              ? [{ value: 'all', label: t('labels.allRecords') }]
               : []),
-            ...options.recordAccessPolicies
-              .filter((policy) => policy.value !== 'allRecords')
-              .map((policy) => ({
-                value: `policy:${policy.value}`,
-                label: policy.label,
+            ...(allowRecords
+              ? [{ value: 'records', label: t('editors.specificRecordIds') }]
+              : []),
+            ...options.recordAccess
+              .filter((entry) => !allowAll || entry.value !== 'allRecords')
+              .map((entry) => ({
+                value: `policy:${entry.value}`,
+                label: entry.label,
               })),
           ]}
           onValueChange={(selected) =>
             onChange(
-              selected === 'ids'
-                ? { type: 'ids', ids: [] }
+              selected === 'records'
+                ? { type: 'records', ids: [] }
                 : selected === 'all'
                   ? { type: 'all' }
-                  : {
-                      type: 'database',
-                      recordAccess:
-                        selected === 'policy:customFilter'
-                          ? {
-                              key: 'customFilter',
-                              params: { filter: emptyFilter() },
-                            }
-                          : selected.slice(7),
-                    },
+                  : recordAccess(selected.slice(7)),
             )
           }
         />
-        {value.type === 'ids' && (
-          <RecordScopeEditor
-            records={records}
-            value={value.ids}
-            onChange={(ids) => onChange({ type: 'ids', ids })}
-          />
-        )}
-        {value.type === 'database' &&
-          recordAccessKey(value.recordAccess) === 'customFilter' && (
-            <CustomFilterEditor
-              fields={fields}
-              value={value.recordAccess}
-              onChange={(recordAccess) =>
-                onChange({ type: 'database', recordAccess })
-              }
-            />
-          )}
+        {recordPicker}
+        {customFilter}
       </div>
     );
   return (
@@ -242,82 +244,56 @@ export function ScopeEditor({
           aria-label={t('editors.recordScope')}
           className={selectClass}
           value={value.type}
-          onValueChange={(selectedValue) => {
-            const type = selectedValue;
+          onValueChange={(type) =>
             onChange(
-              type === 'ids'
-                ? { type: 'ids', ids: [] }
-                : type === 'database'
-                  ? {
-                      type: 'database',
-                      recordAccess:
-                        options.recordAccessPolicies[0]?.value ?? 'allRecords',
-                    }
+              type === 'records'
+                ? { type: 'records', ids: [] }
+                : type === 'recordAccess'
+                  ? recordAccess(options.recordAccess[0]?.value ?? 'allRecords')
                   : { type: 'all' },
-            );
-          }}
+            )
+          }
           options={[
-            { value: 'all', label: t('labels.allRecords') },
-            ...(allowIds
-              ? [{ value: 'ids', label: t('editors.specificRecordIds') }]
+            ...(allowAll
+              ? [{ value: 'all', label: t('labels.allRecords') }]
               : []),
-            { value: 'database', label: t('editors.recordAccessPolicy') },
+            ...(allowRecords
+              ? [{ value: 'records', label: t('editors.specificRecordIds') }]
+              : []),
+            { value: 'recordAccess', label: t('editors.recordAccessPolicy') },
           ]}
         />
       </Field>
-      {value.type === 'ids' ? (
-        <RecordScopeEditor
-          records={records}
-          value={value.ids}
-          onChange={(ids) => onChange({ type: 'ids', ids })}
-        />
-      ) : null}
-      {value.type === 'database' ? (
+      {recordPicker}
+      {value.type === 'recordAccess' ? (
         <>
           <Field label={t('editors.recordAccessPolicy')}>
             <SelectField
               aria-label={t('editors.recordAccessPolicy')}
               className={selectClass}
-              value={recordAccessKey(value.recordAccess)}
-              onValueChange={(selectedValue) =>
-                onChange({
-                  type: 'database',
-                  recordAccess:
-                    selectedValue === 'customFilter'
-                      ? {
-                          key: 'customFilter',
-                          params: { filter: emptyFilter() },
-                        }
-                      : selectedValue,
-                })
-              }
-              options={options.recordAccessPolicies.map((policy) => ({
-                value: policy.value,
-                label: policy.label,
+              value={value.key}
+              onValueChange={(selected) => onChange(recordAccess(selected))}
+              options={options.recordAccess.map((entry) => ({
+                value: entry.value,
+                label: entry.label,
               }))}
             />
           </Field>
-          {recordAccessKey(value.recordAccess) === 'customFilter' ? (
-            <CustomFilterEditor
-              fields={fields}
-              value={value.recordAccess}
-              onChange={(recordAccess) =>
-                onChange({ type: 'database', recordAccess })
-              }
-            />
-          ) : null}
+          {customFilter}
         </>
       ) : null}
     </div>
   );
 }
 
-export function ActionScopesEditor({
+/** Edits a collection rule's actions and the selection of each. */
+export function RuleActionsEditor({
   options,
   resourceType,
   resourceId,
   fields = [],
   records = [],
+  allowAll = true,
   value,
   onChange,
 }: {
@@ -326,8 +302,11 @@ export function ActionScopesEditor({
   resourceId?: string;
   fields?: readonly string[];
   records?: readonly AuthorizationRecordOption[];
-  value: readonly { action: string; scope: AccessScope }[];
-  onChange: (value: readonly { action: string; scope: AccessScope }[]) => void;
+  allowAll?: boolean;
+  value: readonly { action: string; selection: RecordSelection }[];
+  onChange: (
+    value: readonly { action: string; selection: RecordSelection }[],
+  ) => void;
 }): ReactElement {
   const selectedActions = value.map((item) => item.action);
   return (
@@ -343,7 +322,7 @@ export function ActionScopesEditor({
               (action) =>
                 value.find((item) => item.action === action) ?? {
                   action,
-                  scope: initialScope(options),
+                  selection: initialSelection(options),
                 },
             ),
           )
@@ -357,15 +336,18 @@ export function ActionScopesEditor({
           <h4 className='font-medium'>
             {actionLabel(options, resourceType, current.action)}
           </h4>
-          <ScopeEditor
+          <SelectionEditor
             options={options}
             fields={fields}
             records={records}
-            value={current.scope}
-            onChange={(scope) =>
+            allowAll={allowAll}
+            value={current.selection}
+            onChange={(selection) =>
               onChange(
                 value.map((item) =>
-                  item.action === current.action ? { ...item, scope } : item,
+                  item.action === current.action
+                    ? { ...item, selection }
+                    : item,
                 ),
               )
             }
@@ -376,7 +358,7 @@ export function ActionScopesEditor({
   );
 }
 
-function RecordScopeEditor({
+function RecordSelectionEditor({
   records,
   value,
   onChange,
@@ -443,15 +425,44 @@ function RecordScopeEditor({
   );
 }
 
-function recordAccessKey(value: string | { key: string }): string {
-  return typeof value === 'string' ? value : value.key;
+function initialSelection(options: AuthorizationOptions): RecordSelection {
+  const first = options.recordAccess[0];
+  return first ? { type: 'recordAccess', key: first.value } : { type: 'all' };
 }
 
-function initialScope(options: AuthorizationOptions): AccessScope {
-  const policy = options.recordAccessPolicies[0];
-  return policy
-    ? { type: 'database', recordAccess: policy.value }
-    : { type: 'all' };
+/** Resource picker entries: each type, split by its groups. */
+function resourceChoices(options: AuthorizationOptions): readonly {
+  key: string;
+  value: string;
+  label: string;
+  resources: readonly ResourceOption[];
+}[] {
+  return options.resourceTypes.flatMap((type) => {
+    const grouped = (type.groups ?? []).map((group) => ({
+      key: `${type.value}\u0000${group.value}`,
+      value: type.value,
+      label: group.label,
+      resources: type.resources.filter((item) => item.group === group.value),
+    }));
+    const ungrouped = type.resources.filter(
+      (item) =>
+        !item.group ||
+        !(type.groups ?? []).some((group) => group.value === item.group),
+    );
+    return [
+      ...grouped,
+      ...(ungrouped.length || !grouped.length
+        ? [
+            {
+              key: type.value,
+              value: type.value,
+              label: type.label,
+              resources: ungrouped,
+            },
+          ]
+        : []),
+    ];
+  });
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

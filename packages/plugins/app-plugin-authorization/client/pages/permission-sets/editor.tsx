@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { PermissionDevelopmentHint } from '../../components/permission-development-hint.js';
-import { permissionSections } from '../../components/resource-sections.js';
+import { workspaceTypes } from '../../components/workspace-sections.js';
+import { defaultBusinessPolicy } from './business-policy.js';
 import { Checkbox } from '../../components/ui/checkbox.js';
 import type {
   AuthorizationOptions,
@@ -10,7 +11,7 @@ import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { useAuthorizationTranslation } from '../../i18n.js';
 import { resourceKey } from './drafts.js';
-import { ScopeMark } from '../../components/scope-marks.js';
+import { SelectionMark } from '../../components/selection-marks.js';
 import { ResourceTypeList } from './resource-tree.js';
 import { ModulePermissions } from './module-permissions.js';
 import { resourceRows } from './resource-groups.js';
@@ -41,27 +42,16 @@ export function PermissionSetEditor({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const configurationRef = useRef<HTMLDivElement>(null);
-  const sections = permissionSections(options, t);
-  const initialSection =
-    sections.find((section) => section.resources.length > 0) ?? sections[0];
-  const [type, setType] = useState(initialSection?.value ?? 'page');
+  const types = workspaceTypes(options);
+  const initialType =
+    types.find((item) => item.resources.length > 0) ?? types[0];
+  const [type, setType] = useState(initialType?.value ?? 'page');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [businessGroup, setBusinessGroup] = useState(
-    initialSection?.key ?? 'page',
-  );
-  const selectedSection = sections.find((section) =>
-    type === 'resource'
-      ? section.key === businessGroup
-      : section.value === type,
-  );
-  const emptyCategory =
-    selectedSection?.resources.length === 0 &&
-    (selectedSection.category === 'pages' ||
-      selectedSection.category === 'business')
-      ? selectedSection.category
-      : undefined;
+  const selectedType = types.find((item) => item.value === type);
+  const emptySection =
+    selectedType?.resources.length === 0 ? selectedType.section : undefined;
   const [search, setSearch] = useState('');
   const [configuredOnly, setConfiguredOnly] = useState(false);
   const [limit, setLimit] = useState(80);
@@ -88,7 +78,6 @@ export function PermissionSetEditor({
   const query = search.trim().toLowerCase();
   const visible = resources.filter(
     (item) =>
-      (type !== 'resource' || !businessGroup || item.group === businessGroup) &&
       (!configuredOnly ||
         Boolean(current.get(resourceKey(type, item.value))?.actions.length)) &&
       (!query ||
@@ -97,7 +86,7 @@ export function PermissionSetEditor({
           .includes(query)),
   );
   const rows = resourceRows(
-    type === 'resource' ? [] : (resourceType?.groups ?? []),
+    resourceType?.groups ?? [],
     visible,
     query ? new Set() : collapsed,
   );
@@ -123,7 +112,7 @@ export function PermissionSetEditor({
   function choose(grant: GrantDraft, action: string, mode: string): void {
     if (readOnly) return;
     const scoped = resources.find((item) => item.value === grant.resource.id)
-      ?.actionScopes?.[action];
+      ?.dataScopes?.[action];
     const next = {
       ...grant,
       actions:
@@ -131,15 +120,10 @@ export function PermissionSetEditor({
           ? grant.actions.filter((item) => item !== action)
           : [...new Set([...grant.actions, action])],
     };
-    if (scoped && mode !== 'none' && !next.policies?.[action])
+    if (scoped?.length && mode !== 'none' && !next.policies?.[action])
       next.policies = {
         ...next.policies,
-        [action]: {
-          type: scoped.policyType,
-          ...Object.fromEntries(
-            scoped.fields.map((field) => [field.key, field.defaultValue]),
-          ),
-        },
+        [action]: defaultBusinessPolicy(scoped),
       };
     update(next);
   }
@@ -201,19 +185,11 @@ export function PermissionSetEditor({
                 <aside className='w-44 shrink-0 overflow-auto border-r bg-muted/15 xl:w-52'>
                   <ResourceTypeList
                     label={t('permissionSets.picker.resourceTypes')}
-                    types={sections.map((section) => ({
-                      ...section,
-                      value: section.key,
-                      resourceType: section.value,
-                    }))}
+                    types={types}
                     grants={draft.grants}
-                    type={type === 'resource' ? businessGroup : type}
-                    onSelect={(key) => {
-                      const section = sections.find(
-                        (item) => item.key === key,
-                      )!;
-                      setType(section.value);
-                      setBusinessGroup(section.key);
+                    type={type}
+                    onSelect={(value) => {
+                      setType(value);
                       setCollapsed(new Set());
                       setSearch('');
                       setLimit(80);
@@ -224,8 +200,8 @@ export function PermissionSetEditor({
                   className='flex min-h-0 min-w-0 flex-1 flex-col'
                   aria-label={t('permissionSets.picker.resources')}
                 >
-                  {emptyCategory ? (
-                    <PermissionDevelopmentHint category={emptyCategory} />
+                  {emptySection ? (
+                    <PermissionDevelopmentHint section={emptySection} />
                   ) : (
                     <>
                       <div className='flex shrink-0 flex-wrap items-center gap-3 border-b p-3'>
@@ -267,13 +243,7 @@ export function PermissionSetEditor({
                           <ModulePermissions
                             container={configurationRef}
                             type={type}
-                            label={
-                              type === 'resource'
-                                ? (options.resourceGroups?.find(
-                                    (group) => group.value === businessGroup,
-                                  )?.label ?? type)
-                                : (resourceType?.label ?? type)
-                            }
+                            label={resourceType?.label ?? type}
                             rows={rows.slice(0, limit)}
                             items={visible}
                             actions={actions}
@@ -326,7 +296,7 @@ export function PermissionSetEditor({
                                     key={value}
                                     className='flex items-center gap-2'
                                   >
-                                    <ScopeMark
+                                    <SelectionMark
                                       value={value}
                                       legend
                                       label={label}

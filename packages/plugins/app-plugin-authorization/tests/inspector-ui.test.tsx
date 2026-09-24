@@ -35,8 +35,9 @@ vi.mock('@nocobase/i18n/client', async () => {
 import InspectorPage from '../client/pages/inspector-page.js';
 import { inspectionStatus } from '../client/pages/inspector-status.js';
 import en from '../client/locales/en-US.js';
+import { sections, wire } from './workspace-options.js';
 const options: AuthorizationOptions = {
-  plugins: [],
+  sections,
   subjectTypes: [
     { value: 'user', label: 'Users', selection: { type: 'collection' } },
     {
@@ -50,12 +51,13 @@ const options: AuthorizationOptions = {
       selection: { type: 'fixed', id: '*' },
     },
   ],
-  recordAccessPolicies: [],
+  recordAccess: [],
   collections: [{ name: 'orders0', fields: ['id', 'title'] }],
   resourceTypes: [
     {
       value: 'database.collection',
       label: 'Data tables',
+      section: 'business',
       groups: [{ value: 'sales', label: 'Sales' }],
       actions: [
         { value: 'read', label: 'Read' },
@@ -72,7 +74,7 @@ const options: AuthorizationOptions = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.routes = [];
-  mocks.loadOptions.mockResolvedValue(options);
+  mocks.loadOptions.mockResolvedValue(wire(options));
   mocks.inspectConfigured.mockResolvedValue({
     unrestricted: false,
     types: ['database.collection'],
@@ -191,18 +193,21 @@ it('ignores stale responses after changing resource search', async () => {
 });
 
 it('defaults to the first populated type when pages have no registered resources', async () => {
-  mocks.loadOptions.mockResolvedValue({
-    ...options,
-    resourceTypes: [
-      {
-        value: 'page',
-        label: 'Pages',
-        resources: [],
-        actions: [{ value: 'access', label: 'Access' }],
-      },
-      ...options.resourceTypes,
-    ],
-  });
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      resourceTypes: [
+        {
+          value: 'page',
+          label: 'Pages',
+          section: 'pages',
+          resources: [],
+          actions: [{ value: 'access', label: 'Access' }],
+        },
+        ...options.resourceTypes,
+      ],
+    }),
+  );
   mount();
   expect(
     await screen.findByRole('button', { name: 'Orders 0: Read' }),
@@ -214,18 +219,21 @@ it('defaults to the first populated type when pages have no registered resources
 });
 
 it('clamps stale page numbers and resets search when switching resource types', async () => {
-  mocks.loadOptions.mockResolvedValue({
-    ...options,
-    resourceTypes: [
-      ...options.resourceTypes,
-      {
-        value: 'settings',
-        label: 'Settings',
-        resources: [{ value: 'authorization', label: 'Authorization' }],
-        actions: [{ value: 'read', label: 'Read' }],
-      },
-    ],
-  });
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      resourceTypes: [
+        ...options.resourceTypes,
+        {
+          value: 'settings',
+          label: 'Settings',
+          section: 'administration',
+          resources: [{ value: 'authorization', label: 'Authorization' }],
+          actions: [{ value: 'read', label: 'Read' }],
+        },
+      ],
+    }),
+  );
   mount('/?user=alice&page=999&search=Orders');
   expect(
     await screen.findByRole('button', { name: 'Orders 24: Read' }),
@@ -262,18 +270,21 @@ it('includes client-registered pages and their groups in the inspection batch', 
       ],
     },
   ] as AppClientRegisteredRoute[];
-  mocks.loadOptions.mockResolvedValue({
-    ...options,
-    resourceTypes: [
-      {
-        value: 'page',
-        label: 'Pages',
-        resources: [],
-        actions: [{ value: 'access', label: 'Access' }],
-      },
-      ...options.resourceTypes,
-    ],
-  });
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      resourceTypes: [
+        {
+          value: 'page',
+          label: 'Pages',
+          section: 'pages',
+          resources: [],
+          actions: [{ value: 'access', label: 'Access' }],
+        },
+        ...options.resourceTypes,
+      ],
+    }),
+  );
   mount('/?user=alice&type=page');
   expect(
     await screen.findByRole('button', { name: 'Customers: Access' }),
@@ -355,18 +366,21 @@ it('does not present user-dependent subject scopes as a denial', () => {
 });
 
 it('marks configured resource types without showing counts or relying on the current results page', async () => {
-  mocks.loadOptions.mockResolvedValue({
-    ...options,
-    resourceTypes: [
-      ...options.resourceTypes,
-      {
-        value: 'settings',
-        label: 'Settings',
-        resources: [{ value: 'configuration', label: 'Configuration' }],
-        actions: [],
-      },
-    ],
-  });
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      resourceTypes: [
+        ...options.resourceTypes,
+        {
+          value: 'settings',
+          label: 'Settings',
+          section: 'administration',
+          resources: [{ value: 'configuration', label: 'Configuration' }],
+          actions: [],
+        },
+      ],
+    }),
+  );
   mocks.inspectConfigured.mockResolvedValue({
     unrestricted: false,
     types: ['settings'],
@@ -394,29 +408,32 @@ it.each([
 ])(
   'marks only configured resource groups: %j',
   async ({ unrestricted, ids, marked }) => {
-    mocks.loadOptions.mockResolvedValue({
-      ...options,
-      resourceTypes: [
-        {
-          value: 'resource',
-          label: 'Business resources',
-          actions: [{ value: 'view', label: 'View' }],
-          groups: [
-            { value: 'sales', label: 'Sales', category: 'business' },
-            { value: 'delivery', label: 'Delivery', category: 'business' },
-          ],
-          resources: [
-            { value: 'sales.quotes', label: 'Quotes', group: 'sales' },
-            { value: 'delivery.orders', label: 'Orders', group: 'delivery' },
-          ],
-        },
-      ],
-    });
+    mocks.loadOptions.mockResolvedValue(
+      wire({
+        ...options,
+        resourceTypes: [
+          {
+            value: 'business',
+            label: 'Business resources',
+            section: 'business',
+            actions: [{ value: 'view', label: 'View' }],
+            groups: [
+              { value: 'sales', label: 'Sales' },
+              { value: 'delivery', label: 'Delivery' },
+            ],
+            resources: [
+              { value: 'sales.quotes', label: 'Quotes', group: 'sales' },
+              { value: 'delivery.orders', label: 'Orders', group: 'delivery' },
+            ],
+          },
+        ],
+      }),
+    );
     mocks.inspectConfigured.mockResolvedValue({
       unrestricted,
-      types: ['resource', 'page'],
+      types: ['business', 'page'],
       resources: [
-        ...ids.map((id) => ({ type: 'resource', id })),
+        ...ids.map((id) => ({ type: 'business', id })),
         // The same ID under another resource type must not mark the group.
         { type: 'page', id: 'delivery.orders' },
       ],
@@ -426,9 +443,9 @@ it.each([
     for (const label of ['Sales', 'Delivery']) {
       expect(
         Boolean(
-          within(screen.getByRole('button', { name: label })).queryByRole(
-            'img',
-          ),
+          within(
+            screen.getByRole('button', { name: label }).closest('tr')!,
+          ).queryByRole('img'),
         ),
       ).toBe(marked.includes(label));
     }
@@ -500,51 +517,63 @@ it('explains business access once and keeps page checks and JSON in one collapse
     reasons: [
       grant,
       {
-        code: 'SCOPE_EXPANDED',
+        code: 'SELECTION_EXPANDED',
         message: 'raw scope',
         details: {
-          source: { plugin: 'default-access', id: 'resource:quotes' },
-          scope: { type: 'database', recordAccess: 'own' },
+          source: { plugin: 'default-access', id: 'quotes-default' },
+          selection: { type: 'recordAccess', key: 'own' },
         },
       },
       {
-        code: 'SCOPE_RESTRICTED',
+        code: 'SELECTION_RESTRICTED',
         message: 'raw restriction',
         details: {
           source: { plugin: 'restriction-rules', id: 'private-internal-key' },
-          scope: { type: 'database', recordAccess: 'public' },
+          selection: { type: 'recordAccess', key: 'public' },
         },
       },
     ],
   };
-  mocks.loadOptions.mockResolvedValue({
-    ...options,
-    recordAccessPolicies: [
-      { value: 'own', label: 'Projects owned by me' },
-      { value: 'public', label: 'Non-confidential projects' },
-    ],
-    resourceTypes: [
-      {
-        value: 'resource',
-        label: 'Business',
-        actions: [{ value: 'view', label: 'View' }],
-        resources: [
-          {
-            value: 'quotes',
-            label: 'Quotes',
-            ruleScopes: [
-              {
-                action: 'view',
-                scopeKey: 'quotes',
-                collection: 'quotesTable',
-                label: 'Quotes',
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      recordAccess: [
+        { value: 'own', label: 'Projects owned by me' },
+        { value: 'public', label: 'Non-confidential projects' },
+      ],
+      resourceTypes: [
+        {
+          value: 'business',
+          label: 'Business',
+          section: 'business',
+          actions: [{ value: 'view', label: 'View' }],
+          resources: [
+            {
+              value: 'quotes',
+              label: 'Quotes',
+              actions: [{ value: 'view', label: 'View' }],
+              dataScopes: {
+                view: [
+                  {
+                    key: 'quotes',
+                    label: 'Quotes',
+                    collection: 'quotesTable',
+                    collectionFields: [],
+                    defaultValue: '',
+                    options: [
+                      { value: '', label: 'Defaults' },
+                      { value: 'own', label: 'Projects owned by me' },
+                      { value: 'public', label: 'Non-confidential projects' },
+                    ],
+                  },
+                ],
               },
-            ],
-          },
-        ],
-      },
-    ],
-  });
+            },
+          ],
+        },
+      ],
+    }),
+  );
   mocks.inspectBatch.mockImplementation(
     (_subject, checks: Omit<AuthorizationInspection, 'decision'>[]) =>
       Promise.resolve(
@@ -552,7 +581,7 @@ it('explains business access once and keeps page checks and JSON in one collapse
           ...check,
           decision: {
             effect: 'conditional',
-            conditions: { type: 'resource' },
+            conditions: { type: 'business' },
             reasons: [
               grant,
               {
@@ -564,7 +593,6 @@ it('explains business access once and keeps page checks and JSON in one collapse
                 },
               },
               ...database.reasons.slice(1),
-              { code: 'PAGE_ACCESS_GRANTED', message: 'raw page access' },
             ],
             checks: [
               {
@@ -677,8 +705,28 @@ it('shows a team grant once despite different underlying policies and retains th
   expect(screen.queryByText(en.inspector.summary.none)).not.toBeInTheDocument();
 });
 
-it('keeps empty page and business categories with development guidance in the inspector', async () => {
-  mocks.loadOptions.mockResolvedValue({ ...options, resourceTypes: [] });
+it('keeps empty page and business sections with development guidance in the inspector', async () => {
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      resourceTypes: [
+        {
+          value: 'page',
+          label: 'Pages',
+          section: 'pages',
+          resources: [],
+          actions: [],
+        },
+        {
+          value: 'business',
+          label: 'Business features',
+          section: 'business',
+          resources: [],
+          actions: [],
+        },
+      ],
+    }),
+  );
   mocks.inspectConfigured.mockResolvedValue({
     unrestricted: true,
     types: [],
@@ -686,11 +734,7 @@ it('keeps empty page and business categories with development guidance in the in
   });
   mount();
   await screen.findByText(en.permissionWorkspace.development.pages);
-  fireEvent.click(
-    screen.getByRole('button', {
-      name: en.permissionWorkspace.categories.business,
-    }),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Business features' }));
   expect(
     await screen.findByText(en.permissionWorkspace.development.business),
   ).toBeVisible();

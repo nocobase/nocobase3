@@ -22,7 +22,7 @@ const markIcons = {
   bypass: Shield,
 } as const;
 
-export function ScopeMark({
+export function SelectionMark({
   value,
   legend = false,
   label,

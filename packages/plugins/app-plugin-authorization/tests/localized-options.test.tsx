@@ -13,10 +13,7 @@ import { expect, it, vi } from 'vitest';
 import { useAuthorizationPageData } from '../client/pages/page-support.js';
 import { useSubjectNames } from '../client/components/use-subject-names.js';
 import { localizeOptions } from '../client/components/localized-options.js';
-import type {
-  AuthorizationOptions,
-  LocalizedText,
-} from '../client/authorization-client.js';
+import type { AuthorizationOptionsResponse } from '../client/authorization-client.js';
 import locales from '../client/locales/index.js';
 import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 
@@ -30,22 +27,22 @@ vi.mock('../client/use-authorization-client.js', () => ({
 
 it('switches option labels and fixed subjects without refetching or losing edits', async () => {
   mocks.loadOptions.mockResolvedValue({
-    plugins: [],
+    sections: [],
     resourceTypes: [],
     collections: [],
-    recordAccessPolicies: [],
+    recordAccess: [],
     subjectTypes: [
       {
-        value: 'authenticated',
-        label: {
+        type: 'authenticated',
+        title: {
           key: 'options.subjectTypes.authenticated',
           ns: AUTHORIZATION_NAMESPACE,
         },
         selection: { type: 'fixed', id: '*' },
       },
       {
-        value: 'user',
-        label: {
+        type: 'user',
+        title: {
           key: 'options.subjectTypes.user',
           ns: AUTHORIZATION_NAMESPACE,
         },
@@ -61,7 +58,7 @@ it('switches option labels and fixed subjects without refetching or losing edits
   runtime.registerNamespace(AUTHORIZATION_NAMESPACE, locales);
   await runtime.init();
   function Page() {
-    const { options } = useAuthorizationPageData('authz/sharing-rules/options');
+    const { options } = useAuthorizationPageData('sharing-rules');
     const [draft, setDraft] = useState('');
     const names = useSubjectNames(
       'sharing-rules',
@@ -103,34 +100,50 @@ it('switches option labels and fixed subjects without refetching or losing edits
   expect(screen.getByText('Alice')).toBeInTheDocument();
 });
 
-it('resolves nested groups and plugin namespaces while preserving literal names and fallbacks', () => {
+it('resolves groups, sections and plugin namespaces while preserving literal names and fallbacks', () => {
   const descriptor = {
     key: 'resourceTitle',
     ns: '@example/plugin',
     defaultValue: 'Fallback',
   };
-  const raw: AuthorizationOptions<LocalizedText> = {
-    plugins: [],
+  const raw: AuthorizationOptionsResponse = {
+    sections: [
+      {
+        name: 'administration',
+        title: {
+          key: 'sections.administration',
+          ns: '@nocobase/authorization',
+        },
+        order: 200,
+      },
+      { name: 'pages', title: 'Pages', order: 0 },
+    ],
     collections: [],
     subjectTypes: [],
-    recordAccessPolicies: [
-      { value: 'custom', label: 'Custom', description: descriptor },
+    recordAccess: [
+      {
+        key: 'custom',
+        title: 'Custom',
+        description: descriptor,
+        collections: [],
+      },
     ],
     resourceTypes: [
       {
-        value: 'settings',
-        label: descriptor,
-        actions: [{ value: 'read', label: descriptor }],
-        resources: [
-          { value: 'literal', label: 'resourceTitle', description: descriptor },
-        ],
-        groups: [
+        type: 'settings',
+        title: descriptor,
+        section: 'administration',
+        actions: [{ name: 'read', title: descriptor }],
+        items: [
           {
-            value: 'parent',
-            label: 'Parent',
-            children: [{ value: 'child', label: descriptor }],
+            id: 'literal',
+            title: 'resourceTitle',
+            description: descriptor,
+            group: 'child',
+            actions: [],
           },
         ],
+        groups: [{ name: 'child', title: descriptor }],
       },
     ],
   };
@@ -138,14 +151,22 @@ it('resolves nested groups and plugin namespaces while preserving literal names 
     String(options?.defaultValue),
   );
   const result = localizeOptions(raw, t);
-  expect(result.resourceTypes[0]?.groups?.[0]?.children?.[0]?.label).toBe(
-    'Fallback',
-  );
+  expect(result.resourceTypes[0]?.groups?.[0]?.label).toBe('Fallback');
   expect(result.resourceTypes[0]?.resources[0]?.label).toBe('resourceTitle');
-  expect(result.recordAccessPolicies[0]?.description).toBe('Fallback');
+  expect(result.resourceTypes[0]?.section).toBe('administration');
+  expect(result.recordAccess[0]?.description).toBe('Fallback');
+  expect(result.sections.map((section) => section.value)).toEqual([
+    'pages',
+    'administration',
+  ]);
+  // The library's titles are catalogued in this plugin's namespace.
+  expect(t).toHaveBeenCalledWith('sections.administration', {
+    ns: AUTHORIZATION_NAMESPACE,
+    defaultValue: 'sections.administration',
+  });
   expect(t).toHaveBeenCalledWith('resourceTitle', {
     ns: '@example/plugin',
     defaultValue: 'Fallback',
   });
-  expect(raw.resourceTypes[0]?.label).toBe(descriptor);
+  expect(raw.resourceTypes[0]?.title).toBe(descriptor);
 });

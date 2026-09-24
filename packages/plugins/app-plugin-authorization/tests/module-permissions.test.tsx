@@ -94,45 +94,50 @@ it('renders custom business resources with only their own operations', () => {
   ).not.toBeInTheDocument();
 });
 
-it('marks only the business group containing granted resources as configured', () => {
+it('marks only the resource types with granted resources as configured', () => {
   render(
     <ResourceTypeList
       types={[
         {
-          value: 'sales',
-          resourceType: 'resource',
-          label: 'Sales',
+          value: 'business',
+          section: 'business',
+          sectionLabel: 'Business permissions',
+          label: 'Business',
           actions: [],
           resources: [{ value: 'quotes', label: 'Quotes' }],
         },
         {
-          value: 'delivery',
-          resourceType: 'resource',
-          label: 'Delivery',
+          value: 'settings',
+          section: 'administration',
+          sectionLabel: 'Administration',
+          label: 'Settings',
           actions: [],
-          resources: [{ value: 'orders', label: 'Orders' }],
+          resources: [{ value: 'workflow', label: 'Workflow' }],
         },
       ]}
       grants={[
         {
           id: 1,
-          resource: { type: 'resource', id: 'quotes' },
+          resource: { type: 'business', id: 'quotes' },
           actions: ['view'],
         },
       ]}
-      type='sales'
-      label='Groups'
+      type='business'
+      label='Types'
       onSelect={() => {}}
     />,
   );
   expect(
-    screen.getByRole('button', { name: 'Sales' }).querySelector('[role="img"]'),
+    screen
+      .getByRole('button', { name: 'Business' })
+      .querySelector('[role="img"]'),
   ).not.toBeNull();
   expect(
     screen
-      .getByRole('button', { name: 'Delivery' })
+      .getByRole('button', { name: 'Settings' })
       .querySelector('[role="img"]'),
   ).toBeNull();
+  expect(screen.getByText('Administration')).toBeVisible();
 });
 
 it('keeps an all-selected bulk indicator limited when an operation has a restricted scope', () => {
@@ -143,31 +148,32 @@ it('keeps an all-selected bulk indicator limited when an operation has a restric
           value: 'orders',
           label: 'Orders',
           actions: [read],
-          actionScopes: {
-            read: {
-              policyType: 'resource',
-              fields: [
-                {
-                  key: 'orders',
-                  label: 'Orders',
-                  defaultValue: '',
-                  options: [],
-                },
-              ],
-            },
+          dataScopes: {
+            read: [
+              {
+                key: 'orders',
+                label: 'Orders',
+                collection: 'orders',
+                collectionFields: [],
+                defaultValue: '',
+                options: [],
+              },
+            ],
           },
         },
       ]}
       actions={[read]}
-      type='resource'
+      type='business'
       draft={{
         ...empty(),
         grants: [
           {
             id: 1,
-            resource: { type: 'resource', id: 'orders' },
+            resource: { type: 'business', id: 'orders' },
             actions: ['read'],
-            policies: { read: { type: 'resource', orders: 'recordsIOwn' } },
+            policies: {
+              read: { type: 'business', scopes: { orders: 'recordsIOwn' } },
+            },
           },
         ],
       }}

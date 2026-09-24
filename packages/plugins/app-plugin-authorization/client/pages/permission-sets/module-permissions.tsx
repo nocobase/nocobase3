@@ -10,7 +10,7 @@ import type {
   SelectOption,
 } from '../../authorization-client.js';
 import { ScopedOperation } from './scoped-operation.js';
-import { ScopeMark } from '../../components/scope-marks.js';
+import { SelectionMark } from '../../components/selection-marks.js';
 import { useAuthorizationTranslation } from '../../i18n.js';
 import { BulkPermissionToggle } from './bulk-permissions.js';
 import { newGrantForResource, resourceKey } from './drafts.js';
@@ -176,8 +176,8 @@ export function ModulePermissions({
             >
               {(item.actions ?? actions).map((action) => {
                 const granted = grant.actions.includes(action.value);
-                const config = item.actionScopes?.[action.value];
-                if (config)
+                const config = item.dataScopes?.[action.value];
+                if (config?.length)
                   return (
                     <ScopedOperation
                       key={action.value}
@@ -211,7 +211,7 @@ export function ModulePermissions({
                       onToggle(grant, action.value, granted ? 'none' : 'all')
                     }
                   >
-                    <ScopeMark
+                    <SelectionMark
                       value={granted ? 'all' : 'none'}
                       label={t(
                         granted

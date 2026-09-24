@@ -10,13 +10,13 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
-  getPermissionsRevision: () => 0,
-  onPermissionsInvalidated: vi.fn(() => () => {}),
+  revision: () => 0,
+  onInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   listAssignments: vi.fn(),
   updatePermissionSet: vi.fn(),
   createPermissionSet: vi.fn(),
-  invalidatePermissions: vi.fn(),
+  invalidate: vi.fn(),
 }));
 vi.mock('../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => api,
@@ -31,15 +31,17 @@ import NewPage from '../client/pages/permission-set-new-page.js';
 import DetailsPage from '../client/pages/permission-set-details-page.js';
 import AssignmentsPage from '../client/pages/permission-set-assignments-page.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
+import { sections } from './workspace-options.js';
 const options: AuthorizationOptions = {
-  plugins: [],
+  sections,
   subjectTypes: [],
-  recordAccessPolicies: [],
+  recordAccess: [],
   collections: [],
   resourceTypes: [
     {
       value: 'settings',
       label: 'Settings',
+      section: 'administration',
       actions: [{ value: 'read', label: 'Read' }],
       resources: [
         { value: 'authorization.permission-sets', label: 'Permission sets' },

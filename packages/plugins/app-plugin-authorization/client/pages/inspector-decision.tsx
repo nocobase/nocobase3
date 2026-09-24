@@ -52,7 +52,7 @@ export function Decision({
   const t = useAuthorizationTranslation();
   const status = inspectionStatus(value, fields);
   const business =
-    value.conditions?.type === 'resource' || !!value.checks?.length;
+    value.conditions?.type === 'business' || !!value.checks?.length;
   const checks =
     value.checks?.filter(
       (check) => check.resource.type === 'database.collection',
@@ -61,9 +61,7 @@ export function Decision({
     value.reasons.filter(
       (reason) =>
         !business ||
-        !['PAGE_ACCESS_GRANTED', 'SCOPE_EXPANDED', 'SCOPE_RESTRICTED'].includes(
-          reason.code,
-        ),
+        !['SELECTION_EXPANDED', 'SELECTION_RESTRICTED'].includes(reason.code),
     ),
   );
   return (
@@ -102,10 +100,9 @@ export function Decision({
             {t('inspector.subjectHint')}
           </p>
           {checks.map((check) => {
-            const scope = resource?.ruleScopes?.find(
-              (item) =>
-                item.action === action && item.collection === check.resource.id,
-            );
+            const scope = Object.entries(resource?.dataScopes ?? {})
+              .flatMap(([name, scopes]) => (name === action ? scopes : []))
+              .find((item) => item.collection === check.resource.id);
             const scopeReasons = uniqueReasons(
               check.decision.reasons.filter(
                 (reason) =>
@@ -176,12 +173,12 @@ function Reason({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const source = object(value.details?.source);
-  const scope = object(value.details?.scope);
-  const access = scope?.recordAccess;
-  const policy = typeof access === 'string' ? access : object(access)?.key;
-  const label = options?.recordAccessPolicies.find(
-    (item) => item.value === policy,
-  )?.label;
+  const selection = object(value.details?.selection);
+  const label =
+    selection?.type === 'recordAccess'
+      ? options?.recordAccess.find((item) => item.value === selection.key)
+          ?.label
+      : undefined;
   const title = source?.title;
   const descriptor = object(title);
   const sourceTitle =
@@ -192,11 +189,11 @@ function Reason({
         : undefined;
   const scopeLabel =
     label ??
-    (scope?.type === 'all'
+    (selection?.type === 'all'
       ? t('labels.allRecords')
-      : scope?.type === 'ids'
+      : selection?.type === 'records'
         ? t('inspector.selectedRecords', {
-            count: Array.isArray(scope.ids) ? scope.ids.length : 0,
+            count: Array.isArray(selection.ids) ? selection.ids.length : 0,
           })
         : undefined);
   return (

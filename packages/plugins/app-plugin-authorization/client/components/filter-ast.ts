@@ -4,16 +4,14 @@ export function emptyFilter(): FilterGroupNode {
   return { kind: 'group', logic: 'and', items: [] };
 }
 
-export function policyFilter(
-  value: string | { key: string; params?: unknown },
-): FilterNode | undefined {
-  if (
-    typeof value === 'string' ||
-    !value.params ||
-    typeof value.params !== 'object'
-  )
-    return undefined;
-  const filter: unknown = Reflect.get(value.params, 'filter');
+/** The filter of a `customFilter` selection or scope value. */
+export function policyFilter(value: unknown): FilterNode | undefined {
+  const params: unknown =
+    value && typeof value === 'object'
+      ? Reflect.get(value, 'params')
+      : undefined;
+  if (!params || typeof params !== 'object') return undefined;
+  const filter: unknown = Reflect.get(params, 'filter');
   return isFilterNode(filter) ? filter : undefined;
 }
 
@@ -48,11 +46,13 @@ export function incompleteFilter(node: FilterNode | undefined): boolean {
     : false;
 }
 
-export function incompleteScope(
-  scope: import('../authorization-client.js').AccessScope,
+/** A `customFilter` selection whose filter is still being written. */
+export function incompleteSelection(
+  selection: import('../authorization-client.js').RecordSelection,
 ): boolean {
-  if (scope.type !== 'database') return false;
-  const value = scope.recordAccess;
-  const key = typeof value === 'string' ? value : value.key;
-  return key === 'customFilter' && incompleteFilter(policyFilter(value));
+  return (
+    selection.type === 'recordAccess' &&
+    selection.key === 'customFilter' &&
+    incompleteFilter(policyFilter(selection))
+  );
 }

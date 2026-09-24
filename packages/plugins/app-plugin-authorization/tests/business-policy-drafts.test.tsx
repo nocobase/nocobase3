@@ -13,14 +13,13 @@ const original = {
   title: 'Dispatcher',
   grants: [
     {
-      resource: { type: 'work', id: 'tasks' },
+      resource: { type: 'business', id: 'tasks' },
       actions: [
         {
           action: 'assign',
           policy: {
-            type: 'assignment',
-            tasks: 'own',
-            people: 'department',
+            type: 'business',
+            scopes: { tasks: 'own', people: 'department' },
             futureConstraint: { keep: true },
           },
         },
@@ -42,26 +41,27 @@ function Harness() {
         container={containerRef}
         item={{ value: 'tasks', label: 'Tasks' }}
         action={{ value: 'assign', label: 'Assign' }}
-        config={{
-          policyType: 'assignment',
-          fields: [
-            {
-              key: 'tasks',
-              label: 'Task scope',
-              defaultValue: 'own',
-              options: [
-                { value: 'own', label: 'Own tasks' },
-                { value: 'all', label: 'All tasks' },
-              ],
-            },
-            {
-              key: 'people',
-              label: 'Eligible assignees',
-              defaultValue: 'department',
-              options: [{ value: 'department', label: 'Department members' }],
-            },
-          ],
-        }}
+        config={[
+          {
+            key: 'tasks',
+            label: 'Task scope',
+            collection: 'tasks',
+            collectionFields: [],
+            defaultValue: 'own',
+            options: [
+              { value: 'own', label: 'Own tasks' },
+              { value: 'all', label: 'All tasks' },
+            ],
+          },
+          {
+            key: 'people',
+            label: 'Eligible assignees',
+            collection: 'users',
+            collectionFields: [],
+            defaultValue: 'department',
+            options: [{ value: 'department', label: 'Department members' }],
+          },
+        ]}
         grant={draft.grants[0]}
         disabled={false}
         onToggle={() => {}}
@@ -79,7 +79,7 @@ it('edits named business scopes in the configuration drawer without discarding t
     screen.getByRole('img', { name: 'Limited access' }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Tasks: Assign' }));
-  expect(screen.getByText('Eligible assignees')).toBeVisible();
+  expect(screen.getByText(/Eligible assignees/)).toBeVisible();
   expect(
     screen.getByRole('radio', { name: 'Configure permission' }),
   ).toBeChecked();
@@ -90,9 +90,8 @@ it('edits named business scopes in the configuration drawer without discarding t
   fireEvent.mouseUp(option);
   fireEvent.click(option);
   expect(JSON.parse(screen.getByTestId('policy').textContent!)).toEqual({
-    type: 'assignment',
-    tasks: 'all',
-    people: 'department',
+    type: 'business',
+    scopes: { tasks: 'all', people: 'department' },
     futureConstraint: { keep: true },
   });
 });

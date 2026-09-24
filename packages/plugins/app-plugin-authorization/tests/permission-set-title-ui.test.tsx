@@ -9,8 +9,8 @@ import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
 import DetailsPage from '../client/pages/permission-set-details-page.js';
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
-  getPermissionsRevision: () => 0,
-  onPermissionsInvalidated: vi.fn(() => () => {}),
+  revision: () => 0,
+  onInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   listAssignments: vi.fn(),
 }));
@@ -48,11 +48,11 @@ it('switches preset names in place without refetching or translating editable da
             element={
               <PermissionSetsPanel
                 options={{
-                  plugins: [],
+                  sections: [],
                   subjectTypes: [],
                   resourceTypes: [],
                   collections: [],
-                  recordAccessPolicies: [],
+                  recordAccess: [],
                 }}
               />
             }

@@ -2,7 +2,7 @@ import { Fragment, type ReactElement } from 'react';
 import { Shield } from 'lucide-react';
 import { useAuthorizationTranslation } from '../../i18n.js';
 import type { GrantDraft } from './types.js';
-import type { ResourceTypeOption } from '../../authorization-client.js';
+import type { WorkspaceType } from '../../components/workspace-sections.js';
 
 export function ResourceTypeList({
   types,
@@ -11,7 +11,7 @@ export function ResourceTypeList({
   onSelect,
   label,
 }: {
-  types: readonly (ResourceTypeOption & { resourceType?: string })[];
+  types: readonly WorkspaceType[];
   grants: readonly GrantDraft[];
   type: string;
   label: string;
@@ -27,7 +27,7 @@ export function ResourceTypeList({
     <nav aria-label={label} className='space-y-1 p-2'>
       {types.map((item, index) => (
         <Fragment key={item.value}>
-          {item.category && item.category !== types[index - 1]?.category && (
+          {item.section !== types[index - 1]?.section && (
             <div
               className={`flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
             >
@@ -35,7 +35,7 @@ export function ResourceTypeList({
                 className='h-3 w-0.5 rounded-full bg-primary'
                 aria-hidden='true'
               />
-              {t(`permissionWorkspace.categories.${item.category}`)}
+              {item.sectionLabel}
             </div>
           )}
           <button
@@ -47,16 +47,7 @@ export function ResourceTypeList({
             onClick={() => onSelect(item.value)}
           >
             <span className='truncate'>{item.label}</span>
-            {item.resources.length > 0 &&
-            (configuredTypes.has(item.value) ||
-              grants.some(
-                (grant) =>
-                  grant.actions.length > 0 &&
-                  grant.resource.type === item.resourceType &&
-                  item.resources.some(
-                    (resource) => resource.value === grant.resource.id,
-                  ),
-              )) ? (
+            {item.resources.length > 0 && configuredTypes.has(item.value) ? (
               <span
                 title={t('permissionWorkspace.configured')}
                 role='img'

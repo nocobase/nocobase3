@@ -1,4 +1,7 @@
-import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import {
+  compareNavigationOrder,
+  type AppClientRegisteredRoute,
+} from '@nocobase/app-client/plugins';
 import type {
   AuthorizationOptions,
   ResourceOption,
@@ -19,15 +22,22 @@ export interface GrantablePage {
   readonly group?: string;
 }
 
-/** Discover page grants from the normalized route authorization contract. */
+/** Siblings in menu order: `navigation.order`, then registration order. */
+function inMenuOrder(
+  routes: readonly AppClientRegisteredRoute[],
+): readonly AppClientRegisteredRoute[] {
+  return [...routes].sort(compareNavigationOrder);
+}
+
+/** Discover page grants from the route tree, in menu order. */
 export function grantablePages(
   routes: readonly AppClientRegisteredRoute[],
   group?: string,
 ): readonly GrantablePage[] {
-  const pages = routes.flatMap((route) => [
+  const pages = inMenuOrder(routes).flatMap((route) => [
     ...(route.componentLoader &&
     route.authz !== 'skip' &&
-    route.authz.resource.type === 'page' &&
+    route.authz.resource.type === PAGE_RESOURCE_TYPE &&
     route.authz.action === 'access'
       ? [
           {
@@ -54,44 +64,30 @@ export function grantablePages(
 }
 
 /**
- * Adds the pages the browser discovered to the page resource type the server reported, leaving every other resource
- * type — database collections, settings resources — exactly as it came back. A page the server already listed keeps
- * its own title and metadata; display groups always come from the route tree.
+ * Fills the page record type with the pages and groups of the route tree. The
+ * server lists no page: it validates none.
  */
 export function withPageResources(
   options: AuthorizationOptions,
   pages: readonly ResourceOption[],
   groups: readonly ResourceGroupOption[] = [],
 ): AuthorizationOptions {
-  const routePages = new Map(pages.map((page) => [page.value, page]));
   return {
     ...options,
-    resourceTypes: options.resourceTypes.map((resourceType) => {
-      if (resourceType.value !== PAGE_RESOURCE_TYPE) return resourceType;
-      const declared = new Set(
-        resourceType.resources.map((resource) => resource.value),
-      );
-      return {
-        ...resourceType,
-        groups,
-        resources: [
-          ...resourceType.resources.map((resource) => {
-            const page = routePages.get(resource.value);
-            return { ...resource, group: page?.group };
-          }),
-          ...pages.filter((page) => !declared.has(page.value)),
-        ],
-      };
-    }),
+    resourceTypes: options.resourceTypes.map((resourceType) =>
+      resourceType.value === PAGE_RESOURCE_TYPE
+        ? { ...resourceType, groups, resources: pages }
+        : resourceType,
+    ),
   };
 }
 
-/** Navigation-only route nodes form the display tree; pages remain flat items. */
+/** Navigation-only route nodes form the display tree, in menu order. */
 export function pageGroups(
   routes: readonly AppClientRegisteredRoute[],
   translate: (title: string, namespace: string) => string,
 ): readonly ResourceGroupOption[] {
-  return routes.flatMap((route) => {
+  return inMenuOrder(routes).flatMap((route) => {
     if (route.componentLoader) return [];
     const children = pageGroups(route.children ?? [], translate);
     if (!route.navigation) return children;

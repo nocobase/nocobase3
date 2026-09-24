@@ -1,6 +1,13 @@
 import type { AuthorizationServerResource } from './en-US.js';
 
 const zhCN: AuthorizationServerResource = {
+  // Titles the library registers, in its `@nocobase/authorization` namespace.
+  sections: {
+    pages: '页面权限',
+    business: '业务权限',
+    administration: '系统管理',
+  },
+  resourceTypes: { business: '业务功能' },
   options: {
     defaultAndSharing: '沿用默认数据范围',
     actions: {

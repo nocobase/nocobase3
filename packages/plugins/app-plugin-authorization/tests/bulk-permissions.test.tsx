@@ -9,15 +9,17 @@ vi.mock('@nocobase/i18n/client', async () => {
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
+import { sections } from './workspace-options.js';
 const options: AuthorizationOptions = {
-  plugins: [],
+  sections,
   collections: [],
-  recordAccessPolicies: [],
+  recordAccess: [],
   subjectTypes: [],
   resourceTypes: [
     {
       value: 'page',
       label: 'Pages',
+      section: 'pages',
       actions: [{ value: 'access', label: 'Access' }],
       groups: [
         {

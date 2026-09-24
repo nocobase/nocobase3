@@ -4,9 +4,11 @@ import { useId, type RefObject, type ReactElement } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 import type {
+  DataScopeOption,
   ResourceOption,
   SelectOption,
 } from '../../authorization-client.js';
+import { scopeKey, scopeValue, withScopeValue } from './business-policy.js';
 import {
   Select,
   SelectContent,
@@ -14,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select.js';
-import { ScopeMark } from '../../components/scope-marks.js';
+import { SelectionMark } from '../../components/selection-marks.js';
 import { useAuthorizationTranslation } from '../../i18n.js';
 import type { GrantDraft } from './types.js';
 
@@ -31,7 +33,7 @@ export function ScopedOperation({
   container: RefObject<HTMLDivElement | null>;
   item: ResourceOption;
   action: SelectOption;
-  config: NonNullable<ResourceOption['actionScopes']>[string];
+  config: readonly DataScopeOption[];
   grant: GrantDraft;
   disabled: boolean;
   onToggle: (grant: GrantDraft, action: string, mode: string) => void;
@@ -40,12 +42,11 @@ export function ScopedOperation({
   const t = useAuthorizationTranslation();
   const choiceId = useId();
   const granted = grant.actions.includes(action.value);
-  const unrestricted = config.fields.every(
+  const policy = grant.policies?.[action.value];
+  const unrestricted = config.every(
     (field) =>
-      scopeKey(
-        grant.policies?.[action.value]?.[field.key],
-        field.defaultValue,
-      ) === 'allRecords',
+      scopeKey(scopeValue(policy, field.key), field.defaultValue) ===
+      'allRecords',
   );
   return (
     <Dialog.Root modal={false}>
@@ -53,7 +54,7 @@ export function ScopedOperation({
         className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
         aria-label={`${item.label}: ${action.label}`}
       >
-        <ScopeMark
+        <SelectionMark
           value={!granted ? 'none' : unrestricted ? 'all' : 'scoped'}
         />
         <span>{action.label}</span>
@@ -107,15 +108,14 @@ export function ScopedOperation({
               )}
             </fieldset>
             {granted &&
-              config.fields.map((field) => {
-                const optional = config.policyType === 'resource';
+              config.map((field) => {
                 const selected = scopeKey(
-                  grant.policies?.[action.value]?.[field.key],
+                  scopeValue(policy, field.key),
                   field.defaultValue,
                 );
-                const enabled = !optional || selected !== '';
+                const enabled = selected !== '';
                 const choices = field.options.filter(
-                  (option) => !optional || option.value !== '',
+                  (option) => option.value !== '',
                 );
                 const initial =
                   choices.find(
@@ -128,19 +128,22 @@ export function ScopedOperation({
                     ...grant,
                     policies: {
                       ...grant.policies,
-                      [action.value]: {
-                        ...grant.policies?.[action.value],
-                        type: config.policyType,
-                        [field.key]:
-                          value === 'customFilter'
-                            ? { key: value, params: { filter: emptyFilter() } }
-                            : value,
-                      },
+                      [action.value]: withScopeValue(
+                        policy,
+                        field.key,
+                        value === 'customFilter'
+                          ? {
+                              type: 'recordAccess',
+                              key: value,
+                              params: { filter: emptyFilter() },
+                            }
+                          : value,
+                      ),
                     },
                   });
                 return (
                   <section key={field.key} className='space-y-2 text-sm'>
-                    {optional ? (
+                    {
                       <label className='flex cursor-pointer items-center gap-2'>
                         <input
                           type='checkbox'
@@ -155,24 +158,17 @@ export function ScopedOperation({
                           scope: field.label,
                         })}
                       </label>
-                    ) : (
-                      <span>{field.label}</span>
-                    )}
+                    }
                     {!enabled && (
                       <p className='pl-6 text-xs leading-5 text-muted-foreground'>
                         {t('permissionWorkspace.inheritScope')}
                       </p>
                     )}
                     {enabled && (
-                      <div
-                        className={optional ? 'space-y-2 pl-6' : 'space-y-2'}
-                      >
+                      <div className='space-y-2 pl-6'>
                         <Select
                           disabled={disabled}
-                          value={scopeKey(
-                            grant.policies?.[action.value]?.[field.key],
-                            field.defaultValue,
-                          )}
+                          value={selected}
                           onValueChange={(value) => {
                             if (typeof value === 'string') change(value);
                           }}
@@ -184,14 +180,7 @@ export function ScopedOperation({
                             <SelectValue>
                               {
                                 field.options.find(
-                                  (option) =>
-                                    option.value ===
-                                    scopeKey(
-                                      grant.policies?.[action.value]?.[
-                                        field.key
-                                      ],
-                                      field.defaultValue,
-                                    ),
+                                  (option) => option.value === selected,
                                 )?.label
                               }
                             </SelectValue>
@@ -207,29 +196,21 @@ export function ScopedOperation({
                             ))}
                           </SelectContent>
                         </Select>
-                        {scopeKey(
-                          grant.policies?.[action.value]?.[field.key],
-                          field.defaultValue,
-                        ) === 'customFilter' &&
+                        {selected === 'customFilter' &&
                           field.collectionFields && (
                             <CustomFilterEditor
                               fields={field.collectionFields}
-                              value={
-                                grant.policies?.[action.value]?.[field.key] as {
-                                  key: string;
-                                  params?: unknown;
-                                }
-                              }
-                              onChange={(recordAccess) =>
+                              value={scopeValue(policy, field.key)}
+                              onChange={(selection) =>
                                 onChange({
                                   ...grant,
                                   policies: {
                                     ...grant.policies,
-                                    [action.value]: {
-                                      ...grant.policies?.[action.value],
-                                      type: config.policyType,
-                                      [field.key]: recordAccess,
-                                    },
+                                    [action.value]: withScopeValue(
+                                      policy,
+                                      field.key,
+                                      selection,
+                                    ),
                                   },
                                 })
                               }
@@ -245,13 +226,4 @@ export function ScopedOperation({
       </Dialog.Portal>
     </Dialog.Root>
   );
-}
-
-function scopeKey(value: unknown, fallback: string): string {
-  if (typeof value === 'string') return value;
-  if (value && typeof value === 'object') {
-    const key: unknown = Reflect.get(value, 'key');
-    if (typeof key === 'string') return key;
-  }
-  return fallback;
 }

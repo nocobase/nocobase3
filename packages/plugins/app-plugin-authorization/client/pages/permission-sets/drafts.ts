@@ -54,22 +54,19 @@ export function empty(): Draft {
 
 export function hasEmptyCustomFilter(draft: Draft): boolean {
   return draft.grants.some((grant) =>
-    Object.values(grant.policies ?? {}).some(
-      (policy) =>
-        policy?.type === 'resource' &&
-        Object.values(policy).some((value) => {
-          if (
-            !value ||
-            typeof value !== 'object' ||
-            !('key' in value) ||
-            value.key !== 'customFilter'
-          )
-            return false;
-          return incompleteFilter(
-            policyFilter(value as { key: string; params?: unknown }),
-          );
-        }),
-    ),
+    Object.values(grant.policies ?? {}).some((policy) => {
+      if (policy?.type !== 'business') return false;
+      const scopes: unknown = policy.scopes;
+      return Object.values(
+        scopes && typeof scopes === 'object' ? scopes : {},
+      ).some(
+        (value: unknown) =>
+          !!value &&
+          typeof value === 'object' &&
+          Reflect.get(value, 'key') === 'customFilter' &&
+          incompleteFilter(policyFilter(value)),
+      );
+    }),
   );
 }
 

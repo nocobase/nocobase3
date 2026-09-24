@@ -27,11 +27,12 @@ it('finds resources by translated label, original label and identifier', async (
   document.body.append(container);
   const root = createRoot(container);
   const options = {
-    plugins: [],
+    sections: [{ value: 'pages', label: 'Pages', order: 0 }],
     resourceTypes: [
       {
         value: 'page',
         label: 'Pages',
+        section: 'pages',
         resources: [
           {
             value: 'home-id',
@@ -45,7 +46,7 @@ it('finds resources by translated label, original label and identifier', async (
     ],
     subjectTypes: [],
     collections: [],
-    recordAccessPolicies: [],
+    recordAccess: [],
   };
   try {
     await act(() =>

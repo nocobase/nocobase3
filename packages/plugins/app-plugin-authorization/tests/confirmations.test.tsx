@@ -14,11 +14,11 @@ import { translate } from './locale-harness.js';
 
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
-  getPermissionsRevision: () => 0,
-  onPermissionsInvalidated: vi.fn(() => () => {}),
+  revision: () => 0,
+  onInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   deletePermissionSet: vi.fn(),
-  invalidatePermissions: vi.fn(),
+  invalidate: vi.fn(),
 }));
 vi.mock('../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => api,
@@ -37,11 +37,11 @@ async function renderDetail(onDelete: () => void): Promise<void> {
           element={
             <PermissionSetsPanel
               options={{
-                plugins: [],
+                sections: [],
                 resourceTypes: [],
                 subjectTypes: [],
                 collections: [],
-                recordAccessPolicies: [],
+                recordAccess: [],
               }}
             />
           }

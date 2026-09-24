@@ -12,14 +12,17 @@ function Harness({ defaults = false }: { defaults?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [grant, setGrant] = useState<GrantDraft>({
     id: 1,
-    resource: { type: 'resource', id: 'quotes' },
+    resource: { type: 'business', id: 'quotes' },
     actions: ['submit'],
     policies: {
       submit: {
-        type: 'resource',
-        quotes: {
-          key: 'customFilter',
-          params: { filter: { kind: 'group', logic: 'and', items: [] } },
+        type: 'business',
+        scopes: {
+          quotes: {
+            type: 'recordAccess',
+            key: 'customFilter',
+            params: { filter: { kind: 'group', logic: 'and', items: [] } },
+          },
         },
       },
     },
@@ -30,20 +33,19 @@ function Harness({ defaults = false }: { defaults?: boolean }) {
         container={containerRef}
         item={{ value: 'quotes', label: 'Quotes' }}
         action={{ value: 'submit', label: 'Submit' }}
-        config={{
-          policyType: 'resource',
-          fields: ['projects', 'quotes'].map((key) => ({
-            key,
-            label: key,
-            defaultValue: defaults ? 'recordsIOwn' : '',
-            options: [
-              { value: '', label: 'Defaults' },
-              { value: 'allRecords', label: 'All records' },
-              { value: 'recordsIOwn', label: 'Own records' },
-              { value: 'customFilter', label: 'Custom filter' },
-            ],
-          })),
-        }}
+        config={['projects', 'quotes'].map((key) => ({
+          key,
+          label: key,
+          collection: key,
+          collectionFields: [],
+          defaultValue: defaults ? 'recordsIOwn' : '',
+          options: [
+            { value: '', label: 'Defaults' },
+            { value: 'allRecords', label: 'All records' },
+            { value: 'recordsIOwn', label: 'Own records' },
+            { value: 'customFilter', label: 'Custom filter' },
+          ],
+        }))}
         grant={grant}
         disabled={false}
         onToggle={() => {}}
@@ -75,8 +77,7 @@ it('toggles each scope independently, preserves sibling configuration and retain
     screen.getByTestId('grant').textContent!,
   ) as GrantDraft;
   expect(enabled.policies?.submit).toMatchObject({
-    projects: 'recordsIOwn',
-    quotes: { key: 'customFilter' },
+    scopes: { projects: 'recordsIOwn', quotes: { key: 'customFilter' } },
   });
   fireEvent.click(
     screen.getByRole('checkbox', { name: 'Specify scope: projects' }),
@@ -86,8 +87,7 @@ it('toggles each scope independently, preserves sibling configuration and retain
   ) as GrantDraft;
   expect(disabled.actions).toEqual(['submit']);
   expect(disabled.policies?.submit).toMatchObject({
-    projects: '',
-    quotes: { key: 'customFilter' },
+    scopes: { projects: '', quotes: { key: 'customFilter' } },
   });
   expect(
     screen.queryByRole('combobox', { name: 'projects' }),
@@ -103,7 +103,7 @@ it('explicitly disables a registered default instead of silently restoring it on
     screen.getByRole('checkbox', { name: 'Specify scope: projects' }),
   );
   expect(
-    JSON.parse(screen.getByTestId('grant').textContent!).policies.submit
+    JSON.parse(screen.getByTestId('grant').textContent!).policies.submit.scopes
       .projects,
   ).toBe('');
 });

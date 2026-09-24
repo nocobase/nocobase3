@@ -9,7 +9,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { localizeOptions } from '../components/localized-options.js';
 import type {
   AuthorizationOptions,
-  LocalizedText,
+  AuthorizationOptionsResponse,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
 import { errorMessage as message } from '../components/feedback.js';
@@ -28,15 +28,16 @@ export interface AuthorizationPageData {
   readonly reload: () => void;
 }
 
+/** Loads and localizes `authz/<surface>/options`, such as `permission-sets`. */
 // Shared by the independent Authorization settings pages.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuthorizationPageData(
-  optionsPath: string,
+  surface: string,
 ): AuthorizationPageData {
   const authz = useAuthorizationClient();
   const t = useAuthorizationTranslation();
   const [state, setState] = useState<{
-    options?: AuthorizationOptions<LocalizedText>;
+    options?: AuthorizationOptionsResponse;
     error?: unknown;
     forbidden?: boolean;
   }>({});
@@ -52,7 +53,7 @@ export function useAuthorizationPageData(
   }, []);
   useEffect(() => {
     let active = true;
-    void authz.loadOptions(optionsPath).then(
+    void authz.loadOptions(surface).then(
       (options) => {
         if (active) setState({ options });
       },
@@ -67,7 +68,7 @@ export function useAuthorizationPageData(
     return () => {
       active = false;
     };
-  }, [authz, attempt, optionsPath]);
+  }, [authz, attempt, surface]);
   return {
     ...state,
     options,

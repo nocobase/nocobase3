@@ -3,7 +3,7 @@ import {
   useSubjectNames,
   subjectKey,
 } from '../components/use-subject-names.js';
-import { permissionSections } from '../components/resource-sections.js';
+import { workspaceTypes } from '../components/workspace-sections.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SubjectPicker } from '../components/subject-picker.js';
 import { useResourceOptions } from '../components/use-resource-options.js';
@@ -39,7 +39,7 @@ import {
   AuthorizationPageState,
   useAuthorizationPageData,
 } from './page-support.js';
-import { ScopeMark } from '../components/scope-marks.js';
+import { SelectionMark } from '../components/selection-marks.js';
 import { resourceRows } from './permission-sets/resource-groups.js';
 import { inspectionStatus } from './inspector-status.js';
 import { Decision } from './inspector-decision.js';
@@ -47,7 +47,7 @@ import { Decision } from './inspector-decision.js';
 const pageSize = 20;
 export default function InspectorPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/inspector/options');
+  const page = useAuthorizationPageData('inspector');
   const options = useResourceOptions(page.options);
   return (
     <PermissionsPage
@@ -86,16 +86,12 @@ function Inspector({
     options.subjectTypes,
     subject ? [subject] : [],
   );
-  const sections = useMemo(() => permissionSections(options, t), [options, t]);
+  const sections = useMemo(() => workspaceTypes(options), [options]);
   const type =
-    sections.find((item) => item.key === params.get('type')) ??
+    sections.find((item) => item.value === params.get('type')) ??
     sections.find((item) => item.resources.length > 0) ??
     sections[0];
-  const emptyCategory =
-    type?.resources.length === 0 &&
-    (type.category === 'pages' || type.category === 'business')
-      ? type.category
-      : undefined;
+  const emptySection = type?.resources.length === 0 ? type.section : undefined;
   const search = params.get('search') ?? '';
   const configuredOnly = params.get('configuredOnly') === 'true';
   const requestedPage = Number(params.get('page'));
@@ -148,6 +144,13 @@ function Inspector({
   );
   const configurationLoading =
     !!subject && configured?.key !== configurationKey && !error;
+  const groupConfigured = (group: string): boolean =>
+    configured?.key === configurationKey &&
+    (configured.unrestricted ||
+      configuredResources.has('*') ||
+      (type?.resources ?? []).some(
+        (item) => item.group === group && configuredResources.has(item.value),
+      ));
   const filtered = useMemo(
     () =>
       (type?.resources ?? []).filter(
@@ -294,27 +297,26 @@ function Inspector({
             className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
           >
             {sections.map((item, index) => (
-              <Fragment key={item.key}>
-                {item.category &&
-                  item.category !== sections[index - 1]?.category && (
-                    <div
-                      className={`flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
-                    >
-                      <span
-                        className='h-3 w-0.5 rounded-full bg-primary'
-                        aria-hidden='true'
-                      />
-                      {t(`permissionWorkspace.categories.${item.category}`)}
-                    </div>
-                  )}
+              <Fragment key={item.value}>
+                {item.section !== sections[index - 1]?.section && (
+                  <div
+                    className={`flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
+                  >
+                    <span
+                      className='h-3 w-0.5 rounded-full bg-primary'
+                      aria-hidden='true'
+                    />
+                    {item.sectionLabel}
+                  </div>
+                )}
                 <Button
-                  key={item.key}
+                  key={item.value}
                   className='w-full justify-start'
                   variant={item === type ? 'outline' : 'ghost'}
                   aria-label={item.label}
                   aria-current={item === type ? 'page' : undefined}
                   onClick={() => {
-                    change('type', item.key);
+                    change('type', item.value);
                     setCollapsed(new Set());
                   }}
                 >
@@ -386,7 +388,7 @@ function Inspector({
                         >
                           <td colSpan={2}>
                             <button
-                              className='flex w-full items-center gap-2 py-2 text-left font-medium'
+                              className='inline-flex items-center gap-2 py-2 pr-2 text-left font-medium'
                               style={{ paddingLeft: 12 + row.depth * 16 }}
                               onClick={() =>
                                 setCollapsed((previous) => {
@@ -406,6 +408,19 @@ function Inspector({
                               )}
                               {row.group.label}
                             </button>
+                            {groupConfigured(row.group.value) && (
+                              <span
+                                role='img'
+                                title={t('permissionWorkspace.configured')}
+                                aria-label={t('permissionWorkspace.configured')}
+                                className='text-muted-foreground'
+                              >
+                                <Shield
+                                  className='size-3.5'
+                                  aria-hidden='true'
+                                />
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -473,7 +488,7 @@ function Inspector({
                                                 )}
                                               />
                                             ) : (
-                                              <ScopeMark
+                                              <SelectionMark
                                                 value={status!}
                                                 label={t(
                                                   `inspector.status.${status}`,
@@ -495,8 +510,8 @@ function Inspector({
                   )}
                 </tbody>
               </table>
-              {!visible.length && !loading && emptyCategory ? (
-                <PermissionDevelopmentHint category={emptyCategory} />
+              {!visible.length && !loading && emptySection ? (
+                <PermissionDevelopmentHint section={emptySection} />
               ) : !visible.length && !loading ? (
                 <p className='p-8 text-center text-muted-foreground'>
                   {t(
@@ -511,7 +526,7 @@ function Inspector({
               <div className='flex flex-wrap gap-3 text-xs text-muted-foreground'>
                 {(['all', 'scoped', 'none'] as const).map((status) => (
                   <span key={status} className='flex items-center gap-1'>
-                    <ScopeMark
+                    <SelectionMark
                       legend
                       value={status}
                       label={t(`inspector.status.${status}`)}

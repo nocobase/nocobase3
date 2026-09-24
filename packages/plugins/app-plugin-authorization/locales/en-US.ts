@@ -4,6 +4,13 @@ import type { LocaleResource } from '@nocobase/i18n';
  * Display vocabulary shared by the client and server locale catalogues.
  */
 const enUS = {
+  // Titles the library registers, in its `@nocobase/authorization` namespace.
+  sections: {
+    pages: 'Page permissions',
+    business: 'Business permissions',
+    administration: 'Administration',
+  },
+  resourceTypes: { business: 'Business features' },
   options: {
     defaultAndSharing: 'Use default data scope',
     actions: {

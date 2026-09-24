@@ -2,8 +2,34 @@
 // client/plugins.ts; it keeps every implementation entry behind a dynamic import, so importing this module costs the
 // application only the descriptor.
 export { default } from './plugin.js';
-export * from './authorization-client.js';
-export * from './tokens.js';
+export {
+  AuthorizationClient,
+  type AuthorizationCheck,
+  type AuthorizationDecision,
+  type AuthorizationEffect,
+  type AuthorizationInspectInput,
+  type AuthorizationInspection,
+  type AuthorizationOptionsResponse,
+  type AuthorizationPermission,
+  type AuthorizationReason,
+  type AuthorizationRecordOption,
+  type AuthorizationSnapshot,
+  type AuthorizationSubject,
+  type ConfiguredAccess,
+  type LocalizedText,
+  type PermissionAssignmentInput,
+  type PermissionGrant,
+  type PermissionGrantAction,
+  type PermissionSet,
+  type PermissionSetAssignment,
+  type PermissionSetInput,
+  type PermissionSetProtection,
+  type PermissionSetWriteOperation,
+  type ResourceRef,
+  type SubjectOption,
+  type SubjectPage,
+} from './authorization-client.js';
+export { authorizationClientToken } from './tokens.js';
 export { useAuthorizationRevision } from './use-authorization-revision.js';
-export * from './use-can.js';
+export { useCan, type UseCanOptions, type UseCanResult } from './use-can.js';
 export { useAuthorizationClient } from './use-authorization-client.js';

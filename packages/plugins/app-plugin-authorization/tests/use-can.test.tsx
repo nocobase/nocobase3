@@ -51,13 +51,13 @@ describe('useCan without a Refine provider', () => {
     await waitFor(() => expect(result.current.update).toBe(true));
     const pending = Promise.withResolvers<boolean>();
     can.mockReturnValue(pending.promise);
-    act(() => client.invalidatePermissions());
+    act(() => client.invalidate());
     expect(Object.values(result.current).every((allowed) => !allowed)).toBe(
       true,
     );
     await act(async () => pending.resolve(false));
     can.mockResolvedValue(true);
-    act(() => client.invalidatePermissions());
+    act(() => client.invalidate());
     await waitFor(() => expect(result.current.update).toBe(true));
     can.mockResolvedValue(false);
     rerender('second');
@@ -82,7 +82,7 @@ describe('useCan without a Refine provider', () => {
     expect(request).toHaveBeenCalledTimes(1);
     const pending = Promise.withResolvers<typeof snapshot>();
     request.mockReturnValue(pending.promise);
-    act(() => client.invalidatePermissions());
+    act(() => client.invalidate());
     expect(result.current[0]).toMatchObject({ can: false, isPending: true });
     await act(async () =>
       pending.resolve({ data: { unrestricted: false, permissions: [] } }),
