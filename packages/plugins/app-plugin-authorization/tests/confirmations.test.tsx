@@ -38,7 +38,6 @@ async function renderDetail(onDelete: () => void): Promise<void> {
             <PermissionSetsPanel
               options={{
                 sections: [],
-                resourceTypes: [],
                 subjectTypes: [],
                 collections: [],
                 recordAccess: [],

@@ -28,7 +28,6 @@ vi.mock('../client/use-authorization-client.js', () => ({
 it('switches option labels and fixed subjects without refetching or losing edits', async () => {
   mocks.loadOptions.mockResolvedValue({
     sections: [],
-    resourceTypes: [],
     collections: [],
     recordAccess: [],
     subjectTypes: [
@@ -100,7 +99,7 @@ it('switches option labels and fixed subjects without refetching or losing edits
   expect(screen.getByText('Alice')).toBeInTheDocument();
 });
 
-it('resolves groups, sections and plugin namespaces while preserving literal names and fallbacks', () => {
+it('resolves groups, sections, subsections and plugin namespaces while preserving literal names and fallbacks', () => {
   const descriptor = {
     key: 'resourceTitle',
     ns: '@example/plugin',
@@ -115,8 +114,53 @@ it('resolves groups, sections and plugin namespaces while preserving literal nam
           ns: '@nocobase/authorization',
         },
         order: 200,
+        subsections: [
+          {
+            name: 'administration.other',
+            title: { key: 'sections.other', ns: '@nocobase/authorization' },
+            resources: [
+              {
+                type: 'settings',
+                id: 'literal',
+                title: 'resourceTitle',
+                description: descriptor,
+                group: 'child',
+                actions: [{ name: 'read', title: descriptor }],
+              },
+              {
+                type: 'settings',
+                id: 'first',
+                title: 'First',
+                group: 'late',
+                actions: [],
+              },
+              { type: 'settings', id: 'loose', title: 'Loose', actions: [] },
+            ],
+          },
+        ],
       },
-      { name: 'pages', title: 'Pages', order: 0 },
+      {
+        name: 'pages',
+        title: 'Pages',
+        order: 0,
+        subsections: [
+          {
+            name: 'page',
+            title: 'Pages',
+            recordType: {
+              type: 'page',
+              actions: [{ name: 'access', title: 'Access' }],
+            },
+            resources: [],
+          },
+        ],
+      },
+    ],
+    resourceGroups: [
+      { name: 'parent', title: 'Parent' },
+      { name: 'late', title: 'Late', parent: 'parent', order: 10 },
+      { name: 'child', title: descriptor, parent: 'parent' },
+      { name: 'unused', title: 'Unused' },
     ],
     collections: [],
     subjectTypes: [],
@@ -128,32 +172,44 @@ it('resolves groups, sections and plugin namespaces while preserving literal nam
         collections: [],
       },
     ],
-    resourceTypes: [
-      {
-        type: 'settings',
-        title: descriptor,
-        section: 'administration',
-        actions: [{ name: 'read', title: descriptor }],
-        items: [
-          {
-            id: 'literal',
-            title: 'resourceTitle',
-            description: descriptor,
-            group: 'child',
-            actions: [],
-          },
-        ],
-        groups: [{ name: 'child', title: descriptor }],
-      },
-    ],
   };
   const t = vi.fn((_key: string, options?: Readonly<Record<string, unknown>>) =>
     String(options?.defaultValue),
   );
   const result = localizeOptions(raw, t);
-  expect(result.resourceTypes[0]?.groups?.[0]?.label).toBe('Fallback');
-  expect(result.resourceTypes[0]?.resources[0]?.label).toBe('resourceTitle');
-  expect(result.resourceTypes[0]?.section).toBe('administration');
+  const other = result.sections[1]?.subsections[0];
+  expect(other?.label).toBe('sections.other');
+  // Groups nest under their parent, by order then registration; unused ones drop.
+  expect(other?.groups).toEqual([
+    {
+      value: 'parent',
+      label: 'Parent',
+      children: [
+        { value: 'child', label: 'Fallback' },
+        { value: 'late', label: 'Late' },
+      ],
+    },
+  ]);
+  // Ungrouped resources first, then each group's in tree order.
+  expect(other?.resources.map((item) => item.value)).toEqual([
+    'loose',
+    'literal',
+    'first',
+  ]);
+  expect(other?.resources[1]).toMatchObject({
+    type: 'settings',
+    label: 'resourceTitle',
+    description: 'Fallback',
+  });
+  expect(other?.actions).toEqual([{ value: 'read', label: 'Fallback' }]);
+  expect(result.sections[0]?.subsections[0]).toEqual({
+    value: 'page',
+    label: 'Pages',
+    recordType: 'page',
+    actions: [{ value: 'access', label: 'Access' }],
+    groups: [],
+    resources: [],
+  });
   expect(result.recordAccess[0]?.description).toBe('Fallback');
   expect(result.sections.map((section) => section.value)).toEqual([
     'pages',
@@ -168,5 +224,7 @@ it('resolves groups, sections and plugin namespaces while preserving literal nam
     ns: '@example/plugin',
     defaultValue: 'Fallback',
   });
-  expect(raw.resourceTypes[0]?.title).toBe(descriptor);
+  expect(raw.sections[0]?.subsections[0]?.resources[0]?.description).toBe(
+    descriptor,
+  );
 });

@@ -4,21 +4,22 @@ NocoBase application integration for authorization: authenticated identities, Pe
 
 ## Terminology
 
-| Term                  | Meaning                                                                                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resource ref          | `{ type, id }`: the target of a check or a grant. Every grant states its type.                                                                                                               |
-| Resource type         | The only unit of judgement: items, an authorize function and an optional section. This plugin registers `page`, `settings`, `database.collection` and, through `businessPlugin`, `business`. |
-| Item                  | One grantable thing of a catalog type, `{ id, title, actions, group? }`; an unregistered `(type, id, action)` is denied. A record type has no items and validates only the action.           |
-| Page                  | Record type `page`, action `access`. The server validates no page id; pages and their groups come from the client route tree.                                                                |
-| Settings item         | Type `settings`: one administration surface, `{ id, title, group, actions }`, registered with `authz.settings.add`. Ids must be registered.                                                  |
-| Collection            | Type `database.collection`: a collection opted into the permission model with `authz.database.collections.add`.                                                                              |
-| Business resource     | Type `business`: a feature whose actions compose collection grants, registered with `authz.business.define`.                                                                                 |
-| Data scope            | A named slot on a business action that a grant or rule fills with a record selection.                                                                                                        |
-| Record selection      | `all`, `records` with ids, or `recordAccess` with a key and params.                                                                                                                          |
-| Record access         | A named way to select records; `recordAccess.recordsIOwn` and its siblings are the built-in ones.                                                                                            |
-| Section               | A workspace area, `{ name, title, order }`: `pages`, `business`, `administration` and any a plugin adds. Display only.                                                                       |
-| Group                 | A heading items are listed under, `{ name, title }`. Display only.                                                                                                                           |
-| Authorization context | The request's `authz` Hono variable: `authorize`, `can`, `require`, `snapshot` for the signed-in identity.                                                                                   |
+| Term                  | Meaning                                                                                                                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resource ref          | `{ type, id }`: the target of a check or a grant. Every grant states its type.                                                                                                                                         |
+| Resource type         | The only unit of judgement, never displayed: items, an authorize function and an optional `defaultSection`. This plugin registers `page`, `settings`, `database.collection` and, through `businessPlugin`, `business`. |
+| Item                  | One grantable thing of a catalog type, `{ id, title, actions, section?, group? }`; an unregistered `(type, id, action)` is denied. A record type has no items and validates only the action.                           |
+| Page                  | Record type `page`, action `access`, default section `pages`. The server validates no page id; the client fills the Pages subsection and its resource groups from the route tree.                                      |
+| Settings item         | Type `settings`: one administration surface, `{ id, title, section?, actions }`, registered with `authz.settings.add`. Ids must be registered.                                                                         |
+| Collection            | Type `database.collection`: a collection opted into the permission model with `authz.database.collections.add`.                                                                                                        |
+| Business resource     | Type `business`: a feature whose actions compose collection grants, registered with `authz.business.define`.                                                                                                           |
+| Data scope            | A named slot on a business action that a grant or rule fills with a record selection.                                                                                                                                  |
+| Record selection      | `all`, `records` with ids, or `recordAccess` with a key and params.                                                                                                                                                    |
+| Record access         | A named way to select records; `recordAccess.recordsIOwn` and its siblings are the built-in ones.                                                                                                                      |
+| Section               | A top-level heading on the left of the workspace, `{ name, title, order }`: `pages`, `business`, `administration` and any a plugin adds. Display only.                                                                 |
+| Subsection            | A left-side entry under a section, `{ name, title, parent, order? }`, such as `authorization` or `automation`; a resource names one with `section`. Display only.                                                      |
+| Resource group        | A right-side heading resources are listed under, `{ name, title, parent?, order? }`, nested to any depth. Display only.                                                                                                |
+| Authorization context | The request's `authz` Hono variable: `authorize`, `can`, `require`, `snapshot` for the signed-in identity.                                                                                                             |
 
 ## Layers
 
@@ -31,7 +32,7 @@ NocoBase application integration for authorization: authenticated identities, Pe
                                     page · settings · database.collection     client: useCan(...), route `authz`
                                     · business · plugin types                 HTTP:   /api/authz/*
 
- display (separate): sections ─▶ resource types ─▶ groups ─▶ items (pages from the client route tree)
+ display (separate): sections ─▶ subsections ─▶ resource groups ─▶ resources (pages from the client route tree)
 ```
 
 ## Entry points
@@ -78,14 +79,18 @@ All registration runs in a provider's `boot`, before the first request.
 ### Settings item
 
 ```ts
-authz.groups.add({
+authz.sections.add({
   name: 'automation',
-  title: { key: 'nav.automation', ns: '@nocobase/app-plugin-workflow' },
+  title: {
+    key: 'sections.automation',
+    ns: '@nocobase/app-plugin-authorization',
+  },
+  parent: 'administration',
 });
 authz.settings.add({
   id: 'workflow',
   title: { key: 'authorization.title', ns: '@nocobase/app-plugin-workflow' },
-  group: 'automation',
+  section: 'automation',
   actions: [
     {
       name: 'manage',
@@ -99,7 +104,7 @@ authz.settings.add({
 const grant = authz.settings.grant('workflow', ['manage']);
 ```
 
-A settings item may declare any action names. `settings.grant` refuses an id or action nobody registered. The `settings` type lives in section `administration`. Check a settings action on the server with `requireSettings` from `./server/extension` or with `context.require({ resource: { type: 'settings', id: 'workflow' }, action: 'manage' })`.
+A settings item may declare any action names. `settings.grant` refuses an id or action nobody registered. The `settings` type's default section is `administration`, so an item without `section` is listed under its "Other" subsection. Check a settings action on the server with `requireSettings` from `./server/extension` or with `context.require({ resource: { type: 'settings', id: 'workflow' }, action: 'manage' })`.
 
 ### Collection
 
@@ -136,7 +141,7 @@ const quoteData = defineDatabasePermission((permission) =>
 export const quotes = defineBusinessResource('sales.quotes', (resource) =>
   resource
     .title('Quotes')
-    .group('sales')
+    .section('sales')
     .action('view', (action) => action.title('View').grant('quotes', quoteData))
     .action('submit', (action) =>
       action
@@ -146,7 +151,7 @@ export const quotes = defineBusinessResource('sales.quotes', (resource) =>
     ),
 );
 
-authz.groups.add({ name: 'sales', title: 'Sales' });
+authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
 const reference = authz.business.define(quotes);
 ```
 
@@ -156,7 +161,7 @@ Object form, the same data a builder produces:
 authz.business.define({
   name: 'sales.reports',
   title: 'Reports',
-  group: 'sales',
+  section: 'sales',
   actions: [
     {
       name: 'export',
@@ -196,7 +201,6 @@ import { grantBacked } from '@nocobase/authorization/core';
 authz.resourceTypes.add({
   type: 'hub.app',
   title: { key: 'authorization.apps', ns: '@nocobase/app-plugin-hub' },
-  section: 'administration',
   actions: ['read', 'deploy'],
   authorize: grantBacked({
     also: (request) => ownsApp(request.principal.id, request.resource.id),
@@ -206,18 +210,14 @@ authz.resourceTypes.add({
 
 This is a record type: it declares its actions and no items, so any record id passes validation and only an undeclared action is denied; the type's `authorize` judges each record. Grants use `id: '*'` to mean every record. `grantBacked()` is the default judgement and permits when a grant without a policy matches. Hub (`hub.app`, `hub.host`), users (`user`), notification and `page` are record types; `settings`, `business` and `database.collection` are catalog types, which register items and deny any unregistered item or action.
 
-### Sections and groups
+### Sections, subsections and resource groups
 
 ```ts
-authz.sections.add({
-  name: 'reports',
-  title: { key: 'sections.reports', ns: 'my-plugin' },
-  order: 50,
-});
-authz.groups.add({ name: 'sales', title: 'Sales' });
+authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
+authz.resourceGroups.add({ name: 'ledgers', title: 'Ledgers' });
 ```
 
-The workspace renders `options.sections` in order and lists each section's resource types, their items under their groups. Re-adding a deep-equal section or group is a no-op; anything else throws.
+The workspace lists the top-level sections `pages`, `business` and `administration` on the left, each with its subsections as entries, and the selected subsection's resources on the right, under their resource groups. A business resource or settings item names its subsection with `section`; one that names none is listed under the "Other" subsection of its type's default section. The Pages entry is filled on the client from the route tree, with navigation groups as resource groups in menu order. Resource types without a default section, such as `database.collection`, `hub.app` and `user`, are never listed. Re-adding a deep-equal section, subsection or resource group is a no-op, which is how workflow and scheduler share `automation`; anything else throws.
 
 ### Record access
 
@@ -395,7 +395,7 @@ defineRoutes([
 ]);
 ```
 
-Every client route states its `authz`: there is no `page:<route.name>` inference and no default for settings routes. The permission workspace lists page items and their groups from the client route tree, sorted by `navigation.order` the way the menu sorts them.
+Every client route states its `authz`: there is no `page:<route.name>` inference and no default for settings routes. The permission workspace lists these pages in the Pages subsection, under their navigation groups as resource groups, from the client route tree sorted by `navigation.order` the way the menu sorts them.
 
 ## HTTP API
 
@@ -433,7 +433,7 @@ Every path is under `/api/authz` and requires a signed-in user. Settings checks 
 
 `<rule>` is each of `default-access`, `sharing-rules` and `restriction-rules`, present only when that plugin is configured. Options, subjects and records stay per plugin, each gated by that plugin's own settings item. A subject directory may enforce further read checks of its own. The inspector evaluates one subject: a user includes the `authenticated` audience and resolved memberships, while inspecting a team describes that team's grants alone.
 
-`AuthorizationOptions` is `{ sections, resourceTypes: [{ type, title, section?, groups, actions, items: [{ id, title, description?, group?, actions: [{ name, title }], dataScopes? }] }], subjectTypes, recordAccess, collections }`, where `dataScopes` maps a business action to its data scopes, with every title as sent by the server, either a string or `{ key, ns }`.
+`AuthorizationOptions` is `{ sections: [{ name, title, order, subsections: [{ name, title, recordType?, resources: [{ type, id, title, description?, group?, actions: [{ name, title }], dataScopes? }] }] }], resourceGroups?, subjectTypes, recordAccess, collections }`. A subsection with `recordType` (`{ type: 'page', actions }`) lists no resources: the client supplies them. `dataScopes` maps a business action to its data scopes; subsections without resources are omitted, and rule options list only business resources with data scopes, with every title as sent by the server, either a string or `{ key, ns }`.
 
 Settings action names are semantic. Permission sets declare `read`, `create`, `update`, `delete` and `assign`; the inspector declares `inspect`; each rule plugin declares `read`, `create`, `update` and `delete`.
 
@@ -468,7 +468,7 @@ The root entry `@nocobase/app-plugin-authorization` exports exactly the same nam
 | `settingsPlugin`                      | function | `settingsPlugin(): SettingsPlugin`                                                                              | Registers `settings` and `authz.settings`.                         |
 | `SettingsPlugin`                      | type     | `AuthorizationPlugin<{ settings: SettingsApi }>`                                                                | What `settingsPlugin` returns.                                     |
 | `SettingsApi`                         | type     | `add(item: SettingsItemDefinition)`, `grant(id, actions): PermissionGrant`                                      | `authz.settings`.                                                  |
-| `SettingsItemDefinition`              | type     | `{ id, title, group, actions: readonly { name; title? }[] }`                                                    | A settings item.                                                   |
+| `SettingsItemDefinition`              | type     | `{ id, title, section?, actions: readonly { name; title? }[] }`                                                 | A settings item.                                                   |
 | `defineDatabasePermission`            | function | `defineDatabasePermission(configure): DatabasePermissionBuilder`                                                | Builds a bindable collection permission.                           |
 | `DatabasePermissionDefinitionBuilder` | class    | `collection<Row>(name): DatabasePermissionBuilder<Row>`                                                         | The builder `defineDatabasePermission` passes in.                  |
 | `DatabasePermissionBuilder`           | class    | `title`, `options`, `default`, `read`, `create`, `update`, `delete`, `build`, `bind(key, { title? })`           | A collection permission; implements `BindableBusinessPermission`.  |
@@ -541,7 +541,7 @@ authz.routes.add('/sharing-rules', createRouteHandler(router));
 | `DatabaseConnectionSource`   | type     | `() => DatabaseConnection`                                                                                                                               | What a handle resolves a connection from.                                            |
 | `describeCollection`         | function | `describeCollection(connection, name): Promise<AuthorizationCollection \| undefined>`                                                                    | Reads a collection's metadata.                                                       |
 | `DataScopeRuleInput`         | type     | `{ resource: ResourceRef; actions: readonly RuleAction[] }`                                                                                              | What `validateDataScopeRule` checks.                                                 |
-| `AuthorizationExtensionHost` | type     | `{ sections, groups, resourceTypes, recordAccess, subjects, business, database }`                                                                        | The part of `authz` the support routes read.                                         |
+| `AuthorizationExtensionHost` | type     | `{ sections, resourceGroups, resourceTypes, recordAccess, subjects, business, database }`                                                                | The part of `authz` the support routes read.                                         |
 
 ## `@nocobase/app-plugin-authorization/client`
 
@@ -563,7 +563,7 @@ authz.routes.add('/sharing-rules', createRouteHandler(router));
 | `PermissionSetInput`           | type     | `{ key; title?; grants }`                                                                                               | A complete set for create and update.         |
 | `PermissionSetAssignment`      | type     | `{ id; subject; permissionSet }`                                                                                        | An assignment.                                |
 | `PermissionAssignmentInput`    | type     | `{ subject: { type; id } }`                                                                                             | Body of an assignment.                        |
-| `AuthorizationOptionsResponse` | type     | `{ sections, resourceTypes, subjectTypes, recordAccess, collections }`                                                  | What an `options` route answers.              |
+| `AuthorizationOptionsResponse` | type     | `{ sections, resourceGroups?, subjectTypes, recordAccess, collections }`                                                | What an `options` route answers.              |
 | `AuthorizationEffect`          | type     | `'permit' \| 'conditional' \| 'deny'`                                                                                   | A decision's effect.                          |
 | `AuthorizationReason`          | type     | `{ code; message; plugin? }`                                                                                            | Why a decision was made.                      |
 | `AuthorizationPermission`      | type     | `{ resource; actions }`                                                                                                 | One entry of a snapshot.                      |
@@ -665,6 +665,8 @@ Exactly what the rule plugins import to build their settings pages; the workspac
 | `titleText`                   | function  | Text of an `AuthorizationTitle`.                  |
 | `humanize`                    | function  | Readable text of an identifier.                   |
 | `collectionFields`            | function  | Fields of a collection from options.              |
+| `findResource`                | function  | The resource with a type and id in options.       |
+| `workspaceSubsections`        | function  | Every subsection of options, in section order.    |
 | `AuthorizationOptions`        | type      | What an `options` route answers.                  |
 | `ResourceGroupOption`         | type      | One group in options.                             |
 | `AuthorizationRecordOption`   | type      | One record in a records route.                    |

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
@@ -9,55 +10,108 @@ vi.mock('@nocobase/i18n/client', async () => {
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
-import { sections } from './workspace-options.js';
-const options: AuthorizationOptions = {
+import {
+  pageSubsection,
   sections,
+  subsection,
+  withSubsections,
+} from './workspace-options.js';
+
+const read = { value: 'read', label: 'Read' };
+const view = { value: 'view', label: 'View' };
+const options: AuthorizationOptions = {
+  sections: withSubsections({
+    administration: [
+      subsection(
+        'administration.authorization',
+        'Authorization',
+        [
+          {
+            type: 'settings',
+            value: 'authorization.permission-sets',
+            label: 'Permission sets',
+            actions: [read],
+          },
+        ],
+        { groups: [] },
+      ),
+    ],
+  }),
   subjectTypes: [],
   recordAccess: [],
   collections: [],
-  resourceTypes: [
-    {
-      value: 'settings',
-      label: 'Admin settings',
-      section: 'administration',
-      groups: [{ value: 'administration', label: 'Authorization' }],
-      actions: [{ value: 'read', label: 'Read' }],
-      resources: [
-        {
-          value: 'authorization.permission-sets',
-          label: 'Permission sets',
-          group: 'administration',
-        },
-      ],
-    },
-  ],
 };
+
+const workspace: AuthorizationOptions = {
+  ...options,
+  sections: withSubsections({
+    pages: [pageSubsection([{ value: 'orders', label: 'Orders' }])],
+    business: [
+      subsection('example.sales', 'Sales', [
+        { type: 'business', value: 'orders', label: 'Orders', actions: [view] },
+      ]),
+      subsection('example.delivery', 'Delivery', [
+        {
+          type: 'business',
+          value: 'shipments',
+          label: 'Shipments',
+          actions: [view],
+        },
+      ]),
+    ],
+    administration: options.sections[2].subsections,
+  }),
+};
+
+function Location() {
+  return <output data-testid='location'>{useLocation().search}</output>;
+}
+
 function Harness({
   resourceOptions = options,
+  grants = [],
+  url = '/',
+  onChange,
 }: {
   resourceOptions?: AuthorizationOptions;
+  grants?: Draft['grants'];
+  url?: string;
+  onChange?: (draft: Draft) => void;
 }) {
   const [draft, setDraft] = useState<Draft>({
     originalKey: 'staff',
     key: 'staff',
     title: 'Staff',
-    grants: [],
+    grants,
   });
   return (
-    <PermissionSetEditor
-      dirty={true}
-      options={resourceOptions}
-      draft={draft}
-      busy={false}
-      onChange={setDraft}
-      onClose={() => {}}
-      onSave={(event) => {
-        event.preventDefault();
-        return Promise.resolve();
-      }}
-    />
+    <MemoryRouter initialEntries={[url]}>
+      <PermissionSetEditor
+        dirty={true}
+        options={resourceOptions}
+        draft={draft}
+        busy={false}
+        onChange={(next) => {
+          onChange?.(next);
+          setDraft(next);
+        }}
+        onClose={() => {}}
+        onSave={(event) => {
+          event.preventDefault();
+          return Promise.resolve();
+        }}
+      />
+      <Location />
+    </MemoryRouter>
   );
 }
+
+function sidebar(): string[] {
+  return [
+    ...screen.getByRole('navigation', { name: 'Resource types' }).children,
+  ].map((element) => element.textContent ?? '');
+}
+
 describe('scope controls', () => {
   it('toggles simple permissions directly with no menu', () => {
     render(<Harness />);
@@ -73,60 +127,86 @@ describe('scope controls', () => {
   });
 });
 
-it('edits page entry independently from a business resource with the same ID', () => {
-  const options: AuthorizationOptions = {
-    sections,
-    subjectTypes: [],
-    recordAccess: [],
-    collections: [],
-    resourceTypes: [
-      {
-        value: 'business',
-        label: 'Business',
-        section: 'business',
-        groups: [{ value: 'sales', label: 'Sales' }],
-        actions: [{ value: 'view', label: 'View' }],
-        resources: [{ value: 'orders', group: 'sales', label: 'Orders' }],
-      },
-      {
-        value: 'page',
-        label: 'Pages',
-        section: 'pages',
-        actions: [{ value: 'access', label: 'Access' }],
-        resources: [{ value: 'orders', label: 'Orders' }],
-      },
-    ],
-  };
-  let current: Draft = {
-    originalKey: 'staff',
-    key: 'staff',
-    title: 'Staff',
-    grants: [
-      {
-        id: 1,
-        resource: { type: 'business', id: 'orders' },
-        actions: ['view'],
-      },
-    ],
-  };
-  function Editor() {
-    const [draft, setDraft] = useState(current);
-    return (
-      <PermissionSetEditor
-        dirty={true}
-        options={options}
-        draft={draft}
-        busy={false}
-        onChange={(next) => {
-          current = next;
-          setDraft(next);
-        }}
-        onClose={() => {}}
-        onSave={async () => {}}
-      />
+it('lists section headers, then one entry per subsection, without resource types', () => {
+  render(<Harness resourceOptions={workspace} />);
+  expect(sidebar()).toEqual([
+    'Page permissions',
+    'Pages',
+    'Business permissions',
+    'Sales',
+    'Delivery',
+    'Administration',
+    'Authorization',
+  ]);
+  expect(screen.queryByText('Business features')).not.toBeInTheDocument();
+});
+
+it('marks each subsection holding a grant as configured', () => {
+  render(
+    <Harness
+      resourceOptions={workspace}
+      grants={[
+        {
+          id: 1,
+          resource: { type: 'business', id: 'shipments' },
+          actions: ['view'],
+        },
+        { id: 2, resource: { type: 'page', id: '*' }, actions: ['access'] },
+      ]}
+    />,
+  );
+  const shield = (name: string) =>
+    within(screen.getByRole('button', { name, exact: true })).queryByRole(
+      'img',
+      { name: 'Configured in this set' },
     );
-  }
-  render(<Editor />);
+  expect(shield('Pages')).not.toBeNull();
+  expect(shield('Delivery')).not.toBeNull();
+  expect(shield('Sales')).toBeNull();
+  expect(shield('Authorization')).toBeNull();
+});
+
+it('keeps the selected subsection in the URL', () => {
+  const { unmount } = render(<Harness resourceOptions={workspace} />);
+  expect(screen.getByRole('button', { name: 'Pages' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delivery' }));
+  expect(screen.getByTestId('location')).toHaveTextContent(
+    '?section=example.delivery',
+  );
+  unmount();
+  render(
+    <Harness resourceOptions={workspace} url='/?section=example.delivery' />,
+  );
+  expect(screen.getByRole('button', { name: 'Delivery' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  expect(screen.getByRole('group', { name: 'Shipments' })).toBeVisible();
+  expect(
+    screen.queryByRole('group', { name: 'Orders' }),
+  ).not.toBeInTheDocument();
+});
+
+it('edits page entry independently from a business resource with the same ID', () => {
+  let current: Draft | undefined;
+  render(
+    <Harness
+      resourceOptions={workspace}
+      grants={[
+        {
+          id: 1,
+          resource: { type: 'business', id: 'orders' },
+          actions: ['view'],
+        },
+      ]}
+      onChange={(next) => {
+        current = next;
+      }}
+    />,
+  );
   expect(
     screen.getByRole('button', { name: 'Pages', exact: true }),
   ).toHaveAttribute('aria-current', 'true');
@@ -135,9 +215,7 @@ it('edits page entry independently from a business resource with the same ID', (
       .getAllByRole('group', { name: 'Orders' })[0]
       .querySelectorAll('button'),
   ).toHaveLength(1);
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Business', exact: true }),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Sales', exact: true }));
   expect(screen.getByRole('button', { name: 'Orders: View' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -147,48 +225,47 @@ it('edits page entry independently from a business resource with the same ID', (
   expect(access).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(access);
   expect(
-    current.grants.find((grant) => grant.resource.type === 'page')?.actions,
+    current?.grants.find((grant) => grant.resource.type === 'page')?.actions,
   ).toEqual(['access']);
   expect(
-    current.grants.find((grant) => grant.resource.type === 'business')?.actions,
+    current?.grants.find((grant) => grant.resource.type === 'business')
+      ?.actions,
   ).toEqual(['view']);
   fireEvent.click(access);
   expect(
-    current.grants.find((grant) => grant.resource.type === 'page'),
+    current?.grants.find((grant) => grant.resource.type === 'page'),
   ).toBeUndefined();
   expect(
-    current.grants.find((grant) => grant.resource.type === 'business')?.actions,
+    current?.grants.find((grant) => grant.resource.type === 'business')
+      ?.actions,
   ).toEqual(['view']);
 });
 
-it('keeps empty page and business types discoverable with development guidance', () => {
+it('keeps empty page and business sections discoverable with development guidance', () => {
   render(
     <Harness
       resourceOptions={{
         ...options,
-        resourceTypes: [
-          {
-            value: 'page',
-            label: 'Pages',
-            section: 'pages',
-            actions: [],
-            resources: [],
-          },
-          {
-            value: 'business',
-            label: 'Business features',
-            section: 'business',
-            actions: [],
-            resources: [],
-          },
-        ],
+        sections: withSubsections({
+          pages: [pageSubsection()],
+          administration: options.sections[2].subsections,
+        }),
       }}
     />,
   );
-  expect(screen.getByText('Page permissions')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Pages' })).toBeVisible();
+  expect(sidebar()).toEqual([
+    'Page permissions',
+    'Page permissions',
+    'Business permissions',
+    'Business permissions',
+    'Administration',
+    'Authorization',
+  ]);
+  fireEvent.click(
+    screen.getAllByRole('button', { name: 'Page permissions' })[0],
+  );
   expect(screen.getByText(/No pages requiring authorization/)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Business features' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Business permissions' }));
   expect(
     screen.getByText(/No business permissions have been defined/),
   ).toBeVisible();
@@ -196,6 +273,11 @@ it('keeps empty page and business types discoverable with development guidance',
   expect(
     screen.queryByRole('img', { name: 'Configured in this set' }),
   ).not.toBeInTheDocument();
+});
+
+it('keeps an empty workspace on the first placeholder', () => {
+  render(<Harness resourceOptions={{ ...options, sections }} />);
+  expect(screen.getByText(/No pages requiring authorization/)).toBeVisible();
 });
 
 it('distinguishes empty search results from missing business permission development', () => {

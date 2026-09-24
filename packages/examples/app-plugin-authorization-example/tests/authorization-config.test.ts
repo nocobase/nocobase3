@@ -242,7 +242,9 @@ describe('what an application configures about its own authorization', () => {
       data: {
         // Only what the application registered; db supplies the fields.
         collections: [{ name: 'orders', fields: orderFields }],
-        resourceTypes: [],
+        sections: ['pages', 'business', 'administration'].map((name) =>
+          expect.objectContaining({ name, subsections: [] }),
+        ),
       },
     });
     await expect(records.json()).resolves.toEqual({ data: [] });

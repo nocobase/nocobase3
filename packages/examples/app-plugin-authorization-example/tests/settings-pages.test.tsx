@@ -59,7 +59,6 @@ import SharingRulesPage from '../../../plugins/app-plugin-authz-sharing-rules/cl
 
 const options: AuthorizationOptionsResponse = {
   sections: [],
-  resourceTypes: [],
   subjectTypes: [],
   collections: [],
   recordAccess: [],

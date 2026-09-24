@@ -28,6 +28,10 @@ export {
 } from './components/editors.js';
 export { ErrorBox, errorMessage } from './components/feedback.js';
 export { incompleteSelection } from './components/filter-ast.js';
+export {
+  findResource,
+  workspaceSubsections,
+} from './components/localized-options.js';
 export { FilterBar, SearchField } from './components/filters.js';
 export {
   EmptyTableRow,

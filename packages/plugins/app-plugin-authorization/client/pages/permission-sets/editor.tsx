@@ -1,6 +1,10 @@
 import { useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { PermissionDevelopmentHint } from '../../components/permission-development-hint.js';
-import { workspaceTypes } from '../../components/workspace-sections.js';
+import { useSearchParams } from 'react-router';
+import {
+  selectedEntry,
+  workspaceEntries,
+} from '../../components/workspace-sections.js';
 import { defaultBusinessPolicy } from './business-policy.js';
 import { Checkbox } from '../../components/ui/checkbox.js';
 import type {
@@ -42,55 +46,60 @@ export function PermissionSetEditor({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const configurationRef = useRef<HTMLDivElement>(null);
-  const types = workspaceTypes(options);
-  const initialType =
-    types.find((item) => item.resources.length > 0) ?? types[0];
-  const [type, setType] = useState(initialType?.value ?? 'page');
+  const entries = workspaceEntries(options);
+  const [params, setParams] = useSearchParams();
+  const entry = selectedEntry(entries, params.get('section'));
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const selectedType = types.find((item) => item.value === type);
-  const emptySection =
-    selectedType?.resources.length === 0 ? selectedType.section : undefined;
+  const emptySection = entry?.empty ? entry.section : undefined;
+  const pages = entry?.recordType === 'page';
   const [search, setSearch] = useState('');
   const [configuredOnly, setConfiguredOnly] = useState(false);
   const [limit, setLimit] = useState(80);
-  const resourceType = options.resourceTypes.find(
-    (item) => item.value === type,
-  );
   const current = new Map(
     draft.grants.map((item) => [
       resourceKey(item.resource.type, item.resource.id),
       item,
     ]),
   );
-  const known = resourceType?.resources ?? [];
+  const known = entry?.resources ?? [];
+  const recordType = entry?.recordType;
+  // Grants on record-type ids the client no longer lists stay editable.
   const resources: readonly ResourceOption[] = [
     ...known,
-    ...draft.grants
-      .filter(
-        (item) =>
-          item.resource.type === type &&
-          !known.some((knownItem) => knownItem.value === item.resource.id),
-      )
-      .map((item) => ({ value: item.resource.id, label: item.resource.id })),
+    ...(recordType
+      ? draft.grants
+          .filter(
+            (item) =>
+              item.resource.type === recordType &&
+              !known.some((knownItem) => knownItem.value === item.resource.id),
+          )
+          .map((item) => ({
+            type: recordType,
+            value: item.resource.id,
+            label: item.resource.id,
+          }))
+      : []),
   ];
   const query = search.trim().toLowerCase();
   const visible = resources.filter(
     (item) =>
       (!configuredOnly ||
-        Boolean(current.get(resourceKey(type, item.value))?.actions.length)) &&
+        Boolean(
+          current.get(resourceKey(item.type, item.value))?.actions.length,
+        )) &&
       (!query ||
         `${item.label} ${item.searchText ?? ''} ${item.value}`
           .toLowerCase()
           .includes(query)),
   );
   const rows = resourceRows(
-    resourceType?.groups ?? [],
+    entry?.groups ?? [],
     visible,
     query ? new Set() : collapsed,
   );
-  const actions = resourceType?.actions ?? [];
+  const actions = entry?.actions ?? [];
   function update(grant: GrantDraft): void {
     if (readOnly) return;
     const key = resourceKey(grant.resource.type, grant.resource.id);
@@ -111,8 +120,10 @@ export function PermissionSetEditor({
   }
   function choose(grant: GrantDraft, action: string, mode: string): void {
     if (readOnly) return;
-    const scoped = resources.find((item) => item.value === grant.resource.id)
-      ?.dataScopes?.[action];
+    const scoped = resources.find(
+      (item) =>
+        item.type === grant.resource.type && item.value === grant.resource.id,
+    )?.dataScopes?.[action];
     const next = {
       ...grant,
       actions:
@@ -185,11 +196,18 @@ export function PermissionSetEditor({
                 <aside className='w-44 shrink-0 overflow-auto border-r bg-muted/15 xl:w-52'>
                   <ResourceTypeList
                     label={t('permissionSets.picker.resourceTypes')}
-                    types={types}
+                    entries={entries}
                     grants={draft.grants}
-                    type={type}
+                    selected={entry?.value ?? ''}
                     onSelect={(value) => {
-                      setType(value);
+                      setParams(
+                        (previous) => {
+                          const next = new URLSearchParams(previous);
+                          next.set('section', value);
+                          return next;
+                        },
+                        { replace: true },
+                      );
                       setCollapsed(new Set());
                       setSearch('');
                       setLimit(80);
@@ -232,7 +250,7 @@ export function PermissionSetEditor({
                       <div className='flex shrink-0 items-center justify-between gap-3 px-4 py-2'>
                         <p className='text-xs text-muted-foreground'>
                           {t(
-                            type === 'page'
+                            pages
                               ? 'permissionWorkspace.pageAccessHint'
                               : 'permissionWorkspace.clickScope',
                           )}
@@ -242,8 +260,8 @@ export function PermissionSetEditor({
                         {
                           <ModulePermissions
                             container={configurationRef}
-                            type={type}
-                            label={resourceType?.label ?? type}
+                            pages={pages}
+                            label={entry?.label ?? ''}
                             rows={rows.slice(0, limit)}
                             items={visible}
                             actions={actions}

@@ -43,7 +43,11 @@ import {
   fromSet,
   toInput,
 } from '../../../plugins/app-plugin-authorization/client/pages/permission-sets/drafts.js';
-import { localizeOptions } from '../../../plugins/app-plugin-authorization/client/components/localized-options.js';
+import {
+  findResource,
+  localizeOptions,
+} from '../../../plugins/app-plugin-authorization/client/components/localized-options.js';
+import { MemoryRouter } from 'react-router';
 import type {
   AuthorizationOptionsResponse,
   PermissionSet,
@@ -240,9 +244,11 @@ it('saves all three rule types through their production HTTP routes and validate
     const options = (await response.json())
       .data as AuthorizationOptionsResponse;
     expect(
-      options.resourceTypes
-        .find((type) => type.type === 'business')
-        ?.items.find((item) => item.id === 'example.sales.projects')
+      wireResources(options)
+        .find(
+          (item) =>
+            item.type === 'business' && item.id === 'example.sales.projects',
+        )
         ?.actions.map((action) => action.name),
     ).toEqual(['view', 'edit']);
   }
@@ -294,33 +300,32 @@ it('saves one operation scope from the real editor without changing view or quot
       : translate(key, params),
   );
   expect(
-    options.resourceTypes
-      .find((type) => type.value === 'business')
-      ?.resources.find(
-        (resource) => resource.value === 'example.sales.projects',
-      )?.dataScopes?.edit,
+    findResource(options, { type: 'business', id: 'example.sales.projects' })
+      ?.dataScopes?.edit,
   ).toBeDefined();
   const set = (await authz.permissionSets.get('example-sales-assistant'))!;
   let saved = false;
   function Editor() {
     const [draft, setDraft] = useState(() => fromSet(set as PermissionSet));
     return (
-      <PermissionSetEditor
-        dirty={true}
-        options={options}
-        draft={draft}
-        busy={false}
-        onChange={setDraft}
-        onClose={() => {}}
-        onSave={async (event) => {
-          event.preventDefault();
-          expect(
-            (await admin(`permission-sets/${set.key}`, 'PUT', toInput(draft)))
-              .status,
-          ).toBe(200);
-          saved = true;
-        }}
-      />
+      <MemoryRouter>
+        <PermissionSetEditor
+          dirty={true}
+          options={options}
+          draft={draft}
+          busy={false}
+          onChange={setDraft}
+          onClose={() => {}}
+          onSave={async (event) => {
+            event.preventDefault();
+            expect(
+              (await admin(`permission-sets/${set.key}`, 'PUT', toInput(draft)))
+                .status,
+            ).toBe(200);
+            saved = true;
+          }}
+        />
+      </MemoryRouter>
     );
   }
   render(<Editor />);
@@ -831,31 +836,29 @@ it('exposes pages in permission sets and inspection while data rules only list b
     const options = (await (await admin(`${path}/options`)).json())
       .data as AuthorizationOptionsResponse;
     const workspace = path === 'permission-sets' || path === 'inspector';
-    expect(options.resourceTypes.some((type) => type.type === 'page')).toBe(
-      workspace,
-    );
-    expect(options.resourceTypes.map((type) => type.type)).not.toContain(
-      'database.collection',
-    );
+    const subsections = (name: string) =>
+      options.sections
+        .find((section) => section.name === name)
+        ?.subsections.map((item) => item.name);
+    const resources = wireResources(options);
+    expect(
+      options.sections.some((section) =>
+        section.subsections.some((item) => item.recordType?.type === 'page'),
+      ),
+    ).toBe(workspace);
     // Rule plugins can only target business items with data scopes.
-    expect(options.resourceTypes.map((type) => type.type)).toEqual(
-      workspace ? ['business', 'page', 'settings'] : ['business'],
+    expect([...new Set(resources.map((item) => item.type))]).toEqual(
+      workspace ? ['business', 'settings'] : ['business'],
     );
-    const business = options.resourceTypes.find(
-      (type) => type.type === 'business',
-    )!;
-    expect(business.groups.map((group) => group.name)).toEqual([
+    expect(subsections('business')).toEqual([
       'example.sales',
       'example.delivery',
     ]);
     if (workspace)
-      expect(
-        options.resourceTypes
-          .find((type) => type.type === 'settings')
-          ?.groups.map((group) => group.name),
-      ).toContain('authorization');
-    const project = business.items.find(
-      (item) => item.id === 'example.sales.projects',
+      expect(subsections('administration')).toContain('authorization');
+    const project = resources.find(
+      (item) =>
+        item.type === 'business' && item.id === 'example.sales.projects',
     )!;
     const choices = project.dataScopes!.view![0]!.recordAccess;
     offered.set(path, choices);
@@ -1728,4 +1731,13 @@ function databaseGrant(
     resource: { type: 'database.collection', id: collection },
     actions: [{ action, policy: { type: 'database', ...policy } }],
   };
+}
+
+/** Every resource an `options` response lists, in section order. */
+function wireResources(
+  options: AuthorizationOptionsResponse,
+): AuthorizationOptionsResponse['sections'][number]['subsections'][number]['resources'] {
+  return options.sections.flatMap((section) =>
+    section.subsections.flatMap((item) => item.resources),
+  );
 }

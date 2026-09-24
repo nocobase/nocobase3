@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
@@ -9,33 +10,30 @@ vi.mock('@nocobase/i18n/client', async () => {
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
-import { sections } from './workspace-options.js';
+import { pageSubsection, withSubsections } from './workspace-options.js';
 const options: AuthorizationOptions = {
-  sections,
+  sections: withSubsections({
+    pages: [
+      pageSubsection(
+        [
+          { value: 'orders', label: 'Orders', group: 'sales' },
+          { value: 'reports', label: 'Reports', group: 'business' },
+          { value: 'home', label: 'Home' },
+          { value: 'blocked', label: 'Blocked', actions: [] },
+        ],
+        [
+          {
+            value: 'business',
+            label: 'Business',
+            children: [{ value: 'sales', label: 'Sales' }],
+          },
+        ],
+      ),
+    ],
+  }),
   collections: [],
   recordAccess: [],
   subjectTypes: [],
-  resourceTypes: [
-    {
-      value: 'page',
-      label: 'Pages',
-      section: 'pages',
-      actions: [{ value: 'access', label: 'Access' }],
-      groups: [
-        {
-          value: 'business',
-          label: 'Business',
-          children: [{ value: 'sales', label: 'Sales' }],
-        },
-      ],
-      resources: [
-        { value: 'orders', label: 'Orders', group: 'sales' },
-        { value: 'reports', label: 'Reports', group: 'business' },
-        { value: 'home', label: 'Home' },
-        { value: 'blocked', label: 'Blocked', actions: [] },
-      ],
-    },
-  ],
 };
 function Harness() {
   const [draft, setDraft] = useState<Draft>({
@@ -51,7 +49,7 @@ function Harness() {
     ],
   });
   return (
-    <>
+    <MemoryRouter>
       <output data-testid='draft'>{JSON.stringify(draft.grants)}</output>
       <PermissionSetEditor
         dirty={true}
@@ -64,7 +62,7 @@ function Harness() {
           event.preventDefault();
         }}
       />
-    </>
+    </MemoryRouter>
   );
 }
 describe('bulk simple permissions', () => {

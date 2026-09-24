@@ -33,6 +33,11 @@ import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import { authorizationClientToken } from '../client/tokens.js';
 import { translate } from './locale-harness.js';
+import {
+  pageSubsection,
+  subsection,
+  withSubsections,
+} from './workspace-options.js';
 
 describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {
@@ -89,19 +94,22 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(
       firstActions(
         {
-          sections: [],
-          resourceTypes: [
-            {
-              value: 'database.collection',
-              label: 'Collections',
-              resources: [],
-              actions: [
-                { value: 'delete', label: 'Delete' },
-                { value: 'update', label: 'Update' },
-                { value: 'read', label: 'Read' },
-              ],
-            },
-          ],
+          sections: withSubsections({
+            administration: [
+              subsection('administration.other', 'Other', [
+                {
+                  type: 'database.collection',
+                  value: 'orders',
+                  label: 'Orders',
+                  actions: [
+                    { value: 'delete', label: 'Delete' },
+                    { value: 'update', label: 'Update' },
+                    { value: 'read', label: 'Read' },
+                  ],
+                },
+              ]),
+            ],
+          }),
           subjectTypes: [],
           collections: [],
           recordAccess: [],
@@ -115,24 +123,27 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(
       firstActions(
         {
-          sections: [],
-          resourceTypes: [
-            {
-              value: 'settings',
-              label: 'Settings',
-              resources: [
+          sections: withSubsections({
+            administration: [
+              subsection('administration.other', 'Other', [
                 {
+                  type: 'settings',
+                  value: 'users',
+                  label: 'Users',
+                  actions: [
+                    { value: 'create', label: 'Create' },
+                    { value: 'read', label: 'Read' },
+                  ],
+                },
+                {
+                  type: 'settings',
                   value: 'audit-log',
                   label: 'Audit Log',
-                  actions: [{ value: 'read', label: 'Read' }],
+                  actions: [{ value: 'update', label: 'Update' }],
                 },
-              ],
-              actions: [
-                { value: 'create', label: 'Create' },
-                { value: 'read', label: 'Read' },
-              ],
-            },
-          ],
+              ]),
+            ],
+          }),
           subjectTypes: [],
           collections: [],
           recordAccess: [],
@@ -140,7 +151,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
         'settings',
         'audit-log',
       ),
-    ).toEqual(['read']);
+    ).toEqual(['update']);
   });
 
   it('notifies consumers when the cached permission snapshot is invalidated', () => {
@@ -293,7 +304,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ).toBe('Network down');
   });
 
-  it('replaces the page type with the route pages and their groups', () => {
+  it('replaces the page subsection with the route pages and their groups', () => {
     const groups = [
       {
         value: 'business',
@@ -306,16 +317,18 @@ describe('@nocobase/app-plugin-authorization client', () => {
       [{ value: 'orders', label: 'Orders', group: 'sales' }],
       groups,
     );
-    const pages = merged.resourceTypes.find((type) => type.value === 'page')!;
+    const pages = merged.sections[0].subsections[0];
     expect(pages.groups).toEqual(groups);
     expect(pages.resources).toEqual([
-      { value: 'orders', label: 'Orders', group: 'sales' },
+      { type: 'page', value: 'orders', label: 'Orders', group: 'sales' },
     ]);
     const refreshed = withPageResources(merged, [
       { value: 'orders', label: 'Orders' },
     ]);
-    expect(refreshed.resourceTypes[0].groups).toEqual([]);
-    expect(refreshed.resourceTypes[0].resources[0].group).toBeUndefined();
+    expect(refreshed.sections[0].subsections[0].groups).toEqual([]);
+    expect(
+      refreshed.sections[0].subsections[0].resources[0].group,
+    ).toBeUndefined();
   });
 
   it('preserves recursive route groups without turning them into grantable pages', () => {
@@ -426,20 +439,27 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ]);
   });
 
-  it('adds the discovered pages to the page resource type and leaves the rest alone', () => {
+  it('adds the discovered pages to the page subsection and leaves the rest alone', () => {
     const merged = withPageResources(options(), [
       { value: 'orders', label: 'Orders' },
       { value: 'reports', label: 'Reports' },
     ]);
 
     expect(
-      merged.resourceTypes.map((resourceType) => ({
-        value: resourceType.value,
-        resources: resourceType.resources.map((resource) => resource.value),
-      })),
+      merged.sections.flatMap((section) =>
+        section.subsections.map((item) => ({
+          value: item.value,
+          resources: item.resources.map(
+            (resource) => `${resource.type}:${resource.value}`,
+          ),
+        })),
+      ),
     ).toEqual([
-      { value: 'page', resources: ['orders', 'reports'] },
-      { value: 'database.collection', resources: ['orders'] },
+      { value: 'page', resources: ['page:orders', 'page:reports'] },
+      {
+        value: 'administration.other',
+        resources: ['database.collection:orders'],
+      },
     ]);
     expect(merged.collections).toEqual(options().collections);
   });
@@ -462,22 +482,19 @@ function route(
 
 function options(): AuthorizationOptions {
   return {
-    sections: [{ value: 'pages', label: 'Pages', order: 0 }],
-    resourceTypes: [
-      {
-        value: 'page',
-        label: 'Pages',
-        section: 'pages',
-        resources: [],
-        actions: [{ value: 'access', label: 'Access' }],
-      },
-      {
-        value: 'database.collection',
-        label: 'Collections',
-        resources: [{ value: 'orders', label: 'Orders' }],
-        actions: [{ value: 'read', label: 'Read' }],
-      },
-    ],
+    sections: withSubsections({
+      pages: [pageSubsection()],
+      administration: [
+        subsection('administration.other', 'Other', [
+          {
+            type: 'database.collection',
+            value: 'orders',
+            label: 'Orders',
+            actions: [{ value: 'read', label: 'Read' }],
+          },
+        ]),
+      ],
+    }),
     subjectTypes: [{ value: 'user', label: 'User' }],
     collections: [],
     recordAccess: [],

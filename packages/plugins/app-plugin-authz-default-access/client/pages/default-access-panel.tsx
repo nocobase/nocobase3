@@ -1,4 +1,8 @@
-import { selectionLabel } from '@nocobase/app-plugin-authorization/client/management';
+import {
+  findResource,
+  selectionLabel,
+  workspaceSubsections,
+} from '@nocobase/app-plugin-authorization/client/management';
 import { DataScopesEditor } from '@nocobase/app-plugin-authorization/client/management';
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 import type { DefaultAccessRule } from '../api.js';
@@ -86,9 +90,21 @@ export function DefaultAccessPanel({
   const search = params.get('search') ?? '';
   const configured = params.get('configured') === '1';
   const groupFilter = params.get('group') ?? '';
-  const sections = options.resourceTypes;
-  const resourceType =
-    sections.find((item) => item.value === params.get('type')) ?? sections[0];
+  const sections = workspaceSubsections(options).filter(
+    (item) => item.resources.length > 0,
+  );
+  const subsection =
+    sections.find((item) => item.value === params.get('section')) ??
+    sections[0];
+  const businessSection = Boolean(
+    subsection?.resources.every((item) => item.type === BUSINESS),
+  );
+  const inSubsection = (resource: { type: string; id: string }): boolean =>
+    Boolean(
+      subsection?.resources.some(
+        (item) => item.type === resource.type && item.value === resource.id,
+      ),
+    );
   const page = Math.max(1, Number(params.get('page')) || 1);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -126,22 +142,25 @@ export function DefaultAccessPanel({
     void Promise.resolve().then(load);
   }, [load]);
   const rows = useMemo(() => {
-    const result: Row[] = options.resourceTypes.flatMap((type) =>
-      type.resources.map((resource) => {
-        const rule = rules.find(
-          (item) =>
-            item.resource.type === type.value &&
-            item.resource.id === resource.value,
-        );
-        return {
-          key: JSON.stringify([type.value, resource.value]),
-          ...(rule ? { ruleKey: rule.key } : {}),
-          label: resource.label,
-          resource: { type: type.value, id: resource.value },
-          actions: rule?.actions ?? [],
-        };
-      }),
-    );
+    const result: Row[] = [];
+    for (const resource of workspaceSubsections(options).flatMap(
+      (item) => item.resources,
+    )) {
+      const key = JSON.stringify([resource.type, resource.value]);
+      if (result.some((row) => row.key === key)) continue;
+      const rule = rules.find(
+        (item) =>
+          item.resource.type === resource.type &&
+          item.resource.id === resource.value,
+      );
+      result.push({
+        key,
+        ...(rule ? { ruleKey: rule.key } : {}),
+        label: resource.label,
+        resource: { type: resource.type, id: resource.value },
+        actions: rule?.actions ?? [],
+      });
+    }
     for (const rule of rules) {
       if (
         !result.some(
@@ -185,19 +204,14 @@ export function DefaultAccessPanel({
   }, [authz, draft?.resource.id, draft?.resource.type]);
   const actions = [
     ...new Map(
-      (resourceType ? [resourceType] : []).flatMap((type) =>
-        type.actions
-          .filter((action) => action.value !== 'create')
-          .map((action) => [action.value, action] as const),
-      ),
+      (subsection?.actions ?? [])
+        .filter((action) => action.value !== 'create')
+        .map((action) => [action.value, action] as const),
     ).values(),
   ];
   const visible = rows.filter(
     (row) =>
-      row.resource.type === resourceType?.value &&
-      Boolean(
-        resourceType?.resources.some((item) => item.value === row.resource.id),
-      ) &&
+      inSubsection(row.resource) &&
       (!configured || row.actions.length > 0) &&
       (!groupFilter || resourcePath(options, row) === groupFilter) &&
       `${row.label} ${row.resource.id} ${resourcePath(options, row)}`
@@ -248,7 +262,7 @@ export function DefaultAccessPanel({
   const groupPaths = [
     ...new Set(
       rows
-        .filter((row) => row.resource.type === resourceType?.value)
+        .filter((row) => inSubsection(row.resource))
         .map((row) => resourcePath(options, row)),
     ),
   ];
@@ -291,18 +305,18 @@ export function DefaultAccessPanel({
             aria-label={t('editors.resourceGroup')}
             className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
           >
-            {sections.map((type) => (
+            {sections.map((item) => (
               <button
-                key={type.value}
+                key={item.value}
                 aria-current={
-                  type.value === resourceType?.value ? 'page' : undefined
+                  item.value === subsection?.value ? 'page' : undefined
                 }
                 className='flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary aria-[current=page]:font-medium'
                 onClick={() => {
                   setParams(
                     (current) => {
                       const next = new URLSearchParams(current);
-                      next.set('type', type.value);
+                      next.set('section', item.value);
                       next.delete('group');
                       next.delete('page');
                       return next;
@@ -311,9 +325,9 @@ export function DefaultAccessPanel({
                   );
                 }}
               >
-                <span>{type.label}</span>
+                <span>{item.label}</span>
                 <span className='text-xs text-muted-foreground'>
-                  {type.resources.length}
+                  {item.resources.length}
                 </span>
               </button>
             ))}
@@ -326,7 +340,7 @@ export function DefaultAccessPanel({
                 value={search}
                 onChange={(value) => filter('search', value)}
               />
-              {resourceType?.groups?.length ? (
+              {subsection?.groups.length ? (
                 <SelectField
                   aria-label={t('defaultAccess.groupFilter')}
                   className='h-9 max-w-64 rounded-md border bg-transparent px-3 text-sm'
@@ -364,7 +378,7 @@ export function DefaultAccessPanel({
                       <TableHead className='w-[32%] px-5 py-3'>
                         {t('common.resource')}
                       </TableHead>
-                      {resourceType?.value === BUSINESS ? (
+                      {businessSection ? (
                         <TableHead className='px-2 py-3'>
                           {t('editors.actions')}
                         </TableHead>
@@ -386,18 +400,14 @@ export function DefaultAccessPanel({
                         (row) => resourcePath(options, row) === path,
                       );
                       if (!groupRows.length) return null;
-                      const grouped =
-                        path !== resourceType?.label &&
-                        path !== resourceType?.value;
+                      const grouped = path !== '';
                       return (
                         <Fragment key={path}>
                           {grouped ? (
                             <TableRow className='bg-muted/40'>
                               <TableCell
                                 colSpan={
-                                  resourceType?.value === BUSINESS
-                                    ? 2
-                                    : actions.length + 1
+                                  businessSection ? 2 : actions.length + 1
                                 }
                                 className='p-0'
                               >
@@ -440,65 +450,52 @@ export function DefaultAccessPanel({
                                   {row.resource.type === BUSINESS ? (
                                     <TableCell className='px-2 py-2'>
                                       <div className='flex flex-wrap gap-x-3 gap-y-1'>
-                                        {options.resourceTypes
-                                          .find(
-                                            (type) =>
-                                              type.value === row.resource.type,
-                                          )
-                                          ?.resources.find(
+                                        {findResource(
+                                          options,
+                                          row.resource,
+                                        )?.actions?.map((action) => {
+                                          const scopes = row.actions.filter(
                                             (item) =>
-                                              item.value === row.resource.id,
-                                          )
-                                          ?.actions?.map((action) => {
-                                            const scopes = row.actions.filter(
-                                              (item) =>
-                                                item.action === action.value,
-                                            );
-                                            return (
-                                              <button
-                                                key={action.value}
-                                                type='button'
-                                                aria-label={`${row.label}: ${action.label}`}
-                                                disabled={
-                                                  busy ||
-                                                  !loaded ||
-                                                  !canConfigure
+                                              item.action === action.value,
+                                          );
+                                          return (
+                                            <button
+                                              key={action.value}
+                                              type='button'
+                                              aria-label={`${row.label}: ${action.label}`}
+                                              disabled={
+                                                busy || !loaded || !canConfigure
+                                              }
+                                              onClick={() => edit(row)}
+                                              className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-sm hover:bg-muted'
+                                            >
+                                              <SelectionMark
+                                                value={
+                                                  !scopes.length
+                                                    ? 'none'
+                                                    : scopes.every(
+                                                          (item) =>
+                                                            item.selection
+                                                              .type === 'all',
+                                                        )
+                                                      ? 'all'
+                                                      : 'scoped'
                                                 }
-                                                onClick={() => edit(row)}
-                                                className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-sm hover:bg-muted'
-                                              >
-                                                <SelectionMark
-                                                  value={
-                                                    !scopes.length
-                                                      ? 'none'
-                                                      : scopes.every(
-                                                            (item) =>
-                                                              item.selection
-                                                                .type === 'all',
-                                                          )
-                                                        ? 'all'
-                                                        : 'scoped'
-                                                  }
-                                                />
-                                                <span>{action.label}</span>
-                                              </button>
-                                            );
-                                          })}
+                                              />
+                                              <span>{action.label}</span>
+                                            </button>
+                                          );
+                                        })}
                                       </div>
                                     </TableCell>
                                   ) : (
                                     actions.map((action) => {
-                                      const type = options.resourceTypes.find(
-                                        (item) =>
-                                          item.value === row.resource.type,
+                                      const resource = findResource(
+                                        options,
+                                        row.resource,
                                       );
                                       const supported = (
-                                        type?.resources.find(
-                                          (item) =>
-                                            item.value === row.resource.id,
-                                        )?.actions ??
-                                        type?.actions ??
-                                        []
+                                        resource?.actions ?? actions
                                       ).some(
                                         (item) => item.value === action.value,
                                       );
@@ -534,12 +531,9 @@ export function DefaultAccessPanel({
                                                 ).length
                                               }
                                               /
-                                              {type?.resources.find(
-                                                (item) =>
-                                                  item.value ===
-                                                  row.resource.id,
-                                              )?.dataScopes?.[action.value]
-                                                ?.length ?? 0}
+                                              {resource?.dataScopes?.[
+                                                action.value
+                                              ]?.length ?? 0}
                                             </button>
                                           ) : supported || current ? (
                                             <DefaultScopeControl
@@ -574,11 +568,7 @@ export function DefaultAccessPanel({
                     })}
                     {!paged.length ? (
                       <EmptyTableRow
-                        colSpan={
-                          resourceType?.value === BUSINESS
-                            ? 2
-                            : actions.length + 1
-                        }
+                        colSpan={businessSection ? 2 : actions.length + 1}
                       >
                         {!loaded
                           ? t('common.loading')
@@ -618,7 +608,7 @@ export function DefaultAccessPanel({
       {draft ? (
         <RuleDrawer
           title={draft.label}
-          description={`${resourcePath(options, draft)} · ${t('defaultAccess.editorDescription')}`}
+          description={`${[subsectionLabel(options, draft), resourcePath(options, draft)].filter(Boolean).join(' / ')} · ${t('defaultAccess.editorDescription')}`}
           dirty={dirty}
           busy={busy}
           onClose={close}
@@ -663,16 +653,10 @@ export function DefaultAccessPanel({
               ) : (
                 actions
                   .filter((action) => {
-                    const type = options.resourceTypes.find(
-                      (item) => item.value === draft.resource.type,
-                    );
                     return (
                       (
-                        type?.resources.find(
-                          (item) => item.value === draft.resource.id,
-                        )?.actions ??
-                        type?.actions ??
-                        []
+                        findResource(options, draft.resource)?.actions ??
+                        actions
                       ).some((item) => item.value === action.value) ||
                       draft.actions.some((item) => item.action === action.value)
                     );
@@ -783,13 +767,24 @@ export function DefaultAccessPanel({
   );
 }
 
-function resourcePath(options: AuthorizationOptions, row: Row): string {
-  const type = options.resourceTypes.find(
-    (item) => item.value === row.resource.type,
+/** The subsection that lists the row's resource. */
+function subsectionOf(options: AuthorizationOptions, row: Row) {
+  return workspaceSubsections(options).find((item) =>
+    item.resources.some(
+      (resource) =>
+        resource.type === row.resource.type &&
+        resource.value === row.resource.id,
+    ),
   );
-  const groupId = type?.resources.find(
-    (item) => item.value === row.resource.id,
-  )?.group;
+}
+
+function subsectionLabel(options: AuthorizationOptions, row: Row): string {
+  return subsectionOf(options, row)?.label ?? '';
+}
+
+/** The row's resource-group trail; empty when ungrouped. */
+function resourcePath(options: AuthorizationOptions, row: Row): string {
+  const groupId = findResource(options, row.resource)?.group;
   function find(
     groups: readonly ResourceGroupOption[],
     ancestors: string[],
@@ -802,12 +797,7 @@ function resourcePath(options: AuthorizationOptions, row: Row): string {
     }
     return undefined;
   }
-  return [
-    ...(row.resource.type === BUSINESS
-      ? []
-      : [type?.label ?? row.resource.type]),
-    ...(find(type?.groups ?? [], []) ?? []),
-  ].join(' / ');
+  return (find(subsectionOf(options, row)?.groups ?? [], []) ?? []).join(' / ');
 }
 
 function DefaultScopeControl({

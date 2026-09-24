@@ -50,7 +50,6 @@ it('switches preset names in place without refetching or translating editable da
                 options={{
                   sections: [],
                   subjectTypes: [],
-                  resourceTypes: [],
                   collections: [],
                   recordAccess: [],
                 }}

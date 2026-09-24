@@ -76,22 +76,18 @@ describe('locale-independent option descriptors', () => {
 
     expect(response.status).toBe(200);
     const data = await readOptions(response);
-    expect(data.resourceTypes.map((type) => type.value)).toEqual([
-      'business',
-      'page',
-      'settings',
+    expect(outline(data)).toEqual([
+      ['pages', ['page']],
+      ['business', []],
+      ['administration', ['authorization']],
     ]);
-    const settings = resourceType(data, 'settings');
-    expect(settings.section).toBe('administration');
-    expect(settings.groups).toContainEqual({
-      value: 'authorization',
-      label: 'Authorization',
-    });
+    const settings = subsection(data, 'authorization');
+    expect(settings.label).toBe('Authorization');
     expect(
       settings.resources.find(
         (item) => item.value === 'authorization.permission-sets',
       ),
-    ).toMatchObject({ label: 'Permission Sets', group: 'authorization' });
+    ).toMatchObject({ type: 'settings', label: 'Permission Sets' });
     expect(data.subjectTypes[0]).toMatchObject({
       value: 'authenticated',
       label: 'All signed-in users',
@@ -215,11 +211,11 @@ describe('locale-independent option descriptors', () => {
 
   it('includes settings items registered by another settings module', async () => {
     const authz = authorization();
-    authz.groups.add({ name: 'ai', title: 'AI' });
+    authz.sections.add({ name: 'ai', title: 'AI', parent: 'administration' });
     authz.settings.add({
       id: 'ai.models',
       title: 'Models',
-      group: 'ai',
+      section: 'ai',
       actions: [
         { name: 'read', title: 'Read' },
         { name: 'update', title: 'Update' },
@@ -228,16 +224,19 @@ describe('locale-independent option descriptors', () => {
     const router = await mountedRouter(authz);
     const response = await router.request('/api/authz/permission-sets/options');
     const data = await readOptions(response);
-    const settings = resourceType(data, 'settings');
-    expect(settings.groups).toEqual([
-      { value: 'authorization', label: 'Authorization' },
-      { value: 'ai', label: 'AI' },
+    expect(
+      data.sections
+        .find((section) => section.value === 'administration')
+        ?.subsections.map((item) => [item.value, item.label]),
+    ).toEqual([
+      ['authorization', 'Authorization'],
+      ['ai', 'AI'],
     ]);
-    expect(settings.resources).toContainEqual(
+    expect(subsection(data, 'ai').resources).toContainEqual(
       expect.objectContaining({
+        type: 'settings',
         value: 'ai.models',
         label: 'Models',
-        group: 'ai',
         actions: [
           { value: 'read', label: 'Read' },
           { value: 'update', label: 'Update' },
@@ -255,21 +254,18 @@ describe('locale-independent option descriptors', () => {
     );
 
     const data = await readOptions(response, 'zh-CN');
-    expect(data.resourceTypes.map((type) => type.value)).toEqual([
-      'business',
-      'page',
-      'settings',
+    expect(outline(data)).toEqual([
+      ['pages', ['page']],
+      ['business', []],
+      ['administration', ['authorization']],
     ]);
     expect(data.sections.map((section) => section.label)).toEqual([
       '页面权限',
       '业务权限',
       zh.sections.administration,
     ]);
-    const settings = resourceType(data, 'settings');
-    expect(settings.groups).toContainEqual({
-      value: 'authorization',
-      label: '权限管理',
-    });
+    const settings = subsection(data, 'authorization');
+    expect(settings.label).toBe('权限管理');
     expect(
       settings.resources.find(
         (item) => item.value === 'authorization.permission-sets',
@@ -285,7 +281,7 @@ describe('locale-independent option descriptors', () => {
 
   it('sends a registered string as it was written, in every language', async () => {
     const authz = authorization();
-    authz.groups.add({ name: 'sales', title: 'Sales' });
+    authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
     authz.business.define(ordersResource('Orders'));
     const router = await mountedRouter(authz);
 
@@ -296,7 +292,7 @@ describe('locale-independent option descriptors', () => {
           locale ? { headers: { 'accept-language': locale } } : undefined,
         );
         const data = await readOptions(response, locale);
-        return resourceType(data, 'business').resources.find(
+        return subsection(data, 'sales').resources.find(
           (item) => item.value === 'orders',
         )?.label;
       }),
@@ -307,7 +303,7 @@ describe('locale-independent option descriptors', () => {
 
   it('resolves a registered key through the catalogue of its namespace', async () => {
     const authz = authorization();
-    authz.groups.add({ name: 'sales', title: 'Sales' });
+    authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
     authz.business.define(
       ordersResource({
         key: 'options.resourceTypes.collection',
@@ -334,7 +330,7 @@ describe('locale-independent option descriptors', () => {
 
     const data = await readOptions(response, 'zh-CN');
     expect(
-      resourceType(data, 'business').resources.find(
+      subsection(data, 'sales').resources.find(
         (item) => item.value === 'orders',
       )?.label,
     ).toBe('数据表');
@@ -350,7 +346,7 @@ function ordersResource(title: BusinessResource['title']): BusinessResource {
   return {
     name: 'orders',
     title,
-    group: 'sales',
+    section: 'sales',
     actions: [
       {
         name: 'view',
@@ -368,12 +364,22 @@ function ordersResource(title: BusinessResource['title']): BusinessResource {
   };
 }
 
-function resourceType(
+/** Each section with the names of its subsections. */
+function outline(data: AuthorizationOptions): [string, string[]][] {
+  return data.sections.map((section) => [
+    section.value,
+    section.subsections.map((item) => item.value),
+  ]);
+}
+
+function subsection(
   data: AuthorizationOptions,
   value: string,
-): AuthorizationOptions['resourceTypes'][number] {
-  const found = data.resourceTypes.find((item) => item.value === value);
-  if (!found) throw new Error(`No resource type ${value} in the options`);
+): AuthorizationOptions['sections'][number]['subsections'][number] {
+  const found = data.sections
+    .flatMap((section) => section.subsections)
+    .find((item) => item.value === value);
+  if (!found) throw new Error(`No subsection ${value} in the options`);
   return found;
 }
 

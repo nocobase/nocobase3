@@ -11,7 +11,6 @@ import { scopeKey, scopeValue } from './business-policy.js';
 export function BulkPermissionToggle({
   items,
   actions,
-  type,
   draft,
   disabled,
   label,
@@ -19,7 +18,6 @@ export function BulkPermissionToggle({
 }: {
   items: readonly ResourceOption[];
   actions: readonly SelectOption[];
-  type: string;
   draft: Draft;
   disabled: boolean;
   label: string;
@@ -46,14 +44,14 @@ export function BulkPermissionToggle({
       count +
       target.actions.filter((action) =>
         grants
-          .get(resourceKey(type, target.item.value))
+          .get(resourceKey(target.item.type, target.item.value))
           ?.actions.includes(action),
       ).length,
     0,
   );
   const full = targets.every(({ item, actions }) =>
     actions.every((action) => {
-      const grant = grants.get(resourceKey(type, item.value));
+      const grant = grants.get(resourceKey(item.type, item.value));
       if (!grant?.actions.includes(action)) return false;
       const config = item.dataScopes?.[action];
       return (
@@ -80,9 +78,10 @@ export function BulkPermissionToggle({
       onClick={() => {
         const next = new Map(grants);
         for (const target of targets) {
-          const key = resourceKey(type, target.item.value);
+          const key = resourceKey(target.item.type, target.item.value);
           const grant =
-            next.get(key) ?? newGrantForResource(type, target.item.value);
+            next.get(key) ??
+            newGrantForResource(target.item.type, target.item.value);
           const updated: GrantDraft = {
             ...grant,
             actions: !checked

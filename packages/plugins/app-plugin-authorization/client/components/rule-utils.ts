@@ -2,19 +2,16 @@ import type {
   AuthorizationOptions,
   RecordSelection,
 } from '../authorization-client.js';
+import { resourceActions } from './localized-options.js';
 
 export function firstActions(
   options: AuthorizationOptions,
   type: string,
   resourceId?: string,
 ): readonly string[] {
-  const resourceType = options.resourceTypes.find(
-    (item) => item.value === type,
-  );
-  const actions =
-    resourceType?.resources.find((item) => item.value === resourceId)
-      ?.actions ?? resourceType?.actions;
-  const action = actions?.slice().sort(compareActions)[0];
+  const action = resourceActions(options, { type, id: resourceId })
+    .slice()
+    .sort(compareActions)[0];
   return action ? [action.value] : [];
 }
 

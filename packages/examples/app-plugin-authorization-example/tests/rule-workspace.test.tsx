@@ -28,6 +28,10 @@ import {
 import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AuthorizationOptions } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
+import {
+  subsection,
+  withSubsections,
+} from '../../../plugins/app-plugin-authorization/tests/workspace-options.js';
 const authz = vi.hoisted(() => ({
   can: vi.fn(async () => true),
   revision: () => 0,
@@ -57,28 +61,15 @@ import { RestrictionRulesPanel } from '../../../plugins/app-plugin-authz-restric
 import { SharingRulesPanel } from '../../../plugins/app-plugin-authz-sharing-rules/client/pages/sharing-rules-panel.js';
 import en from './rule-locales.js';
 const resource = { type: 'database.collection', id: 'orders' };
+const read = { value: 'read', label: 'Read' };
+const tables = subsection('administration.tables', 'Tables', [
+  { type: resource.type, value: 'orders', label: 'Orders', actions: [read] },
+]);
 const options: AuthorizationOptions = {
-  sections: [],
+  sections: withSubsections({ administration: [tables] }),
   subjectTypes: [],
   collections: [{ name: 'orders', fields: ['id', 'name'] }],
   recordAccess: [],
-  resourceTypes: [
-    {
-      value: resource.type,
-      label: 'Tables',
-      resources: [
-        {
-          value: 'orders',
-          label: 'Orders',
-          actions: [{ value: 'read', label: 'Read' }],
-        },
-      ],
-      actions: [
-        { value: 'read', label: 'Read' },
-        { value: 'update', label: 'Update' },
-      ],
-    },
-  ],
 };
 function Location() {
   return <output data-testid='location'>{useLocation().search}</output>;
@@ -205,22 +196,29 @@ it('groups resources in the table and filters configured resources', async () =>
   ]);
   const grouped: AuthorizationOptions = {
     ...options,
-    resourceTypes: [
-      {
-        ...options.resourceTypes[0]!,
-        groups: [
-          {
-            value: 'business',
-            label: 'Business',
-            children: [{ value: 'sales', label: 'Sales' }],
-          },
-        ],
-        resources: [
-          { value: 'orders', label: 'Orders', group: 'sales' },
-          { value: 'notes', label: 'Notes' },
-        ],
-      },
-    ],
+    sections: withSubsections({
+      administration: [
+        {
+          ...tables,
+          groups: [
+            {
+              value: 'business',
+              label: 'Business',
+              children: [{ value: 'sales', label: 'Sales' }],
+            },
+          ],
+          resources: [
+            {
+              type: resource.type,
+              value: 'orders',
+              label: 'Orders',
+              group: 'sales',
+            },
+            { type: resource.type, value: 'notes', label: 'Notes' },
+          ],
+        },
+      ],
+    }),
   };
   render(
     <MemoryRouter>
@@ -228,7 +226,7 @@ it('groups resources in the table and filters configured resources', async () =>
     </MemoryRouter>,
   );
   const group = screen.getByRole('button', {
-    name: 'Tables / Business / Sales',
+    name: 'Business / Sales',
   });
   expect(group).toHaveAttribute('aria-expanded', 'true');
   fireEvent.click(group);
@@ -279,22 +277,27 @@ it('preserves other actions and retains the old scope when an inline save fails'
   expect(cell).toHaveAttribute('title', en.labels.allRecords);
 });
 
-it('switches resource types without mixing their resources or actions', async () => {
+it('switches subsections without mixing their resources or actions', async () => {
   const multi: AuthorizationOptions = {
     ...options,
-    resourceTypes: [
-      ...options.resourceTypes,
-      {
-        value: 'library',
-        label: 'Libraries',
-        resources: [{ value: 'docs', label: 'Documents' }],
-        actions: [{ value: 'browse', label: 'Browse' }],
-      },
-    ],
+    sections: withSubsections({
+      administration: [
+        tables,
+        subsection('administration.libraries', 'Libraries', [
+          {
+            type: 'library',
+            value: 'docs',
+            label: 'Documents',
+            actions: [{ value: 'browse', label: 'Browse' }],
+          },
+        ]),
+      ],
+    }),
   };
   render(
     <MemoryRouter>
       <DefaultAccessPanel options={multi} />
+      <Location />
     </MemoryRouter>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Libraries1' }));
@@ -303,9 +306,12 @@ it('switches resource types without mixing their resources or actions', async ()
     screen.getByRole('button', { name: 'Documents: Browse' }),
   ).toBeInTheDocument();
   expect(screen.queryByRole('columnheader', { name: 'Read' })).toBeNull();
+  expect(screen.getByTestId('location')).toHaveTextContent(
+    '?section=administration.libraries',
+  );
 });
 
-it('labels the resource type sidebar without adding a synthetic table group', async () => {
+it('labels the subsection sidebar without adding a synthetic table group', async () => {
   render(
     <MemoryRouter>
       <DefaultAccessPanel options={options} />
@@ -332,7 +338,7 @@ it.each(['sharing', 'restriction'] as const)(
     const labels = kind === 'sharing' ? en.sharingRules : en.restrictionRules;
     render(
       <MemoryRouter initialEntries={['/?new=1']}>
-        <Panel options={{ ...options, resourceTypes: [] }} />
+        <Panel options={{ ...options, sections: withSubsections({}) }} />
       </MemoryRouter>,
     );
     expect(await screen.findByText(labels.noResources)).toBeVisible();

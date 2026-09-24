@@ -66,39 +66,51 @@ export interface PermissionAssignmentInput {
 export type LocalizedText =
   string | { key: string; ns?: string; defaultValue?: string };
 
+/** One grantable action as the server sends it. */
+interface OptionsActionResponse {
+  name: string;
+  title: LocalizedText;
+}
+
 /** What every `options` route answers. */
 export interface AuthorizationOptionsResponse {
   readonly sections: readonly {
     name: string;
     title: LocalizedText;
     order: number;
-  }[];
-  readonly resourceTypes: readonly {
-    type: string;
-    title: LocalizedText;
-    section?: string;
-    groups: readonly { name: string; title: LocalizedText }[];
-    actions: readonly { name: string; title: LocalizedText }[];
-    items: readonly {
-      id: string;
+    subsections: readonly {
+      name: string;
       title: LocalizedText;
-      description?: LocalizedText;
-      group?: string;
-      actions: readonly { name: string; title: LocalizedText }[];
-      dataScopes?: Readonly<
-        Record<
-          string,
-          readonly {
-            key: string;
-            title: LocalizedText;
-            collection: string;
-            fields: readonly string[];
-            recordAccess: readonly string[];
-            defaultValue?: string;
-          }[]
-        >
-      >;
+      /** Set when the client supplies the resources, such as pages. */
+      recordType?: { type: string; actions: readonly OptionsActionResponse[] };
+      resources: readonly {
+        type: string;
+        id: string;
+        title: LocalizedText;
+        description?: LocalizedText;
+        group?: string;
+        actions: readonly OptionsActionResponse[];
+        dataScopes?: Readonly<
+          Record<
+            string,
+            readonly {
+              key: string;
+              title: LocalizedText;
+              collection: string;
+              fields: readonly string[];
+              recordAccess: readonly string[];
+              defaultValue?: string;
+            }[]
+          >
+        >;
+      }[];
     }[];
+  }[];
+  readonly resourceGroups?: readonly {
+    name: string;
+    title: LocalizedText;
+    parent?: string;
+    order?: number;
   }[];
   readonly subjectTypes: readonly {
     type: string;
@@ -133,6 +145,8 @@ export interface DataScopeOption {
 }
 
 export interface ResourceOption extends SelectOption {
+  /** The resource type grants store; never displayed. */
+  type: string;
   searchText?: string;
   group?: string;
   actions?: readonly SelectOption[];
@@ -144,19 +158,24 @@ export interface ResourceGroupOption extends SelectOption {
   children?: readonly ResourceGroupOption[];
 }
 
-export interface ResourceTypeOption {
+/** A left-side entry: its resources, grouped by `groups`. */
+export interface SubsectionOption {
   value: string;
   label: string;
-  section?: string;
-  groups?: readonly ResourceGroupOption[];
-  resources: readonly ResourceOption[];
+  /** Set when the client supplies the resources, such as `page`. */
+  recordType?: string;
+  /** The record type's actions, else every action its resources name. */
   actions: readonly SelectOption[];
+  groups: readonly ResourceGroupOption[];
+  resources: readonly ResourceOption[];
 }
 
+/** A left-side heading. */
 export interface SectionOption {
   value: string;
   label: string;
   order: number;
+  subsections: readonly SubsectionOption[];
 }
 
 export interface DatabaseCollectionOption {
@@ -177,7 +196,6 @@ export interface SubjectOption {
 /** The workspace model an `options` response is localized into. */
 export interface AuthorizationOptions {
   sections: readonly SectionOption[];
-  resourceTypes: readonly ResourceTypeOption[];
   subjectTypes: readonly SubjectTypeOption[];
   collections: readonly DatabaseCollectionOption[];
   recordAccess: readonly SelectOption[];

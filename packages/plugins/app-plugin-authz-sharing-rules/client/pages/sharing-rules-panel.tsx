@@ -1,6 +1,10 @@
 import { selectionLabel } from '@nocobase/app-plugin-authorization/client/management';
 import { humanize } from '@nocobase/app-plugin-authorization/client/management';
-import { resourceLabel } from '@nocobase/app-plugin-authorization/client/management';
+import {
+  findResource,
+  resourceLabel,
+  workspaceSubsections,
+} from '@nocobase/app-plugin-authorization/client/management';
 import { collectionFields } from '@nocobase/app-plugin-authorization/client/management';
 import { titleText } from '@nocobase/app-plugin-authorization/client/management';
 import { DataScopesEditor } from '@nocobase/app-plugin-authorization/client/management';
@@ -92,14 +96,13 @@ export function SharingRulesPanel({
   );
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
-  const [groupKey, setGroupKey] = useState('');
-  const groups = useMemo(
-    () => options.resourceTypes.flatMap((type) => type.groups ?? []),
+  const [sectionKey, setSectionKey] = useState('');
+  const subsections = useMemo(
+    () =>
+      workspaceSubsections(options).filter((item) => item.resources.length > 0),
     [options],
   );
-  const hasResources = options.resourceTypes.some(
-    (type) => type.resources.length > 0,
-  );
+  const hasResources = subsections.length > 0;
   const [page, setPage] = useState(1);
   const [errorCause, setErrorCause] = useState<unknown>();
   const error = errorCause === undefined ? undefined : message(t, errorCause);
@@ -116,13 +119,14 @@ export function SharingRulesPanel({
   }, [load]);
   const visibleRules = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const selectedRules = groupKey
-      ? rules.filter(
-          (rule) =>
-            options.resourceTypes
-              .find((type) => type.value === rule.resource.type)
-              ?.resources.find((item) => item.value === rule.resource.id)
-              ?.group === groupKey,
+    const section = subsections.find((item) => item.value === sectionKey);
+    const selectedRules = section
+      ? rules.filter((rule) =>
+          section.resources.some(
+            (item) =>
+              item.type === rule.resource.type &&
+              item.value === rule.resource.id,
+          ),
         )
       : rules;
     return query
@@ -132,7 +136,7 @@ export function SharingRulesPanel({
           ),
         )
       : selectedRules;
-  }, [rules, search, options, groupKey, t]);
+  }, [rules, search, subsections, sectionKey, t]);
   const pagedRules = pageSlice(visibleRules, page);
   // Narrowing the search can leave the current page past the end of the list.
   function changeSearch(value: string): void {
@@ -191,19 +195,19 @@ export function SharingRulesPanel({
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
         filters={
-          groups.length ? (
+          subsections.length > 1 ? (
             <SelectField
               aria-label={t('editors.resourceGroup')}
-              value={groupKey}
+              value={sectionKey}
               onValueChange={(value) => {
-                setGroupKey(value);
+                setSectionKey(value);
                 setPage(1);
               }}
               options={[
                 { value: '', label: t('common.all') },
-                ...groups.map((group) => ({
-                  value: group.value,
-                  label: group.label,
+                ...subsections.map((item) => ({
+                  value: item.value,
+                  label: item.label,
                 })),
               ]}
             />
@@ -285,11 +289,8 @@ export function SharingRulesPanel({
                         const entries = rule.actions.filter(
                           (item) => item.action === action,
                         );
-                        const declared = options.resourceTypes
-                          .find((type) => type.value === rule.resource.type)
-                          ?.resources.find(
-                            (resource) => resource.value === rule.resource.id,
-                          )?.dataScopes?.[action];
+                        const declared = findResource(options, rule.resource)
+                          ?.dataScopes?.[action];
                         const grouped =
                           (declared?.length ?? entries.length) > 1;
                         return (
@@ -310,14 +311,10 @@ export function SharingRulesPanel({
                               }
                             >
                               {entries.map((item) => {
-                                const targets = options.resourceTypes
-                                  .find(
-                                    (type) => type.value === rule.resource.type,
-                                  )
-                                  ?.resources.find(
-                                    (resource) =>
-                                      resource.value === rule.resource.id,
-                                  )?.dataScopes?.[item.action];
+                                const targets = findResource(
+                                  options,
+                                  rule.resource,
+                                )?.dataScopes?.[item.action];
                                 const scopeLabel = targets?.find(
                                   (target) => target.key === item.scopeKey,
                                 )?.label;
@@ -557,27 +554,27 @@ export function SharingRulesPanel({
 }
 
 function fresh(options: AuthorizationOptions): SharingRule {
-  const type =
-    options.resourceTypes.find((item) => item.value === BUSINESS) ??
-    options.resourceTypes[0];
+  const resources = workspaceSubsections(options).flatMap(
+    (item) => item.resources,
+  );
+  const first =
+    resources.find((item) => item.type === BUSINESS) ?? resources[0];
   return {
     key: '',
     title: '',
     resource: {
-      type: type?.value ?? BUSINESS,
-      id: type?.resources[0]?.value ?? '',
+      type: first?.type ?? BUSINESS,
+      id: first?.value ?? '',
     },
     actions:
-      type?.value === BUSINESS
+      first?.type === BUSINESS
         ? []
-        : firstActions(
-            options,
-            type?.value ?? '',
-            type?.resources[0]?.value,
-          ).map((action) => ({
-            action,
-            selection: { type: 'records' as const, ids: [] },
-          })),
+        : firstActions(options, first?.type ?? '', first?.value).map(
+            (action) => ({
+              action,
+              selection: { type: 'records' as const, ids: [] },
+            }),
+          ),
     subjects: [],
     reason: '',
   };

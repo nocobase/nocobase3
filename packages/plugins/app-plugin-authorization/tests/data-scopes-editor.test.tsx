@@ -13,25 +13,17 @@ import {
   type DataScopeRuleAction,
 } from '../client/components/data-scopes-editor.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
+import { subsection, withSubsections } from './workspace-options.js';
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
 const options: AuthorizationOptions = {
-  sections: [],
-  subjectTypes: [],
-  recordAccess: [],
-  collections: [
-    { name: 'projects', fields: ['id', 'title'] },
-    { name: 'quotes', fields: ['id', 'amount'] },
-  ],
-  resourceTypes: [
-    {
-      value: 'business',
-      label: 'Business',
-      actions: [],
-      resources: [
+  sections: withSubsections({
+    business: [
+      subsection('business.other', 'Other', [
         {
+          type: 'business',
           value: 'sales',
           label: 'Sales',
           actions: [{ value: 'submit', label: 'Submit' }],
@@ -46,8 +38,14 @@ const options: AuthorizationOptions = {
             })),
           },
         },
-      ],
-    },
+      ]),
+    ],
+  }),
+  subjectTypes: [],
+  recordAccess: [],
+  collections: [
+    { name: 'projects', fields: ['id', 'title'] },
+    { name: 'quotes', fields: ['id', 'amount'] },
   ],
 };
 it('uses the declared table for each record picker and preserves its sibling scope when edited', async () => {

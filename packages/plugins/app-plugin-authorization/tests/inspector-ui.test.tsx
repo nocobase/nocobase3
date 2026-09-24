@@ -8,7 +8,7 @@ import {
   within,
 } from '@testing-library/react';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type {
   AuthorizationInspection,
@@ -35,9 +35,30 @@ vi.mock('@nocobase/i18n/client', async () => {
 import InspectorPage from '../client/pages/inspector-page.js';
 import { inspectionStatus } from '../client/pages/inspector-status.js';
 import en from '../client/locales/en-US.js';
-import { sections, wire } from './workspace-options.js';
+import {
+  pageSubsection,
+  subsection,
+  wire,
+  withSubsections,
+} from './workspace-options.js';
+const read = { value: 'read', label: 'Read' };
+const view = { value: 'view', label: 'View' };
+const tables = subsection(
+  'example.data',
+  'Data tables',
+  Array.from({ length: 25 }, (_, i) => ({
+    type: 'database.collection',
+    value: `orders${i}`,
+    label: `Orders ${i}`,
+    group: 'sales',
+  })),
+  {
+    groups: [{ value: 'sales', label: 'Sales' }],
+    actions: [read, { value: 'update', label: 'Update' }],
+  },
+);
 const options: AuthorizationOptions = {
-  sections,
+  sections: withSubsections({ business: [tables] }),
   subjectTypes: [
     { value: 'user', label: 'Users', selection: { type: 'collection' } },
     {
@@ -53,23 +74,6 @@ const options: AuthorizationOptions = {
   ],
   recordAccess: [],
   collections: [{ name: 'orders0', fields: ['id', 'title'] }],
-  resourceTypes: [
-    {
-      value: 'database.collection',
-      label: 'Data tables',
-      section: 'business',
-      groups: [{ value: 'sales', label: 'Sales' }],
-      actions: [
-        { value: 'read', label: 'Read' },
-        { value: 'update', label: 'Update' },
-      ],
-      resources: Array.from({ length: 25 }, (_, i) => ({
-        value: `orders${i}`,
-        label: `Orders ${i}`,
-        group: 'sales',
-      })),
-    },
-  ],
 };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -192,46 +196,43 @@ it('ignores stale responses after changing resource search', async () => {
   );
 });
 
-it('defaults to the first populated type when pages have no registered resources', async () => {
+it('defaults to the first populated subsection when pages have no registered resources', async () => {
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
-      resourceTypes: [
-        {
-          value: 'page',
-          label: 'Pages',
-          section: 'pages',
-          resources: [],
-          actions: [{ value: 'access', label: 'Access' }],
-        },
-        ...options.resourceTypes,
-      ],
+      sections: withSubsections({
+        pages: [pageSubsection()],
+        business: [tables],
+      }),
     }),
   );
   mount();
   expect(
     await screen.findByRole('button', { name: 'Orders 0: Read' }),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Pages' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Page permissions' }));
   expect(
     await screen.findByText(en.permissionWorkspace.development.pages),
   ).toBeInTheDocument();
 });
 
-it('clamps stale page numbers and resets search when switching resource types', async () => {
+it('clamps stale page numbers and resets search when switching subsections', async () => {
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
-      resourceTypes: [
-        ...options.resourceTypes,
-        {
-          value: 'settings',
-          label: 'Settings',
-          section: 'administration',
-          resources: [{ value: 'authorization', label: 'Authorization' }],
-          actions: [{ value: 'read', label: 'Read' }],
-        },
-      ],
+      sections: withSubsections({
+        business: [tables],
+        administration: [
+          subsection('administration.other', 'Settings', [
+            {
+              type: 'settings',
+              value: 'authorization',
+              label: 'Authorization',
+              actions: [read],
+            },
+          ]),
+        ],
+      }),
     }),
   );
   mount('/?user=alice&page=999&search=Orders');
@@ -273,19 +274,13 @@ it('includes client-registered pages and their groups in the inspection batch', 
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
-      resourceTypes: [
-        {
-          value: 'page',
-          label: 'Pages',
-          section: 'pages',
-          resources: [],
-          actions: [{ value: 'access', label: 'Access' }],
-        },
-        ...options.resourceTypes,
-      ],
+      sections: withSubsections({
+        pages: [pageSubsection()],
+        business: [tables],
+      }),
     }),
   );
-  mount('/?user=alice&type=page');
+  mount('/?user=alice&section=page');
   expect(
     await screen.findByRole('button', { name: 'Customers: Access' }),
   ).toBeInTheDocument();
@@ -365,20 +360,27 @@ it('does not present user-dependent subject scopes as a denial', () => {
   ).toBe('context');
 });
 
-it('marks configured resource types without showing counts or relying on the current results page', async () => {
+it('marks configured subsections without showing counts or relying on the current results page', async () => {
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
-      resourceTypes: [
-        ...options.resourceTypes,
-        {
-          value: 'settings',
-          label: 'Settings',
-          section: 'administration',
-          resources: [{ value: 'configuration', label: 'Configuration' }],
-          actions: [],
-        },
-      ],
+      sections: withSubsections({
+        business: [tables],
+        administration: [
+          subsection(
+            'administration.other',
+            'Settings',
+            [
+              {
+                type: 'settings',
+                value: 'configuration',
+                label: 'Configuration',
+              },
+            ],
+            { actions: [read] },
+          ),
+        ],
+      }),
     }),
   );
   mocks.inspectConfigured.mockResolvedValue({
@@ -395,9 +397,9 @@ it('marks configured resource types without showing counts or relying on the cur
       }),
     ).toBeInTheDocument(),
   );
-  const tables = screen.getByRole('button', { name: 'Data tables' });
-  expect(within(tables).queryByRole('img')).not.toBeInTheDocument();
-  expect(tables).not.toHaveTextContent('25');
+  const data = screen.getByRole('button', { name: 'Data tables' });
+  expect(within(data).queryByRole('img')).not.toBeInTheDocument();
+  expect(data).not.toHaveTextContent('25');
 });
 
 it.each([
@@ -406,27 +408,31 @@ it.each([
   { unrestricted: false, ids: ['*'], marked: ['Sales', 'Delivery'] },
   { unrestricted: true, ids: [], marked: ['Sales', 'Delivery'] },
 ])(
-  'marks only configured resource groups: %j',
+  'marks only configured subsections: %j',
   async ({ unrestricted, ids, marked }) => {
     mocks.loadOptions.mockResolvedValue(
       wire({
         ...options,
-        resourceTypes: [
-          {
-            value: 'business',
-            label: 'Business resources',
-            section: 'business',
-            actions: [{ value: 'view', label: 'View' }],
-            groups: [
-              { value: 'sales', label: 'Sales' },
-              { value: 'delivery', label: 'Delivery' },
-            ],
-            resources: [
-              { value: 'sales.quotes', label: 'Quotes', group: 'sales' },
-              { value: 'delivery.orders', label: 'Orders', group: 'delivery' },
-            ],
-          },
-        ],
+        sections: withSubsections({
+          business: [
+            subsection('example.sales', 'Sales', [
+              {
+                type: 'business',
+                value: 'sales.quotes',
+                label: 'Quotes',
+                actions: [view],
+              },
+            ]),
+            subsection('example.delivery', 'Delivery', [
+              {
+                type: 'business',
+                value: 'delivery.orders',
+                label: 'Orders',
+                actions: [view],
+              },
+            ]),
+          ],
+        }),
       }),
     );
     mocks.inspectConfigured.mockResolvedValue({
@@ -434,21 +440,21 @@ it.each([
       types: ['business', 'page'],
       resources: [
         ...ids.map((id) => ({ type: 'business', id })),
-        // The same ID under another resource type must not mark the group.
+        // The same ID under another resource type must not mark the subsection.
         { type: 'page', id: 'delivery.orders' },
       ],
     });
     mount();
     await screen.findByRole('button', { name: 'Quotes: View' });
-    for (const label of ['Sales', 'Delivery']) {
+    await waitFor(() =>
       expect(
-        Boolean(
-          within(
-            screen.getByRole('button', { name: label }).closest('tr')!,
-          ).queryByRole('img'),
+        ['Sales', 'Delivery'].filter((label) =>
+          within(screen.getByRole('button', { name: label })).queryByRole(
+            'img',
+          ),
         ),
-      ).toBe(marked.includes(label));
-    }
+      ).toEqual(marked),
+    );
   },
 );
 
@@ -541,14 +547,11 @@ it('explains business access once and keeps page checks and JSON in one collapse
         { value: 'own', label: 'Projects owned by me' },
         { value: 'public', label: 'Non-confidential projects' },
       ],
-      resourceTypes: [
-        {
-          value: 'business',
-          label: 'Business',
-          section: 'business',
-          actions: [{ value: 'view', label: 'View' }],
-          resources: [
+      sections: withSubsections({
+        business: [
+          subsection('business.other', 'Other', [
             {
+              type: 'business',
               value: 'quotes',
               label: 'Quotes',
               actions: [{ value: 'view', label: 'View' }],
@@ -569,9 +572,9 @@ it('explains business access once and keeps page checks and JSON in one collapse
                 ],
               },
             },
-          ],
-        },
-      ],
+          ]),
+        ],
+      }),
     }),
   );
   mocks.inspectBatch.mockImplementation(
@@ -709,22 +712,7 @@ it('keeps empty page and business sections with development guidance in the insp
   mocks.loadOptions.mockResolvedValue(
     wire({
       ...options,
-      resourceTypes: [
-        {
-          value: 'page',
-          label: 'Pages',
-          section: 'pages',
-          resources: [],
-          actions: [],
-        },
-        {
-          value: 'business',
-          label: 'Business features',
-          section: 'business',
-          resources: [],
-          actions: [],
-        },
-      ],
+      sections: withSubsections({ pages: [pageSubsection()] }),
     }),
   );
   mocks.inspectConfigured.mockResolvedValue({
@@ -734,11 +722,145 @@ it('keeps empty page and business sections with development guidance in the insp
   });
   mount();
   await screen.findByText(en.permissionWorkspace.development.pages);
-  fireEvent.click(screen.getByRole('button', { name: 'Business features' }));
+  expect(
+    screen.getByRole('button', { name: 'Page permissions' }),
+  ).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(screen.getByRole('button', { name: 'Business permissions' }));
   expect(
     await screen.findByText(en.permissionWorkspace.development.business),
   ).toBeVisible();
   expect(
     screen.queryByRole('img', { name: en.permissionWorkspace.configured }),
   ).not.toBeInTheDocument();
+});
+
+it('lists section headers, then one entry per subsection', async () => {
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      sections: withSubsections({
+        pages: [pageSubsection()],
+        business: [
+          tables,
+          subsection('example.delivery', 'Delivery', [
+            { type: 'business', value: 'shipments', label: 'Shipments' },
+          ]),
+        ],
+      }),
+    }),
+  );
+  mount();
+  const nav = await screen.findByRole('navigation', {
+    name: en.editors.resourceGroup,
+  });
+  expect([...nav.children].map((element) => element.textContent)).toEqual([
+    'Page permissions',
+    'Page permissions',
+    'Business permissions',
+    'Data tables',
+    'Delivery',
+    'Administration',
+    'Administration',
+  ]);
+});
+
+it('keeps the selected subsection in the URL across a reload', async () => {
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      sections: withSubsections({
+        business: [
+          tables,
+          subsection(
+            'example.delivery',
+            'Delivery',
+            [{ type: 'business', value: 'shipments', label: 'Shipments' }],
+            { actions: [view] },
+          ),
+        ],
+      }),
+    }),
+  );
+  function Location() {
+    return <output data-testid='location'>{useLocation().search}</output>;
+  }
+  const first = render(
+    <MemoryRouter initialEntries={['/?user=alice']}>
+      <InspectorPage />
+      <Location />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Delivery' }));
+  expect(screen.getByTestId('location')).toHaveTextContent(
+    'section=example.delivery',
+  );
+  const search = screen.getByTestId('location').textContent!;
+  first.unmount();
+  mount(`/${search}`);
+  expect(
+    await screen.findByRole('button', { name: 'Shipments: View' }),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Delivery' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+});
+
+it('shows the page subsection as the menu tree, in menu order', async () => {
+  const page = (name: string, order: number) => ({
+    name,
+    packageName: '@test/pages',
+    auth: 'required',
+    authz: { resource: { type: 'page', id: name }, action: 'access' },
+    componentLoader: async () => ({ default: () => null }),
+    navigation: { title: name, order },
+  });
+  mocks.routes = [
+    {
+      name: 'late',
+      packageName: '@test/pages',
+      navigation: { title: 'Late group', order: 20 },
+      children: [page('late-page', 0)],
+    },
+    page('home', 5),
+    {
+      name: 'early',
+      packageName: '@test/pages',
+      navigation: { title: 'Early group', order: 10 },
+      children: [
+        page('second', 2),
+        {
+          name: 'nested',
+          packageName: '@test/pages',
+          navigation: { title: 'Nested group', order: 1 },
+          children: [page('deep', 0)],
+        },
+      ],
+    },
+  ] as AppClientRegisteredRoute[];
+  mocks.loadOptions.mockResolvedValue(
+    wire({
+      ...options,
+      sections: withSubsections({ pages: [pageSubsection()] }),
+    }),
+  );
+  mount();
+  await screen.findByRole('button', { name: 'deep: Access' });
+  expect(
+    screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.textContent?.replace('Access', '')),
+  ).toEqual([
+    'home',
+    'Early group',
+    'Nested group',
+    'deep',
+    'second',
+    'Late group',
+    'late-page',
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Early group' }));
+  expect(screen.queryByText('deep')).not.toBeInTheDocument();
+  expect(screen.getByText('late-page')).toBeVisible();
 });

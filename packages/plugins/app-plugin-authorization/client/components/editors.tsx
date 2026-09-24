@@ -3,6 +3,7 @@ import { SelectField } from './select-field.js';
 import { CustomFilterEditor } from './filter-editor.js';
 import { emptyFilter } from './filter-ast.js';
 import { actionLabel } from './action-labels.js';
+import { resourceActions, workspaceSubsections } from './localized-options.js';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { useAuthorizationTranslation } from '../i18n.js';
@@ -12,7 +13,6 @@ import type {
   AuthorizationOptions,
   AuthorizationRecordOption,
   RecordSelection,
-  ResourceOption,
 } from '../authorization-client.js';
 
 const selectClass =
@@ -48,29 +48,32 @@ export function ResourceEditor({
   onChange: (value: { type: string; id: string }) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const sections = resourceChoices(options);
+  const sections = workspaceSubsections(options).filter(
+    (item) => item.resources.length > 0,
+  );
   const selected =
-    sections.find(
-      (item) =>
-        item.value === type &&
-        item.resources.some((resource) => resource.value === id),
-    ) ?? sections.find((item) => item.value === type);
+    sections.find((item) =>
+      item.resources.some(
+        (resource) => resource.type === type && resource.value === id,
+      ),
+    ) ??
+    sections.find((item) =>
+      item.resources.some((resource) => resource.type === type),
+    );
   return (
     <>
       <Field label={t('editors.resourceGroup')}>
         <SelectField
           aria-label={t('editors.resourceGroup')}
           className={selectClass}
-          value={selected?.key ?? type}
+          value={selected?.value ?? ''}
           onValueChange={(selectedValue) => {
-            const next = sections.find((item) => item.key === selectedValue);
-            onChange({
-              type: next?.value ?? selectedValue,
-              id: next?.resources[0]?.value ?? '',
-            });
+            const first = sections.find((item) => item.value === selectedValue)
+              ?.resources[0];
+            onChange({ type: first?.type ?? type, id: first?.value ?? '' });
           }}
           options={sections.map((item) => ({
-            value: item.key,
+            value: item.value,
             label: item.label,
           }))}
         />
@@ -82,7 +85,13 @@ export function ResourceEditor({
           value={id}
           disabled={!selected?.resources.length}
           onValueChange={(selectedValue) =>
-            onChange({ type, id: selectedValue })
+            onChange({
+              type:
+                selected?.resources.find(
+                  (resource) => resource.value === selectedValue,
+                )?.type ?? type,
+              id: selectedValue,
+            })
           }
           options={(selected?.resources ?? []).map((item) => ({
             value: item.value,
@@ -108,14 +117,10 @@ export function ActionsEditor({
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const selectedType = options.resourceTypes.find(
-    (item) => item.value === resourceType,
-  );
-  const actions =
-    selectedType?.resources.find((item) => item.value === resourceId)
-      ?.actions ??
-    selectedType?.actions ??
-    [];
+  const actions = resourceActions(options, {
+    type: resourceType,
+    id: resourceId,
+  });
   const orderedActions = [...actions].sort((left, right) => {
     const order = ['create', 'read', 'update', 'delete'];
     const leftIndex = order.indexOf(left.value);
@@ -428,41 +433,6 @@ function RecordSelectionEditor({
 function initialSelection(options: AuthorizationOptions): RecordSelection {
   const first = options.recordAccess[0];
   return first ? { type: 'recordAccess', key: first.value } : { type: 'all' };
-}
-
-/** Resource picker entries: each type, split by its groups. */
-function resourceChoices(options: AuthorizationOptions): readonly {
-  key: string;
-  value: string;
-  label: string;
-  resources: readonly ResourceOption[];
-}[] {
-  return options.resourceTypes.flatMap((type) => {
-    const grouped = (type.groups ?? []).map((group) => ({
-      key: `${type.value}\u0000${group.value}`,
-      value: type.value,
-      label: group.label,
-      resources: type.resources.filter((item) => item.group === group.value),
-    }));
-    const ungrouped = type.resources.filter(
-      (item) =>
-        !item.group ||
-        !(type.groups ?? []).some((group) => group.value === item.group),
-    );
-    return [
-      ...grouped,
-      ...(ungrouped.length || !grouped.length
-        ? [
-            {
-              key: type.value,
-              value: type.value,
-              label: type.label,
-              resources: ungrouped,
-            },
-          ]
-        : []),
-    ];
-  });
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

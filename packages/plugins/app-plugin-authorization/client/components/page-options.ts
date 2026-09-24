@@ -64,21 +64,31 @@ export function grantablePages(
 }
 
 /**
- * Fills the page record type with the pages and groups of the route tree. The
+ * Fills the page subsection with the pages and groups of the route tree. The
  * server lists no page: it validates none.
  */
 export function withPageResources(
   options: AuthorizationOptions,
-  pages: readonly ResourceOption[],
+  pages: readonly Omit<ResourceOption, 'type'>[],
   groups: readonly ResourceGroupOption[] = [],
 ): AuthorizationOptions {
   return {
     ...options,
-    resourceTypes: options.resourceTypes.map((resourceType) =>
-      resourceType.value === PAGE_RESOURCE_TYPE
-        ? { ...resourceType, groups, resources: pages }
-        : resourceType,
-    ),
+    sections: options.sections.map((section) => ({
+      ...section,
+      subsections: section.subsections.map((subsection) =>
+        subsection.recordType === PAGE_RESOURCE_TYPE
+          ? {
+              ...subsection,
+              groups,
+              resources: pages.map((page) => ({
+                ...page,
+                type: PAGE_RESOURCE_TYPE,
+              })),
+            }
+          : subsection,
+      ),
+    })),
   };
 }
 

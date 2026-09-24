@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
+import { MemoryRouter } from 'react-router';
 import { expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
@@ -27,21 +28,29 @@ it('finds resources by translated label, original label and identifier', async (
   document.body.append(container);
   const root = createRoot(container);
   const options = {
-    sections: [{ value: 'pages', label: 'Pages', order: 0 }],
-    resourceTypes: [
+    sections: [
       {
-        value: 'page',
+        value: 'pages',
         label: 'Pages',
-        section: 'pages',
-        resources: [
+        order: 0,
+        subsections: [
           {
-            value: 'home-id',
-            label: '首页',
-            searchText: 'Home',
+            value: 'page',
+            label: 'Pages',
+            recordType: 'page',
+            groups: [],
+            resources: [
+              {
+                type: 'page',
+                value: 'home-id',
+                label: '首页',
+                searchText: 'Home',
+                actions: [{ value: 'access', label: 'Access' }],
+              },
+            ],
             actions: [{ value: 'access', label: 'Access' }],
           },
         ],
-        actions: [{ value: 'access', label: 'Access' }],
       },
     ],
     subjectTypes: [],
@@ -52,20 +61,22 @@ it('finds resources by translated label, original label and identifier', async (
     await act(() =>
       root.render(
         <I18nProvider runtime={runtime}>
-          <PermissionSetEditor
-            dirty={true}
-            options={options}
-            draft={{
-              originalKey: 'test',
-              key: 'test',
-              title: 'Test',
-              grants: [],
-            }}
-            busy={false}
-            onChange={() => {}}
-            onSave={() => {}}
-            onClose={() => {}}
-          />
+          <MemoryRouter>
+            <PermissionSetEditor
+              dirty={true}
+              options={options}
+              draft={{
+                originalKey: 'test',
+                key: 'test',
+                title: 'Test',
+                grants: [],
+              }}
+              busy={false}
+              onChange={() => {}}
+              onSave={() => {}}
+              onClose={() => {}}
+            />
+          </MemoryRouter>
         </I18nProvider>,
       ),
     );

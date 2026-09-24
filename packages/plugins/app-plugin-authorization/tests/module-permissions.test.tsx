@@ -14,10 +14,22 @@ vi.mock('@nocobase/i18n/client', async () => {
 const read = { value: 'read', label: 'Read' };
 const test = { value: 'test', label: 'Send test email' };
 const items = [
-  { value: 'email', label: 'Email', group: 'system', actions: [read, test] },
-  { value: 'audit', label: 'Audit', group: 'system', actions: [read] },
+  {
+    type: 'settings',
+    value: 'email',
+    label: 'Email',
+    group: 'system',
+    actions: [read, test],
+  },
+  {
+    type: 'settings',
+    value: 'audit',
+    label: 'Audit',
+    group: 'system',
+    actions: [read],
+  },
 ];
-function Harness({ type = 'settings' }: { type?: string }) {
+function Harness({ pages = false }: { pages?: boolean }) {
   const [draft, setDraft] = useState(empty);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -25,7 +37,7 @@ function Harness({ type = 'settings' }: { type?: string }) {
   return (
     <>
       <ModulePermissions
-        type={type}
+        pages={pages}
         label='Settings'
         items={items}
         actions={[read, test]}
@@ -85,7 +97,7 @@ it('renders module-specific actions and bulk-selects only supported actions even
 });
 
 it('renders custom business resources with only their own operations', () => {
-  render(<Harness type='example.business' />);
+  render(<Harness />);
   expect(
     screen.getByRole('button', { name: 'Email: Send test email' }),
   ).toBeVisible();
@@ -94,25 +106,40 @@ it('renders custom business resources with only their own operations', () => {
   ).not.toBeInTheDocument();
 });
 
-it('marks only the resource types with granted resources as configured', () => {
+it('marks only the subsections with granted resources as configured', () => {
   render(
     <ResourceTypeList
-      types={[
+      entries={[
         {
-          value: 'business',
+          value: 'example.sales',
           section: 'business',
           sectionLabel: 'Business permissions',
-          label: 'Business',
+          label: 'Sales',
           actions: [],
-          resources: [{ value: 'quotes', label: 'Quotes' }],
+          groups: [],
+          resources: [{ type: 'business', value: 'quotes', label: 'Quotes' }],
         },
         {
-          value: 'settings',
+          value: 'example.delivery',
+          section: 'business',
+          sectionLabel: 'Business permissions',
+          label: 'Delivery',
+          actions: [],
+          groups: [],
+          resources: [
+            { type: 'business', value: 'shipments', label: 'Shipments' },
+          ],
+        },
+        {
+          value: 'administration.other',
           section: 'administration',
           sectionLabel: 'Administration',
-          label: 'Settings',
+          label: 'Other',
           actions: [],
-          resources: [{ value: 'workflow', label: 'Workflow' }],
+          groups: [],
+          resources: [
+            { type: 'settings', value: 'workflow', label: 'Workflow' },
+          ],
         },
       ]}
       grants={[
@@ -122,21 +149,23 @@ it('marks only the resource types with granted resources as configured', () => {
           actions: ['view'],
         },
       ]}
-      type='business'
+      selected='example.sales'
       label='Types'
       onSelect={() => {}}
     />,
   );
   expect(
-    screen
-      .getByRole('button', { name: 'Business' })
-      .querySelector('[role="img"]'),
+    screen.getByRole('button', { name: 'Sales' }).querySelector('[role="img"]'),
   ).not.toBeNull();
   expect(
     screen
-      .getByRole('button', { name: 'Settings' })
+      .getByRole('button', { name: 'Delivery' })
       .querySelector('[role="img"]'),
   ).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Other' }).querySelector('[role="img"]'),
+  ).toBeNull();
+  expect(screen.getAllByText('Business permissions')).toHaveLength(1);
   expect(screen.getByText('Administration')).toBeVisible();
 });
 
@@ -145,6 +174,7 @@ it('keeps an all-selected bulk indicator limited when an operation has a restric
     <BulkPermissionToggle
       items={[
         {
+          type: 'business',
           value: 'orders',
           label: 'Orders',
           actions: [read],
@@ -163,7 +193,6 @@ it('keeps an all-selected bulk indicator limited when an operation has a restric
         },
       ]}
       actions={[read]}
-      type='business'
       draft={{
         ...empty(),
         grants: [

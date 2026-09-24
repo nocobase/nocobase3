@@ -31,23 +31,23 @@ import NewPage from '../client/pages/permission-set-new-page.js';
 import DetailsPage from '../client/pages/permission-set-details-page.js';
 import AssignmentsPage from '../client/pages/permission-set-assignments-page.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
-import { sections } from './workspace-options.js';
+import { subsection, withSubsections } from './workspace-options.js';
 const options: AuthorizationOptions = {
-  sections,
+  sections: withSubsections({
+    administration: [
+      subsection('administration.authorization', 'Authorization', [
+        {
+          type: 'settings',
+          value: 'authorization.permission-sets',
+          label: 'Permission sets',
+          actions: [{ value: 'read', label: 'Read' }],
+        },
+      ]),
+    ],
+  }),
   subjectTypes: [],
   recordAccess: [],
   collections: [],
-  resourceTypes: [
-    {
-      value: 'settings',
-      label: 'Settings',
-      section: 'administration',
-      actions: [{ value: 'read', label: 'Read' }],
-      resources: [
-        { value: 'authorization.permission-sets', label: 'Permission sets' },
-      ],
-    },
-  ],
 };
 function Location() {
   const location = useLocation();
@@ -55,16 +55,20 @@ function Location() {
   return (
     <>
       <output data-testid='url'>{location.pathname}</output>
+      <output data-testid='search'>{location.search}</output>
       <button onClick={() => void navigate(-1)}>History back</button>
     </>
   );
 }
-function mount(path = '/sets') {
+function mount(path = '/sets', resourceOptions = options) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Location />
       <Routes>
-        <Route path='/sets' element={<PermissionSetsPanel options={options} />}>
+        <Route
+          path='/sets'
+          element={<PermissionSetsPanel options={resourceOptions} />}
+        >
           <Route path='new' element={<NewPage />} />
           <Route path='edit/:permissionSetKey' element={<EditPage />}>
             <Route path='assignments' element={<AssignmentsPage />} />
@@ -84,6 +88,49 @@ beforeEach(() => {
   api.listAssignments.mockResolvedValue([]);
 });
 describe('permission set workspace', () => {
+  it('keeps the selected subsection in the URL across a reload', async () => {
+    const view = { value: 'view', label: 'View' };
+    const business: AuthorizationOptions = {
+      ...options,
+      sections: withSubsections({
+        business: [
+          subsection('example.sales', 'Sales', [
+            {
+              type: 'business',
+              value: 'quotes',
+              label: 'Quotes',
+              actions: [view],
+            },
+          ]),
+          subsection('example.delivery', 'Delivery', [
+            {
+              type: 'business',
+              value: 'shipments',
+              label: 'Shipments',
+              actions: [view],
+            },
+          ]),
+        ],
+        administration: options.sections[2].subsections,
+      }),
+    };
+    const first = mount('/sets/edit/staff', business);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delivery' }));
+    expect(screen.getByTestId('search')).toHaveTextContent(
+      '?section=example.delivery',
+    );
+    first.unmount();
+    mount('/sets/edit/staff?section=example.delivery', business);
+    expect(
+      await screen.findByRole('button', { name: 'Shipments: View' }),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Delivery' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.getByTestId('url')).toHaveTextContent('/sets/edit/staff');
+  });
+
   it('confirms cancellation and restores the saved draft without navigating', async () => {
     mount('/sets/edit/staff');
     const permission = await screen.findByRole('button', {

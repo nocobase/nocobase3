@@ -5,7 +5,7 @@ import type {
   RecordSelection,
 } from '../authorization-client.js';
 import { SelectionEditor } from './editors.js';
-import { dataScopeTargets } from './localized-options.js';
+import { dataScopeTargets, findResource } from './localized-options.js';
 
 /** One rule action on one data scope of a business action. */
 export interface DataScopeRuleAction {
@@ -33,9 +33,7 @@ export function DataScopesEditor({
   /** Sharing rules may not select every record. */
   allowAll?: boolean;
 }): ReactElement {
-  const resource = options.resourceTypes
-    .find((type) => type.value === 'business')
-    ?.resources.find((item) => item.value === resourceId);
+  const resource = findResource(options, { type: 'business', id: resourceId });
   const allTargets = dataScopeTargets(options, resourceId);
   return (
     <div className='divide-y rounded-lg border'>

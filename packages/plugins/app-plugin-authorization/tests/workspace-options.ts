@@ -1,87 +1,164 @@
 import type {
   AuthorizationOptions,
   AuthorizationOptionsResponse,
+  ResourceGroupOption,
+  ResourceOption,
   SectionOption,
+  SelectOption,
+  SubsectionOption,
 } from '../client/authorization-client.js';
 
-/** The built-in sections, as the workspace receives them after localization. */
-export const sections: readonly SectionOption[] = [
+const builtIn: readonly Omit<SectionOption, 'subsections'>[] = [
   { value: 'pages', label: 'Page permissions', order: 0 },
   { value: 'business', label: 'Business permissions', order: 100 },
   { value: 'administration', label: 'Administration', order: 200 },
 ];
+
+/** The built-in sections with no subsections, as the workspace receives them. */
+export const sections: readonly SectionOption[] = builtIn.map((section) => ({
+  ...section,
+  subsections: [],
+}));
+
+/** The built-in sections holding `subsections`, keyed by section name. */
+export function withSubsections(
+  subsections: Readonly<Record<string, readonly SubsectionOption[]>>,
+): readonly SectionOption[] {
+  return builtIn.map((section) => ({
+    ...section,
+    subsections: subsections[section.value] ?? [],
+  }));
+}
+
+/** A subsection; its actions default to every action its resources name. */
+export function subsection(
+  value: string,
+  label: string,
+  resources: readonly ResourceOption[],
+  extra: Partial<Omit<SubsectionOption, 'value' | 'label' | 'resources'>> = {},
+): SubsectionOption {
+  return {
+    value,
+    label,
+    groups: [],
+    actions: [
+      ...new Map(
+        resources
+          .flatMap((item) => item.actions ?? [])
+          .map((item) => [item.value, item]),
+      ).values(),
+    ],
+    resources,
+    ...extra,
+  };
+}
+
+/** The page subsection the server lists, holding `pages`. */
+export function pageSubsection(
+  pages: readonly Omit<ResourceOption, 'type'>[] = [],
+  groups: readonly ResourceGroupOption[] = [],
+): SubsectionOption {
+  return {
+    value: 'page',
+    label: 'Pages',
+    recordType: 'page',
+    actions: [{ value: 'access', label: 'Access' }],
+    groups,
+    resources: pages.map((page) => ({ ...page, type: 'page' })),
+  };
+}
 
 /** The same sections as the server sends them. */
 export const rawSections: readonly {
   name: string;
   title: { key: string; ns: string };
   order: number;
-}[] = [
-  {
-    name: 'pages',
-    title: { key: 'sections.pages', ns: '@nocobase/authorization' },
-    order: 0,
-  },
-  {
-    name: 'business',
-    title: { key: 'sections.business', ns: '@nocobase/authorization' },
-    order: 100,
-  },
-  {
-    name: 'administration',
-    title: { key: 'sections.administration', ns: '@nocobase/authorization' },
-    order: 200,
-  },
-];
+  subsections: [];
+}[] = builtIn.map((section) => ({
+  name: section.value,
+  title: { key: `sections.${section.value}`, ns: '@nocobase/authorization' },
+  order: section.order,
+  subsections: [],
+}));
 
 /** A workspace model as the `options` route would send it, labels as literal titles. */
 export function wire(
   options: AuthorizationOptions,
 ): AuthorizationOptionsResponse {
+  const groups = new Map<
+    string,
+    { name: string; title: string; parent?: string }
+  >();
+  const collect = (
+    nodes: readonly ResourceGroupOption[],
+    parent?: string,
+  ): void => {
+    for (const node of nodes) {
+      groups.set(node.value, {
+        name: node.value,
+        title: node.label,
+        ...(parent === undefined ? {} : { parent }),
+      });
+      collect(node.children ?? [], node.value);
+    }
+  };
+  for (const section of options.sections)
+    for (const item of section.subsections)
+      if (!item.recordType) collect(item.groups);
   return {
     sections: options.sections.map((section) => ({
       name: section.value,
       title: section.label,
       order: section.order,
-    })),
-    resourceTypes: options.resourceTypes.map((type) => ({
-      type: type.value,
-      title: type.label,
-      ...(type.section === undefined ? {} : { section: type.section }),
-      groups: (type.groups ?? []).map((group) => ({
-        name: group.value,
-        title: group.label,
-      })),
-      actions: type.actions.map(action),
-      items: type.resources.map((item) => ({
-        id: item.value,
+      subsections: section.subsections.map((item) => ({
+        name: item.value,
         title: item.label,
-        ...(item.description === undefined
-          ? {}
-          : { description: item.description }),
-        ...(item.group === undefined ? {} : { group: item.group }),
-        actions: (item.actions ?? type.actions).map(action),
-        ...(item.dataScopes
+        ...(item.recordType
           ? {
-              dataScopes: Object.fromEntries(
-                Object.entries(item.dataScopes).map(([name, scopes]) => [
-                  name,
-                  scopes.map((scope) => ({
-                    key: scope.key,
-                    title: scope.label,
-                    collection: scope.collection,
-                    fields: scope.collectionFields,
-                    recordAccess: scope.options
-                      .map((option) => option.value)
-                      .filter((value) => value !== ''),
-                    defaultValue: scope.defaultValue,
-                  })),
-                ]),
-              ),
+              recordType: {
+                type: item.recordType,
+                actions: item.actions.map(action),
+              },
             }
           : {}),
+        resources: item.recordType
+          ? []
+          : item.resources.map((resource) => ({
+              type: resource.type,
+              id: resource.value,
+              title: resource.label,
+              ...(resource.description === undefined
+                ? {}
+                : { description: resource.description }),
+              ...(resource.group === undefined
+                ? {}
+                : { group: resource.group }),
+              actions: (resource.actions ?? item.actions).map(action),
+              ...(resource.dataScopes
+                ? {
+                    dataScopes: Object.fromEntries(
+                      Object.entries(resource.dataScopes).map(
+                        ([name, scopes]) => [
+                          name,
+                          scopes.map((scope) => ({
+                            key: scope.key,
+                            title: scope.label,
+                            collection: scope.collection,
+                            fields: scope.collectionFields,
+                            recordAccess: scope.options
+                              .map((option) => option.value)
+                              .filter((value) => value !== ''),
+                            defaultValue: scope.defaultValue,
+                          })),
+                        ],
+                      ),
+                    ),
+                  }
+                : {}),
+            })),
       })),
     })),
+    ...(groups.size ? { resourceGroups: [...groups.values()] } : {}),
     subjectTypes: options.subjectTypes.map((type) => ({
       type: type.value,
       title: type.label,
@@ -99,9 +176,6 @@ export function wire(
   };
 }
 
-function action(entry: { value: string; label: string }): {
-  name: string;
-  title: string;
-} {
+function action(entry: SelectOption): { name: string; title: string } {
   return { name: entry.value, title: entry.label };
 }
