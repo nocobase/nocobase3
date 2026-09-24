@@ -4,26 +4,26 @@ Use the current sales example as the model: four job permission sets, three busi
 
 ## Permission model versus editable configuration
 
-Code defines business resources, page routes, actions, readable and writable fields, relation capabilities, settings items and the available record access. These declarations describe what the business supports and how its server enforces access. For example, code defines that submitting a quote updates its status and checks its parent project; backend configuration cannot redefine that operation to write arbitrary fields.
+Code defines composite resources, page routes, actions, readable and writable fields, relation capabilities, settings items and the available record access. These declarations describe what the business supports and how its server enforces access. For example, code defines that submitting a quote updates its status and checks its parent project; backend configuration cannot redefine that operation to write arbitrary fields.
 
 Seeds help the user configure that model initially: create business permission sets, choose page and action grants and data scopes, initialize default/sharing/restriction rules, and assign them to intended users or teams where identities are known. These are ordinary persisted configurations, editable through the authorization backend after installation. Being declared in a seed does not make a permission set or rule code-owned, protected or resettable on startup. Preserve subsequent administrator changes.
 
-Application feature development registers and configures its own business resources. Leave platform/system permission configuration to the owning system plugins: do not modify root/member sets, their protection rules, authorization management capabilities or other system settings merely to make an App feature accessible. A business configuration page can live under Settings without becoming platform configuration; declare and configure only the business capability it owns. System-plugin development is a separate, explicitly scoped task.
+Application feature development registers and configures its own composites. Leave platform/system permission configuration to the owning system plugins: do not modify root/member sets, their protection rules, authorization management capabilities or other system settings merely to make an App feature accessible. A business configuration page can live under Settings without becoming platform configuration; declare and configure only the business capability it owns. System-plugin development is a separate, explicitly scoped task.
 
 For example, code declares Quote View, Edit and Submit and the preparer and region record access. A seed creates the initial Sales engineer set and selects its pages, actions and scopes. An administrator can later change those grants, scopes and assignments in the backend without editing the seed. Changing what Submit does or which fields it may write requires a code change.
 
 ## Classify changes and deliver both parts
 
-| Change                                                               | Where it belongs                              | When it runs                         |
-| -------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------ |
-| Table, owner/preparer field, team membership relation                | Self-contained migration                      | Schema installation/upgrade          |
-| Supported action, fields, relation capabilities, data scope          | Portable TypeScript declarations              | Imported by owning feature           |
-| Register collections, business resources, settings, record access    | Owning service provider                       | Application boot                     |
-| Resolve membership, enforce policies, validate workflow state        | Server services/routes                        | Each request                         |
-| Page ids in route `authz`, buttons, row eligibility, refresh         | Client routes and components                  | Current session                      |
-| Required initial jobs or baseline rules for a fresh product          | Transactional seed or controlled provisioning | Once, after schema prerequisites     |
-| Assign an existing user, delegate a live quote, tune regional access | Settings UI or authorized runtime service     | Administrator/business decision      |
-| Correct configuration in an existing installation                    | Explicit, versioned data-change workflow      | Upgrade with stated affected records |
+| Change                                                                         | Where it belongs                              | When it runs                         |
+| ------------------------------------------------------------------------------ | --------------------------------------------- | ------------------------------------ |
+| Table, owner/preparer field, team membership relation                          | Self-contained migration                      | Schema installation/upgrade          |
+| Supported action, fields, relation capabilities, data scope                    | Portable TypeScript declarations              | Imported by owning feature           |
+| Register collections, composites, settings, workspace placement, record access | Owning service provider                       | Application boot                     |
+| Resolve membership, enforce policies, validate workflow state                  | Server services/routes                        | Each request                         |
+| Page ids in route `authz`, buttons, row eligibility, refresh                   | Client routes and components                  | Current session                      |
+| Required initial jobs or baseline rules for a fresh product                    | Transactional seed or controlled provisioning | Once, after schema prerequisites     |
+| Assign an existing user, delegate a live quote, tune regional access           | Settings UI or authorized runtime service     | Administrator/business decision      |
+| Correct configuration in an existing installation                              | Explicit, versioned data-change workflow      | Upgrade with stated affected records |
 
 A resource declaration registers what the product can do; it grants nobody access. A permission-set declaration is a value; `.build()` does not save it. A seed persists initial configuration; it does not replace provider registration. Never create or overwrite permission sets on every provider boot.
 
@@ -33,7 +33,7 @@ When developing or changing the model, also complete its initial or adjusted per
 
 ## Share declarations, not runtime instances
 
-Keep a portable feature module such as `server/sales-resources.ts` with `defineBusinessResource` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
+Keep a portable feature module such as `server/sales-resources.ts` with `defineComposite` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
 
 ```ts
 import { definePermissionSet } from '@nocobase/authorization/permission-sets';

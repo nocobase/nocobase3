@@ -17,7 +17,7 @@ Create one context per request and reuse it within that request only, never acro
 
 ## Permission sets
 
-`definePermissionSet(key).title(title).grant(...grants).build()` from `@nocobase/authorization/permission-sets` returns `{ key, title?, grants }`. Each grant is `{ resource: { type, id }, actions: [{ action, policy? }] }`; build them with `authz.pages.grant(id)`, `authz.settings.grant(id, actions)` and a business reference's `grant(...)` rather than by hand. A business grant stores `policy: { type: 'business', scopes }`, one value per data scope: a record access key such as `'recordsIOwn'`, or a record selection. An empty value `''` selects nothing. Titles accept strings or `{ key, ns }`.
+`definePermissionSet(key).title(title).grant(...grants).build()` from `@nocobase/authorization/permission-sets` returns `{ key, title?, grants }`. Each grant is `{ resource: { type, id }, actions: [{ action, policy? }] }`; build them with `authz.pages.grant(id)`, `authz.settings.grant(id, actions)` and a composite reference's `grant(...)` rather than by hand. A composite grant stores `policy: { type: 'composite', scopes }`, one value per data scope: a record access key such as `'recordsIOwn'`, or a record selection. An empty value `''` selects nothing. Titles accept strings or `{ key, ns }`.
 
 | `authz.permissionSets`                                                                     | Contract                                                                |
 | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |

@@ -7,12 +7,12 @@ description: Design, implement and verify restriction rules for NocoBase 3 busin
 
 A restriction rule intersects the records an action reaches with the rule's selection, for the subjects it lists. The selection describes the records still allowed, not the records to hide. Several matching restrictions all apply; none can grant an action or widen a range.
 
-Read the installed `nocobase-app-plugin-authorization` Skill first for business resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-restriction-rules/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
+Read the installed `nocobase-app-plugin-authorization` Skill first for composite resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-restriction-rules/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
 
 ## Development workflow
 
 1. State the invariant positively, for example "this team may access only non-confidential projects". Define who it applies to and whether it covers one operation or every path to a collection.
-2. Use a rule on a business resource, with `scopeKey`, for an operation-specific limit. For a limit across every business branch, create a rule on the `database.collection` with its CRUD actions; the settings page offers declared business data scopes, and collection-wide invariants can be provisioned through the service.
+2. Use a rule on a composite, with `scopeKey`, for an operation-specific limit. For a limit across every business branch, create a rule on the `database.collection` with its CRUD actions; the settings page offers declared business data scopes, and collection-wide invariants can be provisioned through the service.
 3. Register a suitable record access and save the complete rule. Apply the restriction directly to a user as well when it must remain after that person's team membership is removed.
 4. Bind policies on all protected reads and writes. For relation targets, declare relation record access explicitly; a standalone collection restriction is not inherited by nested relation writes.
 5. Verify the excluded row stays inaccessible after adding broad sharing and another permission set, across each protected operation, and that unrelated actors keep their intended access.
@@ -41,7 +41,7 @@ During setup the factory registers the settings item `authorization.restriction-
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own business resource, `sales.public` its own record access and `sales.team` its own subject type, all defined as the main Skill describes.
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite, `sales.public` its own record access and `sales.team` its own subject type, all defined as the main Skill describes.
 
 ```ts
 import { selection } from '@nocobase/authorization/core';
@@ -67,7 +67,7 @@ await rules.create(
 );
 ```
 
-A rule is `{ key, resource, actions, title?, subjects, reason? }` and each action is `{ action, scopeKey?, selection }`, where `selection` is `selection.all()`, `selection.records(ids)` or `selection.recordAccess(key, params?)`. `create`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()` and `withTransaction(connection)` validate before writing. A rule on a business resource names the data scope in `scopeKey` and narrows only that business action's branch; a rule on a `database.collection` omits `scopeKey` and narrows every branch that reaches the collection.
+A rule is `{ key, resource, actions, title?, subjects, reason? }` and each action is `{ action, scopeKey?, selection }`, where `selection` is `selection.all()`, `selection.records(ids)` or `selection.recordAccess(key, params?)`. `create`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()` and `withTransaction(connection)` validate before writing. A rule on a composite names the data scope in `scopeKey` and narrows only that composite action's branch; a rule on a `database.collection` omits `scopeKey` and narrows every branch that reaches the collection.
 
 The service is a trusted provisioning API. A custom HTTP caller must check the settings item with `requireSettings(authorization, 'authorization.restriction-rules', action)` and validate the rule with `validateDataScopeRule`, both from `@nocobase/app-plugin-authorization/server/extension`, as this plugin's own handler does.
 

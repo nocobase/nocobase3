@@ -23,7 +23,7 @@ export default defineAppRoutes([
 ]);
 ```
 
-The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. A page route without `authz` is rejected at registration; declare `'skip'` explicitly for a page that needs no check beyond sign-in, and remember that `'skip'` does not bypass parent guards. The permission workspace lists every route whose `authz` checks `page` `access`, under the Pages entry with its navigation groups as resource groups, from the client route tree in menu order; there is no server page registration. `authz.pages.grant('sales.quotes')` builds the matching grant for seeds and provisioning. Business resources and settings items are listed under the subsections they name with `section` (added with `authz.sections.add`), or under "Other". A page grant opens an entry; business data needs its own action grants, and renaming a page id orphans the grants that reference it.
+The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. A page route without `authz` is rejected at registration; declare `'skip'` explicitly for a page that needs no check beyond sign-in, and remember that `'skip'` does not bypass parent guards. The permission workspace lists every route whose `authz` checks `page` `access`, under the Pages entry with its navigation groups as resource groups, from the client route tree in menu order; there is no server page registration. `authz.pages.grant('sales.quotes')` builds the matching grant for seeds and provisioning. Composites and settings items are listed under the subsections the server places them in with `authz.ui.place` (subsections are added with `authz.ui.sections.add`), or under their default section's "Other". A page grant opens an entry; business data needs its own action grants, and renaming a page id orphans the grants that reference it.
 
 ## Check feature visibility
 
@@ -31,7 +31,7 @@ The page module default-exports a React component. Translate the navigation key 
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 
 const permission = useCan({
-  resource: { type: 'business', id: 'sales.quotes' },
+  resource: { type: 'composite', id: 'sales.quotes' },
   action: 'submit',
 });
 // permission: { can, isPending, error, retry }
@@ -61,7 +61,7 @@ export function SubmitQuote({
 }) {
   const api = useApiClient();
   const access = useCan({
-    resource: { type: 'business', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     action: 'submit',
   });
   const [pending, setPending] = useState(false);

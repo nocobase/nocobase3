@@ -7,12 +7,12 @@ description: Design, implement and verify default access for NocoBase 3 business
 
 Default access adds a shared record baseline for every identity that already holds an action. It does not grant the action, page access or additional fields. A baseline combines with permission-set data scopes and sharing, and restriction rules still narrow the result, so choose it as an intentional minimum range rather than a fallback for identities without a scope of their own.
 
-Read the installed `nocobase-app-plugin-authorization` Skill first for business resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-default-access/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
+Read the installed `nocobase-app-plugin-authorization` Skill first for composite resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-default-access/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
 
 ## Development workflow
 
 1. Identify which records every holder of a particular operation should receive by default. A read baseline can be broad while edit remains preparer-only; do not copy read defaults into write operations.
-2. Confirm the business resource, action and data scope exist and that the scope points to the intended collection. Reuse an applicable record access or define one through the main authorization Skill.
+2. Confirm the composite, action and data scope exist and that the scope's grants target the intended collection. Reuse an applicable record access or define one through the main authorization Skill.
 3. Save one rule per resource under a stable `key`; a second rule on the same resource is rejected, so extend the existing rule instead. A rule lists every action and data scope it widens; updating it replaces the whole rule, and deleting it removes the baseline, not the permission-set action.
 4. Verify a holder receives the baseline, a person without the action remains denied, and restrictions still remove excluded rows. Also verify an explicit narrow data scope is not unexpectedly broadened by a permissive default.
 
@@ -40,7 +40,7 @@ During setup the factory registers the settings item `authorization.default-acce
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own business resource and `sales.prepared` its own record access, both defined as the main Skill describes.
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite and `sales.prepared` its own record access, both defined as the main Skill describes.
 
 ```ts
 import { selection } from '@nocobase/authorization/core';
@@ -63,7 +63,7 @@ await rules.create(
 );
 ```
 
-A rule is `{ key, resource, actions }` and each action is `{ action, scopeKey?, selection }`, where `selection` is `selection.all()`, `selection.records(ids)` or `selection.recordAccess(key, params?)`. `create`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()` and `withTransaction(connection)` validate before writing. A rule on a business resource names the data scope in `scopeKey` and affects only that business action's branch; a rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. Neither form shares related records implicitly or replaces field and relation capabilities, and unrestricted identities skip every rule.
+A rule is `{ key, resource, actions }` and each action is `{ action, scopeKey?, selection }`, where `selection` is `selection.all()`, `selection.records(ids)` or `selection.recordAccess(key, params?)`. `create`, `update(key, rule)`, `delete(key)`, `get(key)`, `list()` and `withTransaction(connection)` validate before writing. A rule on a composite names the data scope in `scopeKey` and affects only that composite action's branch; a rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. Neither form shares related records implicitly or replaces field and relation capabilities, and unrestricted identities skip every rule.
 
 The service is a trusted provisioning API. A custom HTTP caller must check the settings item with `requireSettings(authorization, 'authorization.default-access', action)` and validate the rule with `validateDataScopeRule`, both from `@nocobase/app-plugin-authorization/server/extension`, as this plugin's own handler does.
 

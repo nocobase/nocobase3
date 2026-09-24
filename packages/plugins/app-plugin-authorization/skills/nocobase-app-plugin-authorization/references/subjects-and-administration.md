@@ -114,7 +114,7 @@ The rule mechanisms below are optional. Follow [capability discovery](optional-c
 | Confidential records must remain excluded          | Restriction rule               | Sharing and additional sets cannot reopen them at the protected boundary |
 | A record's ownership follows its project           | Custom record access           | Actual parent/membership data determines scope                           |
 
-Positive selections from permission sets, default access and sharing combine; restrictions intersect them. A grant whose data scope selects nothing can still obtain default access and sharing. A restriction is the set of records still allowed, not a list of records to deny. A rule on a business resource matches one action and data scope branch; a rule on a `database.collection` covers every branch. Relation targets do not automatically inherit standalone target restrictions. Root/unrestricted users bypass these constraints, so they are unsuitable for testing ordinary boundaries.
+Positive selections from permission sets, default access and sharing combine; restrictions intersect them. A grant whose data scope selects nothing can still obtain default access and sharing. A restriction is the set of records still allowed, not a list of records to deny. A rule on a composite matches one action and data scope branch; a rule on a `database.collection` covers every branch. Relation targets do not automatically inherit standalone target restrictions. Root/unrestricted users bypass these constraints, so they are unsuitable for testing ordinary boundaries.
 
 Use each installed rule Skill for integration, APIs and initialization. Runtime routes use these services, not direct table writes. Controlled installation seeds follow [code and seeds](code-and-seeds.md). Do not add a parallel roles implementation or silently enable an absent plugin.
 
@@ -136,7 +136,7 @@ Follow the bundled [client and settings workflow](client-development.md#settings
 
 ## Diagnose and accept
 
-1. Check installed plugins, collection and business resource registration, and action and data scope spelling. A catalog item or action nobody registered is denied with `RESOURCE_ACTION_NOT_SUPPORTED`.
+1. Check installed plugins, collection and composite registration, and action and data scope spelling. A catalog item or action nobody registered is denied with `RESOURCE_ACTION_NOT_SUPPORTED`.
 2. Inspect the verified principal, authenticated audience, active memberships and effective permission-set assignments.
 3. Evaluate the same resource and action as the endpoint with the request context's `authorize`, including params when required, and read its `reasons`.
 4. Inspect each collection's policy and the applied default/sharing/restriction sources. Confirm the endpoint binds those policies rather than recomputing broader ones.

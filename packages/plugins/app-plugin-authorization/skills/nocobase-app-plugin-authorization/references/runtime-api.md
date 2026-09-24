@@ -33,30 +33,30 @@ export default defineServerPlugins([authentication, authorization]);
 
 ## API map
 
-| Export or surface                                                                                      | Purpose                                                                                                   |
-| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `./server`: `authorizationToken`                                                                       | Resolve the application's `AppAuthorization`                                                              |
-| `./server`: `defineDatabasePermission`, `recordAccess`, `condition`                                    | Typed collection permissions, the built-in record access and record access filters                        |
-| `@nocobase/authorization/core`: `defineBusinessResource`, `defineRecordAccess`, `selection`            | Business resources, custom record access and rule selections                                              |
-| `authz.middleware()`, `authz.for(identity)`                                                            | The request's `AuthorizationContext`; see [request checks](core-api.md)                                   |
-| `authz.permissionSets`                                                                                 | Definitions, assignments, protection and transactions; see [permission sets](core-api.md#permission-sets) |
-| `authz.sections.add`, `authz.resourceGroups.add`                                                       | Sections and subsections on the left, resource groups on the right; display only                          |
-| `authz.business.define(resource)`                                                                      | Register a business resource; returns a `BusinessResourceReference`                                       |
-| `authz.recordAccess.define(access)`                                                                    | Register a named way to select records                                                                    |
-| `authz.database.collections.add(definition)`                                                           | Opt a collection into the permission model                                                                |
-| `authz.database.policyFor(collection, context, operation?)`                                            | Fold the CRUD decisions of one collection into a `RepositoryPolicy`                                       |
-| `authz.database.authorizeRepository({ repository, resource, actions })`                                | Middleware binding Repository methods to business actions                                                 |
-| `authz.settings.add(item)`, `authz.settings.grant(id, actions)`                                        | Register a settings item and build a grant of it                                                          |
-| `authz.pages.grant(id)`                                                                                | Build a page `access` grant; pages come from the client route tree                                        |
-| `./client`: `useCan`, `useAuthorizationClient`, `authorizationClientToken`, `useAuthorizationRevision` | Session-aware visibility checks                                                                           |
-| `./client/management`, `./server/extension`                                                            | Shared workspace components and HTTP helpers for plugins that add authorization settings screens          |
+| Export or surface                                                                                      | Purpose                                                                                                       |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `./server`: `authorizationToken`                                                                       | Resolve the application's `AppAuthorization`                                                                  |
+| `./server`: `defineDatabasePermission`, `recordAccess`, `condition`                                    | Typed collection permissions, the built-in record access and record access filters                            |
+| `@nocobase/authorization/core`: `defineComposite`, `defineRecordAccess`, `selection`                   | Composite resources, custom record access and rule selections                                                 |
+| `authz.middleware()`, `authz.for(identity)`                                                            | The request's `AuthorizationContext`; see [request checks](core-api.md)                                       |
+| `authz.permissionSets`                                                                                 | Definitions, assignments, protection and transactions; see [permission sets](core-api.md#permission-sets)     |
+| `authz.ui.sections.add`, `authz.ui.groups.add`, `authz.ui.place(reference, { section, group? })`       | Workspace sections, subsections and groups, and where each composite or settings item is listed; display only |
+| `authz.composites.define(resource)`                                                                    | Register a composite resource; returns a `CompositeReference`                                                 |
+| `authz.recordAccess.define(access)`                                                                    | Register a named way to select records                                                                        |
+| `authz.database.collections.add(definition)`                                                           | Opt a collection into the permission model                                                                    |
+| `authz.database.policyFor(collection, context, operation?)`                                            | Fold the CRUD decisions of one collection into a `RepositoryPolicy`                                           |
+| `authz.database.authorizeRepository({ repository, resource, actions })`                                | Middleware binding Repository methods to composite actions                                                    |
+| `authz.settings.add(item)`, `authz.settings.grant(id, actions)`                                        | Register a settings item and build a grant of it                                                              |
+| `authz.pages.grant(id)`                                                                                | Build a page `access` grant; pages come from the client route tree                                            |
+| `./client`: `useCan`, `useAuthorizationClient`, `authorizationClientToken`, `useAuthorizationRevision` | Session-aware visibility checks                                                                               |
+| `./client/management`, `./server/extension`                                                            | Shared workspace components and HTTP helpers for plugins that add authorization settings screens              |
 
 ## Declare a business operation
 
-Use stable business names (`sales.quotes`, `submit`) and a separate data scope key for every independently controlled collection. Builders are immutable; return the builder from each callback. They perform no registration or persistence.
+A business operation is a composite resource. Use stable names (`sales.quotes`, `submit`) and a separate data scope key for every independently controlled collection; a data scope targets the one collection its grants name. Builders are immutable; return the builder from each callback. They perform no registration or persistence.
 
 ```ts
-import { defineBusinessResource } from '@nocobase/authorization/core';
+import { defineComposite } from '@nocobase/authorization/core';
 import { defineDatabasePermission } from '@nocobase/app-plugin-authorization/server';
 
 interface Quote {
@@ -80,10 +80,9 @@ const quoteData = defineDatabasePermission((p) =>
 const projectData = defineDatabasePermission((p) =>
   p.collection<Project>('projects').title('Projects').read(['id', 'title']),
 );
-export const quotes = defineBusinessResource('sales.quotes', (r) =>
+export const quotes = defineComposite('sales.quotes', (r) =>
   r
     .title('Quotes')
-    .section('sales')
     .action('view', (a) => a.title('View').grant('quotes', quoteData))
     .action('edit', (a) =>
       a.title('Edit').grant('quotes', quoteData.update(['amount', 'notes'])),
@@ -97,10 +96,11 @@ export const quotes = defineBusinessResource('sales.quotes', (r) =>
 );
 
 // In the owning provider's boot method:
-authz.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
 authz.database.collections.add({ name: 'quotes', title: 'Quotes' });
 authz.database.collections.add({ name: 'projects', title: 'Projects' });
-authz.business.define(quotes);
+const reference = authz.composites.define(quotes);
+authz.ui.sections.add({ name: 'sales', title: 'Sales', parent: 'business' });
+authz.ui.place(reference, { section: 'sales' });
 ```
 
 Every collection a business action touches must be registered, including for unrestricted users. Registration carries `name`, `title`, optional `description` and `actions` (default `read`, `create`, `update`, `delete`); field, primary-key and relation metadata comes from the database. Re-adding an identical registration is a no-op; a conflicting one throws. Pages are not registered here: the client route that declares `authz: { resource: { type: 'page', id: 'sales.quotes' }, action: 'access' }` is what lists the page in the workspace.
@@ -117,7 +117,7 @@ Every route installs authentication and `authz.middleware()`. For a business act
 router.use('*', authentication.required(), authz.middleware());
 router.get('/quotes', async (c) => {
   const decision = await c.get('authz').authorize({
-    resource: { type: 'business', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     action: 'view',
   });
   const policy = decision.conditions?.database?.quotes;
@@ -131,7 +131,7 @@ router.get('/quotes', async (c) => {
 });
 ```
 
-A business decision's `conditions` are `{ type: 'business', checks, database }`: one `RepositoryPolicy` per composed collection, built from that action's grants only, and `checks` with the underlying decisions. A denied collection check yields a policy that reaches no records rather than denying the whole feature. For `submit`, use both `conditions.database.quotes` and `.projects` inside the same transaction, check the quote's actual parent project through the project policy and include the expected state in the update predicate. Do not replace these policies with `authz.database.policyFor` without an operation: another action's grants could then widen access. `require` rejects conditional decisions; `can` does not enforce rows.
+A composite decision's `conditions` are `{ type: 'composite', checks, database }`: one `RepositoryPolicy` per composed collection, built from that action's grants only, and `checks` with the underlying decisions. A denied collection check yields a policy that reaches no records rather than denying the whole feature. For `submit`, use both `conditions.database.quotes` and `.projects` inside the same transaction, check the quote's actual parent project through the project policy and include the expected state in the update predicate. Do not replace these policies with `authz.database.policyFor` without an operation: another action's grants could then widen access. `require` rejects conditional decisions; `can` does not enforce rows.
 
 For a collection-oriented endpoint, fold the four CRUD decisions into one policy:
 
@@ -143,20 +143,27 @@ await repository.updateOne({ filter: { id }, values: input });
 
 The optional third argument `{ resource: 'sales.quotes', action: 'submit' }` restricts `policyFor` to one business action's branch. Prefer the single business decision when the operation spans several collections. Policies deny absent operations, constrain records in SQL and allow only granted fields and relations. Out-of-scope rows can surface as `RECORD_NOT_FOUND`; map repository errors consistently without leaking hidden records.
 
-For generated Repository APIs, keep the `defineRepositoryApiRoutes` declaration and install `authz.database.authorizeRepository({ repository, resource: quotes.reference(), actions: { findMany: 'view', updateOne: 'edit' } })` after authentication. It binds each endpoint to one business action and narrows its existing policy. See [Repository integration](repository-routes.md) for validation, responses and limits.
+For generated Repository APIs, keep the `defineRepositoryApiRoutes` declaration and install `authz.database.authorizeRepository({ repository, resource: quotes.reference(), actions: { findMany: 'view', updateOne: 'edit' } })` after authentication. It binds each endpoint to one composite action and narrows its existing policy. See [Repository integration](repository-routes.md) for validation, responses and limits.
 
 ## Settings items
 
-An administration surface is a settings item, not a business resource. Register it in the owning provider, declare the same id on its settings route and check it on every endpoint:
+An administration surface is a settings item, not a composite. Register it in the owning provider, place it in an administration subsection, declare the same id on its settings route and check it on every endpoint:
 
 ```ts
-authz.sections.add({ name: 'sales', title: 'Sales', parent: 'administration' });
+authz.ui.sections.add({
+  name: 'sales.admin',
+  title: 'Sales',
+  parent: 'administration',
+});
 authz.settings.add({
   id: 'sales.pricing',
   title: 'Pricing settings',
-  section: 'sales',
   actions: [{ name: 'read' }, { name: 'update' }],
 });
+authz.ui.place(
+  { type: 'settings', id: 'sales.pricing' },
+  { section: 'sales.admin' },
+);
 
 router.put('/sales/pricing', async (c) => {
   await c.get('authz').require({

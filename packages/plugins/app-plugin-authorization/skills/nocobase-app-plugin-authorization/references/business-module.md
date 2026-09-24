@@ -18,13 +18,13 @@ Resolve unclear cases before granting access: may users consult colleagues' quot
 
 Model ownership and preparer ids, project relations, region membership and team membership as business data. Make membership changes an authorized business API. Keep credentials and fixture accounts out of production feature seeds.
 
-Create `server/sales-resources.ts` using the complete `quotes` declaration in [runtime integration](runtime-api.md#declare-a-business-operation). `defineDatabasePermission` declares fields and relation capabilities; `defineBusinessResource` binds them to data scope keys. A `submit` action binds `quotes` to quote read and status update and `projects` to parent read. Give independently controlled collections separate keys even when a workflow edits only one of them.
+Create `server/sales-resources.ts` using the complete `quotes` declaration in [runtime integration](runtime-api.md#declare-a-business-operation). `defineDatabasePermission` declares fields and relation capabilities; `defineComposite` binds them to data scope keys. A `submit` action binds `quotes` to quote read and status update and `projects` to parent read. Give independently controlled collections separate keys even when a workflow edits only one of them.
 
 Keep portable declarations free of database queries so seeds and provisioning can reuse `quotes.reference().grant(...)`. Return fluent builders from callbacks. Define translations in the owning package and use `{ key, ns }` for persisted titles. Do not repeat resource and action strings in permission sets when a typed reference is available.
 
 ## 3. Register record access
 
-Resolve `authorizationToken` and the database in the owning provider. Register the display subsection (`authz.sections.add`), collections and business resources there, and record access with `authz.recordAccess.define`.
+Resolve `authorizationToken` and the database in the owning provider. Register collections and composites there, add the workspace subsection with `authz.ui.sections.add` and place each composite with `authz.ui.place`, and register record access with `authz.recordAccess.define`.
 
 The following application-owned `server/sales-record-access.ts` implements the two selections the engineer set needs. Its migrations must define `quotes.preparedById`, `projects.region` and a trusted `salesMembers` table with user id and region; membership is maintained by authorized business code. A resolver receives `{ principal, collection, action, params }` and returns `true`, `false` or a filter on the collection's own columns. Answer no memberships with `false`, never with all records. Declare `.collections(...)` accurately and type optional parameters with `.params<P>(schema)`.
 
@@ -72,7 +72,7 @@ export function registerSalesRecordAccess(
 }
 ```
 
-Call `registerSalesRecordAccess` from the same provider boot that registers the business resources. For public or owned quote and order selections, first select project ids with the trusted confidentiality or ownership predicate, then return a filter on the child collection's `projectId`; return `false` when no projects match. The following helper supplies the public quote selection used by the optional rule examples:
+Call `registerSalesRecordAccess` from the same provider boot that registers the composites. For public or owned quote and order selections, first select project ids with the trusted confidentiality or ownership predicate, then return a filter on the child collection's `projectId`; return `false` when no projects match. The following helper supplies the public quote selection used by the optional rule examples:
 
 ```ts
 export function registerPublicQuoteAccess(
@@ -125,7 +125,7 @@ export async function submitQuote(
   quoteId: string,
 ): Promise<void> {
   const decision = await authorization.authorize({
-    resource: { type: 'business', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     action: 'submit',
   });
   const policies = decision.conditions?.database;

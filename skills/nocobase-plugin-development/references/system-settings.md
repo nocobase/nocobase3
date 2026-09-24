@@ -12,14 +12,14 @@ Put validation, persistence and transactions in the owning service. Routes authe
 
 A settings page is a settings item, not a page resource. Its entry, children and standalone detail routes check the item's `settings` actions, including details declared with `defineAppRoutes`. Do not declare `page` `access` on these routes; the permission workspace lists as pages only routes that check `page` `access`. Route declaration helpers and URL paths do not decide authorization ownership; the function of the page does.
 
-Group related settings items by the user's management area with a subsection of the `administration` section. For example, `automation` is the subsection, while Workflow and Schedules are settings items inside it; each item exposes its own `read` action and any management actions its plugin implements. Mirror the client settings menu: the plugin that owns the settings group adds the subsection, and a plugin whose settings route extends that group with `extend: true` adds it with `extend: true` too, which does nothing when it exists, creates it otherwise and yields to the owner's title whichever boots first. Two owners with different definitions throw. An item that names no subsection is listed under Other. Keep page entry checks separate from the server operation checks described below.
+Group related settings items by the user's management area with a subsection of the `administration` section. For example, `automation` is the subsection, while Workflow and Schedules are settings items inside it; each item exposes its own `read` action and any management actions its plugin implements. Workspace display lives in `authz.ui`. Mirror the client settings menu: the plugin that owns the settings group adds the subsection with `authz.ui.sections.add`, and a plugin whose settings route extends that group with `extend: true` adds it with `extend: true` too, which does nothing when it exists, creates it otherwise and yields to the owner's title whichever boots first. Two owners with different definitions throw. List each item in its subsection with `authz.ui.place`; an unplaced item is listed under Administration's Other with a startup warning, and a placement naming an unknown subsection fails a development start. Keep page entry checks separate from the server operation checks described below.
 
 ## Register administration capabilities
 
 Resolve `authorizationToken` in provider boot and register the item with `authz.settings.add`. Registration makes its actions grantable; an assigned permission set activates them. `settings` is a catalog type: a check or grant on an item or action nobody registered is denied.
 
 ```ts
-authz.sections.add({
+authz.ui.sections.add({
   name: 'delivery-admin',
   title: 'Delivery administration',
   parent: 'administration',
@@ -27,12 +27,15 @@ authz.sections.add({
 authz.settings.add({
   id: 'delivery.configuration',
   title: 'Delivery configuration',
-  section: 'delivery-admin',
   actions: [{ name: 'read' }, { name: 'configure' }],
 });
+authz.ui.place(
+  { type: 'settings', id: 'delivery.configuration' },
+  { section: 'delivery-admin' },
+);
 ```
 
-Use translated `{ key, ns }` titles for real items. Keep the same stable settings id in the registration, the route's `authz`, client checks and server checks. `authz.settings.grant(id, actions)` builds the grant for seeds and provisioning. A business resource composes only collection grants, so settings access is never granted through one. For business data permissions, read `packages/plugins/app-plugin-authorization/skills/nocobase-app-plugin-authorization/SKILL.md` instead of treating all data editing as system administration.
+Use translated `{ key, ns }` titles for real items. Keep the same stable settings id in the registration, the route's `authz`, client checks and server checks. `authz.settings.grant(id, actions)` builds the grant for seeds and provisioning. Grant settings access directly rather than through a composite resource. For business data permissions, read `packages/plugins/app-plugin-authorization/skills/nocobase-app-plugin-authorization/SKILL.md` instead of treating all data editing as system administration.
 
 ## Contribute the page
 

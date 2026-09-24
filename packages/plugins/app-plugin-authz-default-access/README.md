@@ -9,7 +9,7 @@ Adds default access: records every identity that already holds an action reaches
 | Default-access rule | `DefaultAccessRule { key, resource, actions }`, stored by this plugin. A resource holds at most one rule.                 |
 | Rule action         | `RuleAction { action, scopeKey?, selection }`: one action of the rule and the records it adds.                            |
 | Record selection    | `all`, `records` with ids, or `recordAccess` with a key and params.                                                       |
-| Data scope          | A named slot on a business action; `scopeKey` names it when the rule targets a business resource.                         |
+| Data scope          | A named slot on a composite action; `scopeKey` names it when the rule targets a composite.                                |
 | Settings item       | `settings:authorization.default-access`, whose `read`, `create`, `update` and `delete` actions gate this plugin's routes. |
 
 ## Layers
@@ -19,7 +19,7 @@ Adds default access: records every identity that already holds an action reaches
  ─────────────────────────       ────────────────────────────────────────         ────────────────────────────
  default-access rules ─────────▶ `expand` constraint for every identity ─┐        context.authorize(...)
                                   Permission Set grants ─────────────────┴▶ type  authz.database.policyFor(...)
- display: the "Default access" settings page; its settings item sits in the authorization subsection
+ display: the "Default access" settings page; its settings item is placed in the authorization subsection through authz.ui
 ```
 
 ## Entry points
@@ -42,7 +42,7 @@ import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server'
 export default { plugins: [defaultAccess()] };
 ```
 
-`defaultAccess({ store? })` wraps `defaultAccessPlugin` from `@nocobase/authorization/default-access` with the bundled database store; a replacement store implements `DefaultAccessStore<DatabaseConnection>`. During setup it registers the settings item `authorization.default-access` in the `authorization` subsection with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/default-access', handler)`. Without the factory in the configuration the plugin adds no API and no route.
+`defaultAccess({ store? })` wraps `defaultAccessPlugin` from `@nocobase/authorization/default-access` with the bundled database store; a replacement store implements `DefaultAccessStore<DatabaseConnection>`. During setup it registers the settings item `authorization.default-access`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/default-access', handler)`. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 
@@ -81,7 +81,7 @@ await rules.create({
 | `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                                                                         |
 | `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                                                                    |
 
-A rule on a business resource names the data scope in `scopeKey` and applies to that business action's branch only. A rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule against the registered model with `validateDataScopeRule`, as this plugin's handler does.
+A rule on a composite names the data scope in `scopeKey` and applies to that composite action's branch only. A rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule against the registered model with `validateDataScopeRule`, as this plugin's handler does.
 
 ## Check access
 
@@ -89,7 +89,7 @@ Rules take effect through the ordinary checks; nothing calls them directly.
 
 ```ts
 const decision = await c.get('authz').authorize({
-  resource: { type: 'business', id: 'sales.quotes' },
+  resource: { type: 'composite', id: 'sales.quotes' },
   action: 'view',
 });
 const policy = decision.conditions?.database?.quotes; // includes the baseline records

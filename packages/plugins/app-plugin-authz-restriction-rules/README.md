@@ -9,7 +9,7 @@ Adds restriction rules: for the subjects a rule lists, the records an action rea
 | Restriction rule | `RestrictionRule { key, resource, actions, title?, subjects, reason? }`, stored by this plugin.                              |
 | Rule action      | `RuleAction { action, scopeKey?, selection }`: one action of the rule and the records still allowed.                         |
 | Record selection | `all`, `records` with ids, or `recordAccess` with a key and params. Every kind is accepted.                                  |
-| Data scope       | A named slot on a business action; `scopeKey` names it when the rule targets a business resource.                            |
+| Data scope       | A named slot on a composite action; `scopeKey` names it when the rule targets a composite.                                   |
 | Subject          | Who the rule applies to, `{ type, id }`.                                                                                     |
 | Settings item    | `settings:authorization.restriction-rules`, whose `read`, `create`, `update` and `delete` actions gate this plugin's routes. |
 
@@ -20,7 +20,7 @@ Adds restriction rules: for the subjects a rule lists, the records an action rea
  ────────────────────────      ────────────────────────────────────────────────────         ────────────────────────────
  restriction rules ──────────▶ `restrict` constraint for the rule's subjects ─┐             context.authorize(...)
                                 grants, default access, sharing ──────────────┴▶ type       authz.database.policyFor(...)
- display: the "Restriction rules" settings page; its settings item sits in the authorization subsection
+ display: the "Restriction rules" settings page; its settings item is placed in the authorization subsection through authz.ui
 ```
 
 ## Entry points
@@ -43,7 +43,7 @@ import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/s
 export default { plugins: [restrictionRules()] };
 ```
 
-`restrictionRules({ store? })` wraps `restrictionRulesPlugin` from `@nocobase/authorization/restriction-rules` with the bundled database store; a replacement store implements `RestrictionRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.restriction-rules` in the `authorization` subsection with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/restriction-rules', handler)`. Without the factory in the configuration the plugin adds no API and no route.
+`restrictionRules({ store? })` wraps `restrictionRulesPlugin` from `@nocobase/authorization/restriction-rules` with the bundled database store; a replacement store implements `RestrictionRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.restriction-rules`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/restriction-rules', handler)`. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 
@@ -86,7 +86,7 @@ await rules.create({
 | `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                          |
 | `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                     |
 
-A rule on a business resource names the data scope in `scopeKey` and narrows that business action's branch only. A rule on a `database.collection` omits `scopeKey` and narrows every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule with `validateDataScopeRule`, as this plugin's handler does.
+A rule on a composite names the data scope in `scopeKey` and narrows that composite action's branch only. A rule on a `database.collection` omits `scopeKey` and narrows every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule with `validateDataScopeRule`, as this plugin's handler does.
 
 ## Check access
 

@@ -83,7 +83,7 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
   });
 ```
 
-Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions. The pair must be registered: `settings`, `business` and `database.collection` deny an item or action nobody added, so this route's owner calls `authz.settings.add({ id: 'orders-admin', title, section, actions: [{ name: 'read' }] })`, where the optional `section` is an administration subsection added with `authz.sections.add` in its provider's `boot`. `can` is true only for an unconditional permit; a check that depends on records, such as a `database.collection` grant with record access, is conditional and needs the policy flow below.
+Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions. The pair must be registered: `settings`, `composite` and `database.collection` deny an item or action nobody added, so this route's owner calls `authz.settings.add({ id: 'orders-admin', title, actions: [{ name: 'read' }] })` in its provider's `boot` and may list it in an administration subsection with `authz.ui.place({ type: 'settings', id: 'orders-admin' }, { section })`; an unplaced item is listed under Administration's "Other". `can` is true only for an unconditional permit; a check that depends on records, such as a `database.collection` grant with record access, is conditional and needs the policy flow below.
 
 ### Enforce record, field and relation policies
 
@@ -101,7 +101,7 @@ const customers = database.repository('customers').withPolicy(policy);
 return context.json({ data: await customers.findMany() });
 ```
 
-For a business operation, call the request context's `authorize({ resource: { type: 'business', id }, action })` once, reject denied or missing policies, and bind each table's `decision.conditions.database[collection]` policy. Do not replace it with aggregate collection authorization: grants from another business operation could widen the result. `require` rejects conditional decisions; `can` reports feature visibility rather than access to a specific record.
+For a business operation, call the request context's `authorize({ resource: { type: 'composite', id }, action })` once, reject denied or missing policies, and bind each table's `decision.conditions.database[collection]` policy. Do not replace it with aggregate collection authorization: grants from another business operation could widen the result. `require` rejects conditional decisions; `can` reports feature visibility rather than access to a specific record.
 
 Bound repositories enforce rows, fields and relations together. Keep multi-table writes transactional and business-state predicates in the update. Map out-of-scope `RECORD_NOT_FOUND` errors consistently without exposing hidden records. Never fetch unrestricted rows and filter them in the browser.
 
