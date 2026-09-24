@@ -9,11 +9,13 @@ This page assumes an operational Hub and permission to manage the target App. Se
 
 ## Build and upload
 
-Create an App in Hub and record its ID and public path. Build in the application project for the Host platform; for Linux x64 with glibc and Node 24:
+Create an App in Hub and record its ID and public path. Build in the application project for the environment Hub runs in, which for a Docker deployment is Linux with glibc and Node 24 regardless of the host:
 
 ```bash
 APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 ```
+
+Use `--target linux-arm64` on an ARM64 server, and for a template deployment match the platform, libc and Node major version of the environment that runs Hub; see [Deploy Hub](./hub). Mismatched flags upload and deploy successfully and fail only when the application starts.
 
 The current artifact is `storage/exports/dist.tar.gz`. Upload it from the App detail page, select the Release, prepare runtime configuration, review, and deploy. Uploading alone does not deploy.
 
