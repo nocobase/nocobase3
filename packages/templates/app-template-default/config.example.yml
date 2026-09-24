@@ -18,9 +18,11 @@ client:
     # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
 users:
-  # Used only when seeding an empty user table.
+  # The first administrator, created only when seeding an empty user table. Changing these values later does not
+  # reset an existing account. Replace the password before exposing the application.
   initialAdmin:
-    username: nocobase
+    username: nocobase # 3–30 letters, digits, underscores or dots; stored lowercase
+    email: admin@nocobase.com # stored lowercase; also signs in
     password: admin123
 
 auth:

@@ -123,18 +123,19 @@ Both options sit under the connection they apply to. A first deployment can keep
 
 ### Configure the initial administrator
 
-Before the first start, the runtime configuration can set the administrator's username and password. Standalone applications, Hub itself and Hub-hosted applications all use the same fields, and each application initializes its own account:
+Before the first start, the runtime configuration can set the administrator's username, email and password. Standalone applications, Hub itself and Hub-hosted applications all use the same fields, and each application initializes its own account:
 
 ```yaml
 users:
   initialAdmin:
     username: my_admin
+    email: admin@example.com
     password: REPLACE_WITH_INITIAL_ADMIN_PASSWORD
 ```
 
-The username takes 3 to 30 letters, digits, underscores or dots and is stored in lowercase. When `users.initialAdmin` is configured explicitly, a non-empty password is required; when the username is omitted, `nocobase` is used.
+The username takes 3 to 30 letters, digits, underscores or dots, the email must be a valid address, and both are stored in lowercase and can be used to sign in. When `users.initialAdmin` is configured explicitly, a non-empty password is required; when the username is omitted, `nocobase` is used, and when the email is omitted, `admin@nocobase.com` is used.
 
-The default template provides the username `nocobase` and the password `admin123`; replace them before deploying. This setting takes effect only when the default initialization task runs against an empty user table. Changing these fields on an existing application does not reset the account or its password.
+The default template provides the username `nocobase`, the email `admin@nocobase.com` and the password `admin123`; replace them before deploying. This setting takes effect only when the default initialization task runs against an empty user table. Changing these fields on an existing application does not reset the account or its password.
 
 ### Configure authentication and session secrets
 
