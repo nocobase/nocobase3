@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
 import type { CompositeConditions } from '@nocobase/authorization/core';
 import type {
   AuthorizationOptionsResponse,
@@ -37,7 +36,6 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => {
-  cleanup();
   await fixture.database.disconnect();
 });
 const admin = (path: string, method?: string, body?: unknown) =>

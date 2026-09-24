@@ -1,10 +1,16 @@
-import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
-import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
-import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
-import { apiRoutes as authorizationRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
+import defaultAccessPlugin, {
+  defaultAccess,
+} from '@nocobase/app-plugin-authz-default-access/server';
+import sharingRulesPlugin, {
+  sharingRules,
+} from '@nocobase/app-plugin-authz-sharing-rules/server';
+import restrictionRulesPlugin, {
+  restrictionRules,
+} from '@nocobase/app-plugin-authz-restriction-rules/server';
+import authenticationPlugin from '@nocobase/app-plugin-authentication/server';
 import path from 'node:path';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
-import {
+import authorizationPlugin, {
   authorizationToken,
   createAppAuthorization,
 } from '@nocobase/app-plugin-authorization';
@@ -22,21 +28,19 @@ export async function createFixture() {
     drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
-  for (const name of [
-    'authentication',
-    'authorization',
-    'authz-default-access',
-    'authz-sharing-rules',
-    'authz-restriction-rules',
+  // Each plugin's own migrations, located through its published server plugin.
+  for (const plugin of [
+    authenticationPlugin,
+    authorizationPlugin,
+    defaultAccessPlugin,
+    sharingRulesPlugin,
+    restrictionRulesPlugin,
   ])
     await database
       .createMigrator({
-        directory: path.resolve(
-          import.meta.dirname,
-          `../../../plugins/app-plugin-${name}/database/migrations`,
-        ),
-        packageName: `@nocobase/app-plugin-${name}`,
-        tableName: `${name}Migrations`,
+        directory: path.resolve(plugin.baseDir!, plugin.database!.migrations!),
+        packageName: plugin.packageName,
+        tableName: `${plugin.packageName.replace('@nocobase/app-plugin-', '')}Migrations`,
       })
       .latest();
   await database
@@ -105,7 +109,8 @@ export async function createFixture() {
   };
   await new AuthorizationExampleProvider(app).boot();
   router.route('/api', await apiRoutes.createRouter(app));
-  router.route('/api', await authorizationRoutes.createRouter(app));
+  for (const routes of authorizationPlugin.routes ?? [])
+    router.route('/api', await routes.createRouter(app));
   return {
     database,
     authorization,

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { cleanup } from '@testing-library/react';
 import type { DefaultAccessAuthorizationApi } from '@nocobase/authorization/default-access';
 import type { SharingRulesAuthorizationApi } from '@nocobase/authorization/sharing-rules';
 import type { RestrictionRulesAuthorizationApi } from '@nocobase/authorization/restriction-rules';
@@ -27,7 +26,6 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => {
-  cleanup();
   await fixture.database.disconnect();
 });
 const admin = (path: string, method?: string, body?: unknown) =>

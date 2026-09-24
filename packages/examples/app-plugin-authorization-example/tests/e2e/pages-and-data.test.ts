@@ -1,28 +1,5 @@
-// @vitest-environment jsdom
-import { useState } from 'react';
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { selection } from '@nocobase/authorization/core';
-// The permission-set editor, its drafts and its option localizer are private to the plugin.
-import { PermissionSetEditor } from '../../../../plugins/app-plugin-authorization/client/pages/permission-sets/editor.js';
-import {
-  fromSet,
-  toInput,
-} from '../../../../plugins/app-plugin-authorization/client/pages/permission-sets/drafts.js';
-import { findResource } from '@nocobase/app-plugin-authorization/client/management';
-import { localizeOptions } from '../../../../plugins/app-plugin-authorization/client/components/localized-options.js';
-import type {
-  AuthorizationOptionsResponse,
-  PermissionSet,
-} from '@nocobase/app-plugin-authorization/client';
-import { PROJECTS, QUOTES } from '../../server/sales-authorization.js';
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import { PROJECTS } from '../../server/sales-authorization.js';
 import { projectReference } from '../../server/sales-resources.js';
 import type { DefaultAccessAuthorizationApi } from '@nocobase/authorization/default-access';
 import type { SharingRulesAuthorizationApi } from '@nocobase/authorization/sharing-rules';
@@ -33,30 +10,6 @@ import {
   listIds,
   type SalesFixture,
 } from '../helpers.js';
-
-vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('../locale-harness.js');
-  const { default: example } = await import('../../client/locales/en-US.js');
-  return {
-    useTranslation: () => ({
-      t: (key: string, options?: Record<string, unknown>) => {
-        if (options?.ns === '@nocobase/app-plugin-authorization-example')
-          return (
-            key
-              .split('.')
-              .reduce<unknown>(
-                (value, key) =>
-                  value && typeof value === 'object'
-                    ? Reflect.get(value, key)
-                    : undefined,
-                example,
-              ) ?? key
-          );
-        return translate(key, options);
-      },
-    }),
-  };
-});
 
 type SalesAuthorization = SalesFixture['authorization'] &
   DefaultAccessAuthorizationApi &
@@ -75,7 +28,6 @@ beforeEach(async () => {
   });
 });
 afterEach(async () => {
-  cleanup();
   await fixture.database.disconnect();
 });
 const admin = (path: string, method?: string, body?: unknown) =>
@@ -175,133 +127,6 @@ it('grants page entry separately while data rules govern real endpoints, indepen
       (check) => check.resource.type === 'database.collection',
     ),
   ).toBe(true);
-});
-
-it('saves one operation scope from the real editor without changing view or quote scopes', async () => {
-  const response = await admin('permission-sets/options');
-  const raw = (await response.json()).data as AuthorizationOptionsResponse;
-  const { translate } = await import('../locale-harness.js');
-  const example = (await import('../../client/locales/en-US.js')).default;
-  const options = localizeOptions(raw, (key, params) =>
-    params?.ns === '@nocobase/app-plugin-authorization-example'
-      ? String(
-          key
-            .split('.')
-            .reduce<unknown>(
-              (value, key) =>
-                value && typeof value === 'object'
-                  ? Reflect.get(value, key)
-                  : undefined,
-              example,
-            ) ?? key,
-        )
-      : translate(key, params),
-  );
-  expect(
-    findResource(options, { type: 'composite', id: 'example.sales.projects' })
-      ?.dataScopes?.edit,
-  ).toBeDefined();
-  const set = (await authz.permissionSets.get('example-sales-assistant'))!;
-  let saved = false;
-  function Editor() {
-    const [draft, setDraft] = useState(() => fromSet(set as PermissionSet));
-    return (
-      <MemoryRouter>
-        <PermissionSetEditor
-          dirty={true}
-          options={options}
-          draft={draft}
-          busy={false}
-          onChange={setDraft}
-          onClose={() => {}}
-          onSave={async (event) => {
-            event.preventDefault();
-            expect(
-              (await admin(`permission-sets/${set.key}`, 'PUT', toInput(draft)))
-                .status,
-            ).toBe(200);
-            saved = true;
-          }}
-        />
-      </MemoryRouter>
-    );
-  }
-  render(<Editor />);
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Projects: Edit project information' }),
-  );
-  fireEvent.click(
-    await screen.findByRole('radio', {
-      name: 'Configure permission',
-      exact: true,
-    }),
-  );
-  fireEvent.click(
-    screen.getByRole('checkbox', { name: 'Specify scope: Projects' }),
-  );
-  fireEvent.click(screen.getByRole('combobox', { name: 'Projects' }));
-  const selectedOption = await screen.findByRole('option', {
-    name: 'My region',
-  });
-  fireEvent.pointerDown(selectedOption, { pointerType: 'mouse' });
-  fireEvent.mouseUp(selectedOption);
-  fireEvent.click(selectedOption);
-  fireEvent.click(screen.getByRole('button', { name: 'Back to resources' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save permission set' }));
-  await waitFor(() => expect(saved).toBe(true));
-  expect(
-    (await authz.permissionSets.get(set.key))?.grants.find(
-      (grant) =>
-        grant.resource.type === 'composite' &&
-        grant.resource.id === 'example.sales.projects',
-    )?.actions,
-  ).toContainEqual({
-    action: 'edit',
-    policy: { type: 'composite', scopes: { projects: 'example.sales.region' } },
-  });
-  expect(await ids('assistant')).toEqual([
-    'project-1',
-    'project-2',
-    'project-3',
-  ]);
-  expect(
-    (
-      await fixture.request('assistant', 'salesProjects:updateOne', {
-        filter: { id: 'project-1' },
-        values: {
-          notes: 'Saved from UI grant',
-        },
-      })
-    ).status,
-  ).toBe(200);
-  expect(
-    (
-      await fixture.request('assistant', 'salesProjects:updateOne', {
-        filter: { id: 'project-2' },
-        values: {
-          notes: 'Regional edit independently allows this row',
-        },
-      })
-    ).status,
-  ).toBe(200);
-  await authz.defaultAccess.create({
-    key: 'all-quotes',
-    resource: { type: 'database.collection', id: QUOTES },
-    actions: [{ action: 'read', selection: selection.all() }],
-  });
-  expect(await ids('assistant', 'quotes')).toEqual([
-    'quote-1',
-    'quote-2',
-    'quote-3',
-    'quote-5',
-    'quote-6',
-    'quote-7',
-    'quote-8',
-    'quote-history-1',
-    'quote-history-2',
-    'quote-history-3',
-    'quote-history-8',
-  ]);
 });
 
 it('keeps all-region read separate from engineer edit, including direct repository policies', async () => {
