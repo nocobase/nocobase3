@@ -143,7 +143,7 @@ export async function resolveAppRuntime(
   // The server publishes the locale it starts in; a `client.i18n.defaultLocale` is the fallback for a page served
   // without it.
   const configuredLocale = config.public.has('i18n.defaultLocale')
-    ? config.public.get<unknown>('i18n.defaultLocale')
+    ? config.public.get('i18n.defaultLocale')
     : config.get<unknown>('i18n.defaultLocale');
   const defaultLocale =
     (typeof configuredLocale === 'string'
