@@ -125,7 +125,12 @@ it('waits for a person before computing access', async () => {
 });
 it('batches only the current page, supports group collapse and shows readable scope details', async () => {
   mount();
-  const cell = await screen.findByRole('button', { name: 'Orders 0: Read' });
+  // The first full render of the page is slow on a cold CI runner.
+  const cell = await screen.findByRole(
+    'button',
+    { name: 'Orders 0: Read' },
+    { timeout: 5000 },
+  );
   expect(mocks.inspectBatch.mock.calls[0]?.[1]).toHaveLength(40);
   expect(screen.queryByText('Orders 20')).not.toBeInTheDocument();
   fireEvent.click(cell);
