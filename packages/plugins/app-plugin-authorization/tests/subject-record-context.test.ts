@@ -1,16 +1,19 @@
 import { expect, it } from 'vitest';
 import {
-  recordsIOwn,
-  recordsICreated,
+  builtInRecordAccess,
   UserContextRequiredError,
 } from '../server/database/record-access.js';
+
+const ownerAccess = builtInRecordAccess.filter(({ key }) =>
+  ['recordsIOwn', 'recordsICreated'].includes(key),
+);
 const collection = {
   name: 'orders',
   fields: ['id', 'ownerId', 'createdById'],
   primaryKey: 'id',
   generatedPrimaryKey: true,
 };
-it.each([recordsIOwn(), recordsICreated()])(
+it.each(ownerAccess)(
   'requires a user identity for $key instead of using a department id',
   (policy) => {
     const context = { collection, action: 'read', params: undefined };
