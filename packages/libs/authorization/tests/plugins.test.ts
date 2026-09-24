@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAuthorization,
+  DefaultAccessConflictError,
   defaultAccessPlugin,
   permissionSetsPlugin,
   restrictionRulesPlugin,
@@ -456,6 +457,25 @@ describe('official authorization plugins', () => {
     ).resolves.toMatchObject([
       { selection: { type: 'records', ids: ['order-1'] } },
     ]);
+  });
+
+  it('keeps one default-access rule per resource', async () => {
+    const defaults = new MemoryRuleStore<DefaultAccessRule>();
+    const { defaultAccess } = defaultAccessPlugin({
+      store: defaults,
+    }).authorizationApi;
+    const first = {
+      key: 'orders',
+      resource,
+      actions: [{ action: 'read', selection: selection.all() }],
+    };
+    await defaultAccess.create(first);
+    await expect(
+      defaultAccess.create({ ...first, key: 'orders-again' }),
+    ).rejects.toBeInstanceOf(DefaultAccessConflictError);
+    await expect(
+      defaultAccess.update('orders', { ...first, key: 'orders-renamed' }),
+    ).resolves.toMatchObject({ key: 'orders-renamed' });
   });
 
   it('hands an expanding default access scope to the resource handler', async () => {

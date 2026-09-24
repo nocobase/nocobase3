@@ -42,6 +42,8 @@ export interface RuleKind {
   /** Rules that name subjects apply only to identities holding one. */
   bySubject: boolean;
   allowAll: boolean;
+  /** Set when a resource may hold one rule only; builds the error a second one raises. */
+  onePerResource?: (rule: StoredRule, existing: StoredRule) => Error;
 }
 
 /** Rejects a malformed rule before it reaches a store. */
@@ -81,12 +83,29 @@ export class RuleService<TRule extends StoredRule, TTransaction>
 
   async create(rule: TRule): Promise<TRule> {
     validateRule(rule, this.kind);
+    await this.assertResourceFree(rule, undefined);
     return this.store.create(rule);
   }
 
   async update(key: string, rule: TRule): Promise<TRule> {
     validateRule(rule, this.kind);
+    await this.assertResourceFree(rule, key);
     return this.store.update(key, rule);
+  }
+
+  private async assertResourceFree(
+    rule: TRule,
+    replacing: string | undefined,
+  ): Promise<void> {
+    const conflict = this.kind.onePerResource;
+    if (!conflict) return;
+    const existing = (await this.store.list()).find(
+      (entry) =>
+        entry.key !== replacing &&
+        entry.resource.type === rule.resource.type &&
+        entry.resource.id === rule.resource.id,
+    );
+    if (existing) throw conflict(rule, existing);
   }
 
   delete(key: string): Promise<void> {

@@ -1,7 +1,8 @@
 import type { AuthorizationRouteHandler } from '@nocobase/authorization/core';
-import type {
-  DefaultAccessApi,
-  DefaultAccessRule,
+import {
+  DefaultAccessConflictError,
+  type DefaultAccessApi,
+  type DefaultAccessRule,
 } from '@nocobase/authorization/default-access';
 import {
   createRouteHandler,
@@ -32,6 +33,13 @@ export function createDefaultAccessHandler(
     validateDataScopeRule(authz, rule);
     return rule;
   };
+  const conflict = (error: unknown): Response | undefined =>
+    error instanceof DefaultAccessConflictError
+      ? Response.json(
+          { code: 'DEFAULT_ACCESS_CONFLICT', message: error.message },
+          { status: 409 },
+        )
+      : undefined;
   routes.route('/', createRuleSupportRoutes(authz, DEFAULT_ACCESS_RULE));
   routes.get(PATH, async (context) => {
     await requireSettings(
@@ -47,10 +55,14 @@ export function createDefaultAccessHandler(
       DEFAULT_ACCESS_SETTINGS,
       'create',
     );
-    return context.json(
-      { data: await api.create(checked(await context.req.json())) },
-      201,
-    );
+    const rule = checked(await context.req.json());
+    try {
+      return context.json({ data: await api.create(rule) }, 201);
+    } catch (error) {
+      const response = conflict(error);
+      if (response) return response;
+      throw error;
+    }
   });
   routes.put(`${PATH}/:key`, async (context) => {
     await requireSettings(
@@ -61,9 +73,14 @@ export function createDefaultAccessHandler(
     const key = context.req.param('key');
     if (!(await api.get(key)))
       return context.json({ code: 'RULE_NOT_FOUND' }, 404);
-    return context.json({
-      data: await api.update(key, checked(await context.req.json())),
-    });
+    const rule = checked(await context.req.json());
+    try {
+      return context.json({ data: await api.update(key, rule) });
+    } catch (error) {
+      const response = conflict(error);
+      if (response) return response;
+      throw error;
+    }
   });
   routes.delete(`${PATH}/:key`, async (context) => {
     await requireSettings(

@@ -24,6 +24,19 @@ export type DefaultAccessPlugin<TTransaction = unknown> = AuthorizationPlugin<
   DefaultAccessAuthorizationApi<TTransaction>
 >;
 
+/** A resource holds one default-access rule; a second one conflicts. */
+export class DefaultAccessConflictError extends Error {
+  readonly existing: string;
+
+  constructor(resource: { type: string; id: string }, existing: string) {
+    super(
+      `${resource.type}:${resource.id} already has a default-access rule: ${existing}`,
+    );
+    this.name = 'DefaultAccessConflictError';
+    this.existing = existing;
+  }
+}
+
 export function defaultAccessPlugin<TTransaction = unknown>(
   options: DefaultAccessOptions<TTransaction>,
 ): DefaultAccessPlugin<TTransaction> {
@@ -33,6 +46,8 @@ export function defaultAccessPlugin<TTransaction = unknown>(
       effect: 'expand',
       bySubject: false,
       allowAll: true,
+      onePerResource: (rule, existing) =>
+        new DefaultAccessConflictError(rule.resource, existing.key),
     },
     requireStore(options.store, 'Default Access'),
   );

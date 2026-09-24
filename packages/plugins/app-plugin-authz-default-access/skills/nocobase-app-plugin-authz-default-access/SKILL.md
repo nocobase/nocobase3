@@ -13,7 +13,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for business 
 
 1. Identify which records every holder of a particular operation should receive by default. A read baseline can be broad while edit remains preparer-only; do not copy read defaults into write operations.
 2. Confirm the business resource, action and data scope exist and that the scope points to the intended collection. Reuse an applicable record access or define one through the main authorization Skill.
-3. Save one rule per concern under a stable `key`. A rule lists every action and data scope it widens; updating it replaces the whole rule, and deleting it removes the baseline, not the permission-set action.
+3. Save one rule per resource under a stable `key`; a second rule on the same resource is rejected, so extend the existing rule instead. A rule lists every action and data scope it widens; updating it replaces the whole rule, and deleting it removes the baseline, not the permission-set action.
 4. Verify a holder receives the baseline, a person without the action remains denied, and restrictions still remove excluded rows. Also verify an explicit narrow data scope is not unexpectedly broadened by a permissive default.
 
 The sales example uses related-project ownership for the quote view baseline and preparer identity for editing; the engineer set separately grants broad viewing, which confidentiality restrictions narrow. A project's owner is not necessarily the author of every quote on that project.
@@ -71,7 +71,7 @@ The service is a trusted provisioning API. A custom HTTP caller must check the s
 
 Use this only after confirming the plugin is installed, registered and configured and its migrations have run. Read the main authorization Skill's `references/code-and-seeds.md` for `defineSeed`, the restricted seed context and the code/configuration boundary. Seeded rules are ordinary configuration that administrators keep editing; do not protect or re-apply them.
 
-Build the rule with `defineDefaultAccessRule` in a portable seed-data module and persist it as a row of `authorizationDefaultAccessRules`: `id` (a fresh seed may use the key), unique `key`, `resourceType` and `resourceId` from `rule.resource`, `actions` as `JSON.stringify(rule.actions)`, `createdAt` and `updatedAt`. Check the key before inserting and preserve an existing rule. Default access has no subject assignments: it applies to every holder of the action.
+Build the rule with `defineDefaultAccessRule` in a portable seed-data module and persist it as a row of `authorizationDefaultAccessRules`: `id` (a fresh seed may use the key), unique `key`, `resourceType` and `resourceId` from `rule.resource`, `actions` as `JSON.stringify(rule.actions)`, `createdAt` and `updatedAt`. The table is unique on `key` and on `(resourceType, resourceId)`: check both before inserting and preserve an existing rule. Default access has no subject assignments: it applies to every holder of the action.
 
 ## Administration and acceptance
 

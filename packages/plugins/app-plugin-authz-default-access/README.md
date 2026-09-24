@@ -6,7 +6,7 @@ Adds default access: records every identity that already holds an action reaches
 
 | Term                | Meaning                                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Default-access rule | `DefaultAccessRule { key, resource, actions }`, stored by this plugin.                                                    |
+| Default-access rule | `DefaultAccessRule { key, resource, actions }`, stored by this plugin. A resource holds at most one rule.                 |
 | Rule action         | `RuleAction { action, scopeKey?, selection }`: one action of the rule and the records it adds.                            |
 | Record selection    | `all`, `records` with ids, or `recordAccess` with a key and params.                                                       |
 | Data scope          | A named slot on a business action; `scopeKey` names it when the rule targets a business resource.                         |
@@ -74,12 +74,12 @@ await rules.create({
 });
 ```
 
-| `authz.defaultAccess` method        | Contract                                                        |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `create(rule)`                      | Stores a new rule after validating it.                          |
-| `update(key, rule)`                 | Replaces a rule with a complete definition; the key may change. |
-| `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                          |
-| `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                     |
+| `authz.defaultAccess` method        | Contract                                                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `create(rule)`                      | Stores a new rule after validating it; a resource that already has a rule throws `DefaultAccessConflictError`. |
+| `update(key, rule)`                 | Replaces a rule with a complete definition; the key may change, but not onto a resource another rule holds.    |
+| `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                                                                         |
+| `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                                                                    |
 
 A rule on a business resource names the data scope in `scopeKey` and applies to that business action's branch only. A rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule against the registered model with `validateDataScopeRule`, as this plugin's handler does.
 
@@ -99,7 +99,7 @@ An unrestricted identity skips every rule.
 
 ## HTTP API
 
-Paths are under `/api/authz` and require a signed-in user. Every route checks `{ resource: { type: 'settings', id: 'authorization.default-access' }, action }`. Responses wrap results in `{ data }`; creation answers `201` and deletion `204`. Errors answer `403 { code: 'FORBIDDEN' }`, `400 { code: 'INVALID_AUTHORIZATION_INPUT' }` and `404` for an unknown key.
+Paths are under `/api/authz` and require a signed-in user. Every route checks `{ resource: { type: 'settings', id: 'authorization.default-access' }, action }`. Responses wrap results in `{ data }`; creation answers `201` and deletion `204`. Errors answer `403 { code: 'FORBIDDEN' }`, `400 { code: 'INVALID_AUTHORIZATION_INPUT' }`, `404` for an unknown key and `409 { code: 'DEFAULT_ACCESS_CONFLICT' }` when the resource already has a rule. The table enforces the same with a unique `(resourceType, resourceId)` constraint beside the unique `key`.
 
 | Method and path                               | Required action | Request                             | Response `data`                     |
 | --------------------------------------------- | --------------- | ----------------------------------- | ----------------------------------- |

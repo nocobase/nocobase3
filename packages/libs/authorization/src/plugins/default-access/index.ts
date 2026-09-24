@@ -1,6 +1,7 @@
 export type { DefaultAccessRule } from './model.js';
 export type { DefaultAccessStore } from './store.js';
 export {
+  DefaultAccessConflictError,
   defaultAccessPlugin,
   type DefaultAccessApi,
   type DefaultAccessAuthorizationApi,

@@ -9,7 +9,11 @@ import {
   databasePlugin,
   settingsPlugin,
 } from '@nocobase/app-plugin-authorization/server';
-import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
+import {
+  defaultAccessPlugin,
+  type DefaultAccessRule,
+  type DefaultAccessStore,
+} from '@nocobase/authorization/default-access';
 import { createDefaultAccessHandler } from '../server/handler.js';
 
 const rule: DefaultAccessRule = {
@@ -129,5 +133,59 @@ describe('Default Access management handler', () => {
         })
       ).status,
     ).toBe(400);
+  });
+
+  it('answers 409 for a second rule on the same resource', async () => {
+    const rules = new Map<string, DefaultAccessRule>();
+    const store: DefaultAccessStore<unknown> = {
+      list: async () => [...rules.values()],
+      get: async (key) => rules.get(key),
+      create: async (value) => {
+        rules.set(value.key, value);
+        return value;
+      },
+      update: async (key, value) => {
+        rules.delete(key);
+        rules.set(value.key, value);
+        return value;
+      },
+      delete: async (key) => {
+        rules.delete(key);
+      },
+      withTransaction: () => store,
+    };
+    const api = defaultAccessPlugin({ store }).authorizationApi.defaultAccess;
+    const handler = createDefaultAccessHandler(host(), api);
+    const send = (path: string, method: string, body: unknown) =>
+      handler({
+        request: new Request(`http://app/api/authz${path}`, {
+          method,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        path,
+        authorization: {
+          require: vi.fn(async () => {}),
+        } as unknown as AuthorizationContext,
+      });
+    expect((await send('/default-access', 'POST', rule)).status).toBe(201);
+    const second = await send('/default-access', 'POST', {
+      ...rule,
+      key: 'orders-again',
+    });
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({
+      code: 'DEFAULT_ACCESS_CONFLICT',
+    });
+    // Updating the rule in place, even under a new key, is not a conflict.
+    expect(
+      (
+        await send('/default-access/orders-default', 'PUT', {
+          ...rule,
+          key: 'orders-renamed',
+        })
+      ).status,
+    ).toBe(200);
+    expect([...rules.keys()]).toEqual(['orders-renamed']);
   });
 });

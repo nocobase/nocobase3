@@ -42,6 +42,27 @@ describe('@nocobase/app-plugin-authz-default-access migration', () => {
       await migration.up(context);
       for (const table of tables)
         expect(await client.schema.hasTable(table)).toBe(true);
+      const row = (id: string, key: string) => ({
+        id,
+        key,
+        resourceType: 'business',
+        resourceId: 'sales.quotes',
+        actions: '[]',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const rules = 'authorizationDefaultAccessRules';
+      await connection.query.insertInto(rules).values(row('1', 'a')).execute();
+      // One rule per resource, and one per key.
+      await expect(
+        connection.query.insertInto(rules).values(row('2', 'b')).execute(),
+      ).rejects.toThrow();
+      await expect(
+        connection.query
+          .insertInto(rules)
+          .values({ ...row('3', 'a'), resourceId: 'sales.orders' })
+          .execute(),
+      ).rejects.toThrow();
       await migration.down?.(context);
       for (const table of tables)
         expect(await client.schema.hasTable(table)).toBe(false);

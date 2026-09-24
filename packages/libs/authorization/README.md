@@ -562,7 +562,7 @@ await authz.permissionSets.notifyAssignmentsChanged(subject);
 
 ## `@nocobase/authorization/default-access`
 
-`defaultAccessPlugin({ store })` adds `authz.defaultAccess` and an `expand` constraint resolver that applies to every identity.
+`defaultAccessPlugin({ store })` adds `authz.defaultAccess` and an `expand` constraint resolver that applies to every identity. A resource holds at most one default-access rule: creating a second, or updating another rule onto it, throws `DefaultAccessConflictError`.
 
 ### Exports
 
@@ -577,6 +577,7 @@ await authz.permissionSets.notifyAssignmentsChanged(subject);
 | `DefaultAccessRule`             | type     | `{ key: string; resource: ResourceRef; actions: readonly RuleAction[] }`                       | A default-access rule.                                 |
 | `defineDefaultAccessRule`       | function | `defineDefaultAccessRule(key, reference): DefaultAccessRuleBuilder`                            | Builds a rule on a business resource.                  |
 | `DefaultAccessRuleBuilder`      | class    | `scope(action, scopeKey, selection)`, `build()`                                                | Immutable rule builder; validates the data scope.      |
+| `DefaultAccessConflictError`    | class    | `new DefaultAccessConflictError(resource, existing)`; `existing`                               | A second rule on a resource that already has one.      |
 
 ## `@nocobase/authorization/sharing-rules`
 

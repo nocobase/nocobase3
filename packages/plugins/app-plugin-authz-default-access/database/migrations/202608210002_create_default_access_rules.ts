@@ -23,8 +23,9 @@ const migration: MigrationDefinition = defineMigration({
         collection.unique('key', {
           name: 'uq_authorization_default_access_rules_key',
         });
-        collection.index(['resourceType', 'resourceId'], {
-          name: 'idx_authorization_default_access_resource',
+        // One rule per resource.
+        collection.unique(['resourceType', 'resourceId'], {
+          name: 'uq_authorization_default_access_rules_resource',
         });
       },
     );
