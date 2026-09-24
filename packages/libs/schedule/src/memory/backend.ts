@@ -96,6 +96,12 @@ export class InMemoryScheduleBackend implements ScheduleBackend {
   }
 
   public async write(rule: ScheduleRuleWrite): Promise<Date | undefined> {
+    if (rule.options.endDate && rule.options.endDate.getTime() <= Date.now()) {
+      // A rule that already ended is not stored, the way the redis adapter
+      // (and BullMQ, which refuses it) behaves.
+      await this.remove(rule.name);
+      return undefined;
+    }
     const nextRunAt = firstFiring(rule.options, Date.now(), rule.immediately);
     await this.mutate((draft) => {
       draft.set(rule.name, {

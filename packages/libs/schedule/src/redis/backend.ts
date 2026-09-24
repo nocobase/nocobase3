@@ -146,6 +146,12 @@ export class RedisScheduleBackend implements ScheduleBackend {
   }
 
   public async write(rule: ScheduleRuleWrite): Promise<Date | undefined> {
+    if (hasEnded(rule.options)) {
+      // BullMQ refuses an end date in the past. Such a rule has nothing left
+      // to fire, so whatever the name held before is removed instead.
+      await this.openQueue().removeJobScheduler(rule.name);
+      return undefined;
+    }
     const job = await this.openQueue().upsertJobScheduler(
       rule.name,
       repeatOptionsOf(rule.options, rule.immediately),
@@ -228,7 +234,7 @@ export class RedisScheduleBackend implements ScheduleBackend {
         jobName: job.name,
         scheduledAt: plannedAt(job),
         runAt: new Date(job.processedOn ?? Date.now()),
-        ...(await this.nextRunAt(job.name)),
+        ...(await this.nextRunAt(job)),
         signal,
       });
     } catch (error) {
@@ -251,7 +257,7 @@ export class RedisScheduleBackend implements ScheduleBackend {
           jobName: job.name,
           scheduledAt: plannedAt(job),
           runAt: new Date(job.processedOn ?? Date.now()),
-          ...(await this.nextRunAt(job.name)),
+          ...(await this.nextRunAt(job)),
           ...(name === 'ScheduleError'
             ? failureOf(error, runner.hasHandler(job.name))
             : {}),
@@ -266,11 +272,17 @@ export class RedisScheduleBackend implements ScheduleBackend {
     });
   }
 
-  private async nextRunAt(name: string): Promise<{ nextRunAt?: Date }> {
+  /**
+   * The firing after `job`. Once a scheduler has spent its `limit`, BullMQ
+   * keeps reporting the last planned time as `next`; a `next` that is not
+   * after this firing is therefore no further firing at all.
+   */
+  private async nextRunAt(job: Job): Promise<{ nextRunAt?: Date }> {
     const queue = this.queue;
     if (!queue) return {};
-    const scheduler = await queue.getJobScheduler(name);
-    return scheduler ? nextOf(scheduler) : {};
+    const scheduler = await queue.getJobScheduler(job.name);
+    const next = scheduler ? nextOf(scheduler) : {};
+    return next.nextRunAt && next.nextRunAt > plannedAt(job) ? next : {};
   }
 
   private openQueue(): ScheduleQueue {
@@ -286,6 +298,10 @@ export class RedisScheduleBackend implements ScheduleBackend {
  */
 function plannedAt(job: Job): Date {
   return new Date(job.timestamp + (job.opts?.delay ?? job.delay ?? 0));
+}
+
+function hasEnded(rule: ScheduleRule): boolean {
+  return rule.endDate !== undefined && rule.endDate.getTime() <= Date.now();
 }
 
 function failureOf(

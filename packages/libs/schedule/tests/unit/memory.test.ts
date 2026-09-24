@@ -296,6 +296,7 @@ describe('InMemoryScheduler', () => {
         }),
       ),
     ).resolves.not.toHaveProperty('scheduledAt');
+    await expect(executor.getJob('ended')).resolves.toBeUndefined();
   });
 
   it('lists jobs by next firing and counts them', async () => {

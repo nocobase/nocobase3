@@ -318,6 +318,40 @@ describe('redis adapter', () => {
     });
   });
 
+  it('removes instead of upserting a rule whose end date has passed', async () => {
+    const { executor, queue } = harness();
+    await executor.setup({ consume: false });
+    await executor.addJob(job());
+
+    const receipt = await executor.addJob(
+      job(undefined, {
+        options: { cron: '0 * * * *', endDate: new Date(Date.now() - 1000) },
+      }),
+    );
+
+    expect(receipt).not.toHaveProperty('scheduledAt');
+    expect(queue.upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(queue.removeJobScheduler).toHaveBeenCalledWith('job-1');
+    await expect(executor.getJob('job-1')).resolves.toBeUndefined();
+  });
+
+  it('reports no next firing once BullMQ has nothing after the current one', async () => {
+    const { executor, queue, worker } = harness();
+    const contexts: ScheduleExecutionContext[] = [];
+    await executor.addJob(
+      job(async (context) => {
+        contexts.push(context);
+      }),
+    );
+    await executor.setup();
+    // A spent limit leaves the last planned time behind as `next`.
+    queue.schedulers.get('job-1')!.next = Date.parse('2030-01-01T01:00:00Z');
+
+    await worker().fire(firing());
+
+    expect(contexts[0]).not.toHaveProperty('nextRunAt');
+  });
+
   it('neither reads nor writes the queue for registerOnly', async () => {
     const { executor, queue } = harness();
     await executor.setup({ consume: false });
