@@ -39,7 +39,7 @@ describe('authz.ui sections', () => {
   it('registers the built-in sections, the authorization subsection and the defaults', () => {
     const authz = createAppAuthorization({});
     expect(names(authz)).toEqual([
-      ['pages', []],
+      ['pages', ['pages.page']],
       ['business', []],
       ['administration', ['authorization']],
     ]);
@@ -48,7 +48,14 @@ describe('authz.ui sections', () => {
       title: { key: 'sections.business', ns: AUTHORIZATION_NAMESPACE },
       order: 100,
     });
-    expect(authz.ui.defaultSectionOf('page')).toBe('pages');
+    expect(authz.ui.defaultSectionOf('page')).toBeUndefined();
+    expect(authz.ui.recordTypeOf('pages.page')).toBe('page');
+    expect(authz.ui.sections.get('pages.page')).toEqual({
+      name: 'pages.page',
+      title: { key: 'sections.page', ns: AUTHORIZATION_NAMESPACE },
+      parent: 'pages',
+      order: 0,
+    });
     expect(authz.ui.defaultSectionOf('composite')).toBe('business');
     expect(authz.ui.defaultSectionOf('settings')).toBe('administration');
     expect(authz.ui.defaultSectionOf('database.collection')).toBeUndefined();
@@ -65,7 +72,7 @@ describe('authz.ui sections', () => {
       order: 1,
     });
     expect(names(authz).slice(0, 3)).toEqual([
-      ['pages', []],
+      ['pages', ['pages.page']],
       ['reports', []],
       ['business', ['a', 'b']],
     ]);
@@ -254,6 +261,54 @@ describe('authz.ui groups and placement', () => {
   });
 });
 
+describe('authz.ui record type subsections', () => {
+  it('marks pages.page for the client to fill, titled in this plugin', async () => {
+    const authz = createAppAuthorization({});
+    const options = await authorizationOptions(authz);
+    expect(options.sections[0]).toMatchObject({
+      name: 'pages',
+      subsections: [
+        {
+          name: 'pages.page',
+          title: { key: 'sections.page', ns: AUTHORIZATION_NAMESPACE },
+          recordType: {
+            type: 'page',
+            actions: [{ name: 'access', title: expect.anything() }],
+          },
+          resources: [],
+        },
+      ],
+    });
+    expect(
+      (await authorizationOptions(authz, { rules: true })).sections[0]
+        ?.subsections,
+    ).toEqual([]);
+  });
+
+  it('lists a plugin record type in its own subsection and validates it', () => {
+    const authz = createAppAuthorization({});
+    authz.resourceTypes.add({ type: 'report', actions: ['read'] });
+    authz.ui.sections.add({
+      name: 'reports',
+      title: 'Reports',
+      parent: 'pages',
+    });
+    authz.ui.recordTypeSection('report', 'reports');
+    authz.ui.recordTypeSection('report', 'reports');
+    expect(() => authz.ui.recordTypeSection('page', 'reports')).toThrow(
+      /already lists report/,
+    );
+    expect(() => authz.ui.recordTypeSection('report', 'pages')).toThrow(
+      /only in a subsection/,
+    );
+    authz.ui.recordTypeSection('settings', 'later');
+    expect(authz.ui.validate(authz).errors).toEqual([
+      'Record type settings is listed in unknown subsection later',
+      'settings is listed as a record type but is not one',
+    ]);
+  });
+});
+
 describe('authz.ui startup validation', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -306,7 +361,7 @@ describe('authz.ui startup validation', () => {
         },
       ],
     });
-    authz.resourceTypes.add({ type: 'ledger', title: 'L', actions: ['read'] });
+    authz.resourceTypes.add({ type: 'ledger', actions: ['read'] });
     authz.ui.place(
       { type: 'composite', id: 'ledger.view' },
       { section: 'authorization' },

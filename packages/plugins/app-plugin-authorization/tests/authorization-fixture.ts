@@ -1,5 +1,4 @@
 import {
-  compositesPlugin,
   createAuthorization as createCoreAuthorization,
   type AuthorizationContext,
   type AuthorizationDecision,
@@ -11,7 +10,7 @@ import { settingsPlugin } from '../server/settings.js';
 import { uiPlugin } from '../server/ui.js';
 
 /**
- * Core Authorization with the `settings`, `ui` and `composites` plugins installed
+ * Core Authorization with the `settings` and `ui` plugins installed
  * first and the authorization settings items registered.
  */
 export const createAuthorization: typeof createCoreAuthorization = (
@@ -20,14 +19,7 @@ export const createAuthorization: typeof createCoreAuthorization = (
   const settings = settingsPlugin();
   const authz = createCoreAuthorization({
     ...options,
-    plugins: [
-      settings,
-      uiPlugin(),
-      ...(options.plugins.some((plugin) => plugin.id === 'composites')
-        ? []
-        : [compositesPlugin()]),
-      ...options.plugins,
-    ],
+    plugins: [settings, uiPlugin(), ...options.plugins],
   });
   const api = settings.authorizationApi!.settings;
   api.add({

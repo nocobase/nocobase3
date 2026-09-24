@@ -5,7 +5,6 @@ import {
   type AuthorizationTitle,
   type PermissionGrant,
 } from '@nocobase/authorization/core';
-import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 
 /** One administration surface and the actions it exposes. */
 export interface SettingsItemDefinition {
@@ -74,10 +73,6 @@ export function settingsPlugin(): SettingsPlugin {
     setup(authz): void {
       authz.resourceTypes.add({
         type: 'settings',
-        title: {
-          key: 'options.resourceTypes.settings',
-          ns: AUTHORIZATION_NAMESPACE,
-        },
         items: service.items,
       });
     },

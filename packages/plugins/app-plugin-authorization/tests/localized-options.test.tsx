@@ -111,13 +111,13 @@ it('resolves groups, sections, subsections and plugin namespaces while preservin
         name: 'administration',
         title: {
           key: 'sections.administration',
-          ns: '@nocobase/authorization',
+          ns: AUTHORIZATION_NAMESPACE,
         },
         order: 200,
         subsections: [
           {
             name: 'administration.other',
-            title: { key: 'sections.other', ns: '@nocobase/authorization' },
+            title: { key: 'sections.other', ns: AUTHORIZATION_NAMESPACE },
             resources: [
               {
                 type: 'settings',
@@ -215,7 +215,7 @@ it('resolves groups, sections, subsections and plugin namespaces while preservin
     'pages',
     'administration',
   ]);
-  // The library's titles are catalogued in this plugin's namespace.
+  // Section titles are catalogued in this plugin's namespace.
   expect(t).toHaveBeenCalledWith('sections.administration', {
     ns: AUTHORIZATION_NAMESPACE,
     defaultValue: 'sections.administration',

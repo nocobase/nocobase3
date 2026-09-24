@@ -1,11 +1,9 @@
 import './subjects.js';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
-  compositesPlugin,
   createAuthorization,
   type Authorization,
   type AuthorizationPlugin,
-  type CompositeAuthorizationApi,
 } from '@nocobase/authorization/core';
 import {
   permissionSetsPlugin,
@@ -51,7 +49,6 @@ export type AppAuthorization = Authorization &
   DatabaseAuthorizationApi &
   PagesAuthorizationApi &
   SettingsAuthorizationApi &
-  CompositeAuthorizationApi &
   UiAuthorizationApi;
 
 const DEFAULT_ROOT_SET = 'root';
@@ -82,7 +79,6 @@ export function createAppAuthorization(
       databasePlugin(options.database),
       pagesPlugin(),
       settingsPlugin(),
-      compositesPlugin(),
       uiPlugin(),
       ...(options.config?.plugins ?? []),
     ],

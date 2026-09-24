@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest';
 import {
   CompositeActionBuilder,
-  compositesPlugin,
   createAuthorization,
   defineComposite,
   defineRecordAccess,
@@ -13,7 +12,7 @@ import { pagesPlugin } from '../server/pages-authorization.js';
 import { settingsPlugin } from '../server/settings.js';
 
 function compositeHost() {
-  return createAuthorization({ plugins: [compositesPlugin()] });
+  return createAuthorization({ plugins: [] });
 }
 
 it('binds reusable permissions to independent data scopes without leaking writes', () => {
@@ -77,7 +76,6 @@ it('keeps multi-table selections and defaults through binding and expansion', as
   const grant = resource.reference().grant({ run: { projects: 'regional' } });
   const authz = createAuthorization({
     plugins: [
-      compositesPlugin(),
       {
         id: 'grants',
         grants: {
@@ -95,7 +93,6 @@ it('keeps multi-table selections and defaults through binding and expansion', as
         setup(host) {
           host.resourceTypes.add({
             type: 'database.collection',
-            title: 'Collections',
             actions: ['read'],
             recordAccess: true,
             async authorize(request, context) {

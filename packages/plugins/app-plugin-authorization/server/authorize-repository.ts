@@ -1,5 +1,4 @@
 import {
-  COMPOSITE_RESOURCE_TYPE,
   dataScopeTarget,
   type AuthorizationEnv,
   type CompositeActions,
@@ -100,7 +99,7 @@ export function createCompositeRepositoryAuthorization<
 
     const authorize = async (): Promise<void> => {
       const decision = await context.var.authz.authorize({
-        resource: { type: COMPOSITE_RESOURCE_TYPE, id: resource },
+        resource: { type: 'composite', id: resource },
         action: binding.action,
       });
       const policies = decision.conditions?.database;

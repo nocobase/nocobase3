@@ -7,20 +7,15 @@ import type {
   SelectOption,
   SubsectionOption,
 } from '../authorization-client.js';
-import {
-  AUTHORIZATION_NAMESPACE,
-  LIBRARY_NAMESPACE,
-  type Translate,
-} from '../i18n.js';
+import { AUTHORIZATION_NAMESPACE, type Translate } from '../i18n.js';
 
-/** Translates a server title; the library namespace maps onto this plugin's. */
+/** Translates a server title in its own namespace, this plugin's by default. */
 export function localizedText(value: LocalizedText, t: Translate): string {
   if (typeof value === 'string') return value;
-  const ns =
-    value.ns === undefined || value.ns === LIBRARY_NAMESPACE
-      ? AUTHORIZATION_NAMESPACE
-      : value.ns;
-  return t(value.key, { ns, defaultValue: value.defaultValue ?? value.key });
+  return t(value.key, {
+    ns: value.ns ?? AUTHORIZATION_NAMESPACE,
+    defaultValue: value.defaultValue ?? value.key,
+  });
 }
 
 /** Turns an `options` response into the workspace model. */

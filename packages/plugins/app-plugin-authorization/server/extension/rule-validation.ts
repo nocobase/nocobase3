@@ -1,5 +1,4 @@
 import {
-  COMPOSITE_RESOURCE_TYPE,
   dataScopeTarget,
   type ResourceRef,
   type RuleAction,
@@ -31,10 +30,10 @@ export function validateDataScopeRule(
   rule: DataScopeRuleInput,
 ): void {
   const composite =
-    rule.resource.type === COMPOSITE_RESOURCE_TYPE
+    rule.resource.type === 'composite'
       ? authz.composites.list().find((item) => item.name === rule.resource.id)
       : undefined;
-  if (rule.resource.type === COMPOSITE_RESOURCE_TYPE && !composite)
+  if (rule.resource.type === 'composite' && !composite)
     throw new TypeError('Unknown composite');
   if (!composite && rule.resource.type !== 'database.collection')
     throw new TypeError('Unsupported rule resource');

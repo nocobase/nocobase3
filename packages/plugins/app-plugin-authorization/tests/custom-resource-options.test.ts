@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest';
 import { ResourceItems } from '@nocobase/authorization/core';
-import { createAppAuthorization } from '../server/index.js';
+import {
+  AUTHORIZATION_NAMESPACE,
+  createAppAuthorization,
+} from '../server/index.js';
 import { authorizationOptions } from '../server/options.js';
 
 const tree = (
@@ -15,11 +18,10 @@ it('lists sections with their subsections, but no type without a default section
   const authz = createAppAuthorization({});
   authz.database.collections.add({ name: 'orders', title: 'Orders' });
   const custom = new ResourceItems();
-  authz.resourceTypes.add({ type: 'custom', title: 'Custom', items: custom });
+  authz.resourceTypes.add({ type: 'custom', items: custom });
   custom.add({ id: 'one', title: 'One', actions: ['read'] });
   authz.resourceTypes.add({
     type: 'hub.app',
-    title: 'Apps',
     actions: ['read'],
   });
   authz.ui.sections.add({
@@ -43,12 +45,13 @@ it('lists sections with their subsections, but no type without a default section
   });
   const options = await authorizationOptions(authz);
   expect(tree(options)).toEqual([
-    ['pages', ['page']],
+    ['pages', ['pages.page']],
     ['business', []],
     ['administration', ['authorization', 'automation', 'administration.other']],
   ]);
   expect(options.sections[0]?.subsections[0]).toMatchObject({
-    name: 'page',
+    name: 'pages.page',
+    title: { key: 'sections.page', ns: AUTHORIZATION_NAMESPACE },
     recordType: { type: 'page', actions: [{ name: 'access' }] },
     resources: [],
   });

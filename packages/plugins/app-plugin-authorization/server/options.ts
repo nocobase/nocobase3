@@ -1,5 +1,4 @@
 import {
-  COMPOSITE_RESOURCE_TYPE,
   dataScopeTarget,
   type AuthorizationTitle,
   type ResourceItemAction,
@@ -119,26 +118,10 @@ export async function authorizationOptions(
   const collections = described.filter((item) => item !== undefined);
   const fields = new Map(collections.map((item) => [item.name, item.fields]));
   const resources = new Map<string, AuthorizationOptionsResource[]>();
-  const recordTypes = new Map<string, AuthorizationOptionsSubsection[]>();
   for (const type of host.resourceTypes.list()) {
     const defaultSection = host.ui.defaultSectionOf(type.type);
-    if (options.rules && type.type !== COMPOSITE_RESOURCE_TYPE) continue;
-    if (!type.items) {
-      if (defaultSection === undefined) continue;
-      recordTypes.set(defaultSection, [
-        ...(recordTypes.get(defaultSection) ?? []),
-        {
-          name: type.type,
-          title: title(type.title, type.type),
-          recordType: {
-            type: type.type,
-            actions: type.actions.map(actionOption),
-          },
-          resources: [],
-        },
-      ]);
-      continue;
-    }
+    if (options.rules && type.type !== 'composite') continue;
+    if (!type.items) continue;
     for (const item of type.items.list()) {
       // A placement production startup only warned about falls back to "Other".
       const found = host.ui.placementOf({ type: type.type, id: item.id });
@@ -154,7 +137,7 @@ export async function authorizationOptions(
           : host.ui.sections.other(defaultSection));
       if (section === undefined) continue;
       const dataScopes =
-        type.type === COMPOSITE_RESOURCE_TYPE
+        type.type === 'composite'
           ? compositeDataScopes(host, item.id, fields)
           : undefined;
       if (options.rules && !Object.keys(dataScopes ?? {}).length) continue;
@@ -184,9 +167,28 @@ export async function authorizationOptions(
     name: section.name,
     title: title(section.title, section.name),
     order: section.order,
-    subsections: [
-      ...(options.rules ? [] : (recordTypes.get(section.name) ?? [])),
-      ...section.subsections.flatMap((subsection) => {
+    subsections: section.subsections.flatMap(
+      (subsection): AuthorizationOptionsSubsection[] => {
+        const recordType = host.ui.recordTypeOf(subsection.name);
+        const registered =
+          recordType !== undefined && host.resourceTypes.has(recordType)
+            ? host.resourceTypes.get(recordType)
+            : undefined;
+        // The client fills a record type's subsection, such as pages.page.
+        if (registered && !registered.items)
+          return options.rules
+            ? []
+            : [
+                {
+                  name: subsection.name,
+                  title: title(subsection.title, subsection.name),
+                  recordType: {
+                    type: registered.type,
+                    actions: registered.actions.map(actionOption),
+                  },
+                  resources: [],
+                },
+              ];
         const listed = resources.get(subsection.name) ?? [];
         return listed.length
           ? [
@@ -197,8 +199,8 @@ export async function authorizationOptions(
               },
             ]
           : [];
-      }),
-    ],
+      },
+    ),
   }));
   const resourceGroups = referencedGroups(host, [...resources.values()].flat());
   return {

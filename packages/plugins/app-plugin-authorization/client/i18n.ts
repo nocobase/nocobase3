@@ -4,9 +4,6 @@ import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 
 export { AUTHORIZATION_NAMESPACE };
 
-/** The library's titles are translated from this plugin's catalogue. */
-export const LIBRARY_NAMESPACE = '@nocobase/authorization';
-
 /** What a label helper needs: the narrow shape of i18next's `t`. */
 export type Translate = (
   key: string,
@@ -24,9 +21,8 @@ export function titleText(
   fallback = '',
 ): string {
   if (typeof value !== 'object') return value ?? fallback;
-  const ns =
-    value.ns === undefined || value.ns === LIBRARY_NAMESPACE
-      ? AUTHORIZATION_NAMESPACE
-      : value.ns;
-  return t(value.key, { ns, defaultValue: value.key });
+  return t(value.key, {
+    ns: value.ns ?? AUTHORIZATION_NAMESPACE,
+    defaultValue: value.key,
+  });
 }

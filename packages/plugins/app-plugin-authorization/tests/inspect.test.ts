@@ -32,7 +32,6 @@ const decisions: AuthorizationPlugin = {
   setup(authz) {
     authz.resourceTypes.add({
       type: 'test.resource',
-      title: 'Test',
       actions: ['read'],
       authorize: (request): Promise<AuthorizationDecision> =>
         Promise.resolve(
@@ -117,7 +116,6 @@ describe('the permission inspector endpoint', () => {
     const seen: unknown[] = [];
     authz.resourceTypes.add({
       type: 'subject-check',
-      title: 'Subject check',
       actions: ['read'],
       authorize(request) {
         seen.push({ principal: request.principal, subjects: request.subjects });

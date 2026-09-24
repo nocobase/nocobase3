@@ -34,10 +34,6 @@ export function pagesPlugin(): PagesPlugin {
     setup(authz): void {
       authz.resourceTypes.add({
         type: 'page',
-        title: {
-          key: 'options.resourceTypes.page',
-          ns: AUTHORIZATION_NAMESPACE,
-        },
         actions: [
           {
             name: 'access',

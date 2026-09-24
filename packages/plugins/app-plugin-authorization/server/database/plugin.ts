@@ -1,9 +1,5 @@
-import type {
-  AuthorizationPlugin,
-  CompositeAuthorizationApi,
-} from '@nocobase/authorization/core';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
-import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
 import {
   composeDatabasePolicies,
   DatabaseAuthorizationService,
@@ -16,8 +12,7 @@ import { builtInRecordAccess } from './record-access.js';
 
 export type DatabasePlugin = AuthorizationPlugin<
   DatabaseAuthorizationApi,
-  DatabaseConnection,
-  CompositeAuthorizationApi
+  DatabaseConnection
 >;
 
 /** Registers the `database.collection` catalog type and `authz.database`. */
@@ -25,7 +20,6 @@ export function databasePlugin(database?: DatabaseManager): DatabasePlugin {
   const api = new DatabaseAuthorizationService();
   return {
     id: 'database',
-    dependencies: ['composites'],
     requiresGrants: true,
     composeConditions: (checks) => ({
       database: composeDatabasePolicies(checks),
@@ -44,10 +38,6 @@ export function databasePlugin(database?: DatabaseManager): DatabasePlugin {
       });
       authz.resourceTypes.add<DatabaseAuthorizationParams>({
         type: 'database.collection',
-        title: {
-          key: 'options.resourceTypes.collection',
-          ns: AUTHORIZATION_NAMESPACE,
-        },
         items: api.collections.items,
         actions: ['read', 'create', 'update', 'delete'],
         recordAccess: true,

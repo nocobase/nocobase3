@@ -4,7 +4,6 @@ import type { AuthorizationResource } from './en-US.js';
 const zhCN: AuthorizationResource = {
   options: optionMessages.options,
   sections: optionMessages.sections,
-  resourceTypes: optionMessages.resourceTypes,
   navigation: {
     authorization: '权限管理',
     permissionSets: '权限集',
