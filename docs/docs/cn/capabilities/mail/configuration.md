@@ -9,7 +9,7 @@ description: '通过 AI 分步引导完成邮箱接入，按需查阅手动配�
 
 ## 推荐：让 AI 引导配置
 
-你只需先说明邮箱类型、应用访问地址和使用范围，例如仅公司内部使用，还是允许其他用户关联邮箱。已有 OAuth 应用时也一并说明，让 AI 检查能否复用。无需先理解所有配置项，可以把下面的需求交给应用 Agent：
+你只需先说明邮箱类型、应用访问地址和使用范围，比如仅公司内部使用，还是允许其他用户关联邮箱。已有 OAuth 应用时也一并说明，让 AI 检查能否复用。无需先理解所有配置项，可以把下面的需求交给应用 Agent：
 
 > 请引导我为当前应用接入 Gmail 邮箱（也可以替换为 Microsoft 365 或 IMAP/SMTP）。先读取邮件插件 Skill 和已有配置，确认应用访问地址及使用范围，列出还缺少的信息。请完成项目内的配置，并将需要我在服务商平台操作的部分逐步说明，每一步给出入口、填写值和完成后的检查方法。OAuth 回调地址请根据当前项目生成，权限以当前插件要求为准。密钥请告诉我在本地哪里填写，不要让我直接粘贴到对话中。配置完成后，引导我关联一个邮箱，检查授权返回、首次同步和收发信是否正常。
 
@@ -46,7 +46,15 @@ description: '通过 AI 分步引导完成邮箱接入，按需查阅手动配�
 
 可以让 AI 按所选接入方式完成应用配置。IMAP/SMTP 服务器信息由邮箱服务商提供；Gmail 和 Microsoft 365 需要在对应平台创建 OAuth 应用，并登记[OAuth 回调地址](#oauth-回调地址)。
 
-以下配置写入应用 `config.yml` 的 `mail` 节点，修改后重启应用。一个应用可以配置多个服务商实例；实例名会关联到已有账户，投入使用后应保持稳定。实例的 `enabled` 默认是 `true`，设为 `false` 后，关联账户将无法继续使用该实例。
+以下配置写入应用的 [`config.yml`](../../app/configuration.md) 的 `mail` 节点，修改后重启应用。一个应用可以配置多个服务商实例；实例名会关联到已有账户，投入使用后应保持稳定。实例的 `enabled` 默认是 `true`，设为 `false` 后，关联账户将无法继续使用该实例。
+
+自动同步、定时发送和推送触发的同步都需要应用队列正常运行。配置文件正确并不代表后台任务已经执行，遇到任务长时间停留在等待状态时，先检查队列和应用服务状态。
+
+| 实例类型    | 必填配置                                       | 账户关联方式                                       |
+| ----------- | ---------------------------------------------- | -------------------------------------------------- |
+| `gmail`     | `clientId`、`clientSecret`                     | Google OAuth                                       |
+| `microsoft` | `clientId`、`clientSecret`                     | Microsoft OAuth；`tenant` 默认为 `common`          |
+| `imap-smtp` | `imap` 和 `smtp` 下的 `host`、`port`、`secure` | 用户在关联账户时填写邮箱地址、用户名和密码或授权码 |
 
 ## IMAP/SMTP
 
@@ -125,7 +133,7 @@ mail:
 
 `mail.oauthCallbackUrl` 默认是应用内路径 `/mail/oauth/callback`。邮件插件将应用的 `app.publicBasePath` 加到路径前面，再根据 `app.publicOrigin` 生成完整地址；没有配置公共 origin 时使用请求 origin。
 
-例如，公共 origin 是 `https://mail.example.com`、应用挂载在 `/main`，应在 OAuth 应用中登记：
+比如，公共 origin 是 `https://mail.example.com`、应用挂载在 `/main`，应在 OAuth 应用中登记：
 
 ```text
 https://mail.example.com/main/mail/oauth/callback
@@ -163,7 +171,7 @@ mail:
   pushWebhookSecret: replace-with-a-random-secret-at-least-32-characters
 ```
 
-将示例密钥替换为随机值：长度为 `32–128`，仅使用字母、数字、`_` 和 `-`。对应环境变量为 `MAIL_PUSH_WEBHOOK_URL`、`MAIL_PUSH_WEBHOOK_SECRET`，只填写其中一项不会启用推送。运行时在基础地址后追加服务商类型、实例名和密钥，例如：
+将示例密钥替换为随机值：长度为 `32–128`，仅使用字母、数字、`_` 和 `-`。对应环境变量为 `MAIL_PUSH_WEBHOOK_URL`、`MAIL_PUSH_WEBHOOK_SECRET`，只填写其中一项不会启用推送。运行时在基础地址后追加服务商类型、实例名和密钥，比如：
 
 ```text
 https://mail.example.com/main/mail/webhooks/gmail/google/<secret>
@@ -179,7 +187,11 @@ Microsoft 365 的订阅由邮件插件在账户连接后创建、验证和续期
 
 上面列出的 `MAIL_*` 环境变量会覆盖对应的 `mail` 配置。服务商凭据、端点和授权范围通过 `mail.providers` 设置，没有独立的 `MAIL_*` 环境变量映射。修改配置后重启应用。
 
-不要将真实的 OAuth 密钥、推送密钥和邮箱密码提交到仓库。当前核心插件的默认凭据存储将授权数据以普通 JSON 保存在数据库中；如应用要求加密保存，可按[应用开发](./development.md#扩展服务商和凭据存储)接入替代实现。
+:::warning 注意
+
+不要将真实的 OAuth 密钥、推送密钥和邮箱密码提交到仓库。当前核心插件的默认凭据存储将授权数据以普通 JSON 保存在数据库中；如果应用要求加密保存，可按[应用开发](./development.md#扩展服务商和凭据存储)接入替代实现。
+
+:::
 
 ## 配置完成后
 

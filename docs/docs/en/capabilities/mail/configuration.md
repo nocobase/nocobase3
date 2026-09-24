@@ -46,7 +46,15 @@ These guides describe the older Mail plugin. Refer only to their provider-platfo
 
 Ask AI to configure the application for the selected method. Your mailbox provider supplies IMAP/SMTP server details. Gmail and Microsoft 365 require an OAuth application on their platform with a registered [OAuth callback URL](#oauth-callback-url).
 
-Write the following settings under `mail` in the application's `config.yml` and restart after changes. An application can configure multiple provider instances. Their names are associated with connected accounts and should remain stable once in use. Instances default to `enabled: true`; setting this to `false` prevents associated accounts from continuing to use the instance.
+Write the following settings under `mail` in the application's [`config.yml`](../../app/configuration.md) and restart after changes. An application can configure multiple provider instances. Their names are associated with connected accounts and should remain stable once in use. Instances default to `enabled: true`; setting this to `false` prevents associated accounts from continuing to use the instance.
+
+Automatic synchronization, scheduled sending, and push-triggered synchronization require the application queue to be running. Correct configuration alone does not mean that background work is executing; if a task stays pending, check the queue and application service first.
+
+| Instance type | Required settings                                         | Account connection                                                                             |
+| ------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `gmail`       | `clientId`, `clientSecret`                                | Google OAuth                                                                                   |
+| `microsoft`   | `clientId`, `clientSecret`                                | Microsoft OAuth; `tenant` defaults to `common`                                                 |
+| `imap-smtp`   | `host`, `port`, and `secure` under both `imap` and `smtp` | The user enters an email address, username, and password or authorization code when connecting |
 
 ## IMAP/SMTP
 
@@ -177,9 +185,13 @@ Push only triggers the existing incremental synchronization pipeline. Periodic s
 
 ## Configuration and credential storage
 
-The `MAIL_*` environment variables listed above override their corresponding `mail` settings. provider credentials, endpoints, and scopes are configured through `mail.providers` and have no dedicated `MAIL_*` environment mappings. Restart the application after changing configuration.
+The `MAIL_*` environment variables listed above override their corresponding `mail` settings. Provider credentials, endpoints, and scopes are configured through `mail.providers` and have no dedicated `MAIL_*` environment mappings. Restart the application after changing configuration.
+
+:::warning 注意
 
 Do not commit real OAuth secrets, push secrets, or mailbox passwords to the repository. The core plugin's default credential store saves authorization data as plain JSON in the database. If your application requires encrypted storage, integrate a replacement as described in [Application Development](./development.md#extend-providers-and-credential-storage).
+
+:::
 
 ## After setup
 

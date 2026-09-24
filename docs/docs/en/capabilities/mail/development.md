@@ -13,6 +13,18 @@ Decide whether mail belongs on a standalone page or a business detail page, whic
 
 To display correspondence on a customer detail page, define how messages relate to customers and how they are filtered. Passing template variables only affects composed content; it does not automatically link messages to customers or filter their correspondence.
 
+## Access boundaries
+
+The Mail plugin separates personal operations from cross-user management. Grant only the scope required by the application:
+
+| Permission                    | Scope                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `page:mail.workspace/access`  | The current user's accounts, messages, attachments, sending, and synchronization records |
+| `page:mail.admin/access`      | Cross-user account overview and settings operation logs                                  |
+| `page:mail.management/access` | All-user message queries, details, attachments, and batch actions                        |
+
+All-user mail management currently has no department or organization scope, so confirm the administrator's responsibilities before granting it. Hiding a page or button does not replace API authorization; custom application routes must authenticate the caller and check the relevant permission and account ownership again.
+
 ## Use the plugin skill
 
 Have the application agent read `.agents/skills/nocobase-app-plugin-mail/` from the installed version and use the plugin's interfaces to implement the integration. If the plugin is registered but the skill is missing, run this from the application root:
@@ -43,7 +55,11 @@ These addresses provide development and component integration examples. Paths ar
 
 The administrator account overview at `/settings/mail/accounts` provides a read-only view of all users' connected accounts.
 
-Development pages are excluded from production builds. Check all links in production pages and the return location after OAuth. The plugin currently returns to the development account page by default, so adding the mail workspace alone does not complete production account connection support.
+:::warning 注意
+
+`/dev/mail/*` pages are development references and are excluded from production builds. A production application must provide its own account management, mail entry point, and any required log links. If it includes OAuth account connection, it must also handle the post-authorization return page. The plugin currently returns to the development account page by default, so adding the mail workspace alone does not complete production account connection support.
+
+:::
 
 ## Pass business records
 
@@ -65,7 +81,7 @@ When applying a template, `{{record.customer.name}}` becomes `Alex`. Pass only p
 
 ## Send mail from business code
 
-Resolve the service through `mailServiceToken` and use `MailService.sendMessage()`, or call `POST /api/mail/messages/send`. Personal APIs check authentication, mail workspace permission, and account ownership. Server-side integrations should preserve the same access boundaries.
+Resolve the service through `mailServiceToken` and use `MailService.sendMessage()`, or call `POST /api/mail/messages/send`. Personal APIs check authentication, mail workspace permission, and account ownership. Server-side integrations should preserve the same access boundaries. Do not write the Mail plugin's tables directly or bypass the Mail service to call a provider.
 
 Reuse a stable `idempotencyKey` for the same business send operation. Reusing a key with different content is rejected. After a timeout, query the original submission result rather than sending again with a new key. A provider submission result of `unknown` should put the business operation into a state requiring confirmation.
 

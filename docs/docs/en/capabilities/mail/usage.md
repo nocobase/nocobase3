@@ -15,6 +15,8 @@ Disable an account when you do not need it temporarily. It will stop sending and
 
 Removing an account clears its information and locally synchronized data from the application. It does not delete messages at the mailbox provider.
 
+If an account requires reauthorization, reconnect it or complete the OAuth flow before synchronizing or sending again. Disabled or unauthorized accounts are not available as sending accounts.
+
 ## Read and find messages
 
 The mail center shows messages from multiple accounts and identifies the source account. Switch accounts and folders, search messages, or filter by unread status, stars, and labels.
@@ -32,6 +34,8 @@ Use the synchronization action when you want to fetch new messages. With one acc
 Check progress and errors in the synchronization records provided by your application. The application configures the automatic synchronization interval for all accounts, with a default of every five minutes.
 
 IMAP/SMTP primarily synchronizes new messages. Read status changes, deletions, and moves made in other clients are not yet fully synchronized.
+
+Gmail and Microsoft 365 also support provider draft synchronization, sending aliases, and push synchronization. IMAP/SMTP keeps drafts only in the application and does not support aliases, push, or moving messages to provider folders. See [Mailbox Setup](./configuration.md) for provider-specific configuration.
 
 ## Organize messages
 
@@ -73,4 +77,8 @@ Check each recipient's result in the bulk send records. If some fail, retry only
 
 Regular, scheduled, and separate sending all create records, available through your application's send records feature.
 
-A provider accepting a message (`accepted`) does not guarantee that the recipient has received or read it. Check the error reason after a failed send. If the result is uncertain (`unknown`), confirm whether the message was sent before retrying.
+:::warning 注意
+
+A provider accepting a message (`accepted`) does not guarantee that the recipient has received or read it. Check the error reason after a failed send. If the result is uncertain (`unknown`), confirm whether the message was sent before retrying; do not create a new message immediately and send it again.
+
+:::
