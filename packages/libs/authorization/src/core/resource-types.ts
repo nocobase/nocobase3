@@ -155,9 +155,10 @@ export interface ResourceTypeAction<TParams = undefined> {
   readonly authorizeUnrestricted?: ResourceAuthorizeUnrestricted<TParams>;
 }
 
+/** A resource type exists only for judgement and is never displayed. */
 export interface ResourceTypeDefinition<TParams = undefined> {
+  /** Any name except `composite`, which the core reserves for composites. */
   readonly type: string;
-  readonly title: AuthorizationTitle;
   /** A record type must declare its actions; a catalog type's items inherit them. */
   readonly actions?: readonly (string | ResourceTypeAction<TParams>)[];
   /**
@@ -175,7 +176,6 @@ export interface ResourceTypeDefinition<TParams = undefined> {
 
 export interface RegisteredResourceType {
   readonly type: string;
-  readonly title: AuthorizationTitle;
   /** The declared type-level actions. */
   readonly actions: readonly ResourceItemAction[];
   /** Whether a composite's data scope may target this type. */
@@ -256,6 +256,22 @@ export function resourceTypeHandler(
   return handlers.get(registry)?.get(type);
 }
 
+const RESERVED_TYPE = 'composite';
+let addingReserved = false;
+
+/** Package-internal: registers the reserved `composite` type for `authz.composites`. */
+export function addReservedResourceType<TParams>(
+  registry: ResourceTypeRegistry,
+  definition: ResourceTypeDefinition<TParams>,
+): RegisteredResourceType {
+  addingReserved = true;
+  try {
+    return registry.add(definition);
+  } finally {
+    addingReserved = false;
+  }
+}
+
 export const RESOURCE_ACTION_NOT_SUPPORTED = 'RESOURCE_ACTION_NOT_SUPPORTED';
 export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
 
@@ -276,6 +292,10 @@ export class ResourceTypeRegistry {
   ): RegisteredResourceType {
     const type = definition.type;
     if (!type) throw new TypeError('A resource type needs a name');
+    if (type === RESERVED_TYPE && !addingReserved)
+      throw new Error(
+        `Resource type ${RESERVED_TYPE} is reserved for composites; use authz.composites.define`,
+      );
     if (this.registered.has(type))
       throw new Error(`Resource type already registered: ${type}`);
     const actions = definition.actions?.map(
@@ -367,7 +387,6 @@ export class ResourceTypeRegistry {
     });
     const registered: RegisteredResourceType = {
       type,
-      title: structuredClone(definition.title),
       actions: structuredClone(declared ?? []),
       recordAccess: definition.recordAccess === true,
       ...(items ? { items } : {}),

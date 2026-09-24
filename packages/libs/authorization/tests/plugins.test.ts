@@ -69,7 +69,6 @@ function recordingResource(): {
       setup(authz): void {
         authz.resourceTypes.add({
           type: 'database.collection',
-          title: 'Collections',
           actions: ['read', 'create', 'update', 'delete'],
           async authorize(request, context) {
             const grants = await context.grants.resolve(request);
@@ -339,7 +338,6 @@ describe('official authorization plugins', () => {
     });
     authorization.resourceTypes.add({
       type: 'test-resource',
-      title: 'Test',
       actions: ['read', 'delete'],
       async authorize(request, context) {
         await context.grants.resolve(request);
@@ -566,7 +564,6 @@ describe('official authorization plugins', () => {
         const grants = authz.grants;
         authz.resourceTypes.add({
           type: 'file.object',
-          title: 'Files',
           actions: ['download'],
           async authorize(request) {
             const resolved = await grants.resolve(request);
@@ -612,7 +609,6 @@ it('loads rule lists once per context and again in the next one', async () => {
         setup(authorization) {
           authorization.resourceTypes.add({
             type: 'batch',
-            title: 'Batch',
             actions: ['read'],
             async authorize(request, context) {
               await context.constraints.resolve(request);

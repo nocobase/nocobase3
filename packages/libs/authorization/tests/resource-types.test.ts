@@ -38,28 +38,51 @@ describe('resource types', () => {
     const items = new ResourceItems();
     authz.resourceTypes.add({
       type: 'report',
-      title: 'Reports',
       actions: ['read'],
       items,
     });
     authz.resourceTypes.add({
       type: 'ledger',
-      title: 'Ledgers',
       actions: ['read'],
       recordAccess: true,
     });
     expect(authz.resourceTypes.get('report')).toEqual({
       type: 'report',
-      title: 'Reports',
       actions: [{ name: 'read' }],
       recordAccess: false,
       items,
     });
     expect(authz.resourceTypes.get('ledger').recordAccess).toBe(true);
+    for (const type of authz.resourceTypes.list())
+      expect(type).not.toHaveProperty('title');
     expect(() => authz.resourceTypes.get('missing')).toThrow(/not registered/);
     expect(() =>
-      authz.resourceTypes.add({ type: 'report', title: 'R', actions: ['x'] }),
+      authz.resourceTypes.add({ type: 'report', actions: ['x'] }),
     ).toThrow(/already registered/);
+  });
+});
+
+describe('the reserved composite type', () => {
+  it('is registered by the core and cannot be registered again', () => {
+    const authz = createAuthorization({ plugins: [] });
+    expect(authz.resourceTypes.list().map((type) => type.type)).toEqual([
+      'composite',
+    ]);
+    expect(() =>
+      authz.resourceTypes.add({ type: 'composite', actions: ['run'] }),
+    ).toThrow(/reserved for composites/);
+    expect(() =>
+      createAuthorization({
+        plugins: [
+          {
+            id: 'squatter',
+            setup(host) {
+              host.resourceTypes.add({ type: 'composite', actions: ['run'] });
+            },
+          },
+        ],
+      }),
+    ).toThrow(/reserved for composites/);
   });
 });
 
@@ -75,7 +98,6 @@ describe('resource items', () => {
     });
     authz.resourceTypes.add({
       type: 'report',
-      title: 'Reports',
       items,
       actions: [{ name: 'read', title: 'Read' }, 'export'],
     });
@@ -102,7 +124,7 @@ describe('resource items', () => {
   it('requires item actions when the type declares none', () => {
     const authz = createAuthorization({ plugins: [] });
     const settings = new ResourceItems();
-    authz.resourceTypes.add({ type: 'settings', title: 'S', items: settings });
+    authz.resourceTypes.add({ type: 'settings', items: settings });
     expect(() => settings.add({ id: 'workflow', title: 'W' })).toThrow(
       /needs actions/,
     );
@@ -120,7 +142,7 @@ describe('resource items', () => {
         unrestricted,
       );
       const items = new ResourceItems();
-      authz.resourceTypes.add({ type: 'report', title: 'R', items });
+      authz.resourceTypes.add({ type: 'report', items });
       items.add({ id: 'sales', title: 'Sales', actions: ['read'] });
       const context = authz.for(alice);
       await expect(
@@ -142,7 +164,7 @@ describe('resource items', () => {
 
   it('needs items or declared actions', () => {
     const authz = createAuthorization({ plugins: [] });
-    expect(() => authz.resourceTypes.add({ type: 'bare', title: 'B' })).toThrow(
+    expect(() => authz.resourceTypes.add({ type: 'bare' })).toThrow(
       /needs items or declared actions/,
     );
   });
@@ -154,7 +176,6 @@ describe('resource items', () => {
     ]);
     const registered = authz.resourceTypes.add({
       type: 'hub.app',
-      title: 'Apps',
       actions: ['read'],
     });
     expect(registered.items).toBeUndefined();
@@ -181,7 +202,6 @@ describe('resource items', () => {
     ]);
     authz.resourceTypes.add({
       type: 'page',
-      title: 'Pages',
       actions: ['access'],
     });
     const context = authz.for(alice);
@@ -220,7 +240,6 @@ describe('grantBacked', () => {
     ]);
     authz.resourceTypes.add({
       type: 'user',
-      title: 'Users',
       actions: ['read', 'update'],
       authorize: grantBacked(),
     });
@@ -252,7 +271,6 @@ describe('grantBacked', () => {
     const seen: number[] = [];
     authz.resourceTypes.add({
       type: 'hub.app',
-      title: 'Apps',
       actions: ['read'],
       authorize: grantBacked({
         also: (request, grants) => {
@@ -284,7 +302,6 @@ describe('grantBacked', () => {
     const jobs = new ResourceItems();
     authz.resourceTypes.add({
       type: 'job',
-      title: 'Jobs',
       items: jobs,
       actions: [
         'run',

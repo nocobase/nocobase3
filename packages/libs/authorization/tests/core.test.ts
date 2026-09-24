@@ -33,7 +33,6 @@ function plugin(
       options.order?.push(id);
       authz.resourceTypes.add({
         type: id,
-        title: id,
         actions: ['read'],
         async authorize() {
           if (options.throws) throw new Error('broken handler');
@@ -62,7 +61,6 @@ describe('Authorization Core', () => {
     const authorization = createAuthorization({ plugins: [] });
     authorization.resourceTypes.add<{ userId: string }>({
       type: 'post',
-      title: 'Posts',
       actions: ['update'],
       authorize(request) {
         return Promise.resolve({
@@ -211,7 +209,6 @@ describe('Authorization Core', () => {
     const authorization = createAuthorization({ plugins: [] });
     authorization.resourceTypes.add({
       type: 'document',
-      title: 'Documents',
       actions: ['read'],
       authorize(request) {
         receivedPrincipal = request.principal.id;

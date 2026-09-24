@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  COMPOSITE_RESOURCE_TYPE,
   dataScopeTarget,
-  compositesPlugin,
   createAuthorization,
   defineComposite,
   selection,
@@ -149,16 +147,45 @@ function setup(
   extra: readonly AuthorizationPlugin[] = [],
 ) {
   const authz = createAuthorization({
-    plugins: [
-      compositesPlugin(),
-      { id: 'grants', grants: provider(grants) },
-      ...extra,
-    ],
+    plugins: [{ id: 'grants', grants: provider(grants) }, ...extra],
   });
   return authz;
 }
 
 describe('composites', () => {
+  it('are built in: available without any plugin', () => {
+    const authz = createAuthorization({ plugins: [] });
+    const reference = authz.composites.define(quotes);
+    expect(reference.name).toBe('sales.quotes');
+    expect(authz.composites.list().map((item) => item.name)).toEqual([
+      'sales.quotes',
+    ]);
+    expect(authz.composites.getAction('sales.quotes', 'export')?.name).toBe(
+      'export',
+    );
+    expect(authz.composites.validate()).toEqual([
+      'Data scope sales.quotes.submit.quotes targets unregistered resource type database.collection',
+    ]);
+    expect(
+      authz.resourceTypes.get('composite').items?.has('sales.quotes'),
+    ).toBe(true);
+  });
+
+  it('are handed to every plugin setup', () => {
+    let seen: unknown;
+    const authz = createAuthorization({
+      plugins: [
+        {
+          id: 'reader',
+          setup(host) {
+            seen = host.composites;
+          },
+        },
+      ],
+    });
+    expect(seen).toBe(authz.composites);
+  });
+
   it('builds the same definition in object and builder form', () => {
     expect(quotes.build()).toEqual(quotesObject);
     const built = quotes.build();
@@ -175,7 +202,7 @@ describe('composites', () => {
       expect(authz.composites.getAction('sales.quotes', 'export')).toEqual(
         quotesObject.actions[1],
       );
-      const composite = authz.resourceTypes.get(COMPOSITE_RESOURCE_TYPE);
+      const composite = authz.resourceTypes.get('composite');
       expect(composite.type).toBe('composite');
       expect(composite.items?.list()).toEqual([
         {
@@ -316,7 +343,6 @@ describe('data scopes', () => {
     setup(host) {
       host.resourceTypes.add({
         type: 'ledger',
-        title: 'Ledgers',
         actions: ['read'],
         recordAccess,
       });
@@ -396,7 +422,7 @@ describe('data scopes', () => {
       [],
     );
     late.composites.define(definition);
-    late.resourceTypes.add({ type: 'ledger', title: 'L', actions: ['read'] });
+    late.resourceTypes.add({ type: 'ledger', actions: ['read'] });
     expect(late.composites.validate()).toEqual([
       'Data scope scoped.run.records targets resource type ledger, which does not declare recordAccess',
     ]);
@@ -419,7 +445,6 @@ describe('composite authorization', () => {
       setup(authz) {
         authz.resourceTypes.add({
           type: 'database.collection',
-          title: 'Collections',
           actions: ['read', 'create', 'update', 'delete'],
           recordAccess: true,
           async authorize(request, context) {
@@ -496,7 +521,6 @@ describe('composite authorization', () => {
             setup(host) {
               host.resourceTypes.add({
                 type: 'database.collection',
-                title: 'Collections',
                 actions: ['read', 'create', 'update', 'delete'],
                 recordAccess: true,
                 async authorize(request, context) {
@@ -569,7 +593,6 @@ describe('composite authorization', () => {
         host.constraints.add({ id: 'rules', resolve, for: bound });
         host.resourceTypes.add({
           type: 'database.collection',
-          title: 'Collections',
           actions: ['read', 'create', 'update', 'delete'],
           recordAccess: true,
           async authorize(request, context) {

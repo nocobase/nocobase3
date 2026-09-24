@@ -1,11 +1,11 @@
 import type { MiddlewareHandler } from 'hono';
 import {
   COMPOSITE_RESOURCE_TYPE,
-  compositeRegistryOf,
+  CompositeRegistry,
   composedGrants,
+  type CompositeApi,
   type CompositeCheck,
   type CompositeConditions,
-  type CompositeRegistry,
 } from './composite.js';
 import {
   AccessConstraintRegistry,
@@ -97,6 +97,8 @@ interface AuthorizationOptions {
 
 export class Authorization {
   readonly resourceTypes: ResourceTypeRegistry = new ResourceTypeRegistry();
+  /** Built in: composites and the reserved `composite` resource type. */
+  readonly composites: CompositeApi;
   readonly recordAccess: RecordAccessRegistry = new RecordAccessRegistry();
   readonly constraints: AccessConstraintRegistry =
     new AccessConstraintRegistry();
@@ -106,14 +108,15 @@ export class Authorization {
     new AuthorizationRouteRegistry();
   private readonly plugins: readonly AuthorizationPlugin[];
   private readonly provider: AuthorizationGrantService;
-  private readonly compositeRegistry: CompositeRegistry | undefined;
+  private readonly compositeRegistry: CompositeRegistry;
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
   constructor(options: AuthorizationOptions) {
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
     this.provider = grantProvider?.grants ?? missingGrantService();
-    this.compositeRegistry = compositeRegistryOf(this.plugins);
+    this.compositeRegistry = new CompositeRegistry(this.resourceTypes);
+    this.composites = this.compositeRegistry;
     this.installApis();
     const apis: Record<string, unknown> = {};
     for (const plugin of this.plugins)
@@ -133,6 +136,7 @@ export class Authorization {
           return grantProvider.grants;
         },
         resourceTypes: this.resourceTypes,
+        composites: this.composites,
         recordAccess: this.recordAccess,
         constraints: this.constraints,
         subjects: this.subjects,
@@ -278,7 +282,7 @@ export class Authorization {
     grants: AuthorizationGrantService,
     constraints: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
-    const action = this.compositeRegistry?.getAction(
+    const action = this.compositeRegistry.getAction(
       request.resource.id,
       request.action,
     );

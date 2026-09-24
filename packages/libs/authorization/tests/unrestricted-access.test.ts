@@ -55,7 +55,6 @@ function recordingResource(): {
       setup(authz): void {
         authz.resourceTypes.add({
           type: 'database.collection',
-          title: 'Collections',
           actions: ['read', 'create', 'update', 'delete'],
           async authorize(request, context) {
             await context.constraints.resolve(request);
@@ -96,7 +95,6 @@ describe('unrestricted access', () => {
     });
     authorization.resourceTypes.add({
       type: 'test-resource',
-      title: 'Test',
       actions: ['read', 'delete'],
       authorize: async () => ({ effect: 'deny', reasons: [] }),
     });

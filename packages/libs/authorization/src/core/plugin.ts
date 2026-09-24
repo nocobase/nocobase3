@@ -1,6 +1,10 @@
 import type { MiddlewareHandler } from 'hono';
 import type { AuthorizationEnv } from './authorization.js';
-import type { CompositeCheck, CompositeConditions } from './composite.js';
+import type {
+  CompositeApi,
+  CompositeCheck,
+  CompositeConditions,
+} from './composite.js';
 import type { AccessConstraintRegistry } from './constraints.js';
 import type { AuthorizationGrantService } from './grants.js';
 import type { AuthorizationMiddleware } from './middleware.js';
@@ -15,6 +19,8 @@ export interface AuthorizationPluginSetup<TConnection = unknown> {
   /** The Grant Provider; reading it without one installed throws. */
   readonly grants: AuthorizationGrantService;
   readonly resourceTypes: ResourceTypeRegistry;
+  /** Built in: define composites and read their actions. */
+  readonly composites: CompositeApi;
   readonly recordAccess: RecordAccessRegistry;
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;

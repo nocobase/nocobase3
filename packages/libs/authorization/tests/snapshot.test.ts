@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  compositesPlugin,
   createAuthorization,
   defineComposite,
   grantBacked,
@@ -45,7 +44,6 @@ const database: AuthorizationPlugin = {
     authz.resourceTypes.add({
       type: 'database.collection',
       items: collections,
-      title: 'Collections',
       actions: ['read', 'update'],
       recordAccess: true,
       async authorize(request, context) {
@@ -63,7 +61,6 @@ const database: AuthorizationPlugin = {
     collections.add({ id: 'quotes', title: 'Quotes' });
     authz.resourceTypes.add({
       type: 'settings',
-      title: 'Settings',
       items: settings,
       authorize: grantBacked(),
     });
@@ -85,7 +82,7 @@ function setup(grants: readonly PermissionGrant[], unrestricted = false) {
     }),
   });
   const authz = createAuthorization({
-    plugins: [permissionSets, compositesPlugin(), database],
+    plugins: [permissionSets, database],
   });
   if (unrestricted)
     authz.permissionSets.protect({

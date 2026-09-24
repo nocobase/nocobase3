@@ -6,17 +6,22 @@ import type {
   PermissionGrant,
   PermissionGrantAction,
 } from './grants.js';
-import type { AuthorizationPlugin } from './plugin.js';
-import { ResourceItems, type ResourceTypeRegistry } from './resource-types.js';
+import {
+  ResourceItems,
+  addReservedResourceType,
+  type AuthorizationRuntimeContext,
+  type ResourceTypeRegistry,
+} from './resource-types.js';
 import { parseRecordSelection, type RecordSelection } from './selection.js';
 import type { AuthorizationTitle } from './titles.js';
 import type {
   AuthorizationConditions,
   AuthorizationDecision,
+  AuthorizationRequest,
   ResourceRef,
 } from './types.js';
 
-/** The stored resource type of every composite. */
+/** Package-internal: the reserved type every composite is stored under. */
 export const COMPOSITE_RESOURCE_TYPE = 'composite';
 
 /**
@@ -442,23 +447,27 @@ export interface CompositeApi {
   validate(): readonly string[];
 }
 
+/**
+ * Package-internal: `authz.composites`. It registers the reserved `composite`
+ * resource type itself, so it is always available.
+ */
 export class CompositeRegistry implements CompositeApi {
   private readonly definitions = new Map<string, Composite>();
   /** Composites whose data scope targets have passed the `recordAccess` check. */
   private readonly verified = new Set<string>();
-  private host?: { items: ResourceItems; resourceTypes: ResourceTypeRegistry };
+  private readonly items: ResourceItems = new ResourceItems();
 
-  attach(items: ResourceItems, resourceTypes: ResourceTypeRegistry): void {
-    this.host = { items, resourceTypes };
+  constructor(private readonly resourceTypes: ResourceTypeRegistry) {
+    addReservedResourceType(resourceTypes, {
+      type: COMPOSITE_RESOURCE_TYPE,
+      items: this.items,
+      authorize: authorizeComposite,
+    });
   }
 
   define<A extends CompositeActions = CompositeActions>(
     definition: Composite | CompositeBuilder<A>,
   ): CompositeReference<A> {
-    if (!this.host)
-      throw new Error(
-        'The composites plugin is not installed in an Authorization',
-      );
     const resource = validateComposite(
       definition instanceof CompositeBuilder
         ? definition.build()
@@ -468,7 +477,7 @@ export class CompositeRegistry implements CompositeApi {
       throw new Error(`Composite already defined: ${resource.name}`);
     const problems = this.scopeProblems(resource, false);
     if (problems.length) throw new TypeError(problems[0]);
-    this.host.items.add({
+    this.items.add({
       id: resource.name,
       title: resource.title,
       actions: resource.actions.map(({ name, title }) => ({ name, title })),
@@ -488,8 +497,7 @@ export class CompositeRegistry implements CompositeApi {
    * those whose type is not registered yet.
    */
   private scopeProblems(resource: Composite, strict: boolean): string[] {
-    const types = this.host?.resourceTypes;
-    if (!types) return [];
+    const types = this.resourceTypes;
     return resource.actions.flatMap((action) =>
       (action.dataScopes ?? []).flatMap((scope) => {
         const target = dataScopeTarget(action, scope.key);
@@ -592,85 +600,43 @@ function compositeScopes(
   return scopes as Readonly<Record<string, unknown>>;
 }
 
-const registries = new WeakMap<AuthorizationPlugin, CompositeRegistry>();
-
-/** Package-internal: finds the installed composite registry. */
-export function compositeRegistryOf(
-  plugins: readonly AuthorizationPlugin[],
-): CompositeRegistry | undefined {
-  for (const plugin of plugins) {
-    const registry = registries.get(plugin);
-    if (registry) return registry;
-  }
-  return undefined;
-}
-
-export interface CompositeAuthorizationApi {
-  composites: CompositeApi;
-}
-
-export type CompositePlugin = AuthorizationPlugin<CompositeAuthorizationApi>;
-
-/** Registers the `composite` resource type and `authz.composites`. */
-export function compositesPlugin(): CompositePlugin {
-  const registry = new CompositeRegistry();
-  const plugin: CompositePlugin = {
-    id: 'composites',
-    authorizationApi: { composites: registry },
-    setup(authz): void {
-      const items = new ResourceItems();
-      authz.resourceTypes.add({
-        type: COMPOSITE_RESOURCE_TYPE,
-        items,
-        title: {
-          key: 'resourceTypes.composite',
-          ns: '@nocobase/authorization',
-        },
-        async authorize(request, context) {
-          const grants = await context.grants.resolve({
-            principal: request.principal,
-            ...(request.subjects === undefined
-              ? {}
-              : { subjects: request.subjects }),
-            resource: request.resource,
-            action: request.action,
-          });
-          return grants.length
-            ? {
-                effect: 'permit',
-                reasons: grants.map((grant) => ({
-                  code: 'GRANT_MATCHED',
-                  message: `${grant.source.plugin}:${grant.source.id} allows ${request.resource.id}.${request.action}`,
-                  plugin: 'composites',
-                  details: { source: grant.source, policy: grant.policy },
-                })),
-              }
-            : {
-                effect: 'deny',
-                reasons: [
-                  {
-                    code: 'NO_MATCHING_GRANT',
-                    message: `No grant allows ${request.resource.id}.${request.action}`,
-                    plugin: 'composites',
-                  },
-                ],
-              };
-        },
-      });
-      registry.attach(items, authz.resourceTypes);
-    },
-  };
-  registries.set(plugin, registry);
-  return plugin;
+/** A composite action is permitted by any grant on it; its branches are checked separately. */
+async function authorizeComposite(
+  request: AuthorizationRequest<undefined>,
+  context: AuthorizationRuntimeContext,
+): Promise<AuthorizationDecision> {
+  const grants = await context.grants.resolve({
+    principal: request.principal,
+    ...(request.subjects === undefined ? {} : { subjects: request.subjects }),
+    resource: request.resource,
+    action: request.action,
+  });
+  return grants.length
+    ? {
+        effect: 'permit',
+        reasons: grants.map((grant) => ({
+          code: 'GRANT_MATCHED',
+          message: `${grant.source.plugin}:${grant.source.id} allows ${request.resource.id}.${request.action}`,
+          details: { source: grant.source, policy: grant.policy },
+        })),
+      }
+    : {
+        effect: 'deny',
+        reasons: [
+          {
+            code: 'NO_MATCHING_GRANT',
+            message: `No grant allows ${request.resource.id}.${request.action}`,
+          },
+        ],
+      };
 }
 
 /** Wraps a Grant Provider so composite grants resolve with what they compose. */
 export function composedGrants(
   provider: AuthorizationGrantService,
-  registry: CompositeRegistry | undefined,
+  registry: CompositeRegistry,
   constraints: AccessConstraintService,
 ): AuthorizationGrantService {
-  if (!registry) return provider;
   const expand = (
     grants: readonly AuthorizationGrant[],
     input: Parameters<AuthorizationGrantService['resolveAll']>[0],
