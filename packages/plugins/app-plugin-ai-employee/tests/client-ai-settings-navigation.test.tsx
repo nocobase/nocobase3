@@ -623,7 +623,7 @@ describe('AI settings page navigation', () => {
     },
   );
 
-  it('fills the scroll viewport only for the employee page', async () => {
+  it('fills the scroll viewport for the employee and conversation pages only', async () => {
     const { settingsRouteTree: tree } = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-ai-employee',
@@ -652,7 +652,15 @@ describe('AI settings page navigation', () => {
     expect(employee.parentElement?.parentElement).toHaveClass(
       'lg:flex',
       'lg:h-full',
+      'lg:min-h-[36rem]',
       'lg:flex-col',
+    );
+    await act(() => router.navigate('/settings/ai/conversations'));
+    const conversations = await screen.findByText('Conversation content');
+    expect(conversations.parentElement).toHaveClass('lg:min-h-0', 'lg:flex-1');
+    expect(conversations.parentElement?.parentElement).toHaveClass(
+      'lg:h-full',
+      'lg:min-h-[36rem]',
     );
     await act(() => router.navigate('/settings/ai/knowledge-base/42'));
     const detail = await screen.findByText('Detail content');

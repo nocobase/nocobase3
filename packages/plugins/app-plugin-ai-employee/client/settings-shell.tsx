@@ -10,7 +10,9 @@ type SettingsShellProps = {
   readonly children: ReactNode;
   /**
    * Fill the host's scroll viewport on large screens so a page with its own
-   * scroll regions does not also scroll the page around them.
+   * scroll regions does not also scroll the page around them. Below the floor
+   * the whole page grows and the host scrolls it once, rather than squeezing
+   * the content past the page padding.
    */
   readonly fill?: boolean;
 } & (
@@ -41,7 +43,9 @@ export function SettingsShell({
   const t = useT();
   return (
     <PageContainer
-      className={fill ? 'lg:flex lg:h-full lg:flex-col' : undefined}
+      className={
+        fill ? 'lg:flex lg:h-full lg:min-h-[36rem] lg:flex-col' : undefined
+      }
     >
       <PageHeader title={t(title)} description={t(description)} />
       {tabs && tabs.length > 1 ? (
