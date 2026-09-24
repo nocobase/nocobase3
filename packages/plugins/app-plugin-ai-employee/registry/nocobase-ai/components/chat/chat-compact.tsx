@@ -20,6 +20,7 @@ export type AIChatCompactProps = {
   showModelSelector?: boolean;
   showUserPrompt?: boolean;
   enableAttachments?: boolean;
+  enableWebSearch?: boolean;
   placeholder?: string;
   disclaimer?: ReactNode | false;
   onToolCallDecision?: (decision: AIToolCallDecision) => void | Promise<void>;
@@ -33,6 +34,7 @@ export function AIChatCompact({
   showModelSelector = true,
   showUserPrompt = true,
   enableAttachments = false,
+  enableWebSearch = false,
   placeholder,
   disclaimer,
   onToolCallDecision,
@@ -80,6 +82,7 @@ export function AIChatCompact({
         showEmployeeSelector={showEmployeeSelector}
         showModelSelector={showModelSelector}
         enableAttachments={enableAttachments}
+        enableWebSearch={enableWebSearch}
         placeholder={placeholder}
         disclaimer={disclaimer}
       />

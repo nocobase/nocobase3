@@ -175,7 +175,15 @@ export function AIChatProvider({
   const editingSnapshotRef = useRef<AIMessageEditingSnapshot | undefined>(
     undefined,
   );
-  const webSearchRef = useRef(webSearch);
+  // `webSearch` is where the switch starts; the composer's toggle changes it
+  // from there, and a new value of the prop starts it over.
+  const [webSearchEnabled, setWebSearchEnabled] = useState(webSearch);
+  const [webSearchProp, setWebSearchProp] = useState(webSearch);
+  if (webSearchProp !== webSearch) {
+    setWebSearchProp(webSearch);
+    setWebSearchEnabled(webSearch);
+  }
+  const webSearchRef = useRef(webSearchEnabled);
   const taskRuntimeRef = useRef<AIChatTaskRuntime | undefined>(undefined);
   // A queued task is never rendered; it waits for the draft conversation and
   // the requested employee to become current. Keeping it in a ref with a
@@ -215,8 +223,8 @@ export function AIChatProvider({
   useEffect(() => {
     chatSurfaceOpenRef.current = chatSurfaceOpen;
     stateRef.current = state;
-    webSearchRef.current = webSearch;
-  }, [chatSurfaceOpen, state, webSearch]);
+    webSearchRef.current = webSearchEnabled;
+  }, [chatSurfaceOpen, state, webSearchEnabled]);
   const {
     transportsRef,
     runtimeContextsRef,
@@ -828,11 +836,13 @@ export function AIChatProvider({
       draft,
       attachments,
       uploadingAttachments,
+      webSearch: webSearchEnabled,
       workContext,
       editingMessageId,
       setDraft,
       uploadFiles,
       removeAttachment,
+      setWebSearch: setWebSearchEnabled,
       addWorkContext,
       removeWorkContext,
       send,
@@ -918,6 +928,7 @@ export function AIChatProvider({
       interactionError,
       attachments,
       uploadingAttachments,
+      webSearchEnabled,
       workContext,
       editingMessageId,
       currentEmployee,

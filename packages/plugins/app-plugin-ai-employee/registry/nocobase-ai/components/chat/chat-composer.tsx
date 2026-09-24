@@ -23,7 +23,7 @@ import {
   type AIEmployee,
 } from '../../providers/index.js';
 import { cn } from '../../shared/utils.js';
-import { ArrowUp, Paperclip, Pencil, Square, X } from 'lucide-react';
+import { ArrowUp, Globe2, Paperclip, Pencil, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AIEmployeeAvatar } from './ai-employee-avatar.js';
 import { WorkContextChip } from './work-context-chip.js';
@@ -51,6 +51,7 @@ export function ChatComposer({
   showEmployeeSelector = true,
   showModelSelector = true,
   enableAttachments = false,
+  enableWebSearch = false,
   attachmentActionIndex = 0,
   placeholder,
   disclaimer,
@@ -59,6 +60,7 @@ export function ChatComposer({
   showEmployeeSelector?: boolean;
   showModelSelector?: boolean;
   enableAttachments?: boolean;
+  enableWebSearch?: boolean;
   attachmentActionIndex?: number;
   placeholder?: string;
   disclaimer?: ReactNode | false;
@@ -81,6 +83,8 @@ export function ChatComposer({
     uploadingAttachments,
     uploadFiles,
     removeAttachment,
+    webSearch,
+    setWebSearch,
     workContext,
     removeWorkContext,
     editingMessageId,
@@ -110,6 +114,20 @@ export function ChatComposer({
           'AI can make mistakes. Review important changes before publishing.',
         )
       : disclaimer;
+  const canSearchWeb = currentModel.supportWebSearch === true;
+  const webSearchAction: AIChatComposerAction = {
+    key: 'web-search',
+    label: canSearchWeb
+      ? t('actions.webSearch', 'Web search')
+      : t(
+          'actions.webSearchUnsupported',
+          'Web search is not supported by this model',
+        ),
+    icon: <Globe2 />,
+    active: webSearch,
+    disabled: !canSearchWeb,
+    onClick: () => setWebSearch(!webSearch),
+  };
   const renderAction = (action: AIChatComposerAction) => (
     <Tooltip key={action.key}>
       <TooltipTrigger
@@ -134,6 +152,12 @@ export function ChatComposer({
       <TooltipContent>{action.label}</TooltipContent>
     </Tooltip>
   );
+
+  // A model that cannot search leaves the toggle disabled, so it must not stay
+  // on from a model that could.
+  useEffect(() => {
+    if (enableWebSearch && webSearch && !canSearchWeb) setWebSearch(false);
+  }, [canSearchWeb, enableWebSearch, setWebSearch, webSearch]);
 
   useEffect(() => {
     if (composerFocusRequest === 0) return;
@@ -254,6 +278,7 @@ export function ChatComposer({
                   </TooltipContent>
                 </Tooltip>
               ) : null}
+              {enableWebSearch ? renderAction(webSearchAction) : null}
               {actions.slice(normalizedAttachmentActionIndex).map(renderAction)}
               {showEmployeeSelector ? (
                 <Select

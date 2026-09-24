@@ -198,7 +198,7 @@ function ConfiguredChat() {
       defaultEmployee='order-desk'
     >
       <ChatInline>
-        <AIChatWindow enableAttachments />
+        <AIChatWindow enableAttachments enableWebSearch />
       </ChatInline>
     </AIChatProvider>
   );
@@ -226,7 +226,7 @@ type AIChatProviderProps = PropsWithChildren<{
   defaultEmployee?: string; // an employee username
   defaultTasks?: AIEmployeeTask[];
   employeeTasks?: Record<string, AIEmployeeTask[]>; // keyed by employee username
-  webSearch?: boolean; // the provider's own built-in search, where supported
+  webSearch?: boolean; // where the composer's web search toggle starts; default false
 }>;
 ```
 
@@ -272,6 +272,7 @@ function FloatingChat() {
       >
         <AIChatWindow
           enableAttachments
+          enableWebSearch
           headerActions={
             <ChatSurfaceActions
               expanded={expanded}
@@ -301,6 +302,7 @@ type AIChatWindowProps = {
   showModelSelector?: boolean; // default true
   showUserPrompt?: boolean; // default true
   enableAttachments?: boolean; // default false
+  enableWebSearch?: boolean; // default false
   attachmentActionIndex?: number; // default 0
   placeholder?: string;
   disclaimer?: ReactNode | false;
@@ -320,66 +322,9 @@ That last one is on you to get right, and nothing checks it. `AIModel` has no fi
 
 ## Web search toggle
 
-The composer has no web search button of its own. `AIChatProvider.webSearch` defaults to `false`, and nothing in the chat switches it, so a chat mounted without a toggle never searches. **Add the toggle to every chat surface you mount**, the way the plugin's `chat` example does — see [source-map.md § Working examples](source-map.md#working-examples): hold the state in the component that renders `AIChatProvider`, pass it as `webSearch`, and add a composer action that flips it.
+**Set `enableWebSearch` on every chat surface you mount**, beside `enableAttachments`, and leave it off only when the user has said they do not want web search. It defaults to `false` and adds a toggle to the composer, next to the file action; without it nothing in the chat switches web search on. The toggle starts off, or at `AIChatProvider.webSearch` when that is set, and is usable only when the selected model searches: on a model whose `supportWebSearch` is not `true` it is disabled with a note saying so, and moving to such a model switches it off. That flag already combines the service's `supportWebSearch` with its `webSearchModels`, so the page checks nothing itself.
 
-The action is available only when the selected model searches. Read `currentModel.supportWebSearch` from `useAIChatBase()`, which works only below `AIChatProvider`, and disable the action unless it is `true`; that flag already combines the service's `supportWebSearch` with its `webSearchModels`. Switch the state back off when the user moves to a model that cannot search, or the next message still asks that model to search.
-
-```tsx
-import { useEffect, useMemo, useState } from 'react';
-import { Globe2 } from 'lucide-react';
-import {
-  AIChatProvider,
-  AIChatWindow,
-  useAIChatBase,
-  type AIChatComposerAction,
-} from '@/extensions/nocobase-ai';
-
-function AssistantChat() {
-  const [webSearch, setWebSearch] = useState(false);
-  return (
-    <AIChatProvider
-      id='assistant-chat'
-      defaultEmployee='order-desk'
-      webSearch={webSearch}
-    >
-      <AssistantWindow webSearch={webSearch} onWebSearchChange={setWebSearch} />
-    </AIChatProvider>
-  );
-}
-
-function AssistantWindow({
-  webSearch,
-  onWebSearchChange,
-}: {
-  webSearch: boolean;
-  onWebSearchChange: (enabled: boolean) => void;
-}) {
-  const { currentModel } = useAIChatBase();
-  const canSearch = currentModel.supportWebSearch === true;
-
-  useEffect(() => {
-    if (webSearch && !canSearch) onWebSearchChange(false);
-  }, [canSearch, onWebSearchChange, webSearch]);
-
-  const composerActions = useMemo<AIChatComposerAction[]>(
-    () => [
-      {
-        key: 'web-search',
-        label: canSearch ? 'Web search' : 'This model cannot search the web',
-        icon: <Globe2 />,
-        disabled: !canSearch,
-        active: webSearch,
-        onClick: () => onWebSearchChange(!webSearch),
-      },
-    ],
-    [canSearch, onWebSearchChange, webSearch],
-  );
-
-  return <AIChatWindow enableAttachments composerActions={composerActions} />;
-}
-```
-
-Localize the labels. A task that sets its own `webSearch` overrides the toggle for the turn it sends; see [Tasks and shortcuts](#tasks-and-shortcuts).
+A page that needs the state elsewhere reads `webSearch` and `setWebSearch` from `useAIChatBase()`, below `AIChatProvider`. A task that sets its own `webSearch` overrides the toggle for the turn it sends; see [Tasks and shortcuts](#tasks-and-shortcuts).
 
 ## Tasks and shortcuts
 
