@@ -56,7 +56,7 @@ Every Server plugin must provide an absolute `baseDir`. In a source `server/plug
 
 Filesystem contribution paths must be safe `baseDir`-relative paths beginning with `./`; `..`, backslashes, doubled separators, and the bare `./` are rejected. The resolver walks upward from `baseDir` until it finds a `package.json` whose `name` equals `packageName`. Keep source and published `./server` exports aligned so each loads its matching declaration, and ensure compiled resources are present below `dist`.
 
-Declaration modules must remain import-safe. Top-level code may create frozen definitions, tokens, and constructor arrays; it must not connect to a database, start a worker, create a timer, make a network request, instantiate a Provider, or execute a Route factory. App composition and `server:inspect` import these modules for read-only analysis.
+Declaration modules must remain import-safe. Top-level code may create frozen definitions, tokens, and constructor arrays; it must not connect to a database, start a worker, create a timer, make a network request, instantiate a Provider, or execute a Route factory. App composition imports these modules before any lifecycle runs.
 
 ## Root and API routes
 
@@ -193,11 +193,11 @@ Dispatch options support connection, queue, priority, delay, group, and deduplic
 
 Assume at-least-once execution. Use a stable business key, Queue deduplication, or durable execution state for side effects such as email, external API calls, billing, and file writes. Distinguish temporary retryable failures from invalid input or terminal business failures. Log Job ID, queue, attempt, and non-sensitive business identity. Never rely on a process-local `Map` to remember completion.
 
-Test the handler's payload validation and behavior directly, then cover retry, deduplication, and idempotency where relevant. Verify the declaration points to a real compiled location and run a target App integration test that discovers, dispatches, executes, and shuts down the worker. `server:inspect` reports configured and resolved locations without importing Job modules or starting a worker.
+Test the handler's payload validation and behavior directly, then cover retry, deduplication, and idempotency where relevant. Verify the declaration points to a real compiled location and run a target App integration test that discovers, dispatches, executes, and shuts down the worker.
 
 ## Verification and source references
 
-Run the modified plugin's `lint`, `typecheck`, `test`, and `build`, plus the affected target App checks. Use `pnpm nocobase plugin inspect <name> --workspace-root . --app <app> --json` or `pnpm --filter <app> server:inspect --json` only when registration, composition order, scope, or resource resolution is in question; Inspector output does not prove Route security, Provider lifecycle, Job execution, migrations, or seeds.
+Run the modified plugin's `lint`, `typecheck`, `test`, and `build`, plus the affected target App checks. Use `pnpm nocobase plugin inspect <name> --workspace-root . --app <app> --json` only when registration is in question; it reads static registration facts and does not prove Route security, Provider lifecycle, Job execution, migrations, or seeds.
 
 Use these maintained implementations when a detail is uncertain:
 

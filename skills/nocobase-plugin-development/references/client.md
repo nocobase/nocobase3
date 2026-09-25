@@ -19,7 +19,7 @@ A component named `SomethingProvider` is not automatically a ServiceProvider. A 
 
 ## Declare Client contributions statically
 
-Keep `client/plugin.ts` a small, side-effect-free declaration. Import contribution declarations statically so composition and inspection can read them, while keeping page modules and each locale module lazy at their leaf loaders.
+Keep `client/plugin.ts` a small, side-effect-free declaration. Import contribution declarations statically so composition can read them, while keeping page modules and each locale module lazy at their leaf loaders.
 
 ```ts
 import {
@@ -155,9 +155,7 @@ Use `workspace:^` for internal NocoBase peers and `catalog:` for shared catalog 
 
 Published ESM code must use explicit relative `.js` specifiers for internal imports. The target App's `@/` alias and a plugin's TypeScript `paths` setting do not rewrite import specifiers in compiled plugin JavaScript.
 
-## Inspection and verification
-
-`client:inspect` reads static Client declarations and final composition. It does not instantiate ServiceProviders, execute lifecycle, render React Providers, load route components, or load locale messages, so it is a wiring diagnostic rather than a behavior test.
+## Verification
 
 Verify each changed layer at the layer that owns the behavior:
 
@@ -165,6 +163,5 @@ Verify each changed layer at the layer that owns the behavior:
 - Test ServiceProvider registration, lifecycle order, failure cleanup, and finalized Refine configuration through `ClientApplication`.
 - Render React Providers around a consumer and test Context, loading, error, cleanup, and repeat mounts.
 - Run the plugin's focused `lint`, `typecheck`, `test`, and `build`, then run the target App checks when registration or composition changes.
-- Use `pnpm --filter <target-app> client:inspect --json` only when contribution composition changed or a contribution is missing.
 
 For the current public contracts, consult the repository's app-client README (`packages/app/app-client/README.md`) and Client plugin definitions (`packages/app/app-client/src/plugins.ts`).

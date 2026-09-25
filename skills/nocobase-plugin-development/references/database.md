@@ -30,7 +30,7 @@ export default defineServerPlugin({
 
 Locations must begin with `./` and resolve below the absolute `baseDir`. In source, this declaration resolves the TypeScript directories below the package root; from `dist/server/plugin.js`, it resolves compiled JavaScript below `dist`. The runtime does not fall back between those copies. A missing directory or a scaffold file ending in `.ts.example` contributes no executable task.
 
-The target App must explicitly register the plugin's Server definition and run its own migration or seed command. `server:inspect` can confirm configured and resolved locations but never executes or validates a task.
+The target App must explicitly register the plugin's Server definition and run its own migration or seed command.
 
 ## Write immutable, self-contained migrations
 

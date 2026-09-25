@@ -140,7 +140,6 @@ async function restoreGitignore(directory: string): Promise<void> {
  * The name is not decoration in any of these: `client/runtime.ts` declares the `packageName` that becomes the
  * application's i18n namespace on the browser side, while the server derives the same namespace from `package.json`.
  * Left unrewritten the two disagree, so `APP_NS` resolves to a different namespace in each half of the application.
- * It also fails `pnpm nocobase plugin inspect`, which compares the two and refuses to run when they differ.
  *
  * `server/providers/app-example.ts` names a service token, and a token's identity is its name.
  *

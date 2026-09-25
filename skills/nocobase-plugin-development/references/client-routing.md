@@ -61,7 +61,7 @@ export default routes;
 
 `defineDevRoutes()` contains its production guard. Call it unconditionally like `defineSettingsRoutes()`; a production Vite build replaces the environment flag and drops the contribution, page modules, and modules used only by those pages. Dev Routes are a build boundary, not a role-based authorization mechanism.
 
-Each page module must default-export a React component. Declaration modules remain side-effect-free, and `client:inspect` reads the declarations without invoking page loaders.
+Each page module must default-export a React component. Declaration modules remain side-effect-free, so reading a declaration never invokes a page loader.
 
 ## Authentication and authorization boundaries
 
@@ -180,7 +180,7 @@ const override = {
 };
 ```
 
-The target ID must resolve to a page rather than a group, and a route may have only one final override. Include `componentEntry` so inspection and later maintainers can locate App-owned source. If an overridden parent page owns children, the replacement must preserve its `Outlet`.
+The target ID must resolve to a page rather than a group, and a route may have only one final override. Include `componentEntry` so later maintainers can locate App-owned source. If an overridden parent page owns children, the replacement must preserve its `Outlet`.
 
 ## Test declarations and behavior
 
@@ -218,6 +218,6 @@ describe('client routes', () => {
 
 Also cover inherited auth, access denial, nested routing and Outlet behavior, plugin options when routes are factory-produced, override uniqueness, and any page-to-Server-API flow. Test anonymous, denied, and allowed API requests independently of Client navigation.
 
-Run the plugin's focused checks and the target App tests when registration or final routing changes. `pnpm --filter <target-app> client:inspect --json` helps diagnose final identities, paths, owners, loaders, groups, and overrides, but it does not load pages or prove authorization behavior.
+Run the plugin's focused checks and the target App tests when registration or final routing changes.
 
 Use the maintained route example declaration (`packages/examples/app-plugin-routes-example/client/routes.ts`), route declaration tests (`packages/examples/app-plugin-routes-example/tests/client/routes.test.ts`), and app-client child route tests (`packages/app/app-client/tests/child-routes.test.ts`) for current contracts.
