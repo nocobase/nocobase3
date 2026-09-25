@@ -2,7 +2,7 @@
 
 NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
-它做三件事：提供插件注册命令、同步 NocoBase 包提供的 Agent Skills，以及提供 App 组装自己 CLI 的 runner。作为 devDependency 随 App 分发，由 App 的 `pnpm nocobase` 调用。本仓库根目录也调用同一套实现，加上 `--workspace-root .`。
+它做三件事：提供插件注册命令、同步 NocoBase 包提供的 Agent Skills，以及提供 App 组装自己 CLI 的 runner。作为 App 的 dependency 随 App 分发，由 App 的 `pnpm nocobase` 调用。本仓库根目录也调用同一套实现，加上 `--workspace-root .`。
 
 创建项目不走这里，走 `pnpm create @nocobase/app`。
 

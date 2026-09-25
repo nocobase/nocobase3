@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Config } from '@oclif/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import commands from '../../cli/standard-commands.js';
+import commands from '../../cli/commands/index.js';
 
 const AppDeploy = commands.deploy;
 const AppUpload = commands.upload;
