@@ -11,7 +11,7 @@ describe('cli plugin definition', () => {
   });
 
   it('claims a topic and describes it', () => {
-    expect(cliPlugin.topic).toBe('demo');
+    expect(cliPlugin.topic).toBe('cli-example');
     expect(cliPlugin.description).toBeTruthy();
   });
 

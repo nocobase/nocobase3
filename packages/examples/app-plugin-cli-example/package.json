@@ -44,7 +44,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/app-cli": "workspace:^",
     "@oclif/core": "^4.14.0"
   },
   "devDependencies": {

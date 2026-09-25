@@ -14,18 +14,20 @@ import packageMetadata from '../package.json' with { type: 'json' };
 const execFileAsync = promisify(execFile);
 const packageRoot = path.resolve(import.meta.dirname, '..');
 const repoRoot = path.resolve(packageRoot, '../../..');
-const appCli = path.join(
-  repoRoot,
-  'packages/templates/app-template-default/cli/index.ts',
-);
-const tsxLoader = path.join(packageRoot, 'node_modules/tsx/dist/loader.mjs');
+// The application CLI of the Default template, named through `NOCOBASE_APP_ROOT` so the working directory stays free
+// for the relative paths each test passes.
+const appCli = path.join(repoRoot, 'packages/app/app-cli/bin/run.js');
+const appRoot = path.join(repoRoot, 'packages/templates/app-template-default');
+const appEnv = { ...process.env, NOCOBASE_APP_ROOT: appRoot };
 
 describe('workflow CLI contribution', () => {
   it('declares the workflow topic and command map', () => {
     expect(cliPlugin).toMatchObject({
       packageName: packageMetadata.name,
       topic: 'workflow',
-      commands: {
+      commands: {},
+      // Both act on workflow sources, which a built `dist/` does not carry.
+      devCommands: {
         check: WorkflowCheck,
         build: WorkflowBuild,
       },
@@ -61,16 +63,16 @@ describe('workflow CLI contribution', () => {
     expect(packageMetadata.exports['./cli']).toBeDefined();
     expect(packageMetadata.publishConfig.exports['./cli']).toBeDefined();
     // Declared once each. pnpm resolves both peers here on its own, so a duplicate devDependency adds nothing.
-    expect(packageMetadata.peerDependencies['@nocobase/nb3-cli']).toBeTruthy();
+    expect(packageMetadata.peerDependencies['@nocobase/app-cli']).toBeTruthy();
     expect(packageMetadata.peerDependencies['@oclif/core']).toBeTruthy();
     expect(
-      packageMetadata.devDependencies?.['@nocobase/nb3-cli'],
+      packageMetadata.devDependencies?.['@nocobase/app-cli'],
     ).toBeUndefined();
     expect(packageMetadata.devDependencies?.['@oclif/core']).toBeUndefined();
   });
 
   it('gives every command, flag, and argument help text', () => {
-    for (const [name, command] of Object.entries(cliPlugin.commands)) {
+    for (const [name, command] of Object.entries(cliPlugin.devCommands)) {
       expect(command.summary, `${name} has no summary`).toBeTruthy();
       expect(
         command.examples?.length,
@@ -101,8 +103,8 @@ describe('workflow CLI contribution', () => {
     );
     const { stdout } = await execFileAsync(
       process.execPath,
-      ['--import', tsxLoader, appCli, 'workflow', 'check', fixture, '--json'],
-      { cwd: packageRoot },
+      [appCli, 'workflow', 'check', fixture, '--json'],
+      { cwd: packageRoot, env: appEnv },
     );
 
     expect(JSON.parse(stdout)).toMatchObject({
@@ -122,11 +124,10 @@ describe('workflow CLI contribution', () => {
         path.join(packagePath, 'workflow.ts'),
         `import { defineWorkflow } from ${JSON.stringify(path.join(packageRoot, 'index.ts'))};\nexport default defineWorkflow({ title: 'CLI build', nodes: [] });\n`,
       );
-      await execFileAsync(
-        process.execPath,
-        ['--import', tsxLoader, appCli, 'workflow', 'build'],
-        { cwd: root },
-      );
+      await execFileAsync(process.execPath, [appCli, 'workflow', 'build'], {
+        cwd: root,
+        env: appEnv,
+      });
       const keyRoot = path.join(root, 'dist/server/workflows/example');
       const [digest] = await fsPromises.readdir(keyRoot);
       await expect(

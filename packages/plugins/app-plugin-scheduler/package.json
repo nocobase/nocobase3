@@ -73,6 +73,8 @@
     "hono": "catalog:"
   },
   "peerDependencies": {
+    "@base-ui/react": "catalog:",
+    "@nocobase/app-cli": "workspace:^",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
@@ -81,13 +83,11 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^",
     "@oclif/core": "catalog:",
     "cronstrue": "^3.24.0",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-router": "^7.0.0",
-    "@base-ui/react": "catalog:",
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
