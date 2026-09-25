@@ -2,7 +2,10 @@ import { AppCommand } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseApplyCommand } from '../../database-command.ts';
+import {
+  collectionsRefreshAllowed,
+  runDatabaseApplyCommand,
+} from '../../database-command.ts';
 
 export default class AppDbReset extends AppCommand {
   static override summary =
@@ -20,6 +23,7 @@ export default class AppDbReset extends AppCommand {
     json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
+    collections: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
     json: Flags.boolean({
@@ -36,6 +40,12 @@ export default class AppDbReset extends AppCommand {
       exclusive: ['all'],
       description: 'Target a named managed connection, regardless of autoRun.',
     }),
+    collections: Flags.boolean({
+      default: true,
+      allowNo: true,
+      description:
+        'Refresh the gitignored Collection cache under database/<connection>/collections/ for each connection whose migrations changed. Use --no-collections to skip it. Never written in a built dist/.',
+    }),
     force: Flags.boolean({
       default: false,
       description: 'Skip the confirmation prompt.',
@@ -49,8 +59,15 @@ export default class AppDbReset extends AppCommand {
         log: (message) => this.log(message),
         logJson: (value) => this.logJson(value),
         exit: (code) => this.exit(code),
+        warn: (message) => {
+          this.warn(message);
+        },
       },
-      { ...flags, fresh: true },
+      {
+        ...flags,
+        fresh: true,
+        collections: flags.collections && collectionsRefreshAllowed(),
+      },
       this.appContext,
     );
   }

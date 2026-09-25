@@ -2,7 +2,10 @@ import { AppCommand } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseRollbackCommand } from '../../database-command.ts';
+import {
+  collectionsRefreshAllowed,
+  runDatabaseRollbackCommand,
+} from '../../database-command.ts';
 
 export default class AppDbRollback extends AppCommand {
   static override summary = 'Roll back the latest migration batch.';
@@ -19,6 +22,7 @@ export default class AppDbRollback extends AppCommand {
     json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
+    collections: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
     json: Flags.boolean({
@@ -35,6 +39,12 @@ export default class AppDbRollback extends AppCommand {
       exclusive: ['all'],
       description: 'Target a named managed connection, regardless of autoRun.',
     }),
+    collections: Flags.boolean({
+      default: true,
+      allowNo: true,
+      description:
+        'Refresh the gitignored Collection cache under database/<connection>/collections/ for each connection whose migrations changed. Use --no-collections to skip it. Never written in a built dist/.',
+    }),
     force: Flags.boolean({
       default: false,
       description: 'Skip the confirmation prompt.',
@@ -48,8 +58,14 @@ export default class AppDbRollback extends AppCommand {
         log: (message) => this.log(message),
         logJson: (value) => this.logJson(value),
         exit: (code) => this.exit(code),
+        warn: (message) => {
+          this.warn(message);
+        },
       },
-      flags,
+      {
+        ...flags,
+        collections: flags.collections && collectionsRefreshAllowed(),
+      },
       this.appContext,
     );
   }

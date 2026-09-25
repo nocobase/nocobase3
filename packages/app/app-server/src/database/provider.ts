@@ -2,7 +2,10 @@ import {
   ServiceProvider,
   type ServiceContainer,
 } from '@nocobase/service-provider';
-import { databaseManagerToken } from '@nocobase/db';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
+import { refreshAppCollectionsArtifact } from './collections-artifact.js';
 import { createAppDatabaseManager } from './manager.js';
 import {
   executeAppDatabasePlan,
@@ -24,6 +27,15 @@ export interface DatabaseProviderApplication {
   readonly paths: AppPaths;
   readonly databaseTaskContributions: AppDatabaseTaskContributions;
 }
+
+/**
+ * Set by `nocobase dev` on the server process it starts, to that
+ * application's root. Naming the root rather than switching the behavior on
+ * matters for a Hub: applications it hosts in the same process see the same
+ * environment, and their directories are deployed revisions a cache must not
+ * be written into.
+ */
+export const COLLECTIONS_REFRESH_ENV = 'NOCOBASE_COLLECTIONS_REFRESH';
 
 export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplication> {
   public readonly name: string = '@nocobase/app-server/database';
@@ -70,6 +82,38 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
       paths: this.app.paths,
     });
     this.reportChecksumWarnings(result);
+    await this.refreshCollections(config, result, database);
+  }
+
+  /**
+   * Startup migrations make `database/<connection>/collections/` stale just
+   * as `db apply` does, and under `nocobase dev` they are the usual cause. So
+   * the development server refreshes the cache of every connection they
+   * changed. Nothing else does: production never sets the variable.
+   */
+  private async refreshCollections(
+    config: AppDatabaseConfig,
+    result: AppDatabaseTasksResult,
+    database: DatabaseManager,
+  ): Promise<void> {
+    const target = process.env[COLLECTIONS_REFRESH_ENV];
+    if (!target || !sameDirectory(target, this.app.paths.root())) return;
+    const refreshed = await refreshAppCollectionsArtifact(config, result, {
+      paths: this.app.paths,
+      database,
+    });
+    for (const entry of refreshed ?? []) {
+      if (entry.status !== 'failed') continue;
+      const message = `Could not refresh the Collection cache of "${entry.connection}": ${entry.error}. Run "nocobase collections generate --connection ${entry.connection}" to rebuild it.`;
+      if (this.app.container.has(loggingToken)) {
+        this.app.container
+          .resolve(loggingToken)
+          .getLogger('database')
+          .warn({ connection: entry.connection }, message);
+      } else {
+        console.warn(message);
+      }
+    }
   }
 
   /**
@@ -105,4 +149,15 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
   private getDatabaseConfig(): AppDatabaseConfig {
     return this.app.config.get<AppDatabaseConfig>('database')!;
   }
+}
+
+function sameDirectory(left: string, right: string): boolean {
+  const resolve = (directory: string): string => {
+    try {
+      return realpathSync(directory);
+    } catch {
+      return path.resolve(directory);
+    }
+  };
+  return resolve(left) === resolve(right);
 }
