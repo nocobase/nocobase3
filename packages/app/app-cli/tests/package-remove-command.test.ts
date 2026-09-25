@@ -426,4 +426,24 @@ describe('package remove command', () => {
       runCommand(config, 'package:remove', ['lodash', '--dir', appRoot]),
     ).rejects.toThrow('must be a full @nocobase/* package name');
   });
+
+  it('prints a --json failure on stdout, like a success, and exits non-zero', async () => {
+    const appRoot = await createApp({});
+    const previousExitCode = process.exitCode;
+    try {
+      const result = await runCommand(config, 'package:remove', [
+        'app-skills',
+        '--dir',
+        appRoot,
+        '--json',
+      ]);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: false,
+        operation: 'package:remove',
+      });
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
 });

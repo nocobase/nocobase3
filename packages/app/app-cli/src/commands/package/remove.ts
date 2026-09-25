@@ -119,9 +119,7 @@ export default class PackageRemove extends PluginUnregister {
               ],
             }
           : classifyPluginError(error);
-      this.logToStderr(
-        JSON.stringify(pluginJsonFailure(this.operation, classified), null, 2),
-      );
+      this.logJson(pluginJsonFailure(this.operation, classified));
       process.exitCode = 1;
     }
   }

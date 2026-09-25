@@ -1,9 +1,21 @@
-import { AppCommand } from '../../context.ts';
-import { Flags, type Interfaces } from '@oclif/core';
-import { PublishingError, publishToHub } from '../../hub-publishing.ts';
+import { type Command, Flags, type Interfaces } from '@oclif/core';
 
-export default class AppDeploy extends AppCommand {
+import {
+  ReleaseCommand,
+  type ReleaseFlags,
+} from '../../lib/release-command.ts';
+
+export default class ReleaseDeploy extends ReleaseCommand {
   static override summary = 'Deploy an existing Hub release.';
+  static override description =
+    'Deploys a Release that is already on the Hub, such as one `release upload` created without --deploy, or an earlier Release to roll back to. It waits for the deployment to finish unless --no-wait is given.\n\nThe Hub, App ID and API key come from the flags, then HUB_URL, HUB_APP_ID and HUB_API_KEY in the environment, then the App root .env. Retrying with the same --idempotency-key is safe when a run could not confirm its result; deploying the same Release again needs a new key.';
+
+  static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %> --release-id <release-id>',
+    '<%= config.bin %> <%= command.id %> --release-id <release-id> --no-wait --json',
+    '<%= config.bin %> <%= command.id %> --release-id <release-id> --config ./runtime.yml',
+  ];
+
   static override flags: {
     config: Interfaces.OptionFlag<string | undefined>;
     hub: Interfaces.OptionFlag<string | undefined>;
@@ -17,11 +29,11 @@ export default class AppDeploy extends AppCommand {
   } = {
     config: Flags.string({
       description:
-        'Runtime YAML configuration file. Omit to reuse the current Hub configuration.',
+        'Runtime YAML configuration to deploy with, relative to the current directory. Omit to reuse the current Hub configuration.',
     }),
     hub: Flags.string({
       description:
-        'Hub application URL. Defaults to HUB_URL in the environment or App root .env.',
+        'Hub application URL, including its base path. Defaults to HUB_URL in the environment or App root .env.',
     }),
     'app-id': Flags.string({
       description:
@@ -54,56 +66,16 @@ export default class AppDeploy extends AppCommand {
       description: 'Print a single JSON result.',
     }),
   };
-  public async run(): Promise<void> {
-    let parsed = false;
-    let json = this.argv.includes('--json');
-    try {
-      const { flags } = await this.parse(AppDeploy);
-      parsed = true;
-      json = flags.json;
-      const result = await publishToHub(
-        'deploy',
-        flags,
-        this.appContext.rootDir,
-      );
-      if (json)
-        this.logJson({
-          schemaVersion: 1,
-          ok: true,
-          operation: 'app.deploy',
-          status: 'success',
-          result,
-        });
-      else
-        this.log(
-          `Deployment ${String(result.operationId)}: ${String(result.operationStatus)}. Retry key: ${String(result.idempotencyKey)}.`,
-        );
-      if (!json && typeof result.warning === 'string')
-        this.warn(result.warning);
-    } catch (error) {
-      const failure = !parsed
-        ? new PublishingError(
-            'INVALID_ARGUMENTS',
-            'Invalid command arguments. Run this command with --help.',
-            2,
-          )
-        : error instanceof PublishingError
-          ? error
-          : new PublishingError('DEPLOY_FAILED', 'Deployment failed.', 1);
-      if (json)
-        this.logJson({
-          schemaVersion: 1,
-          ok: false,
-          operation: 'app.deploy',
-          status: 'failure',
-          error: {
-            code: failure.code,
-            message: failure.message,
-            suggestions: [],
-          },
-        });
-      else this.log(failure.message);
-      this.exit(failure.exitCode);
-    }
+
+  protected readonly operation = 'deploy' as const;
+  protected readonly failureCode = 'DEPLOY_FAILED';
+  protected readonly failureMessage = 'Deployment failed.';
+
+  protected async parseFlags(): Promise<ReleaseFlags> {
+    return (await this.parse(ReleaseDeploy)).flags;
+  }
+
+  protected describe(result: Record<string, unknown>): string {
+    return `Deployment ${String(result.operationId)}: ${String(result.operationStatus)}. Retry key: ${String(result.idempotencyKey)}.`;
   }
 }

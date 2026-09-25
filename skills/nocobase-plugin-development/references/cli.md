@@ -76,7 +76,7 @@ Explicit `args`, `flags`, and `examples` types matter because plugin packages em
 
 Keep command modules cheap to import. Load heavy SDKs or optional dependencies with `await import()` inside the named `run()` method so `--help` does not initialize them.
 
-For machine-readable behavior, emit one JSON document on success, send failures to stderr, and preserve a nonzero exit code. Treat exit code `2` as invalid usage and `1` as a runtime error unless the command has a documented, stable extension.
+For machine-readable behavior, emit one JSON document on stdout for a success and for a failure alike, and preserve a nonzero exit code on failure, which is what the built-in commands do. Treat exit code `2` as invalid usage and `1` as a runtime error unless the command has a documented, stable extension.
 
 ## Declare the CLI plugin
 

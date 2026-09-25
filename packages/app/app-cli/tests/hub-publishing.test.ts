@@ -90,6 +90,57 @@ describe('Hub publishing client', () => {
     },
   );
 
+  it('resolves --file and --config from the current directory, and the default artifact from the App root', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'hub-cli-cwd-'));
+    try {
+      await writeFile(path.join(cwd, 'other.tar.gz'), 'other');
+      await writeFile(path.join(cwd, 'runtime.yml'), 'feature: cwd\n');
+      const bodies: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(async (_url: URL, init: RequestInit) => {
+          if (typeof init.body === 'string') {
+            bodies.push(init.body);
+            return response({ operationId: 'op-1', status: 'queued' });
+          }
+          const chunks: Buffer[] = [];
+          for await (const chunk of init.body as unknown as AsyncIterable<Buffer>)
+            chunks.push(Buffer.from(chunk));
+          bodies.push(Buffer.concat(chunks).toString());
+          return response({ releaseId: 'r1', operationId: null });
+        }),
+      );
+
+      await publishToHub('upload', { file: 'other.tar.gz' }, root, env, cwd);
+      await publishToHub('upload', {}, root, env, cwd);
+      await publishToHub(
+        'deploy',
+        { 'release-id': 'r1', config: 'runtime.yml', wait: false },
+        root,
+        env,
+        cwd,
+      );
+      expect(bodies[0]).toBe('other');
+      expect(bodies[1]).toBe('artifact');
+      expect(JSON.parse(bodies[2] ?? '')).toMatchObject({
+        config: { content: 'feature: cwd\n' },
+      });
+
+      // The App root is not searched for a path the caller named.
+      await expect(
+        publishToHub(
+          'upload',
+          { file: 'storage/exports/dist.tar.gz' },
+          root,
+          env,
+          cwd,
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_ARTIFACT', exitCode: 2 });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('reports unreadable .env as a local error before sending a request', async () => {
     await mkdir(path.join(root, '.env'));
     const fetcher = vi.fn();
@@ -374,6 +425,7 @@ describe('Hub publishing client', () => {
       { 'release-id': 'r1', config: 'runtime.yml', wait: false },
       root,
       env,
+      root,
     );
     expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({
       releaseId: 'r1',
@@ -386,6 +438,7 @@ describe('Hub publishing client', () => {
       { 'release-id': 'r1', config: 'runtime.yml', wait: false },
       root,
       env,
+      root,
     );
     expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
     fetcher.mockImplementation(async (_url: URL, init: RequestInit) => {
@@ -412,6 +465,7 @@ describe('Hub publishing client', () => {
       { deploy: true, config: 'runtime.yml', wait: false },
       root,
       env,
+      root,
     );
   });
 
@@ -436,6 +490,7 @@ describe('Hub publishing client', () => {
         { deploy: true, config: 'runtime.yml', wait: false },
         root,
         env,
+        root,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_CONFIG_FILE', exitCode: 2 });
     expect(fetcher).not.toHaveBeenCalled();
@@ -484,8 +539,8 @@ describe('CLI command output', () => {
     '%s %j reports %s with polling=%s',
     async (operation, flags, status, polls) => {
       const { Config } = await import('@oclif/core');
-      const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
-      const AppUpload = bindAppCommand(Upload, { rootDir: root });
+      const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
+      const ReleaseUpload = bindAppCommand(Upload, { rootDir: root });
       const config = await Config.load({
         root,
         pjson: {
@@ -501,7 +556,7 @@ describe('CLI command output', () => {
         )
         .mockResolvedValueOnce(response({ status }));
       vi.stubGlobal('fetch', fetcher);
-      const Command = operation === 'deploy' ? AppDeploy : AppUpload;
+      const Command = operation === 'deploy' ? ReleaseDeploy : ReleaseUpload;
       const command = new Command(
         [
           '--json',
@@ -546,7 +601,7 @@ describe('CLI command output', () => {
   );
   it('prints one JSON envelope and a parameter exit code without echoing secret arguments', async () => {
     const { Config } = await import('@oclif/core');
-    const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
+    const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -555,7 +610,7 @@ describe('CLI command output', () => {
         oclif: { bin: 'nocobase' },
       },
     });
-    const command = new AppDeploy(
+    const command = new ReleaseDeploy(
       ['--json', '--api-key', env.HUB_API_KEY],
       config,
     );
@@ -573,7 +628,7 @@ describe('CLI command output', () => {
   });
   it('exits with failure JSON when upload --deploy has no confirmed deployment', async () => {
     const { Config } = await import('@oclif/core');
-    const AppUpload = bindAppCommand(Upload, { rootDir: root });
+    const ReleaseUpload = bindAppCommand(Upload, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -590,7 +645,7 @@ describe('CLI command output', () => {
           response({ releaseId: 'existing', operationId: null, reused: true }),
         ),
     );
-    const command = new AppUpload(
+    const command = new ReleaseUpload(
       [
         '--json',
         '--deploy',
@@ -619,7 +674,7 @@ describe('CLI command output', () => {
 
   it('warns in human output when the Hub reused an earlier deployment', async () => {
     const { Config } = await import('@oclif/core');
-    const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
+    const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -640,7 +695,7 @@ describe('CLI command output', () => {
         ),
       ),
     );
-    const command = new AppDeploy(
+    const command = new ReleaseDeploy(
       [
         '--hub',
         env.HUB_URL,
@@ -663,7 +718,7 @@ describe('CLI command output', () => {
 
   it('allows --no-wait to return the accepted deployment status', async () => {
     const { Config } = await import('@oclif/core');
-    const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
+    const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -679,7 +734,7 @@ describe('CLI command output', () => {
         .mockResolvedValue(response({ operationId: 'op-1', status: 'queued' })),
     );
     await writeFile(path.join(root, 'runtime.yml'), 'feature: parsed\n');
-    const command = new AppDeploy(
+    const command = new ReleaseDeploy(
       [
         '--json',
         '--hub',

@@ -110,12 +110,8 @@ export default class PluginRegister extends Command {
       await this.runUnsafe();
     } catch (error) {
       if (!this.argv.includes('--json')) throw error;
-      this.logToStderr(
-        JSON.stringify(
-          pluginJsonFailure('plugin:register', classifyPluginError(error)),
-          null,
-          2,
-        ),
+      this.logJson(
+        pluginJsonFailure('plugin:register', classifyPluginError(error)),
       );
       process.exitCode = 1;
     }

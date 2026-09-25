@@ -1,15 +1,28 @@
-import { AppCommand } from '../../context.ts';
-import { Flags, type Interfaces } from '@oclif/core';
-import { PublishingError, publishToHub } from '../../hub-publishing.ts';
+import { type Command, Flags, type Interfaces } from '@oclif/core';
 
-export default class AppUpload extends AppCommand {
+import {
+  ReleaseCommand,
+  type ReleaseFlags,
+} from '../../lib/release-command.ts';
+
+export default class ReleaseUpload extends ReleaseCommand {
   static override summary = 'Upload an immutable application release to Hub.';
+  static override description =
+    'Uploads the archive `nocobase build --tar` writes, storage/exports/dist.tar.gz, as a new Release of the App on the Hub. The Release is immutable: uploading the same archive again returns the existing Release instead of creating another. With --deploy, the upload also starts a deployment and waits for it to finish unless --no-wait is given.\n\nThe Hub, App ID and API key come from the flags, then HUB_URL, HUB_APP_ID and HUB_API_KEY in the environment, then the App root .env. Retrying with the same --idempotency-key is safe when a run could not confirm its result.';
+
+  static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --deploy --json',
+    '<%= config.bin %> <%= command.id %> --deploy --config ./runtime.yml',
+    '<%= config.bin %> <%= command.id %> --file ./artifacts/dist.tar.gz',
+  ];
+
   static override flags: {
     config: Interfaces.OptionFlag<string | undefined>;
     hub: Interfaces.OptionFlag<string | undefined>;
     'app-id': Interfaces.OptionFlag<string | undefined>;
     'api-key': Interfaces.OptionFlag<string | undefined>;
-    file: Interfaces.OptionFlag<string>;
+    file: Interfaces.OptionFlag<string | undefined>;
     'idempotency-key': Interfaces.OptionFlag<string | undefined>;
     deploy: Interfaces.BooleanFlag<boolean>;
     wait: Interfaces.BooleanFlag<boolean | undefined>;
@@ -18,7 +31,7 @@ export default class AppUpload extends AppCommand {
   } = {
     config: Flags.string({
       description:
-        'Runtime YAML configuration file. Omit to reuse the current Hub configuration.',
+        'Runtime YAML configuration to deploy with, relative to the current directory. Requires --deploy. Omit to reuse the current Hub configuration.',
     }),
     hub: Flags.string({
       description:
@@ -33,11 +46,11 @@ export default class AppUpload extends AppCommand {
         'Publishing API key. Defaults to HUB_API_KEY in the environment or App root .env.',
     }),
     file: Flags.string({
-      description: 'Artifact path.',
-      default: 'storage/exports/dist.tar.gz',
+      description:
+        'Archive to upload, relative to the current directory. Defaults to storage/exports/dist.tar.gz in the App root.',
     }),
     'idempotency-key': Flags.string({
-      description: 'Retry identity. Defaults to artifact SHA-256.',
+      description: 'Retry identity. Defaults to the archive SHA-256.',
     }),
     deploy: Flags.boolean({
       default: false,
@@ -46,7 +59,7 @@ export default class AppUpload extends AppCommand {
     wait: Flags.boolean({
       allowNo: true,
       description:
-        'Wait for deployment success by default with --deploy. Use --no-wait to return after acceptance.',
+        'Wait for deployment success, the default with --deploy. Use --no-wait to return after acceptance.',
     }),
     timeout: Flags.integer({
       default: 600,
@@ -57,56 +70,20 @@ export default class AppUpload extends AppCommand {
       description: 'Print a single JSON result.',
     }),
   };
-  public async run(): Promise<void> {
-    let parsed = false;
-    let json = this.argv.includes('--json');
-    try {
-      const { flags } = await this.parse(AppUpload);
-      parsed = true;
-      json = flags.json;
-      const result = await publishToHub(
-        'upload',
-        flags,
-        this.appContext.rootDir,
-      );
-      const response = {
-        schemaVersion: 1,
-        ok: true,
-        operation: 'app.upload',
-        status: 'success',
-        result,
-      };
-      if (json) this.logJson(response);
-      else
-        this.log(
-          `Release ${String(result.releaseId)} uploaded${result.reused ? ' (reused)' : ''}. Deployment: ${String(typeof result.operationId === 'string' ? result.operationId : 'not requested')}.`,
-        );
-      if (!json && typeof result.warning === 'string')
-        this.warn(result.warning);
-    } catch (error) {
-      const failure = !parsed
-        ? new PublishingError(
-            'INVALID_ARGUMENTS',
-            'Invalid command arguments. Run this command with --help.',
-            2,
-          )
-        : error instanceof PublishingError
-          ? error
-          : new PublishingError('PUBLISH_FAILED', 'Publishing failed.', 1);
-      const response = {
-        schemaVersion: 1,
-        ok: false,
-        operation: 'app.upload',
-        status: 'failure',
-        error: {
-          code: failure.code,
-          message: failure.message,
-          suggestions: [],
-        },
-      };
-      if (json) this.logJson(response);
-      else this.log(failure.message);
-      this.exit(failure.exitCode);
-    }
+
+  protected readonly operation = 'upload' as const;
+  protected readonly failureCode = 'PUBLISH_FAILED';
+  protected readonly failureMessage = 'Publishing failed.';
+
+  protected async parseFlags(): Promise<ReleaseFlags> {
+    return (await this.parse(ReleaseUpload)).flags;
+  }
+
+  protected describe(result: Record<string, unknown>): string {
+    const deployment =
+      typeof result.operationId === 'string'
+        ? result.operationId
+        : 'not requested';
+    return `Release ${String(result.releaseId)} uploaded${result.reused ? ' (reused)' : ''}. Deployment: ${deployment}.`;
   }
 }
