@@ -79,7 +79,7 @@ export interface AppDatabaseMigrationConfig {
   /**
    * How to react when an executed migration's source no longer hashes to the
    * checksum recorded for it. `warn` (the default) reports the drift and
-   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * continues; `error` refuses to run until `nocobase db repair` realigns the
    * history. A migration the sources cannot explain at all always fails.
    */
   onChecksumMismatch?: ChecksumMismatchPolicy;
@@ -96,7 +96,7 @@ export interface AppDatabaseSeedConfig {
   /**
    * How to react when an executed seed's source no longer hashes to the
    * checksum recorded for it. `warn` (the default) reports the drift and
-   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * continues; `error` refuses to run until `nocobase db repair` realigns the
    * history.
    */
   onChecksumMismatch?: ChecksumMismatchPolicy;

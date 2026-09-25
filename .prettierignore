@@ -38,8 +38,8 @@ docs/theme/components/HomeHero/
 /skills/
 
 # The generated Collection artifacts an application keeps under `database/<connection>/collections/`: one JSON file
-# per Collection plus a `_manifest.json`, written by `pnpm collections:generate` through a stable serializer so that
-# `pnpm collections:generate --check` can regenerate them and compare byte for byte. Prettier collapses their short
+# per Collection plus a `_manifest.json`, written by `pnpm nocobase collections generate` through a stable serializer so that
+# `pnpm nocobase collections generate --check` can regenerate them and compare byte for byte. Prettier collapses their short
 # arrays and objects onto single lines, which makes that check report the artifacts as out of date when nothing about
 # the schema changed. Each template names the same path in its own `.prettierignore`; a pattern containing a slash is
 # anchored to the directory of the file it is written in, so reaching them from here needs the `**/`.

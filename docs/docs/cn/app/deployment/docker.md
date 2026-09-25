@@ -37,7 +37,7 @@ docker build --platform linux/amd64 --build-arg DIST=prebuilt --build-arg APP_BA
 镜像不包含 pnpm。需要在容器中运行应用命令时，直接调用 `node dist/cli/index.js`，例如检查配置：
 
 ```bash
-docker run --rm -v ./config.yml:/app/config.yml:ro crm:release-001 node dist/cli/index.js app config check
+docker run --rm -v ./config.yml:/app/config.yml:ro crm:release-001 node dist/cli/index.js config check
 ```
 
 ## 3. 创建 Compose 配置

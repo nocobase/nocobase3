@@ -85,7 +85,7 @@ State authentication and authorization separately. Name the caller identity, res
 
 Give a short executable workflow: confirm prerequisites, create App-owned data or permissions, call the public entry, verify an observable result, and diagnose known failures. Use real names and inputs rather than placeholders.
 
-Verification should assert a response, visible page state, database record, Job status, CLI output, or log produced by the public workflow. Skill file equality proves only synchronization. `plugin:inspect`, Client inspection, and Server inspection are optional read-only diagnostics for unexpected composition problems and do not prove runtime behavior, permissions, tests, or builds.
+Verification should assert a response, visible page state, database record, Job status, CLI output, or log produced by the public workflow. Skill file equality proves only synchronization. `plugin inspect`, Client inspection, and Server inspection are optional read-only diagnostics for unexpected composition problems and do not prove runtime behavior, permissions, tests, or builds.
 
 Update Plugin Skills in the same change whenever public entries, integration steps, inputs, outputs, ownership, permissions, constraints, or verification change. Internal refactors that preserve the App contract do not require Skill changes.
 
@@ -95,16 +95,16 @@ Plugin registration copies shipped Skills by default unless `--no-skills` is giv
 
 ```bash
 cd packages/templates/app-template-default
-pnpm skills:sync
+pnpm nocobase skills sync
 ```
 
 Target a complete installed package when needed:
 
 ```bash
-pnpm skills:sync --package @nocobase/app-plugin-audit-log
+pnpm nocobase skills sync --package @nocobase/app-plugin-audit-log
 ```
 
-`pnpm plugin:skills:sync` and `nocobase plugin skills sync` remain compatibility aliases; new documentation and scripts should use `skills:sync`. From the repository root, enter the target App before running its Skill sync script, or invoke the CLI with `--workspace-root . --app <app>`.
+From the repository root, run `pnpm nocobase skills sync` inside the target App, or pass `--workspace-root . --app <app>`.
 
 Full synchronization discovers direct NocoBase packages from `dependencies`, `devDependencies`, and `optionalDependencies`, then merges plugin names found in the explicit Client, Server, and CLI composition roots. A targeted sync preserves other package owners; a full sync also prunes tracked Skills from removed packages.
 
@@ -112,6 +112,6 @@ After synchronizing, inspect the App copy only to confirm delivery. Make all con
 
 Current implementation and maintained example:
 
-- Skills synchronization implementation (`packages/tools/cli/src/lib/skills-sync.ts`)
-- Preferred Skills sync command (`packages/tools/cli/src/commands/skills/sync.ts`)
+- Skills synchronization implementation (`packages/app/app-cli/src/lib/skills-sync.ts`)
+- Preferred Skills sync command (`packages/app/app-cli/src/commands/skills/sync.ts`)
 - Skills Example source (`packages/examples/app-plugin-skills-example/skills/nocobase-app-plugin-skills-example/SKILL.md`)

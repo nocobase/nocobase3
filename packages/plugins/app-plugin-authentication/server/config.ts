@@ -78,7 +78,7 @@ export function defineAuthConfig(
  *
  * An application that had no configuration at all used to be given a temporary secret here so that it could boot far
  * enough to serve an installation page. Nothing serves that page any more — configuration is written by
- * `nocobase app config init` before the application is started, and `pnpm dev` and `pnpm start` refuse to run without
+ * `nocobase config init` before the application is started, and `pnpm dev` and `pnpm start` refuse to run without
  * it — so a missing secret is simply an error, and a far better one: a temporary secret is regenerated on every boot,
  * which silently invalidates every session on restart.
  */
@@ -90,7 +90,7 @@ export function resolveAuthSecret(secret: string | undefined): string {
 
   if (secret) return secret;
 
-  // The fact only: a standalone start adds `pnpm config:init`, and a Hub shows this to an operator whose
+  // The fact only: a standalone start adds `pnpm nocobase config init`, and a Hub shows this to an operator whose
   // configuration lives in the Hub, where that advice would be wrong.
   throw new ApplicationNotConfiguredError('auth.secret is not set.', {
     key: 'auth.secret',

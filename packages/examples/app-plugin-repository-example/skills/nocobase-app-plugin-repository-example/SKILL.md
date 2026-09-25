@@ -12,7 +12,7 @@ This plugin owns thirteen isolated example collections, five authenticated list 
 The application must register `@nocobase/app-plugin-authentication` and this plugin on the Server, and this plugin's Client factory. It needs the normal `apiClientToken` and a working database. Apply application migrations before opening the pages.
 
 ```bash
-pnpm plugin:register repository-example --app app-template-default
+pnpm nocobase plugin register repository-example --workspace-root . --app app-template-default
 pnpm --filter @nocobase/app-template-default migrate
 pnpm --filter @nocobase/app-template-default seed
 ```

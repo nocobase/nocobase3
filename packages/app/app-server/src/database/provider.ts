@@ -92,7 +92,7 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
             recordedChecksum: warning.recordedChecksum,
             sourceChecksum: warning.sourceChecksum,
           },
-          `Executed ${entry.kind === 'migrations' ? 'migration' : 'seed'} "${warning.name}" no longer matches its source. Run "nocobase app db repair" when the edit left the schema identical, or "nocobase app db redo" when it changed what ran.`,
+          `Executed ${entry.kind === 'migrations' ? 'migration' : 'seed'} "${warning.name}" no longer matches its source. Run "nocobase db repair" when the edit left the schema identical, or "nocobase db redo" when it changed what ran.`,
         );
       }
     }

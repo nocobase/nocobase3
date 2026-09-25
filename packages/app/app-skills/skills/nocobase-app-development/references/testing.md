@@ -79,7 +79,7 @@ Then verify the affected behavior, selecting only the applicable steps below. Gr
 
 - For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took; a quick change needs only static checks.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
-- Confirm `pnpm db:apply` applies cleanly.
+- Confirm `pnpm nocobase db apply` applies cleanly.
 
 ## Reporting
 
@@ -103,8 +103,6 @@ Do not delete or rebuild a running development server's cache. For an already co
 
 ## Shared application tooling
 
-Application scripts delegate to `@nocobase/app-tools`, and standard runtime CLI commands delegate to `@nocobase/app-cli`. In the source repository, run shared implementation tests in those packages and application composition tests in each affected template. Keep custom application command tests local. A generated application consumes compiled packages; do not edit installed package files to customize behavior.
+`@nocobase/app-cli` implements the application's scripts and commands: `pnpm dev`, `pnpm build` and `pnpm start` run `nocobase dev`, `nocobase build` and `nocobase start`, and every standard command is `pnpm nocobase <topic> <command>`. In the source repository, run shared implementation tests in `packages/app/app-cli` and application composition tests in each affected template. Keep tests for the application's own commands in the application. A generated application consumes the compiled package; do not edit installed package files to customize behavior.
 
-Development starts through `scripts/dev.mjs` calling `runAppTool('dev', { rootDir })`. Vite configuration imports proxy helpers directly from `@nocobase/app-tools/dev/proxy`. Keep watcher, proxy, and supervisor unit tests in `app-tools`; templates verify application entry paths and Vite integration.
-
-Standalone dependency checks and native retargeting use `scripts/server-deps.mjs` through the existing `server:deps:verify` and `server:deps:retarget` package scripts. Internal build utilities are owned and tested by `app-tools`.
+Vite configuration imports the proxy helpers from `@nocobase/app-cli/dev/proxy`. Watcher, proxy, supervisor and build-step unit tests live in `app-cli`; templates verify their composition and Vite integration.

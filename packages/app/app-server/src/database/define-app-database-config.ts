@@ -99,7 +99,7 @@ export function defineAppDatabaseConfig(
 
 /**
  * What can be said about the `database` section from its value alone. Whether each database can be reached is left to
- * `config:check`, which connects; a start connects anyway and reports the driver's own error.
+ * `config check`, which connects; a start connects anyway and reports the driver's own error.
  */
 export const validateAppDatabaseConfig: ConfigValidator<AppDatabaseConfig> = (
   database,

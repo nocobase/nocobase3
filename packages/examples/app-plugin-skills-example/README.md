@@ -24,5 +24,5 @@ that package-owned Skill into the target App's `.agents/skills/` directory.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-skills-example check
-pnpm plugin:inspect skills-example --app app-template-default --json
+pnpm nocobase plugin inspect skills-example --workspace-root . --app app-template-default --json
 ```

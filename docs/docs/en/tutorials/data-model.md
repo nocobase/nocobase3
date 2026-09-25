@@ -61,8 +61,8 @@ Run the migration and check primary keys, uniqueness, customer references, and a
 Migrations belong in `database/main/migrations/`; seeds belong in `database/main/seeds/`. A migration defines structure; a seed inserts example data.
 
 ```bash
-pnpm db:apply
-pnpm collections:generate
+pnpm nocobase db apply
+pnpm nocobase collections generate
 ```
 
 The final command generates database descriptions. Editing those generated files does not create a table. A migration reported as skipped may already have run on startup; inspect the actual structure.

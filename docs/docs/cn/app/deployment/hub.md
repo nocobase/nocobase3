@@ -216,9 +216,9 @@ pnpm create @nocobase/app hub --template=hub
 cd hub
 ```
 
-创建命令会下载 Hub 模板、安装依赖，并生成 `.env`。它不生成 `config.yml`——在应用目录里运行 `pnpm config:init` 来生成，其中包含随机认证与会话密钥，默认主数据库为 SQLite。
+创建命令会下载 Hub 模板、安装依赖，并生成 `.env`。它不生成 `config.yml`——在应用目录里运行 `pnpm nocobase config init` 来生成，其中包含随机认证与会话密钥，默认主数据库为 SQLite。
 
-使用其他主数据库时，先安装驱动再配置，例如 `pnpm add @nocobase/db-postgres` 后运行 `pnpm config:init --dialect postgres`。固定版本时，将创建命令中的包名改为 `@nocobase/app@<CREATE_APP_VERSION>`，模板改为 `--template @nocobase/app-template-hub@<HUB_TEMPLATE_VERSION>`，替换为实际发布版本。
+使用其他主数据库时，先安装驱动再配置，例如 `pnpm add @nocobase/db-postgres` 后运行 `pnpm nocobase config init --dialect postgres`。固定版本时，将创建命令中的包名改为 `@nocobase/app@<CREATE_APP_VERSION>`，模板改为 `--template @nocobase/app-template-hub@<HUB_TEMPLATE_VERSION>`，替换为实际发布版本。
 
 ### 2. 配置运行环境
 

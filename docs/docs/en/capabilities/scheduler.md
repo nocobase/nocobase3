@@ -22,7 +22,7 @@ Background tasks that do not need administrators to monitor, enable, or disable 
 The Scheduler plugin ships the `nocobase-app-plugin-scheduler` Skill. Once the plugin is enabled, the application synchronizes it into `.agents/skills/`. If the directory is missing or clearly outdated, run this from the application root:
 
 ```bash
-pnpm plugin:skills:sync
+pnpm nocobase skills sync
 ```
 
 You usually do not need to name the Skill explicitly. When a request includes scheduled execution and administrator visibility in the UI, the application Agent should discover and use it. Describe the business goal, processing rules, and results administrators need to see, for example:

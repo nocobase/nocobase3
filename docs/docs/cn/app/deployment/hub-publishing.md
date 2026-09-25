@@ -122,17 +122,17 @@ CLI 配置优先级为显式参数、进程环境、App 根目录 `.env`；此�
 **上传后单独部署：**
 
 ```bash
-pnpm nocobase app upload --json
-pnpm nocobase app deploy --release-id <RETURNED_RELEASE_ID> --wait --json
+pnpm nocobase release upload --json
+pnpm nocobase release deploy --release-id <RETURNED_RELEASE_ID> --wait --json
 ```
 
 **上传并部署，显式提供首次运行配置：**
 
 ```bash
-pnpm nocobase app upload --deploy --config ./runtime.yml --wait --json
+pnpm nocobase release upload --deploy --config ./runtime.yml --wait --json
 ```
 
-默认上传 `storage/exports/dist.tar.gz`，其他路径用 `--file`。已单独上传的 Release 使用 `app deploy` 部署；对同一包补跑 `upload --deploy` 会返回 409 `NO_DEPLOYMENT`，提示改用 `app deploy --release-id`。
+默认上传 `storage/exports/dist.tar.gz`，其他路径用 `--file`。已单独上传的 Release 使用 `release deploy` 部署；对同一包补跑 `upload --deploy` 会返回 409 `NO_DEPLOYMENT`，提示改用 `release deploy --release-id`。
 
 | 情况                                        | 行为                                                                                                            |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -141,7 +141,7 @@ pnpm nocobase app upload --deploy --config ./runtime.yml --wait --json
 | 传 `--config`                               | 替换配置文档，经既有密钥处理和 YAML 校验，不合并任意旧字段                                                      |
 | 只 upload，不带 `--deploy`，却传 `--config` | 参数错误                                                                                                        |
 | 网络重试                                    | 保持同一幂等键及请求内容，查询或复用原操作                                                                      |
-| 有意重部署相同 Release                      | 用 `app deploy` 并指定新的 `--idempotency-key`                                                                  |
+| 有意重部署相同 Release                      | 用 `release deploy` 并指定新的 `--idempotency-key`                                                              |
 
 配置文件必须为非空 UTF-8 YAML，最大 1 MiB，路径相对于 App 根目录。配置不写入 Release，不修改原始构建包。
 

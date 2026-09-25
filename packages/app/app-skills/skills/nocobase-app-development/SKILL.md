@@ -39,7 +39,7 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 ## Check the installed plugins first
 
-NocoBase packages may publish Skills under `.agents/skills/`. Current application templates run `pnpm skills:sync` automatically through `postinstall`; run it manually if install scripts were disabled or that directory is missing or stale. Confirm that the package is a direct `@nocobase/*` dependency or a registered plugin before relying on its Skill. The common capability mappings are:
+NocoBase packages may publish Skills under `.agents/skills/`. Current application templates run `pnpm nocobase skills sync` automatically through `postinstall`; run it manually if install scripts were disabled or that directory is missing or stale. Confirm that the package is a direct `@nocobase/*` dependency or a registered plugin before relying on its Skill. The common capability mappings are:
 
 | The requirement sounds like                                                                   | Read the Skill for                    |
 | --------------------------------------------------------------------------------------------- | ------------------------------------- |
@@ -59,17 +59,17 @@ For notification configuration or sending, follow the notification plugin Skill:
 
 Skills synchronization reads direct `@nocobase/*` dependencies from the application manifest and retains compatibility with explicitly registered plugins. It does not make an unregistered runtime plugin active; the composition roots remain the authority for registration and contribution order.
 
-Install plugins with `pnpm plugin:register <name>`. All application plugins belong in `dependencies`, including client-only and disabled plugins, because deployment dependencies come from that field. Plugin frontend libraries remain peers and are not automatically installed in the deployment. Re-registering migrates legacy `devDependencies` entries while preserving the declared range; verify the manifest and lockfile afterward. With an older CLI, use `pnpm add --save-prod <package>@<declared-range>` to correct the declaration; `--no-install` leaves lockfile synchronization to the caller.
+Install plugins with `pnpm nocobase plugin register <name>`. All application plugins belong in `dependencies`, including client-only and disabled plugins, because deployment dependencies come from that field. Plugin frontend libraries remain peers and are not automatically installed in the deployment. Re-registering migrates legacy `devDependencies` entries while preserving the declared range; verify the manifest and lockfile afterward. With an older CLI, use `pnpm add --save-prod <package>@<declared-range>` to correct the declaration; `--no-install` leaves lockfile synchronization to the caller.
 
-To update a registered plugin, use `pnpm plugin:update @nocobase/app-plugin-authentication` (or the short name `authentication`). Omit the name to update all registered plugins; add `--dry-run` to preview. `plugin:update` takes a positional name, not `--plugin`, and re-synchronizes Skills after a successful package update. See the Plugins section of the application's `README.MD` for version-range behavior and examples.
+To update a registered plugin, use `pnpm nocobase plugin update @nocobase/app-plugin-authentication` (or the short name `authentication`). Omit the name to update all registered plugins; add `--dry-run` to preview. `plugin update` takes a positional name, not `--plugin`, and re-synchronizes Skills after a successful package update. See the Plugins section of the application's `README.MD` for version-range behavior and examples.
 
 ## Removing a direct NocoBase package
 
-Before removing an `@nocobase/*` dependency, search the application's imports, Client/Server/CLI plugin registrations, routes, services, configuration, tests, and build scripts for the package name and the contracts it provides. Migrate or remove those references first. `package:remove` updates dependency metadata and generated Skills; it does not rewrite application code or configuration and cannot decide whether the capability is still needed.
+Before removing an `@nocobase/*` dependency, search the application's imports, Client/Server/CLI plugin registrations, routes, services, configuration, tests, and build scripts for the package name and the contracts it provides. Migrate or remove those references first. `package remove` updates dependency metadata and generated Skills; it does not rewrite application code or configuration and cannot decide whether the capability is still needed.
 
-Run `pnpm package:remove @nocobase/example`. The command uses the application's package manager to update `package.json` and the lockfile, then removes only synchronized Skills recorded as owned by that package. An `@nocobase/app-plugin-*` target delegates to the plugin unregister workflow so its Client, Server, and CLI registrations are removed together; `pnpm plugin:unregister <name>` remains available. Use `--dry-run` before a consequential removal and `--json` when structured output is needed.
+Run `pnpm nocobase package remove @nocobase/example`. The command uses the application's package manager to update `package.json` and the lockfile, then removes only synchronized Skills recorded as owned by that package. An `@nocobase/app-plugin-*` target delegates to the plugin unregister workflow so its Client, Server, and CLI registrations are removed together; `pnpm nocobase plugin unregister <name>` remains available. Use `--dry-run` before a consequential removal and `--json` when structured output is needed.
 
-If an older application has the command but not the script, use `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; on a version that already has `skills:sync`, a compatibility fallback is to remove the package with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, verify that the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing an already-absent package to `package:remove` cleans recorded historical Skill ownership without uninstalling or cleaning another package.
+After an interrupted or manual removal, verify that the manifest no longer declares the package and run a full `pnpm nocobase skills sync` to reconcile stale package-owned output. Passing an already-absent package to `package remove` cleans recorded historical Skill ownership without uninstalling or cleaning another package.
 
 ## Frontend work
 
@@ -141,7 +141,7 @@ Generated     .agents/skills/ — synchronized copies, gitignored, replaced
               .claude/skills/ — symbolic links to the above so Claude Code
               discovers them; gitignored, rewritten by the same sync
 
-Config        config.yml — written by pnpm config:init, gitignored, holds
+Config        config.yml — written by pnpm nocobase config init, gitignored, holds
               secrets; document options in config.example.yml instead
 ```
 
@@ -166,7 +166,7 @@ These cause real damage and appear in every reference:
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
 - **Tests live in `tests/` or `e2e/`,** never beside the source.
-- **Remove direct NocoBase packages with `package:remove` after reviewing their usage.** Do not hand-delete only the manifest entry or leave synchronized Skills and plugin registrations behind.
+- **Remove direct NocoBase packages with `package remove` after reviewing their usage.** Do not hand-delete only the manifest entry or leave synchronized Skills and plugin registrations behind.
 
 ## Development file watching
 
@@ -194,7 +194,7 @@ For each change, scope all verification to affected files, projects, or packages
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
 
-After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone and exits nonzero until the lists align. A client-only language is still supported at runtime and the server falls back to English; add matching server translations when server-produced text should use that language.
+After touching `client/locales/` or `server/locales/`, run `pnpm nocobase locales check`. It reports a language declared on one side alone and exits nonzero until the lists align. A client-only language is still supported at runtime and the server falls back to English; add matching server translations when server-produced text should use that language.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See [internationalization](references/i18n.md), [frontend copy](references/frontend/references/i18n.md) and [themes and tokens](references/frontend/references/theme.md).
 
@@ -202,15 +202,15 @@ Navigation groups retain their expanded or collapsed state while the navigation 
 
 ## Publish application releases
 
-This section applies to Default applications that include the `app upload` and `app deploy` CLI commands. Examples and Hub applications do not provide these publishing commands.
+This section applies to Default applications that include the `release upload` and `release deploy` CLI commands. Examples and Hub applications do not provide these publishing commands.
 
 `HUB_API_KEY` is created in Hub, not in the application: the **API Keys** page (`<HUB_URL>/api-keys`, requiring `hub.app / manage-api-keys`) binds a key to selected applications and grants **Upload release**, **Deploy release**, or both. Uploading needs `upload-release`; anything that deploys needs `deploy` as well. Bindings and permissions cannot be edited after creation, and a key never exceeds its creator's current permissions, so a key with the wrong scope is deleted and recreated. Tell the user to create the key before the first upload rather than guessing its value.
 
-Use `pnpm build --tar`, then `pnpm nocobase app upload` with `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY`. The Hub URL includes the application's mount path. Both commands read the App root `.env` with per-value precedence: command flags > terminal/CI environment > `.env`. Keep `.env` gitignored; no `.env.local` or mode-specific files are loaded. Upload and deploy with `app upload --deploy`; upload only with `app upload`. Automation belongs in the caller’s script; Hub has no deployment-mode setting. For an existing Release use `app deploy --release-id <id>`. Add `--json` in CI, check `ok` and the process exit code, and preserve the idempotency key on network retries. A fresh deployment key requests a new deployment of the same Release. Never print API keys or put them in committed configuration. See README.MD for arguments, limits, and exit codes.
+Use `pnpm build --tar`, then `pnpm nocobase release upload` with `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY`. The Hub URL includes the application's mount path. Both commands read the App root `.env` with per-value precedence: command flags > terminal/CI environment > `.env`. Keep `.env` gitignored; no `.env.local` or mode-specific files are loaded. Upload and deploy with `release upload --deploy`; upload only with `release upload`. Automation belongs in the caller’s script; Hub has no deployment-mode setting. For an existing Release use `release deploy --release-id <id>`. Add `--json` in CI, check `ok` and the process exit code, and preserve the idempotency key on network retries. A fresh deployment key requests a new deployment of the same Release. Never print API keys or put them in committed configuration. See README.MD for arguments, limits, and exit codes.
 
-Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
+Both `release deploy --release-id <id> --config ./runtime.yml` and `release upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `release upload --config` without `--deploy` is rejected. Use `release deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
 
-Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.
+Deployment commands (`release deploy` and `release upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.
 
 ## Logging and hosted applications
 

@@ -58,7 +58,7 @@ if (!clientId || !clientSecret) {
 ```
 
 Map environment variables in `env` of the section's `defineAppConfig`, relative
-to the section, and check them with `pnpm config:env`. Secrets never enter
+to the section, and check them with `pnpm nocobase config env`. Secrets never enter
 `client/` or a Vite environment variable.
 
 ### 2. Register the provider or plugin

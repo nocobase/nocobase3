@@ -43,7 +43,7 @@ export default defineAppConfig((_runtime) => ({
 }));
 ```
 
-Then grant `page:api-keys/access` to the roles that may manage keys — normally all authenticated users, since every endpoint acts only on the caller's own keys — and run `pnpm db:apply`.
+Then grant `page:api-keys/access` to the roles that may manage keys — normally all authenticated users, since every endpoint acts only on the caller's own keys — and run `pnpm nocobase db apply`.
 
 Registering the server plugin without `apiKey()` creates the table and mounts no endpoints; registering `apiKey()` without the server plugin mounts endpoints against a table that does not exist.
 

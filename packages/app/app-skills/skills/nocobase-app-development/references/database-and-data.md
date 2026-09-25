@@ -1,6 +1,6 @@
 # Database and data access
 
-This page is how an application reaches the database and where that code belongs. The API itself — Repository, QueryAdapter, transactions, naming, and the criterion for choosing between the two layers — belongs to the package that owns it: read `.agents/skills/nocobase-db/SKILL.md` sections 4 and 5, and run `pnpm skills:sync` if that file is missing. Schema changes are migrations; see [migrations and seeds](migrations.md).
+This page is how an application reaches the database and where that code belongs. The API itself — Repository, QueryAdapter, transactions, naming, and the criterion for choosing between the two layers — belongs to the package that owns it: read `.agents/skills/nocobase-db/SKILL.md` sections 4 and 5, and run `pnpm nocobase skills sync` if that file is missing. Schema changes are migrations; see [migrations and seeds](migrations.md).
 
 ## Resolving the database
 

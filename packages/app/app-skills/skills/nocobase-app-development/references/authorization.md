@@ -4,7 +4,7 @@ Use this reference when a feature distinguishes people, jobs, teams, pages, oper
 
 ## Discover the capability
 
-Inspect `package.json`, `client/plugins.ts`, `server/plugins.ts` and `server/config/authorization.ts`. Read the installed `.agents/skills/nocobase-app-plugin-authorization/SKILL.md` before implementation. If installed Skills are stale, run `pnpm skills:sync`; do not edit generated copies. Check registration separately from dependency presence.
+Inspect `package.json`, `client/plugins.ts`, `server/plugins.ts` and `server/config/authorization.ts`. Read the installed `.agents/skills/nocobase-app-plugin-authorization/SKILL.md` before implementation. If installed Skills are stale, run `pnpm nocobase skills sync`; do not edit generated copies. Check registration separately from dependency presence.
 
 Default access, sharing rules and restriction rules are optional plugins. Read their installed Skills when the business requirement calls for a common baseline, collaboration exception or record exclusion. If the corresponding Skill is absent, treat the capability as unsupported in this App and explain that it requires separate development. Do not assume its APIs, tables or seed format, or silently install/configure it. If the Skill exists, follow it to verify runtime activation and migrations. Implementation and seed details belong to that owning Skill. Do not implement replacement role tables or assume all optional plugins are present.
 

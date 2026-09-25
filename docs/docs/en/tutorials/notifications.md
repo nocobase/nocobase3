@@ -34,7 +34,7 @@ notification:
       provider: in-app
 ```
 
-Check that notification, in-app notification, and notification provider plugins are registered. Use the application's `plugin:inspect` command when needed. Restart after configuration changes and check the effective channel. Configure the channel in `config.yml`; `config.example.yml` is only a reference.
+Check that notification, in-app notification, and notification provider plugins are registered. Use the application's `plugin inspect` command when needed. Restart after configuration changes and check the effective channel. Configure the channel in `config.yml`; `config.example.yml` is only a reference.
 
 ## Connect the result workflow
 

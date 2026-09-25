@@ -22,7 +22,7 @@ Inspect `client/extensions/nocobase-file-component-ui/` before writing upload or
 
 For custom attachment lists, uploads or business associations, reuse `FilePreviewDialog` with file records and `contentUrl`; it requires no repository prop. Extend the existing UI or add the necessary content adapter rather than reimplementing format detection and dropping supported formats. A DOCX download fallback indicates a request/rendering failure or an outdated/custom component, not that the plugin lacks DOCX support. Report the actual failure and preserve its evidence.
 
-If the installed package, synchronized Skill and copied UI disagree, inspect the resolved plugin version, run `pnpm skills:sync` to refresh guidance, and reconcile the UI source separately. Skills synchronization does not upgrade Registry copies.
+If the installed package, synchronized Skill and copied UI disagree, inspect the resolved plugin version, run `pnpm nocobase skills sync` to refresh guidance, and reconcile the UI source separately. Skills synchronization does not upgrade Registry copies.
 
 ## Work incrementally
 

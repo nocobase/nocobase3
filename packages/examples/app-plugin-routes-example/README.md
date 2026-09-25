@@ -72,8 +72,8 @@ The Examples template already registers this plugin. To enable it in another
 workspace App, run from the repository root, choosing the target with `--app`:
 
 ```bash
-pnpm plugin:register @nocobase/app-plugin-routes-example --app app-template-default --dry-run --json
-pnpm plugin:register @nocobase/app-plugin-routes-example --app app-template-default
+pnpm nocobase plugin register @nocobase/app-plugin-routes-example --workspace-root . --app app-template-default --dry-run --json
+pnpm nocobase plugin register @nocobase/app-plugin-routes-example --workspace-root . --app app-template-default
 ```
 
 Registration updates the App's package dependency and adds explicit entries to
