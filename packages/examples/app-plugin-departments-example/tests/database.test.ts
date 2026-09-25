@@ -6,7 +6,10 @@ import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it } from 'vitest';
 
 import packageMetadata from '../package.json' with { type: 'json' };
-import { DEMO_ACCOUNTS } from '../server/demo.js';
+import {
+  DEMO_ACCOUNTS,
+  SEED_PERMISSION_SETS,
+} from '../database/seed-data/organization.js';
 import { createTestApp } from './helpers.js';
 
 const SEED = '202609250002_departments_example_seed_organization';
@@ -91,7 +94,7 @@ describe('organization migration', () => {
 });
 
 describe('organization seed', () => {
-  it('writes the tree, the staff set and its department assignment once, and a replay changes nothing', async () => {
+  it('writes the tree, the permission sets, their assignments and the demo accounts once, and a replay changes nothing', async () => {
     const first = await createTestApp();
     const directory = first.directory;
     const snapshot = async (app: typeof first) => {
@@ -105,16 +108,27 @@ describe('organization seed', () => {
         sets: await query
           .selectFrom('authorizationPermissionSets')
           .select(['key', 'title'])
-          .where('key', '=', 'departments-example-staff')
+          .where('key', 'like', 'departments-example-%')
+          .orderBy('key', 'asc')
           .execute(),
         assignments: await query
           .selectFrom('authorizationPermissionSetAssignments')
           .select(['permissionSetKey', 'subjectType', 'subjectId'])
-          .where('permissionSetKey', '=', 'departments-example-staff')
+          .where('permissionSetKey', 'like', 'departments-example-%')
+          .orderBy('permissionSetKey', 'asc')
+          .execute(),
+        users: await query
+          .selectFrom('user')
+          .innerJoin('account', 'account.userId', 'user.id')
+          .select(['user.id', 'user.email', 'account.providerId'])
+          .where('user.email', 'like', '%@departments.example')
+          .orderBy('user.email', 'asc')
           .execute(),
         members: await query
           .selectFrom('departmentMembers')
-          .select(['departmentId', 'userId'])
+          .innerJoin('user', 'user.id', 'departmentMembers.userId')
+          .select(['departmentId', 'email', 'primary'])
+          .orderBy('email', 'asc')
           .orderBy('departmentId', 'asc')
           .execute(),
       };
@@ -127,17 +141,54 @@ describe('organization seed', () => {
         'sales-east',
         'support',
       ]);
+      expect(seeded.sets.map((row) => row.key)).toEqual(
+        SEED_PERMISSION_SETS.map((set) => set.key).sort(),
+      );
+      const sam = seeded.users.find(
+        (row) => row.email === 'sam@departments.example',
+      );
       expect(seeded.assignments).toEqual([
+        {
+          permissionSetKey: 'departments-example-organization-viewer',
+          subjectType: 'org.department',
+          subjectId: 'sales',
+        },
         {
           permissionSetKey: 'departments-example-staff',
           subjectType: 'org.department',
           subjectId: 'hq',
         },
+        {
+          permissionSetKey: 'departments-example-whole-directory',
+          subjectType: 'user',
+          subjectId: sam?.id,
+        },
       ]);
-      // The demo accounts are created once at start, each with its membership.
-      expect(seeded.members.map((row) => row.departmentId)).toEqual(
-        DEMO_ACCOUNTS.map((account) => account.departmentId).sort(),
+      // Each demo account is a credential account with its memberships.
+      expect(seeded.users.map((row) => [row.email, row.providerId])).toEqual(
+        DEMO_ACCOUNTS.map((account) => [account.email, 'credential']).sort(),
       );
+      expect(
+        seeded.members.map((row) => [
+          row.email,
+          row.departmentId,
+          Boolean(row.primary),
+        ]),
+      ).toEqual(
+        DEMO_ACCOUNTS.flatMap((account) =>
+          account.memberships.map((membership) => [
+            account.email,
+            membership.departmentId,
+            membership.primary,
+          ]),
+        ).sort((a, b) =>
+          `${String(a[0])}/${String(a[1])}`.localeCompare(
+            `${String(b[0])}/${String(b[1])}`,
+          ),
+        ),
+      );
+      // The seeded password signs in.
+      await first.signIn('dana@departments.example', 'departments-demo');
 
       // An administrator renames a department; a deliberate replay must keep that.
       await first.organization.updateDepartment('sales', {
@@ -162,6 +213,7 @@ describe('organization seed', () => {
         expect(history).toHaveLength(1);
         expect(replayed.sets).toEqual(seeded.sets);
         expect(replayed.assignments).toEqual(seeded.assignments);
+        expect(replayed.users).toEqual(seeded.users);
         expect(replayed.members).toEqual(seeded.members);
         expect(replayed.departments).toEqual(
           seeded.departments.map((row) =>

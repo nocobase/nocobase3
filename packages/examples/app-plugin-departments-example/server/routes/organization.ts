@@ -12,7 +12,6 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import { databaseManagerToken } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -141,9 +140,8 @@ export function createOrganizationRoutes(
 
   const routes = new Hono<AuthorizationEnv>();
   routes.use('*', auth.required(), authz.middleware());
+  // A denied `require` answers 403 on its own; only this plugin's errors need mapping.
   routes.onError((error, c) => {
-    if (error instanceof AuthorizationDeniedError)
-      return c.json({ code: 'FORBIDDEN', message: 'Forbidden' }, 403);
     if (error instanceof InputError)
       return c.json({ code: 'INVALID_INPUT', message: error.message }, 400);
     if (error instanceof OrganizationError)
@@ -277,9 +275,7 @@ export function createOrganizationRoutes(
     const policy = decision.conditions?.database?.departments;
     if (decision.effect === 'deny' || !policy)
       return c.json({ code: 'FORBIDDEN', message: 'Forbidden' }, 403);
-    // The caller holds `view`, but its data scope selects nothing: a record access that answered `false`, such as
-    // a user in no department. A Repository refuses to read under that policy, so answer the empty list here.
-    if (policy.read === false) return c.json({ data: [] });
+    // A data scope that selects nothing, such as a user in no department, binds a policy matching no rows.
     const rows = await database
       .repository('departments')
       .withPolicy(policy)

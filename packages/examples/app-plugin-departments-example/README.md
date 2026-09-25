@@ -9,18 +9,34 @@ It follows the application development Skill's `organization.md` and is a runnab
 | Part                                                                                                     | Where                                                 |
 | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `departments` and `departmentMembers`                                                                    | `database/migrations/`                                |
-| Demo tree and the staff set assigned to Headquarters                                                     | `database/seeds/`, built from `database/seed-data/`   |
+| Demo tree, permission sets, assignments and accounts                                                     | `database/seeds/`, built from `database/seed-data/`   |
 | `OrganizationService` and its token                                                                      | `server/services/organization.ts`, `server/tokens.ts` |
 | `org.department` subject type, settings item, directory composite and `org.ownDepartments` record access | `server/authorization.ts`, `server/resources.ts`      |
 | Organisation API under `/api/departments-example`                                                        | `server/routes/organization.ts`                       |
-| Demo accounts, created once at start                                                                     | `server/demo.ts`                                      |
 | Settings → Organization with a department child route, and the Department directory page                 | `client/routes.ts`, `client/pages/`                   |
 
 Every organisation endpoint authenticates and checks the `organization` settings item: `read` for lists and details, `update` for writes. Membership writes notify each affected user after the transaction commits, so their clients reload their permission snapshot. The directory endpoint authorizes the `org.directory` composite's `view` action once and binds its `departments` policy to the query.
 
 ## Demo data
 
-The seed creates Headquarters with Sales, East sales and Support below it, the `departments-example-staff` permission set (the directory page plus `view` on the departments the user belongs to) and its assignment to Headquarters. At start the plugin creates three demo accounts, each only if it does not exist yet, with the password `departments-demo`: `dana@departments.example` in Headquarters, `sam@departments.example` in East sales and `sue@departments.example` in Support.
+The seed creates Headquarters with Sales and Support below it and East sales below Sales, then three permission sets:
+
+| Permission set                            | Grants                                                           | Assigned to   |
+| ----------------------------------------- | ---------------------------------------------------------------- | ------------- |
+| `departments-example-staff`               | The directory page, and `view` on the departments one belongs to | Headquarters  |
+| `departments-example-organization-viewer` | `read` on the Organization settings                              | Sales         |
+| `departments-example-whole-directory`     | The directory page, and `view` on every department               | Sam, directly |
+
+It also writes four demo accounts straight into the authentication plugin's `user` and `account` tables, all with the password `departments-demo`. Every row is written only when it is missing, so an account or assignment an administrator changed is left alone on a replay.
+
+| Account                    | Member of                   | Directory shows              | Organization settings | Why                                                                                                                            |
+| -------------------------- | --------------------------- | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `dana@departments.example` | Headquarters                | Headquarters                 | 403                   | The staff set on the root department reaches its own members; her departments are Headquarters alone.                          |
+| `sam@departments.example`  | East sales                  | All four departments         | Read                  | Staff comes from Headquarters two levels up and the viewer set from Sales one level up; the whole directory is his direct set. |
+| `sue@departments.example`  | Support                     | Headquarters, Support        | 403                   | Support inherits only from Headquarters; the Sales grant does not reach it.                                                    |
+| `li@departments.example`   | Sales (primary) and Support | Headquarters, Sales, Support | Read                  | Memberships add up: both departments and their ancestors are hers, and Sales adds the viewer set.                              |
+
+Revoking the staff set from Headquarters closes the directory for Dana, Sue and Li, while Sam keeps it through his direct assignment. A user in no department who holds the directory set gets an empty list, not an error.
 
 ## Verification
 

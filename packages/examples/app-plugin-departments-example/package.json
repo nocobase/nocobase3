@@ -67,6 +67,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "better-auth": "catalog:",
     "hono": "catalog:"
   },
   "peerDependencies": {
