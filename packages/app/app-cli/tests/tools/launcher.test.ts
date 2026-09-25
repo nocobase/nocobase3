@@ -14,7 +14,7 @@ import { expect, it } from 'vitest';
 import { runAppTool } from '../../src/tools/run-tool.ts';
 
 it('uses the supplied app root rather than the tooling package or working directory', async () => {
-  const rootDir = await mkdtemp(path.join(tmpdir(), 'app-tools-root-'));
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'app-cli-root-'));
   try {
     await mkdir(path.join(rootDir, 'dist/server'), { recursive: true });
     await writeFile(
@@ -34,7 +34,7 @@ it('uses the supplied app root rather than the tooling package or working direct
 });
 
 it('fails with a build hint when dist/server/standalone.js is missing', async () => {
-  const rootDir = await mkdtemp(path.join(tmpdir(), 'app-tools-no-dist-'));
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'app-cli-no-dist-'));
   try {
     // `runAppTool` inherits this process's stderr, so the exit code comes from it and the hint is read back by
     // running the same entry with a pipe.

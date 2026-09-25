@@ -6,7 +6,7 @@ This package ships only guidance and reference examples. It has no Client or Ser
 
 ## Use in an application
 
-Install this package as a direct development dependency of the target App using its package manager, then run `pnpm nocobase skills:sync --json` from that App. In this source workspace, use `workspace:*` for the dependency. Skill synchronization discovers direct `@nocobase/*` dependencies; no Client or Server registration is required for this package.
+Install this package as a direct development dependency of the target App using its package manager, then run `pnpm nocobase skills sync --json` from that App. In this source workspace, use `workspace:*` for the dependency. Skill synchronization discovers direct `@nocobase/*` dependencies; no Client or Server registration is required for this package.
 
 Ask the App Agent, for example: “Implement invoice template printing from a DOCX file, including line items and PDF download.” The [Template Print Skill](skills/nocobase-app-plugin-template-print/SKILL.md) guides scope, dependencies, data permissions, rendering, and verification. Edit the canonical files here; the App's `.agents/skills/` copy is generated local output.
 

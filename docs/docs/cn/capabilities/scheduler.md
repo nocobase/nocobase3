@@ -82,8 +82,8 @@ Agent 应报告它选择的执行模型、稳定 schedule key、时区、目标�
 1. **确认是否需要 Scheduler。** 关键判断是管理员是否需要通过 UI 查看、启停和追踪执行记录。没有这个要求时，普通 Queue 或 Service 更合适。
 2. **根据业务选择执行任务类型。** 需要多个流程步骤、节点级观测、人工介入或较长时间运行的任务，使用工作流类 job；单一动作、无需节点级观测和人工介入的任务，使用普通 job。是否使用工作流应由业务场景决定，而不是由任务是否已经存在工作流来决定。
 3. **定义任务。** 在应用或业务插件 Provider 中调用 `schedulerServiceToken.defineSchedule(definition)`，使用应用内全局唯一且稳定的 `key`，建议使用业务命名空间，例如 `sales.daily-report`。
-4. **同步并验证。** 运行 `pnpm nocobase schedule sync --json`，用管理员账号进入“设置 → 自动化 → 定时任务”确认任务、下次运行时间和执行记录。
-5. **发布时 finalize。** 生产部署确认完整插件清单已加载后，每个应用运行一次 `pnpm nocobase schedule sync --finalize --json`，软停用代码中已移除的定义。
+4. **同步并验证。** 运行 `pnpm nocobase scheduler sync --json`，用管理员账号进入“设置 → 自动化 → 定时任务”确认任务、下次运行时间和执行记录。
+5. **发布时 finalize。** 生产部署确认完整插件清单已加载后，每个应用运行一次 `pnpm nocobase scheduler sync --finalize --json`，软停用代码中已移除的定义。
 
 ## 常用服务 API
 
@@ -210,7 +210,7 @@ const handle = scheduler.registerTarget({
 新增或修改定义后，在目标应用根目录运行：
 
 ```bash
-pnpm nocobase schedule sync --json
+pnpm nocobase scheduler sync --json
 ```
 
 普通同步会加载完整应用、校验已注册目标、非破坏性 upsert 定义，并保留管理员在 UI 上做过的启停状态。应用正常启动时也会自动执行一次非破坏性同步，然后启动 Scheduler 自己的 `schedule` 队列 worker。
@@ -218,7 +218,7 @@ pnpm nocobase schedule sync --json
 生产部署确认所有插件都已加载后，每个应用运行一次：
 
 ```bash
-pnpm nocobase schedule sync --finalize --json
+pnpm nocobase scheduler sync --finalize --json
 ```
 
 `--finalize` 会把代码清单中已不存在的定义软停用，并保留历史记录。不要在只加载了部分插件的进程里 finalize。

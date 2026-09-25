@@ -16,14 +16,14 @@ Install the package from the target application's root directory, then synchroni
 
 ```bash
 pnpm add -D @nocobase/app-plugin-template-print
-pnpm nocobase skills:sync --package @nocobase/app-plugin-template-print --json
+pnpm nocobase skills sync --package @nocobase/app-plugin-template-print --json
 ```
 
 When developing in a NocoBase 3 source workspace that already contains the plugin, use a workspace dependency from the target application's directory:
 
 ```bash
 pnpm add -D '@nocobase/app-plugin-template-print@workspace:*'
-pnpm nocobase skills:sync --package @nocobase/app-plugin-template-print --json
+pnpm nocobase skills sync --package @nocobase/app-plugin-template-print --json
 ```
 
 A version not yet published to your registry requires the workspace package or a locally packed archive. `workspace:*` only works within the same workspace; it cannot download an npm package into a standalone application.

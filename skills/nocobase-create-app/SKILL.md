@@ -1,6 +1,6 @@
 ---
 name: nocobase-create-app
-description: Create a new NocoBase 3 application with `pnpm create @nocobase/app`, configure it with `pnpm config:init`, `config:set` and `config:check`, start it, and hand over to the application's own guidance. Use when the user asks to install, create, set up or try NocoBase and the working directory holds no NocoBase application yet. Not for NocoBase 2 or the `nb` CLI, and not for work inside an existing application, which carries its own AGENTS.md and Skills.
+description: Create a new NocoBase 3 application with `pnpm create @nocobase/app`, configure it with `pnpm nocobase config init`, `config set` and `config check`, start it, and hand over to the application's own guidance. Use when the user asks to install, create, set up or try NocoBase and the working directory holds no NocoBase application yet. Not for NocoBase 2 or the `nb` CLI, and not for work inside an existing application, which carries its own AGENTS.md and Skills.
 ---
 
 # Create a NocoBase 3 application
@@ -49,29 +49,29 @@ Never delete the directory to retry.
 
 Work from the application directory from here on. Read its `AGENTS.md` now: it appeared after this session started, so it may not be loaded.
 
-The result's `nextCommands` configure the application for SQLite and then start it. When a retried install left you without them, they are `pnpm config:init`, `pnpm config:check`, then `pnpm dev`. Unless the user has already named a database, ask which one they want before running them, and adapt them as the steps below describe: a database other than SQLite needs its driver, a `--dialect`, and a `config:set` between `config:init` and `config:check`. Pass `--json` to every `pnpm config:*` command and act on the result, not on the exit code alone.
+The result's `nextCommands` configure the application for SQLite and then start it. When a retried install left you without them, they are `pnpm nocobase config init`, `pnpm nocobase config check`, then `pnpm dev`. Unless the user has already named a database, ask which one they want before running them, and adapt them as the steps below describe: a database other than SQLite needs its driver, a `--dialect`, and a `config set` between `config init` and `config check`. Pass `--json` to every `pnpm nocobase config` command and act on the result, not on the exit code alone.
 
 1. **Choose the database.** Use the one the user named, or ask. SQLite needs nothing installed: the template depends on its driver. For any other database, install its driver first, for example `pnpm add @nocobase/db-postgres`.
-2. **`pnpm config:init --dialect <dialect> --json`** writes `config.yml` from the application's `config.example.yml`, with generated secrets.
-   - It installs nothing. When the driver is missing it writes nothing and returns a `suggestedCommand`; run that, then run `config:init` again.
+2. **`pnpm nocobase config init --dialect <dialect> --json`** writes `config.yml` from the application's `config.example.yml`, with generated secrets.
+   - It installs nothing. When the driver is missing it writes nothing and returns a `suggestedCommand`; run that, then run `config init` again.
    - An application that is already configured is reported `unchanged`, so re-running the sequence is safe.
    - Its result lists `requiredSettings`: the connection settings still at a placeholder.
-3. **`pnpm config:set key=value … --json`** sets each of the `requiredSettings`, for example `database.connections.main.host=db.internal`. A password is always set from an environment variable; see Secrets below.
-4. **`pnpm config:check --json`** must pass before the application is started. It loads the configuration without starting the application and connects to the database. Each finding names its key and, where there is one, a `fix` to run; apply the fixes and run it again.
+3. **`pnpm nocobase config set key=value … --json`** sets each of the `requiredSettings`, for example `database.connections.main.host=db.internal`. A password is always set from an environment variable; see Secrets below.
+4. **`pnpm nocobase config check --json`** must pass before the application is started. It loads the configuration without starting the application and connects to the database. Each finding names its key and, where there is one, a `fix` to run; apply the fixes and run it again.
 
 For the details of a particular database, read `.agents/skills/nocobase-app-development/references/database-connections.md` in the application.
 
-If the application has no `config:*` scripts in its `package.json`, it predates these commands: follow its `AGENTS.md` instead of this section.
+If `pnpm nocobase config init --help` reports that the command does not exist, the application predates these commands: follow its `AGENTS.md` instead of this section.
 
 ## Start
 
-The last of the `nextCommands`, `pnpm dev`, does not exit. Run it in the background and wait for the URL it prints: it prints a `Local:` line only once the application is ready, and the URL includes the application's path, such as `/main/`. Request that exact URL, for example with `curl -I`, expecting a successful response before reporting success. It refuses to start an application that is not configured; run `pnpm config:check --json` and follow its fixes.
+The last of the `nextCommands`, `pnpm dev`, does not exit. Run it in the background and wait for the URL it prints: it prints a `Local:` line only once the application is ready, and the URL includes the application's path, such as `/main/`. Request that exact URL, for example with `curl -I`, expecting a successful response before reporting success. It refuses to start an application that is not configured; run `pnpm nocobase config check --json` and follow its fixes.
 
 ## Secrets
 
-- Never ask for a password in the conversation, and never put one on a command line. Ask the user to set it in an environment variable, then run `pnpm config:set --from-env database.connections.main.password=<VARIABLE> --json`.
+- Never ask for a password in the conversation, and never put one on a command line. Ask the user to set it in an environment variable, then run `pnpm nocobase config set --from-env database.connections.main.password=<VARIABLE> --json`.
 - Never print `config.yml` or any secret it contains.
-- Do not pass `--force`, delete `config.yml` or drop a database to make a step pass. `config:init --force` replaces an existing configuration and is only for when the user asks for exactly that.
+- Do not pass `--force`, delete `config.yml` or drop a database to make a step pass. `config init --force` replaces an existing configuration and is only for when the user asks for exactly that.
 
 ## Finish
 
@@ -98,7 +98,7 @@ If the Skills are not loaded but the user wants to keep working in this session 
 | `@nocobase/...` not found (404) in the application   | Its `.npmrc` lacks `@nocobase:registry=https://npm.nocobase.ai/`. Add that line to the project's `.npmrc`.   |
 | No version matches, or the newest one is ignored     | Set `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` for the command.                                                     |
 | `Could not locate the bindings file`                 | Install scripts were disabled (`ignore-scripts=true`). Run `pnpm rebuild better-sqlite3` in the application. |
-| A warning that the Skills could not be synchronized  | Run `pnpm skills:sync` in the application.                                                                   |
-| `pnpm dev` or `pnpm start` says it is not configured | Run `pnpm config:init --json`, then `pnpm config:check --json`, and follow the result.                       |
+| A warning that the Skills could not be synchronized  | Run `pnpm nocobase skills sync` in the application.                                                          |
+| `pnpm dev` or `pnpm start` says it is not configured | Run `pnpm nocobase config init --json`, then `pnpm nocobase config check --json`, and follow the result.     |
 
 The full guide: https://github.com/nocobase/nocobase3/blob/develop/docs/docs/en/get-started/create-app-with-agent.md
