@@ -103,12 +103,8 @@ export default class PluginUnregister extends Command {
       await this.runUnsafe();
     } catch (error) {
       if (!this.argv.includes('--json')) throw error;
-      this.logToStderr(
-        JSON.stringify(
-          pluginJsonFailure(this.operation, classifyPluginError(error)),
-          null,
-          2,
-        ),
+      this.logJson(
+        pluginJsonFailure(this.operation, classifyPluginError(error)),
       );
       process.exitCode = 1;
     }

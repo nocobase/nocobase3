@@ -71,8 +71,12 @@ describe('command tree', () => {
     }
   });
 
-  it('gives every package command at least one example', () => {
-    for (const id of PACKAGE_COMMAND_IDS) {
+  it('gives every package and release command at least one example', () => {
+    for (const id of [
+      ...PACKAGE_COMMAND_IDS,
+      'release:deploy',
+      'release:upload',
+    ]) {
       const command = config.findCommand(id, { must: true });
       expect(command.examples?.length, `${id} has no examples`).toBeGreaterThan(
         0,

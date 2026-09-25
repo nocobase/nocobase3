@@ -39,7 +39,7 @@ describe('upload deployment retries without waiting', () => {
     async (status) => {
       const fetcher = mockRetry(status);
       await expect(
-        publishToHub('upload', options, root, env),
+        publishToHub('upload', options, root, env, root),
       ).rejects.toMatchObject({
         code: 'DEPLOYMENT_FAILED',
         exitCode: 1,
@@ -55,7 +55,7 @@ describe('upload deployment retries without waiting', () => {
     async (status) => {
       const fetcher = mockRetry(status);
       await expect(
-        publishToHub('upload', options, root, env),
+        publishToHub('upload', options, root, env, root),
       ).resolves.toMatchObject({
         reused: true,
         operationId: 'op-1',
@@ -69,7 +69,7 @@ describe('upload deployment retries without waiting', () => {
     async (status) => {
       mockRetry(status);
       await expect(
-        publishToHub('upload', options, root, env),
+        publishToHub('upload', options, root, env, root),
       ).rejects.toMatchObject({
         code: 'RESULT_UNKNOWN',
         exitCode: 3,
@@ -87,7 +87,7 @@ describe('upload deployment retries without waiting', () => {
       )
       .mockRejectedValueOnce(new Error('Disconnected'));
     await expect(
-      publishToHub('upload', options, root, env),
+      publishToHub('upload', options, root, env, root),
     ).rejects.toMatchObject({
       code: 'RESULT_UNKNOWN',
       exitCode: 3,
@@ -105,7 +105,7 @@ describe('upload deployment retries without waiting', () => {
         }),
       );
       vi.stubGlobal('fetch', fetcher);
-      await publishToHub('upload', { ...options, deploy }, root, env);
+      await publishToHub('upload', { ...options, deploy }, root, env, root);
       expect(fetcher).toHaveBeenCalledTimes(1);
     },
   );

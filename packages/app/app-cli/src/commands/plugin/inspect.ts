@@ -104,12 +104,8 @@ export default class PluginInspect extends Command {
       }
     } catch (error) {
       if (!this.argv.includes('--json')) throw error;
-      this.logToStderr(
-        JSON.stringify(
-          pluginJsonFailure('plugin:inspect', classifyPluginError(error)),
-          null,
-          2,
-        ),
+      this.logJson(
+        pluginJsonFailure('plugin:inspect', classifyPluginError(error)),
       );
       process.exitCode = 1;
     }

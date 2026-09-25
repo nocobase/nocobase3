@@ -59,6 +59,7 @@ describe.each([undefined, 'runtime.yml'])(
           { file: 'artifact.tar.gz', deploy: true, wait: false, config },
           root,
           env,
+          root,
         ),
       ).rejects.toMatchObject({ code: 'RESULT_UNKNOWN', exitCode: 3 });
       for (const stream of streams()) expect(stream.closed).toBe(true);
@@ -87,6 +88,7 @@ describe.each([undefined, 'runtime.yml'])(
           { file: 'artifact.tar.gz', deploy: true, wait: false, config },
           root,
           env,
+          root,
         );
 
         if (outcome === 'accepted') {

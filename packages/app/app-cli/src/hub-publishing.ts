@@ -29,12 +29,21 @@ export class PublishingError extends Error {
   }
 }
 
-/** HTTP-only tooling. It never initializes the application or reads Hub storage. */
+/** The archive `nocobase build --tar` writes, relative to the App root. */
+export const DEFAULT_ARTIFACT: string = 'storage/exports/dist.tar.gz';
+
+/**
+ * HTTP-only tooling. It never initializes the application or reads Hub storage.
+ *
+ * `root` is the App root: its `.env` is read, and the default artifact is found there. A path the caller passes in
+ * `file` or `config` resolves from `cwd` instead, as any command-line path does.
+ */
 export async function publishToHub(
   operation: 'upload' | 'deploy',
   options: PublishingOptions,
   root: string,
   env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
 ): Promise<Record<string, unknown>> {
   // Parse locally so application configuration never mutates the CLI process environment.
   let fileEnv: NodeJS.ProcessEnv = {};
@@ -119,7 +128,7 @@ export async function publishToHub(
   if (options.config !== undefined) {
     try {
       if (!options.config.trim()) throw new Error('Empty path');
-      const filename = path.resolve(root, options.config);
+      const filename = path.resolve(cwd, options.config);
       const info = await stat(filename);
       if (!info.isFile() || info.size < 1 || info.size > 1024 * 1024)
         throw new Error('Invalid size');
@@ -194,10 +203,10 @@ export async function publishToHub(
   };
   let result: Record<string, unknown>;
   if (operation === 'upload') {
-    const file = path.resolve(
-      root,
-      options.file ?? 'storage/exports/dist.tar.gz',
-    );
+    const file =
+      options.file === undefined
+        ? path.resolve(root, DEFAULT_ARTIFACT)
+        : path.resolve(cwd, options.file);
     let size: number;
     let checksum: string;
     try {
@@ -212,7 +221,7 @@ export async function publishToHub(
     } catch {
       throw new PublishingError(
         'INVALID_ARTIFACT',
-        'Artifact must be a readable file between 1 byte and 256 MiB. Run pnpm build --tar first.',
+        'Artifact must be a readable file between 1 byte and 256 MiB. Run pnpm build --tar first, or pass --file.',
         2,
       );
     }
