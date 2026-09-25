@@ -1,10 +1,14 @@
-import { useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient } from '@nocobase/app-client';
 import { useMemo } from 'react';
+
+/** Plain text, or the translation descriptor a seeded department stores. */
+export type DepartmentTitle = string | { key: string; ns: string };
 
 export interface Department {
   readonly id: string;
-  readonly title: string;
+  readonly title: DepartmentTitle;
   readonly parentId: string | null;
+  readonly region: string | null;
   readonly active: boolean;
   readonly sortOrder: number;
 }
@@ -22,20 +26,27 @@ export interface UserOption {
   readonly description?: string;
 }
 
-/** What the tree page hands its department child route through the outlet. */
-export interface OrganizationOutletContext {
+export interface DepartmentChanges {
+  readonly title?: string;
+  readonly parentId?: string | null;
+  readonly region?: string | null;
+}
+
+/** What the page hands its department child route through the outlet. */
+export interface DepartmentsOutletContext {
   readonly departments: readonly Department[];
   readonly canUpdate: boolean;
   /** Reloads the tree after a child route changed it. */
   readonly reload: () => void;
 }
 
-export interface OrganizationApi {
+export interface DepartmentsApi {
   listDepartments(signal?: AbortSignal): Promise<readonly Department[]>;
   createDepartment(input: {
     title: string;
     parentId?: string;
   }): Promise<Department>;
+  updateDepartment(id: string, changes: DepartmentChanges): Promise<Department>;
   setActive(id: string, active: boolean): Promise<void>;
   listMembers(
     id: string,
@@ -56,9 +67,28 @@ function department(id: string): string {
   return `${BASE}/departments/${encodeURIComponent(id)}`;
 }
 
-export function useOrganizationApi(): OrganizationApi {
+/** The `errors.*` key describing a failed request, from the code the server answered. */
+export function errorKey(error: unknown): string {
+  if (!(error instanceof ApiClientError)) return 'errors.requestFailed';
+  if (error.status === 403) return 'errors.FORBIDDEN';
+  const code = error.code;
+  return code &&
+    [
+      'DEPARTMENT_NOT_FOUND',
+      'DEPARTMENT_EXISTS',
+      'PARENT_NOT_FOUND',
+      'PARENT_CYCLE',
+      'USER_NOT_FOUND',
+      'MEMBER_NOT_FOUND',
+      'INVALID_INPUT',
+    ].includes(code)
+    ? `errors.${code}`
+    : 'errors.requestFailed';
+}
+
+export function useDepartmentsApi(): DepartmentsApi {
   const api = useApiClient();
-  return useMemo<OrganizationApi>(
+  return useMemo<DepartmentsApi>(
     () => ({
       async listDepartments(signal) {
         const body = await api.request<{ data: Department[] }>({
@@ -72,6 +102,14 @@ export function useOrganizationApi(): OrganizationApi {
           path: `${BASE}/departments`,
           method: 'POST',
           json: input,
+        });
+        return body.data;
+      },
+      async updateDepartment(id, changes) {
+        const body = await api.request<{ data: Department }>({
+          path: department(id),
+          method: 'PATCH',
+          json: changes,
         });
         return body.data;
       },

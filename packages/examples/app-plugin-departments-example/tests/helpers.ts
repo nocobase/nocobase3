@@ -7,6 +7,13 @@ import authorization, {
   authorizationToken,
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization/server';
+import authorizationExample from '@nocobase/app-plugin-authorization-example/server';
+import defaultAccessPlugin, {
+  defaultAccess,
+} from '@nocobase/app-plugin-authz-default-access/server';
+import restrictionRulesPlugin, {
+  restrictionRules,
+} from '@nocobase/app-plugin-authz-restriction-rules/server';
 import sharingRulesPlugin, {
   sharingRules,
 } from '@nocobase/app-plugin-authz-sharing-rules/server';
@@ -38,12 +45,7 @@ import {
   type PermissionSet,
 } from '@nocobase/authorization/permission-sets';
 
-import departments, {
-  DIRECTORY_PAGE,
-  directory,
-  ORGANIZATION_SETTINGS,
-  OWN_DEPARTMENTS,
-} from '../server/index.js';
+import departments, { DEPARTMENTS_SETTINGS } from '../server/index.js';
 import {
   organizationServiceToken,
   type OrganizationService,
@@ -84,8 +86,9 @@ function cookieOf(response: Response): string {
 }
 
 /**
- * A real application: authentication, authorization with the sharing-rules factory, and this plugin, on a fresh
- * SQLite file. Startup runs every plugin's migrations and seeds, exactly as an installing application does.
+ * A real application: authentication, authorization with the three rule plugins, the authorization example this
+ * plugin builds on, and this plugin, on a fresh SQLite file. Startup runs every plugin's migrations and seeds,
+ * exactly as an installing application does.
  */
 export async function createTestApp(
   options: { directory?: string } = {},
@@ -109,7 +112,7 @@ export async function createTestApp(
     },
     authorization: {
       permissionSets: { rootSet: 'root', defaultSet: 'member' },
-      plugins: [sharingRules()],
+      plugins: [defaultAccess(), sharingRules(), restrictionRules()],
     },
     caching: createDefaultCachingConfig(),
     database: {
@@ -150,7 +153,10 @@ export async function createTestApp(
       defineServerPlugins([
         authentication,
         authorization,
+        defaultAccessPlugin,
         sharingRulesPlugin,
+        restrictionRulesPlugin,
+        authorizationExample,
         departments,
       ] as readonly AppServerPlugin[]),
     ),
@@ -220,51 +226,67 @@ export async function createTestApp(
   };
 }
 
-/** A permission set that opens the directory page and views departments through `scope`. */
-export function directorySet(
-  key: string,
-  scope: string = OWN_DEPARTMENTS,
-): PermissionSet {
-  return definePermissionSet(key)
-    .grant({
-      resource: { type: 'page', id: DIRECTORY_PAGE },
-      actions: [{ action: 'access' }],
-    })
-    .grant(directory.reference().grant({ view: { departments: scope } }))
-    .build();
-}
+/** The authorization example's sets this plugin assigns. */
+export const SALES_SETS = {
+  assistant: 'example-sales-assistant',
+  engineer: 'example-sales-engineer',
+  manager: 'example-sales-manager',
+  delivery: 'example-sales-delivery',
+} as const;
 
-/** A permission set holding the organisation settings item with the given actions. */
-export function organizationSettingsSet(
+/** A permission set holding the Departments settings item with the given actions. */
+export function departmentsSettingsSet(
   authz: AppAuthorization,
   key: string,
   actions: readonly ('read' | 'update')[],
 ): PermissionSet {
   return definePermissionSet(key)
-    .grant(authz.settings.grant(ORGANIZATION_SETTINGS, actions))
+    .grant(authz.settings.grant(DEPARTMENTS_SETTINGS, actions))
     .build();
 }
 
-/** Creates departments in order; each entry is `[id, parentId]`, titled after its id. */
+/** Creates departments in order; each entry is `[id, parentId, region?]`, titled after its id. */
 export async function createTree(
   organization: OrganizationService,
-  entries: readonly (readonly [string, string | null])[],
+  entries: readonly (readonly [string, string | null, string?])[],
 ): Promise<void> {
-  for (const [id, parentId] of entries)
-    await organization.createDepartment({ id, title: `Dept ${id}`, parentId });
+  for (const [id, parentId, region] of entries)
+    await organization.createDepartment({
+      id,
+      title: `Dept ${id}`,
+      parentId,
+      ...(region === undefined ? {} : { region }),
+    });
 }
 
-/** What the directory endpoint answers for a session: its status and the department ids it lists. */
-export async function readDirectory(
+export type SalesList = 'projects' | 'quotes' | 'orders';
+
+/** What a sales list of the authorization example answers a session: its status and the record ids it lists. */
+export async function readSales(
   test: TestApp,
   cookie: string,
+  list: SalesList = 'projects',
 ): Promise<{ status: number; ids: string[] }> {
   const response = await test.request(
     'GET',
-    '/api/departments-example/directory',
+    `/api/authorization-example/sales/${list}`,
     { cookie },
   );
   if (response.status !== 200) return { status: response.status, ids: [] };
-  const body = (await response.json()) as { data: { id: string }[] };
-  return { status: 200, ids: body.data.map((row) => row.id).sort() };
+  const body = (await response.json()) as { data: { items: { id: string }[] } };
+  return { status: 200, ids: body.data.items.map((row) => row.id).sort() };
+}
+
+/** The sales region the authorization example reads for a user, or `undefined` when it has none. */
+export async function salesRegion(
+  test: TestApp,
+  userId: string,
+): Promise<string | undefined> {
+  const row = await test.database
+    .connection()
+    .query.selectFrom('authorizationExampleSalesMembers')
+    .select('region')
+    .where('id', '=', userId)
+    .executeTakeFirst();
+  return row ? String(row.region) : undefined;
 }

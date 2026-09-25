@@ -9,6 +9,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.primary('id');
       collection.string('title', { length: 255, nullable: false });
       collection.string('parentId', { length: 64, nullable: true });
+      collection.string('region', { length: 64, nullable: true });
       collection.boolean('active', { nullable: false, defaultValue: true });
       collection.integer('sortOrder', { nullable: false, defaultValue: 0 });
       collection.index('parentId');

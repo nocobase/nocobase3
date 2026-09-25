@@ -1,11 +1,9 @@
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
-import type {
-  DatabaseConnection,
-  DatabaseManager,
-  FilterBuilder,
-  FilterNode,
-} from '@nocobase/db';
+import type { AuthorizationTitle } from '@nocobase/authorization/core';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 
+import { label, SALES_MEMBERS } from '../resources.js';
+import { readTitle, titleTexts } from '../titles.js';
 import {
   OrganizationError,
   type AddMemberInput,
@@ -27,8 +25,9 @@ export interface OrganizationServiceDependencies {
 
 interface TreeNode {
   readonly id: string;
-  readonly title: string;
+  readonly title: AuthorizationTitle;
   readonly parentId: string | null;
+  readonly region: string | null;
   readonly active: boolean;
   readonly sortOrder: number;
 }
@@ -52,20 +51,27 @@ function toBoolean(value: unknown): boolean {
 function toNode(row: Record<string, unknown>): TreeNode {
   return {
     id: text(row.id),
-    title: text(row.title),
+    title: readTitle(text(row.title)),
     parentId:
       row.parentId === null || row.parentId === undefined
         ? null
         : text(row.parentId),
+    region:
+      row.region === null || row.region === undefined ? null : text(row.region),
     active: toBoolean(row.active),
     sortOrder: Number(row.sortOrder ?? 0),
   };
 }
 
+/** The English text of a title, which orders departments that share a sort order. */
+function sortText(title: AuthorizationTitle): string {
+  return titleTexts(title)[0] ?? '';
+}
+
 function compareNodes(left: TreeNode, right: TreeNode): number {
   return (
     left.sortOrder - right.sortOrder ||
-    left.title.localeCompare(right.title) ||
+    sortText(left.title).localeCompare(sortText(right.title)) ||
     left.id.localeCompare(right.id)
   );
 }
@@ -116,16 +122,6 @@ function subtreeOf(tree: Tree, id: string): TreeNode[] {
   return result;
 }
 
-function pathOf(tree: Tree, id: string): string | undefined {
-  const chain = chainOf(tree, id);
-  if (!chain || chain.length < 2) return undefined;
-  return chain
-    .slice(1)
-    .reverse()
-    .map((node) => node.title)
-    .join(' / ');
-}
-
 function validatePage(query: OrganizationPageQuery): void {
   if (
     !Number.isInteger(query.page) ||
@@ -147,6 +143,44 @@ function normalizeTitle(title: unknown): string {
   return title.trim();
 }
 
+function normalizeRegion(region: unknown): string | null {
+  if (region === null) return null;
+  if (typeof region !== 'string' || !region.trim() || region.trim().length > 64)
+    throw new OrganizationError(
+      'INVALID_INPUT',
+      'A region is null or 1 to 64 characters.',
+    );
+  return region.trim();
+}
+
+/**
+ * The region the organisation gives a user: the region of its primary department when that has one, else the
+ * first other active department with a region, in tree order.
+ */
+function regionFrom(
+  tree: Tree,
+  memberships: readonly { departmentId: string; primary: boolean }[],
+): string | null {
+  const regional = memberships
+    .map((membership) => ({
+      membership,
+      node: tree.get(membership.departmentId),
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is { membership: typeof entry.membership; node: TreeNode } =>
+        entry.node?.region != null &&
+        activeChainOf(tree, entry.membership.departmentId) !== undefined,
+    )
+    .sort(
+      (left, right) =>
+        Number(right.membership.primary) - Number(left.membership.primary) ||
+        compareNodes(left.node, right.node),
+    );
+  return regional[0]?.node.region ?? null;
+}
+
 export function createOrganizationService(
   dependencies: OrganizationServiceDependencies,
 ): OrganizationService {
@@ -155,7 +189,7 @@ export function createOrganizationService(
   async function loadTree(connection?: DatabaseConnection): Promise<Tree> {
     const rows = await (connection ?? database.connection()).query
       .selectFrom('departments')
-      .select(['id', 'title', 'parentId', 'active', 'sortOrder'])
+      .select(['id', 'title', 'parentId', 'region', 'active', 'sortOrder'])
       .execute();
     return new Map(
       rows.map((row) => {
@@ -184,6 +218,48 @@ export function createOrganizationService(
       userId: String(row.userId),
       primary: toBoolean(row.primary),
     }));
+  }
+
+  /**
+   * The HR-sync step: the organisation is the source of truth for the sales region of everyone it touches, so each
+   * write re-derives the region of those users and writes the authorization example's sales-member row the "own
+   * region" record access reads. A user left without a regional department loses the row.
+   */
+  async function syncRegions(
+    connection: DatabaseConnection,
+    userIds: readonly string[],
+  ): Promise<void> {
+    if (!userIds.length) return;
+    const tree = await loadTree(connection);
+    for (const userId of new Set(userIds)) {
+      const region = regionFrom(
+        tree,
+        await activeMemberships(connection, { userId }),
+      );
+      const existing = await connection.query
+        .selectFrom(SALES_MEMBERS)
+        .select('region')
+        .where('id', '=', userId)
+        .executeTakeFirst();
+      if (region === null) {
+        if (existing)
+          await connection.query
+            .deleteFrom(SALES_MEMBERS)
+            .where('id', '=', userId)
+            .execute();
+      } else if (!existing) {
+        await connection.query
+          .insertInto(SALES_MEMBERS)
+          .values({ id: userId, region })
+          .execute();
+      } else if (String(existing.region) !== region) {
+        await connection.query
+          .updateTable(SALES_MEMBERS)
+          .set({ region })
+          .where('id', '=', userId)
+          .execute();
+      }
+    }
   }
 
   async function requireDepartment(
@@ -257,17 +333,26 @@ export function createOrganizationService(
       );
   }
 
+  function toDepartment(node: TreeNode): Department {
+    return { ...node };
+  }
+
   return {
     async listTree(connection) {
-      return [...(await loadTree(connection)).values()].sort(compareNodes);
+      return [...(await loadTree(connection)).values()]
+        .sort(compareNodes)
+        .map(toDepartment);
     },
 
     async getDepartment(id) {
-      return (await loadTree()).get(id);
+      const node = (await loadTree()).get(id);
+      return node ? toDepartment(node) : undefined;
     },
 
     async createDepartment(input: CreateDepartmentInput): Promise<Department> {
       const title = normalizeTitle(input.title);
+      const region =
+        input.region === undefined ? null : normalizeRegion(input.region);
       const id = input.id ?? generateId();
       if (typeof id !== 'string' || !DEPARTMENT_ID.test(id))
         throw new OrganizationError(
@@ -288,9 +373,9 @@ export function createOrganizationService(
         validateParent(tree, undefined, parentId);
         await connection.query
           .insertInto('departments')
-          .values({ id, title, parentId, active: true, sortOrder })
+          .values({ id, title, parentId, region, active: true, sortOrder })
           .execute();
-        return { id, title, parentId, active: true, sortOrder };
+        return { id, title, parentId, region, active: true, sortOrder };
       });
     },
 
@@ -300,6 +385,8 @@ export function createOrganizationService(
     ): Promise<UpdateDepartmentResult> {
       const values: Record<string, unknown> = {};
       if (input.title !== undefined) values.title = normalizeTitle(input.title);
+      if (input.region !== undefined)
+        values.region = normalizeRegion(input.region);
       if (input.sortOrder !== undefined) {
         if (!Number.isInteger(input.sortOrder))
           throw new OrganizationError('INVALID_INPUT', 'Invalid sort order.');
@@ -330,50 +417,50 @@ export function createOrganizationService(
             .where('id', '=', id)
             .execute();
         }
+        // A new region reaches the department's own members through the sync.
+        if ('region' in values && values.region !== current.region)
+          await syncRegions(
+            connection,
+            (await activeMemberships(connection, { departmentIds: [id] })).map(
+              (row) => row.userId,
+            ),
+          );
         const department = (await loadTree(connection)).get(id);
         if (!department)
           throw new OrganizationError(
             'DEPARTMENT_NOT_FOUND',
             `Department "${id}" does not exist.`,
           );
-        return { department, changed };
+        return { department: toDepartment(department), changed };
       });
     },
 
     async listDepartments(query) {
       validatePage(query);
-      const search = query.search?.trim();
-      const departments = database.repository('departments');
-      // Repository `includes` matches the search as literal text, so `%` and `_` mean themselves.
-      const filter = (f: FilterBuilder): FilterNode =>
-        f.and([
-          f.boolean('active').isTrue(),
-          ...(search
-            ? [f.string('title').includes(search, { mode: 'insensitive' })]
-            : []),
-        ]);
-      const [rows, total, tree] = await Promise.all([
-        departments.findMany({
-          filter,
-          select: (s) => s.fields('id', 'title'),
-          sort: (s) => [s.field('title').asc(), s.field('id').asc()],
-          offset: (query.page - 1) * query.pageSize,
-          limit: query.pageSize,
-        }),
-        departments.count({ filter }),
-        loadTree(),
-      ]);
+      const search = query.search?.trim().toLowerCase();
+      const tree = await loadTree();
+      // The tree is small and seeded titles are translation keys, so the search runs over their shipped
+      // translations in memory; `%` and `_` mean themselves.
+      const matches = [...tree.values()]
+        .filter(
+          (node) =>
+            node.active &&
+            (!search ||
+              titleTexts(node.title).some((text) =>
+                text.toLowerCase().includes(search),
+              )),
+        )
+        .sort(
+          (left, right) =>
+            sortText(left.title).localeCompare(sortText(right.title)) ||
+            left.id.localeCompare(right.id),
+        );
+      const offset = (query.page - 1) * query.pageSize;
       return {
-        items: rows.map((row) => {
-          const id = text(row.id);
-          const description = pathOf(tree, id);
-          return {
-            id,
-            title: text(row.title),
-            ...(description ? { description } : {}),
-          };
-        }),
-        total,
+        items: matches
+          .slice(offset, offset + query.pageSize)
+          .map((node) => optionOf(tree, node)),
+        total: matches.length,
       };
     },
 
@@ -383,19 +470,7 @@ export function createOrganizationService(
       const options: OrganizationOption[] = [];
       for (const id of new Set(ids)) {
         const node = tree.get(id);
-        if (!node) continue;
-        const path = pathOf(tree, id);
-        const disabled = activeChainOf(tree, id) === undefined;
-        const description = disabled
-          ? path
-            ? `Disabled · ${path}`
-            : 'Disabled'
-          : path;
-        options.push({
-          id,
-          title: node.title,
-          ...(description ? { description } : {}),
-        });
+        if (node) options.push(optionOf(tree, node));
       }
       return options;
     },
@@ -423,44 +498,12 @@ export function createOrganizationService(
       return [...result];
     },
 
-    async effectiveMembers(departmentId, query) {
-      validatePage(query);
-      const connection = database.connection();
-      const tree = await loadTree(connection);
-      if (!tree.has(departmentId))
-        throw new OrganizationError(
-          'DEPARTMENT_NOT_FOUND',
-          `Department "${departmentId}" does not exist.`,
-        );
-      if (!activeChainOf(tree, departmentId)) return { items: [], total: 0 };
-      const departments = subtreeOf(tree, departmentId).filter(
-        (node) => activeChainOf(tree, node.id) !== undefined,
+    async regionOf(userId, connection) {
+      const target = connection ?? database.connection();
+      return regionFrom(
+        await loadTree(target),
+        await activeMemberships(target, { userId }),
       );
-      const memberships = await activeMemberships(connection, {
-        departmentIds: departments.map((node) => node.id),
-      });
-      const direct = new Map<string, string[]>();
-      for (const membership of memberships) {
-        const titles = direct.get(membership.userId) ?? [];
-        titles.push(tree.get(membership.departmentId)?.title ?? '');
-        direct.set(membership.userId, titles);
-      }
-      if (!direct.size) return { items: [], total: 0 };
-      const page = await users.list({
-        userIds: [...direct.keys()],
-        ...(query.search?.trim() ? { search: query.search.trim() } : {}),
-        status: 'enabled',
-        page: query.page,
-        pageSize: query.pageSize,
-      });
-      return {
-        items: page.items.map((user) => ({
-          id: user.id,
-          title: user.name,
-          description: (direct.get(user.id) ?? []).sort().join(', '),
-        })),
-        total: page.total,
-      };
     },
 
     async directMembers(departmentId) {
@@ -540,6 +583,7 @@ export function createOrganizationService(
             })
             .execute();
         }
+        await syncRegions(connection, [input.userId]);
         return [input.userId];
       });
     },
@@ -565,6 +609,7 @@ export function createOrganizationService(
           .set({ active: false, primary: false })
           .where('id', '=', String(membership.id))
           .execute();
+        await syncRegions(connection, [userId]);
         return [userId];
       });
     },
@@ -591,6 +636,7 @@ export function createOrganizationService(
           .set({ primary: true })
           .where('id', '=', String(membership.id))
           .execute();
+        await syncRegions(connection, [userId]);
         return [userId];
       });
     },
@@ -613,8 +659,24 @@ export function createOrganizationService(
           .where('id', '=', departmentId)
           .execute();
         // Disabling a parent is a check on the chain, not a cascade: every member below it is affected.
-        return subtreeMemberIds(connection, departmentId);
+        const changed = await subtreeMemberIds(connection, departmentId);
+        await syncRegions(connection, changed);
+        return changed;
       });
     },
+  };
+}
+
+/** A picker entry: the parent's title as the description, or a disabled marker the client translates. */
+function optionOf(tree: Tree, node: TreeNode): OrganizationOption {
+  const parent = node.parentId === null ? undefined : tree.get(node.parentId);
+  const description =
+    activeChainOf(tree, node.id) === undefined
+      ? label('subject.disabled')
+      : parent?.title;
+  return {
+    id: node.id,
+    title: node.title,
+    ...(description === undefined ? {} : { description }),
   };
 }

@@ -1,48 +1,33 @@
 import {
-  defineAppRoutes,
   defineSettingsRoutes,
   type AppClientRouteContribution,
 } from '@nocobase/app-client/plugins';
-import { Building2, Network } from 'lucide-react';
+import { Network } from 'lucide-react';
 
-import { DIRECTORY_PAGE, ORGANIZATION_SETTINGS } from './constants.js';
+import { DEPARTMENTS_SETTINGS } from './constants.js';
 
 const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
   {
-    name: 'organization',
-    path: '/organization',
-    navigation: { title: 'navigation.organization', icon: Network },
+    name: 'departments',
+    path: '/departments',
+    navigation: { title: 'navigation.departments', icon: Network },
     authz: {
-      resource: { type: 'settings', id: ORGANIZATION_SETTINGS },
+      resource: { type: 'settings', id: DEPARTMENTS_SETTINGS },
       action: 'read',
     },
-    componentLoader: () => import('./pages/settings/organization/index.js'),
+    componentLoader: () => import('./pages/settings/departments/index.js'),
     children: [
       {
-        // The path the department subject type's `manage` returns; it inherits the entry page's `authz`.
-        name: 'organizationDepartment',
-        path: 'departments/:departmentId',
+        // One department's details; it inherits the entry page's `authz`.
+        name: 'department',
+        path: ':departmentId',
         componentLoader: () =>
-          import('./pages/settings/organization/department.js'),
+          import('./pages/settings/departments/department.js'),
       },
     ],
   },
 ]);
 
-const appRoutes: AppClientRouteContribution = defineAppRoutes([
-  {
-    name: 'departmentDirectory',
-    path: '/department-directory',
-    auth: 'required',
-    navigation: { title: 'navigation.directory', icon: Building2 },
-    authz: { resource: { type: 'page', id: DIRECTORY_PAGE }, action: 'access' },
-    componentLoader: () => import('./pages/directory.js'),
-  },
-]);
-
-const routes: readonly AppClientRouteContribution[] = [
-  appRoutes,
-  settingsRoutes,
-];
+const routes: readonly AppClientRouteContribution[] = [settingsRoutes];
 
 export default routes;

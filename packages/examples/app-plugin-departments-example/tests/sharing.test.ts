@@ -1,18 +1,14 @@
 // @vitest-environment node
 import { selection } from '@nocobase/authorization/core';
-import {
-  defineSharingRule,
-  type SharingRulesAuthorizationApi,
-} from '@nocobase/authorization/sharing-rules';
+import type { SharingRulesAuthorizationApi } from '@nocobase/authorization/sharing-rules';
 import type { DatabaseConnection } from '@nocobase/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { directory } from '../server/index.js';
 import {
   createTestApp,
   createTree,
-  directorySet,
-  readDirectory,
+  readSales,
+  SALES_SETS,
   type TestApp,
 } from './helpers.js';
 
@@ -35,51 +31,55 @@ describe('a sharing rule whose subject is a department', () => {
       authz as typeof authz & SharingRulesAuthorizationApi<DatabaseConnection>
     ).sharingRules;
 
-    await createTree(organization, [
-      ['north', null],
-      ['south', null],
-    ]);
-    // Everyone holds `view` directly, scoped to their own departments; sharing never grants the action itself.
-    const set = directorySet('sharing-viewers');
-    await authz.permissionSets.create(set);
-    const member = await test.signUp('northMember');
-    const outsider = await test.signUp('northOutsider');
+    await createTree(organization, [['share-north', null]]);
+    // Both hold the assistant set directly, which views only the projects they own: none. Sharing never grants
+    // the action itself.
+    const member = await test.signUp('shareMember');
+    const outsider = await test.signUp('shareOutsider');
     for (const user of [member, outsider])
       await authz.permissionSets.assign({
-        permissionSet: set.key,
+        permissionSet: SALES_SETS.assistant,
         subject: { type: 'user', id: user.id },
       });
-    await organization.addMember({ departmentId: 'north', userId: member.id });
-
-    await rules.create(
-      defineSharingRule('north-sees-south', directory.reference())
-        .title('North sees South')
-        .subjects({ type: 'org.department', id: 'north' })
-        .scope('view', 'departments', selection.records(['south']))
-        .build(),
-    );
-
-    expect(await readDirectory(test, member.cookie)).toEqual({
-      status: 200,
-      ids: ['north', 'south'],
-    });
-    expect(await readDirectory(test, outsider.cookie)).toEqual({
-      status: 200,
-      ids: [],
-    });
-
-    await organization.removeMember('north', member.id);
-    expect(await readDirectory(test, member.cookie)).toEqual({
-      status: 200,
-      ids: [],
-    });
-
-    // A user who never held the action gains nothing from the rule.
-    const withoutAction = await test.signUp('northNoAction');
     await organization.addMember({
-      departmentId: 'north',
+      departmentId: 'share-north',
+      userId: member.id,
+    });
+
+    await rules.create({
+      key: 'share-north-hill',
+      resource: { type: 'composite', id: 'example.sales.projects' },
+      actions: [
+        {
+          action: 'view',
+          scopeKey: 'projects',
+          selection: selection.records(['project-3']),
+        },
+      ],
+      subjects: [{ type: 'org.department', id: 'share-north' }],
+    });
+
+    expect(await readSales(test, member.cookie)).toEqual({
+      status: 200,
+      ids: ['project-3'],
+    });
+    expect(await readSales(test, outsider.cookie)).toEqual({
+      status: 200,
+      ids: [],
+    });
+
+    await organization.removeMember('share-north', member.id);
+    expect(await readSales(test, member.cookie)).toEqual({
+      status: 200,
+      ids: [],
+    });
+
+    // A member who never held the action gains nothing from the rule.
+    const withoutAction = await test.signUp('shareNoAction');
+    await organization.addMember({
+      departmentId: 'share-north',
       userId: withoutAction.id,
     });
-    expect((await readDirectory(test, withoutAction.cookie)).status).toBe(403);
+    expect((await readSales(test, withoutAction.cookie)).status).toBe(403);
   });
 });

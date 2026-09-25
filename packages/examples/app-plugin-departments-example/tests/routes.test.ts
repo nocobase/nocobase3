@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createTestApp,
   createTree,
-  organizationSettingsSet,
+  departmentsSettingsSet,
+  salesRegion,
   type TestApp,
   type TestUser,
 } from './helpers.js';
@@ -23,8 +24,8 @@ describe('organization routes', () => {
     nobody = await test.signUp('routesNobody');
     reader = await test.signUp('routesReader');
     manager = await test.signUp('routesManager');
-    const read = organizationSettingsSet(authz, 'routes-read', ['read']);
-    const update = organizationSettingsSet(authz, 'routes-update', [
+    const read = departmentsSettingsSet(authz, 'routes-read', ['read']);
+    const update = departmentsSettingsSet(authz, 'routes-update', [
       'read',
       'update',
     ]);
@@ -53,7 +54,6 @@ describe('organization routes', () => {
       `${BASE}/departments`,
       `${BASE}/departments/rt-root/members`,
       `${BASE}/users`,
-      `${BASE}/directory`,
     ])
       expect((await test.request('GET', pathname)).status).toBe(401);
     expect(
@@ -119,6 +119,7 @@ describe('organization routes', () => {
       ['POST', `${BASE}/departments`, { title: 'X', parentId: 'nope' }, 400],
       ['PATCH', `${BASE}/departments/rt-root`, { parentId: 'rt-child' }, 400],
       ['PUT', `${BASE}/departments/rt-root/active`, { active: 'no' }, 400],
+      ['PATCH', `${BASE}/departments/rt-root`, { region: '' }, 400],
       ['POST', `${BASE}/departments/nope/members`, { userId: manager.id }, 404],
       ['POST', `${BASE}/departments/rt-root/members`, { userId: 'ghost' }, 400],
       [
@@ -216,5 +217,43 @@ describe('organization routes', () => {
       notify.mockRestore();
       await test.organization.setActive('rt-root', true);
     }
+  });
+
+  it('keeps the sales region in sync with membership and the department region', async () => {
+    await createTree(test.organization, [
+      ['rg-north', 'rt-root', 'North'],
+      ['rg-west', 'rt-root', 'West'],
+    ]);
+    const member = await test.signUp('regionMember');
+    const write = async (
+      method: string,
+      pathname: string,
+      json?: unknown,
+    ): Promise<void> => {
+      const response = await test.request(method, `${BASE}${pathname}`, {
+        cookie: manager.cookie,
+        ...(json === undefined ? {} : { json }),
+      });
+      expect(response.status, `${method} ${pathname}`).toBeLessThan(300);
+    };
+
+    expect(await salesRegion(test, member.id)).toBeUndefined();
+    await write('POST', '/departments/rg-north/members', { userId: member.id });
+    expect(await salesRegion(test, member.id)).toBe('North');
+
+    // A second, non-primary regional department leaves the primary one's region in force.
+    await write('POST', '/departments/rg-west/members', { userId: member.id });
+    expect(await salesRegion(test, member.id)).toBe('North');
+    await write('PUT', `/departments/rg-west/members/${member.id}/primary`);
+    expect(await salesRegion(test, member.id)).toBe('West');
+
+    // Changing a department's region reaches its members.
+    await write('PATCH', '/departments/rg-west', { region: 'South' });
+    expect(await salesRegion(test, member.id)).toBe('South');
+
+    await write('DELETE', `/departments/rg-west/members/${member.id}`);
+    expect(await salesRegion(test, member.id)).toBe('North');
+    await write('PATCH', '/departments/rg-north', { region: null });
+    expect(await salesRegion(test, member.id)).toBeUndefined();
   });
 });

@@ -4,11 +4,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createTestApp,
   createTree,
-  directorySet,
-  readDirectory,
+  readSales,
+  SALES_SETS,
   type TestApp,
   type TestUser,
 } from './helpers.js';
+
+/** North projects the engineer set's "own region" scope selects; this tree carries no confidentiality restriction. */
+const NORTH = ['project-1', 'project-2', 'project-4'];
 
 interface Case {
   /** Holds the set only through the department tree. */
@@ -20,20 +23,18 @@ interface Case {
 }
 
 /**
- * Each case gets its own tree `root > child > leaf`, a permission set assigned to `root`, and two members of
- * `leaf`; the second also holds the set through a direct user assignment.
+ * Each case gets its own tree `root > child > leaf`, where `leaf` works in the North region, the authorization
+ * example's engineer set assigned to `root`, and two members of `leaf`; the second also holds the set directly.
  */
 async function setUp(test: TestApp, name: string): Promise<Case> {
   const ids = { root: `${name}`, child: `${name}-child`, leaf: `${name}-leaf` };
   await createTree(test.organization, [
     [ids.root, null],
     [ids.child, ids.root],
-    [ids.leaf, ids.child],
+    [ids.leaf, ids.child, 'North'],
   ]);
-  const set = directorySet(`${name}-set`);
-  await test.authz.permissionSets.create(set);
   const assignment = await test.authz.permissionSets.assign({
-    permissionSet: set.key,
+    permissionSet: SALES_SETS.engineer,
     subject: { type: 'org.department', id: ids.root },
   });
   const inherited = await test.signUp(`${name}Inherited`);
@@ -44,7 +45,7 @@ async function setUp(test: TestApp, name: string): Promise<Case> {
       userId: user.id,
     });
   await test.authz.permissionSets.assign({
-    permissionSet: set.key,
+    permissionSet: SALES_SETS.engineer,
     subject: { type: 'user', id: direct.id },
   });
   return { inherited, direct, assignmentId: assignment.id, ids };
@@ -69,22 +70,25 @@ describe('a permission set assigned to a department', () => {
       userId: directMember.id,
     });
 
-    // The leaf member's chain is leaf, child and root; record access selects exactly that chain.
-    expect(await readDirectory(test, inherited.cookie)).toEqual({
+    // The leaf member inherits from two levels up, and the leaf's region selects the North projects.
+    expect(await readSales(test, inherited.cookie)).toEqual({
       status: 200,
-      ids: [ids.root, ids.child, ids.leaf].sort(),
+      ids: NORTH,
     });
-    expect(await readDirectory(test, directMember.cookie)).toEqual({
+    // A member of the root holds the set too; the root has no region, so the region scope selects nothing.
+    expect(await readSales(test, directMember.cookie)).toEqual({
       status: 200,
-      ids: [ids.root],
+      ids: [],
     });
     const snapshot = await test.request('GET', '/api/authz/permissions', {
       cookie: inherited.cookie,
     });
-    expect(JSON.stringify(await snapshot.json())).toContain('org.directory');
+    expect(JSON.stringify(await snapshot.json())).toContain(
+      'example.sales.projects',
+    );
 
     const outsider = await test.signUp('reachOutsider');
-    expect((await readDirectory(test, outsider.cookie)).status).toBe(403);
+    expect((await readSales(test, outsider.cookie)).status).toBe(403);
   });
 
   it('is revoked by removing the member', async () => {
@@ -92,25 +96,22 @@ describe('a permission set assigned to a department', () => {
     await test.organization.removeMember(ids.leaf, inherited.id);
     await test.organization.removeMember(ids.leaf, direct.id);
 
-    expect((await readDirectory(test, inherited.cookie)).status).toBe(403);
-    // The direct assignment keeps the action; the departments left are none of the user's any more.
-    expect(await readDirectory(test, direct.cookie)).toEqual({
+    expect((await readSales(test, inherited.cookie)).status).toBe(403);
+    // The direct assignment keeps the action; leaving the regional department took the region with it.
+    expect(await readSales(test, direct.cookie)).toEqual({
       status: 200,
       ids: [],
     });
   });
 
   it('is revoked by unassigning the set from the department', async () => {
-    const { inherited, direct, assignmentId, ids } = await setUp(
-      test,
-      'unassign',
-    );
+    const { inherited, direct, assignmentId } = await setUp(test, 'unassign');
     await test.authz.permissionSets.revoke(assignmentId);
 
-    expect((await readDirectory(test, inherited.cookie)).status).toBe(403);
-    expect(await readDirectory(test, direct.cookie)).toEqual({
+    expect((await readSales(test, inherited.cookie)).status).toBe(403);
+    expect(await readSales(test, direct.cookie)).toEqual({
       status: 200,
-      ids: [ids.root, ids.child, ids.leaf].sort(),
+      ids: NORTH,
     });
   });
 
@@ -118,22 +119,22 @@ describe('a permission set assigned to a department', () => {
     const { inherited, direct, ids } = await setUp(test, 'disable');
     await test.organization.setActive(ids.leaf, false);
 
-    expect((await readDirectory(test, inherited.cookie)).status).toBe(403);
-    expect((await readDirectory(test, direct.cookie)).status).toBe(200);
+    expect((await readSales(test, inherited.cookie)).status).toBe(403);
+    expect((await readSales(test, direct.cookie)).status).toBe(200);
   });
 
   it('is revoked by disabling an ancestor department', async () => {
     const { inherited, direct, ids } = await setUp(test, 'ancestor');
     await test.organization.setActive(ids.root, false);
 
-    expect((await readDirectory(test, inherited.cookie)).status).toBe(403);
-    expect((await readDirectory(test, direct.cookie)).status).toBe(200);
+    expect((await readSales(test, inherited.cookie)).status).toBe(403);
+    expect((await readSales(test, direct.cookie)).status).toBe(200);
 
-    // Re-enabling the ancestor restores the inheritance; no child row was rewritten.
+    // Re-enabling the ancestor restores the inheritance and the region; no child row was rewritten.
     await test.organization.setActive(ids.root, true);
-    expect(await readDirectory(test, inherited.cookie)).toEqual({
+    expect(await readSales(test, inherited.cookie)).toEqual({
       status: 200,
-      ids: [ids.root, ids.child, ids.leaf].sort(),
+      ids: NORTH,
     });
   });
 });

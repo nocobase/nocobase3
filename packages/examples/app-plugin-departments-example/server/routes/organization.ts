@@ -12,11 +12,10 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { databaseManagerToken } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-import { DIRECTORY_RESOURCE, ORGANIZATION_SETTINGS } from '../resources.js';
+import { DEPARTMENTS_SETTINGS } from '../resources.js';
 import {
   OrganizationError,
   organizationServiceToken,
@@ -42,7 +41,7 @@ async function requireSettings(
   action: 'read' | 'update',
 ): Promise<void> {
   await c.get('authz').require({
-    resource: { type: 'settings', id: ORGANIZATION_SETTINGS },
+    resource: { type: 'settings', id: DEPARTMENTS_SETTINGS },
     action,
   });
 }
@@ -75,6 +74,13 @@ function optionalParent(
 ): string | null | undefined {
   if (body.parentId === null) return null;
   return optionalString(body, 'parentId');
+}
+
+function optionalRegion(
+  body: Record<string, unknown>,
+): string | null | undefined {
+  if (body.region === null) return null;
+  return optionalString(body, 'region');
 }
 
 function optionalInteger(
@@ -119,8 +125,8 @@ function pageQuery(c: RouteContext): {
 }
 
 /**
- * The organisation settings API under `/api/departments-example`, and the directory endpoint the department
- * directory page calls. Every route authenticates and authorizes on its own sub-router.
+ * The Departments settings API under `/api/departments-example`. Every route authenticates and authorizes on its
+ * own sub-router. Errors answer a `code` the client translates; `message` is for logs and API callers.
  */
 export function createOrganizationRoutes(
   app: AppPluginApplication,
@@ -130,7 +136,6 @@ export function createOrganizationRoutes(
   const authz: AppAuthorization = container.resolve(authorizationToken);
   const organization = container.resolve(organizationServiceToken);
   const users = container.resolve(userAdministrationServiceToken);
-  const database = container.resolve(databaseManagerToken);
 
   // Clients cache their permission snapshot; tell each affected user after the membership write has committed.
   async function refreshUsers(userIds: readonly string[]): Promise<void> {
@@ -162,11 +167,13 @@ export function createOrganizationRoutes(
     const body = await readObject(c);
     const id = optionalString(body, 'id');
     const parentId = optionalParent(body);
+    const region = optionalRegion(body);
     const sortOrder = optionalInteger(body, 'sortOrder');
     const department = await organization.createDepartment({
       title: typeof body.title === 'string' ? body.title : '',
       ...(id === undefined ? {} : { id }),
       ...(parentId === undefined ? {} : { parentId }),
+      ...(region === undefined ? {} : { region }),
       ...(sortOrder === undefined ? {} : { sortOrder }),
     });
     return c.json({ data: department }, 201);
@@ -188,10 +195,12 @@ export function createOrganizationRoutes(
     const body = await readObject(c);
     const title = optionalString(body, 'title');
     const parentId = optionalParent(body);
+    const region = optionalRegion(body);
     const sortOrder = optionalInteger(body, 'sortOrder');
     const result = await organization.updateDepartment(c.req.param('id'), {
       ...(title === undefined ? {} : { title }),
       ...(parentId === undefined ? {} : { parentId }),
+      ...(region === undefined ? {} : { region }),
       ...(sortOrder === undefined ? {} : { sortOrder }),
     });
     await refreshUsers(result.changed);
@@ -264,27 +273,6 @@ export function createOrganizationRoutes(
         total: page.total,
       },
     });
-  });
-
-  // The business endpoint behind the directory page: one decision, its departments policy bound to the query.
-  routes.get('/directory', async (c) => {
-    const decision = await c.get('authz').authorize({
-      resource: { type: 'composite', id: DIRECTORY_RESOURCE },
-      action: 'view',
-    });
-    const policy = decision.conditions?.database?.departments;
-    if (decision.effect === 'deny' || !policy)
-      return c.json({ code: 'FORBIDDEN', message: 'Forbidden' }, 403);
-    // A data scope that selects nothing, such as a user in no department, binds a policy matching no rows.
-    const rows = await database
-      .repository('departments')
-      .withPolicy(policy)
-      .findMany({
-        filter: (f) => f.boolean('active').isTrue(),
-        select: (s) => s.fields('id', 'title', 'parentId'),
-        sort: (s) => [s.field('title').asc(), s.field('id').asc()],
-      });
-    return c.json({ data: rows });
   });
 
   return routes;

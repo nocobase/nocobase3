@@ -1,3 +1,4 @@
+import type { AuthorizationTitle } from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   createServiceToken,
@@ -6,8 +7,11 @@ import {
 
 export interface Department {
   readonly id: string;
-  readonly title: string;
+  /** Plain text, or the translation descriptor a seeded department stores. */
+  readonly title: AuthorizationTitle;
   readonly parentId: string | null;
+  /** The business region its members work in, such as `North`; `null` when the department has none. */
+  readonly region: string | null;
   readonly active: boolean;
   readonly sortOrder: number;
 }
@@ -19,11 +23,11 @@ export interface DirectMember {
   readonly primary: boolean;
 }
 
-/** One entry of a picker or member list, the shape the authorization workspace reads. */
+/** One entry of the subject picker, the shape the authorization workspace reads. */
 export interface OrganizationOption {
   readonly id: string;
-  readonly title: string;
-  readonly description?: string;
+  readonly title: AuthorizationTitle;
+  readonly description?: AuthorizationTitle;
 }
 
 export interface OrganizationPage {
@@ -41,12 +45,14 @@ export interface CreateDepartmentInput {
   readonly id?: string;
   readonly title: string;
   readonly parentId?: string | null;
+  readonly region?: string | null;
   readonly sortOrder?: number;
 }
 
 export interface UpdateDepartmentInput {
   readonly title?: string;
   readonly parentId?: string | null;
+  readonly region?: string | null;
   readonly sortOrder?: number;
 }
 
@@ -83,6 +89,7 @@ export class OrganizationError extends Error {
 /**
  * The department organisation. Reads take an optional connection so they can run inside a caller's transaction;
  * each write runs in its own transaction and resolves, after commit, to the user ids whose membership changed.
+ * Every write also re-derives the sales region of the users it touches, in the same transaction.
  */
 export interface OrganizationService {
   /** Every department, for the settings tree. */
@@ -93,9 +100,9 @@ export interface OrganizationService {
     id: string,
     input: UpdateDepartmentInput,
   ): Promise<UpdateDepartmentResult>;
-  /** The picker page: active departments only, literal title search, stable order. */
+  /** The picker page: active departments only, literal title search in any shipped language, stable order. */
   listDepartments(query: OrganizationPageQuery): Promise<OrganizationPage>;
-  /** Every requested id that exists; a disabled one says so in `description`. */
+  /** Every requested id that exists; `description` names the parent, or marks a disabled one. */
   resolveDepartments(
     ids: readonly string[],
   ): Promise<readonly OrganizationOption[]>;
@@ -114,11 +121,11 @@ export interface OrganizationService {
     userId: string,
     connection?: DatabaseConnection,
   ): Promise<readonly string[]>;
-  /** Enabled users in the department or any active descendant, one page. */
-  effectiveMembers(
-    departmentId: string,
-    query: OrganizationPageQuery,
-  ): Promise<OrganizationPage>;
+  /** The region the organisation gives a user: its primary department's first, else another department's. */
+  regionOf(
+    userId: string,
+    connection?: DatabaseConnection,
+  ): Promise<string | null>;
   /** Active direct memberships of one department. */
   directMembers(departmentId: string): Promise<readonly DirectMember[]>;
   addMember(input: AddMemberInput): Promise<readonly string[]>;

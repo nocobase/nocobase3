@@ -8,17 +8,26 @@ import {
   DEMO_ACCOUNTS,
   DEMO_PASSWORD,
   DEPARTMENT_ASSIGNMENTS,
+  RESTRICTION_ASSIGNMENTS,
   SEED_DEPARTMENTS,
-  SEED_PERMISSION_SETS,
+  SHARING_ASSIGNMENTS,
+  seedRegionOf,
   type SeedAssignment,
+  type SeedRuleAssignment,
 } from '../seed-data/organization.js';
 
+const DEPARTMENT_SUBJECT = 'org.department';
+const SALES_MEMBERS = 'authorizationExampleSalesMembers';
+
 /**
- * The demonstration tree, its permission sets and their assignments, and the demo accounts with their memberships.
+ * The example trading company on top of the authorization example's sales and delivery domain: its department
+ * tree, the demo accounts with their memberships, the authorization example's permission sets and rules assigned
+ * to departments and people, and each regional account's sales-member row, as an HR sync would write it.
  *
  * Each row is written only when its key is missing, so an administrator's later edits survive a replay. Accounts
  * are keyed by email and written straight into the authentication plugin's `user` and `account` tables; an account
- * that already exists is left alone, memberships and direct assignments included.
+ * that already exists is left alone, memberships, assignments and region included. An assignment whose permission
+ * set or rule is missing is skipped rather than written dangling.
  */
 const seed: SeedDefinition = defineSeed({
   name: '202609250002_departments_example_seed_organization',
@@ -28,6 +37,12 @@ const seed: SeedDefinition = defineSeed({
     const now = new Date();
 
     async function assign(assignment: SeedAssignment): Promise<void> {
+      const set = await query
+        .selectFrom('authorizationPermissionSets')
+        .select('id')
+        .where('key', '=', assignment.permissionSetKey)
+        .executeTakeFirst();
+      if (!set) return;
       const existing = await query
         .selectFrom('authorizationPermissionSetAssignments')
         .select('id')
@@ -42,6 +57,38 @@ const seed: SeedDefinition = defineSeed({
         .execute();
     }
 
+    async function assignRule(
+      table: string,
+      rules: string,
+      column: string,
+      assignment: SeedRuleAssignment,
+    ): Promise<void> {
+      const rule = await query
+        .selectFrom(rules)
+        .select('id')
+        .where('key', '=', assignment.ruleId)
+        .executeTakeFirst();
+      if (!rule) return;
+      const existing = await query
+        .selectFrom(table)
+        .select('id')
+        .where(column, '=', assignment.ruleId)
+        .where('subjectType', '=', DEPARTMENT_SUBJECT)
+        .where('subjectId', '=', assignment.subjectId)
+        .executeTakeFirst();
+      if (existing) return;
+      await query
+        .insertInto(table)
+        .values({
+          id: assignment.id,
+          [column]: assignment.ruleId,
+          subjectType: DEPARTMENT_SUBJECT,
+          subjectId: assignment.subjectId,
+          createdAt: now,
+        })
+        .execute();
+    }
+
     for (const department of SEED_DEPARTMENTS) {
       const existing = await query
         .selectFrom('departments')
@@ -51,31 +98,29 @@ const seed: SeedDefinition = defineSeed({
       if (existing) continue;
       await query
         .insertInto('departments')
-        .values({ ...department, active: true })
-        .execute();
-    }
-
-    for (const set of SEED_PERMISSION_SETS) {
-      const existing = await query
-        .selectFrom('authorizationPermissionSets')
-        .select('id')
-        .where('key', '=', set.key)
-        .executeTakeFirst();
-      if (existing) continue;
-      await query
-        .insertInto('authorizationPermissionSets')
         .values({
-          id: set.key,
-          key: set.key,
-          title: encodeAuthorizationTitle(set.title),
-          grants: JSON.stringify(set.grants),
-          createdAt: now,
-          updatedAt: now,
+          ...department,
+          title: encodeAuthorizationTitle(department.title),
+          active: true,
         })
         .execute();
     }
 
     for (const assignment of DEPARTMENT_ASSIGNMENTS) await assign(assignment);
+    for (const assignment of SHARING_ASSIGNMENTS)
+      await assignRule(
+        'authorizationSharingRuleAssignments',
+        'authorizationSharingRules',
+        'sharingRuleId',
+        assignment,
+      );
+    for (const assignment of RESTRICTION_ASSIGNMENTS)
+      await assignRule(
+        'authorizationRestrictionRuleAssignments',
+        'authorizationRestrictionRules',
+        'restrictionRuleId',
+        assignment,
+      );
 
     let password: string | undefined;
     for (const account of DEMO_ACCOUNTS) {
@@ -122,6 +167,13 @@ const seed: SeedDefinition = defineSeed({
           subjectType: 'user',
           subjectId: userId,
         });
+      // The HR sync: the department's region becomes the account's sales region.
+      const region = seedRegionOf(account);
+      if (region !== null)
+        await query
+          .insertInto(SALES_MEMBERS)
+          .values({ id: userId, region })
+          .execute();
     }
   },
 });

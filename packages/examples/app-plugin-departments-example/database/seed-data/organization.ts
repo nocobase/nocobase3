@@ -1,78 +1,76 @@
-import { recordAccess } from '@nocobase/app-plugin-authorization/server';
-import {
-  definePermissionSet,
-  type PermissionSet,
-} from '@nocobase/authorization/permission-sets';
+import type { AuthorizationTitle } from '@nocobase/authorization/core';
 
-import {
-  DEPARTMENT_SUBJECT,
-  DIRECTORY_PAGE,
-  directory,
-  ORGANIZATION_SETTINGS,
-  OWN_DEPARTMENTS,
-} from '../../server/resources.js';
+import { DEPARTMENT_SUBJECT, label } from '../../server/resources.js';
 
 export interface SeedDepartment {
   readonly id: string;
-  readonly title: string;
+  /** A translation descriptor; the seed stores it encoded, and the client translates it. */
+  readonly title: AuthorizationTitle;
   readonly parentId: string | null;
+  readonly region: string | null;
   readonly sortOrder: number;
 }
 
 /** Parents before children, so every parent exists when its child is written. */
 export const SEED_DEPARTMENTS: readonly SeedDepartment[] = [
-  { id: 'hq', title: 'Headquarters', parentId: null, sortOrder: 0 },
-  { id: 'sales', title: 'Sales', parentId: 'hq', sortOrder: 0 },
-  { id: 'support', title: 'Support', parentId: 'hq', sortOrder: 1 },
-  { id: 'sales-east', title: 'East sales', parentId: 'sales', sortOrder: 0 },
+  {
+    id: 'trading',
+    title: label('seed.trading'),
+    parentId: null,
+    region: null,
+    sortOrder: 0,
+  },
+  {
+    id: 'executive-office',
+    title: label('seed.executiveOffice'),
+    parentId: 'trading',
+    region: null,
+    sortOrder: 0,
+  },
+  {
+    id: 'sales-center',
+    title: label('seed.salesCenter'),
+    parentId: 'trading',
+    region: null,
+    sortOrder: 1,
+  },
+  {
+    id: 'north-sales',
+    title: label('seed.northSales'),
+    parentId: 'sales-center',
+    region: 'North',
+    sortOrder: 0,
+  },
+  {
+    id: 'south-sales',
+    title: label('seed.southSales'),
+    parentId: 'sales-center',
+    region: 'South',
+    sortOrder: 1,
+  },
+  {
+    id: 'delivery-center',
+    title: label('seed.deliveryCenter'),
+    parentId: 'trading',
+    region: null,
+    sortOrder: 2,
+  },
+  {
+    id: 'delivery',
+    title: label('seed.delivery'),
+    parentId: 'delivery-center',
+    region: null,
+    sortOrder: 0,
+  },
 ];
 
-/** Everyone in the organisation may open the directory and see the departments they belong to. */
-export const staff: PermissionSet = definePermissionSet(
-  'departments-example-staff',
-)
-  .title('Staff')
-  .grant({
-    resource: { type: 'page', id: DIRECTORY_PAGE },
-    actions: [{ action: 'access' }],
-  })
-  .grant(
-    directory.reference().grant({ view: { departments: OWN_DEPARTMENTS } }),
-  )
-  .build();
-
-/** Assigned to Sales: its branch may open the organisation settings read-only, which Support may not. */
-export const organizationViewer: PermissionSet = definePermissionSet(
-  'departments-example-organization-viewer',
-)
-  .title('Organization viewer')
-  .grant({
-    resource: { type: 'settings', id: ORGANIZATION_SETTINGS },
-    actions: [{ action: 'read' }],
-  })
-  .build();
-
-/** Assigned to one user directly: the directory with every department, whatever the user belongs to. */
-export const wholeDirectory: PermissionSet = definePermissionSet(
-  'departments-example-whole-directory',
-)
-  .title('Whole directory')
-  .grant({
-    resource: { type: 'page', id: DIRECTORY_PAGE },
-    actions: [{ action: 'access' }],
-  })
-  .grant(
-    directory
-      .reference()
-      .grant({ view: { departments: recordAccess.allRecords.key } }),
-  )
-  .build();
-
-export const SEED_PERMISSION_SETS: readonly PermissionSet[] = [
-  staff,
-  organizationViewer,
-  wholeDirectory,
-];
+/** The authorization example's permission sets this organisation reuses. */
+export const SALES_SETS = {
+  assistant: 'example-sales-assistant',
+  engineer: 'example-sales-engineer',
+  manager: 'example-sales-manager',
+  delivery: 'example-sales-delivery',
+} as const;
 
 export interface SeedAssignment {
   readonly id: string;
@@ -81,21 +79,65 @@ export interface SeedAssignment {
   readonly subjectId: string;
 }
 
-/** The staff set on the root department reaches everyone; the viewer set on Sales reaches Sales and East sales. */
+/**
+ * Baseline access by department. Sales Center's assistant set reaches both regional sales departments below it;
+ * Delivery holds the delivery set. Job roles above the baseline are assigned to people, in {@link DEMO_ACCOUNTS}.
+ */
 export const DEPARTMENT_ASSIGNMENTS: readonly SeedAssignment[] = [
   {
-    id: 'departments-example-staff-hq',
-    permissionSetKey: staff.key,
+    id: 'departments-example:sales-center:assistant',
+    permissionSetKey: SALES_SETS.assistant,
     subjectType: DEPARTMENT_SUBJECT,
-    subjectId: 'hq',
+    subjectId: 'sales-center',
   },
   {
-    id: 'departments-example-organization-viewer-sales',
-    permissionSetKey: organizationViewer.key,
+    id: 'departments-example:delivery:delivery',
+    permissionSetKey: SALES_SETS.delivery,
     subjectType: DEPARTMENT_SUBJECT,
-    subjectId: 'sales',
+    subjectId: 'delivery',
   },
 ];
+
+export interface SeedRuleAssignment {
+  readonly id: string;
+  readonly ruleId: string;
+  readonly subjectId: string;
+}
+
+/**
+ * The authorization example's sharing rules, assigned to departments. Sharing never grants an action: it widens
+ * the records of actions a member already holds.
+ */
+export const SHARING_ASSIGNMENTS: readonly SeedRuleAssignment[] = [
+  // Salespeople read their region's orders; delivery staff also deliver them.
+  {
+    id: 'departments-example:sales-center:delivery-orders',
+    ruleId: 'example-delivery-orders',
+    subjectId: 'sales-center',
+  },
+  {
+    id: 'departments-example:delivery:delivery-orders',
+    ruleId: 'example-delivery-orders',
+    subjectId: 'delivery',
+  },
+  // The Executive Office reviews the shared example projects.
+  {
+    id: 'departments-example:executive-office:selected-projects',
+    ruleId: 'example-selected-projects',
+    subjectId: 'executive-office',
+  },
+];
+
+/** The authorization example's confidentiality restrictions, company-wide through the root department. */
+export const RESTRICTION_ASSIGNMENTS: readonly SeedRuleAssignment[] = [
+  'example-public-authorizationExampleProjects',
+  'example-public-authorizationExampleQuotes',
+  'example-public-authorizationExampleOrders',
+].map((ruleId) => ({
+  id: `departments-example:trading:${ruleId}`,
+  ruleId,
+  subjectId: 'trading',
+}));
 
 export interface DemoMembership {
   readonly departmentId: string;
@@ -106,36 +148,61 @@ export interface DemoAccount {
   readonly name: string;
   readonly email: string;
   readonly memberships: readonly DemoMembership[];
-  /** Permission sets assigned to the user directly, besides what the departments pass down. */
+  /** The person's job role, assigned to the user directly on top of what the departments pass down. */
   readonly permissionSets?: readonly string[];
 }
 
 /** Fictional accounts for practice; they share {@link DEMO_PASSWORD}. */
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
-    name: 'Dana Director',
-    email: 'dana@departments.example',
-    memberships: [{ departmentId: 'hq', primary: true }],
+    name: 'Grace Zhou',
+    email: 'grace@departments.example',
+    memberships: [{ departmentId: 'executive-office', primary: true }],
+    permissionSets: [SALES_SETS.manager],
   },
   {
-    name: 'Sam Seller',
-    email: 'sam@departments.example',
-    memberships: [{ departmentId: 'sales-east', primary: true }],
-    permissionSets: [wholeDirectory.key],
+    name: 'Leo Wang',
+    email: 'leo@departments.example',
+    memberships: [{ departmentId: 'north-sales', primary: true }],
+    permissionSets: [SALES_SETS.engineer],
   },
   {
-    name: 'Sue Support',
-    email: 'sue@departments.example',
-    memberships: [{ departmentId: 'support', primary: true }],
+    name: 'Nina Li',
+    email: 'nina@departments.example',
+    memberships: [{ departmentId: 'north-sales', primary: true }],
   },
   {
-    name: 'Li Liaison',
-    email: 'li@departments.example',
+    name: 'Chen Chen',
+    email: 'chen@departments.example',
     memberships: [
-      { departmentId: 'sales', primary: true },
-      { departmentId: 'support', primary: false },
+      { departmentId: 'south-sales', primary: true },
+      { departmentId: 'delivery', primary: false },
     ],
+  },
+  {
+    name: 'Eric Liu',
+    email: 'eric@departments.example',
+    memberships: [{ departmentId: 'south-sales', primary: true }],
+    permissionSets: [SALES_SETS.engineer],
+  },
+  {
+    name: 'Mia Zhao',
+    email: 'mia@departments.example',
+    memberships: [{ departmentId: 'delivery', primary: true }],
   },
 ];
 
 export const DEMO_PASSWORD = 'departments-demo';
+
+/** The region the organisation gives an account at seed time: its primary regional department's, else another's. */
+export function seedRegionOf(account: DemoAccount): string | null {
+  const regions = [...account.memberships]
+    .sort((left, right) => Number(right.primary) - Number(left.primary))
+    .map(
+      (membership) =>
+        SEED_DEPARTMENTS.find((item) => item.id === membership.departmentId)
+          ?.region ?? null,
+    )
+    .filter((region): region is string => region !== null);
+  return regions[0] ?? null;
+}

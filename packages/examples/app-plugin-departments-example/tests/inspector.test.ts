@@ -5,7 +5,7 @@ import {
   ADMIN,
   createTestApp,
   createTree,
-  directorySet,
+  SALES_SETS,
   type TestApp,
 } from './helpers.js';
 
@@ -34,10 +34,8 @@ describe('the inspector for a department member', () => {
       ['in-root', null],
       ['in-leaf', 'in-root'],
     ]);
-    const set = directorySet('inspector-set');
-    await authz.permissionSets.create(set);
     await authz.permissionSets.assign({
-      permissionSet: set.key,
+      permissionSet: SALES_SETS.delivery,
       subject: { type: 'org.department', id: 'in-root' },
     });
     const member = await test.signUp('inspectorMember');
@@ -61,8 +59,8 @@ describe('the inspector for a department member', () => {
         { type: 'org.department', id: 'in-root' },
       ]),
     );
-    expect(data.sets.find((entry) => entry.key === set.key)?.sources).toEqual([
-      { type: 'org.department', id: 'in-root' },
-    ]);
+    expect(
+      data.sets.find((entry) => entry.key === SALES_SETS.delivery)?.sources,
+    ).toEqual([{ type: 'org.department', id: 'in-root' }]);
   });
 });

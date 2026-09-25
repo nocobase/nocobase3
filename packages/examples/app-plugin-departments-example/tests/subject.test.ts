@@ -5,12 +5,15 @@ import { definePermissionSet } from '@nocobase/authorization/permission-sets';
 import { DEPARTMENT_SUBJECT } from '../server/index.js';
 import { ADMIN, createTestApp, createTree, type TestApp } from './helpers.js';
 
+type Title = string | { key: string; ns: string };
+
 interface Option {
   readonly id: string;
-  readonly title: string;
-  readonly description?: string;
-  readonly manage?: string;
+  readonly title: Title;
+  readonly description?: Title;
 }
+
+const NS = '@nocobase/app-plugin-departments-example';
 
 const SURFACE = '/api/authz/permission-sets/subjects/org.department';
 
@@ -39,13 +42,17 @@ describe('the department subject type', () => {
     return get(`${SURFACE}?${query}`);
   }
 
-  it('is announced with members and manage', async () => {
+  it('is announced under the localized Departments title', async () => {
     const options = await get<{
-      subjectTypes: { type: string; members?: boolean; manage?: boolean }[];
+      subjectTypes: { type: string; title: unknown; selection: unknown }[];
     }>('/api/authz/permission-sets/options');
     expect(
       options.subjectTypes.find((type) => type.type === DEPARTMENT_SUBJECT),
-    ).toMatchObject({ members: true, manage: true });
+    ).toEqual({
+      type: DEPARTMENT_SUBJECT,
+      title: expect.objectContaining({ key: 'departments', ns: NS }),
+      selection: { type: 'collection' },
+    });
   });
 
   it('is listed and resolved only with the permission-sets settings entry', async () => {
@@ -133,7 +140,20 @@ describe('the department subject type', () => {
       ]);
     });
 
-    it('resolves the requested ids, marks disabled ones and links to their page', async () => {
+    it('finds a seeded department by its title in either language', async () => {
+      for (const search of ['north sales', '%E5%8C%97%E5%8C%BA'])
+        expect(
+          (await list(`search=${search}&page=1&pageSize=30`)).items,
+        ).toEqual([
+          {
+            id: 'north-sales',
+            title: { key: 'seed.northSales', ns: NS },
+            description: { key: 'seed.salesCenter', ns: NS },
+          },
+        ]);
+    });
+
+    it('resolves the requested ids, naming the parent and marking disabled ones', async () => {
       await createTree(test.organization, [
         ['res-root', null],
         ['res-child', 'res-root'],
@@ -142,21 +162,22 @@ describe('the department subject type', () => {
 
       const response = await test.request('POST', `${SURFACE}/resolve`, {
         cookie: admin,
-        json: { ids: ['res-child', 'res-missing', 'hq'] },
+        json: { ids: ['res-child', 'res-missing', 'trading', 'south-sales'] },
       });
       expect(response.status).toBe(200);
       const items = ((await response.json()) as { data: Option[] }).data;
+      // Titles and descriptions are plain text or translation descriptors; the client renders both.
       expect(items).toEqual([
         {
           id: 'res-child',
           title: 'Dept res-child',
-          description: 'Disabled · Dept res-root',
-          manage: '/settings/organization/departments/res-child',
+          description: { key: 'subject.disabled', ns: NS },
         },
+        { id: 'trading', title: { key: 'seed.trading', ns: NS } },
         {
-          id: 'hq',
-          title: 'Headquarters',
-          manage: '/settings/organization/departments/hq',
+          id: 'south-sales',
+          title: { key: 'seed.southSales', ns: NS },
+          description: { key: 'seed.salesCenter', ns: NS },
         },
       ]);
     });
@@ -195,78 +216,6 @@ describe('the department subject type', () => {
       connection.mockRestore();
 
       expect(await type.filterActive(ids)).toEqual(ids);
-    });
-  });
-
-  describe('members', () => {
-    it('pages and searches the effective members, descendants included, and names each direct department', async () => {
-      const { organization } = test;
-      await createTree(organization, [
-        ['mem-root', null],
-        ['mem-child', 'mem-root'],
-        ['mem-leaf', 'mem-child'],
-        ['mem-off', 'mem-root'],
-      ]);
-      await organization.setActive('mem-off', false);
-      const root = await test.signUp('memRoot');
-      const child = await test.signUp('memChild');
-      const leaf = await test.signUp('memLeafOnly');
-      const both = await test.signUp('memBoth');
-      const off = await test.signUp('memOff');
-      await organization.addMember({
-        departmentId: 'mem-root',
-        userId: root.id,
-      });
-      await organization.addMember({
-        departmentId: 'mem-child',
-        userId: child.id,
-      });
-      await organization.addMember({
-        departmentId: 'mem-leaf',
-        userId: leaf.id,
-      });
-      await organization.addMember({
-        departmentId: 'mem-child',
-        userId: both.id,
-      });
-      await organization.addMember({
-        departmentId: 'mem-leaf',
-        userId: both.id,
-      });
-      await organization.addMember({ departmentId: 'mem-off', userId: off.id });
-
-      const members = `${SURFACE}/mem-root/members`;
-      const first = await get<{ items: Option[]; total: number }>(
-        `${members}?page=1&pageSize=3`,
-      );
-      const second = await get<{ items: Option[]; total: number }>(
-        `${members}?page=2&pageSize=3`,
-      );
-      expect(first.total).toBe(4);
-      expect(first.items).toHaveLength(3);
-      expect(second.items).toHaveLength(1);
-      const all = [...first.items, ...second.items];
-      expect(all.map((item) => item.id).sort()).toEqual(
-        [root.id, child.id, leaf.id, both.id].sort(),
-      );
-      expect(all.find((item) => item.id === both.id)?.description).toBe(
-        'Dept mem-child, Dept mem-leaf',
-      );
-      expect(all.find((item) => item.id === leaf.id)?.description).toBe(
-        'Dept mem-leaf',
-      );
-
-      const searched = await get<{ items: Option[]; total: number }>(
-        `${members}?page=1&pageSize=10&search=memleafonly`,
-      );
-      expect(searched.items.map((item) => item.id)).toEqual([leaf.id]);
-
-      const leafOnly = await get<{ items: Option[]; total: number }>(
-        `${SURFACE}/mem-leaf/members?page=1&pageSize=10`,
-      );
-      expect(leafOnly.items.map((item) => item.id).sort()).toEqual(
-        [leaf.id, both.id].sort(),
-      );
     });
   });
 });
