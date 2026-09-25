@@ -17,7 +17,6 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { AlertCircleIcon } from 'lucide-react';
 import { type ReactElement, useMemo } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 
 import { PROJECT_STATUSES, type Project } from './types.js';
 
@@ -142,11 +142,12 @@ export function ProjectForm({
     } finally {
       onSubmittingChange?.(false);
     }
-    toast.success(
-      project
+    toast.add({
+      type: 'success',
+      title: project
         ? t('projects.edit.success', { name: saved.name })
         : t('projects.create.success', { name: saved.name }),
-    );
+    });
     onSubmitted(saved);
   });
 
@@ -393,7 +394,7 @@ Use `z.string().trim()` in the schema and an empty string as the default (`proje
 
 ### Success
 
-The form reports the result with `toast.success`, including the record name (`t('projects.create.success', { name })`, guidelines T3.7 and C6), then passes the record the endpoint returned to `onSubmitted`. The container uses that record to update the current view immediately, then refreshes the list and closes the dialog (guideline R2). Do not just refresh the list and leave the detail view showing old values.
+The form reports the result with a `success` toast, including the record name (`t('projects.create.success', { name })`, guidelines T3.7 and C6), then passes the record the endpoint returned to `onSubmitted`. The container uses that record to update the current view immediately, then refreshes the list and closes the dialog (guideline R2). Do not just refresh the list and leave the detail view showing old values.
 
 ### Default values are read only on mount
 
@@ -763,7 +764,6 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { AlertCircleIcon, PlusIcon, XIcon } from 'lucide-react';
 import { type ReactElement, useMemo } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -784,6 +784,7 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
+import { toast } from '@/components/ui/toast';
 import {
   Tooltip,
   TooltipContent,
@@ -850,7 +851,7 @@ export function ProjectMembersCard({
     }
     // After saving, make the submitted values the new defaults: isDirty goes back to false, and "Discard changes" returns to them too.
     form.reset(values);
-    toast.success(t('projects.members.saved'));
+    toast.add({ type: 'success', title: t('projects.members.saved') });
   });
 
   return (

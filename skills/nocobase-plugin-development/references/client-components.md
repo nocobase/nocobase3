@@ -162,6 +162,46 @@ Keep a component private unless the App or another package needs a stable import
 
 A public component's contract includes props, render semantics, accessibility, theme integration, namespace behavior, peer dependencies, and export path. Update its types, behavioral tests, user-facing integration guidance, and changeset when that contract changes.
 
+## Report results through the App's toasts
+
+A plugin neither mounts a toast host nor brings a toast library. The App mounts one Base UI `Toaster` in its `client/react-providers.ts`, and a plugin component reaches it through `Toast.useToastManager()` from `@base-ui/react/toast`, a peer the plugin already declares:
+
+```tsx
+import { Toast } from '@base-ui/react/toast';
+import { useTranslation } from '@nocobase/i18n/client';
+import type { ReactElement } from 'react';
+
+import { Button } from './ui/button.js';
+
+export function SaveButton({
+  onSave,
+}: {
+  readonly onSave: () => Promise<void>;
+}): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-audit');
+  const { add: addToast } = Toast.useToastManager();
+  return (
+    <Button
+      onClick={() =>
+        void onSave().then(
+          () => addToast({ type: 'success', title: t('records.saved') }),
+          () =>
+            addToast({
+              type: 'error',
+              priority: 'high',
+              title: t('records.saveFailed'),
+            }),
+        )
+      }
+    >
+      {t('actions.save')}
+    </Button>
+  );
+}
+```
+
+Destructure `add` and `close` rather than keeping the returned object: the object changes whenever a toast appears or leaves, while `add` and `close` are stable, so only they belong in `useCallback` and `useEffect` dependencies. The hook throws outside a `Toast.Provider`, so a component test wraps what it renders, as `render(ui, { wrapper: Toast.Provider })`, or mocks the hook when it asserts what was reported. Do not add sonner or report through Refine's `useNotification()`: the App mounts no sonner host and registers no Refine notification provider, so both report nothing.
+
 ## Keep page modules lazy
 
 Route declarations load page modules instead of statically importing them in `client/plugin.ts`. Declare `authz` on the first page of every path, as a check, `'skip'` or `'unrestricted'`. A nested page that omits it inherits its nearest ancestor page's value. A first page that omits it still registers with a development warning, defaulting to `'unrestricted'` (root only) on a protected App or settings page and to `'skip'` on a guest, optional or dev page, so always declare it:

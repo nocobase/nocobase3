@@ -2,7 +2,6 @@
 '@nocobase/app-plugin-authentication': minor
 '@nocobase/app-plugin-authorization': minor
 '@nocobase/app-plugin-file': minor
-'@nocobase/app-plugin-notification-provider': minor
 '@nocobase/app-plugin-routes-example': minor
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/app-template-default': patch

@@ -111,7 +111,6 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
-    "@refinedev/core": "catalog:",
     "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
     "lucide-react": "catalog:",
