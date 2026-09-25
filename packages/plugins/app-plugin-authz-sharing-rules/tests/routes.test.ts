@@ -76,6 +76,7 @@ describe('sharing rules through the authorization dispatcher', () => {
     });
     expect(authz.ui.placementOf(SETTINGS)).toEqual({
       section: 'authorization',
+      order: 20,
     });
     expect(authz.routes.list()).toContain(PATH);
     expect('sharingRules' in authz).toBe(true);

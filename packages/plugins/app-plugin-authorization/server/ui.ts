@@ -48,6 +48,8 @@ export interface AuthorizationUiGroup {
 export interface AuthorizationUiPlacement {
   readonly section: string;
   readonly group?: string;
+  /** Position within its subsection; unordered resources follow in registration order. */
+  readonly order?: number;
 }
 
 /** A resource to place: a ref, or the reference `composites.define` returns. */
@@ -282,9 +284,14 @@ class AuthorizationUi implements AuthorizationUiApi {
       throw new Error(
         `${resource.type}:${resource.id} can be placed only in a subsection, not ${placement.section}`,
       );
+    if (placement.order !== undefined && !Number.isFinite(placement.order))
+      throw new TypeError(
+        `Placement of ${resource.type}:${resource.id} needs a finite order`,
+      );
     const value: AuthorizationUiPlacement = {
       section: placement.section,
       ...(placement.group === undefined ? {} : { group: placement.group }),
+      ...(placement.order === undefined ? {} : { order: placement.order }),
     };
     const key = refKey(resource);
     const existing = this.placements.get(key);
