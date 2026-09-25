@@ -1,49 +1,53 @@
 ---
 title: 'Quick Start'
-description: 'Ask AI to build a mail center, connect your first account, and read and send messages.'
-keywords: 'NocoBase,mail,quick start,IMAP,SMTP'
+description: 'Use a sales scenario to add mail to a customer record and verify sending and replies.'
+keywords: 'NocoBase,mail,quick start,Agent,CRM'
 ---
 
 # Quick Start
 
-This guide uses an IMAP/SMTP mailbox to take you from building a mail center to sending and receiving your first messages. If your application already provides mail features, start at step 2.
+This guide uses a sales workflow to show how to prepare mail access, describe the desired result to your Agent, and verify the integration.
 
-## Step 1: Ask AI to build a mail center
+## Before you start
 
-In an existing NocoBase 3 application, give AI the following request, adding your mailbox provider and where you want mail to appear:
+- Confirm that the NocoBase Pro Mail plugin is installed and enabled in the application. If it is missing, ask the Agent to check whether Mail is available in your Pro environment; do not replace it with a custom mail client.
+- Decide which mailbox provider to connect. Gmail and Microsoft 365 usually require an administrator to prepare an OAuth app; other providers may use IMAP/SMTP, depending on provider support.
+- Make sure customer contacts have email addresses that can be used for matching, and prepare a mailbox for testing.
 
-> Add a mail center to my application for our company mailboxes. Let everyone connect their own accounts, read, reply to, and send messages, and manage signatures and templates. Tell me which mailbox settings I need to provide and where to open the feature once it is ready.
+Provider credentials are usually maintained by an application administrator in deployment configuration; the exact location depends on the installed version. Users connect their own mailboxes in the application's Mail account page. Do not paste passwords, authorization codes, or OAuth secrets into a chat. See [Prepare Mail Access](./configuration.md) for details.
 
-Tell AI which provider you use and let it guide you through the required information and configuration. IMAP/SMTP requires server addresses and connection settings. Gmail and Microsoft 365 require an OAuth application on the provider's platform; follow [AI-guided setup](./configuration.md#recommended-ai-guided-setup) step by step.
+## Example: handle mail from a customer record
 
-Enter your mailbox password or authorization code yourself when connecting the account. Once setup is complete, open mail from the location AI identifies. This guide uses "account management" and "mail center" to refer to these features; their actual names depend on your application.
+Give the following prompt to your application Agent, and adjust the contact field names and target page to match your app:
 
-## Step 2: Connect a mailbox
+```text
+Add a mail section to the customer detail page in this NocoBase 3 application so sales reps can view and handle messages related to that customer.
 
-Open account management and click "Connect account":
+First check whether the Mail Pro plugin is installed and enabled, and read the Mail Skill shipped with the installed version. If the plugin is unavailable, explain what must be installed or enabled; do not build mail sending and receiving from scratch.
 
-1. Select a configured mailbox provider.
-2. Choose the starting date for the initial synchronization. For your first connection, choosing the last few days reduces the wait.
-3. Enter your email address, username, and password. If your provider requires an authorization code or app password, use that value.
-4. Complete the connection and confirm that the account is active.
+Business rules:
+- Show only messages whose sender or recipient address matches an email address on the current customer's contact records.
+- Use only mailboxes connected by, and accessible to, the current user. Do not expose another user's mailboxes or messages to ordinary sales reps.
+- Let users read messages, view attachments, and reply from the customer detail page.
+- When composing, let users select a contact from this customer and use the customer and contact names in message templates.
+- If a contact has no email, addresses are duplicated, or a message matches multiple customers, make the ambiguity clear and avoid linking it incorrectly.
 
-For Gmail or Microsoft 365 authorization, follow the prompts to authorize on the provider's site.
+Inspect the existing customer fields and permissions before implementing the page. Tell me where an administrator configures the mail provider and where users connect their own mailboxes; do not assume these settings are in a Settings page. If OAuth or server details are required, say who should provide them and where they can be entered securely. Never ask me to paste a secret into chat.
 
-After the first successful connection, the system automatically synchronizes messages within the selected date range in the background. Initial synchronization takes time, especially for larger mailboxes. Check progress in the synchronization records provided by your application.
+When finished, report the page entry point, access rules, and verification results. Confirm that matching messages appear, unrelated messages do not, ordinary users cannot access someone else's mailbox, recipients and customer details are correct when composing, and a test message can be sent and replied to.
+```
 
-## Step 3: Read messages
+## Expected result
 
-Open the mail center to view synchronized messages. Select a message to read its body and view attachments. If you have connected multiple mailboxes, switch accounts to view each one.
+On a customer detail page, sales reps can see messages matching the customer's contact addresses, read them, view attachments, and reply without leaving the page. When composing, they can select a contact and use customer details in the message. Each rep continues to see only mailboxes and messages they are authorized to access.
 
-You can read imported messages before synchronization finishes. If no messages appear yet, refresh the list later. See [Synchronize mailboxes](./usage.md#synchronize-mailboxes) for everyday synchronization use.
+<!-- Add a genuine screenshot of the Mail plugin integrated into a customer detail page, showing customer details, matching messages, and the message read or reply entry point. -->
 
-## Step 4: Send a message
+## Verify the result
 
-Click compose, choose the sending account, and enter a recipient, subject, and body. Send the message to another mailbox you can check.
+- Connect a test mailbox and confirm that messages to or from the customer's contacts appear on the customer page.
+- Confirm that unrelated messages are not shown and contacts without an email address are not matched incorrectly.
+- Sign in as another ordinary user and confirm they cannot view the first user's mailbox or messages.
+- Send a test message and reply to an incoming message; verify the content and attachments in the receiving mailbox.
 
-Confirm that the receiving mailbox has the message and that its body and attachments look correct. You can also reply to an incoming message to try handling mail in the application. If sending fails, check the send records provided by your application for the reason.
-
-## Next steps
-
-- [Use Mail](./usage.md): Manage multiple accounts and use signatures, templates, drafts, and scheduled sending.
-- [Application Development](./development.md): Integrate mail further into customer, project, and other business pages.
+If provider access is not configured yet, start with [Prepare Mail Access](./configuration.md). For signatures, templates, and other business pages, continue to [Further Use](./usage.md).

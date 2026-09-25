@@ -12,16 +12,16 @@
   {
     "type": "file",
     "name": "usage",
-    "label": "Use Mail"
+    "label": "Further Use"
   },
   {
     "type": "file",
     "name": "configuration",
-    "label": "Mailbox Setup"
+    "label": "Prepare Mail Access"
   },
   {
     "type": "file",
     "name": "development",
-    "label": "Application Development"
+    "label": "Advanced Customization"
   }
 ]

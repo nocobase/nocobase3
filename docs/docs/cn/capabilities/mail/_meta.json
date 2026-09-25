@@ -12,16 +12,16 @@
   {
     "type": "file",
     "name": "usage",
-    "label": "使用邮件"
+    "label": "进一步使用"
   },
   {
     "type": "file",
     "name": "configuration",
-    "label": "邮箱接入配置"
+    "label": "准备邮箱接入"
   },
   {
     "type": "file",
     "name": "development",
-    "label": "应用开发"
+    "label": "高级定制"
   }
 ]

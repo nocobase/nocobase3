@@ -1,84 +1,51 @@
 ---
-title: 'Use Mail'
-description: 'Connect and manage mailboxes, read and organize messages, and use signatures, templates, drafts, and scheduled sending.'
+title: 'Further Use'
+description: 'Use concrete prompts to connect mail with business records, templates, and team workflows.'
+keywords: 'NocoBase,mail,business workflows,templates,permissions,Agent'
 ---
 
-# Use Mail
+# Further Use
 
-AI integrates mail components into your application, so navigation and available features depend on your application. The following operations apply to the current user's connected mailboxes. If mail has not been added yet, follow the [Quick Start](./quick-start.md).
+After completing [Quick Start](./quick-start.md), tell the Agent how mail should work with your business. Describe who handles which messages on which page, how messages relate to business records, and who may access them. Let the Agent choose an implementation that matches the installed Mail plugin.
 
-## Manage mailbox accounts
+## Send mail from an order page
 
-Connect mailboxes in account management. Each user can connect multiple accounts, authorize them separately, and choose a starting date for the initial synchronization. See [Quick Start](./quick-start.md#step-2-connect-a-mailbox) for connection steps.
+This is useful when employees contact customers about an order but should review the message before sending. Replace the field names with those in your app:
 
-Disable an account when you do not need it temporarily. It will stop sending and synchronizing until you enable it again. If authorization expires, reconnect the account and authorize it again.
+```text
+Add a "Contact customer" mail action to the order detail page. Let the user choose a recipient from the contacts linked to the current order. The subject and body can use the order number, customer name, and order status. Show a complete preview and require the employee to confirm the recipient, subject, and body before sending; do not automatically email customers when an order status changes. Record the send result, and make sure employees can only use mailboxes they are authorized to access. Check the current Mail Skill and order fields before implementing. Tell me first if the installed version has any limitations with template variables or send records.
+```
 
-Removing an account clears its information and locally synchronized data from the application. It does not delete messages at the mailbox provider.
+**Expected result:** The employee starts a message from the order page, with recipient and order details from the current record, reviews it before sending, and can check the result afterward.
 
-If an account requires reauthorization, reconnect it or complete the OAuth flow before synchronizing or sending again. Disabled or unauthorized accounts are not available as sending accounts.
+## Create team signatures and templates
 
-## Read and find messages
+Use this for consistent company introductions, support details, or common replies. Tell the Agent which content an administrator maintains and which details employees may personalize; avoid hard-coding template text into a page.
 
-The mail center shows messages from multiple accounts and identifies the source account. Switch accounts and folders, search messages, or filter by unread status, stars, and labels.
+```text
+Set up reusable email signatures and templates for the sales team. Sales reps can use templates maintained by the company while keeping their own name, title, and contact details. Let them review the final message before sending. Use the management options supported by the installed Mail plugin, and tell me who maintains templates and where employees select them. Do not put secrets or private customer data in a template.
+```
 
-Select a message to read its body and view or download attachments. Messages in the same conversation are grouped using information from the provider. Opening a message marks it as read; you can mark it unread again manually.
+**Expected result:** Selecting a template fills in its subject and body, personal details and fields from the current business record appear correctly, and the employee can still edit and review the message before sending.
 
-Some message bodies may not have finished loading. Follow the prompts to load them or retry.
+<!-- Add genuine screenshots from the current version showing the mail entry point on a business record, template selection, and the pre-send preview. Two screenshots may be clearer. -->
 
-## Synchronize mailboxes
+## Define team visibility
 
-When you first connect a mailbox, the system automatically synchronizes messages within the selected date range, then periodically synchronizes new messages. Initial synchronization can take time; you can read imported messages while it continues.
+Use this when managers need to track team activity. First decide whether "view progress" also means reading message content; these should not be treated as the same permission by default.
 
-Use the synchronization action when you want to fetch new messages. With one account selected, it synchronizes that mailbox. "Sync all mailboxes" synchronizes available accounts. Refreshing the list only displays data already synchronized to the application; it does not fetch new messages from the provider.
+```text
+Set up mail access for the sales team: each rep can access only messages in their own connected mailboxes. Managers can view team processing status and send results, but must not read message bodies or attachments unless I explicitly approve that. Check whether the installed Mail plugin and application permissions can separate these scopes. Show me the proposed access rules for confirmation before implementing them. Do not rely on hiding a page or button as the access control.
+```
 
-Check progress and errors in the synchronization records provided by your application. The application configures the automatic synchronization interval for all accounts, with a default of every five minutes.
+**Expected result:** Reps handle only their own mailboxes, and managers receive only the approved management scope. If the current version cannot safely separate processing status from message content, the Agent should explain the limitation instead of broadening manager access.
 
-IMAP/SMTP primarily synchronizes new messages. Read status changes, deletions, and moves made in other clients are not yet fully synchronized.
+## Everyday considerations
 
-Gmail and Microsoft 365 also support provider draft synchronization, sending aliases, and push synchronization. IMAP/SMTP keeps drafts only in the application and does not support aliases, push, or moving messages to provider folders. See [Mailbox Setup](./configuration.md) for provider-specific configuration.
+- Choose an appropriate date range when connecting a mailbox for the first time. Importing more history usually takes longer.
+- Refreshing a page only displays content already synchronized to the application. Use the available sync action to fetch new messages.
+- IMAP/SMTP primarily syncs new messages and does not guarantee synchronization of read, deleted, or moved states from other clients. Provider drafts, sending aliases, push sync, and moving messages to provider folders are also unavailable.
+- If a send result is uncertain, check the receiving mailbox and original send record before retrying to avoid duplicates.
+- For approval results, verification codes, or system alerts—not correspondence through a user's personal mailbox—use [Notifications](../notification.md).
 
-## Organize messages
-
-Mark messages read or unread, add stars, and move, archive, or delete messages according to your mailbox's capabilities. IMAP/SMTP does not yet support moving messages to folders or trash; use your provider's client for those operations. Permanent deletion removes messages from the provider, so check the content before proceeding.
-
-Labels, private notes, and to-do markers organize messages within the application and remain after synchronization. They are not synchronized as labels, notes, or tasks in the provider's mailbox.
-
-## Compose, reply, and forward
-
-Click compose, choose the sending account, and enter recipients, a subject, and a body. Add attachments, CC, or BCC as needed. If the account has available sending aliases, you can choose one to send from.
-
-Reply or forward directly while reading a message. Forwarding preserves the original content and lets you add your own text before it.
-
-### Use signatures and templates
-
-Set up signatures and templates in account management. Each mailbox can have multiple signatures and a default. Switch signatures while composing or choose not to use one.
-
-Templates reuse message subjects and bodies and belong to the current user. Applying a template replaces the current subject and body, so check whether you need to keep existing content first.
-
-If the application integrates business data, templates can also fill in values such as customer names. Check the result before sending; unmatched variables remain unchanged.
-
-### Save drafts
-
-Drafts are saved automatically as you compose, so you can continue editing after reopening the page. Gmail and Microsoft 365 also support synchronizing drafts to the provider. IMAP/SMTP drafts are stored only in the application.
-
-If draft versions conflict, follow the prompts to compare them and choose which version to keep. When closing the composer, resolve any unsaved-change prompt first.
-
-### Schedule sending
-
-Enable scheduled sending and choose a time. Once saved, the system sends at that time even if you close the browser. The application services and mailbox account must still be available when the message is due.
-
-### Send separately
-
-Use separate sending when you want each recipient to receive an individual message.
-
-Check each recipient's result in the bulk send records. If some fail, retry only the failed items to avoid duplicate messages.
-
-## View send results
-
-Regular, scheduled, and separate sending all create records, available through your application's send records feature.
-
-:::warning 注意
-
-A provider accepting a message (`accepted`) does not guarantee that the recipient has received or read it. Check the error reason after a failed send. If the result is uncertain (`unknown`), confirm whether the message was sent before retrying; do not create a new message immediately and send it again.
-
-:::
+For custom Mail pages, permissions, or provider extensions, see [Advanced Customization](./development.md).

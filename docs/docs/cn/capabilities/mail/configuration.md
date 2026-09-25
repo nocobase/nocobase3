@@ -1,198 +1,74 @@
 ---
-title: '邮箱接入配置'
-description: '通过 AI 分步引导完成邮箱接入，按需查阅手动配置、OAuth 回调和同步设置。'
+title: '准备邮箱接入'
+description: '了解管理员和邮箱用户分别需要准备什么，以及如何让 Agent 引导完成接入。'
+keywords: 'NocoBase,邮件,邮箱接入,OAuth,IMAP,SMTP,Agent'
 ---
 
-# 邮箱接入配置
+# 准备邮箱接入
 
-本页供搭建应用时按需查阅。应用搭建者先配置可用的邮箱服务商，每位用户再在应用中关联自己的邮箱。已有应用已完成配置时，直接按[快速开始](./quick-start.md#第二步关联邮箱)关联账户即可。
+Mail 接入分为两件事：管理员让应用能够连接邮箱服务，用户再关联自己有权使用的邮箱。已有应用能正常关联账户时，可以直接按[快速开始](./quick-start.md)搭建页面，不必重复配置服务商。
 
-## 推荐：让 AI 引导配置
+## 谁需要准备什么
 
-你只需先说明邮箱类型、应用访问地址和使用范围，比如仅公司内部使用，还是允许其他用户关联邮箱。已有 OAuth 应用时也一并说明，让 AI 检查能否复用。无需先理解所有配置项，可以把下面的需求交给应用 Agent：
+| 邮箱方式             | 应用管理员准备                                              | 邮箱用户操作                                           |
+| -------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| Gmail、Microsoft 365 | 可用的 OAuth 应用、应用访问地址，以及服务商要求的管理员审批 | 在应用中选择账户并登录服务商授权                       |
+| IMAP/SMTP            | 邮箱服务提供的收信和发信服务器信息，以及连接方式            | 在应用中填写邮箱地址、用户名和服务商要求的密码或授权码 |
 
-> 请引导我为当前应用接入 Gmail 邮箱（也可以替换为 Microsoft 365 或 IMAP/SMTP）。先读取邮件插件 Skill 和已有配置，确认应用访问地址及使用范围，列出还缺少的信息。请完成项目内的配置，并将需要我在服务商平台操作的部分逐步说明，每一步给出入口、填写值和完成后的检查方法。OAuth 回调地址请根据当前项目生成，权限以当前插件要求为准。密钥请告诉我在本地哪里填写，不要让我直接粘贴到对话中。配置完成后，引导我关联一个邮箱，检查授权返回、首次同步和收发信是否正常。
+### 配置入口在哪里
 
-### 配置过程
+当前 Mail 接入方式将服务商凭据和服务器信息作为应用级配置维护，管理员在应用服务端配置的 `mail.providers` 中设置；这不是普通用户在 Settings 页面填写的个人设置。密钥应按部署环境的安全方式管理，不要提交到代码仓库。用户在应用的 Mail 账户页面关联自己的邮箱并完成授权。
 
-1. **确认接入信息**：AI 检查当前应用，确认服务商、部署地址和已有配置。使用 IMAP/SMTP 时，根据服务商提供的信息确认服务器地址、端口和连接方式。
-2. **完成平台操作**：使用 Gmail 或 Microsoft 365 时，AI 给出需要登记的回调地址、权限和操作步骤。你在服务商平台登录，创建或选择 OAuth 应用，并完成所需授权或管理员审批。AI 工具支持浏览器操作时，也可以让它辅助填写。
-3. **完成应用配置**：AI 生成或更新配置文件，标明客户端 ID、密钥等信息的填写位置。你在本地填写敏感值，再由 AI 检查配置结构和启动结果，检查输出应隐藏密钥。
-4. **验证接入结果**：在应用中关联一个邮箱，确认授权后能返回应用、首次同步正常，并完成一次收发信。
+如果当前 Pro 版本提供了服务商 Settings 页面，以该版本随附的 Mail Skill 为准。让 Agent 先检查当前版本和应用配置，再告诉你准确入口；不要把密钥发到聊天中或提交到代码仓库。
 
-这里的分步引导由应用 Agent 根据项目情况完成。服务商账户登录、用户授权和必要的管理员审批仍需相应账户持有人完成；遇到平台权限或审核要求时，由 AI 说明下一步需要谁处理。
+<!-- 需要一张当前版本的真实界面截图，清楚区分管理员配置服务商的位置与用户关联邮箱的位置；若两者不在同一界面，应分别截图。 -->
 
-## 手动配置（备用）
+## 让 Agent 带你完成配置
 
-需要自行配置或核对 AI 生成的结果时，可查阅下面的准备清单和配置示例。
-
-### 服务商平台图文参考
-
-原有文档提供了控制台操作截图，可作为手动操作的补充：
-
-- [邮件配置流程](https://docs.nocobase.com/cn/email-manager/configuration/guide)
-- [Gmail 服务商配置](https://docs.nocobase.com/cn/email-manager/configuration/gmail)
-- [Outlook / Microsoft 服务商配置](https://docs.nocobase.com/cn/email-manager/configuration/outlook)
-
-这些指南面向旧版邮件插件，仅参考其中的服务商平台操作。旧版 NocoBase 设置入口、回调地址和权限列表不适用于当前应用；请使用 AI 根据当前项目生成的值，或按本页的配置说明填写。服务商控制台界面如有变化，以当前平台提示为准。
-
-### 需要准备什么
-
-| 接入方式      | 应用搭建者准备                                        | 邮箱用户填写或操作             |
-| ------------- | ----------------------------------------------------- | ------------------------------ |
-| IMAP/SMTP     | 收信和发信服务器地址、端口及连接方式                  | 邮箱地址、用户名、密码或授权码 |
-| Gmail         | Google OAuth Web 应用的客户端 ID、密钥和回调地址      | 登录 Google 账户并授权         |
-| Microsoft 365 | Microsoft Entra 应用的客户端 ID、密钥、租户及回调地址 | 登录 Microsoft 账户并授权      |
-
-可以让 AI 按所选接入方式完成应用配置。IMAP/SMTP 服务器信息由邮箱服务商提供；Gmail 和 Microsoft 365 需要在对应平台创建 OAuth 应用，并登记[OAuth 回调地址](#oauth-回调地址)。
-
-以下配置写入应用的 [`config.yml`](../../app/configuration.md) 的 `mail` 节点，修改后重启应用。一个应用可以配置多个服务商实例；实例名会关联到已有账户，投入使用后应保持稳定。实例的 `enabled` 默认是 `true`，设为 `false` 后，关联账户将无法继续使用该实例。
-
-自动同步、定时发送和推送触发的同步都需要应用队列正常运行。配置文件正确并不代表后台任务已经执行，遇到任务长时间停留在等待状态时，先检查队列和应用服务状态。
-
-| 实例类型    | 必填配置                                       | 账户关联方式                                       |
-| ----------- | ---------------------------------------------- | -------------------------------------------------- |
-| `gmail`     | `clientId`、`clientSecret`                     | Google OAuth                                       |
-| `microsoft` | `clientId`、`clientSecret`                     | Microsoft OAuth；`tenant` 默认为 `common`          |
-| `imap-smtp` | `imap` 和 `smtp` 下的 `host`、`port`、`secure` | 用户在关联账户时填写邮箱地址、用户名和密码或授权码 |
-
-## IMAP/SMTP
-
-```yaml
-mail:
-  providers:
-    company-mail:
-      type: imap-smtp
-      imap:
-        host: imap.example.com
-        port: 993
-        secure: true
-      smtp:
-        host: smtp.example.com
-        port: 465
-        secure: true
-```
-
-应用配置收信和发信服务器，用户关联账户时填写邮箱地址、用户名和密码。插件会验证两个端点后再保存凭据。邮箱服务要求使用授权码或应用专用密码时，填写该值。
-
-`host`、`port` 和 `secure` 均为必填项。`secure: true` 表示连接时直接使用 TLS；上例适用于 IMAP `993` 和 SMTP `465`。SMTP 使用 STARTTLS 端口时按服务器要求设置 `secure: false`。证书校验 `rejectUnauthorized` 默认是 `true`。实例还可以设置 `sentFolder`、`trashFolder`、`draftsFolder`，作为文件夹自动识别的路径提示；这些提示不会启用远端草稿功能。
-
-### 已发送邮件的保存（按需配置）
-
-`sentCopyMode` 默认为 `server`，由 SMTP 服务保存已发送副本。服务端不保存副本时，设置为 `client`，插件会将已发送邮件追加到 `sentFolder` 指定的现有文件夹，或服务端标记为「已发送」的文件夹：
-
-```yaml
-mail:
-  providers:
-    company-mail:
-      type: imap-smtp
-      imap:
-        host: imap.example.com
-        port: 993
-        secure: true
-      smtp:
-        host: smtp.example.com
-        port: 465
-        secure: true
-      sentCopyMode: client
-      sentFolder: Sent
-```
-
-服务端已经自动保存副本时，保持 `server`，避免产生重复副本。客户端保存失败会记录 `IMAP_SENT_COPY_FAILED`，不会重发已被 SMTP 接受的邮件。
-
-## Gmail
-
-在 `mail.providers` 中添加 Gmail 实例：
-
-```yaml
-mail:
-  providers:
-    google:
-      type: gmail
-      clientId: replace-with-google-oauth-client-id
-      clientSecret: replace-with-google-oauth-client-secret
-```
-
-使用 Google OAuth Web 应用的凭据，并为该应用登记下文说明的完整 OAuth 回调地址。插件默认请求 `https://www.googleapis.com/auth/gmail.modify` 和 `https://www.googleapis.com/auth/gmail.settings.basic`，分别用于邮件操作和发件地址发现。可通过实例的 `scopes` 配置允许请求的授权范围；账户关联请求不能超出该列表。
-
-## Microsoft 365
-
-```yaml
-mail:
-  providers:
-    microsoft-365:
-      type: microsoft
-      tenant: common
-      clientId: replace-with-microsoft-entra-client-id
-      clientSecret: replace-with-microsoft-entra-client-secret
-```
-
-填写 Microsoft Entra 应用凭据并登记完整 OAuth 回调地址。`tenant` 默认是 `common`，也可以指定租户 ID 或域名。插件默认请求 `openid`、`profile`、`email`、`offline_access`，以及 Microsoft Graph 的 `User.Read`、`Mail.ReadWrite`、`Mail.Send`，可通过 `scopes` 调整允许请求的范围。
-
-## OAuth 回调地址
-
-`mail.oauthCallbackUrl` 默认是应用内路径 `/mail/oauth/callback`。邮件插件将应用的 `app.publicBasePath` 加到路径前面，再根据 `app.publicOrigin` 生成完整地址；没有配置公共 origin 时使用请求 origin。
-
-比如，公共 origin 是 `https://mail.example.com`、应用挂载在 `/main`，应在 OAuth 应用中登记：
+把下面的提示词交给应用 Agent，并替换邮箱服务商和部署信息：
 
 ```text
-https://mail.example.com/main/mail/oauth/callback
+请为当前 NocoBase 3 应用准备 Mail 邮箱接入，邮箱服务商是 [Gmail / Microsoft 365 / IMAP/SMTP]，应用访问地址是 [应用地址]。
+
+先检查 Mail Pro 插件是否已安装并启用，阅读当前安装版本随附的 Mail Skill，并检查现有配置。先告诉我：
+1. 服务商配置由管理员在哪里维护，普通用户在哪里关联个人邮箱；这是否涉及 Settings 页面。
+2. 还缺少哪些信息，分别需要由应用管理员、邮箱管理员或邮箱用户提供。
+3. OAuth 回调地址或 IMAP/SMTP 服务器信息应如何确认，以及如何验证填写正确。
+
+请根据当前安装版本完成应用侧可安全完成的配置，并把必须由我在服务商平台操作的步骤逐步列出。密钥和邮箱密码不得要求我粘贴到对话中；请指出安全的本地或部署密钥填写位置。不要猜测回调地址、权限范围或配置项。
+
+配置完成后，指导我关联一个测试邮箱，并确认授权能返回应用、首次同步正常、邮件可以阅读和发送。若插件或当前邮箱类型不支持某项能力，请先说明限制，不要用自建收发逻辑替代。
 ```
 
-可通过 `mail.oauthCallbackUrl` 或 `MAIL_OAUTH_CALLBACK_URL` 覆盖。相对路径仍会加上应用前缀；绝对地址必须已经包含该前缀，且最终转发到当前应用。地址不能包含 `#` 片段。
+Agent 应该先说明准备清单和操作者，再协助配置；需要登录 Google、Microsoft 或邮箱服务商平台、批准组织权限的步骤仍由有权限的人完成。
 
-```yaml
-mail:
-  oauthCallbackUrl: /mail/oauth/callback
-```
+## 选择邮箱接入方式
 
-本地开发时，确认登记的主机名、端口和实际访问地址一致。需要固定地址时可显式设置 `APP_PUBLIC_ORIGIN`，使用启动日志中的实际端口。OAuth 回调与推送回调是两种不同地址，不可相互替代。
+- **Gmail 或 Microsoft 365**：通常通过 OAuth 登录授权。管理员需要准备服务商 OAuth 应用，并将 Agent 根据当前应用生成的回调地址登记到服务商平台。
+- **IMAP/SMTP**：适用于提供标准 IMAP 收信和 SMTP 发信服务的邮箱。管理员提供服务器地址、端口和安全连接方式；用户关联邮箱时使用服务商要求的登录凭据。
 
-## 同步配置
+Gmail 和 Microsoft 365 支持的同步与邮箱整理能力较完整。IMAP/SMTP 主要用于收取新邮件和发送邮件，不完整同步其他客户端中的已读、删除和移动操作，也不支持服务商草稿、发件别名、推送同步或移动到服务商文件夹。具体能力以当前安装版本和邮箱服务商为准。
 
-| 配置项                         | 默认值   | 环境变量                          | 含义                                                                       |
-| ------------------------------ | -------- | --------------------------------- | -------------------------------------------------------------------------- |
-| `mail.automaticSyncIntervalMs` | `300000` | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | 所有账户统一使用的自动同步间隔，仅通过 config 配置，单位毫秒，至少 `60000` |
-| `mail.syncBatchSize`           | `100`    | `MAIL_SYNC_BATCH_SIZE`            | 每次服务商同步请求的批量大小，整数 `1–200`                                 |
+## 常见问题
 
-自动同步间隔统一通过配置管理，对新账户和已有账户生效，账户页面不单独调整。运行时每分钟检查到期账户，因此实际启动时间可能稍晚于设定间隔。
+### 应用里找不到 Mail 或关联邮箱入口
 
-首次关联账户时可以选择历史邮件的起始日期。插件导入该日期及之后的邮件；不设置日期时导入全部历史。历史导入没有累计封数上限。`syncBatchSize` 只控制单次请求的批量大小，不限制账户邮件总量。
+先确认当前部署是否提供并启用了 NocoBase Pro Mail 插件。随后请 Agent 按当前版本检查 Mail 页面是否已接入应用；插件已启用不代表邮件入口已自动添加到业务导航。
 
-历史导入与增量同步交替推进，每批保存进度。服务重启后可以恢复中断任务；游标失效时会重新扫描账户配置的历史范围。可在应用的同步记录中查看进度和正文待处理状态。
+### OAuth 登录后没有回到应用
 
-## 推送同步（可选）
+请管理员核对服务商平台登记的回调地址与当前应用对外访问地址是否完全一致，包括协议、域名、端口和应用路径。让 Agent 根据当前部署配置重新确认回调地址，不要照抄其他环境的示例。
 
-默认周期同步即可自动获取邮件。需要更及时地获取变化时，可以启用推送。推送可让 Gmail 和 Microsoft 365 的邮箱变更更快触发增量同步。先同时配置公共回调地址和密钥：
+### 邮箱关联成功，但没有看到邮件
 
-```yaml
-mail:
-  pushWebhookUrl: https://mail.example.com/main/mail/webhooks
-  pushWebhookSecret: replace-with-a-random-secret-at-least-32-characters
-```
+检查首次同步选择的起始日期、同步状态和邮箱授权是否有效。首次导入大量邮件需要时间；应用后台任务或队列未运行时，同步也可能无法完成，请让 Agent 检查应用服务状态和同步记录。
 
-将示例密钥替换为随机值：长度为 `32–128`，仅使用字母、数字、`_` 和 `-`。对应环境变量为 `MAIL_PUSH_WEBHOOK_URL`、`MAIL_PUSH_WEBHOOK_SECRET`，只填写其中一项不会启用推送。运行时在基础地址后追加服务商类型、实例名和密钥，比如：
+### 在其他邮箱客户端整理的邮件没有同步
 
-```text
-https://mail.example.com/main/mail/webhooks/gmail/google/<secret>
-```
+IMAP/SMTP 当前主要发现新增邮件，不保证同步其他客户端的已读、删除和移动状态，也不支持移动邮件到服务商文件夹。需要这些能力时，优先确认 Gmail 或 Microsoft 365 是否适用。
 
-Gmail 还需要在 `google` 实例中设置 `pushTopicName: projects/example/topics/mail-push`，并在 Google Cloud Pub/Sub 中把推送订阅指向上面的完整地址。主题需要允许 Gmail 推送服务账号发布消息；可用 `pushLabelIds` 限制监听标签。邮件插件负责创建和续期账户的 Gmail watch。
+### 邮件发送结果显示不确定
 
-Microsoft 365 的订阅由邮件插件在账户连接后创建、验证和续期，无需手动在 Graph 或 Entra 中登记 webhook。配置的地址需要能够从公网通过 HTTPS 访问。
+先查看应用的发送记录并在收件邮箱确认邮件是否已到达，再决定是否重试。不要因为页面超时就立即新建邮件重发，以免重复发送。
 
-推送只触发已有的增量同步流程，周期同步仍然作为通知延迟或丢失时的补充。IMAP/SMTP 不支持推送。
-
-## 配置与凭据存储
-
-上面列出的 `MAIL_*` 环境变量会覆盖对应的 `mail` 配置。服务商凭据、端点和授权范围通过 `mail.providers` 设置，没有独立的 `MAIL_*` 环境变量映射。修改配置后重启应用。
-
-:::warning 注意
-
-不要将真实的 OAuth 密钥、推送密钥和邮箱密码提交到仓库。当前核心插件的默认凭据存储将授权数据以普通 JSON 保存在数据库中；如果应用要求加密保存，可按[应用开发](./development.md#扩展服务商和凭据存储)接入替代实现。
-
-:::
-
-## 配置完成后
-
-回到[快速开始](./quick-start.md#第二步关联邮箱)，关联邮箱并完成一次收发。
+如果要把邮件放进客户、项目等业务页面，继续看[进一步使用](./usage.md)。

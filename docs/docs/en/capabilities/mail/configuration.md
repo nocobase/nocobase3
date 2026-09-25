@@ -1,198 +1,74 @@
 ---
-title: 'Mailbox Setup'
-description: 'Set up mailbox access with AI guidance, with manual configuration, OAuth callbacks, and synchronization settings available for reference.'
+title: 'Prepare Mail Access'
+description: 'Learn what administrators and mailbox users need to prepare, and ask an Agent to guide the setup.'
+keywords: 'NocoBase,mail,mailbox setup,OAuth,IMAP,SMTP,Agent'
 ---
 
-# Mailbox Setup
+# Prepare Mail Access
 
-Use this page as needed while building your application. The application builder configures available providers first; each user then connects their own mailbox. If your application is already configured, go directly to [connecting an account](./quick-start.md#step-2-connect-a-mailbox).
+Mail setup has two parts: an administrator enables the application to connect to a provider, and each user connects a mailbox they are authorized to use. If users can already connect accounts in your app, you can build the page from [Quick Start](./quick-start.md) without repeating provider setup.
 
-## Recommended: AI-guided setup
+## Who prepares what
 
-Start by telling AI your mailbox type, application URL, and intended audience, such as internal company users or other users who will connect their accounts. If you already have an OAuth application, mention it so AI can check whether it can be reused. You do not need to understand every setting first. Give the application agent this request:
+| Mailbox method         | Application administrator prepares                                             | Mailbox user does                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Gmail or Microsoft 365 | An available OAuth app, the application URL, and any provider-admin approval   | Selects an account in the app and authorizes with the provider                                        |
+| IMAP/SMTP              | Incoming and outgoing server details and connection settings from the provider | Enters their email address, username, and the password or authorization code required by the provider |
 
-> Guide me through connecting Gmail to this application (or substitute Microsoft 365 or IMAP/SMTP). First read the Mail plugin skill and existing configuration, confirm the application URL and intended audience, and list any missing information. Complete the project configuration and guide me step by step through anything I need to do on the provider's platform. For each step, provide the entry point, values to enter, and how to check completion. Generate the OAuth callback URL from this project and use the current plugin's required permissions. Tell me where to enter secrets locally instead of asking me to paste them into the conversation. Once configured, guide me through connecting a mailbox and checking the authorization return, initial synchronization, and sending and receiving.
+### Where are the settings?
 
-### Setup process
+The current Mail connection flow treats provider credentials and server details as application-level settings. An administrator maintains them in the app server's `mail.providers` configuration; these are not personal settings for users to enter in a Settings page. Handle secrets securely according to the deployment environment and do not commit them to the repository. Users connect and authorize their own mailboxes from the application's Mail account page.
 
-1. **Confirm connection details**: AI checks the application, provider, deployment URL, and existing settings. For IMAP/SMTP, it confirms server addresses, ports, and connection methods using information from the provider.
-2. **Complete provider setup**: For Gmail or Microsoft 365, AI supplies the callback URL, permissions, and steps to follow. Sign in to the provider's platform, create or select an OAuth application, and complete required authorization or administrator approval. If your AI tool supports browser interaction, you can also ask it to help fill in forms.
-3. **Complete application configuration**: AI generates or updates configuration files and identifies where to enter the client ID, secrets, and other values. Enter sensitive values locally, then have AI check the configuration structure and startup results. Check output should hide secrets.
-4. **Verify the connection**: Connect a mailbox in the application, confirm that authorization returns to the application and initial synchronization works, then send and receive a message.
+If the current Pro release provides a provider Settings page, follow the Mail Skill shipped with that release. Ask the Agent to inspect the installed version and application configuration before giving you the exact location. Never share secrets in chat or commit them to the repository.
 
-The application agent provides this guidance based on your project. provider sign-in, user authorization, and required administrator approvals still need the appropriate account holder. If platform permissions or review requirements block progress, AI should explain who needs to handle the next step.
+<!-- Add genuine screenshots from the current version that distinguish provider setup by an administrator from mailbox connection by a user. Use separate screenshots if these are different screens. -->
 
-## Manual setup as a fallback
+## Ask the Agent to guide setup
 
-Use the preparation checklist and examples below when configuring manually or checking AI-generated settings.
-
-### Illustrated provider guides
-
-The earlier documentation includes console screenshots for reference during manual setup:
-
-- [Mail configuration workflow](https://docs.nocobase.com/cn/email-manager/configuration/guide) (Chinese)
-- [Gmail provider setup](https://docs.nocobase.com/cn/email-manager/configuration/gmail) (Chinese)
-- [Outlook / Microsoft provider setup](https://docs.nocobase.com/cn/email-manager/configuration/outlook) (Chinese)
-
-These guides describe the older Mail plugin. Refer only to their provider-platform operations. The older NocoBase settings pages, callback URLs, and permission lists do not apply to the current application. Use values generated by AI for your project or the settings on this page. If the provider console has changed, follow its current prompts.
-
-### What to prepare
-
-| Connection method | Application builder prepares                                            | Mailbox user provides or does                               |
-| ----------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
-| IMAP/SMTP         | Incoming and outgoing server addresses, ports, and connection methods   | Email address, username, and password or authorization code |
-| Gmail             | Google OAuth web application client ID, secret, and callback URL        | Sign in to Google and authorize access                      |
-| Microsoft 365     | Microsoft Entra application client ID, secret, tenant, and callback URL | Sign in to Microsoft and authorize access                   |
-
-Ask AI to configure the application for the selected method. Your mailbox provider supplies IMAP/SMTP server details. Gmail and Microsoft 365 require an OAuth application on their platform with a registered [OAuth callback URL](#oauth-callback-url).
-
-Write the following settings under `mail` in the application's [`config.yml`](../../app/configuration.md) and restart after changes. An application can configure multiple provider instances. Their names are associated with connected accounts and should remain stable once in use. Instances default to `enabled: true`; setting this to `false` prevents associated accounts from continuing to use the instance.
-
-Automatic synchronization, scheduled sending, and push-triggered synchronization require the application queue to be running. Correct configuration alone does not mean that background work is executing; if a task stays pending, check the queue and application service first.
-
-| Instance type | Required settings                                         | Account connection                                                                             |
-| ------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `gmail`       | `clientId`, `clientSecret`                                | Google OAuth                                                                                   |
-| `microsoft`   | `clientId`, `clientSecret`                                | Microsoft OAuth; `tenant` defaults to `common`                                                 |
-| `imap-smtp`   | `host`, `port`, and `secure` under both `imap` and `smtp` | The user enters an email address, username, and password or authorization code when connecting |
-
-## IMAP/SMTP
-
-```yaml
-mail:
-  providers:
-    company-mail:
-      type: imap-smtp
-      imap:
-        host: imap.example.com
-        port: 993
-        secure: true
-      smtp:
-        host: smtp.example.com
-        port: 465
-        secure: true
-```
-
-The application configures the receiving and sending servers. Users supply their email address, username, and password when connecting an account. The plugin verifies both endpoints before storing credentials. If the mailbox service requires an authorization code or application password, use that value.
-
-`host`, `port`, and `secure` are required. `secure: true` starts TLS when connecting; the example uses IMAP `993` and SMTP `465`. For an SMTP STARTTLS port, set `secure: false` as required by the server. Certificate verification through `rejectUnauthorized` defaults to `true`. An instance can also specify `sentFolder`, `trashFolder`, and `draftsFolder` as path hints for folder discovery; these hints do not enable remote drafts.
-
-### Saving sent messages when needed
-
-`sentCopyMode` defaults to `server`, leaving the SMTP service responsible for saving sent copies. If the server does not save copies, set it to `client`. The plugin appends sent messages to the existing folder specified by `sentFolder`, or to the folder marked as sent by the server:
-
-```yaml
-mail:
-  providers:
-    company-mail:
-      type: imap-smtp
-      imap:
-        host: imap.example.com
-        port: 993
-        secure: true
-      smtp:
-        host: smtp.example.com
-        port: 465
-        secure: true
-      sentCopyMode: client
-      sentFolder: Sent
-```
-
-Keep `server` when the provider already saves copies to avoid duplicates. A client-side save failure records `IMAP_SENT_COPY_FAILED` and does not resend a message already accepted by SMTP.
-
-## Gmail
-
-Add a Gmail instance under `mail.providers`:
-
-```yaml
-mail:
-  providers:
-    google:
-      type: gmail
-      clientId: replace-with-google-oauth-client-id
-      clientSecret: replace-with-google-oauth-client-secret
-```
-
-Use credentials from a Google OAuth web application and register the complete OAuth callback URL described below. The plugin requests `https://www.googleapis.com/auth/gmail.modify` and `https://www.googleapis.com/auth/gmail.settings.basic` by default for mail operations and sending identity discovery. Use the instance's `scopes` setting to configure the allowed scopes; account authorization requests cannot exceed that list.
-
-## Microsoft 365
-
-```yaml
-mail:
-  providers:
-    microsoft-365:
-      type: microsoft
-      tenant: common
-      clientId: replace-with-microsoft-entra-client-id
-      clientSecret: replace-with-microsoft-entra-client-secret
-```
-
-Supply Microsoft Entra application credentials and register the complete OAuth callback URL. `tenant` defaults to `common`; a tenant ID or domain can also be used. The plugin requests `openid`, `profile`, `email`, `offline_access`, and Microsoft Graph's `User.Read`, `Mail.ReadWrite`, and `Mail.Send` by default. Use `scopes` to adjust the allowed list.
-
-## OAuth callback URL
-
-`mail.oauthCallbackUrl` defaults to the application-local path `/mail/oauth/callback`. Mail prefixes it with `app.publicBasePath` and resolves it against `app.publicOrigin`. When no public origin is configured, it uses the request origin.
-
-For a public origin of `https://mail.example.com` and an application mounted at `/main`, register this URL with the OAuth application:
+Give this prompt to your application Agent and replace the provider and deployment details:
 
 ```text
-https://mail.example.com/main/mail/oauth/callback
+Prepare Mail access for this NocoBase 3 application. The mailbox provider is [Gmail / Microsoft 365 / IMAP/SMTP], and the application URL is [application URL].
+
+First check that the Mail Pro plugin is installed and enabled, read the Mail Skill shipped with the installed version, and inspect the existing configuration. Tell me:
+1. Where an administrator maintains provider settings and where users connect personal mailboxes, including whether a Settings page is involved.
+2. What information is missing and whether it must come from the application administrator, mailbox administrator, or mailbox user.
+3. How to determine the OAuth callback URL or IMAP/SMTP server details and verify them.
+
+Complete any application-side configuration that can be done safely, and list the steps I must perform on the provider's platform. Never ask me to paste a secret or mailbox password into chat; tell me where it can be entered securely in the local or deployment environment. Do not guess callback URLs, permission scopes, or configuration fields.
+
+After setup, guide me through connecting a test mailbox. Confirm that authorization returns to the app, initial synchronization works, and messages can be read and sent. If the plugin or mailbox type does not support a capability, explain the limitation instead of replacing it with custom mail logic.
 ```
 
-Override it with `mail.oauthCallbackUrl` or `MAIL_OAUTH_CALLBACK_URL`. Relative paths still receive the application prefix; absolute URLs must already include that prefix and route to the current application. URLs cannot contain a `#` fragment.
+The Agent should explain the checklist and who needs to act before making changes. A person with the appropriate access must still sign in to Google, Microsoft, or the mailbox provider and approve any organization-level permissions.
 
-```yaml
-mail:
-  oauthCallbackUrl: /mail/oauth/callback
-```
+## Choose a connection method
 
-During local development, make sure the registered hostname and port match the actual address. Set `APP_PUBLIC_ORIGIN` explicitly if you need a fixed origin, using the actual port shown in the startup log. OAuth and push callbacks are separate URLs and cannot replace each other.
+- **Gmail or Microsoft 365**: Usually connects through OAuth. An administrator prepares the provider OAuth app and registers the callback URL generated for the current application.
+- **IMAP/SMTP**: Works with mailboxes that provide standard IMAP receiving and SMTP sending. An administrator supplies the server addresses, ports, and connection security; users connect with the credentials required by their provider.
 
-## Synchronization settings
+Gmail and Microsoft 365 provide broader synchronization and mailbox-management capabilities. IMAP/SMTP primarily discovers new messages and sends mail; it does not fully synchronize read, deleted, and moved states from other clients, and does not support provider drafts, sending aliases, push sync, or moving messages to provider folders. Check the installed version and provider for exact capabilities.
 
-| Setting                        | Default  | Environment variable              | Meaning                                                                                                                |
-| ------------------------------ | -------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `mail.automaticSyncIntervalMs` | `300000` | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | Automatic synchronization interval for all accounts, set only through configuration, in milliseconds; at least `60000` |
-| `mail.syncBatchSize`           | `100`    | `MAIL_SYNC_BATCH_SIZE`            | Batch size for each provider synchronization request; an integer from `1–200`                                          |
+## FAQ
 
-The automatic synchronization interval is configured centrally and applies to new and existing accounts. It cannot be adjusted separately on the account page. The runtime checks for due accounts every minute, so actual start times may be slightly later than the configured interval.
+### Mail or the account connection entry is missing
 
-When first connecting an account, choose a starting date for historical mail. The plugin imports messages from that date onward, or all history when no date is set. Historical imports have no total message limit. `syncBatchSize` controls only the size of each request, not the account's total message count.
+Confirm that the deployment provides and enables the NocoBase Pro Mail plugin. Then ask the Agent to check whether a Mail page has been added to the application; enabling the plugin does not necessarily add a mail entry to the business navigation.
 
-Historical import and incremental synchronization take turns, saving progress after each batch. Interrupted tasks can resume after a service restart. If a cursor becomes invalid, the configured historical range is scanned again. Check progress and pending message body processing in the application's synchronization records.
+### OAuth does not return to the application
 
-## Push synchronization (optional)
+Ask an administrator to compare the callback URL registered with the provider against the application's public URL, including scheme, hostname, port, and app path. Have the Agent confirm the callback URL for this deployment; do not copy an example from another environment.
 
-Periodic synchronization fetches mail automatically by default. Enable push when you need changes sooner. Push can trigger incremental synchronization sooner for Gmail and Microsoft 365 mailbox changes. Configure both a public callback URL and a secret:
+### The mailbox connected, but no messages appear
 
-```yaml
-mail:
-  pushWebhookUrl: https://mail.example.com/main/mail/webhooks
-  pushWebhookSecret: replace-with-a-random-secret-at-least-32-characters
-```
+Check the initial-sync date range, synchronization status, and mailbox authorization. Importing a large mailbox can take time. If background jobs or the application queue are not running, synchronization may not finish; ask the Agent to check service health and sync records.
 
-Replace the example secret with a random value of `32–128` characters using only letters, digits, `_`, and `-`. The environment variables are `MAIL_PUSH_WEBHOOK_URL` and `MAIL_PUSH_WEBHOOK_SECRET`; setting only one does not enable push. The runtime appends the provider type, instance name, and secret to the base URL:
+### Changes made in another mail client do not appear
 
-```text
-https://mail.example.com/main/mail/webhooks/gmail/google/<secret>
-```
+IMAP/SMTP primarily discovers new messages and does not guarantee synchronization of read, deleted, or moved states from other clients. It also cannot move messages to provider folders. If these capabilities matter, check whether Gmail or Microsoft 365 is suitable.
 
-Gmail also requires `pushTopicName: projects/example/topics/mail-push` in the `google` instance. Configure a Google Cloud Pub/Sub push subscription with the complete URL above as its endpoint. The topic must allow the Gmail push service account to publish; use `pushLabelIds` to restrict watched labels if needed. Mail creates and renews the account's Gmail watch.
+### A send result is uncertain
 
-For Microsoft 365, Mail creates, validates, and renews subscriptions after an account connects. No manual webhook registration in Graph or Entra is needed. The configured URL must be reachable over public HTTPS.
+Check the application's send record and receiving mailbox before retrying. Do not create and send a new message immediately just because the page timed out; it may cause a duplicate.
 
-Push only triggers the existing incremental synchronization pipeline. Periodic synchronization continues as a fallback for delayed or dropped notifications. IMAP/SMTP does not support push.
-
-## Configuration and credential storage
-
-The `MAIL_*` environment variables listed above override their corresponding `mail` settings. Provider credentials, endpoints, and scopes are configured through `mail.providers` and have no dedicated `MAIL_*` environment mappings. Restart the application after changing configuration.
-
-:::warning 注意
-
-Do not commit real OAuth secrets, push secrets, or mailbox passwords to the repository. The core plugin's default credential store saves authorization data as plain JSON in the database. If your application requires encrypted storage, integrate a replacement as described in [Application Development](./development.md#extend-providers-and-credential-storage).
-
-:::
-
-## After setup
-
-Return to the [Quick Start](./quick-start.md#step-2-connect-a-mailbox), connect a mailbox, and send and receive a message.
+To add mail to customer, project, or other business pages, continue to [Further Use](./usage.md).
