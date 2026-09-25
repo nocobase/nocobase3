@@ -33,6 +33,10 @@ async function fixture(strict = false, wrapper = false) {
   await writeFile(log, '');
   await writeFile(path.join(root, '.env'), 'VALUE=base\nREMOVED=present\n');
   const entry = path.join(root, 'child.mjs');
+  // The tests signal the child as soon as its 'start' event appears, so the
+  // handlers are registered before it is recorded. Recording first left a
+  // window, which a loaded CI runner hits, where SIGUSR2 arrived before its
+  // handler and killed the child instead of making it exit 7.
   await writeFile(
     entry,
     `
@@ -40,10 +44,10 @@ async function fixture(strict = false, wrapper = false) {
     import { loadStandaloneAppEnv } from ${JSON.stringify(envLoader)};
     const env = loadStandaloneAppEnv({ rootDir: ${JSON.stringify(root)} });
     const record = (event) => appendFileSync(${JSON.stringify(log)}, JSON.stringify({event, value: env.VALUE, removed: env.REMOVED, shell: env.SHELL_OVERRIDE, pid: process.pid}) + '\\n');
-    record('start');
-    setInterval(() => {}, 1000);
     process.on('SIGUSR2', () => process.exit(7));
     process.on('SIGTERM', () => setTimeout(() => { record('stop'); process.exit(0); }, 150));
+    setInterval(() => {}, 1000);
+    record('start');
   `,
   );
   const launcher = path.join(root, 'launcher.mjs');
