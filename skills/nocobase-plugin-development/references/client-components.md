@@ -164,7 +164,7 @@ A public component's contract includes props, render semantics, accessibility, t
 
 ## Keep page modules lazy
 
-Route declarations load page modules instead of statically importing them in `client/plugin.ts`. Every page route also declares `authz`, either a check or `'skip'`:
+Route declarations load page modules instead of statically importing them in `client/plugin.ts`. Declare `authz` on the first page of every path, as a check, `'skip'` or `'unrestricted'`. A nested page that omits it inherits its nearest ancestor page's value. A first page that omits it still registers with a development warning, defaulting to `'unrestricted'` (root only) on a protected App or settings page and to `'skip'` on a guest, optional or dev page, so always declare it:
 
 ```ts
 defineSettingsRoutes([

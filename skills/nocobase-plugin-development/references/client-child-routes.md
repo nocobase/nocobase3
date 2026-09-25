@@ -339,7 +339,7 @@ Returning `false` keeps the overlay open. The guard applies to the close button,
 
 Use the same page/group shape with `defineSettingsRoutes()` or `defineDevRoutes()`. Do not write `/settings` or `/dev` in their declared paths. A settings page's nested detail or Tab normally omits navigation. Dev routes and modules reachable only from them are excluded from production.
 
-App entry routes choose auth; descendants inherit it. Settings and Dev require sign-in. Every page, at any depth and on every surface, declares `authz`: a `{ resource: { type, id }, action }` request or `'skip'`; nothing is inferred from the route name, and a page without it is rejected at registration. Every parent check must pass before a child is rendered, so a child that needs nothing beyond its parent declares `'skip'`. A menu group cannot declare `authz` and adds no page permission. Client access checks do not replace server authorization.
+App entry routes choose auth; descendants inherit it. Settings and Dev require sign-in. Declare `authz` on the first page of every path: a `{ resource: { type, id }, action }` request, `'skip'` or `'unrestricted'`; nothing is inferred from the route name. A nested page that omits it inherits its nearest ancestor page's value, and a child's own value overrides it. An entry page that omits it registers with a development warning and defaults to `'unrestricted'` (root only) on protected App and settings pages or `'skip'` on guest, optional and dev pages. Every parent check must pass before a child is rendered, so a child that needs nothing beyond its parent may declare `'skip'`. A menu group cannot declare `authz` and adds no page permission. Client access checks do not replace server authorization.
 
 ## Verify
 

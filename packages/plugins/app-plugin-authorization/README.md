@@ -403,7 +403,7 @@ defineRoutes([
 ]);
 ```
 
-Every client route states its `authz`: there is no `page:<route.name>` inference and no default for settings routes. The permission workspace lists these pages in the `pages.page` subsection, under their navigation groups as resource groups, from the client route tree sorted by `navigation.order` the way the menu sorts them.
+Declare `authz` on every entry client route: there is no `page:<route.name>` inference. A nested page that omits it inherits its nearest ancestor page's value; an entry page that omits it defaults to `'unrestricted'` on protected App and settings routes, which `useCan('unrestricted')` and `client.can('unrestricted')` pass only for an unrestricted snapshot such as root's, and to `'skip'` on guest, optional and dev routes. Unrestricted-only routes are never offered as page grants. The permission workspace lists these pages in the `pages.page` subsection, under their navigation groups as resource groups, from the client route tree sorted by `navigation.order` the way the menu sorts them.
 
 ## HTTP API
 

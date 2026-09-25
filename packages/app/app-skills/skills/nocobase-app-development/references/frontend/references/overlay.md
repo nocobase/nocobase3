@@ -83,7 +83,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
 - Declare them in `defineAppRoutes()` in `client/routes.ts`, not in a page component file.
 - An overlay is a child route of "the page to return to after closing": create and detail are children of the list route; edit is a child of the detail route, so the edit dialog stacks on the drawer and closing it returns to the drawer.
 - Child routes declare no `navigation` (they are not menu items, and a dynamic path cannot be one anyway) and no `breadcrumb` (an overlay is not a destination).
-- Every child route declares `authz`; `'skip'` adds no check of its own, and the parent route's check still applies. Endpoints enforce permissions themselves (see `page.md`).
+- A child route inherits `authz` from its parent page when it omits it; `'skip'` adds no check of its own, and the parent route's check still applies. Endpoints enforce permissions themselves (see `page.md`).
 - Lay out files by path segment: `new.tsx`, `detail/index.tsx`, `detail/edit.tsx` (see `child-routes.md`). After adding routes, add their names to the page grant list in the route test (see section 12 of `page.md`).
 
 ### 2.2 Place the Outlet in the parent page

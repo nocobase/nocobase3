@@ -58,7 +58,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
 | `name`            | Route name. Only letters, digits, `.`, `_` and `-` are allowed; kebab-case is recommended. Unique among the application's App routes. It is the target of route overrides, so do not change it after release |
 | `path`            | A root route starts with `/`; a child route is one segment relative to its parent (`new`, `:projectId`). It cannot contain query parameters, `#`, `*` or `..`                                                |
 | `auth`            | Who can open the page; see section 3. Defaults to `'required'`                                                                                                                                               |
-| `authz`           | Page authorization, required on every page; see section 4                                                                                                                                                    |
+| `authz`           | Page authorization; declare it on the first page of every path, nested pages inherit it; see section 4                                                                                                       |
 | `navigation`      | Menu entry: `title` (translation key), `icon`, `order`; see section 6. Omit it when the page needs no menu entry                                                                                             |
 | `breadcrumb`      | Breadcrumb title (translation key); see section 7                                                                                                                                                            |
 | `componentLoader` | Lazily loads the page module; the module must `export default` the page component                                                                                                                            |
@@ -138,7 +138,13 @@ export default function ProjectsPage(): ReactElement {
 
 ## 4. authz: page authorization
 
-Every page route, on every surface (App, Settings, Dev) and at every depth, declares `authz`: a `{ resource: { type, id }, action }` request or `'skip'`. Nothing is inferred from the route name, and registration rejects a page without it. Menus, page loading and the permission set page all read the declared value.
+`authz` is a `{ resource: { type, id }, action }` request, `'skip'`, or `'unrestricted'`. Nothing is inferred from the route name. Menus, page loading and the permission set page all read the resolved value, which comes from the root down:
+
+- **A page that declares `authz`** uses it. A malformed value raises an error at registration.
+- **A nested page that omits it** inherits the value of its nearest ancestor page, through navigation groups and any number of levels. A child that declares its own value overrides it for itself and its descendants.
+- **The first page on a path that omits it** still registers, and the application still starts, with a development warning naming the route, its path and the default applied. A protected App page (`auth: 'required'`) or a settings page becomes `'unrestricted'`: only identities with unrestricted access, such as root, may open it, and it is hidden from everyone else's menus. A `guest` or `optional` App page, or a dev page, becomes `'skip'`.
+
+**Always declare `authz` on the first page of every path.** The default keeps an omission from stopping the application; it is not a design choice. `'unrestricted'` may also be declared explicitly for a page only root may open; nothing grants it, so it never appears in the permission set page.
 
 **Rules:**
 
@@ -155,7 +161,8 @@ Every page route, on every surface (App, Settings, Dev) and at every depth, decl
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Every signed-in user may use it (the home page; its endpoints are also open to every signed-in user) | `authz: 'skip'`                                                       |
 | Only for people who have been granted access                                                         | `authz: { resource: { type: 'page', id: '<id>' }, action: 'access' }` |
-| A child page that needs nothing beyond its parent's check                                            | `authz: 'skip'`                                                       |
+| A child page that needs nothing beyond its parent's check                                            | Omit `authz` to inherit the parent's value, or write `authz: 'skip'`  |
+| Only root, never assignable                                                                          | `authz: 'unrestricted'`                                               |
 | A child page that needs its own authorization                                                        | `authz: { resource: { type: 'page', id: '<id>' }, action: 'access' }` |
 
 A page and the endpoints it calls must agree: the example's `/api/projects` is open to every signed-in user, so the projects page uses `authz: 'skip'`.
@@ -199,7 +206,7 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
 ]);
 ```
 
-- **A settings page has no default either**: declare its check, or `'skip'` for a page every signed-in user who can enter the settings area may open, and have its server endpoints check the same rule.
+- **Declare a settings page's check**, or `'skip'` for a page every signed-in user who can enter the settings area may open, and have its server endpoints check the same rule. A settings page that omits it defaults to `'unrestricted'`, which only root may open.
 - How to write `authz`:
   - An ordinary application settings page uses a page permission, `{ resource: { type: 'page', id: '<route-name>' }, action: 'access' }` (as in the example above). Administrators hold it by default, and it can be assigned through the page grants of a permission set.
   - A feature that must distinguish "view" from "modify", with the server checking the same management resource, uses a resource of type `settings` (for example `{ resource: { type: 'settings', id: '<resource-name>' }, action: 'read' }`) and registers that resource on the server; read the `nocobase-app-plugin-authorization` Skill first. Actions are business actions (`read`, `update`); there is no conversion such as `list`, `show` or `edit`.
@@ -390,7 +397,7 @@ When customizing the shell, preserve these existing behaviors:
 - `keeps the landing page and the authentication pages`: the home page and the four authentication pages still exist. Adding a page does not require changing it.
 - `loads every page component`: calls every page's `componentLoader` in turn (including child routes at every level, settings pages and dev pages) and confirms that the module default-exports a component. Adding a page does not require changing it; it fails when a page file has no default export.
 - `never imports or routes a reference page`: application code neither imports nor routes files under `client/pages/reference/`. Do not change it.
-- `pins the route names page grants are stored against`: lists, in depth-first order, every page in the app routes that requires sign-in, including child routes (settings pages and dev pages excluded). **When you add a page that requires sign-in, add it here**: `authorizedAs` is `null` for a page with `authz: 'skip'`; for a page that checks page access, it is that page's resource id. The example's projects routes add `projects`, `project-new`, `project-detail` and `project-edit`, all `null`. Stored page grants reference the resource id, and changing one requires migrating existing grants, so this list is deliberately pinned.
+- `pins the route names page grants are stored against`: lists, in depth-first order, every page in the app routes that requires sign-in, including child routes (settings pages and dev pages excluded). **When you add a page that requires sign-in, add it here**: `authorizedAs` is `null` for a page whose resolved `authz` is `'skip'`, `'unrestricted'` for an unrestricted-only page, and the resource id for a page that checks page access; a nested page that omits `authz` shows its parent's value. The example's projects routes add `projects`, `project-new`, `project-detail` and `project-edit`, all `null`. Stored page grants reference the resource id, and changing one requires migrating existing grants, so this list is deliberately pinned.
 
 After the change, run `pnpm exec vitest run tests/logic/client-routes.test.ts`.
 

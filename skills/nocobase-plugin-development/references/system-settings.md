@@ -56,7 +56,7 @@ export default defineSettingsRoutes([
 ]);
 ```
 
-Register this contribution through the plugin's client `routes`. Do not include `/settings` or a deployment prefix in the declared path. The page module default-exports a React component. Settings require authentication; the `authz` check controls whether the page is available. Every page route, children included, must declare `authz`, either the appropriate settings check or `'skip'` under a parent that already checks it; dynamic detail URLs must not become a bypass.
+Register this contribution through the plugin's client `routes`. Do not include `/settings` or a deployment prefix in the declared path. The page module default-exports a React component. Settings require authentication; the `authz` check controls whether the page is available. Declare `authz` on the entry settings page, which its children inherit unless they declare their own settings check or `'skip'`; an entry page that omits it opens only for root. Dynamic detail URLs must not become a bypass.
 
 A standalone leaf fits a small configuration surface. A collection workspace can use a sidebar list and child routes for editor, assignments and basic information, as `app-plugin-authorization/client/routes.ts` does. The parent renders an `Outlet`; child Tabs navigate routes, with the URL as the selection state. Do not duplicate route state in local tab state. Independent plugins can join a declared group through entry-level `parent`; the rule plugins use `parent: 'authorization'` while keeping their own translation namespace.
 
