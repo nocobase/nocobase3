@@ -147,6 +147,7 @@ export interface MigrationRunResult {
 
 export type {
   StaleTaskLockTakeover,
+  TaskLockBusyDetails,
   TaskLockReleaseResult,
   TaskLockState,
 } from './internal/lock.js';

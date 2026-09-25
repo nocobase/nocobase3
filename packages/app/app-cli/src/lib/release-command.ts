@@ -40,7 +40,14 @@ export abstract class ReleaseCommand<
     }
     let published: PublishedRelease<TResult>;
     try {
-      published = await this.publish(flags, this.rootDir);
+      // Progress goes to stderr, which stays visible under --json, so a long wait does not go silent.
+      published = await this.publish(
+        {
+          ...flags,
+          onProgress: (message: string) => this.logToStderr(message),
+        },
+        this.rootDir,
+      );
     } catch (error) {
       throw this.toCommandError(error);
     }

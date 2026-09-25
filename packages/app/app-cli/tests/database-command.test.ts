@@ -2,6 +2,7 @@ import {
   createDatabaseManager,
   databaseManagerToken,
   TASK_LOCK_EXPIRY_MS,
+  TaskLockBusyError,
 } from '@nocobase/db';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import { createAppFromRuntime } from '@nocobase/app-server/runtime';
@@ -29,7 +30,9 @@ import {
   runDatabaseRepairCommand,
   runDatabaseRollbackCommand,
   runDatabaseUnlockCommand,
+  toDatabaseCommandError,
   type DatabaseCommandResult,
+  type DatabasePlanEntry,
 } from '../src/database-command.ts';
 import { CommandError } from '../src/command/errors.ts';
 import AppDbApply from '../src/commands/db/apply.ts';
@@ -1060,10 +1063,27 @@ describe('the db commands', () => {
       ['--json', '--dry-run'],
       root,
     );
+    // A dry run changes nothing, so it is a no-op like every other dry run.
     expect(repair.json()).toMatchObject({
       ok: true,
-      status: 'success',
+      status: 'success-noop',
       result: {
+        dryRun: true,
+        plan: [
+          {
+            connection: 'main',
+            kind: 'migrations',
+            action: 'repair',
+            tasks: [],
+          },
+          {
+            connection: 'main',
+            kind: 'seeds',
+            action: 'skip',
+            reason: 'missing-directory',
+            tasks: [],
+          },
+        ],
         results: [
           expect.objectContaining({ kind: 'migrations', dryRun: true }),
           expect.objectContaining({ kind: 'seeds' }),
@@ -1090,6 +1110,619 @@ describe('the db commands', () => {
       status: 'success-noop',
       result: { state: 'not-configured', results: [] },
     });
+  });
+});
+
+describe('previewing a database command with --dry-run', () => {
+  it('lists what apply would run, per connection and kind, and runs none of it', async () => {
+    const { root, bind, migration, seed } = fixture();
+    migration('main');
+    seed('main');
+    const run = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--dry-run', '--all'],
+      root,
+    );
+    expect(run.exitCode).toBeUndefined();
+    const json = run.json();
+    expect(json).toMatchObject({ ok: true, status: 'success-noop' });
+    const result = json.result as DatabaseCommandResult;
+    expect(Object.keys(result)).toEqual(['dryRun', 'plan', 'results']);
+    expect(result.dryRun).toBe(true);
+    expect(result.plan).toEqual([
+      {
+        connection: 'main',
+        kind: 'migrations',
+        action: 'apply',
+        tasks: ['001_create'],
+      },
+      {
+        connection: 'main',
+        kind: 'seeds',
+        action: 'apply',
+        tasks: ['001_defaults'],
+      },
+      {
+        connection: 'analytics',
+        kind: 'migrations',
+        action: 'skip',
+        reason: 'missing-directory',
+        tasks: [],
+      },
+      {
+        connection: 'analytics',
+        kind: 'seeds',
+        action: 'skip',
+        reason: 'missing-directory',
+        tasks: [],
+      },
+      {
+        connection: 'erp',
+        kind: 'migrations',
+        action: 'skip',
+        reason: 'external',
+        tasks: [],
+      },
+      {
+        connection: 'erp',
+        kind: 'seeds',
+        action: 'skip',
+        reason: 'external',
+        tasks: [],
+      },
+    ]);
+    expect(result.results[0]).toMatchObject({
+      pending: ['001_create'],
+      dryRun: true,
+    });
+
+    // Nothing ran, so the real run still has both to execute.
+    const applied = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(
+      (applied.json().result as DatabaseCommandResult).results.map(
+        (entry) => entry.executed,
+      ),
+    ).toEqual([['001_create'], ['001_defaults']]);
+  });
+
+  it('prints the plan for people', async () => {
+    const { root, bind, migration } = fixture();
+    migration('main');
+    const run = await runAppCommand(bind(AppDbApply), ['--dry-run'], root);
+    expect(run.error).toBeUndefined();
+    expect(run.stdout).toBe(
+      [
+        '[main] migrations: would apply 001_create',
+        '[main] seeds: skipped (missing-directory)',
+        'Dry run: nothing was changed.',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('shows which connections a reset would empty, without asking for --force or touching them', async () => {
+    const { root, bind, runtime, command, migration, seed } = fixture();
+    migration('main');
+    seed('main');
+    await runDatabaseApplyCommand(command, { all: false }, runtime);
+    vi.stubEnv('CI', '1');
+
+    const run = await runAppCommand(
+      bind(AppDbReset),
+      ['--json', '--dry-run'],
+      root,
+    );
+    expect(run.json()).toMatchObject({
+      ok: true,
+      status: 'success-noop',
+      result: {
+        dryRun: true,
+        plan: [
+          {
+            connection: 'main',
+            kind: 'migrations',
+            action: 'reset',
+            tasks: ['001_create'],
+          },
+          {
+            connection: 'main',
+            kind: 'seeds',
+            action: 'apply',
+            tasks: ['001_defaults'],
+          },
+        ],
+      },
+    });
+    const human = await runAppCommand(bind(AppDbReset), ['--dry-run'], root);
+    expect(human.stdout).toContain(
+      '[main] migrations: would delete all managed schema objects, then apply 001_create',
+    );
+
+    // The schema was not dropped: nothing is pending.
+    const again = await runDatabaseApplyCommand(
+      command,
+      { all: false, dryRun: true },
+      runtime,
+    );
+    expect(again.plan?.map((entry) => entry.tasks)).toEqual([[], []]);
+  });
+
+  it('shows the batch a rollback would undo, and undoes nothing', async () => {
+    const { root, bind, runtime, command, migration } = fixture();
+    migration('main');
+    await runDatabaseApplyCommand(command, { all: false }, runtime);
+    vi.stubEnv('CI', '1');
+
+    const run = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--dry-run'],
+      root,
+    );
+    expect(run.json()).toMatchObject({
+      ok: true,
+      status: 'success-noop',
+      result: {
+        dryRun: true,
+        plan: [
+          {
+            connection: 'main',
+            kind: 'migrations',
+            action: 'rollback',
+            batch: 1,
+            tasks: ['001_create'],
+          },
+        ],
+        results: [
+          expect.objectContaining({
+            rolledBack: ['001_create'],
+            records: [expect.objectContaining({ packageName: 'test-app' })],
+            dryRun: true,
+          }),
+        ],
+      },
+    });
+    const human = await runAppCommand(bind(AppDbRollback), ['--dry-run'], root);
+    expect(human.stdout).toBe(
+      [
+        '[main] migrations: would roll back batch 1: 001_create',
+        'Dry run: nothing was changed.',
+        '',
+      ].join('\n'),
+    );
+
+    const rolledBack = await runDatabaseRollbackCommand(
+      command,
+      { all: false, force: true },
+      runtime,
+    );
+    expect(rolledBack.results[0]).toMatchObject({ rolledBack: ['001_create'] });
+  });
+
+  it('shows a redo as the rollback and the apply that follows it', async () => {
+    const { root, bind, runtime, command, migration, seed, paths } = fixture();
+    migration('main');
+    seed('main');
+    await runDatabaseApplyCommand(command, { all: false }, runtime);
+    // Pending before the redo, so it runs in the apply half with the batch.
+    writeFileSync(
+      path.join(paths.database('main/migrations'), '000_first.ts'),
+      `import { defineMigration } from '@nocobase/db';
+export default defineMigration({ name: '000_first', async up() {}, async down() {} });`,
+    );
+
+    const result = await runDatabaseRedoCommand(
+      command,
+      { all: false, dryRun: true },
+      runtime,
+    );
+    expect(result).toMatchObject({ dryRun: true });
+    expect(result.plan).toEqual([
+      {
+        connection: 'main',
+        kind: 'migrations',
+        action: 'rollback',
+        batch: 1,
+        tasks: ['001_create'],
+      },
+      {
+        connection: 'main',
+        kind: 'migrations',
+        action: 'apply',
+        tasks: ['000_first', '001_create'],
+      },
+      // Seeds are not rolled back, so the one that ran does not run again.
+      { connection: 'main', kind: 'seeds', action: 'apply', tasks: [] },
+    ]);
+
+    // Nothing was rolled back or applied.
+    const preview = await runDatabaseRollbackCommand(
+      command,
+      { all: false, dryRun: true },
+      runtime,
+    );
+    expect(preview.plan?.[0]?.tasks).toEqual(['001_create']);
+
+    const run = await runAppCommand(
+      bind(AppDbRedo),
+      ['--json', '--dry-run'],
+      root,
+    );
+    expect(run.json()).toMatchObject({ ok: true, status: 'success-noop' });
+  });
+
+  it('plans nothing past the rollback when there is no batch to redo', async () => {
+    const { runtime, command, migration } = fixture();
+    migration('main');
+    const result = await runDatabaseRedoCommand(
+      command,
+      { all: false, dryRun: true },
+      runtime,
+    );
+    expect(result.plan).toEqual([
+      {
+        connection: 'main',
+        kind: 'migrations',
+        action: 'rollback',
+        batch: 0,
+        tasks: [],
+      },
+    ]);
+    expect(command.log).toHaveBeenCalledWith(
+      '[main] migrations: nothing to roll back',
+    );
+  });
+
+  it('lists the records a repair would rewrite and keeps its lines for people', async () => {
+    const { runtime, command, migration, seed, rewrite } = fixture();
+    migration('main');
+    seed('main');
+    await runDatabaseApplyCommand(command, { all: false }, runtime);
+    rewrite('main');
+    command.log.mockClear();
+
+    const result = await runDatabaseRepairCommand(
+      command,
+      { all: false, dryRun: true },
+      runtime,
+    );
+    expect(result.plan).toEqual([
+      {
+        connection: 'main',
+        kind: 'migrations',
+        action: 'repair',
+        tasks: ['001_create'],
+      },
+      {
+        connection: 'main',
+        kind: 'seeds',
+        action: 'repair',
+        tasks: ['001_defaults'],
+      },
+    ]);
+    expect(command.log).toHaveBeenCalledWith('Would repair: 1');
+    expect(command.log).not.toHaveBeenCalledWith(
+      'Dry run: nothing was changed.',
+    );
+  });
+
+  it('reports a missing database as an empty plan', async () => {
+    const { root, bind } = fixture({ configured: false });
+    for (const command of [AppDbApply, AppDbReset, AppDbRollback, AppDbRedo]) {
+      const run = await runAppCommand(
+        bind(command),
+        ['--json', '--dry-run'],
+        root,
+      );
+      expect(run.json()).toMatchObject({
+        ok: true,
+        status: 'success-noop',
+        result: {
+          state: 'not-configured',
+          dryRun: true,
+          plan: [],
+          results: [],
+        },
+      });
+    }
+  });
+});
+
+describe('refusing a destructive run without --force', () => {
+  it('carries the plan --dry-run shows, and the two ways forward', async () => {
+    const { root, bind, migration, seed, rewrite } = fixture();
+    migration('main');
+    seed('main');
+    await runAppCommand(bind(AppDbApply), ['--json', '--no-collections'], root);
+    rewrite('main');
+    vi.stubEnv('CI', '1');
+
+    for (const [command, name, message] of [
+      [
+        AppDbReset,
+        'reset',
+        'Reset requires --force in CI or a non-interactive terminal.',
+      ],
+      [
+        AppDbRollback,
+        'rollback',
+        'A rollback requires --force in CI or a non-interactive terminal.',
+      ],
+      [
+        AppDbRedo,
+        'redo',
+        'A redo requires --force in CI or a non-interactive terminal.',
+      ],
+      [
+        AppDbRepair,
+        'repair',
+        'Checksum repair requires --force in CI or a non-interactive terminal.',
+      ],
+    ] as const) {
+      const preview = await runAppCommand(
+        bind(command),
+        ['--json', '--dry-run', '--connection', 'main'],
+        root,
+      );
+      const plan = (preview.json().result as DatabaseCommandResult).plan;
+      expect(plan?.length).toBeGreaterThan(0);
+
+      const run = await runAppCommand(
+        bind(command),
+        ['--json', '--connection', 'main'],
+        root,
+      );
+      expect(run.exitCode).toBe(2);
+      expect(run.json()).toMatchObject({
+        ok: false,
+        status: 'failure',
+        error: {
+          code: 'FORCE_REQUIRED',
+          message,
+          details: { plan },
+          suggestions: [
+            {
+              message:
+                'Show the user this plan and rerun with --force only if they confirm.',
+              run: {
+                command: 'pnpm',
+                args: [
+                  'nocobase',
+                  'db',
+                  name,
+                  '--connection',
+                  'main',
+                  '--force',
+                ],
+              },
+            },
+            {
+              message: 'Preview the plan without changing anything:',
+              run: {
+                command: 'pnpm',
+                args: [
+                  'nocobase',
+                  'db',
+                  name,
+                  '--connection',
+                  'main',
+                  '--dry-run',
+                  '--json',
+                ],
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    // Nothing was changed by any refusal: the batch and the drift are still there.
+    const rollback = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--dry-run'],
+      root,
+    );
+    expect(
+      (rollback.json().result as DatabaseCommandResult).plan?.[0],
+    ).toMatchObject({ tasks: ['001_create'] });
+    const repair = await runAppCommand(
+      bind(AppDbRepair),
+      ['--json', '--dry-run'],
+      root,
+    );
+    expect(
+      (repair.json().result as DatabaseCommandResult).plan?.map(
+        (entry: DatabasePlanEntry) => entry.tasks,
+      ),
+    ).toEqual([['001_create'], ['001_defaults']]);
+  });
+
+  it('repeats --all in the suggested commands', async () => {
+    const { root, bind, migration } = fixture();
+    migration('main');
+    await runAppCommand(bind(AppDbApply), ['--json', '--no-collections'], root);
+    vi.stubEnv('CI', '1');
+    const run = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--all'],
+      root,
+    );
+    const suggestions = (
+      run.json().error as { suggestions: { run: { args: string[] } }[] }
+    ).suggestions;
+    expect(suggestions.map((suggestion) => suggestion.run.args)).toEqual([
+      ['nocobase', 'db', 'rollback', '--all', '--force'],
+      ['nocobase', 'db', 'rollback', '--all', '--dry-run', '--json'],
+    ]);
+  });
+});
+
+describe('a task lock held by another run', () => {
+  const lockedAt = '2026-09-21T05:07:34.847Z';
+  const heartbeatAt = '2026-09-21T05:08:04.847Z';
+
+  /** A migration whose run fails the way a task that could not take its lock does. */
+  function lockedMigration(
+    paths: ReturnType<typeof fixture>['paths'],
+    { expired }: { expired: boolean },
+  ): void {
+    const directory = paths.database('main/migrations');
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      path.join(directory, '001_create.ts'),
+      `import { defineMigration, TaskLockBusyError } from '@nocobase/db';
+export default defineMigration({ name: '001_create', transaction: false, async up() {
+throw new TaskLockBusyError({
+  label: 'Migration',
+  connection: 'main',
+  tableName: '__nocobase_migration_lock',
+  lockedBy: '4242:1789967254830:abcdef',
+  lockedAt: new Date('${lockedAt}'),
+  heartbeatAt: new Date('${heartbeatAt}'),
+  expired: ${String(expired)},
+  waitedMs: 30000,
+  inProcess: false,
+});
+}, async down() {} });`,
+    );
+  }
+
+  it('fails with DATABASE_LOCKED, naming the holder, and suggests waiting before a forced unlock', async () => {
+    const { root, bind, paths } = fixture();
+    lockedMigration(paths, { expired: false });
+    const run = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(run.exitCode).toBe(1);
+    expect(run.json()).toMatchObject({
+      ok: false,
+      status: 'failure',
+      error: {
+        code: 'DATABASE_LOCKED',
+        message: expect.stringMatching(
+          /^Database migrations failed for connection "main": Migration lock "__nocobase_migration_lock" is already held by "4242:1789967254830:abcdef"/,
+        ),
+        details: {
+          connection: 'main',
+          kind: 'migrations',
+          table: '__nocobase_migration_lock',
+          lockedBy: '4242:1789967254830:abcdef',
+          lockedAt,
+          heartbeatAt,
+          expired: false,
+          waitedMs: 30000,
+          inProcess: false,
+          results: [
+            expect.objectContaining({ kind: 'migrations', status: 'failed' }),
+            expect.objectContaining({ kind: 'seeds', status: 'not-run' }),
+          ],
+        },
+        suggestions: [
+          {
+            message:
+              'Another run holds the lock. Wait for it to finish, then run this command again.',
+          },
+          {
+            message:
+              'If the user confirms the other run is gone, release its lock. It was still sending heartbeats, so this needs --force:',
+            run: {
+              command: 'pnpm',
+              args: [
+                'nocobase',
+                'db',
+                'unlock',
+                '--connection',
+                'main',
+                '--force',
+              ],
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('suggests a plain unlock for a holder that stopped beating, and prints the entries first', async () => {
+    const { root, bind, paths } = fixture();
+    lockedMigration(paths, { expired: true });
+    const run = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(run.json()).toMatchObject({
+      error: {
+        code: 'DATABASE_LOCKED',
+        details: { expired: true },
+        suggestions: [
+          expect.anything(),
+          {
+            message:
+              'If the user confirms the other run is gone, release its lock:',
+            run: {
+              command: 'pnpm',
+              args: ['nocobase', 'db', 'unlock', '--connection', 'main'],
+            },
+          },
+        ],
+      },
+    });
+
+    const human = await runAppCommand(
+      bind(AppDbApply),
+      ['--no-collections'],
+      root,
+    );
+    expect(human.error).toMatchObject({
+      errorCode: 'DATABASE_LOCKED',
+      oclif: { exit: 1 },
+    });
+    expect(human.stdout).toMatch(
+      /^\[main\] migrations: failed: Migration lock "__nocobase_migration_lock" is already held/,
+    );
+    expect(human.stdout).toContain(
+      '[main] seeds: not-run (previous-task-failed)',
+    );
+  });
+
+  it('maps a lock this process holds without suggesting an unlock', () => {
+    const error = toDatabaseCommandError(
+      new TaskLockBusyError({
+        label: 'Seed',
+        connection: 'main',
+        tableName: '__nocobase_seed_lock',
+        lockedBy: '4242:1789967254830:abcdef',
+        lockedAt: undefined,
+        heartbeatAt: undefined,
+        expired: false,
+        waitedMs: 0,
+        inProcess: true,
+      }),
+      'main',
+    );
+    expect(error).toMatchObject({
+      errorCode: 'DATABASE_LOCKED',
+      exitCode: 1,
+      message:
+        'Seed lock "__nocobase_seed_lock" is already held for connection "main".',
+      details: {
+        connection: 'main',
+        table: '__nocobase_seed_lock',
+        inProcess: true,
+      },
+      commandSuggestions: [
+        {
+          message:
+            'Another run holds the lock. Wait for it to finish, then run this command again.',
+        },
+      ],
+    });
+    expect((error as CommandError).details).not.toHaveProperty('lockedAt');
   });
 });
 

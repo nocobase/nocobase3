@@ -12,12 +12,12 @@ export default class AppDbRedo extends AppCommand {
   static override summary =
     'Roll back the latest migration batch and apply it again.';
   static override description =
-    'What correcting a migration before its branch is merged needs: an executed migration is already recorded, so editing it and running "db apply" changes nothing. Rolls the batch back, then applies migrations and seeds the way "db apply" does. Destructive in the same way "db rollback" is, and confirms the same way. Once the branch is merged, write a new migration instead.';
+    'What correcting a migration before its branch is merged needs: an executed migration is already recorded, so editing it and running "db apply" changes nothing. Rolls the batch back, then applies migrations and seeds the way "db apply" does. Destructive in the same way "db rollback" is, and confirms the same way; --dry-run shows the plan instead. Once the branch is merged, write a new migration instead.';
 
   static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %> --dry-run --json',
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --connection analytics',
-    '<%= config.bin %> <%= command.id %> --force --json',
   ];
 
   static override flags: {
@@ -25,6 +25,7 @@ export default class AppDbRedo extends AppCommand {
     connection: Interfaces.OptionFlag<string | undefined>;
     collections: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
+    'dry-run': Interfaces.BooleanFlag<boolean>;
   } = {
     all: Flags.boolean({
       default: false,
@@ -46,6 +47,11 @@ export default class AppDbRedo extends AppCommand {
       default: false,
       description: 'Skip the confirmation prompt.',
     }),
+    'dry-run': Flags.boolean({
+      default: false,
+      description:
+        'Report what would run, as a plan, without changing anything.',
+    }),
   };
 
   public async run(): Promise<DatabaseCommandResult> {
@@ -54,11 +60,13 @@ export default class AppDbRedo extends AppCommand {
       this,
       {
         ...flags,
+        dryRun: flags['dry-run'],
         collections: flags.collections && collectionsRefreshAllowed(),
       },
       appContextOf(this),
     );
-    if (result.state === 'not-configured') this.setStatus('success-noop');
+    if (result.dryRun || result.state === 'not-configured')
+      this.setStatus('success-noop');
     return result;
   }
 }

@@ -83,6 +83,10 @@ Records the application logs while a command runs go to stderr, so stdout carrie
 
 Declare a path flag with `appPath({ description, default })`. The command receives an absolute path: a value the user typed resolves from the current directory, and the default resolves from the application root, wherever the command was run. Do not resolve it again, and do not use `process.cwd()` for application files.
 
+### Make it discoverable
+
+`pnpm nocobase commands --json` lists every command with its summary, arguments and flags, and marks the ones that take `--dry-run` and `--force`; an agent reads it before choosing a command. Give every flag a description, and use the conventional names: `dry-run` for a preview that changes nothing and answers `success-noop` with the plan in `result`, and `force` for proceeding past a confirmation. A command that refuses without `force` outside a terminal throws `CommandError` with code `FORCE_REQUIRED`, exit `2`, the plan in `details`, and both forms in `suggestions`. Lead the `examples` with the safe form — `--json`, `--dry-run` — rather than `--force`.
+
 ### Keep the module cheap
 
 The command tree is assembled for `--help` too, so every command module is imported before any command runs. Keep top-level imports to `@nocobase/app-cli`, `@oclif/core` and Node built-ins, and load anything heavy with `await import()` inside `run()`.

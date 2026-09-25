@@ -13,9 +13,32 @@ import type {
 export const APP_TOPIC = 'app';
 export const PLUGIN_TOPIC = 'plugin';
 
+/** Who contributed a command or topic to the assembled tree. */
+export type CommandSource = 'builtin' | 'app' | 'plugin';
+
+/** Where a topic in the assembled tree came from. */
+export interface TopicOrigin {
+  readonly source: CommandSource;
+  /** The plugin package that contributed it, for `source: 'plugin'`. */
+  readonly package?: string;
+}
+
+/** Where a command in the assembled tree came from, and whether a deployment has it. */
+export interface CommandOrigin extends TopicOrigin {
+  /** Registered only in a source checkout: a development built-in, or an entry of a plugin's `devCommands`. */
+  readonly developmentOnly: boolean;
+}
+
 export interface AssembledCli {
   readonly commands: Record<string, AppCliCommand>;
   readonly topics: Record<string, { description: string }>;
+  /**
+   * Where each command came from, keyed like `commands`. Kept beside the classes rather than on them: a plugin may
+   * register one class under several names, and the class is the plugin's, not this package's to mark.
+   */
+  readonly commandOrigins: Record<string, CommandOrigin>;
+  /** Where each topic came from, keyed like `topics`. */
+  readonly topicOrigins: Record<string, TopicOrigin>;
 }
 
 export interface AssembleCliOptions {
@@ -32,6 +55,8 @@ export interface AssembleCliOptions {
    * plugin loads never depends on where the CLI happens to run.
    */
   readonly reservedTopics?: readonly string[];
+  /** First segments of built-in commands a deployment does not register, which marks them development-only. */
+  readonly developmentTopics?: readonly string[];
 }
 
 export function assembleCli({
@@ -41,11 +66,23 @@ export function assembleCli({
   plugins,
   deployment = false,
   reservedTopics = [],
+  developmentTopics = [],
 }: AssembleCliOptions): AssembledCli {
   const assembled: Record<string, AppCliCommand> = { ...builtinCommands };
   const topics: Record<string, { description: string }> = {
     ...builtinTopics,
   };
+  const commandOrigins: Record<string, CommandOrigin> = {};
+  for (const id of Object.keys(builtinCommands)) {
+    const [head = id] = id.split(':');
+    commandOrigins[id] = {
+      source: 'builtin',
+      developmentOnly: developmentTopics.includes(head),
+    };
+  }
+  const topicOrigins: Record<string, TopicOrigin> = Object.fromEntries(
+    Object.keys(builtinTopics).map((topic) => [topic, { source: 'builtin' }]),
+  );
   // What claimed each topic, so a collision message can name both sides rather than only the loser.
   const topicOwners = new Map<string, string>(
     Object.keys(builtinTopics).map((topic) => [topic, 'the built-in commands']),
@@ -61,10 +98,15 @@ export function assembleCli({
 
   for (const [name, command] of Object.entries(commands)) {
     assembled[`${APP_TOPIC}:${name}`] = command;
+    commandOrigins[`${APP_TOPIC}:${name}`] = {
+      source: 'app',
+      developmentOnly: false,
+    };
   }
   if (Object.keys(commands).length > 0) {
     topicOwners.set(APP_TOPIC, 'this app');
     topics[APP_TOPIC] ??= { description: "This app's own commands." };
+    topicOrigins[APP_TOPIC] = { source: 'app' };
   }
 
   for (const plugin of plugins?.plugins ?? []) {
@@ -82,12 +124,26 @@ export function assembleCli({
       description:
         plugin.description ?? `Commands contributed by ${plugin.packageName}.`,
     };
+    topicOrigins[plugin.topic] = {
+      source: 'plugin',
+      package: plugin.packageName,
+    };
     for (const [name, command] of Object.entries(contributed)) {
       assembled[`${plugin.topic}:${name}`] = command;
+      commandOrigins[`${plugin.topic}:${name}`] = {
+        source: 'plugin',
+        package: plugin.packageName,
+        // A name in both maps runs the development command here and the runtime one in a deployment, so a deployment
+        // still has it.
+        developmentOnly:
+          !deployment &&
+          Object.hasOwn(plugin.devCommands, name) &&
+          !Object.hasOwn(plugin.commands, name),
+      };
     }
   }
 
-  return { commands: assembled, topics };
+  return { commands: assembled, topics, commandOrigins, topicOrigins };
 }
 
 function assertTopicAvailable(

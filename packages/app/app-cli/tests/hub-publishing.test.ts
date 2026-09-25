@@ -219,6 +219,48 @@ describe('Hub publishing client', () => {
       publishToHub('deploy', { 'release-id': 'r2', wait: true }, root, env),
     ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
   });
+  it('reports each deployment status once while it waits, without the Hub address', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ operationId: 'op-1', status: 'queued' }),
+        )
+        .mockResolvedValueOnce(response({ status: 'queued' }))
+        .mockResolvedValueOnce(response({ status: 'deploying' }))
+        .mockResolvedValueOnce(response({ status: 'deploying' }))
+        .mockResolvedValueOnce(response({ status: 'succeeded' })),
+    );
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const progress: string[] = [];
+    try {
+      const run = publishRelease(
+        'deploy',
+        {
+          hub: 'https://hub.example/console',
+          'release-id': 'r1',
+          wait: true,
+          onProgress: (message) => progress.push(message),
+        },
+        root,
+        env,
+      );
+      await vi.runAllTimersAsync();
+      await expect(run).resolves.toMatchObject({
+        result: { operationStatus: 'succeeded' },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(progress).toEqual([
+      'Waiting for deployment op-1 (up to 600s)…',
+      'Deployment op-1: queued',
+      'Deployment op-1: deploying',
+      'Deployment op-1: succeeded',
+    ]);
+    expect(progress.join('\n')).not.toContain('hub.example');
+  });
   it.each(['failed', 'cancelled'])(
     'rejects a known %s deployment retry without waiting',
     async (status) => {

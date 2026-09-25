@@ -15,8 +15,8 @@ export default class AppDbRepair extends AppCommand {
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %> --dry-run',
+    '<%= config.bin %> <%= command.id %> --all --dry-run --json',
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --all --force --json',
   ];
 
   static override flags: {
@@ -52,7 +52,8 @@ export default class AppDbRepair extends AppCommand {
       { ...flags, dryRun: flags['dry-run'] },
       appContextOf(this),
     );
-    if (result.state === 'not-configured') this.setStatus('success-noop');
+    if (result.dryRun || result.state === 'not-configured')
+      this.setStatus('success-noop');
     return result;
   }
 }

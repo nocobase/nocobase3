@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 
 import {
   createSeeder,
+  loadSeeds,
   type ChecksumMismatch,
   type CreateSeederOptions,
   type DatabaseManager,
@@ -19,10 +20,17 @@ import {
 } from '@nocobase/db';
 
 import type { AppDatabaseSeedConfig } from './types.js';
-import type { AppTaskLockReleaseResult } from './migrator.js';
+import {
+  pendingTasksResult,
+  type AppPendingTasksOptions,
+  type AppPendingTasksResult,
+  type AppTaskLockReleaseResult,
+} from './migrator.js';
 
 export interface AppSeeder {
   run(): Promise<AppSeedRunResult>;
+  /** What `run()` would execute, after a fresh rebuild with `fresh` set. Reads only. */
+  pending(options?: AppPendingTasksOptions): Promise<AppPendingTasksResult>;
   repair(options?: SeedRepairOptions): Promise<AppSeedRepairResult>;
   unlock(options?: TaskLockReleaseOptions): Promise<AppTaskLockReleaseResult>;
 }
@@ -66,6 +74,25 @@ export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
       }
 
       return completedRunResult(await createDatabaseSeeder(options).run());
+    },
+
+    async pending(
+      pendingOptions: AppPendingTasksOptions = {},
+    ): Promise<AppPendingTasksResult> {
+      if (!hasSeedDirectory(options)) {
+        return {
+          status: 'skipped',
+          reason: 'missing-directory',
+        };
+      }
+      const seeds = await loadSeeds(createDatabaseSeederOptions(options));
+      // A fresh run drops the seed history with the rest of the schema.
+      return pendingTasksResult(
+        seeds,
+        pendingOptions.fresh
+          ? []
+          : await createDatabaseSeeder(options).history(),
+      );
     },
 
     // Unlocking needs no seed directory: the lock is taken by whichever run

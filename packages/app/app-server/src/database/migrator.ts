@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 
 import {
   createMigrator,
+  loadMigrations,
   type ChecksumMismatch,
   type CreateMigratorOptions,
   type DatabaseManager,
@@ -26,11 +27,35 @@ import type { AppDatabaseMigrationConfig } from './types.js';
 export interface AppMigrator {
   latest(): Promise<AppMigrationRunResult>;
   fresh(): Promise<AppMigrationRunResult>;
+  /** What `latest()`, or `fresh()` with `fresh` set, would execute. Reads only. */
+  pending(options?: AppPendingTasksOptions): Promise<AppPendingTasksResult>;
   rollback(
     options?: MigrationRollbackOptions,
   ): Promise<AppMigrationRollbackResult>;
   repair(options?: MigrationRepairOptions): Promise<AppMigrationRepairResult>;
   unlock(options?: TaskLockReleaseOptions): Promise<AppTaskLockReleaseResult>;
+}
+
+export interface AppPendingTasksOptions {
+  /** Plan a fresh run: the schema is emptied first, so every task is pending. */
+  readonly fresh?: boolean;
+}
+
+/**
+ * What a run would execute, read without running anything, taking the lock or
+ * writing history. It is a plan rather than a promise: a migration whose
+ * `shouldRun()` would decline is still listed, because that is evaluated under
+ * the lock against the database as the run finds it, and history the sources
+ * cannot explain is reported by the run rather than here.
+ */
+export interface AppPendingTasksResult {
+  status: 'completed' | 'skipped';
+  reason?: 'missing-directory';
+  /** Tasks with no history record, in the order a run would execute them. */
+  pending?: string[];
+  /** Tasks already recorded, which a run would skip. */
+  skipped?: string[];
+  dryRun?: true;
 }
 
 /** A lock release, or the reason it was left alone. */
@@ -102,6 +127,27 @@ export function createAppMigrator(
         };
       }
       return completedRunResult(await createDatabaseMigrator(options).latest());
+    },
+
+    async pending(
+      pendingOptions: AppPendingTasksOptions = {},
+    ): Promise<AppPendingTasksResult> {
+      if (!hasMigrationDirectory(options)) {
+        // `fresh()` empties the schema whether or not there is anything to
+        // apply afterwards, so a fresh plan still has something to do.
+        return pendingOptions.fresh
+          ? { status: 'completed', pending: [], skipped: [], dryRun: true }
+          : { status: 'skipped', reason: 'missing-directory' };
+      }
+      const migrations = await loadMigrations(
+        createDatabaseMigratorOptions(options),
+      );
+      return pendingTasksResult(
+        migrations,
+        pendingOptions.fresh
+          ? []
+          : await createDatabaseMigrator(options).history(),
+      );
     },
 
     async rollback(
@@ -188,6 +234,24 @@ function skippedMigrationResult(): AppMigrationRunResult &
   return {
     status: 'skipped',
     reason: 'missing-directory',
+  };
+}
+
+/** Splits loaded tasks into those a run would execute and those it would skip. */
+export function pendingTasksResult(
+  tasks: readonly { readonly name: string }[],
+  history: readonly { readonly name: string }[],
+): AppPendingTasksResult {
+  const executed = new Set(history.map((record) => record.name));
+  return {
+    status: 'completed',
+    pending: tasks
+      .filter((task) => !executed.has(task.name))
+      .map((task) => task.name),
+    skipped: tasks
+      .filter((task) => executed.has(task.name))
+      .map((task) => task.name),
+    dryRun: true,
   };
 }
 

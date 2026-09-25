@@ -89,6 +89,26 @@ describe('the runner', () => {
     expect(result.code).toBe(0);
   }, 60_000);
 
+  it('exits 0 when a reader closes stdout early, as `| head` does', async () => {
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, [bin, 'commands', '--json'], {
+      cwd: app,
+      env: { ...process.env, NOCOBASE_CONTENT_TYPE: '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += String(chunk);
+    });
+    // Read the first chunk, then close the pipe the way `head -1` does.
+    child.stdout.once('data', () => child.stdout.destroy());
+    const code = await new Promise<number | null>((resolve) =>
+      child.once('close', resolve),
+    );
+    expect(code).toBe(0);
+    expect(stderr).not.toContain('unsettled top-level await');
+  }, 60_000);
+
   it('answers --json with one failure document for a command that does not exist', async () => {
     const result = await nocobase(['no-such-command', '--json']);
     expect(JSON.parse(result.stdout)).toMatchObject({

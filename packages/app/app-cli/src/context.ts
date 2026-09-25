@@ -23,9 +23,14 @@ import {
   type CommandSuccessStatus,
 } from './command/envelope.ts';
 import { debugEnabled, describeForDebugging } from './command/diagnostics.ts';
-import { describeCommandError } from './command/errors.ts';
+import { CommandError, describeCommandError } from './command/errors.ts';
 import { isAppPathFlag } from './command/flags.ts';
 import { withAppInstance } from './command/lifecycle.ts';
+import {
+  INVALID_USAGE,
+  acceptedFlagNames,
+  describeUsageError,
+} from './command/usage.ts';
 import { createDefaultCommandContext } from './default-context.ts';
 import { applicationState } from './runtime/command-store.ts';
 
@@ -214,13 +219,32 @@ export class AppCommand extends Command {
   protected override async catch(
     error: Error & { exitCode?: number },
   ): Promise<unknown> {
-    process.exitCode = describeCommandError(error).exit;
+    const reported = this.#withUsageSuggestions(error);
+    process.exitCode = describeCommandError(reported).exit;
     if (debugEnabled()) this.logToStderr(await describeForDebugging(error));
     if (this.jsonEnabled()) {
-      this.logJson(this.toErrorJson(error));
+      this.logJson(this.toErrorJson(reported));
       return undefined;
     }
-    throw error;
+    throw reported;
+  }
+
+  /**
+   * An error oclif raised while parsing, as a `CommandError` that says what to do next: the flag that was probably
+   * meant, and where the command's flags are listed. Any other error is returned as it is.
+   */
+  #withUsageSuggestions(error: Error): Error {
+    const usage = describeUsageError(error, {
+      words: this.commandName.split(' ').filter(Boolean),
+      flags: acceptedFlagNames(this.ctor),
+    });
+    if (usage === undefined) return error;
+    return new CommandError(usage.message, {
+      code: INVALID_USAGE,
+      exit: usage.exit,
+      suggestions: usage.suggestions,
+      cause: error,
+    });
   }
 
   protected override async _run<T>(): Promise<T> {

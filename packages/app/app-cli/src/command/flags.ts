@@ -56,6 +56,20 @@ export function appPath(
   return flag;
 }
 
+/** A flag as a command class declares it. */
+export type DeclaredFlag = Interfaces.Flag<unknown>;
+
+/**
+ * The flags a command class declares, its base flags first, merged the way oclif merges them. `--json` is not among
+ * them: oclif adds it when `enableJsonFlag` is set.
+ */
+export function declaredFlags(command: {
+  readonly flags?: Interfaces.FlagInput;
+  readonly baseFlags?: Interfaces.FlagInput;
+}): Readonly<Record<string, DeclaredFlag>> {
+  return { ...command.baseFlags, ...command.flags };
+}
+
 /** Whether a flag definition came from `appPath()`, including one from another copy of this package. */
 export function isAppPathFlag(flag: unknown): boolean {
   return (

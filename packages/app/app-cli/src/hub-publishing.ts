@@ -18,6 +18,11 @@ export interface PublishingOptions {
   deploy?: boolean;
   wait?: boolean;
   timeout?: number;
+  /**
+   * Called with one line at each step worth telling a person or an agent about while the command runs: the upload
+   * starting, the deployment being accepted, and each change of deployment status while it waits. Not a flag.
+   */
+  onProgress?: (message: string) => void;
 }
 
 export type ReleaseOperation = 'upload' | 'deploy';
@@ -361,6 +366,9 @@ export async function publishRelease(
       ),
     );
     let data: Record<string, unknown>;
+    options.onProgress?.(
+      `Uploading ${path.basename(file)} (${formatBytes(size)})…`,
+    );
     try {
       const init: RequestInit & { duplex: 'half' } = {
         method: 'POST',
@@ -487,6 +495,12 @@ export async function publishRelease(
         'Release already exists without a deployment. Use release deploy --release-id to deploy it.',
         1,
       );
+    if (wait) {
+      options.onProgress?.(
+        `Waiting for deployment ${operationId} (up to ${timeout}s)…`,
+      );
+    }
+    let reported: DeploymentStatus | undefined;
     while (true) {
       const state = await request(
         `deployments/${encodeURIComponent(operationId)}/status`,
@@ -495,6 +509,10 @@ export async function publishRelease(
       const status = state.status;
       if (!isDeploymentStatus(status))
         throw failure('RESULT_UNKNOWN', UNCONFIRMED_DEPLOYMENT, 3);
+      if (status !== reported) {
+        options.onProgress?.(`Deployment ${operationId}: ${status}`);
+        reported = status;
+      }
       result.operationStatus = status;
       known.operationStatus = status;
       if (status === 'succeeded') break;
@@ -544,4 +562,10 @@ function isDeploymentStatus(status: unknown): status is DeploymentStatus {
     status === 'failed' ||
     status === 'cancelled'
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }

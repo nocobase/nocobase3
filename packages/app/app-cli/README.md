@@ -8,11 +8,11 @@ Applications are created with `pnpm create @nocobase/app`, not with this package
 
 The bin finds the application from the nearest `package.json` above the working directory, and what that manifest says decides the command set:
 
-| Found                                    | Location   | Commands registered                                                                          |
-| ---------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- |
-| `nocobase.templateKind`                  | source     | everything: runtime, development, the application's own, and every plugin's                  |
-| `nocobase.buildTarget` (a built `dist/`) | deployment | runtime commands, the application's own, and plugins' `commands` but not `devCommands`       |
-| neither                                  | none       | the commands that take their target from a flag: `plugin *`, `package remove`, `skills sync` |
+| Found                                    | Location   | Commands registered                                                                    |
+| ---------------------------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `nocobase.templateKind`                  | source     | everything: runtime, development, the application's own, and every plugin's            |
+| `nocobase.buildTarget` (a built `dist/`) | deployment | runtime commands, the application's own, and plugins' `commands` but not `devCommands` |
+| neither                                  | none       | `commands`, and the flag-targeted `plugin *`, `package remove` and `skills sync`       |
 
 `NOCOBASE_APP_ROOT` names the application explicitly and leaves the working directory alone, so relative paths a command takes still resolve against where it was run. The `cli/index.js` a build writes into `dist/` passes its own location instead, which is why `node dist/cli/index.js db apply` works from any directory — a built `dist/` has no `.bin`, and a slim runtime image has no pnpm.
 
@@ -22,6 +22,7 @@ In a source application the bin registers the application's own `tsx` before it 
 
 | Command                                                                    | In a deployment | Notes                                                                |
 | -------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
+| `commands`                                                                 | yes             | Every command registered where it runs; `--json` for agents          |
 | `info`                                                                     | yes             |                                                                      |
 | `config init`, `config check`, `config set`, `config env`                  | yes             | Act on the application's `config.yml`                                |
 | `db apply`, `db reset`, `db repair`, `db rollback`, `db redo`, `db unlock` | yes             | Create the application without booting it                            |
@@ -38,7 +39,11 @@ In a source application the bin registers the application's own `tsx` before it 
 
 `tests/builtin-commands.test.ts` asserts the exact list, so adding, renaming or removing a command is a deliberate edit there.
 
+`commands --json` is the tree as data, for an agent or script that would otherwise read every `--help`: each command's id, `source` (`builtin`, `app` or `plugin`, with the plugin's `package`), whether it is `developmentOnly`, whether it takes `--json`, `--dry-run` and `--force`, and its arguments, flags and examples, plus the topics. It reports what is registered where it runs, so in a built `dist/` it lists no development command.
+
 `--json` prints one JSON document on stdout, success or failure, in the shape described under "Writing commands" below, and a failure also exits non-zero. Exit codes are `0` for success, `1` for a runtime error and `2` for a usage error; `release upload` and `release deploy` add `3` for a result the Hub could not confirm. `NOCOBASE_CONTENT_TYPE=json` turns it on for every command. A path given in a flag resolves from the current directory; a default path a command names in its `--help` is inside the application.
+
+Invalid usage — a flag or argument oclif rejects, or a command that does not exist — fails with `INVALID_USAGE` and exit code `2`, and its suggestions name what was probably meant: the closest flag (`Did you mean --connection?`) or command ids, the command's `--help`, and `commands --json`. `src/command/distance.ts` decides what counts as close.
 
 ### Topics are a flat namespace
 
@@ -48,7 +53,7 @@ Built-in commands, the application's commands and every plugin's commands share 
 
 A file's path below a commands directory is its command id: `src/commands/db/apply.ts` answers to `db apply`, and an application's `cli/commands/orders/sync.ts` answers to `app orders sync`. Files and directories starting with `_`, and directories named `lib`, are skipped so a command can keep helpers beside it; each command file default-exports one oclif `Command` class.
 
-A built-in command is dispatched with nothing else loaded. Only a run that needs the whole tree — help, an `app` command, a plugin's command — imports the application's `cli/plugins.ts` and `cli/commands/`, so `pnpm install` running `nocobase skills sync`, or `plugin register` repairing a broken `cli/plugins.ts`, never depends on every plugin's CLI entry importing.
+A built-in command is dispatched with nothing else loaded. Only a run that needs the whole tree — help, `commands`, an `app` command, a plugin's command — imports the application's `cli/plugins.ts` and `cli/commands/`, so `pnpm install` running `nocobase skills sync`, or `plugin register` repairing a broken `cli/plugins.ts`, never depends on every plugin's CLI entry importing.
 
 Plugins are not discovered. `cli/plugins.ts` lists them explicitly, because the array order is both command registration order and hook order, and because a plugin installed is not a plugin enabled. `pnpm nocobase plugin register` writes the entry.
 

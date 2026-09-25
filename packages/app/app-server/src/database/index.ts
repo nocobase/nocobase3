@@ -27,6 +27,8 @@ export {
 } from './provider.js';
 export {
   createAppMigrator,
+  type AppPendingTasksOptions,
+  type AppPendingTasksResult,
   type AppMigrationRepairResult,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,

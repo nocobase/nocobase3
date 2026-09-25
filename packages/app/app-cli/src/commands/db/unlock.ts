@@ -14,9 +14,9 @@ export default class AppDbUnlock extends AppCommand {
     'A run holds its lock only while it is sending heartbeats, so a killed run stops holding it and the next run takes it over on its own. Use this when waiting is not wanted, or to see who holds one. A lock that is still beating is reported rather than released; --force releases it anyway, which lets a second run start beside the first. Covers both the migration and the seed lock for the selected connections.';
 
   static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %> --json',
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --connection analytics',
-    '<%= config.bin %> <%= command.id %> --force --json',
   ];
 
   static override flags: {

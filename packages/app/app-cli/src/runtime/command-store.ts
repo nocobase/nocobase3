@@ -1,4 +1,4 @@
-// Holds the assembled command map for the registry module below.
+// Holds the assembled command tree for the registry module below, and for `nocobase commands`.
 //
 // oclif's `explicit` command strategy resolves its target to a file path and imports it, so the command map cannot be
 // handed to `Config.load` directly — it has to be reachable from a module oclif can import. The runner writes the map
@@ -10,9 +10,10 @@
 // copies, and a module-level binding would leave the registry reading state nobody wrote — an empty command tree
 // rather than an error.
 import type { AppCliCommand, AppCliPlugins } from '../plugins/types.ts';
+import type { AssembledCli } from './assemble.ts';
 import type { AppLocation } from './location.ts';
 
-const STORE = Symbol.for('@nocobase/app-cli.resolvedCommands');
+const STORE = Symbol.for('@nocobase/app-cli.resolvedCli');
 const APP_STORE = Symbol.for('@nocobase/app-cli.application');
 const OPEN_RUNTIMES = Symbol.for('@nocobase/app-cli.openRuntimes');
 
@@ -29,7 +30,7 @@ export interface OpenRuntime {
 }
 
 interface CommandStoreHost {
-  [STORE]?: Record<string, AppCliCommand>;
+  [STORE]?: AssembledCli;
   [APP_STORE]?: ApplicationState;
   [OPEN_RUNTIMES]?: Set<OpenRuntime>;
 }
@@ -56,14 +57,21 @@ export function takeOpenRuntimes(): OpenRuntime[] {
   return runtimes;
 }
 
-export function setResolvedCommands(
-  resolved: Record<string, AppCliCommand>,
-): void {
-  (globalThis as CommandStoreHost)[STORE] = resolved;
+/** Records the tree a run dispatches from, for the registry and for `nocobase commands`. */
+export function setResolvedCli(assembled: AssembledCli): void {
+  (globalThis as CommandStoreHost)[STORE] = assembled;
+}
+
+/**
+ * The tree a run dispatches from. For a built-in command dispatched on its own it holds only that command; a command
+ * that reads the whole tree is never dispatched that way.
+ */
+export function resolvedCli(): AssembledCli | undefined {
+  return (globalThis as CommandStoreHost)[STORE];
 }
 
 export function resolvedCommands(): Record<string, AppCliCommand> {
-  return (globalThis as CommandStoreHost)[STORE] ?? {};
+  return resolvedCli()?.commands ?? {};
 }
 
 /**

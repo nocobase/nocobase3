@@ -57,6 +57,8 @@ export interface AppDatabaseTaskResult {
   warnings?: ChecksumMismatch[];
   /** Records a repair rewrote, or that a dry run would rewrite. */
   repaired?: ChecksumMismatch[];
+  /** Migrations or seeds a run would execute, as a dry run reports them. */
+  pending?: string[];
   dryRun?: boolean;
 }
 
@@ -89,7 +91,12 @@ export interface AppDatabasePlanExecutionOptions {
   /** Unlock only: release a lock that is still sending heartbeats. */
   readonly force?: boolean;
   readonly operation?: AppDatabaseTaskOperation;
-  /** Repair only: report what would be rewritten without writing anything. */
+  /**
+   * Report what the operation would do without doing it. A run lists its
+   * pending tasks, reading history without taking the lock; a rollback reports
+   * the batch it would undo and a repair the records it would rewrite. Not
+   * supported by unlock.
+   */
   readonly dryRun?: boolean;
 }
 
@@ -119,6 +126,9 @@ export async function executeAppDatabasePlan(
   }
   if (operation === 'unlock' && fresh) {
     throw new Error('A fresh run cannot be combined with unlock.');
+  }
+  if (operation === 'unlock' && dryRun) {
+    throw new Error('An unlock has no dry run; it reports the lock it finds.');
   }
   const taskContainer = createTaskServiceResolver(container);
   const taskConfig = snapshotDatabaseTaskConfig(runtimeConfig);
@@ -163,11 +173,15 @@ export async function executeAppDatabasePlan(
               : await createAppSeeder(options).repair({ dryRun })
             : operation === 'rollback'
               ? await createAppMigrator(options).rollback({ dryRun })
-              : task.kind === 'migrations'
-                ? await (fresh
-                    ? createAppMigrator(options).fresh()
-                    : createAppMigrator(options).latest())
-                : await createAppSeeder(options).run();
+              : dryRun
+                ? task.kind === 'migrations'
+                  ? await createAppMigrator(options).pending({ fresh })
+                  : await createAppSeeder(options).pending({ fresh })
+                : task.kind === 'migrations'
+                  ? await (fresh
+                      ? createAppMigrator(options).fresh()
+                      : createAppMigrator(options).latest())
+                  : await createAppSeeder(options).run();
       result.results.push({
         ...identity,
         ...completed,
@@ -275,7 +289,11 @@ export interface AppDatabaseTaskRunOptions extends AppRuntimeDatabaseTaskPlanOpt
    */
   readonly kind: AppDatabaseTaskKind | readonly AppDatabaseTaskKind[];
   readonly operation?: AppDatabaseTaskOperation;
-  /** Repair only: report what would be rewritten without writing anything. */
+  /**
+   * Report what the operation would do without doing it; see
+   * {@link AppDatabasePlanExecutionOptions.dryRun}. A fresh dry run confirms
+   * nothing, because it drops nothing.
+   */
   readonly dryRun?: boolean;
   /** Unlock only: release a lock that is still sending heartbeats. */
   readonly force?: boolean;
@@ -316,7 +334,11 @@ export async function runAppDatabaseTasks(
         );
       }
     }
-    if (options.confirmFresh && !(await options.confirmFresh(plan))) {
+    if (
+      !options.dryRun &&
+      options.confirmFresh &&
+      !(await options.confirmFresh(plan))
+    ) {
       throw new Error('Fresh migration cancelled.');
     }
   }
