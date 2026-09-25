@@ -2,7 +2,7 @@ import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import {
   useAuthorizationRevision,
   useAuthorizationClient,
-  type AuthorizationCheck,
+  type AuthorizationRequirement,
 } from '@nocobase/app-plugin-authorization/client';
 import { useEffect, useMemo, useState } from 'react';
 import { matchPath, matchRoutes, type RouteObject } from 'react-router';
@@ -76,7 +76,8 @@ export function useRouteNavigation(
   const guards = useMemo(() => {
     const collect = (
       nodes: readonly AppClientRegisteredRoute[],
-    ): { id: string; check: AuthorizationCheck }[] =>
+    ): { id: string; check: AuthorizationRequirement }[] =>
+      // `unrestricted` pages are checked like any other: hidden unless the snapshot is unrestricted.
       nodes.flatMap((route) => [
         ...(route.componentLoader && route.authz !== 'skip'
           ? [{ id: routeKey(route), check: route.authz }]

@@ -16,6 +16,12 @@ export interface AuthorizationCheck {
   action: string;
 }
 
+/**
+ * A check, or `'unrestricted'` to require unrestricted access, such as root's.
+ * Nothing grants `'unrestricted'`; it holds only when the snapshot is unrestricted.
+ */
+export type AuthorizationRequirement = AuthorizationCheck | 'unrestricted';
+
 export interface PermissionGrantAction {
   action: string;
   policy?: Readonly<Record<string, unknown>> & { type: string };
@@ -268,9 +274,11 @@ export class AuthorizationClient {
   constructor(private readonly api: ApiClient) {}
 
   /** Whether the session's snapshot permits the check. */
-  async can({ resource, action }: AuthorizationCheck): Promise<boolean> {
+  async can(requirement: AuthorizationRequirement): Promise<boolean> {
     const snapshot = await this.snapshot();
     if (snapshot.unrestricted) return true;
+    if (requirement === 'unrestricted') return false;
+    const { resource, action } = requirement;
     return snapshot.permissions.some(
       (permission) =>
         permission.resource.type === resource.type &&

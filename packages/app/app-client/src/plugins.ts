@@ -21,11 +21,16 @@ const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
 export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
 /**
- * Authorization checked before this page loads. Every page declares it: nothing
- * is inferred. `skip` opts out explicitly and does not bypass parent guards.
+ * Authorization checked before this page loads. `skip` opts out and does not
+ * bypass parent guards; `unrestricted` admits only identities with unrestricted
+ * access, such as root, and is never offered as a grant. A page that omits it
+ * inherits its nearest ancestor page's value; the first page on a path defaults
+ * to `unrestricted` on protected app and settings pages and to `skip` on guest,
+ * optional and dev pages.
  */
 export type AppClientRouteAuthz =
   | 'skip'
+  | 'unrestricted'
   | {
       readonly resource: { readonly type: string; readonly id: string };
       readonly action: string;
@@ -48,7 +53,8 @@ export interface AppClientRoutePageDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
-  readonly authz: AppClientRouteAuthz;
+  /** Omitted: inherited from the nearest ancestor page, else a surface default. Declare it on the first page. */
+  readonly authz?: AppClientRouteAuthz;
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader: AppClientRouteComponentLoader;
@@ -135,8 +141,8 @@ export interface AppClientSettingsRoutePageDefinition {
   readonly path: string;
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
-  /** Authorization checked before the page is loaded; required. */
-  readonly authz: AppClientRouteAuthz;
+  /** Omitted: inherited from the nearest ancestor page, else `unrestricted` on settings and `skip` on dev. */
+  readonly authz?: AppClientRouteAuthz;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientSettingsRouteDefinition[];
 }
@@ -520,6 +526,10 @@ export function defineSettingsRoutes(
  */
 interface ImportMetaWithBundlerEnv {
   readonly env?: { readonly PROD?: boolean; readonly DEV?: boolean };
+}
+
+function isDevelopment(): boolean {
+  return !(import.meta as ImportMetaWithBundlerEnv).env?.PROD;
 }
 
 /**
@@ -1015,7 +1025,8 @@ interface RouteResolveContext {
   surface: RouteSurface;
   parentPath: string;
   parentAuth?: AppClientRouteAuth;
-  hasPageAncestor?: boolean;
+  /** Effective authz of the nearest ancestor page; groups pass it through. */
+  ancestorAuthz?: AppClientRouteAuthz;
   ids: Map<string, string>;
   claimed: Map<string, ClaimedPath>;
 }
@@ -1172,6 +1183,7 @@ function resolveRouteTree(
       }
       ids.set(identity, packageName);
     }
+    const authz = normalizeRouteAuthz(route, id, path, isPage, auth, context);
     return Object.freeze({
       id,
       name,
@@ -1181,7 +1193,7 @@ function resolveRouteTree(
       source,
       ...(breadcrumb ? { breadcrumb } : {}),
       ...(navigation ? { navigation } : {}),
-      authz: normalizeRouteAuthz(route, id, isPage),
+      authz,
       ...(isPage
         ? {
             componentLoader: wrapRouteComponentLoader(
@@ -1197,7 +1209,7 @@ function resolveRouteTree(
               ...context,
               parentPath: path,
               parentAuth: auth,
-              hasPageAncestor: context.hasPageAncestor || isPage,
+              ancestorAuthz: isPage ? authz : context.ancestorAuthz,
             }),
           }
         : {}),
@@ -1208,7 +1220,10 @@ function resolveRouteTree(
 function normalizeRouteAuthz(
   route: RouteNode['definition'],
   id: string,
+  path: string,
   isPage: boolean,
+  auth: AppClientRouteAuth,
+  context: RouteResolveContext,
 ): AppClientRouteAuthz {
   if ('access' in route) {
     throw new Error(
@@ -1219,7 +1234,7 @@ function normalizeRouteAuthz(
   if (value !== undefined) {
     if (!isPage)
       throw new Error(`Client route group "${id}" cannot declare authz.`);
-    if (value === 'skip') return value;
+    if (value === 'skip' || value === 'unrestricted') return value;
     if (
       !value ||
       typeof value !== 'object' ||
@@ -1234,18 +1249,26 @@ function normalizeRouteAuthz(
       !value.action.trim()
     )
       throw new Error(
-        `Client route "${id}" must use authz "skip" or { resource: { type, id }, action }.`,
+        `Client route "${id}" must use authz "skip", "unrestricted" or { resource: { type, id }, action }.`,
       );
     return Object.freeze({
       resource: Object.freeze({ ...value.resource }),
       action: value.action,
     });
   }
-  if (isPage)
-    throw new Error(
-      `Client route "${id}" must declare authz: { resource: { type, id }, action } or "skip".`,
+  if (!isPage) return 'skip';
+  if (context.ancestorAuthz !== undefined) return context.ancestorAuthz;
+  // An omission never stops the application: a protected page stays closed to all but unrestricted identities.
+  const fallback =
+    context.surface === 'dev' ||
+    (context.surface === 'app' && auth !== 'required')
+      ? 'skip'
+      : 'unrestricted';
+  if (isDevelopment())
+    console.warn(
+      `Client route "${id}" at "${path}" does not declare authz; using "${fallback}". Declare authz on this page: { resource: { type, id }, action } or "skip".`,
     );
-  return 'skip';
+  return fallback;
 }
 
 function normalizeRouteAuth(

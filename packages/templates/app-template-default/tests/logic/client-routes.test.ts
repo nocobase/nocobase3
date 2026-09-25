@@ -248,9 +248,11 @@ function pageAuthorizations(
             authorizedAs:
               route.authz === 'skip'
                 ? null
-                : route.authz.resource.type === 'page'
-                  ? route.authz.resource.id
-                  : `${route.authz.resource.type}:${route.authz.resource.id}`,
+                : route.authz === 'unrestricted'
+                  ? 'unrestricted'
+                  : route.authz.resource.type === 'page'
+                    ? route.authz.resource.id
+                    : `${route.authz.resource.type}:${route.authz.resource.id}`,
           },
         ]
       : []),

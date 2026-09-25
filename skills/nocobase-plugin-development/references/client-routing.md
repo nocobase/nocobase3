@@ -67,7 +67,7 @@ Each page module must default-export a React component. Declaration modules rema
 
 App Routes accept `auth: 'required' | 'guest' | 'optional'`. Omitted authentication defaults to `required`; child Routes inherit their ancestor's value and cannot change it. Reserved authentication paths such as `/login`, `/register`, `/forgot-password`, and `/reset-password` must use `guest`.
 
-Settings and Dev Routes require an authenticated user. Every page route on every surface declares `authz`, a stable `{ resource: { type, id }, action }` or `'skip'`; registration rejects a page without it, and nothing is inferred from the route name. A Settings page checks the settings item its server registers with `authz.settings.add`. If access is denied, the page is omitted from available navigation and its loader is not run.
+Settings and Dev Routes require an authenticated user. Declare `authz` on the first page of every path, a stable `{ resource: { type, id }, action }`, `'skip'` or `'unrestricted'`; nothing is inferred from the route name. Nested pages inherit it, and an entry page that omits it registers with a development warning and defaults to `'unrestricted'` (root only) on protected App and settings pages or `'skip'` on guest, optional and dev pages. A Settings page checks the settings item its server registers with `authz.settings.add`. If access is denied, the page is omitted from available navigation and its loader is not run.
 
 Client `auth` and `authz` control navigation and page loading only. Every Server Route called by the page must install and test its own authentication and authorization. Similar Client and Server route names create no automatic connection.
 

@@ -433,6 +433,41 @@ describe('options', () => {
     expect(options.resourceGroups).toBeUndefined();
   });
 
+  it('orders a subsection by placement order, then unordered ones by registration', async () => {
+    const authz = createAppAuthorization({});
+    authz.ui.sections.add({
+      name: 'automation',
+      title: 'Automation',
+      parent: 'administration',
+    });
+    for (const [id, order] of [
+      ['unordered', undefined],
+      ['last', 100],
+      ['first', 1],
+    ] as const) {
+      authz.settings.add({ id, title: id, actions: [{ name: 'manage' }] });
+      authz.ui.place(
+        { type: 'settings', id },
+        { section: 'automation', ...(order === undefined ? {} : { order }) },
+      );
+    }
+    const options = await authorizationOptions(authz);
+    const automation = options.sections[2]!.subsections.find(
+      (subsection) => subsection.name === 'automation',
+    );
+    expect(automation?.resources.map((resource) => resource.id)).toEqual([
+      'first',
+      'last',
+      'unordered',
+    ]);
+    expect(() =>
+      authz.ui.place(
+        { type: 'settings', id: 'first' },
+        { section: 'automation', order: Number.NaN },
+      ),
+    ).toThrow('needs a finite order');
+  });
+
   it('lists the resource groups the resources name, with their ancestors', async () => {
     const authz = createAppAuthorization({});
     authz.ui.groups.add({ name: 'ledgers', title: 'Ledgers' });

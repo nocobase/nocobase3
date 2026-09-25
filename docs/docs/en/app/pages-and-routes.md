@@ -18,9 +18,9 @@ Add a page, put it in the menu, require sign-in.
 - `auth` requires sign-in for navigation; note it is not server-side security
 - How to add settings pages and development-only pages
 
-## Every page declares `authz`
+## Declare `authz` on every entry page
 
-Every page route declares `authz`: either `{ resource: { type: 'page', id }, action: 'access' }`, which lists the page in the permission workspace and shows it only to users granted it, or `'skip'`, which checks nothing beyond sign-in and parent routes (typical for child pages and guest pages). Nothing is inferred from the route name, and a page without `authz` is rejected at registration. See [Route types](./reference/routes) for settings and development pages.
+Declare `authz` on the first page of every path: either `{ resource: { type: 'page', id }, action: 'access' }`, which lists the page in the permission workspace and shows it only to users granted it, `'skip'`, which checks nothing beyond sign-in and parent routes (typical for guest pages), or `'unrestricted'`, which only root may open. A nested page that omits `authz` inherits its nearest ancestor page's value; a child that declares its own overrides it. Nothing is inferred from the route name. A first page that omits `authz` does not stop the application: a protected page defaults to `'unrestricted'`, hidden from everyone but root, and a guest or optional page to `'skip'`, with a development warning. Always declare it rather than rely on that default. See [Route types](./reference/routes) for settings and development pages.
 
 ```ts
 defineAppRoutes([

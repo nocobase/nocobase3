@@ -118,7 +118,10 @@ export async function authorizationOptions(
   );
   const collections = described.filter((item) => item !== undefined);
   const fields = new Map(collections.map((item) => [item.name, item.fields]));
-  const resources = new Map<string, AuthorizationOptionsResource[]>();
+  const placed = new Map<
+    string,
+    { order: number; resource: AuthorizationOptionsResource }[]
+  >();
   for (const type of host.resourceTypes.list()) {
     const defaultSection = host.ui.defaultSectionOf(type.type);
     if (options.rules && type.type !== 'composite') continue;
@@ -146,24 +149,38 @@ export async function authorizationOptions(
         placement?.group !== undefined && host.ui.groups.has(placement.group)
           ? placement.group
           : undefined;
-      resources.set(section, [
-        ...(resources.get(section) ?? []),
+      placed.set(section, [
+        ...(placed.get(section) ?? []),
         {
-          type: type.type,
-          id: item.id,
-          title: title(item.title, item.id),
-          ...(item.description === undefined
-            ? {}
-            : { description: title(item.description, '') }),
-          ...(group === undefined ? {} : { group }),
-          actions: item.actions.map(actionOption),
-          ...(dataScopes && Object.keys(dataScopes).length
-            ? { dataScopes }
-            : {}),
+          order: placement?.order ?? Number.POSITIVE_INFINITY,
+          resource: {
+            type: type.type,
+            id: item.id,
+            title: title(item.title, item.id),
+            ...(item.description === undefined
+              ? {}
+              : { description: title(item.description, '') }),
+            ...(group === undefined ? {} : { group }),
+            actions: item.actions.map(actionOption),
+            ...(dataScopes && Object.keys(dataScopes).length
+              ? { dataScopes }
+              : {}),
+          },
         },
       ]);
     }
   }
+  // Array.prototype.sort is stable, so unordered resources keep registration order.
+  const resources = new Map(
+    [...placed].map(([section, entries]) => [
+      section,
+      [...entries]
+        .sort((left, right) =>
+          left.order === right.order ? 0 : left.order < right.order ? -1 : 1,
+        )
+        .map((entry) => entry.resource),
+    ]),
+  );
   const sections = host.ui.sections.tree().map((section) => ({
     name: section.name,
     title: title(section.title, section.name),

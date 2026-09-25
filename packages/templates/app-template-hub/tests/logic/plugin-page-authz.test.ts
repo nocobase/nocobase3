@@ -32,7 +32,7 @@ describe('plugin page authorization', () => {
     // Some pages check another resource, such as Hub's API keys; each plugin still offers a page grant.
     const granted = pages.filter(
       (route) =>
-        route.authz !== 'skip' &&
+        typeof route.authz === 'object' &&
         route.authz.resource.type === 'page' &&
         route.authz.action === 'access',
     );
