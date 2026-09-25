@@ -75,6 +75,7 @@ describe('default access through the authorization dispatcher', () => {
     });
     expect(authz.ui.placementOf(SETTINGS)).toEqual({
       section: 'authorization',
+      order: 10,
     });
     expect(authz.routes.list()).toContain(PATH);
     expect('defaultAccess' in authz).toBe(true);

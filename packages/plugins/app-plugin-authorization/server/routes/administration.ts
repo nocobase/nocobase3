@@ -33,11 +33,15 @@ export function installAuthorizationAdministration(
     title: text('options.settings.inspector'),
     actions: [action('inspect')],
   });
-  for (const id of [PERMISSION_SETS_SETTINGS, INSPECTOR_SETTINGS])
-    authz.ui.place(
-      { type: 'settings', id },
-      { section: AUTHORIZATION_SETTINGS_SECTION },
-    );
+  // Permission sets lead the section and the inspector closes it; rule plugins sit between.
+  authz.ui.place(
+    { type: 'settings', id: PERMISSION_SETS_SETTINGS },
+    { section: AUTHORIZATION_SETTINGS_SECTION, order: 0 },
+  );
+  authz.ui.place(
+    { type: 'settings', id: INSPECTOR_SETTINGS },
+    { section: AUTHORIZATION_SETTINGS_SECTION, order: 1000 },
+  );
   authz.routes.add(
     '/permission-sets',
     createPermissionSetHandler(authz, authz.permissionSets),

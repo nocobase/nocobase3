@@ -304,18 +304,14 @@ function Inspector({
               <Fragment key={item.value}>
                 {item.section !== entries[index - 1]?.section && (
                   <div
-                    className={`flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
+                    className={`px-3 pb-1 text-xs font-medium text-muted-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
                   >
-                    <span
-                      className='h-3 w-0.5 rounded-full bg-primary'
-                      aria-hidden='true'
-                    />
                     {item.sectionLabel}
                   </div>
                 )}
                 <Button
-                  className='w-full justify-start'
-                  variant={item === entry ? 'outline' : 'ghost'}
+                  className={`w-full justify-start ${item === entry ? 'bg-primary/10 font-medium text-primary hover:bg-primary/10' : 'font-normal text-foreground'}`}
+                  variant='ghost'
                   aria-label={item.label}
                   aria-current={item === entry ? 'page' : undefined}
                   onClick={() => {

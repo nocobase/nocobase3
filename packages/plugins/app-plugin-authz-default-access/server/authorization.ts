@@ -54,7 +54,7 @@ export function defaultAccess(
       });
       authz.ui.place(
         { type: 'settings', id: DEFAULT_ACCESS_SETTINGS },
-        { section: AUTHORIZATION_SETTINGS_SECTION },
+        { section: AUTHORIZATION_SETTINGS_SECTION, order: 10 },
       );
       authz.routes.add(
         `/${DEFAULT_ACCESS_RULE}`,

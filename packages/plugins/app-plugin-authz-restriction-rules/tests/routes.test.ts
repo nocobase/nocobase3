@@ -76,6 +76,7 @@ describe('restriction rules through the authorization dispatcher', () => {
     });
     expect(authz.ui.placementOf(SETTINGS)).toEqual({
       section: 'authorization',
+      order: 30,
     });
     expect(authz.routes.list()).toContain(PATH);
     expect('restrictionRules' in authz).toBe(true);

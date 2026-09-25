@@ -54,7 +54,7 @@ export function sharingRules(
       });
       authz.ui.place(
         { type: 'settings', id: SHARING_RULES_SETTINGS },
-        { section: AUTHORIZATION_SETTINGS_SECTION },
+        { section: AUTHORIZATION_SETTINGS_SECTION, order: 20 },
       );
       authz.routes.add(
         `/${SHARING_RULES_RULE}`,
