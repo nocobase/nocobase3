@@ -1,6 +1,6 @@
 # Build a business module with authorization
 
-Use a quote submission workflow as the reference: engineers prepare quotes; project responsibility determines whether they can submit them; a delegated engineer can receive an explicit handover. Orders have separate delivery responsibilities; submitting a quote does not create an order. The same design applies to approvals, service tickets and project work. Source examples live in `@nocobase/app-plugin-authorization-example` in the source workspace; an installed App implements these patterns in its own feature files.
+Use a quote submission workflow as the reference: engineers prepare quotes; project responsibility determines whether they can submit them; a delegated engineer can receive an explicit handover. Orders have separate delivery responsibilities; submitting a quote does not create an order. The same design applies to approvals, service tickets and project work. Implement these patterns in the App's own feature files.
 
 ## 1. Write the responsibility matrix
 
@@ -104,7 +104,7 @@ export function registerPublicQuoteAccess(
 }
 ```
 
-This is a resolver's trusted lookup, not a public list endpoint. The model needs `projects.confidential`. When one record access applies to several collections, pass each to `.collections(...)` and branch on `collection` to map the right parent, instead of treating every collection's id as a project id. For large datasets, implement a database-backed parent lookup and measure it; the small demonstration's id list is not a universal scaling design.
+This is a resolver's trusted lookup, not a public list endpoint. The model needs `projects.confidential`. When one record access applies to several collections, pass each to `.collections(...)` and branch on `collection` to map the right parent, instead of treating every collection's id as a project id. For large datasets, implement a database-backed parent lookup and measure it; a list of ids is not a universal scaling design.
 
 Reuse the built-in `recordAccess.recordsIOwn` and `recordAccess.recordsICreated` when the collection has the corresponding column (default `ownerId` and `createdById`, configurable with `params.field`), `recordAccess.customFilter` for a fixed filter and `recordAccess.allRecords` for everything. Use custom record access when ownership follows a parent. Do not assume an id from a team subject is a user id; user-dependent resolvers must check the principal type.
 
@@ -178,7 +178,7 @@ Complete this configuration as part of delivering the permission feature, for bo
 
 Create the engineer set with page access and quote actions as separate grants. Configure edit with the preparer selection; submit with the preparer and region selections. Do not use project ownership as an edit default if that would reopen a colleague's quote.
 
-The following rule-based extensions require the corresponding installed Skills; follow [capability discovery](optional-capabilities.md) first. Without them, describe the missing capability as separate development rather than assuming the example configuration is available. Add default access only for an intentional baseline. Add sharing for the delegation exception: the delegated quote's edit and submit scopes plus its actual parent project's submit scope, assigned to the delegated engineer. Sharing the quote does not automatically grant its parent or the submit action. Add restrictions for confidential records at the appropriate boundary; a collection restriction covers all operation branches when the invariant must apply everywhere.
+The following rule-based extensions require the corresponding installed Skills; follow [capability discovery](optional-capabilities.md) first. Without them, describe the missing capability as separate development rather than assuming it is available. Add default access only for an intentional baseline. Add sharing for the delegation exception: the delegated quote's edit and submit scopes plus its actual parent project's submit scope, assigned to the delegated engineer. Sharing the quote does not automatically grant its parent or the submit action. Add restrictions for confidential records at the appropriate boundary; a collection restriction covers all operation branches when the invariant must apply everywhere.
 
 Use the three optional rule Skills for implementation. Follow [code declarations and seeds](code-and-seeds.md) for an executable permission-set declaration, persistence row shapes and initialization rules. Migrations contain schema operations only. Keep demonstration account creation and practice reset out of production features.
 

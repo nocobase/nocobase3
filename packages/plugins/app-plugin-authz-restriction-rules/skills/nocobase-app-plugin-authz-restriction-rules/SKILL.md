@@ -17,7 +17,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for composite
 4. Bind policies on all protected reads and writes. For relation targets, declare relation record access explicitly; a standalone collection restriction is not inherited by nested relation writes.
 5. Verify the excluded row stays inaccessible after adding broad sharing and another permission set, across each protected operation, and that unrelated actors keep their intended access.
 
-In the sales example every account carries the confidentiality restriction directly, so it holds whichever permission set grants the action. Test with ordinary users: unrestricted identities skip every rule.
+For example, a confidentiality restriction assigned directly to each account holds whichever permission set grants the action. Test with ordinary users: unrestricted identities skip every rule.
 
 ## Install
 
@@ -41,7 +41,7 @@ During setup the factory registers the settings item `authorization.restriction-
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite, `sales.public` its own record access and `sales.team` its own subject type, all defined as the main Skill describes.
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite, `sales.public` its own record access and `org.team` its own subject type, all defined as the main Skill describes.
 
 ```ts
 import { selection } from '@nocobase/authorization/core';
@@ -60,7 +60,7 @@ const rules = (
 await rules.create(
   defineRestrictionRule('public-proposals', quotes.reference())
     .title('Exclude confidential proposals')
-    .subjects({ type: 'sales.team', id: 'proposal' })
+    .subjects({ type: 'org.team', id: 'proposal' })
     .scope('submit', 'quotes', selection.recordAccess('sales.public'))
     .reason('Proposal collaboration excludes confidential work')
     .build(),

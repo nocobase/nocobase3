@@ -2,17 +2,19 @@
 
 ## Inherited teams or departments
 
-Register the type through `authz.subjects.add('sales.team', { resolveFor, filterActive, administration })` in provider boot and call the function it returns on shutdown. `resolveFor(principal)` returns membership IDs from the authoritative team service; `filterActive(ids, transaction?)` excludes inactive/deleted teams. Use the passed transaction when reading validity during protected assignment changes. The registration below is a minimal flat team. It assumes the feature owns `salesTeams` (id, title, active) and `salesTeamMembers` (userId, teamId); adapt those table names to the customer model.
+When the application has no organisation model yet, build it with the application development Skill's `references/organization.md`; this section covers only the subject registration contract.
+
+Register the type through `authz.subjects.add('org.team', { resolveFor, filterActive, administration })` in provider boot and call the function it returns on shutdown. `resolveFor(principal)` returns membership IDs from the authoritative team service; `filterActive(ids, transaction?)` excludes inactive/deleted teams. Use the passed transaction when reading validity during protected assignment changes. The registration below is a minimal flat team. It assumes the feature owns `teams` (id, title, active) and `teamMembers` (userId, teamId); adapt those table names to the customer model.
 
 ```ts
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import { buildFilter } from '@nocobase/repository-input';
 
-export const TEAM_SUBJECT = 'sales.team';
-const TEAMS = 'salesTeams';
+export const TEAM_SUBJECT = 'org.team';
+const TEAMS = 'teams';
 
-export function registerSalesTeams(
+export function registerTeams(
   authz: AppAuthorization,
   database: DatabaseManager,
 ): () => void {
@@ -21,7 +23,7 @@ export function registerSalesTeams(
       if (principal.type !== 'user') return [];
       const memberships = await database
         .connection()
-        .query.selectFrom('salesTeamMembers')
+        .query.selectFrom('teamMembers')
         .select('teamId')
         .where('userId', '=', principal.id)
         .execute();
@@ -38,7 +40,7 @@ export function registerSalesTeams(
       return rows.map((row) => String(row.id));
     },
     administration: {
-      title: 'Sales teams',
+      title: 'Teams',
       selection: {
         type: 'collection',
         async list({ search, page, pageSize }) {
@@ -99,8 +101,6 @@ Store the returned unregister callback in the owning provider and call it on shu
 The App middleware adds `authenticated:*` and resolves active memberships for authenticated users. User inspection uses the resolver too. Background jobs/tests that call `authz.for(identity)` must explicitly supply verified subjects; never trust client-submitted memberships. Direct inspection of a team describes the team itself, not the union of its users.
 
 Expose `administration: { title, selection }` for assignment and rule pickers. A collection selection implements `list({ search, page, pageSize }, { authz })` returning `{ items, total }`, and `resolve(ids, { authz })` returning `{ id, title, description? }[]`; `title` and `description` may be plain text or a `{ key, ns }` translation descriptor, rendered in the viewer's language. The calling endpoint checks the management permission. Enforce additional directory read authorization and row constraints in both callbacks only when the directory has those independent requirements; ordinary management pickers need no extra capability. Fixed audiences use `{ type: 'fixed', id: '*' }`. Picker access does not authorize saving assignments; preserve inaccessible stored subjects by ID instead of silently dropping them.
-
-For a full department model built on this, see the application development Skill's `organization.md`.
 
 Test direct and inherited grants together. Removing a membership, disabling a team or revoking its permission set must stop inherited access on a new request while preserving independent direct grants. The server re-evaluates membership on each request, so membership changes affect only client freshness: after the membership transaction commits, call `authz.permissionSets.notifyAssignmentsChanged({ type: 'user', id })` for each affected user to refresh that user's clients. An assignment change on any non-user subject already refreshes every client.
 

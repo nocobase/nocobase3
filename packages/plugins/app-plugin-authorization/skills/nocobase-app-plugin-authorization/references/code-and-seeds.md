@@ -1,6 +1,6 @@
 # Code declarations, seeds and administrator configuration
 
-Use the current sales example as the model: four job permission sets, three business collections, separate page access, a two-scope quote submission, a delegated quote handover and delivery relations. For a job inherited through an organisation, see `@nocobase/app-plugin-departments-example`. Code defines the business permission model; seeds provide initial business permission configuration that administrators can continue editing in the backend. The example additionally seeds fictional accounts and records for practice; those fixtures are separate from the production permission configuration pattern.
+Use the sales domain of [the business module workflow](business-module.md) as the model: job permission sets, three business collections, separate page access, a two-scope quote submission, a delegated quote handover and delivery relations. For a job inherited through an organisation, build it with the application development Skill's `references/organization.md`. Code defines the business permission model; seeds provide initial business permission configuration that administrators can continue editing in the backend. Demonstration accounts and records are separate from the production permission configuration.
 
 ## Permission model versus editable configuration
 
@@ -33,7 +33,7 @@ When developing or changing the model, also complete its initial or adjusted per
 
 ## Share declarations, not runtime instances
 
-Keep a portable feature module such as `server/sales-resources.ts` with `defineCompositeResource` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently; the installed example uses `example.sales.*` and `authorizationExample*` names.
+Keep a portable feature module such as `server/sales-resources.ts` with `defineCompositeResource` declarations. Put permission-set values in `database/seed-data/permission-sets.ts`, importing the same resource references. The corresponding code for a customer-owned feature can live under its own `sales/` directory. Use that feature's names consistently.
 
 ```ts
 import { definePermissionSet } from '@nocobase/authorization/permission-sets';
@@ -61,7 +61,7 @@ The declarations used here are in [the sales workflow](business-module.md). Regi
 
 `defineSeed` from `@nocobase/db` receives `{ query, connection }`. `connection` is a restricted `SeedConnection`, not a complete runtime `DatabaseConnection`; the seed has no application container. Do not cast it to construct an App authorization service or assume `authorizationToken` can be resolved there.
 
-For initial installation, a seed may write the documented persistence rows below after the owning plugins' migrations. Keep this adapter confined to installation data, use fluent values as its input, and test against the installed schema. Runtime routes must use the services instead. The current example uses this bootstrap pattern and separate data modules per table.
+For initial installation, a seed may write the documented persistence rows below after the owning plugins' migrations. Keep this adapter confined to installation data, use fluent values as its input, and test against the installed schema. Runtime routes must use the services instead. Keep one seed-data module per table.
 
 ```ts
 import { defineSeed } from '@nocobase/db';
@@ -94,7 +94,7 @@ export default defineSeed({
 });
 ```
 
-This example lives in `database/main/seeds/202609190001_sales_jobs.ts` and imports `database/seed-data/permission-sets.ts`. Adapt the path to the App's configured seed directory; the seed name matches the filename. Ensure schema migrations for authorization and business collections have run, and explicitly order prerequisite installation data. Use the App's existing migration/seed commands. Do not run this code in a migration: migrations must describe fixed schema history and cannot import live business declarations.
+This seed lives in `database/main/seeds/202609190001_sales_jobs.ts` and imports `database/seed-data/permission-sets.ts`. Adapt the path to the App's configured seed directory; the seed name matches the filename. Ensure schema migrations for authorization and business collections have run, and explicitly order prerequisite installation data. Use the App's existing migration/seed commands. Do not run this code in a migration: migrations must describe fixed schema history and cannot import live business declarations.
 
 ### Persist initial permission-set assignments
 

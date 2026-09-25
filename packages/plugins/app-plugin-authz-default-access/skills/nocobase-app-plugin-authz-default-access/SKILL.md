@@ -16,7 +16,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for composite
 3. Save one rule per resource under a stable `key`; a second rule on the same resource is rejected, so extend the existing rule instead. A rule lists every action and data scope it widens; updating it replaces the whole rule, and deleting it removes the baseline, not the permission-set action.
 4. Verify a holder receives the baseline, a person without the action remains denied, and restrictions still remove excluded rows. Also verify an explicit narrow data scope is not unexpectedly broadened by a permissive default.
 
-The sales example uses related-project ownership for the quote view baseline and preparer identity for editing; the engineer set separately grants broad viewing, which confidentiality restrictions narrow. A project's owner is not necessarily the author of every quote on that project.
+For example, a quote view baseline can follow related-project ownership while editing follows the preparer, and a job's permission set can separately grant broad viewing that confidentiality restrictions narrow. A project's owner is not necessarily the author of every quote on that project.
 
 ## Install
 
