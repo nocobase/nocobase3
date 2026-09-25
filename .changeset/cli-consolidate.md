@@ -14,6 +14,8 @@
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/app-plugin-hub': patch
 '@nocobase/app-plugin-i18n': patch
+'@nocobase/app-plugin-api-keys': patch
+'@nocobase/app-plugin-repository-example': patch
 ---
 
 `@nocobase/app-cli` is now the whole application command line: it provides the `nocobase` bin and absorbs `@nocobase/nb3-cli` (command assembly, the plugin contract, plugin and Skill management) and `@nocobase/app-tools` (`dev`, `build`, `start`, `server-deps`). Neither of those two packages is published any more, and there is no compatibility period.
