@@ -1,9 +1,7 @@
-import { Toaster, toast } from 'sonner';
 import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
@@ -17,6 +15,7 @@ import {
 } from 'react-router';
 import { useEffect, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render } from './render.js';
 
 import type {
   AppOverview,
@@ -231,7 +230,6 @@ function Logs(): ReactElement {
 
 describe('Hub client pages', () => {
   beforeEach(() => {
-    render(<Toaster position='top-right' />);
     mocks.client.request.mockReset();
     mocks.authorization.can.mockReset().mockResolvedValue(true);
     mocks.authorization.invalidate.mockReset();
@@ -243,7 +241,6 @@ describe('Hub client pages', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
-    toast.dismiss();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -615,11 +612,11 @@ describe('Hub client pages', () => {
     expect(name).toHaveValue('My TMS');
     expect(id).toHaveValue('tms');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    const notification = screen
-      .getByText('Application ID is unavailable')
-      .closest('[data-sonner-toaster]');
-    expect(notification).toHaveAttribute('data-x-position', 'right');
-    expect(notification).toHaveAttribute('data-y-position', 'top');
+    expect(
+      within(screen.getByRole('dialog')).queryByText(
+        'Application ID is unavailable',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('debounces catalog search and sends the trimmed query to the server', async () => {
@@ -812,6 +809,34 @@ describe('Hub client pages', () => {
     expect(
       screen.getByText((content) => content.includes('failed to reload')),
     ).toBeInTheDocument();
+  });
+
+  it('keeps a replacing error on screen and reports neither the replaced nor the unmounted one as dismissed', async () => {
+    const onClose = vi.fn();
+    const view = render(
+      <ErrorNotification message='First failure' onClose={onClose} />,
+    );
+    expect(await screen.findByText('First failure')).toBeInTheDocument();
+
+    view.rerender(
+      <ErrorNotification message='Second failure' onClose={onClose} />,
+    );
+    expect(await screen.findByText('Second failure')).toBeInTheDocument();
+    expect(screen.queryByText('First failure')).not.toBeInTheDocument();
+
+    view.unmount();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('reports an error notification that closed on its own', () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    render(<ErrorNotification message='Timed failure' onClose={onClose} />);
+
+    act(() => {
+      vi.advanceTimersByTime(8000);
+    });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('closes the lifecycle confirmation before showing a restart failure', async () => {
@@ -1445,7 +1470,6 @@ describe('Hub client pages', () => {
   );
 
   it('redirects the legacy release page, preserves the query, and expands an uploaded release without deploying', async () => {
-    const notify = vi.spyOn(toast, 'success');
     const release: ReleaseRecord = {
       id: 'uploaded-1',
       version: '2.0.0',
@@ -1525,10 +1549,7 @@ describe('Hub client pages', () => {
       screen.getByRole('button', { name: 'releases.collapse' }),
     ).toHaveAttribute('aria-expanded', 'true');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(notify).toHaveBeenCalledWith('releases.uploaded', {
-      position: 'top-right',
-      duration: 4000,
-    });
+    expect(screen.getByText('releases.uploaded')).toBeInTheDocument();
     expect(
       mocks.client.request.mock.calls.some(([r]) => r.path.endsWith('/deploy')),
     ).toBe(false);

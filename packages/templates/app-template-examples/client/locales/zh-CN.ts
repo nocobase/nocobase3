@@ -202,6 +202,9 @@ const zhCN: AppResource = {
     allowClose: '允许关闭当前层',
     historyHint:
       '取消勾选后，按 Esc、点击遮罩或关闭按钮都会保持当前层打开。浏览器前进和后退仍会正常导航。',
+    showToast: '显示通知',
+    toastTitle: '来自弹层内的通知',
+    toastDescription: '通知会显示在弹窗和抽屉之上。',
   },
   numbers: {
     title: '数字类型',

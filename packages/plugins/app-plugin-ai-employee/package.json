@@ -186,7 +186,6 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@refinedev/core": "^5.0.0",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "echarts": "^5.5.0",

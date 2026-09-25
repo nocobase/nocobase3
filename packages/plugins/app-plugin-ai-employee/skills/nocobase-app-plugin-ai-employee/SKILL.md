@@ -36,6 +36,7 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 3. Frontend work needs `client/extensions/nocobase-ai/index.ts` to exist. If it does not, install the Registry item first — see [chat-surfaces.md § Install the extension](references/chat-surfaces.md#install-the-extension).
 4. Chat attachments need a storage disk decided deliberately — see [capabilities.md § Attachment storage](references/capabilities.md#attachment-storage-configyml).
 5. Business data the assistant should read is already authorized, and its authorization resource id is two-part — `<connection>.<collection>`. The built-in data tools skip a bare `orders`, and what they skip disappears in silence: discovery returns no data sources at all, not one missing table, so the symptom points at the database configuration rather than the grant. Authorization itself belongs to the `nocobase-app-plugin-authorization` Skill; what this plugin requires of it is in [capabilities.md § What the data tools can see](references/capabilities.md#what-the-data-tools-can-see).
+6. The App mounts the `toaster` provider from `client/components/ui/toast.tsx` in `client/react-providers.ts`, as the templates do. The AI employee page reports results through that Base UI toast and fails with `Base UI: useToastManager must be used within <Toast.Provider>` without it; the `nocobase-app-upgrade` Skill's `references/edge-cases.md` ("Notifications and the Base UI toast") shows how to add it.
 
 ## Known gaps in this version
 

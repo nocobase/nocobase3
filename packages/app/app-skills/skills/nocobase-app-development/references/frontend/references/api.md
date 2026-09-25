@@ -470,10 +470,10 @@ Write the checks directly in the component that uses them (for example `ProjectS
 
 A write happens once, when the user clicks, and its state has to be managed too:
 
-| State      | Form                                                                  | Confirmation dialog, single button                                             |
-| ---------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Submitting | `form.formState.isSubmitting` (see `form.md`)                         | Keep it in your own `useState` and reset it in `finally`                       |
-| Failed     | `form.setError(...)`, shown below the field or at the top of the form | A one-line error in the confirmation dialog; `toast.error` for a single button |
+| State      | Form                                                                  | Confirmation dialog, single button                                                |
+| ---------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Submitting | `form.formState.isSubmitting` (see `form.md`)                         | Keep it in your own `useState` and reset it in `finally`                          |
+| Failed     | `form.setError(...)`, shown below the field or at the top of the form | A one-line error in the confirmation dialog; an `error` toast for a single button |
 
 For complete forms, see `form.md`; for the delete confirmation dialog, see `overlay.md`. Below is a single button that marks the project as "Done" when clicked (`client/pages/projects/complete-project-button.tsx`).
 
@@ -482,10 +482,10 @@ import { ApiClientError, useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { CheckIcon } from 'lucide-react';
 import { type ReactElement, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { toast } from '@/components/ui/toast';
 
 import type { Project } from './types.js';
 
@@ -516,18 +516,33 @@ export function CompleteProjectButton({
         method: 'PATCH',
         json: { status: 'done' },
       });
-      toast.success(t('projects.complete.success', { name: project.name }));
+      toast.add({
+        type: 'success',
+        title: t('projects.complete.success', { name: project.name }),
+      });
       onCompleted(result.data);
     } catch (error: unknown) {
       // This action has no dialog, so errors have no fixed place to appear; use a toast.
       if (error instanceof ApiClientError && error.status === 404) {
-        toast.error(t('projects.error.notFound'));
+        toast.add({
+          type: 'error',
+          priority: 'high',
+          title: t('projects.error.notFound'),
+        });
         onGone();
       } else if (error instanceof ApiClientError && error.status === 403) {
-        toast.error(t('projects.error.forbidden'));
+        toast.add({
+          type: 'error',
+          priority: 'high',
+          title: t('projects.error.forbidden'),
+        });
       } else {
         // Network errors are not ApiClientError and end up here too. Do not show error.message.
-        toast.error(t('projects.error.requestFailed'));
+        toast.add({
+          type: 'error',
+          priority: 'high',
+          title: t('projects.error.requestFailed'),
+        });
       }
     } finally {
       setPending(false);
@@ -554,23 +569,22 @@ export function CompleteProjectButton({
 Handling the outcome:
 
 - **Submitting**: the button shows a `Spinner` and is disabled; dialogs and confirmation dialogs cannot be closed (guidelines T3.5 and S5).
-- **Success**: `toast.success(...)` states the result. The current view (detail view, drawer) updates immediately with the data the endpoint returned, and the list refreshes by calling `reload()` (guideline R2); the list's `reload` is passed to child routes through `<Outlet context>` (see `overlay.md`). Do not just call `reload()` and wait for it to come back; in the meantime the UI shows old values.
+- **Success**: a `success` toast states the result. The current view (detail view, drawer) updates immediately with the data the endpoint returned, and the list refreshes by calling `reload()` (guideline R2); the list's `reload` is passed to child routes through `<Outlet context>` (see `overlay.md`). Do not just call `reload()` and wait for it to come back; in the meantime the UI shows old values.
 - **Load the latest data before editing**: request the record by id again and prefill the form with the latest data (guidelines T3.8 and R1). When the backend replaces fields as a whole, saving with stale data overwrites changes that someone else, or you yourself, just made. See `form.md` for how.
 - **404 returned**: the record no longer exists. Explain what happened, refresh the list, and offer no "Retry" (guideline R3). A 404 during a delete counts as a successful delete.
-- **Other failures**: show the error where the action started (guideline I3) — `form.setError` in a form, one line of error text in a confirmation dialog. Use `toast.error(...)` only for single-click actions without a dialog and for background operations.
+- **Other failures**: show the error where the action started (guideline I3) — `form.setError` in a form, one line of error text in a confirmation dialog. Use an `error` toast only for single-click actions without a dialog and for background operations.
 
 ## Toasts
 
-`import { toast } from 'sonner'`, and call it in event handlers:
+`import { toast } from '@/components/ui/toast'`, and call `toast.add({ type, title })` in event handlers:
 
-| Method          | Use                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------- |
-| `toast.success` | The action succeeded; one sentence stating the result                                       |
-| `toast.info`    | Information, for example that the record to delete has already been deleted by someone else |
-| `toast.error`   | A single-click action without a dialog, or a background operation, failed                   |
+| `type`      | Use                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------- |
+| `'success'` | The action succeeded; one sentence stating the result                                             |
+| `'info'`    | Information, for example that the record to delete has already been deleted by someone else       |
+| `'error'`   | A single-click action without a dialog, or a background operation, failed; add `priority: 'high'` |
 
-- The registered `@nocobase/app-plugin-notification-provider` plugin mounts the Toaster globally. Call the methods directly; do not mount another Toaster yourself.
-- Do not use `@/components/ui/toast`: it is a different set of components, and the application does not mount it.
+- `client/react-providers.ts` mounts the application's one `Toaster`. Call `toast.add` directly; do not mount another Toaster yourself.
 - Copy goes through translation; when a specific record is involved, include its name (guideline C6), for example `t('projects.complete.success', { name: project.name })`.
 - Form validation failures and failed requests inside a dialog do not use a toast; show them in the form or dialog (guideline I3).
 

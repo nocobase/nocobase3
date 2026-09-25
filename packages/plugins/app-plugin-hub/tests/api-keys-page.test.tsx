@@ -1,13 +1,7 @@
-import { Toaster, toast } from 'sonner';
 import userEvent from '@testing-library/user-event';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render } from './render.js';
 import enUS from '../client/locales/en-US.js';
 import { emptyHubCapabilities } from '../client/permissions.js';
 
@@ -76,8 +70,6 @@ beforeEach(() => {
     configurable: true,
     value: undefined,
   });
-  toast.dismiss();
-  render(<Toaster position='top-right' />);
   mocks.request.mockReset();
 });
 

@@ -10,7 +10,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useNotification } from '@refinedev/core';
+import { Toast } from '@base-ui/react/toast';
 import {
   useCallback,
   useEffect,
@@ -359,7 +359,7 @@ export default function AIEmployeePage(): ReactElement {
   const t = useT();
   const { skillTitle, skillDescription, toolTitle, toolAbout, compareTitles } =
     useCatalogDisplay();
-  const { open } = useNotification();
+  const { add: addToast } = Toast.useToastManager();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
   const [employeeListExpanded, setEmployeeListExpanded] = useState<boolean>();
   const employeeListOpen = employeeListExpanded ?? employees.length > 1;
@@ -625,15 +625,16 @@ export default function AIEmployeePage(): ReactElement {
           item.username === updated.username ? { ...item, ...updated } : item,
         ),
       );
-      open?.({
+      addToast({
         type: 'success',
-        message: t('AI employee saved'),
+        title: t('AI employee saved'),
         description: t('Your changes have been saved successfully.'),
       });
     } catch (cause) {
-      open?.({
+      addToast({
         type: 'error',
-        message: t('Unable to save changes.'),
+        priority: 'high',
+        title: t('Unable to save changes.'),
         description: cause instanceof Error ? cause.message : String(cause),
       });
     } finally {

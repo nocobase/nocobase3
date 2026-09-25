@@ -930,7 +930,6 @@ A confirmation dialog concerns a single action, so it uses component state. Make
 import { ApiClientError, useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, type RefObject, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 import {
   AlertDialog,
@@ -943,6 +942,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/ui/spinner';
+import { toast } from '@/components/ui/toast';
 
 import type { Project } from './types.js';
 
@@ -977,7 +977,10 @@ export function ProjectDeleteDialog({
     setError(undefined);
     try {
       await api.request({ path: `projects/${target.id}`, method: 'DELETE' });
-      toast.success(t('projects.delete.success', { name: target.name }));
+      toast.add({
+        type: 'success',
+        title: t('projects.delete.success', { name: target.name }),
+      });
     } catch (caught: unknown) {
       const status = caught instanceof ApiClientError ? caught.status : 0;
       if (status !== 404) {
@@ -987,7 +990,10 @@ export function ProjectDeleteDialog({
         return;
       }
       // 404: someone else already deleted the record. What the user wanted has already happened, so explain that and treat it as a successful delete (guideline R3).
-      toast.info(t('projects.delete.notFound', { name: target.name }));
+      toast.add({
+        type: 'info',
+        title: t('projects.delete.notFound', { name: target.name }),
+      });
     }
     setPending(false);
     deletedRef.current = true;
@@ -1094,7 +1100,7 @@ For its use in the detail drawer, see `ProjectDetailActions` in 3.2.
 - `AlertDialogAction` does not close the confirmation dialog automatically: on success, the parent closes it in `onDeleted` (the list sets `open` to `false`; the drawer closes the whole drawer). `AlertDialogCancel` does close automatically.
 - **While deleting**: `onOpenChange` ignores close requests (Esc, clicking the backdrop), both buttons are disabled, and the confirm button shows a `Spinner` (guideline S5).
 - **Failure**: the confirmation dialog stays open and explains the reason inside it with `role='alert'` (guideline I3); without permission (403) the confirm button is disabled, and after other failures the user can click again to retry. Do not show the raw message the backend returned.
-- **404**: someone else already deleted the record; say so with `toast.info` and treat it as a successful delete (guideline R3).
+- **404**: someone else already deleted the record; say so with an `info` toast and treat it as a successful delete (guideline R3).
 - **Where focus goes**: the deleted row disappears together with the menu that opened the confirmation dialog, so the list passes `deletedFocusRef={searchRef}`, and focus lands on the search box after the delete (guideline A6). The drawer does not pass it: the drawer closes, and the list's `afterDelete` handles focus.
 - When the confirmation dialog renders inside the drawer (in the drawer's `footer`), Esc closes only the confirmation dialog.
 

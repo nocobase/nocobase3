@@ -16,8 +16,8 @@ import clientLocales from '../../client/locales/index.js';
 import { createWorkflowI18nRuntime } from '../i18n.js';
 
 const { notify } = vi.hoisted(() => ({ notify: vi.fn() }));
-vi.mock('@refinedev/core', () => ({
-  useNotification: () => ({ open: notify }),
+vi.mock('@base-ui/react/toast', () => ({
+  Toast: { useToastManager: () => ({ add: notify }) },
 }));
 const i18n = await createWorkflowI18nRuntime(clientLocales);
 afterEach(() => vi.restoreAllMocks());
