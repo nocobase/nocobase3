@@ -853,13 +853,18 @@ describe('app plugin register command', () => {
     });
   });
 
-  it('prints one JSON error document when Skills synchronization fails', async () => {
+  it('prints one JSON error document on stdout when Skills synchronization fails', async () => {
     const appRoot = await createAppWithInstalledPlugin();
     const lines: string[] = [];
+    const errors: string[] = [];
+    const originalLog = console.log;
     const originalError = console.error;
     const originalExitCode = process.exitCode;
-    console.error = (...args: unknown[]): void => {
+    console.log = (...args: unknown[]): void => {
       lines.push(args.map((argument) => String(argument)).join(' '));
+    };
+    console.error = (...args: unknown[]): void => {
+      errors.push(args.map((argument) => String(argument)).join(' '));
     };
 
     try {
@@ -875,10 +880,12 @@ describe('app plugin register command', () => {
       ).resolves.toBeUndefined();
       expect(process.exitCode).toBe(1);
     } finally {
+      console.log = originalLog;
       console.error = originalError;
       process.exitCode = originalExitCode;
     }
 
+    expect(errors).toEqual([]);
     expect(lines).toHaveLength(1);
     const response = JSON.parse(lines[0]) as {
       schemaVersion: number;

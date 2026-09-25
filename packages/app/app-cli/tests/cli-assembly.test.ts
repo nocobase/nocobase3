@@ -64,7 +64,7 @@ describe('built-in commands by location', () => {
     );
     for (const id of deployment) {
       expect(id).not.toMatch(
-        /^(build|dev|dist|start|plugin|package|skills)(:|$)/,
+        /^(build|dev|dist|start|plugin|package|release|skills)(:|$)/,
       );
     }
   });
@@ -96,6 +96,15 @@ describe('built-in commands by location', () => {
     expect(on).toEqual(
       expect.arrayContaining(['release:upload', 'release:deploy']),
     );
+  });
+
+  it('never registers the release commands in a built dist, even when the application publishes', async () => {
+    const deployment = Object.keys(
+      await builtinCommandFiles({ kind: 'deployment', publishing: true }),
+    );
+
+    expect(deployment).not.toContain('release:upload');
+    expect(deployment).not.toContain('release:deploy');
   });
 
   it('lists a topic only when one of its commands is registered', () => {

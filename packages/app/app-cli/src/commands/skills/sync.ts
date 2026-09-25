@@ -90,9 +90,7 @@ export default class SkillsSync extends Command {
           : classified.code === 'PLUGIN_COMMAND_FAILED'
             ? { ...classified, code: 'SKILLS_SYNC_FAILED' }
             : classified;
-      this.logToStderr(
-        JSON.stringify(pluginJsonFailure(this.operation, errorResult), null, 2),
-      );
+      this.logJson(pluginJsonFailure(this.operation, errorResult));
       process.exitCode = 1;
     }
   }

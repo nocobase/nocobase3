@@ -1143,7 +1143,7 @@ describe('Hub API Key HTTP boundary', () => {
       });
       await writeFile(path.join(root, 'runtime.yml'), 'feature: cli-config\n');
       const options = {
-        config: 'runtime.yml',
+        config: path.join(root, 'runtime.yml'),
         hub: 'http://localhost/main',
         'app-id': 'crm',
         'api-key': publishing.secret,

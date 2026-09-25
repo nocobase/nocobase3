@@ -27,7 +27,7 @@ In a source application the bin registers the application's own `tsx` before it 
 | `db apply`, `db reset`, `db repair`, `db rollback`, `db redo`, `db unlock` | yes             | Create the application without booting it                            |
 | `collections generate`, `collections doctor`                               | yes             |                                                                      |
 | `locales check`                                                            | yes             |                                                                      |
-| `release upload`, `release deploy`                                         | yes             | Only when `package.json` sets `nocobase.cli.publishing: true`        |
+| `release upload`, `release deploy`                                         | no              | Only when `package.json` sets `nocobase.cli.publishing: true`        |
 | `dev`, `build`, `start`                                                    | no              | `build` passes `--target`, `--node-version` and `--tar` to the build |
 | `dist retarget`, `dist check`                                              | no              |                                                                      |
 | `plugin register`, `plugin unregister`, `plugin update`, `plugin inspect`  | no              | Take `--dir`, or `--workspace-root` with `--app` in this repository  |
@@ -37,7 +37,7 @@ In a source application the bin registers the application's own `tsx` before it 
 
 `tests/builtin-commands.test.ts` asserts the exact list, so adding, renaming or removing a command is a deliberate edit there.
 
-`--json` prints one JSON document: stdout on success, stderr on failure with a non-zero exit code. Exit codes are `0` for success, `1` for a runtime error and `2` for a usage error.
+`--json` prints one JSON document on stdout, success or failure, and a failure also exits non-zero. Exit codes are `0` for success, `1` for a runtime error and `2` for a usage error; `release upload` and `release deploy` add `3` for a result the Hub could not confirm. A path given in a flag resolves from the current directory.
 
 ### Topics are a flat namespace
 

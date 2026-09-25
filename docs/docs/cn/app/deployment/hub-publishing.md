@@ -143,7 +143,7 @@ pnpm nocobase release upload --deploy --config ./runtime.yml --wait --json
 | 网络重试                                    | 保持同一幂等键及请求内容，查询或复用原操作                                                                      |
 | 有意重部署相同 Release                      | 用 `release deploy` 并指定新的 `--idempotency-key`                                                              |
 
-配置文件必须为非空 UTF-8 YAML，最大 1 MiB，路径相对于 App 根目录。配置不写入 Release，不修改原始构建包。
+配置文件必须为非空 UTF-8 YAML，最大 1 MiB。`--config` 和 `--file` 的路径相对于当前目录；不传 `--file` 时读取 App 根目录下的 `storage/exports/dist.tar.gz`。配置不写入 Release，不修改原始构建包。
 
 ### 等待结果与自动化发布
 

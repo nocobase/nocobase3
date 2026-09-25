@@ -4,8 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { Config } from '@oclif/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import AppDeploy from '../src/commands/release/deploy.ts';
-import AppUpload from '../src/commands/release/upload.ts';
+import Deploy from '../src/commands/release/deploy.ts';
+import Upload from '../src/commands/release/upload.ts';
 import { bindAppCommand } from './app-command.ts';
 
 let root: string;
@@ -28,10 +28,9 @@ async function command(operation: 'upload' | 'deploy', flags: string[] = []) {
       oclif: { bin: 'nocobase' },
     },
   });
-  const Command = bindAppCommand(
-    operation === 'deploy' ? AppDeploy : AppUpload,
-    { rootDir: root },
-  );
+  const Command = bindAppCommand(operation === 'deploy' ? Deploy : Upload, {
+    rootDir: root,
+  });
   const instance = new Command(
     [
       '--json',

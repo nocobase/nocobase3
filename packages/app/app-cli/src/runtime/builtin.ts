@@ -18,7 +18,9 @@ export type AppLocationKind = 'source' | 'deployment' | 'none';
 
 /**
  * First segments of commands that only make sense in a source checkout. A built `dist/` has no sources to compile, no
- * `package.json` dependencies to edit, and none of the development tooling these commands spawn.
+ * `package.json` dependencies to edit, and none of the development tooling these commands spawn. It is also what a
+ * release is published from rather than where: `release upload` sends the archive `build --tar` wrote beside the
+ * sources, and a deployment has no such archive.
  */
 export const DEVELOPMENT_TOPICS: readonly string[] = Object.freeze([
   'build',
@@ -26,6 +28,7 @@ export const DEVELOPMENT_TOPICS: readonly string[] = Object.freeze([
   'dist',
   'package',
   PLUGIN_TOPIC,
+  'release',
   'skills',
   'start',
 ]);
