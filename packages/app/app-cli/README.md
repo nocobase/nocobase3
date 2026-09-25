@@ -14,15 +14,15 @@ export default createAppCommands({
 });
 ```
 
-The factory accepts one options object and returns `info`, `migrate`, `seed`, `collections:generate`, and `i18n:check`. Set `publishing: true` in that object to add `upload` and `deploy` for publishing application releases to a Hub. The Default template enables these commands; Examples and Hub disable them.
+The factory accepts one options object and returns `info`, `config:init`, `config:check`, `config:set`, `config:env`, `db:apply`, `db:reset`, `db:repair`, `db:rollback`, `db:redo`, `db:unlock`, `db:doctor`, `collections:generate`, and `i18n:check`. Set `publishing: true` in that object to add `upload` and `deploy` for publishing application releases to a Hub. The Default template enables these commands; Examples and Hub disable them.
 
 Registration does not load or start the application. When needed, the default loaders discover `server/runtime.ts` and `server/app.ts` relative to `rootDir`, falling back to `.js` only when the TypeScript file is absent. The runtime module must default-export its definition; the application module must export `createApp(runtime)`. Module execution errors propagate without trying another file. Nonstandard layouts can supply optional `loadRuntime` and `createApp` callbacks in the same options object.
 
-Migration and seed commands create the application, register providers, and reuse its database manager and contributions without calling `boot/start` or triggering autoRun. They dispose the application and standalone scope on completion or failure. Other commands load only the runtime they need.
+Database commands create the application, register providers, and reuse its database manager and contributions without calling `boot/start` or triggering autoRun. They dispose the application and standalone scope on completion or failure. Other commands load only the runtime they need.
 
-Keep `cli/index.ts`, plugin registration, command registration, and custom business commands in the application. Merge or override the returned command map in the application's composition root. The default template retains small per-command reexports for compatibility with existing customizations.
+Keep `cli/index.ts`, plugin registration, command registration, and custom business commands in the application. Spread or override the returned command map in the application's `cli/commands/index.ts`.
 
-`database-command`, `hub-publishing`, and `commands/i18n-check` subpaths expose helpers used by existing application code. No module infers the application root from this package's installation directory.
+The `hub-publishing` subpath exposes `publishToHub` for code that publishes a release without going through the command. No module infers the application root from this package's installation directory.
 
 ## Publication
 

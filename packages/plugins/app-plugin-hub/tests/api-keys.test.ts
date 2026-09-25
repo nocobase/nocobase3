@@ -6,7 +6,7 @@ import {
   DefaultHubService,
   type HubHostController,
 } from '../server/services/hub.js';
-import { publishToHub } from '../../../templates/app-template-default/cli/hub-publishing.js';
+import { publishToHub } from '@nocobase/app-cli/hub-publishing';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import type { Knex } from 'knex';

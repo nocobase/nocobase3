@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 
-import { checkAppLocales } from '../../cli/commands/i18n-check.js';
+import { checkAppLocales } from '../src/commands/i18n-check.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -14,9 +15,7 @@ afterEach(() => {
 function fixture(
   sides: Record<'client' | 'server', readonly string[]>,
 ): string {
-  const parent = path.resolve('tests/.tmp');
-  mkdirSync(parent, { recursive: true });
-  const root = mkdtempSync(path.join(parent, 'i18n-check-'));
+  const root = mkdtempSync(path.join(os.tmpdir(), 'i18n-check-'));
   roots.push(root);
 
   for (const [side, locales] of Object.entries(sides)) {

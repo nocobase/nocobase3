@@ -137,4 +137,4 @@ Legacy application-owned guidance, when present
 
 ## Shared application scripts and commands
 
-When a target template delegates scripts to `@nocobase/app-tools` and commands to `@nocobase/app-cli`, add the former to `devDependencies` and the latter to `dependencies`. Merge the thin script entries and `cli/standard-commands.ts` while retaining application command registrations, plugin composition, and custom commands. Compare any locally modified script implementation before replacing it; move application-specific behavior to supported CLI hooks or retain a deliberate local override.
+When a target template delegates scripts to `@nocobase/app-tools` and commands to `@nocobase/app-cli`, add the former to `devDependencies` and the latter to `dependencies`. Merge the thin script entries and the `createAppCommands` call in `cli/commands/index.ts` while retaining application command registrations, plugin composition, and custom commands. Compare any locally modified script implementation before replacing it; move application-specific behavior to supported CLI hooks or retain a deliberate local override.

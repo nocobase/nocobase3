@@ -17,20 +17,10 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./database-command": {
-      "types": "./src/database-command.ts",
-      "import": "./src/database-command.ts",
-      "default": "./src/database-command.ts"
-    },
     "./hub-publishing": {
       "types": "./src/hub-publishing.ts",
       "import": "./src/hub-publishing.ts",
       "default": "./src/hub-publishing.ts"
-    },
-    "./commands/i18n-check": {
-      "types": "./src/commands/i18n-check.ts",
-      "import": "./src/commands/i18n-check.ts",
-      "default": "./src/commands/i18n-check.ts"
     },
     "./package.json": "./package.json"
   },
@@ -42,20 +32,10 @@
         "import": "./dist/index.js",
         "default": "./dist/index.js"
       },
-      "./database-command": {
-        "types": "./dist/database-command.d.ts",
-        "import": "./dist/database-command.js",
-        "default": "./dist/database-command.js"
-      },
       "./hub-publishing": {
         "types": "./dist/hub-publishing.d.ts",
         "import": "./dist/hub-publishing.js",
         "default": "./dist/hub-publishing.js"
-      },
-      "./commands/i18n-check": {
-        "types": "./dist/commands/i18n-check.d.ts",
-        "import": "./dist/commands/i18n-check.js",
-        "default": "./dist/commands/i18n-check.js"
       },
       "./package.json": "./package.json"
     }
