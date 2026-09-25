@@ -1,13 +1,13 @@
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/nb3-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
 
 import WorkflowBuild from './build.ts';
 import WorkflowCheck from './check.ts';
 
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: '@nocobase/app-plugin-workflow',
-  topic: 'workflow',
   description: 'Validate and build source-managed workflows.',
-  commands: {
+  // Both act on the workflow sources, which a built `dist/` does not carry.
+  devCommands: {
     check: WorkflowCheck,
     build: WorkflowBuild,
   },

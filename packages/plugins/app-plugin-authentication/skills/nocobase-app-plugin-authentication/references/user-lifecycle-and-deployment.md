@@ -102,7 +102,7 @@ token. Rules that apply to any implementation:
 **Secret.** `auth.secret` comes from `AUTH_SECRET` or the deployment
 configuration file, is at least 32 characters, is identical on every
 instance, and never appears in source or in a browser build. Without one the
-application refuses to start; a standalone start names `pnpm config:init`,
+application refuses to start; a standalone start names `pnpm nocobase config init`,
 which generates it. The plugin never invents a secret: one made up at boot changes on
 every restart and silently invalidates every session.
 

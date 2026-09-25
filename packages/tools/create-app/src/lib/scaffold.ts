@@ -40,7 +40,7 @@ export async function assertTargetIsUsable(directory: string): Promise<void> {
 }
 
 /**
- * The minimum a generated project must ignore. `config.yml` carries the `auth.secret` that `config:init` generates
+ * The minimum a generated project must ignore. `config.yml` carries the `auth.secret` that `config init` generates
  * and `.env` carries a hub's settings, so committing either would publish local configuration; the rest are build
  * output and local state.
  */
@@ -61,7 +61,7 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-journal',
   '/database.sqlite-wal',
   '/database.sqlite-shm',
-  // Written by `pnpm collections:generate`: a snapshot of what this machine's database resolves every Collection
+  // Written by `pnpm nocobase collections generate`: a snapshot of what this machine's database resolves every Collection
   // to, regenerated after migrating rather than committed. Only the managed connection the template ships is named,
   // because an `external` connection keeps its metadata.json in the repository as the metadata source.
   '/database/main/collections/',

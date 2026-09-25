@@ -34,11 +34,11 @@ Every published package lives under `packages/`, grouped into six directories by
 | Directory             | What belongs here                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/libs/`      | Runtime libraries that solve one problem and know nothing about NocoBase applications, such as `caching`, `drive`, and `i18n`   |
-| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server`, `app-client`, and `app-portal-sdk`  |
+| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server`, `app-client`, and `app-cli`         |
 | `packages/plugins/`   | Application plugins that ship as product features, such as `app-plugin-authentication`                                          |
 | `packages/examples/`  | Application plugins that exist to demonstrate a capability, such as `app-plugin-routes-example`                                 |
 | `packages/templates/` | Complete applications that `create-app` scaffolds from: `app-template-default`, `app-template-examples`, and `app-template-hub` |
-| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`             |
+| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `create-app`, and `create-plugin`   |
 
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
 
@@ -48,7 +48,7 @@ Every published package lives under `packages/`, grouped into six directories by
 
 This repository's Skills are committed under the root `skills/` directory, and nowhere else. Agents do not read that path on their own — most look in `.agents/skills/`, and Claude Code discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/sync-skills.mjs`, which links each Skill in `skills/` into both `.agents/skills/` and `.claude/skills/` as a relative symbolic link. Both directories are therefore generated and ignored, and editing a Skill through any of the three paths edits the same committed file. This is the same arrangement `nocobase skills sync` sets up inside a generated application, except that an application's Skills come from its installed packages while this repository's are written by hand.
 
-Because a Skill is read through links one directory deeper than where it is committed, a relative Markdown link from a Skill into the rest of the repository resolves differently depending on the path it was opened through. Refer to repository files by their path from the repository root in a code span, such as `packages/tools/cli/src/lib/skills-sync.ts`, and keep relative links for files inside the Skill itself.
+Because a Skill is read through links one directory deeper than where it is committed, a relative Markdown link from a Skill into the rest of the repository resolves differently depending on the path it was opened through. Refer to repository files by their path from the repository root in a code span, such as `packages/app/app-cli/src/lib/skills-sync.ts`, and keep relative links for files inside the Skill itself.
 
 `skills/` holds two kinds of Skill. `nocobase-plugin-development` is for developing plugins in this repository. `nocobase-create-app` is installed globally by users, so that an agent knows how to reach NocoBase 3 before any application exists, with `npx skills add nocobase/nocobase3 --skill nocobase-create-app -g`; `--skill` is required because the `skills` CLI reads the whole directory and would otherwise offer the development Skill alongside it. Before merging a change to a global Skill, try it against the unreleased checkout with `pnpm unreleased:*`, as [skills/README.md](skills/README.md) describes: the published packages cannot show whether a Skill works with behavior that has not been released yet.
 
@@ -231,13 +231,15 @@ The client row is the one worth understanding. A plugin's `client/` is not bundl
 
 `optional` on a peer means the consumer may legitimately not need it, not "skip this at deploy time". An optional peer is not auto-installed anywhere, including in the application that needs it — which is the failure this arrangement exists to prevent. `@nocobase/i18n`'s `hono` is the legitimate case: a browser-only consumer has no use for it.
 
+`@nocobase/app-cli` is the one package that uses optional peers for tooling, and the reason is the same one read the other way. It is a production dependency, because a deployment runs `node dist/cli/index.js db apply`, yet its `dev`, `build` and plugin-management commands need `typescript`, `tsx`, `vite`, `prettier`, `tar` and `@nocobase/dev-config`, which a deployment legitimately does not have. Those are optional peers, every template declares them in `devDependencies`, and nothing a runtime command loads may import one at module top level: development commands are not registered in a built `dist/` and load their tooling only when they run. When app-cli gains another development-only import, add it to all three places.
+
 An application has two, and the question is which half imports it: `server/`, `database/`, and `cli/` imports go in `dependencies`, because `dist/package.json` is generated from there; `client/` imports and build tooling stay in `devDependencies`, because Vite inlines them at build time and nothing resolves them again.
 
 `build-server-dist-package.mjs` used to walk the built output for bare imports and expand every transitive dependency by hand. It had to, because applications declared their server packages in `devDependencies` and nothing else could tell which of them a deployment needed. Once those moved to `dependencies` the walk had nothing left to discover, and it was removed: `pnpm install` applies the same rules, and a scan that resolves specifiers is a scan that can miss one. Workspace packages remain the exception, vendored into `dist/vendor` under a `file:` path because a `workspace:` range means nothing to a deployment.
 
 The shared UI packages — `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, `tw-animate-css` — resolve through `catalog:` wherever they are declared, peers included; `pnpm pack` expands the reference before publishing.
 
-An earlier version of this pruned `dist/node_modules` with a `@vercel/nft` file trace. It produced a far smaller tree, but what it could not see it deleted — the pino transports named in a `target:` string, each plugin's `dist/database` read by directory scan, `@nocobase/nb3-cli`'s registry module handed to oclif as a path. Every one surfaced only by running the built `dist/`, and every one would have shipped as a successful build. Declarations cannot fail that way.
+An earlier version of this pruned `dist/node_modules` with a `@vercel/nft` file trace. It produced a far smaller tree, but what it could not see it deleted — the pino transports named in a `target:` string, each plugin's `dist/database` read by directory scan, `@nocobase/app-cli`'s registry module handed to oclif as a path. Every one surfaced only by running the built `dist/`, and every one would have shipped as a successful build. Declarations cannot fail that way.
 
 ### Building for another platform
 
@@ -339,7 +341,7 @@ So the question is who resolves the import, and then what the import actually is
 
 `peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `react`, `react-dom`, `react-router`, and everything in `IDENTITY_SENSITIVE_PACKAGES` belong here rather than in `dependencies`: a second copy of a router or a React context does not merely waste space, it silently breaks. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
 
-A tool a package **spawns** rather than imports is a dependency too, and it is the one neither check can find: both read import specifiers, so a `spawn('vite', …)` is invisible to them. Declare it as a peer, because the application owns the copy that runs, and record it where someone adding the next one will look — `@nocobase/app-tools` keeps a table of the executables it spawns in its README. Nothing else catches an omission here: the binary resolves from `node_modules/.bin` in this repository and in any generated application, so it is missing only in an application that never installed it.
+A tool a package **spawns** rather than imports is a dependency too, and it is the one neither check can find: both read import specifiers, so a `spawn('vite', …)` is invisible to them. Declare it as a peer, because the application owns the copy that runs, and record it where someone adding the next one will look — `@nocobase/app-cli` keeps a table of the executables it spawns in its README. Nothing else catches an omission here: the binary resolves from `node_modules/.bin` in this repository and in any generated application, so it is missing only in an application that never installed it.
 
 This rule changed once, and the reason is worth recording. Client imports used to belong in `devDependencies`, because `dist/package.json` was built by walking `dependencies` transitively and dragged every client package into the server deployment — `lucide-react` and `@xyflow/react` alone were 44 MB installed and never required. They are peers now, which keeps them out of a deployment without keeping them out of the application that has to resolve them.
 
@@ -422,6 +424,7 @@ Library packages that emit `.d.ts` files (`declaration: true`) enable both `isol
 | `packages/libs/db-oracle/tsconfig.json`                    | Oracle dialect             |
 | `packages/libs/db-mssql/tsconfig.json`                     | MSSQL dialect              |
 | `packages/libs/db-dameng/tsconfig.json`                    | Dameng dialect             |
+| `packages/app/app-cli/tsconfig.json`                       | Application CLI            |
 | `packages/app/app-host/tsconfig.json`                      | Application host           |
 | `packages/app/app-server/tsconfig.json`                    | Application server library |
 | `packages/libs/caching/tsconfig.json`                      | Caching library            |

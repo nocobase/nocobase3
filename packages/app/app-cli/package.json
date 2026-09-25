@@ -1,41 +1,69 @@
 {
   "name": "@nocobase/app-cli",
   "version": "0.1.0-beta.5",
-  "description": "Shared application runtime CLI commands.",
+  "description": "The NocoBase application command line: runtime commands, plugin management, and the dev and build tooling.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=24.0.0"
   },
+  "bin": {
+    "nocobase": "./bin/run.js"
+  },
   "files": [
+    "bin",
     "dist"
   ],
   "prettier": "@nocobase/dev-config/prettier",
+  "oclif": {
+    "bin": "nocobase",
+    "topicSeparator": " "
+  },
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts",
+      "default": "./src/plugins/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts",
+      "default": "./src/runtime/index.ts"
     },
     "./hub-publishing": {
       "types": "./src/hub-publishing.ts",
       "import": "./src/hub-publishing.ts",
       "default": "./src/hub-publishing.ts"
     },
+    "./dev/proxy": {
+      "types": "./src/tools/scripts/dev/proxy.d.mts",
+      "import": "./src/tools/scripts/dev/proxy.mjs",
+      "default": "./src/tools/scripts/dev/proxy.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
-      ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js",
-        "default": "./dist/index.js"
+      "./plugins": {
+        "types": "./dist/plugins/index.d.ts",
+        "import": "./dist/plugins/index.js",
+        "default": "./dist/plugins/index.js"
+      },
+      "./runtime": {
+        "types": "./dist/runtime/index.d.ts",
+        "import": "./dist/runtime/index.js",
+        "default": "./dist/runtime/index.js"
       },
       "./hub-publishing": {
         "types": "./dist/hub-publishing.d.ts",
         "import": "./dist/hub-publishing.js",
         "default": "./dist/hub-publishing.js"
+      },
+      "./dev/proxy": {
+        "types": "./dist/tools/scripts/dev/proxy.d.mts",
+        "import": "./dist/tools/scripts/dev/proxy.mjs",
+        "default": "./dist/tools/scripts/dev/proxy.mjs"
       },
       "./package.json": "./package.json"
     }
@@ -46,31 +74,65 @@
     "directory": "packages/app/app-cli"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ./scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
     "format:check": "prettier . --check",
     "test": "vitest run",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
-  },
-  "devDependencies": {
-    "@nocobase/dev-config": "workspace:*",
-    "@types/node": "catalog:",
-    "typescript": "catalog:",
-    "eslint": "catalog:",
-    "prettier": "catalog:",
-    "vitest": "catalog:",
-    "@nocobase/db-sqlite": "workspace:^"
-  },
-  "peerDependencies": {
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^",
-    "@nocobase/db": "workspace:^"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "prepack": "pnpm build"
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
     "@oclif/core": "catalog:",
+    "cross-spawn": "catalog:",
+    "execa": "^10.0.1",
     "yaml": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/dev-config": "workspace:^",
+    "prettier": "catalog:",
+    "tar": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@nocobase/dev-config": {
+      "optional": true
+    },
+    "prettier": {
+      "optional": true
+    },
+    "tar": {
+      "optional": true
+    },
+    "tsx": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:^",
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "publint": "catalog:",
+    "tar": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

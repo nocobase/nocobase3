@@ -100,6 +100,7 @@
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
+    "@nocobase/app-cli": "workspace:^",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
@@ -107,7 +108,6 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
@@ -117,8 +117,8 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-router": "catalog:",
-    "typescript": "catalog:",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependenciesMeta": {
     "@nocobase/app-plugin-scheduler": {

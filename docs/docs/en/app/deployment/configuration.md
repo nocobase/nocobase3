@@ -26,7 +26,7 @@ The application's main database connection lives under `database.connections.mai
 
 #### Supported main databases
 
-`pnpm config:init --dialect` currently offers the following eight options, and the application runtime has a loading entry for each official driver. Compatibility between a specific database version and your business plugins still has to be verified in the target environment.
+`pnpm nocobase config init --dialect` currently offers the following eight options, and the application runtime has a loading entry for each official driver. Compatibility between a specific database version and your business plugins still has to be verified in the target environment.
 
 | Database     | `dialect`   | Notes                                                                                           |
 | ------------ | ----------- | ----------------------------------------------------------------------------------------------- |
@@ -39,7 +39,7 @@ The application's main database connection lives under `database.connections.mai
 | KingbaseES   | `kingbase`  | Currently targets the PostgreSQL compatibility mode (`DB_MODE=pg`)                              |
 | OceanBase CE | `oceanbase` | Currently targets MySQL-compatible tenants                                                      |
 
-Choose the main database inside the application, not when creating it: install the driver and run `pnpm config:init --dialect <dialect>`, which generates the matching connection configuration. Templates already depend on `@nocobase/db-sqlite`, so SQLite needs no install. Any database other than SQLite still needs its real connection details filled in, and a successfully configured project does not mean the connection has been verified. SQLite, PostgreSQL and MySQL examples follow.
+Choose the main database inside the application, not when creating it: install the driver and run `pnpm nocobase config init --dialect <dialect>`, which generates the matching connection configuration. Templates already depend on `@nocobase/db-sqlite`, so SQLite needs no install. Any database other than SQLite still needs its real connection details filled in, and a successfully configured project does not mean the connection has been verified. SQLite, PostgreSQL and MySQL examples follow.
 
 #### Using SQLite
 
@@ -108,7 +108,7 @@ database:
 
 - **Database and permissions**: create the database and account ahead of time. With automatic migrations enabled, the account needs the privileges migrations use, such as creating and altering tables; prepare Oracle, Dameng and the like according to their own service and schema conventions.
 - **Connection address**: `host` must be reachable from where the application runs. Inside a container, `localhost` is the container itself; reach another database service through its service name or network address.
-- **Database driver**: the application declares the drivers it can use. `pnpm config:init` installs nothing — it reports a dialect whose driver is absent and writes no configuration — so add the driver first with `pnpm add`. When an existing project switches to another database, confirm the target driver is installed and rebuild; official drivers are named `@nocobase/db-<dialect>`, for example `@nocobase/db-mssql`.
+- **Database driver**: the application declares the drivers it can use. `pnpm nocobase config init` installs nothing — it reports a dialect whose driver is absent and writes no configuration — so add the driver first with `pnpm add`. When an existing project switches to another database, confirm the target driver is installed and rebuild; official drivers are named `@nocobase/db-<dialect>`, for example `@nocobase/db-mssql`.
 
 #### Migrations and initialization
 
@@ -212,7 +212,7 @@ In Docker, use the path inside the container, such as `/app/config.yml`, and mou
 
 The default template loads the configuration file first and then applies the environment variables its configuration sections declare. **When the same setting appears both in the file and in its environment variable, the environment variable wins.** For example, `AUTH_SECRET` and `SESSION_SECRET` override `auth.secret` and `session.secret`.
 
-Only declared variables override anything; do not assume a variable such as `DB_HOST` exists just because the name looks plausible. Run `pnpm config:env` in the application, or in `dist/` for a build, to list every variable it reads, the configuration path each one sets, and whether it is set.
+Only declared variables override anything; do not assume a variable such as `DB_HOST` exists just because the name looks plausible. Run `pnpm nocobase config env` in the application, or in `dist/` for a build, to list every variable it reads, the configuration path each one sets, and whether it is set.
 
 ### Persistent directory
 
@@ -319,14 +319,14 @@ When a business feature generates external callbacks or links, still check the p
 
 ## Confirm the configuration took effect
 
-| Check                          | How                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Whole configuration            | Standalone: run `pnpm config:check` inside `dist/` on the target machine; it loads the configuration as the service will and connects to every database but SQLite |
-| Configuration source           | Standalone: check `APP_CONFIG_FILE` and the mounts. Hub-hosted: check the App's current configuration and deployment record                                        |
-| Environment variable overrides | Standalone: when a change to the file has no effect, look for the matching environment variable                                                                    |
-| Database connection            | Read the startup log and fetch a known business record from the target database                                                                                    |
-| Public address                 | Sign in through the real domain, refresh a nested page, and check asset and callback URLs                                                                          |
-| Realtime connection            | Confirm the WebSocket features the application uses work                                                                                                           |
-| Data persistence               | Create a test record and a file and confirm they survive a restart; with Docker, also recreate the container                                                       |
+| Check                          | How                                                                                                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Whole configuration            | Standalone: run `pnpm nocobase config check` inside `dist/` on the target machine; it loads the configuration as the service will and connects to every database but SQLite |
+| Configuration source           | Standalone: check `APP_CONFIG_FILE` and the mounts. Hub-hosted: check the App's current configuration and deployment record                                                 |
+| Environment variable overrides | Standalone: when a change to the file has no effect, look for the matching environment variable                                                                             |
+| Database connection            | Read the startup log and fetch a known business record from the target database                                                                                             |
+| Public address                 | Sign in through the real domain, refresh a nested page, and check asset and callback URLs                                                                                   |
+| Realtime connection            | Confirm the WebSocket features the application uses work                                                                                                                    |
+| Data persistence               | Create a test record and a file and confirm they survive a restart; with Docker, also recreate the container                                                                |
 
 Never print the whole configuration when reading logs. When something is wrong, see [Troubleshooting](./operations#troubleshooting).

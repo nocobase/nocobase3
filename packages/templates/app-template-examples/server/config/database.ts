@@ -26,7 +26,7 @@ export default defineAppDatabaseConfig(({ paths }) => ({
      * express — titles, descriptions, which column is a relation — is read
      * from `database/externalCrm/collections/<name>/metadata.json`, the
      * default metadata source for an external connection; edit those files
-     * and rerun `pnpm collections:generate`. Point this at the real CRM in
+     * and rerun `pnpm nocobase collections generate`. Point this at the real CRM in
      * production; the SQLite file is a stand-in that
      * `server/providers/external-crm.ts` fills with sample data.
      */

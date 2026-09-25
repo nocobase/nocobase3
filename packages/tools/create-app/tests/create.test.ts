@@ -66,7 +66,7 @@ async function template(kind = 'app'): Promise<void> {
 const run = (argv: string[]) =>
   createApp({ argv, version: 'test', binary: 'create-app' });
 describe('JSON creation flow', () => {
-  it('installs by default and hands the configuration step to config:init', async () => {
+  it('installs by default and hands the configuration step to config init', async () => {
     await template();
     expect(await run(['crm', '--json'])).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
@@ -74,10 +74,14 @@ describe('JSON creation flow', () => {
       projectCreated: true,
       dependenciesInstalled: true,
       configured: false,
-      nextCommands: ['pnpm config:init', 'pnpm config:check', 'pnpm dev'],
+      nextCommands: [
+        'pnpm nocobase config init',
+        'pnpm nocobase config check',
+        'pnpm dev',
+      ],
     });
     expect(installDependencies).toHaveBeenCalledOnce();
-    // Creation writes no configuration at all, so there is no secret for it to leak and nothing for `config:init` to
+    // Creation writes no configuration at all, so there is no secret for it to leak and nothing for `config init` to
     // refuse to overwrite.
     await expect(readFile(path.join(root, 'crm/config.yml'))).rejects.toThrow();
     expect(stdout).not.toContain('secret');
@@ -114,8 +118,8 @@ describe('JSON creation flow', () => {
       dependenciesInstalled: false,
       nextCommands: [
         'pnpm install',
-        'pnpm config:init',
-        'pnpm config:check',
+        'pnpm nocobase config init',
+        'pnpm nocobase config check',
         'pnpm build',
         'pnpm start',
       ],
@@ -161,7 +165,7 @@ describe('JSON creation flow', () => {
     expect(await run(['--json', '--help'])).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
       status: 'success',
-      help: expect.stringContaining('config:init'),
+      help: expect.stringContaining('nocobase config init'),
     });
   });
 });

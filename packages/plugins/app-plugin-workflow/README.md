@@ -93,7 +93,7 @@ Automation settings group. Their record detail routes stay inside the settings
 layout at `/settings/workflow/workflows/:id` and
 `/settings/workflow/runs/:id`.
 
-Register it with `pnpm plugin:register workflow --app app-template-default`.
+Register it with `pnpm nocobase plugin register workflow --workspace-root . --app app-template-default`.
 Application-owned workflow source remains in the application package. The
 plugin itself owns and publishes its complete management UI; enabling the
 plugin is sufficient to register the Automation settings pages and their

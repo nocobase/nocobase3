@@ -37,7 +37,7 @@ Create a dedicated directory on the server holding `compose.yml`, the target env
 The image does not include pnpm. To run an application command in a container, call `node dist/cli/index.js` directly, for example to check the configuration:
 
 ```bash
-docker run --rm -v ./config.yml:/app/config.yml:ro crm:release-001 node dist/cli/index.js app config check
+docker run --rm -v ./config.yml:/app/config.yml:ro crm:release-001 node dist/cli/index.js config check
 ```
 
 ## 3. Write the Compose file

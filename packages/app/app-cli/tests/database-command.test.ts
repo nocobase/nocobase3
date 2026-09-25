@@ -6,9 +6,9 @@ import {
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import { createAppFromRuntime } from '@nocobase/app-server/runtime';
 import { DatabaseProvider } from '@nocobase/app-server/database';
-import type { AppCommandContext } from '../src/context.js';
+import type { AppCommandContext } from '../src/context.ts';
 import { IdGeneratorProvider } from '@nocobase/app-server/id-generator';
-import { ServiceProvider } from '../../../libs/service-provider/src/index.js';
+import { ServiceProvider } from '../../../libs/service-provider/src/index.ts';
 import type { Application } from '@nocobase/app-server';
 // @vitest-environment node
 import {
@@ -27,7 +27,7 @@ import {
   runDatabaseRepairCommand,
   runDatabaseRollbackCommand,
   runDatabaseUnlockCommand,
-} from '../src/database-command.js';
+} from '../src/database-command.ts';
 import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
@@ -473,8 +473,8 @@ it('warns about checksum drift and repairs it across both task kinds', async () 
   );
   // Both routes, because repair is only right when the schema already agrees
   // with the edited source.
-  expect(drift).toContain('"nocobase app db repair"');
-  expect(drift).toContain('"nocobase app db redo"');
+  expect(drift).toContain('"nocobase db repair"');
+  expect(drift).toContain('"nocobase db redo"');
   expect(command.exit).not.toHaveBeenCalled();
 
   // A dry run reports both kinds and writes nothing.

@@ -61,11 +61,11 @@ description: '固定客户、订单、金额和归属字段，为后面的页面
 迁移放在 `database/main/migrations/`，种子放在 `database/main/seeds/`。迁移负责结构，种子负责练习数据。AI Agent 生成迁移后，执行：
 
 ```bash
-pnpm db:apply
-pnpm collections:generate
+pnpm nocobase db apply
+pnpm nocobase collections generate
 ```
 
-`collections:generate` 生成数据库描述文件，不能靠手工修改这些文件来建表。迁移显示已跳过，可能只是启动时已经自动执行；继续检查实际表结构。
+`collections generate` 生成数据库描述文件，不能靠手工修改这些文件来建表。迁移显示已跳过，可能只是启动时已经自动执行；继续检查实际表结构。
 
 ## 检查结果
 

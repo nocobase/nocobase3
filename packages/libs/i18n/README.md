@@ -136,7 +136,7 @@ const enUS: WorkflowResource = {
 t('trigger.types.schedule'); // 'Schedule'
 ```
 
-`pnpm i18n:check` reports keys a locale is missing, without blocking development. It is this monorepo's own script and reads every `locales/` directory under `packages/`; an application built from a template runs `pnpm nocobase app i18n:check` instead, which compares the languages its `client/locales/` and `server/locales/` declare.
+`pnpm i18n:check` reports keys a locale is missing, without blocking development. It is this monorepo's own script and reads every `locales/` directory under `packages/`; an application built from a template runs `pnpm nocobase locales check` instead, which compares the languages its `client/locales/` and `server/locales/` declare.
 
 ### Loading
 

@@ -43,7 +43,7 @@ notification:
 Run application migrations after enabling notification plugins or adding a notification plugin:
 
 ```bash
-pnpm db:apply
+pnpm nocobase db apply
 ```
 
 The core plugin creates the Notification, Delivery, and delivery execution record tables. The in-app plugin creates the inbox table. If `database.connections.main.migrations.autoRun` is `true`, the application also runs pending migrations during startup.
@@ -51,10 +51,10 @@ The core plugin creates the Notification, Delivery, and delivery execution recor
 For a custom application, register the plugins required by your Channels:
 
 ```bash
-pnpm plugin:register notification
-pnpm plugin:register notification-in-app
-pnpm plugin:register notification-providers
-pnpm db:apply
+pnpm nocobase plugin register notification
+pnpm nocobase plugin register notification-in-app
+pnpm nocobase plugin register notification-providers
+pnpm nocobase db apply
 ```
 
 You can omit `notification-in-app` when you do not need in-app messages, or omit `notification-providers` when you do not need email or instant messaging. Every Provider referenced by `config.yml` must have a corresponding registered definition.

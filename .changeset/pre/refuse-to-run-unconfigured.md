@@ -1,6 +1,6 @@
 ---
 '@nocobase/app-server': patch
-'@nocobase/app-tools': minor
+'@nocobase/app-cli': minor
 ---
 
 Stop `pnpm dev` before it launches an application that has nowhere to read its configuration from, and say how to create one.

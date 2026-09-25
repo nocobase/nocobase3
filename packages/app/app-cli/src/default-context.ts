@@ -3,12 +3,17 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import type { AppRuntimeDefinition } from '@nocobase/app-server/runtime';
-import type { AppCommandContext } from './context.js';
-import type { AppCommandsOptions } from './index.js';
+import type { AppCommandContext } from './context.ts';
+
+export interface AppCommandContextOptions {
+  readonly rootDir: string;
+  readonly loadRuntime?: AppCommandContext['loadRuntime'];
+  readonly createApp?: AppCommandContext['createApp'];
+}
 
 /** Load by convention only when a command actually needs the application. */
 export function createDefaultCommandContext(
-  options: AppCommandsOptions,
+  options: AppCommandContextOptions,
 ): AppCommandContext {
   const rootDir = path.resolve(options.rootDir);
   return {

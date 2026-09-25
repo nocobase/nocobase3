@@ -17,7 +17,7 @@ export function createAppConfig(
       : context.paths.root(configuredPath);
 
   // Environment variables are declared by the sections they set, in `env` of each `defineAppConfig`, and loaded
-  // above this file once the sections are known. `pnpm config:env` lists them.
+  // above this file once the sections are known. `pnpm nocobase config env` lists them.
   config.loadFile(configPath, { optional: configuredPath === undefined });
 
   return config;

@@ -47,7 +47,7 @@ Creation stops at a project that is ready to configure. It writes no `config.yml
 
 ```bash
 cd my-app
-pnpm config:init
+pnpm nocobase config init
 ```
 
 This writes `config.yml` from `config.example.yml`, keeping its comments, and fills in the authentication and session secrets. It contains application configuration and secrets, so keep it local and out of version control.
@@ -56,20 +56,20 @@ It uses SQLite, which the templates already depend on and which needs no server.
 
 ```bash
 pnpm add @nocobase/db-postgres
-pnpm config:init --dialect postgres
+pnpm nocobase config init --dialect postgres
 ```
 
-`pnpm config:init` installs nothing: a dialect whose driver is missing is reported with the command that installs it, and nothing is written, so you can simply run it again afterwards. For anything other than SQLite it asks for the connection settings when run in a terminal, and tries the connection before writing. You can also set them afterwards — the password read from an environment variable, so it stays out of your shell history:
+`pnpm nocobase config init` installs nothing: a dialect whose driver is missing is reported with the command that installs it, and nothing is written, so you can simply run it again afterwards. For anything other than SQLite it asks for the connection settings when run in a terminal, and tries the connection before writing. You can also set them afterwards — the password read from an environment variable, so it stays out of your shell history:
 
 ```bash
-pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm
-pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD
+pnpm nocobase config set database.connections.main.host=db.internal database.connections.main.username=crm
+pnpm nocobase config set --from-env database.connections.main.password=CRM_DB_PASSWORD
 ```
 
 ## Check the configuration
 
 ```bash
-pnpm config:check
+pnpm nocobase config check
 ```
 
 This loads the configuration the way the application will, connects to the database unless it is SQLite, and reports anything that would stop the application from starting — a missing driver, a missing secret, a database it cannot reach — with the command that fixes it.
@@ -112,7 +112,7 @@ Use `pnpm dev` during development. `pnpm build` followed by `pnpm start` runs a 
 ## Troubleshooting
 
 - **The directory already exists:** choose another name or continue inside the existing project. Do not delete an existing application just to retry.
-- **Dependency installation did not finish:** inspect the terminal error. If the project was generated, fix the issue inside it, rerun `pnpm install`, then run `pnpm skills:sync`.
+- **Dependency installation did not finish:** inspect the terminal error. If the project was generated, fix the issue inside it, rerun `pnpm install`, then run `pnpm nocobase skills sync`.
 - **The URL does not open:** check that the terminal is still running and use its printed address. A browser on another machine requires appropriate port access.
 - **Type checking reports two versions of the same package:** check the dependency tree for multiple versions of the package. Run `pnpm dedupe` to merge compatible duplicate dependencies, then run type checking again.
 

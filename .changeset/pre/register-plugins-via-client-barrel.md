@@ -1,5 +1,5 @@
 ---
-'@nocobase/nb3-cli': minor
+'@nocobase/app-cli': minor
 ---
 
 Register a plugin's client entry as `<package>/client` rather than `<package>/client/plugin`, matching the barrel default export plugins now ship.

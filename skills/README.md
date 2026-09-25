@@ -39,10 +39,10 @@ Open the agent in an empty directory and ask for an application, for example:
 The Skill then:
 
 1. Runs `pnpm create @nocobase/app <name> --json` from the parent directory, so the files land in the directory you opened.
-2. Follows the `nextCommands` that creation returns: `pnpm config:init`, then `pnpm config:set` for any `requiredSettings` of a database other than SQLite, then `pnpm config:check`, and finally `pnpm dev` in the background.
+2. Follows the `nextCommands` that creation returns: `pnpm nocobase config init`, then `pnpm nocobase config set` for any `requiredSettings` of a database other than SQLite, then `pnpm nocobase config check`, and finally `pnpm dev` in the background.
 3. Reports the URL and the first sign-in account, and recommends starting a new session in the application directory, where the application's own Skills are loaded reliably. If you keep working in the same session, it reads the application's `AGENTS.md` and Skills directly instead.
 
-It never asks for a database password in the conversation. For a database other than SQLite it asks you to put the password in an environment variable, then reads it with `pnpm config:set --from-env`.
+It never asks for a database password in the conversation. For a database other than SQLite it asks you to put the password in an environment variable, then reads it with `pnpm nocobase config set --from-env`.
 
 ### Where the packages come from
 
@@ -55,18 +55,18 @@ The Skill runs nothing you cannot run yourself:
 ```bash
 PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm create @nocobase/app my-app
 cd my-app
-pnpm config:init
-pnpm config:check
+pnpm nocobase config init
+pnpm nocobase config check
 pnpm dev
 ```
 
-`PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` lets pnpm install versions published minutes ago. For another database, install its driver, name it, and fill in the connection before `pnpm config:check`:
+`PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` lets pnpm install versions published minutes ago. For another database, install its driver, name it, and fill in the connection before `pnpm nocobase config check`:
 
 ```bash
 pnpm add @nocobase/db-postgres
-pnpm config:init --dialect postgres
-pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm
-pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD
+pnpm nocobase config init --dialect postgres
+pnpm nocobase config set database.connections.main.host=db.internal database.connections.main.username=crm
+pnpm nocobase config set --from-env database.connections.main.password=CRM_DB_PASSWORD
 ```
 
 ## Install the unreleased checkout
@@ -128,7 +128,7 @@ mkdir -p ~/nb-skill-test/my-app && cd ~/nb-skill-test/my-app && claude
 
 Ask for an application exactly as in the published case. A snapshot install can be told apart from a published one:
 
-- There is no `config.yml` until `pnpm config:init` runs.
+- There is no `config.yml` until `pnpm nocobase config init` runs.
 - `.npmrc` contains `@nocobase:registry=http://127.0.0.1:4873/`.
 - `node_modules/@nocobase/app-cli/dist/commands/` contains `config-init.js`, `config-check.js` and `config-set.js`.
 

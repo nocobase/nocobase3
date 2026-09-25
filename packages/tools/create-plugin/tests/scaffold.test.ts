@@ -161,7 +161,7 @@ describe('createPlugin', () => {
       'cli',
       ['./cli', './package.json'],
       [],
-      ['@nocobase/nb3-cli', '@oclif/core'],
+      ['@nocobase/app-cli', '@oclif/core'],
     ],
     ['skills', ['./package.json'], [], []],
   ] as const)(

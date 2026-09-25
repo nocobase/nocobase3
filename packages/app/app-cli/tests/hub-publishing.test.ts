@@ -4,8 +4,10 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAppCommands } from '../src/index.js';
-import { publishToHub } from '../src/hub-publishing.js';
+import { bindAppCommand } from './app-command.ts';
+import Deploy from '../src/commands/release/deploy.ts';
+import Upload from '../src/commands/release/upload.ts';
+import { publishToHub } from '../src/hub-publishing.ts';
 
 let root: string;
 const env = {
@@ -482,14 +484,8 @@ describe('CLI command output', () => {
     '%s %j reports %s with polling=%s',
     async (operation, flags, status, polls) => {
       const { Config } = await import('@oclif/core');
-      const { deploy: AppDeploy } = createAppCommands({
-        rootDir: root,
-        publishing: true,
-      });
-      const { upload: AppUpload } = createAppCommands({
-        rootDir: root,
-        publishing: true,
-      });
+      const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
+      const AppUpload = bindAppCommand(Upload, { rootDir: root });
       const config = await Config.load({
         root,
         pjson: {
@@ -550,10 +546,7 @@ describe('CLI command output', () => {
   );
   it('prints one JSON envelope and a parameter exit code without echoing secret arguments', async () => {
     const { Config } = await import('@oclif/core');
-    const { deploy: AppDeploy } = createAppCommands({
-      rootDir: root,
-      publishing: true,
-    });
+    const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -580,10 +573,7 @@ describe('CLI command output', () => {
   });
   it('exits with failure JSON when upload --deploy has no confirmed deployment', async () => {
     const { Config } = await import('@oclif/core');
-    const { upload: AppUpload } = createAppCommands({
-      rootDir: root,
-      publishing: true,
-    });
+    const AppUpload = bindAppCommand(Upload, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -629,10 +619,7 @@ describe('CLI command output', () => {
 
   it('warns in human output when the Hub reused an earlier deployment', async () => {
     const { Config } = await import('@oclif/core');
-    const { deploy: AppDeploy } = createAppCommands({
-      rootDir: root,
-      publishing: true,
-    });
+    const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {
@@ -676,10 +663,7 @@ describe('CLI command output', () => {
 
   it('allows --no-wait to return the accepted deployment status', async () => {
     const { Config } = await import('@oclif/core');
-    const { deploy: AppDeploy } = createAppCommands({
-      rootDir: root,
-      publishing: true,
-    });
+    const AppDeploy = bindAppCommand(Deploy, { rootDir: root });
     const config = await Config.load({
       root,
       pjson: {

@@ -179,7 +179,7 @@ Overrides apply after every namespace has registered, so the application always 
 
 ```bash
 pnpm typecheck                    # a key absent from the interface
-pnpm nocobase app i18n:check      # a language declared on only one side
+pnpm nocobase locales check      # a language declared on only one side
 pnpm test                         # if application text changed
 ```
 

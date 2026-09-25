@@ -13,8 +13,8 @@ import {
 } from '@nocobase/app-server/database';
 import { parseDocument } from 'yaml';
 
-import { buildConfigFile } from './config-file.js';
-import { configureDatabase } from './database-config.js';
+import { buildConfigFile } from './config-file.ts';
+import { configureDatabase } from './database-config.ts';
 
 /**
  * Where the command is running, which decides both what it may offer and what it can tell the user to do about a
@@ -109,7 +109,7 @@ export interface ConfigInitResult {
   readonly overriddenByEnvironment: readonly string[];
   /**
    * Settings still at a generated placeholder that have to be set before the application can reach its database —
-   * with `pnpm config:set`, or `pnpm config:set --from-env` for the password.
+   * with `pnpm nocobase config set`, or `pnpm nocobase config set --from-env` for the password.
    */
   readonly requiredSettings: readonly string[];
   /** The commands to run next, in order. */
@@ -135,7 +135,7 @@ const CONFIG_EXTENSIONS = ['.yml', '.yaml', '.toml', '.json'] as const;
  * Secrets the standard templates map from the environment.
  *
  * The mapping belongs to the application, not to this command, so this is a check for the conventional names rather
- * than an authoritative reading of the sections' `env` declarations, which `config:env` lists. It only ever produces a warning: a value set here wins
+ * than an authoritative reading of the sections' `env` declarations, which `config env` lists. It only ever produces a warning: a value set here wins
  * over the file, so writing a fresh secret into `config.yml` would look like it worked and change nothing.
  */
 const ENVIRONMENT_SECRETS = ['AUTH_SECRET', 'SESSION_SECRET'] as const;
@@ -291,7 +291,7 @@ export async function runConfigInit(
     if (!(await options.onConnectionTested(connectionTest))) {
       throw new ConfigInitError(
         'cancelled',
-        'Nothing was written. Run pnpm config:init again with the right settings.',
+        'Nothing was written. Run pnpm nocobase config init again with the right settings.',
         { details: { connectionTest } },
       );
     }
@@ -323,7 +323,10 @@ export async function runConfigInit(
 
 /** What follows configuration: check it, then start. A deployment starts from its own `dist` script. */
 function nextCommands(mode: ConfigInitMode): readonly string[] {
-  return ['pnpm config:check', mode === 'source' ? 'pnpm dev' : 'pnpm start'];
+  return [
+    'pnpm nocobase config check',
+    mode === 'source' ? 'pnpm dev' : 'pnpm start',
+  ];
 }
 
 /**

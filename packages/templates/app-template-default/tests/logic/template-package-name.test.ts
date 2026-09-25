@@ -30,7 +30,7 @@ const isGeneratedApplication = originalTemplateName !== applicationName;
 const REWRITTEN_SOURCES = ['client/runtime.ts', 'client/service-provider.ts'];
 
 /** Source trees shipped to a generated application, per the `files` field. */
-const SHIPPED_SOURCE_DIRECTORIES = ['client', 'server', 'database', 'scripts'];
+const SHIPPED_SOURCE_DIRECTORIES = ['client', 'server', 'database', 'cli'];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mjs', '.js']);
 

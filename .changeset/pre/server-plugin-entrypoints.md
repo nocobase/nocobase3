@@ -14,7 +14,7 @@
 '@nocobase/app-plugin-skills-example': minor
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/app-template-default': minor
-'@nocobase/nb3-cli': minor
+'@nocobase/app-cli': minor
 '@nocobase/create-plugin': minor
 ---
 

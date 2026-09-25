@@ -1,6 +1,6 @@
 ---
 '@nocobase/app-template-hub': minor
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 ---
 
 Rename the Hub template package from `@nocobase/hub` to `@nocobase/app-template-hub`, so it matches the naming the other v3 templates already use and reads as the template it is rather than as the Hub runtime itself.

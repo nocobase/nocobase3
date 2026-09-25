@@ -67,11 +67,11 @@ The dialects are `sqlite`, `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `ki
 
 Switching a dialect means changing **both** layers. `config.yml` deep-merges into the code defaults, so editing only the code leaves a stale YAML override in place — with fields belonging to the previous dialect still applied. Remove `filename` from a connection switched away from SQLite. In YAML, `database:` is an alias for `filename` and takes precedence over it, which is the usual reason a changed `filename` appears to do nothing.
 
-`schemaManagement` decides who owns the schema. A connection the application owns is `'managed'` and has migrations; a database owned by another system is `'external'`, which rejects builder DDL and migrations while still allowing record reads and writes, subject to the database account's own permissions. `pnpm db:apply --all` reports external connections as skipped, and targeting one explicitly is an error.
+`schemaManagement` decides who owns the schema. A connection the application owns is `'managed'` and has migrations; a database owned by another system is `'external'`, which rejects builder DDL and migrations while still allowing record reads and writes, subject to the database account's own permissions. `pnpm nocobase db apply --all` reports external connections as skipped, and targeting one explicitly is an error.
 
 Passing `pnpm typecheck` validates neither the YAML contents nor connectivity. Only starting the application against the target proves either.
 
-The mechanics belong to the application rather than to this package: how `pnpm config:init` configures one, the per-dialect connection fields and defaults, driver installation and native binaries, and the typing of `defineAppDatabaseConfig` are in `.agents/skills/nocobase-app-development/references/database-connections.md`.
+The mechanics belong to the application rather than to this package: how `pnpm nocobase config init` configures one, the per-dialect connection fields and defaults, driver installation and native binaries, and the typing of `defineAppDatabaseConfig` are in `.agents/skills/nocobase-app-development/references/database-connections.md`.
 
 Keep `@nocobase/db` itself in `dependencies`, not `devDependencies`: the deployed server resolves it at runtime, and TypeScript reads that declaration to infer the database configuration.
 
@@ -122,14 +122,14 @@ export default defineSeed({
 });
 ```
 
-Apply both with `pnpm db:apply`, adding `--connection <name>` for a non-default connection or `--all` for every managed one.
+Apply both with `pnpm nocobase db apply`, adding `--connection <name>` for a non-default connection or `--all` for every managed one.
 
 Each context carries its own tools, and which one to use is not a free choice — see [Repository and Query](#4-repository-and-query). In short: a migration works through `builder` and `query`, and a seed writes through `repository`.
 
 The rules are absolute, because these files are history that has already run on other machines:
 
 - **Self-contained.** Spell out every table, field, index, constraint and metadata operation in the file. Never import a Collection definition, model, registry or shared constant that keeps evolving — that silently changes both the behavior and the checksum of something already applied.
-- **Immutable once merged.** Check with `git log -- <file>` if unsure. Before the branch is merged you may correct the file in place; after it, every change is a new, later file. Never hard-code a previous checksum to make an edited migration look untouched. Correcting it in place changes nothing on its own — it is recorded as executed, so a plain apply skips it and the database keeps the schema the old file produced. `pnpm db:redo` rolls the latest batch back and applies it again.
+- **Immutable once merged.** Check with `git log -- <file>` if unsure. Before the branch is merged you may correct the file in place; after it, every change is a new, later file. Never hard-code a previous checksum to make an edited migration look untouched. Correcting it in place changes nothing on its own — it is recorded as executed, so a plain apply skips it and the database keeps the schema the old file produced. `pnpm nocobase db redo` rolls the latest batch back and applies it again.
 - **The file name body matches `name`**, and the name is unique across every source in the application.
 - **Declare `irreversible: true`** when there is no real reverse operation, instead of writing a `down()` that quietly does nothing.
 - **A seed is idempotent**, keyed on a stable business value backed by a unique constraint, so a repeated run is a no-op — `upsertOne` is the direct way to express that. A seed context has no `builder` at all, and a seed has no rollback or truncate behavior.
@@ -292,7 +292,7 @@ A Repository nested write opens its own transaction when none is active and join
 
 A Collection is what the database resolves to once physical schema and metadata are combined. There are two ways to reach it, and they answer different questions.
 
-**`pnpm collections:generate` writes it to disk, for you to read.** It reads every Collection of a connection and writes `collection.json`, `metadata.json` and `schema.json` per Collection under `database/<connection>/collections/<name>/`, plus one `_manifest.json` for the connection. Run it after migrating and read the artifact before writing a query — it is the reliable way to learn the real field names, types, nullability, keys and relations instead of guessing them from a migration you have not read. `--connection <name>` and `--all` select connections; `--check` writes nothing and exits non-zero when the files are stale.
+**`pnpm nocobase collections generate` writes it to disk, for you to read.** It reads every Collection of a connection and writes `collection.json`, `metadata.json` and `schema.json` per Collection under `database/<connection>/collections/<name>/`, plus one `_manifest.json` for the connection. Run it after migrating and read the artifact before writing a query — it is the reliable way to learn the real field names, types, nullability, keys and relations instead of guessing them from a migration you have not read. `--connection <name>` and `--all` select connections; `--check` writes nothing and exits non-zero when the files are stale.
 
 Who owns those files depends on `schemaManagement`, and this asymmetry matters:
 
@@ -344,13 +344,13 @@ Do not generate `findUnique`, `findFirst`, `connectOrCreate`, `countDistinct`, `
 
 ## Verify
 
-| Change              | Minimum verification                                                      |
-| ------------------- | ------------------------------------------------------------------------- |
-| Configuration       | The application starts against the target and `pnpm db:apply` succeeds    |
-| Migration           | `up` plus physical schema and metadata assertions; `down` when reversible |
-| Seed                | First run, repeat run, and a failed run leaving no history                |
-| Repository or query | A test against a real database, not only a mock                           |
-| Transaction         | Both commit and rollback                                                  |
+| Change              | Minimum verification                                                            |
+| ------------------- | ------------------------------------------------------------------------------- |
+| Configuration       | The application starts against the target and `pnpm nocobase db apply` succeeds |
+| Migration           | `up` plus physical schema and metadata assertions; `down` when reversible       |
+| Seed                | First run, repeat run, and a failed run leaving no history                      |
+| Repository or query | A test against a real database, not only a mock                                 |
+| Transaction         | Both commit and rollback                                                        |
 
 ```bash
 pnpm typecheck
@@ -359,7 +359,7 @@ pnpm lint
 pnpm build
 ```
 
-`pnpm db:apply` against a disposable database is what proves a migration runs; asserting the builder's return value is not. `pnpm db:redo` reruns the latest batch through its own `down()` and `up()`, which is what a correction to an unmerged migration needs. `pnpm db:reset --force` drops the managed schema and reruns everything from empty without calling any `down()` — only for a database that is genuinely disposable. Regenerate collection artifacts afterwards, or `pnpm collections:generate --check` will fail.
+`pnpm nocobase db apply` against a disposable database is what proves a migration runs; asserting the builder's return value is not. `pnpm nocobase db redo` reruns the latest batch through its own `down()` and `up()`, which is what a correction to an unmerged migration needs. `pnpm nocobase db reset --force` drops the managed schema and reruns everything from empty without calling any `down()` — only for a database that is genuinely disposable. Regenerate collection artifacts afterwards, or `pnpm nocobase collections generate --check` will fail.
 
 Cover the empty result, the partial match and the absent relation, not only the happy path. Passing on SQLite does not verify PostgreSQL, MySQL, Oracle or SQL Server; report an unverified dialect rather than implying the behavior is uniform.
 

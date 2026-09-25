@@ -163,14 +163,23 @@ async function run(
     result.projectCreated = true;
     await ensureAllowBuilds(targetDirectory);
     // Creation stops at a project that can be configured, not at one that can run. Which database an application uses
-    // is decided by the driver it depends on, and configuring it is `config:init`'s job — so the next steps name it
+    // is decided by the driver it depends on, and configuring it is `config init`'s job — so the next steps name it
     // rather than this command writing a configuration nobody asked for.
     result.nextCommands =
       kind === 'hub'
-        ? ['pnpm config:init', 'pnpm config:check', 'pnpm build', 'pnpm start']
-        : ['pnpm config:init', 'pnpm config:check', 'pnpm dev'];
+        ? [
+            'pnpm nocobase config init',
+            'pnpm nocobase config check',
+            'pnpm build',
+            'pnpm start',
+          ]
+        : [
+            'pnpm nocobase config init',
+            'pnpm nocobase config check',
+            'pnpm dev',
+          ];
     result.message =
-      'Configure the application with pnpm config:init before starting it. That uses SQLite; for another database, install its driver and name the dialect, for example: pnpm add @nocobase/db-postgres, then pnpm config:init --dialect postgres';
+      'Configure the application with pnpm nocobase config init before starting it. That uses SQLite; for another database, install its driver and name the dialect, for example: pnpm add @nocobase/db-postgres, then pnpm nocobase config init --dialect postgres';
     progress(`Created ${name}. ${result.message}`);
   } finally {
     await removeDirectory(template.directory);

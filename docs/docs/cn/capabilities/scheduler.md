@@ -22,7 +22,7 @@ description: '让 Agent 使用 Scheduler 插件开发可观测、可启停的定
 Scheduler 插件随包发布 `nocobase-app-plugin-scheduler` Skill。插件启用后，应用会把它同步到 `.agents/skills/`；如果目录缺失或明显过期，在应用根目录运行：
 
 ```bash
-pnpm plugin:skills:sync
+pnpm nocobase skills sync
 ```
 
 通常不需要显式指定 Skill。只要需求包含“定时运行”和“管理员可在 UI 观测”，应用 Agent 应主动发现并使用它。开发者可以直接描述业务目标、处理规则和管理员需要看到的结果，例如：

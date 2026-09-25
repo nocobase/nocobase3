@@ -382,7 +382,7 @@ function lockHeldMessage(
   const beat = lock.heartbeatAt
     ? ` Last heartbeat ${lock.heartbeatAt.toISOString()}.`
     : '';
-  return `${label} lock "${tableName}" is already held by "${lock.lockedBy}"${since}. Waited ${(elapsedMs / 1000).toFixed(1)}s for it to be released.${beat} Another ${label.toLowerCase()} run holds it; a run that stops beating is taken over automatically after ${TASK_LOCK_EXPIRY_MS / 1000}s, or release it now with "nocobase app db unlock".`;
+  return `${label} lock "${tableName}" is already held by "${lock.lockedBy}"${since}. Waited ${(elapsedMs / 1000).toFixed(1)}s for it to be released.${beat} Another ${label.toLowerCase()} run holds it; a run that stops beating is taken over automatically after ${TASK_LOCK_EXPIRY_MS / 1000}s, or release it now with "nocobase db unlock".`;
 }
 
 /** Dialects return the timestamp as a Date, an epoch number, or a string. */

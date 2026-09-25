@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 
-import type { AppCommandRuntime } from '../src/context.js';
-import { ConfigSetError, runConfigSet } from '../src/lib/config-set.js';
+import type { AppCommandRuntime } from '../src/context.ts';
+import { ConfigSetError, runConfigSet } from '../src/lib/config-set.ts';
 
 const directories: string[] = [];
 
@@ -279,7 +279,7 @@ describe('runConfigSet', () => {
       }),
     ).rejects.toMatchObject({
       reason: 'not-configured',
-      suggestedCommand: 'pnpm config:init',
+      suggestedCommand: 'pnpm nocobase config init',
     });
   });
 

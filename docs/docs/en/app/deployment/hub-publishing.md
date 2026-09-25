@@ -46,10 +46,10 @@ Provide `HUB_URL` (including its mount path), `HUB_APP_ID`, and `HUB_API_KEY` th
 ### Upload and deploy
 
 ```bash
-pnpm nocobase app upload --deploy --config ./runtime.yml --wait --json
+pnpm nocobase release upload --deploy --config ./runtime.yml --wait --json
 ```
 
-For an existing uploaded Release, use `pnpm nocobase app deploy --release-id <releaseId> --wait --json`. Without `--config`, an existing deployment reuses current configuration; first deployment uses Release-template initialization. A supplied UTF-8 YAML document replaces configuration, subject to existing secret handling and validation, rather than merging arbitrary fields. The limit is 1 MiB; upload without `--deploy` rejects `--config`.
+For an existing uploaded Release, use `pnpm nocobase release deploy --release-id <releaseId> --wait --json`. Without `--config`, an existing deployment reuses current configuration; first deployment uses Release-template initialization. A supplied UTF-8 YAML document replaces configuration, subject to existing secret handling and validation, rather than merging arbitrary fields. The limit is 1 MiB; upload without `--deploy` rejects `--config`.
 
 ### Wait for results and automate
 

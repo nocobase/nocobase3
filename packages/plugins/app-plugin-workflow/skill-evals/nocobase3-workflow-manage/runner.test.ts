@@ -84,7 +84,7 @@ describe('workflow skill prompt fixtures', () => {
     });
     await expect(
       fs.readFile(path.join(workspace.root, 'TEST_CONTEXT.md'), 'utf8'),
-    ).resolves.toContain('/cli/index.ts workflow check');
+    ).resolves.toContain('/bin/run.js workflow check');
     const validWorkflow = path.join(
       workspace.root,
       'server/workflows/valid-quotation',
@@ -92,17 +92,21 @@ describe('workflow skill prompt fixtures', () => {
     await execFileAsync(
       process.execPath,
       [
-        '--import',
-        path.join(packageRoot, 'node_modules/tsx/dist/loader.mjs'),
-        path.join(
-          repoRoot,
-          'packages/templates/app-template-default/cli/index.ts',
-        ),
+        path.join(repoRoot, 'packages/app/app-cli/bin/run.js'),
         'workflow',
         'check',
         validWorkflow,
       ],
-      { cwd: workspace.root },
+      {
+        cwd: workspace.root,
+        env: {
+          ...process.env,
+          NOCOBASE_APP_ROOT: path.join(
+            repoRoot,
+            'packages/templates/app-template-default',
+          ),
+        },
+      },
     );
     await workspace.cleanup();
   });
