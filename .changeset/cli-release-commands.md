@@ -1,6 +1,7 @@
 ---
 '@nocobase/app-cli': major
 '@nocobase/app-skills': minor
+'@nocobase/app-plugin-hub': patch
 ---
 
 Tidy the `release upload` and `release deploy` commands and make `--json` output consistent across the CLI.
@@ -11,4 +12,4 @@ Tidy the `release upload` and `release deploy` commands and make `--json` output
 - An argument error names the flag that is missing, invalid or unknown, such as `Missing required flag --release-id.`, and still never repeats a value. A failure with no known cause suggests `NOCOBASE_CLI_DEBUG=1`, which prints that cause to stderr.
 - Both commands have a description and examples in `--help`, and `--hub` is described the same way on both.
 - `plugin register`, `plugin unregister`, `plugin update`, `plugin inspect`, `package remove` and `skills sync` print a `--json` failure on stdout, as a success already was and as every other command already did. A caller reads one stream and checks the exit code.
-- The Hub publishing guidance moves from the `nocobase-app-development` Skill to `nocobase-deployment`, and the CLI reference describes the stdout-only `--json` contract and path resolution.
+- The Hub publishing guidance moves from the `nocobase-app-development` Skill to `nocobase-deployment`, the CLI reference describes the stdout-only `--json` contract and path resolution, and the Hub API key Skill states the new path rule.
