@@ -11,11 +11,11 @@ Everything it ships is in `cli/`:
 | `cli/artifact-build.ts` | A nested sub-command, and deferring heavy work into `run()` |
 | `cli/index.ts`          | Declaring the topic and command map with `defineCliPlugin`  |
 
-Registered in an application, its commands appear under the `demo` topic:
+Registered in an application, its commands appear under the `cli-example` topic:
 
 ```bash
-pnpm nocobase demo --help
-pnpm nocobase demo greet world --loud
-pnpm nocobase demo greet world --json
-pnpm nocobase demo artifact build --source-root server/artifacts
+pnpm nocobase cli-example --help
+pnpm nocobase cli-example greet world --loud
+pnpm nocobase cli-example greet world --json
+pnpm nocobase cli-example artifact build --source-root server/artifacts
 ```

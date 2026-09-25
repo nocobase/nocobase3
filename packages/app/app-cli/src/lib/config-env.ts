@@ -1,6 +1,6 @@
 import { RUNTIME_ENVIRONMENT_VARIABLES } from '@nocobase/app-server/config';
 
-import type { AppCommandRuntime } from '../context.js';
+import type { AppCommandRuntime } from '../context.ts';
 
 export interface ConfigEnvVariable {
   readonly name: string;

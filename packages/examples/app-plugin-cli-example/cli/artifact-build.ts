@@ -3,7 +3,7 @@ import type { Interfaces } from '@oclif/core';
 import path from 'node:path';
 
 /**
- * A nested command: the `artifact:build` key makes this `nocobase demo artifact build`.
+ * A nested command: the `artifact:build` key makes this `nocobase cli-example artifact build`.
  *
  * It also shows where a command's real work belongs. Anything expensive is loaded inside `run()` rather than imported
  * at the top of the file, so `--help` stays cheap no matter what the command itself needs.

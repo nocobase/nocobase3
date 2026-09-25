@@ -8,14 +8,18 @@ import { formatNotConfigured } from '../src/node/not-configured-message.js';
 
 describe('findApplicationNotConfigured', () => {
   it('recognises the error itself', () => {
-    const error = new ApplicationNotConfiguredError('Run pnpm config:init.');
+    const error = new ApplicationNotConfiguredError(
+      'Run pnpm nocobase config init.',
+    );
 
     expect(findApplicationNotConfigured(error)).toBe(error);
   });
 
   /** Startup wraps what a provider throws, so the instruction is looked for down the cause chain. */
   it('finds it when startup wraps it', () => {
-    const cause = new ApplicationNotConfiguredError('Run pnpm config:init.');
+    const cause = new ApplicationNotConfiguredError(
+      'Run pnpm nocobase config init.',
+    );
 
     expect(
       findApplicationNotConfigured(
@@ -28,7 +32,7 @@ describe('findApplicationNotConfigured', () => {
 
   /** A second copy of this package throws its own class; the name is what both copies agree on. */
   it('recognises one thrown by another copy of the package', () => {
-    const foreign = new Error('Run pnpm config:init.');
+    const foreign = new Error('Run pnpm nocobase config init.');
     foreign.name = 'ApplicationNotConfiguredError';
 
     expect(findApplicationNotConfigured(foreign)).toBe(foreign);
@@ -56,7 +60,7 @@ describe('formatNotConfigured', () => {
         'This application is not configured: auth.secret is not set.',
         '',
         'Create the configuration with:',
-        '  pnpm config:init',
+        '  pnpm nocobase config init',
         '',
         'Run it inside dist/ for a built application.',
         'If a configuration file already exists, set auth.secret in it, or AUTH_SECRET in the environment.',

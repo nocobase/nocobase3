@@ -26,7 +26,7 @@ private or user-specific data.
 
 ## Add the Notice to an App page
 
-1. Confirm the plugin is registered and `plugin:inspect skills-example --json`
+1. Confirm the plugin is registered and `plugin inspect skills-example --json`
    reports consistent Server and Skill state.
 2. Import `AppNotice` from its public component export in an App-owned page or
    component.
@@ -63,6 +63,6 @@ implementation or recreate a Token with the same name.
 - An authenticated API request returns the Notice payload with `title`,
   `description`, and `tone`.
 - The target App renders the visible Notice through the public component.
-- `plugin:inspect skills-example --json` reports `consistent: true` with no
+- `plugin inspect skills-example --json` reports `consistent: true` with no
   issues.
 - The target App passes its relevant tests, typecheck, and build.

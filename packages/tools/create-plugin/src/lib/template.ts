@@ -196,7 +196,6 @@ function replacementEntries(
       '__NOCOBASE_CLI_DESCRIPTION_LITERAL__',
       literal(`Commands contributed by ${context.packageName}.`),
     ],
-    ['__NOCOBASE_CLI_TOPIC_LITERAL__', literal(context.shortName)],
     ['__NOCOBASE_COLLECTION_NAME_LITERAL__', literal(context.collectionName)],
     ['__NOCOBASE_DESCRIPTION__', context.description],
     ['__NOCOBASE_DISPLAY_NAME__', jsonStringContent(context.displayName)],
@@ -435,7 +434,7 @@ async function renderManifest(
   if (capabilities.server.jobs) addRuntimePeer('@nocobase/queue');
   if (clientPlugin) addRuntimePeer('@nocobase/app-client');
   if (capabilities.cli) {
-    addRuntimePeer('@nocobase/nb3-cli');
+    addRuntimePeer('@nocobase/app-cli');
     // `@oclif/core` is a peer for a related but distinct reason from module identity: one shared version, so help
     // rendering and flag parsing behave the same in the plugin and in the application assembling its commands. The
     // range is explicit rather than `workspace:^` because whoever installs this plugin is outside this repository.

@@ -22,8 +22,8 @@ The source workspace uses local packages and `workspace:^`; an installed App use
 Run from the repository root, with the chosen App's directory name or full package name:
 
 ```bash
-pnpm plugin:register audit-log --app app-template-default --dry-run --json
-pnpm plugin:register audit-log --app app-template-default --json
+pnpm nocobase plugin register audit-log --workspace-root . --app app-template-default --dry-run --json
+pnpm nocobase plugin register audit-log --workspace-root . --app app-template-default --json
 ```
 
 Inspect the preview before applying it. `--app` defaults to `app-template-default`; specify it explicitly when multiple Apps are relevant. Registration uses actual exports to decide which composition roots to change and synchronizes plugin Skills by default. It appends new registrations rather than resolving business-specific ordering requirements.
@@ -51,7 +51,7 @@ Pass documented typed Client options in the App composition root when needed. Do
 ## Install without enabling
 
 ```bash
-pnpm plugin:register audit-log --app app-template-default --disabled --json
+pnpm nocobase plugin register audit-log --workspace-root . --app app-template-default --disabled --json
 ```
 
 `--disabled` installs the dependency without adding Client, Server, or CLI registrations. Skills still synchronize by default because they are integration knowledge, not runtime code; add `--no-skills` only when that is the intended result. The flag does not neutralize manual registrations already present in composition roots. Inspect those roots when disabling an existing integration and remove only the intended entries.
@@ -61,11 +61,11 @@ pnpm plugin:register audit-log --app app-template-default --disabled --json
 From an installed App's root:
 
 ```bash
-pnpm plugin:register audit-log --version 1.2.0 --json
-pnpm plugin:update @nocobase/app-plugin-audit-log --json
+pnpm nocobase plugin register audit-log --version 1.2.0 --json
+pnpm nocobase plugin update @nocobase/app-plugin-audit-log --json
 ```
 
-Use the requested version; the number above is illustrative. Omit the plugin argument to `plugin:update` only when upgrading all registered plugins is requested. Workspace plugins are normally updated through their workspace source and lockfile, not this registry workflow.
+Use the requested version; the number above is illustrative. Omit the plugin argument to `plugin update` only when upgrading all registered plugins is requested. Workspace plugins are normally updated through their workspace source and lockfile, not this registry workflow.
 
 Synchronize Skills after a successful package upgrade. If installation fails, do not synchronize from an assumed new version. If package upgrade succeeds but synchronization fails, report the two stages separately. Verify changed exports, typed options, required migrations, App checks, and runtime behavior. Upgrading a plugin does not overwrite App-owned Registry source; use the merge workflow in [Registry](registry.md).
 
@@ -74,19 +74,19 @@ Synchronize Skills after a successful package upgrade. If installation fails, do
 Run in the target App directory, not the source workspace root:
 
 ```bash
-pnpm skills:sync
-pnpm skills:sync --package @nocobase/app-plugin-audit-log
+pnpm nocobase skills sync
+pnpm nocobase skills sync --package @nocobase/app-plugin-audit-log
 ```
 
-The plugin's top-level `skills/` is the maintained source. The App's `.agents/skills/` is generated, replaced on synchronization, and excluded from Git with the entire App `/.agents/` directory. Do not edit or commit those synchronized copies. `plugin:skills:sync` remains a compatibility alias; use `skills:sync` for new instructions. See [Plugin Skills](plugin-skills.md) for discovery, ownership prefixes, conflict handling, and semantic validation.
+The plugin's top-level `skills/` is the maintained source. The App's `.agents/skills/` is generated, replaced on synchronization, and excluded from Git with the entire App `/.agents/` directory. Do not edit or commit those synchronized copies. `skills sync` remains a compatibility alias; use `skills sync` for new instructions. See [Plugin Skills](plugin-skills.md) for discovery, ownership prefixes, conflict handling, and semantic validation.
 
 ## Unregister and remove
 
 Preview unregistering from a workspace App:
 
 ```bash
-pnpm plugin:unregister audit-log --app app-template-default --dry-run --json
-pnpm plugin:unregister audit-log --app app-template-default --json
+pnpm nocobase plugin unregister audit-log --workspace-root . --app app-template-default --dry-run --json
+pnpm nocobase plugin unregister audit-log --workspace-root . --app app-template-default --json
 ```
 
 An installed App uses the same commands from its root without `--app`. Unregister cleans the target App dependency, applicable imports/entries in all three composition roots, owned synchronized Skills, and legacy management metadata. `--no-install` defers the package-manager phase. Review the plan for unrelated manually maintained source.
@@ -117,7 +117,7 @@ Lifecycle commands use a JSON envelope such as:
 | `requires-installation` | Preview needs an installed package before it can calculate the full plan                     |
 | `failure`               | `ok: false`; handle `error.code` and `error.suggestions`, preserving the nonzero exit status |
 
-For registration inconsistencies, use `pnpm plugin:inspect audit-log --app app-template-default --json`. Check `ok` and `status`, then `result.consistent`, `issues`, and `suggestions`. A successful inspection can have `ok: true` while reporting inconsistent state. It observes static facts and does not repair them.
+For registration inconsistencies, use `pnpm nocobase plugin inspect audit-log --workspace-root . --app app-template-default --json`. Check `ok` and `status`, then `result.consistent`, `issues`, and `suggestions`. A successful inspection can have `ok: true` while reporting inconsistent state. It observes static facts and does not repair them.
 
 Use `pnpm --filter <target-app> client:inspect --json` or `server:inspect --json` only for the corresponding changed composition or diagnostic question. Client inspection does not instantiate Providers, run lifecycle, render React, or load page/locale messages. Server inspection does not execute Providers, Route factories, Jobs, or database operations. Their success cannot prove security, translations, or behavior.
 
@@ -130,4 +130,4 @@ Use `pnpm --filter <target-app> client:inspect --json` or `server:inspect --json
 | Skills are stale                              | Verify upstream source and run App-scoped synchronization                   |
 | Automatic source editing was skipped          | Read the reported reason/manual edits; do not call partial success complete |
 
-Finish with [testing and delivery](testing.md). Source references: registration planner (`packages/tools/cli/src/lib/plugin-registration.ts`) and lifecycle commands (`packages/tools/cli/src/commands/plugin`).
+Finish with [testing and delivery](testing.md). Source references: registration planner (`packages/app/app-cli/src/lib/plugin-registration.ts`) and lifecycle commands (`packages/app/app-cli/src/commands/plugin`).

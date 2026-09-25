@@ -32,7 +32,7 @@ const officialDriverLoaders = {
 /**
  * The dialects above, as a list tooling can name them from.
  *
- * Anything that has to present the choice to a person — `nocobase app config init`, the documentation it prints —
+ * Anything that has to present the choice to a person — `nocobase config init`, the documentation it prints —
  * reads this rather than keeping its own copy. A separate list is one that silently stops matching the loaders the
  * day a dialect is added, and the mismatch only shows up as a dialect the CLI offers and the runtime cannot load.
  */

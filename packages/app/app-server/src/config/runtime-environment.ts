@@ -6,7 +6,7 @@ export interface RuntimeEnvironmentVariable {
 /**
  * Environment variables the runtime reads itself rather than through a section's `env`. With the sections'
  * declarations they are everything an application can be configured with from its environment, which is what
- * `pnpm config:env` lists and what `.env.example` may name.
+ * `pnpm nocobase config env` lists and what `.env.example` may name.
  */
 export const RUNTIME_ENVIRONMENT_VARIABLES: readonly RuntimeEnvironmentVariable[] =
   [

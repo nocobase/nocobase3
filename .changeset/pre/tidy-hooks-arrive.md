@@ -1,5 +1,5 @@
 ---
-'@nocobase/nb3-cli': minor
+'@nocobase/app-cli': minor
 ---
 
 Let a plugin register commands for an application's build and dev runs

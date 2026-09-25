@@ -13,7 +13,7 @@ describe('parseInput', () => {
   });
 
   /**
-   * Choosing a database is `config:init`'s job now, and it needs the driver installed first. Leaving the flag parsed
+   * Choosing a database is `config init`'s job now, and it needs the driver installed first. Leaving the flag parsed
    * but ignored would accept a command that silently did nothing about the database it named.
    */
   it('rejects the dialect flag, which creation no longer decides', async () => {

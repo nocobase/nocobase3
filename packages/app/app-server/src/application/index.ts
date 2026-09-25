@@ -262,7 +262,7 @@ export class Application<
 
   /**
    * Refuses to start on a configuration that breaks a rule its sections declare. It runs here rather than when the
-   * runtime is resolved, so commands that only read the configuration, such as `config:init` and `config:check`, still
+   * runtime is resolved, so commands that only read the configuration, such as `config init` and `config check`, still
    * load it and can report what is wrong.
    */
   private async validateConfig(): Promise<void> {

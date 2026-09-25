@@ -22,7 +22,7 @@ describe('.env.example', () => {
     const sectionVariables = [
       ...(defaultConfigs.sections?.values() ?? []),
     ].flatMap((rules) => Object.keys(rules.env ?? {}));
-    // The same list `pnpm config:env` prints.
+    // The same list `pnpm nocobase config env` prints.
     const read = new Set([
       ...sectionVariables,
       ...RUNTIME_ENVIRONMENT_VARIABLES.map((variable) => variable.name),

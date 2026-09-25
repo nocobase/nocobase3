@@ -8,8 +8,8 @@ import {
   envString,
 } from '@nocobase/app-server/config';
 
-import type { AppCommandRuntime } from '../src/context.js';
-import { runConfigEnv } from '../src/lib/config-env.js';
+import type { AppCommandRuntime } from '../src/context.ts';
+import { runConfigEnv } from '../src/lib/config-env.ts';
 
 async function createRuntime(env: Record<string, string>): Promise<{
   readonly runtime: AppCommandRuntime;

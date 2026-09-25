@@ -50,12 +50,11 @@ export default class Greet extends Command {
 
 ```ts
 // cli/index.ts
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/nb3-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
 import Greet from './greet.ts';
 
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: '@nocobase/app-plugin-cli-example',
-  topic: 'demo',
   description: 'Example commands contributed by a plugin.',
   commands: { greet: Greet, 'artifact:build': ArtifactBuild },
 });
@@ -63,8 +62,8 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
 export default cliPlugin;
 ```
 
-Keys are sub-command names. `greet` becomes `nocobase demo greet`; the colon in `artifact:build` nests one level
-further, into `nocobase demo artifact build`.
+Keys are sub-command names. `greet` becomes `nocobase cli-example greet`; the colon in `artifact:build` nests one level
+further, into `nocobase cli-example artifact build`.
 
 **The manifest** exposes the entry and declares oclif:
 
@@ -107,10 +106,10 @@ failure, preserving a non-zero exit code. Exit codes are `0` success, `1` runtim
 ## Verify
 
 ```bash
-pnpm nocobase demo --help              # the topic and its commands
-pnpm nocobase demo greet --help        # one command's flags and args
-pnpm nocobase demo greet world --json
+pnpm nocobase cli-example --help              # the topic and its commands
+pnpm nocobase cli-example greet --help        # one command's flags and args
+pnpm nocobase cli-example greet world --json
 ```
 
 A command missing from `--help` usually means the plugin is absent from the application's `cli/plugins.ts`. Run
-`pnpm plugin:inspect <name> --json` and read `composition.cli`.
+`pnpm nocobase plugin inspect <name> --json` and read `composition.cli`.

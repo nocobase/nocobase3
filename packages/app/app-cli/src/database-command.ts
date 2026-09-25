@@ -5,7 +5,7 @@ import {
   type DatabaseManager,
   type MigrationHistoryRecord,
 } from '@nocobase/db';
-import type { AppCommandContext, AppCommandRuntime } from './context.js';
+import type { AppCommandContext, AppCommandRuntime } from './context.ts';
 import {
   AppDatabaseTaskError,
   type AppDatabaseConfig,
@@ -90,10 +90,10 @@ export async function runDatabaseApplyCommand(
         // agree. Used on a change the database never received, it makes an
         // un-applied migration look applied.
         command.log(
-          'If the edit left the schema identical — a reformat, a comment, a rebuild — run "nocobase app db repair" to realign the history.',
+          'If the edit left the schema identical — a reformat, a comment, a rebuild — run "nocobase db repair" to realign the history.',
         );
         command.log(
-          'If it changed what the migration does, run "nocobase app db redo" while its branch is unmerged, or add a new migration once it is merged.',
+          'If it changed what the migration does, run "nocobase db redo" while its branch is unmerged, or add a new migration once it is merged.',
         );
       }
     }

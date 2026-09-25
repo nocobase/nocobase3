@@ -9,17 +9,17 @@ import {
   type ConnectionCheckResult,
 } from '@nocobase/app-server/database';
 
-import type { AppCommandRuntime } from '../context.js';
+import type { AppCommandRuntime } from '../context.ts';
 import {
   detectConfigInitMode,
   installCommand,
   type ConfigInitMode,
-} from './config-init.js';
+} from './config-init.ts';
 import {
   activeConfigFile,
   closestKey,
   exampleSections,
-} from './config-keys.js';
+} from './config-keys.ts';
 
 export type ConfigCheckLevel = 'error' | 'warning';
 
@@ -245,7 +245,7 @@ function secretFindings(
         : 'This application has no configuration, and it does not start without auth.secret.',
       fix: configured
         ? 'Set auth.secret in the configuration file, or AUTH_SECRET in the environment.'
-        : 'pnpm config:init',
+        : 'pnpm nocobase config init',
     });
   } else if (isPlaceholderSecret(authSecret)) {
     findings.push(placeholderFinding('auth.secret'));

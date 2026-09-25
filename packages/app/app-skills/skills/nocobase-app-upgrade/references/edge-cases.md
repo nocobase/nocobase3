@@ -24,9 +24,9 @@ diff <(node -p "JSON.stringify(require('$WORK/$BASE/package.json'), null, 2)") \
 
 Dependency keys get reordered between releases, so most of the raw diff is noise — compare key by key. A dependency the template dropped may be one the user now imports directly; search application code, configuration, tests, and build scripts before deleting it, same as a removed export. For plugins, complete the [code and configuration review](#review-a-removed-plugins-usage). Obtain confirmation before removing any apparently unused `@nocobase/*` capability, and keep each retained package in the appropriate dependency section together with any required registrations.
 
-After its references have been migrated and the user has confirmed the removal, run `pnpm package:remove @nocobase/example` instead of deleting only the manifest key. Use `--dry-run` to preview or `--json` for structured output. The command invokes the application's package manager so `package.json` and the lockfile stay consistent, then removes only synchronized Skills recorded as owned by that package. For an `@nocobase/app-plugin-*` target it delegates to the plugin unregister workflow and removes Client, Server, and CLI registrations together; `pnpm plugin:unregister <name>` remains available as the plugin-specific entry point. The removal command does not edit business code or configuration, which is why the usage review and any migration happen first.
+After its references have been migrated and the user has confirmed the removal, run `pnpm nocobase package remove @nocobase/example` instead of deleting only the manifest key. Use `--dry-run` to preview or `--json` for structured output. The command invokes the application's package manager so `package.json` and the lockfile stay consistent, then removes only synchronized Skills recorded as owned by that package. For an `@nocobase/app-plugin-*` target it delegates to the plugin unregister workflow and removes Client, Server, and CLI registrations together; `pnpm nocobase plugin unregister <name>` remains available as the plugin-specific entry point. The removal command does not edit business code or configuration, which is why the usage review and any migration happen first.
 
-An older application with a recent CLI but no `package:remove` script can run `pnpm nocobase package remove @nocobase/example`. If the installed CLI predates the command, merge the target `@nocobase/nb3-cli` dependency and install it before removal; where `skills:sync` is already available, the compatibility fallback is the application's package-manager remove followed by `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, confirm that the final manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. `package:remove` can also clean recorded historical Skill ownership for a named package already absent from the manifest, and it does not uninstall or clean Skills belonging to another package.
+After an interrupted or manual removal, confirm that the final manifest no longer declares the package and run a full `pnpm nocobase skills sync` to reconcile stale package-owned output. `package remove` can also clean recorded historical Skill ownership for a named package already absent from the manifest, and it does not uninstall or clean Skills belonging to another package.
 
 Ranges in a published template are already resolved (`pnpm pack` expands `workspace:` and `catalog:`). Take them as published.
 
@@ -46,11 +46,11 @@ pnpm why @nocobase/app-plugin-authorization
 
 When a compatible newer version of the retaining dependency is available within its declared range, run `pnpm update <identified-package>`, then `pnpm dedupe`, and inspect the dependency paths again. Update only the package identified by the conflict; do not run an unscoped update or use `--latest`. If the declared ranges or application overrides prevent a shared version, report the conflicting constraints and reconcile them with the target template and the user's custom dependencies instead of forcing a version or deleting the lockfile.
 
-After resolving the conflict, rerun `pnpm skills:sync` and all Finish checks. Confirm the affected paths use a compatible shared package resolution; unrelated packages may legitimately retain multiple versions. A remaining type error without duplicate package resolutions needs investigation as a source or API compatibility issue.
+After resolving the conflict, rerun `pnpm nocobase skills sync` and all Finish checks. Confirm the affected paths use a compatible shared package resolution; unrelated packages may legitimately retain multiple versions. A remaining type error without duplicate package resolutions needs investigation as a source or API compatibility issue.
 
 ## Generated configuration and committed examples
 
-`config.yml` holds real settings and generated secrets. A template may also generate `.env` for build-time deployment facts. These live files are gitignored, were written by `pnpm config:init` and the generator rather than copied from the template, and are absent from the release diff. Never print or replace them as part of the merge. `config:init` refuses to overwrite an existing configuration, so it is safe to run during an upgrade; `--force` replaces one and is never part of a merge.
+`config.yml` holds real settings and generated secrets. A template may also generate `.env` for build-time deployment facts. These live files are gitignored, were written by `pnpm nocobase config init` and the generator rather than copied from the template, and are absent from the release diff. Never print or replace them as part of the merge. `config init` refuses to overwrite an existing configuration, so it is safe to run during an upgrade; `--force` replaces one and is never part of a merge.
 
 `config.example.yml` ships with every current official template and merges normally. A template may also ship `.env.example`. Changes to these examples are the signal that a corresponding live file may need a manual edit:
 
@@ -65,11 +65,11 @@ A new key with a working default needs nothing. One without a default is a start
 
 ### A removed plugin the diff cannot remove for you
 
-A target release that drops `@nocobase/app-plugin-install` leaves an upgrading application still importing it. Remove the dependency from `package.json` and its entries from `client/plugins.ts` and `server/plugins.ts`; there is nothing to migrate, because the installation page only ever appeared for an application that had no configuration file, and a configured one never reached it. An application that did rely on that page configures itself with `pnpm config:init` instead.
+A target release that drops `@nocobase/app-plugin-install` leaves an upgrading application still importing it. Remove the dependency from `package.json` and its entries from `client/plugins.ts` and `server/plugins.ts`; there is nothing to migrate, because the installation page only ever appeared for an application that had no configuration file, and a configured one never reached it. An application that did rely on that page configures itself with `pnpm nocobase config init` instead.
 
 ## `client/plugins.ts`, `server/plugins.ts`, `cli/plugins.ts`
 
-Composition roots: the template registers what it ships, `pnpm plugin:register` appends what the user installed. Both sides append to the same region, which is exactly what a text merge gets wrong. Merge them as sets of registrations:
+Composition roots: the template registers what it ships, `pnpm nocobase plugin register` appends what the user installed. Both sides append to the same region, which is exactly what a text merge gets wrong. Merge them as sets of registrations:
 
 - Added by the template — merge the target's registration and options, preserving any deliberate application customization.
 - Removed by the template — complete the usage review below before removing either the registration or dependency. Preserve user-added or used plugins, including those originally enabled by the template. Removal stops registering a capability; it does not delete tables or data.
@@ -94,7 +94,7 @@ Apply the agreed outcome to the manifest and composition roots together, then ve
 
 ## Migrations
 
-A release can ship a migration under `database/`. Copy it in like any added file, then `pnpm db:apply`.
+A release can ship a migration under `database/`. Copy it in like any added file, then `pnpm nocobase db apply`.
 
 Never edit a migration that arrives this way, and never edit one already run — a correction goes in a new migration. The user's own migrations and seeds stay byte for byte where they are; an upgrade never rewrites them.
 
@@ -106,13 +106,13 @@ Unregistering a plugin leaves its records and migration history intact. Do not r
 
 `AGENTS.md`, `CLAUDE.md`, and `README.MD` ship with the template and may contain user additions. Take the template's version where the user wrote nothing and merge where they did.
 
-Older template releases also shipped a committed `skills/` directory. A target release that moves those Skills into `@nocobase/app-skills` does not authorize deleting local changes. Compare each legacy file with the BASE template: an unchanged template copy may be removed only after install and `pnpm skills:sync` produce the corresponding package-owned Skill under `.agents/skills/`; a modified or added file is application-owned and must be preserved. Keep a customized legacy directory with explicit links from `AGENTS.md`, or move its rules into `AGENTS.md` or another committed application-owned source after showing the user the exact relocation. Never silently fold custom content into a generated copy.
+Older template releases also shipped a committed `skills/` directory. A target release that moves those Skills into `@nocobase/app-skills` does not authorize deleting local changes. Compare each legacy file with the BASE template: an unchanged template copy may be removed only after install and `pnpm nocobase skills sync` produce the corresponding package-owned Skill under `.agents/skills/`; a modified or added file is application-owned and must be preserved. Keep a customized legacy directory with explicit links from `AGENTS.md`, or move its rules into `AGENTS.md` or another committed application-owned source after showing the user the exact relocation. Never silently fold custom content into a generated copy.
 
 Older releases may include `MIGRATION.md`. Treat it as historical context and verify each suggestion against BASE → TARGET and the project's state; never remove a capability that TARGET still provides solely because an old note says to. When TARGET removes the document, delete an unchanged template copy, but preserve or relocate the user's own operational notes before removing a customized copy.
 
-`.agents/skills/` is generated and gitignored. `pnpm skills:sync` replaces each synchronized package-owned Skill directory wholesale, so never merge into or edit it. Local custom guidance belongs in committed application-owned files outside this generated directory.
+`.agents/skills/` is generated and gitignored. `pnpm nocobase skills sync` replaces each synchronized package-owned Skill directory wholesale, so never merge into or edit it. Local custom guidance belongs in committed application-owned files outside this generated directory.
 
-`config.yml`, optional generated `.env`, `.gitignore`, `.npmrc`, and `pnpm-workspace.yaml` were written by the generator or by `pnpm config:init` and appear in no diff at all.
+`config.yml`, optional generated `.env`, `.gitignore`, `.npmrc`, and `pnpm-workspace.yaml` were written by the generator or by `pnpm nocobase config init` and appear in no diff at all.
 
 ## Where the user's code lives
 
@@ -137,4 +137,15 @@ Legacy application-owned guidance, when present
 
 ## Shared application scripts and commands
 
-When a target template delegates scripts to `@nocobase/app-tools` and commands to `@nocobase/app-cli`, add the former to `devDependencies` and the latter to `dependencies`. Merge the thin script entries and `cli/standard-commands.ts` while retaining application command registrations, plugin composition, and custom commands. Compare any locally modified script implementation before replacing it; move application-specific behavior to supported CLI hooks or retain a deliberate local override.
+An application from before `@nocobase/app-cli` took over the whole command line depends on `@nocobase/nb3-cli` and, usually, `@nocobase/app-tools`. Neither is published any more, so the upgrade has to move to the new layout in one step; there is no compatibility period.
+
+1. In `package.json`, remove `@nocobase/nb3-cli` and `@nocobase/app-tools`, keep `@nocobase/app-cli` in `dependencies` at the target template's range, and add the development tools it expects the application to provide to `devDependencies` — `typescript`, `tsx`, `vite`, `prettier`, `tar` and `@nocobase/dev-config`, taking the target template's ranges.
+2. Replace `scripts` with the target template's: `postinstall`, `dev`, `build` and `start` run `nocobase …`, and the quality scripts stay. Delete the command aliases (`config:*`, `db:*`, `collections:generate`, `plugin:*`, `package:remove`, `skills:sync`, `upload`, `deploy`, `server:deps:*`, `nocobase`); each is now `pnpm nocobase <topic> <command>`. Keep scripts the user added that are not aliases, and ask before dropping one they redefined.
+3. If the application publishes to a Hub (it had `upload` and `deploy`), set `"nocobase": { "cli": { "publishing": true } }` in `package.json`. The commands are now `release upload` and `release deploy`.
+4. Delete `scripts/dev.mjs`, `scripts/build.mjs`, `scripts/start.mjs` and `scripts/server-deps.mjs`, and `cli/index.ts`. Compare any locally modified script first and move application-specific behavior into a plugin build or dev hook.
+5. Delete `cli/commands/index.ts`, `cli/standard-commands.ts` and any `cli/database-command.ts`, `cli/hub-publishing.ts` or `cli/commands/i18n-check.ts` forwarding files. Keep every command file the application wrote under `cli/commands/`: it is now registered by its path, so `cli/commands/sync-orders.ts` answers to `nocobase app sync-orders`. Its name comes from the file, not from the key it had in the old `cli/commands/index.ts`, so rename a file whose key differed; a file must default-export its command class.
+6. In `cli/plugins.ts` and `vite.config.ts`, import from `@nocobase/app-cli/plugins` and `@nocobase/app-cli/dev/proxy`.
+7. Remove `scripts/*.ts` from `tsconfig.node.json`'s `include` and `scripts` from `files`, as the target template does.
+8. Replace every `app` command id in the application's own documentation, CI and scripts: `nocobase app db apply` is `nocobase db apply`, `app db doctor` is `collections doctor`, `app i18n:check` is `locales check`, `app upload` is `release upload`, `server:deps:retarget` and `server:deps:verify` are `dist retarget` and `dist check`, and a plugin topic follows its package name, so the scheduler's `schedule sync` is `scheduler sync`.
+
+Run `pnpm install`, then `pnpm nocobase --help`, `pnpm build`, and `node dist/cli/index.js --help` to confirm the source and deployment command sets.

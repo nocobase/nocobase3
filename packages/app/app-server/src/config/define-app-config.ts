@@ -18,7 +18,7 @@ export interface ConfigIssueOptions {
 /**
  * Checks one section's final value — code defaults merged with the configuration file and the environment.
  *
- * It runs at startup, on every reload and in `config:check`, so it may read local files but must not reach the
+ * It runs at startup, on every reload and in `config check`, so it may read local files but must not reach the
  * network or write anything. The value is typed as the section, but it came from user input: check it as untrusted.
  */
 export type ConfigValidator<T> = (
@@ -37,7 +37,7 @@ export interface AppConfigDefinition<T extends object> {
   /**
    * Environment variables that set fields of this section, with paths relative to it, such as
    * `{ AUTH_SECRET: envString('secret') }`. The owner of the section declares them here so that whoever reads a
-   * setting also maps it. `pnpm config:env` lists every declared variable.
+   * setting also maps it. `pnpm nocobase config env` lists every declared variable.
    */
   readonly env?: Readonly<Record<string, EnvironmentMapping>>;
 }

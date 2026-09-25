@@ -2,6 +2,9 @@ node_modules/
 /.pnpm-store/
 dist/
 dist.build/
+# `nocobase dist retarget` and `nocobase dist check` are found by their directory, which the rule above would
+# otherwise hide. packages/app/app-cli/tests/command-files.test.ts fails if this exception is lost.
+!packages/app/app-cli/src/commands/dist/
 coverage/
 test-results/
 playwright-report/

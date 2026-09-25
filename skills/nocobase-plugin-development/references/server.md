@@ -197,7 +197,7 @@ Test the handler's payload validation and behavior directly, then cover retry, d
 
 ## Verification and source references
 
-Run the modified plugin's `lint`, `typecheck`, `test`, and `build`, plus the affected target App checks. Use `pnpm plugin:inspect <name> --app <app> --json` or `pnpm --filter <app> server:inspect --json` only when registration, composition order, scope, or resource resolution is in question; Inspector output does not prove Route security, Provider lifecycle, Job execution, migrations, or seeds.
+Run the modified plugin's `lint`, `typecheck`, `test`, and `build`, plus the affected target App checks. Use `pnpm nocobase plugin inspect <name> --workspace-root . --app <app> --json` or `pnpm --filter <app> server:inspect --json` only when registration, composition order, scope, or resource resolution is in question; Inspector output does not prove Route security, Provider lifecycle, Job execution, migrations, or seeds.
 
 Use these maintained implementations when a detail is uncertain:
 

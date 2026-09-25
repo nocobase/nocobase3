@@ -15,11 +15,11 @@ import { fileURLToPath } from 'node:url';
 import {
   createClientPluginsEditor,
   readClientPlugins,
-} from '../packages/tools/cli/src/lib/client-plugins.ts';
+} from '../packages/app/app-cli/src/lib/client-plugins.ts';
 import {
   createServerPluginsEditor,
   readServerPlugins,
-} from '../packages/tools/cli/src/lib/server-plugins.ts';
+} from '../packages/app/app-cli/src/lib/server-plugins.ts';
 import { normalizePluginName } from '../packages/tools/create-plugin/src/lib/names.ts';
 
 const packagePrefix = '@nocobase/app-plugin-';
@@ -361,7 +361,9 @@ function formatReferenceError(packageName, references) {
         const app = path.posix.basename(path.posix.dirname(packageJsonPath));
         return app === '.'
           ? []
-          : [`  pnpm plugin:unregister ${shortName} --app ${app}`];
+          : [
+              `  pnpm nocobase plugin unregister ${shortName} --workspace-root . --app ${app}`,
+            ];
       }),
     ),
   ];

@@ -86,7 +86,7 @@ declare a second route or import the plugin's private fallback components.
 Register the plugin before using this item:
 
 ```bash
-pnpm plugin:register registry-example --app app-template-default
+pnpm nocobase plugin register registry-example --workspace-root . --app app-template-default
 ```
 
 Then materialize the editable page:

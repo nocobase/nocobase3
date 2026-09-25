@@ -1,11 +1,11 @@
-import { AppCommand } from '../context.js';
+import { AppCommand } from '../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export default class AppInfo extends AppCommand {
-  static override summary = 'Print this application’s name and version.';
+  static override summary = "Print this application's name and version.";
   static override description =
     'Reads the application manifest. A starting point for commands this application owns; replace or extend it as needed.';
 

@@ -12,8 +12,8 @@ import {
 import { MissingDatabaseDriversError } from '@nocobase/app-server/database';
 import sqliteDriver from '@nocobase/db-sqlite';
 
-import type { AppCommandRuntime } from '../src/context.js';
-import { runConfigCheck } from '../src/lib/config-check.js';
+import type { AppCommandRuntime } from '../src/context.ts';
+import { runConfigCheck } from '../src/lib/config-check.ts';
 
 const directories: string[] = [];
 
@@ -158,7 +158,7 @@ describe('runConfigCheck', () => {
       expect.objectContaining({
         code: 'secret-missing',
         key: 'auth.secret',
-        fix: 'pnpm config:init',
+        fix: 'pnpm nocobase config init',
       }),
     );
   });

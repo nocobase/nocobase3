@@ -2,7 +2,7 @@ import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import fs from 'node:fs';
 import path from 'path';
-import { createDevProxy } from '@nocobase/app-tools/dev/proxy';
+import { createDevProxy } from '@nocobase/app-cli/dev/proxy';
 
 const AGENT_ANNOTATIONS_DISABLED_VALUES = new Set(['false', '0', 'no', 'off']);
 

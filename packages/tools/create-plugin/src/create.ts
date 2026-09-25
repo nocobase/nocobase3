@@ -189,7 +189,7 @@ export async function runCreatePluginCli(
                 : ['CI=true pnpm install --no-frozen-lockfile'],
             nextSteps: [
               `pnpm --filter ${result.packageName} check`,
-              `pnpm plugin:register ${result.shortName} --app app-template-default`,
+              `pnpm nocobase plugin register ${result.shortName} --workspace-root . --app app-template-default`,
             ],
           },
           null,

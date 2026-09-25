@@ -90,7 +90,7 @@ export NODE_ENV=production
 node ./dist/server/standalone.js
 ```
 
-部署包不包含源码目录的 `scripts/start.mjs`，因此解压部署包后直接用 `node` 运行编译产物入口 `dist/server/standalone.js`；源码目录中则使用 `pnpm start`。
+部署包只包含构建产物，解压后直接用 `node` 运行编译产物入口 `dist/server/standalone.js`；源码目录中则使用 `pnpm start`。应用的命令（如 `db apply`）用 `node dist/cli/index.js db apply` 运行。
 
 把域名的 HTTPS 流量通过反向代理转发到应用，保留 API、静态资源和 WebSocket 路径；使用服务管理器管理进程、重启和日志。正式迁移前备份已有数据库，并按照目标配置决定启动时迁移还是发布时单独迁移。
 

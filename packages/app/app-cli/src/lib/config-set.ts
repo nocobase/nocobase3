@@ -5,16 +5,16 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { isMap, isSeq, parse, parseDocument } from 'yaml';
 
-import type { AppCommandRuntime } from '../context.js';
+import type { AppCommandRuntime } from '../context.ts';
 import {
   detectConfigInitMode,
   resolveDeploymentRootDir,
-} from './config-init.js';
+} from './config-init.ts';
 import {
   activeConfigFile,
   closestKey,
   exampleSections,
-} from './config-keys.js';
+} from './config-keys.ts';
 
 export type ConfigSetErrorReason =
   | 'invalid-assignment'
@@ -158,7 +158,7 @@ export async function runConfigSet(
     throw new ConfigSetError(
       'not-configured',
       'This application has no configuration file to set values in.',
-      { suggestedCommand: 'pnpm config:init' },
+      { suggestedCommand: 'pnpm nocobase config init' },
     );
   }
   if (!/\.ya?ml$/u.test(configFile)) {
@@ -272,7 +272,7 @@ async function confirmApplied(
     return [
       `The file was updated, but the configuration does not load yet: ${
         error instanceof Error ? error.message : String(error)
-      } Run pnpm config:check for details.`,
+      } Run pnpm nocobase config check for details.`,
     ];
   }
   try {

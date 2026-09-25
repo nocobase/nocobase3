@@ -52,7 +52,7 @@ Both halves are required, and each fails differently on its own.
 3. Grant `page:api-keys/access` to the roles that may manage keys. Keys are
    self-service and every endpoint acts only on the caller's own, so this is
    normally granted to all authenticated users.
-4. Run `pnpm db:apply`.
+4. Run `pnpm nocobase db apply`.
 
 Only step 1 leaves the `apikey` table created and no endpoints mounted. Only
 step 2 mounts endpoints against a table that does not exist, and every call

@@ -34,7 +34,7 @@ notification:
       provider: in-app
 ```
 
-确认通知、站内信和通知服务商插件已经注册；需要时使用应用提供的 `plugin:inspect` 检查。修改配置后重启开发服务，再确认渠道已经启用。渠道需要配置在 `config.yml` 中，`config.example.yml` 仅供参考。
+确认通知、站内信和通知服务商插件已经注册；需要时使用应用提供的 `plugin inspect` 检查。修改配置后重启开发服务，再确认渠道已经启用。渠道需要配置在 `config.yml` 中，`config.example.yml` 仅供参考。
 
 ## 接到审批结果工作流
 

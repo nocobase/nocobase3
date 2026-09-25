@@ -514,10 +514,10 @@ async function main() {
         // application depends on, which is a change to the application rather than to how it is scaffolded.
         const configure =
           options.dialect === 'sqlite'
-            ? ['pnpm config:init']
+            ? ['pnpm nocobase config init']
             : [
                 `pnpm add @nocobase/db-${options.dialect}`,
-                `pnpm config:init --dialect ${options.dialect}`,
+                `pnpm nocobase config init --dialect ${options.dialect}`,
               ];
         console.log(
           [

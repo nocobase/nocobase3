@@ -13,7 +13,7 @@ keywords: 'NocoBase,AI 知识库,专业版,RAG,向量数据库,AI 员工'
 AI 知识库插件属于 NocoBase 专业版插件。在应用根目录执行：
 
 ```bash
-pnpm plugin:register ai-knowledge-base
+pnpm nocobase plugin register ai-knowledge-base
 ```
 
 ## 快速索引

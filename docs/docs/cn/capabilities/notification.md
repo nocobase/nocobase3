@@ -43,7 +43,7 @@ notification:
 首次启用通知插件或新增通知相关插件后，请执行应用迁移：
 
 ```bash
-pnpm db:apply
+pnpm nocobase db apply
 ```
 
 核心插件会创建通知、投递和投递执行记录数据表，站内信插件会创建收件箱数据表。如果应用配置中的 `database.connections.main.migrations.autoRun` 为 `true`，应用启动时也会自动执行待处理迁移。
@@ -51,10 +51,10 @@ pnpm db:apply
 如果你使用自定义应用，请按需要注册插件：
 
 ```bash
-pnpm plugin:register notification
-pnpm plugin:register notification-in-app
-pnpm plugin:register notification-providers
-pnpm db:apply
+pnpm nocobase plugin register notification
+pnpm nocobase plugin register notification-in-app
+pnpm nocobase plugin register notification-providers
+pnpm nocobase db apply
 ```
 
 如果不需要站内信，可以不注册 `notification-in-app`；如果不需要邮件或即时通讯，可以不注册 `notification-providers`。不过，`config.yml` 中配置的每个 Provider 都必须有对应的插件定义。

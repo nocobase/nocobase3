@@ -17,7 +17,7 @@ Where each piece of AI work goes in a CLI-created App, and what to read before c
 ```bash
 pnpm create @nocobase/app my-app   # also installs the dependencies
 cd my-app
-pnpm config:init                   # writes config.yml
+pnpm nocobase config init                   # writes config.yml
 ```
 
 The current directory is the App root when it holds `client/`, `server/`, and `package.json`. Work relative to it, and do not require the user to know which npm template generated it.
@@ -27,7 +27,7 @@ Read these App-local files when present, before writing anything:
 - `README.MD` — setup and development notes; the templates spell the extension in capitals.
 - `AGENTS.md` — App-specific coding rules; they outrank this Skill's defaults.
 - `package.json` — dependencies and scripts. Plugin registration is in `server/plugins.ts` and `client/plugins.ts`, not here.
-- `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml). It is written by `pnpm config:init`, so its absence means that has not run yet, not that the App needs no configuration.
+- `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml). It is written by `pnpm nocobase config init`, so its absence means that has not run yet, not that the App needs no configuration.
 - `.gitignore` — confirm `config.yml` and `.env` are ignored and untracked before a key goes near either; see [capabilities.md § Where the key lives](capabilities.md#where-the-key-lives).
 - `client/extensions/nocobase-ai/README.md` — the installed AI frontend. Its absence means the Registry item is not installed yet, not that the App cannot have AI UI.
 

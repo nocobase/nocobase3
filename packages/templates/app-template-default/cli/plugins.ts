@@ -1,7 +1,7 @@
 import {
   defineCliPlugins,
   type AppCliPlugins,
-} from '@nocobase/nb3-cli/plugins';
+} from '@nocobase/app-cli/plugins';
 import workflow from '@nocobase/app-plugin-workflow/cli';
 
 // Array order is command registration order. A plugin contributes its commands

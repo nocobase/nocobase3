@@ -2,7 +2,7 @@
 '@nocobase/app-server': minor
 '@nocobase/app-client': minor
 '@nocobase/app-template-default': patch
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 '@nocobase/create-plugin': patch
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/app-plugin-authorization': patch

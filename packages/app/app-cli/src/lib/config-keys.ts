@@ -5,7 +5,7 @@ import path from 'node:path';
 import { resolveDefaultAppConfigFile } from '@nocobase/app-server/config';
 import { parse } from 'yaml';
 
-import type { AppCommandRuntime } from '../context.js';
+import type { AppCommandRuntime } from '../context.ts';
 
 /**
  * The top-level sections `config.example.yml` documents.
