@@ -7,10 +7,11 @@
 // `command/envelope.ts`. Loading a runtime by hand is deliberately not on the class, so there is nothing to forget to
 // close.
 import path from 'node:path';
+import { format } from 'node:util';
 
 import type { Application } from '@nocobase/app-server';
 import type { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
-import { Command } from '@oclif/core';
+import { Command, ux } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
 import {
@@ -21,6 +22,7 @@ import {
   type CommandSuccessJson,
   type CommandSuccessStatus,
 } from './command/envelope.ts';
+import { debugEnabled, describeForDebugging } from './command/diagnostics.ts';
 import { describeCommandError } from './command/errors.ts';
 import { isAppPathFlag } from './command/flags.ts';
 import { withAppInstance } from './command/lifecycle.ts';
@@ -168,6 +170,14 @@ export class AppCommand extends Command {
     return super.warn(input);
   }
 
+  /**
+   * Progress and other notes for whoever is watching. Unlike oclif's, this is not silenced by `--json`: stderr never
+   * carries the document, and a long command should not go quiet for the agent that asked for JSON.
+   */
+  public override logToStderr(message: string = '', ...args: unknown[]): void {
+    ux.stderr(format(message, ...args));
+  }
+
   public override exit(_code?: number): never {
     throw new Error(
       'Return the result from run() or throw CommandError instead of calling exit().',
@@ -205,6 +215,7 @@ export class AppCommand extends Command {
     error: Error & { exitCode?: number },
   ): Promise<unknown> {
     process.exitCode = describeCommandError(error).exit;
+    if (debugEnabled()) this.logToStderr(await describeForDebugging(error));
     if (this.jsonEnabled()) {
       this.logJson(this.toErrorJson(error));
       return undefined;

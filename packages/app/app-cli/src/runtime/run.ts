@@ -27,6 +27,7 @@ import {
   takeOpenRuntimes,
 } from './command-store.ts';
 import { commandFailureJson } from '../command/envelope.ts';
+import { debugEnabled, describeForDebugging } from '../command/diagnostics.ts';
 import { describeCommandError } from '../command/errors.ts';
 import { loadCommandFiles } from './discover.ts';
 import { appAt, locateApp, type AppLocation } from './location.ts';
@@ -75,9 +76,8 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
       pjson: cliPjson(packageRoot, runningFromSource, topics),
       root: packageRoot,
     });
-    if (runningFromSource) {
-      settings.debug = Boolean(process.env.NOCOBASE_CLI_DEBUG);
-    }
+    // Stack traces for failures oclif reports itself; an AppCommand's own failures print theirs from `catch`.
+    settings.debug = debugEnabled();
     try {
       await run(argv, config);
     } finally {
@@ -87,6 +87,9 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
   } catch (error) {
     // A command reports its own failures. What arrives here failed before or around one — an unknown command, a
     // broken plugin entry — and under --json it still has to answer with the one document a caller parses.
+    if (debugEnabled()) {
+      process.stderr.write(`${await describeForDebugging(error)}\n`);
+    }
     if (jsonRequested(argv)) {
       const { json, exit } = describeCommandError(error);
       process.stdout.write(

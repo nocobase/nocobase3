@@ -30,6 +30,8 @@ interface DatabaseCommandOutput {
   log(message: string): void;
   /** Collected into the document's `warnings` under `--json`. */
   warn(message: string): unknown;
+  /** Notes for whoever is watching, on stderr, also under `--json`. */
+  logToStderr(message: string): void;
   /** Whether stdout carries the `--json` document, which moves a confirmation prompt to stderr. */
   jsonEnabled(): boolean;
 }
@@ -691,7 +693,7 @@ async function confirm(
 ): Promise<boolean> {
   const json = command.jsonEnabled();
   for (const line of lines) {
-    if (json) process.stderr.write(`${line}\n`);
+    if (json) command.logToStderr(line);
     else command.log(line);
   }
   const prompt = createInterface({

@@ -158,6 +158,8 @@ describe('unexpected release failures', () => {
     vi.stubEnv('NOCOBASE_CLI_DEBUG', '1');
     const debugJson = await run('deploy', ['--json', ...argv]);
     expect(debugJson.stdout).not.toContain(secret);
+    // Under --json the document stays clean, and the cause still reaches whoever is watching stderr.
+    expect(debugJson.stderr).toContain('cause containing');
 
     // stderr is for people, and the cause goes there only for one who opted in.
     const debug = await run('deploy', argv);

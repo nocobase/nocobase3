@@ -453,12 +453,15 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../../libs/logging
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
       '@refinedev/cli':
         specifier: ^2.16.48
-        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
@@ -17844,7 +17847,7 @@ snapshots:
       '@gar/promisify': 1.1.3
       semver: 7.8.5
 
-  '@npmcli/git@5.0.8':
+  '@npmcli/git@5.0.8(bluebird@3.4.7)':
     dependencies:
       '@npmcli/promise-spawn': 7.0.2
       ini: 4.1.3
@@ -17863,9 +17866,9 @@ snapshots:
       mkdirp: 1.0.4
       rimraf: 3.0.2
 
-  '@npmcli/package-json@5.2.1':
+  '@npmcli/package-json@5.2.1(bluebird@3.4.7)':
     dependencies:
-      '@npmcli/git': 5.0.8
+      '@npmcli/git': 5.0.8(bluebird@3.4.7)
       glob: 10.5.0
       hosted-git-info: 7.0.2
       json-parse-even-better-errors: 3.0.2
@@ -18172,9 +18175,60 @@ snapshots:
       react: 19.2.8
       react-redux: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
 
+  '@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)':
+    dependencies:
+      '@npmcli/package-json': 5.2.1(bluebird@3.4.7)
+      '@refinedev/devtools-server': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
+      boxen: 5.1.2
+      camelcase: 6.3.0
+      cardinal: 2.1.1
+      center-align: 1.0.1
+      chalk: 4.1.2
+      cli-table3: 0.6.5
+      commander: 9.4.1
+      conf: 10.2.0
+      decamelize: 5.0.1
+      dedent: 0.7.0
+      dotenv: 16.6.1
+      envinfo: 7.21.0
+      execa: 5.1.1
+      figlet: 1.11.4
+      fs-extra: 10.1.0
+      globby: 11.1.0
+      gray-matter: 4.0.3
+      handlebars: 4.7.9
+      inquirer: 8.2.7(@types/node@24.13.3)
+      inquirer-autocomplete-prompt: 2.0.1(inquirer@8.2.7(@types/node@24.13.3))
+      jscodeshift: 17.4.0
+      marked: 4.3.0
+      marked-terminal: 6.2.0(marked@4.3.0)
+      node-emoji: 2.2.0
+      node-env-type: 0.0.8
+      node-fetch: 2.7.0(encoding@0.1.13)
+      ora: 5.4.1
+      pluralize: 8.0.0
+      preferred-pm: 3.1.4
+      prettier: 2.8.8
+      semver: 7.5.2
+      semver-diff: 3.1.1
+      temp: 0.9.4
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - '@babel/preset-env'
+      - '@types/node'
+      - '@types/react'
+      - '@types/react-dom'
+      - bluebird
+      - bufferutil
+      - encoding
+      - react
+      - react-dom
+      - supports-color
+      - utf-8-validate
+
   '@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@npmcli/package-json': 5.2.1
+      '@npmcli/package-json': 5.2.1(bluebird@3.4.7)
       '@refinedev/devtools-server': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       boxen: 5.1.2
       camelcase: 6.3.0
@@ -18266,6 +18320,40 @@ snapshots:
       globby: 11.1.0
       gray-matter: 4.0.3
       http-proxy-middleware: 3.0.7
+      jscodeshift: 17.4.0
+      lodash: 4.18.1
+      lodash-es: 4.18.1
+      marked: 4.3.0
+      node-fetch: 2.7.0(encoding@0.1.13)
+      package-manager-detector: 0.1.2
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+      sanitize-html: 2.17.7
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - '@babel/preset-env'
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+
+  '@refinedev/devtools-server@2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)':
+    dependencies:
+      '@refinedev/devtools-shared': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/react': 19.2.18
+      '@types/react-dom': 19.2.4(@types/react@19.2.18)
+      body-parser: 1.20.6
+      boxen: 5.1.2
+      chalk: 4.1.2
+      dedent: 0.7.0
+      dotenv: 16.6.1
+      error-stack-parser: 2.1.4
+      execa: 5.1.1
+      express: 4.22.2
+      fs-extra: 10.1.0
+      globby: 11.1.0
+      gray-matter: 4.0.3
+      http-proxy-middleware: 3.0.7(supports-color@8.1.1)
       jscodeshift: 17.4.0
       lodash: 4.18.1
       lodash-es: 4.18.1
@@ -21965,6 +22053,10 @@ snapshots:
     optionalDependencies:
       debug: 4.3.4
 
+  follow-redirects@1.16.0(debug@4.4.3(supports-color@8.1.1)):
+    optionalDependencies:
+      debug: 4.4.3(supports-color@8.1.1)
+
   follow-redirects@1.16.0(debug@4.4.3):
     optionalDependencies:
       debug: 4.4.3(supports-color@8.1.1)
@@ -22513,6 +22605,25 @@ snapshots:
       micromatch: 4.0.8
     transitivePeerDependencies:
       - supports-color
+
+  http-proxy-middleware@3.0.7(supports-color@8.1.1):
+    dependencies:
+      '@types/http-proxy': 1.17.17
+      debug: 4.4.3(supports-color@8.1.1)
+      http-proxy: 1.18.1(debug@4.4.3(supports-color@8.1.1))
+      is-glob: 4.0.3
+      is-plain-object: 5.0.0
+      micromatch: 4.0.8
+    transitivePeerDependencies:
+      - supports-color
+
+  http-proxy@1.18.1(debug@4.4.3(supports-color@8.1.1)):
+    dependencies:
+      eventemitter3: 4.0.7
+      follow-redirects: 1.16.0(debug@4.4.3(supports-color@8.1.1))
+      requires-port: 1.0.0
+    transitivePeerDependencies:
+      - debug
 
   http-proxy@1.18.1(debug@4.4.3):
     dependencies:

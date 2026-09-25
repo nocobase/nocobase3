@@ -4,7 +4,7 @@
 // Every failure message comes from a fixed string. A parse failure names only declared flags (`describeArgumentError`),
 // a publishing failure carries the message `publishToHub` chose, and anything else is reported by code alone because
 // its message may quote a request, a response or an environment value. `NOCOBASE_CLI_DEBUG` prints that cause to
-// stderr, for a person at a terminal who has opted in to seeing it.
+// stderr, redacted, for someone who has opted in to seeing it; `AppCommand` does the printing for every command.
 import { CommandError } from '../command/errors.ts';
 import { AppCommand } from '../context.ts';
 import {
@@ -68,14 +68,10 @@ export abstract class ReleaseCommand<
         details: error.details,
       });
     }
-    if (process.env.NOCOBASE_CLI_DEBUG) {
-      this.logToStderr(
-        error instanceof Error ? (error.stack ?? error.message) : String(error),
-      );
-    }
+    // The cause is kept out of the message and printed, redacted, only under NOCOBASE_CLI_DEBUG.
     return new CommandError(
       `${this.failureMessage} Set NOCOBASE_CLI_DEBUG=1 to print the cause.`,
-      { code: this.failureCode, exit: 1 },
+      { code: this.failureCode, exit: 1, cause: error },
     );
   }
 }

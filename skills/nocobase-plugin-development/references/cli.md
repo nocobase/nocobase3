@@ -71,7 +71,7 @@ Choose what the command reaches for:
 | ------------------------- | ----------------------------------------------------------------------- | ---------------------------------- | ---------------------------- |
 | Tell a person the result  | `this.log(text)`                                                        | stdout                             | nothing                      |
 | Give a program the result | `return { … }`                                                          | nothing                            | `result`                     |
-| Report progress           | `this.logToStderr(text)`                                                | stderr                             | nothing                      |
+| Report progress           | `this.logToStderr(text)`                                                | stderr                             | stderr                       |
 | Warn                      | `this.warn(text)`                                                       | stderr                             | `warnings`                   |
 | Fail                      | `throw new CommandError(message, { code, suggestions, details, exit })` | message and suggestions, on stderr | `error`, and a non-zero exit |
 
@@ -80,7 +80,12 @@ Choose what the command reaches for:
 - The result is a public contract that callers and scripts come to rely on: declare its type, keep it to plain data, and never include a secret or a large text.
 - Do not call `this.exit()`, `this.logJson()` or `console.log`. Each puts something on stdout the document does not account for; `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`.
 
-Records the application logs while a command runs go to stderr, so stdout carries only the command's own output.
+Records the application logs while a command runs go to stderr, so stdout carries only the command's own output. Progress stays on stderr under `--json` too, so a long command does not go quiet for the agent that asked for JSON.
+
+### Logs and debugging
+
+- A `CommandError`'s `cause` is never printed with it: the message is written to be safe anywhere, and the error behind it may quote a request, a response or an environment value. `NOCOBASE_CLI_DEBUG=1` prints that chain, with stacks and redacted, to stderr, for any command.
+- A record that belongs in the application's log — something an operator looks for later — goes through the application's own logger inside `withApp()`: call `app.registerProviders()`, then `app.container.resolve(loggingToken).getLogger('<topic>')` with `loggingToken` from `@nocobase/app-server/logging`. It lands in the application's log files, redacted and rotated like the server's records, and on stderr.
 
 ### Paths
 

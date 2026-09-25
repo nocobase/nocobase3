@@ -97,6 +97,7 @@
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
+    "@nocobase/logging": "workspace:^",
     "@oclif/core": "catalog:",
     "cross-spawn": "catalog:",
     "execa": "^10.0.1",

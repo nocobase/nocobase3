@@ -71,7 +71,7 @@ Every command — built-in, an application's, or a plugin's — extends `AppComm
 { "schemaVersion": 1, "ok": false, "command": "db apply", "status": "failure", "error": { "code": "CONNECTION_FAILED", "message": "…", "suggestions": [], "details": {} }, "warnings": [] }
 ```
 
-A command writes text for people with `this.log`, which `--json` silences, progress with `this.logToStderr`, and warnings with `this.warn`, which `--json` collects into `warnings`. It never calls `this.exit()`, `this.logJson()` or `console.log`: `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`. What the application logs while a command runs goes to stderr. The runner closes a runtime a command left open and names the command on stderr; a command that uses `withApp()` never triggers it.
+A command writes text for people with `this.log`, which `--json` silences, progress with `this.logToStderr`, which stays on stderr under `--json`, and warnings with `this.warn`, which `--json` collects into `warnings`. A `CommandError`'s `cause` is kept off the printed error and shown, redacted, only under `NOCOBASE_CLI_DEBUG`. It never calls `this.exit()`, `this.logJson()` or `console.log`: `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`. What the application logs while a command runs goes to stderr. The runner closes a runtime a command left open and names the command on stderr; a command that uses `withApp()` never triggers it.
 
 The root entry is kept free of the server runtime and the optional peers, because every plugin's `cli/index.ts` imports it whenever the command tree is assembled; `tests/deployment-imports.test.ts` holds it there. The `nocobase-app-development` and `nocobase-plugin-development` Skills carry the full authoring guide.
 
@@ -157,7 +157,7 @@ node ./bin/run.js --help                 # runs the sources directly; Node 24 st
 pnpm --filter @nocobase/app-cli check    # lint, format, typecheck, test and build
 ```
 
-`bin/run.js` loads `src/` when `src/runtime` exists and `dist/` otherwise, because Node refuses to strip types inside `node_modules`. `NOCOBASE_CLI_USE_DIST=1` forces `dist/` from a source checkout to check the published shape, and `NOCOBASE_CLI_DEBUG=1` turns on oclif's debug output there.
+`bin/run.js` loads `src/` when `src/runtime` exists and `dist/` otherwise, because Node refuses to strip types inside `node_modules`. `NOCOBASE_CLI_USE_DIST=1` forces `dist/` from a source checkout to check the published shape, and `NOCOBASE_CLI_DEBUG=1` prints, from source or from `dist/`, the redacted error chain behind a failure and oclif's own stack traces.
 
 oclif's `explicit` discovery loads `commands.target` by file path, so the assembled command map cannot be handed to `Config.load` directly: the runner writes it into `src/runtime/command-store.ts` and `src/runtime/registry.ts` reads it back. The store hangs off a global symbol rather than a module-level binding because the writer and reader do not always reach it through the same module instance, and a module-level binding would leave the registry reading an empty tree rather than failing.
 

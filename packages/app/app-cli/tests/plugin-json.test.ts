@@ -70,7 +70,7 @@ describe('classifyPluginError', () => {
       cause,
     });
 
-    expect(error.cause).toBe(cause);
+    expect(error.underlyingError).toBe(cause);
   });
 
   it('passes a CommandError through, so a code chosen where it was thrown survives', () => {

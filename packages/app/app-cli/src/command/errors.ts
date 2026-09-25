@@ -26,6 +26,10 @@ export interface CommandErrorOptions {
    * that failed. It becomes `error.details` under `--json`; keep it to plain data, and never put a secret in it.
    */
   readonly details?: unknown;
+  /**
+   * The error behind this one. It is printed only when `NOCOBASE_CLI_DEBUG` is set, and only after redaction, because
+   * an underlying message may quote a request, a response or an environment value that `message` deliberately omits.
+   */
   readonly cause?: unknown;
 }
 
@@ -50,6 +54,11 @@ export class CommandError extends Errors.CLIError {
   public readonly commandSuggestions: readonly CommandSuggestion[];
   public readonly exitCode: number;
   public readonly details: unknown;
+  /**
+   * `options.cause`, kept off the standard `cause` property: oclif prints that under "Caused by" whenever it prints the
+   * error, which would show a person what the message was written to leave out.
+   */
+  public readonly underlyingError: unknown;
 
   public constructor(message: string, options: CommandErrorOptions) {
     const suggestions = (options.suggestions ?? []).map(toSuggestion);
@@ -58,12 +67,11 @@ export class CommandError extends Errors.CLIError {
       exit: options.exit ?? 1,
       suggestions: suggestions.map(renderSuggestion),
     });
-    // A cause that only repeats the message would print it twice under "Caused by".
-    const repeatsMessage =
-      options.cause instanceof Error && options.cause.message === message;
-    if (options.cause !== undefined && !repeatsMessage) {
-      this.cause = options.cause;
-    }
+    // Not enumerable, so serializing the error never carries what the message leaves out.
+    Object.defineProperty(this, 'underlyingError', {
+      value: options.cause,
+      enumerable: false,
+    });
     this.errorCode = options.code;
     this.commandSuggestions = suggestions;
     this.exitCode = options.exit ?? 1;

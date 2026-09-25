@@ -403,3 +403,78 @@ describe('suggestions for people', () => {
     ]);
   });
 });
+
+describe('diagnostics', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('keeps notes on stderr under --json, where they cannot corrupt the document', async () => {
+    class Waits extends AppCommand {
+      static override id = 'fixture:waits';
+      public async run(): Promise<{ done: boolean }> {
+        await this.parse(Waits);
+        this.logToStderr('Waiting for the deployment…');
+        return { done: true };
+      }
+    }
+    const run = await runAppCommand(
+      bindAppCommand(Waits, { rootDir: root }),
+      ['--json'],
+      root,
+    );
+    expect(run.json()).toMatchObject({ ok: true, result: { done: true } });
+    expect(run.stderr).toContain('Waiting for the deployment…');
+  });
+
+  class FailsDeeply extends AppCommand {
+    static override id = 'fixture:fails-deeply';
+    public async run(): Promise<never> {
+      await this.parse(FailsDeeply);
+      throw new CommandError('Could not reach the database.', {
+        code: 'CONNECTION_FAILED',
+        cause: new Error(
+          'connect failed for postgres://admin:hunter2@db/crm password=hunter2',
+        ),
+      });
+    }
+  }
+
+  it('keeps the error behind a failure to itself unless NOCOBASE_CLI_DEBUG is set', async () => {
+    vi.stubEnv('NOCOBASE_CLI_DEBUG', '');
+    const run = await runAppCommand(
+      bindAppCommand(FailsDeeply, { rootDir: root }),
+      ['--json'],
+      root,
+    );
+    expect(run.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'CONNECTION_FAILED',
+        message: 'Could not reach the database.',
+      },
+    });
+    expect(run.stdout + run.stderr).not.toContain('connect failed');
+  });
+
+  it('prints the chain behind a failure, redacted, under NOCOBASE_CLI_DEBUG', async () => {
+    vi.stubEnv('NOCOBASE_CLI_DEBUG', '1');
+    const run = await runAppCommand(
+      bindAppCommand(FailsDeeply, { rootDir: root }),
+      ['--json'],
+      root,
+    );
+    expect(run.json()).toMatchObject({ ok: false });
+    expect(run.stderr).toContain('NOCOBASE_CLI_DEBUG:');
+    expect(run.stderr).toContain('Caused by: Error: connect failed');
+    expect(run.stderr).not.toContain('hunter2');
+  });
+
+  it('keeps a CommandError cause off the chain oclif prints under "Caused by"', () => {
+    const cause = new Error('private detail');
+    const error = new CommandError('Public message.', { code: 'X', cause });
+    expect(error.cause).toBeUndefined();
+    expect(error.underlyingError).toBe(cause);
+    expect(JSON.stringify(error)).not.toContain('private detail');
+  });
+});
