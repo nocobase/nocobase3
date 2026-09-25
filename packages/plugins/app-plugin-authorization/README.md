@@ -409,37 +409,42 @@ Declare `authz` on every entry client route: there is no `page:<route.name>` inf
 
 Every path is under `/api/authz` and requires a signed-in user. Settings checks use `{ resource: { type: 'settings', id }, action }`. Successful responses wrap results in `{ data }`; creation answers `201` and deletion `204`. Errors answer `401` without a session, `403 { code: 'FORBIDDEN', message }`, `400 { code: 'INVALID_AUTHORIZATION_INPUT', message }`, `404` for an unknown key and `409` for a protected set or its last required assignment.
 
-| Method and path                                | Required permission                               | Request                                       | Response `data`                                        |
-| ---------------------------------------------- | ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
-| `GET /permissions`                             | Signed in                                         |                                               | `AuthorizationSnapshot`                                |
-| `GET /permission-sets/options`                 | `settings:authorization.permission-sets` `read`   |                                               | `AuthorizationOptions`                                 |
-| `GET /permission-sets/subjects/:type`          | `settings:authorization.permission-sets` `read`   | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
-| `POST /permission-sets/subjects/:type/resolve` | `settings:authorization.permission-sets` `read`   | `{ ids: string[] }`                           | `SubjectOption[]`                                      |
-| `GET /permission-sets`                         | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSet[]` with `protection` and `unrestricted` |
-| `POST /permission-sets`                        | `settings:authorization.permission-sets` `create` | `{ key, title?, grants }`                     | `PermissionSet`                                        |
-| `GET /permission-sets/:key`                    | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSet`                                        |
-| `PUT /permission-sets/:key`                    | `settings:authorization.permission-sets` `update` | `{ key, title?, grants }`, complete           | `PermissionSet`                                        |
-| `DELETE /permission-sets/:key`                 | `settings:authorization.permission-sets` `delete` |                                               | none                                                   |
-| `GET /permission-sets/effective/:type/:id`     | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSet[]` the subject holds                    |
-| `GET /permission-sets/:key/assignments`        | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSetAssignment[]`                            |
-| `POST /permission-sets/:key/assignments`       | `settings:authorization.permission-sets` `assign` | `{ subject: { type, id } }`                   | `PermissionSetAssignment`                              |
-| `DELETE /permission-sets/:key/assignments/:id` | `settings:authorization.permission-sets` `assign` |                                               | none                                                   |
-| `GET /inspector/options`                       | `settings:authorization.inspector` `inspect`      |                                               | `AuthorizationOptions`                                 |
-| `GET /inspector/subjects/:type`                | `settings:authorization.inspector` `inspect`      | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
-| `POST /inspector/subjects/:type/resolve`       | `settings:authorization.inspector` `inspect`      | `{ ids: string[] }`                           | `SubjectOption[]`                                      |
-| `POST /inspector/decision`                     | `settings:authorization.inspector` `inspect`      | `{ subject, resource, action }`               | `AuthorizationDecision`, with `checks` for a composite |
-| `POST /inspector/batch`                        | `settings:authorization.inspector` `inspect`      | `{ subject, checks: [{ resource, action }] }` | `[{ resource, action, decision }]`                     |
-| `POST /inspector/configured`                   | `settings:authorization.inspector` `inspect`      | `{ subject }`                                 | `{ unrestricted, types, resources }`                   |
-| `GET /<rule>`                                  | `settings:authorization.<rule>` `read`            |                                               | rules                                                  |
-| `POST /<rule>`                                 | `settings:authorization.<rule>` `create`          | a complete rule                               | the rule                                               |
-| `PUT /<rule>/:key`                             | `settings:authorization.<rule>` `update`          | a complete rule                               | the rule                                               |
-| `DELETE /<rule>/:key`                          | `settings:authorization.<rule>` `delete`          |                                               | none                                                   |
-| `GET /<rule>/options`                          | `settings:authorization.<rule>` `read`            |                                               | `AuthorizationOptions`                                 |
-| `GET /<rule>/subjects/:type`                   | `settings:authorization.<rule>` `read`            | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
-| `POST /<rule>/subjects/:type/resolve`          | `settings:authorization.<rule>` `read`            | `{ ids: string[] }`                           | `SubjectOption[]`                                      |
-| `GET /<rule>/records/:collection`              | `settings:authorization.<rule>` `read`            |                                               | `[{ id, label, description? }]`                        |
+| Method and path                                   | Required permission                               | Request                                       | Response `data`                                        |
+| ------------------------------------------------- | ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
+| `GET /permissions`                                | Signed in                                         |                                               | `AuthorizationSnapshot`                                |
+| `GET /permission-sets/options`                    | `settings:authorization.permission-sets` `read`   |                                               | `AuthorizationOptions`                                 |
+| `GET /permission-sets/subjects/:type`             | `settings:authorization.permission-sets` `read`   | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
+| `POST /permission-sets/subjects/:type/resolve`    | `settings:authorization.permission-sets` `read`   | `{ ids: string[] }`                           | `SubjectOption[]`, each with `manage?`                 |
+| `GET /permission-sets/subjects/:type/:id/members` | `settings:authorization.permission-sets` `read`   | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
+| `GET /permission-sets`                            | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSet[]` with `protection` and `unrestricted` |
+| `POST /permission-sets`                           | `settings:authorization.permission-sets` `create` | `{ key, title?, grants }`                     | `PermissionSet`                                        |
+| `GET /permission-sets/:key`                       | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSet`                                        |
+| `PUT /permission-sets/:key`                       | `settings:authorization.permission-sets` `update` | `{ key, title?, grants }`, complete           | `PermissionSet`                                        |
+| `DELETE /permission-sets/:key`                    | `settings:authorization.permission-sets` `delete` |                                               | none                                                   |
+| `GET /permission-sets/effective/:type/:id`        | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSet[]` the subject holds                    |
+| `GET /permission-sets/:key/assignments`           | `settings:authorization.permission-sets` `read`   |                                               | `PermissionSetAssignment[]`                            |
+| `POST /permission-sets/:key/assignments`          | `settings:authorization.permission-sets` `assign` | `{ subject: { type, id } }`                   | `PermissionSetAssignment`                              |
+| `DELETE /permission-sets/:key/assignments/:id`    | `settings:authorization.permission-sets` `assign` |                                               | none                                                   |
+| `GET /inspector/options`                          | `settings:authorization.inspector` `inspect`      |                                               | `AuthorizationOptions`                                 |
+| `GET /inspector/subjects/:type`                   | `settings:authorization.inspector` `inspect`      | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
+| `POST /inspector/subjects/:type/resolve`          | `settings:authorization.inspector` `inspect`      | `{ ids: string[] }`                           | `SubjectOption[]`, each with `manage?`                 |
+| `GET /inspector/subjects/:type/:id/members`       | `settings:authorization.inspector` `inspect`      | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
+| `POST /inspector/decision`                        | `settings:authorization.inspector` `inspect`      | `{ subject, resource, action }`               | `AuthorizationDecision`, with `checks` for a composite |
+| `POST /inspector/batch`                           | `settings:authorization.inspector` `inspect`      | `{ subject, checks: [{ resource, action }] }` | `[{ resource, action, decision }]`                     |
+| `POST /inspector/configured`                      | `settings:authorization.inspector` `inspect`      | `{ subject }`                                 | `{ unrestricted, types, resources, identity, sets }`   |
+| `GET /<rule>`                                     | `settings:authorization.<rule>` `read`            |                                               | rules                                                  |
+| `POST /<rule>`                                    | `settings:authorization.<rule>` `create`          | a complete rule                               | the rule                                               |
+| `PUT /<rule>/:key`                                | `settings:authorization.<rule>` `update`          | a complete rule                               | the rule                                               |
+| `DELETE /<rule>/:key`                             | `settings:authorization.<rule>` `delete`          |                                               | none                                                   |
+| `GET /<rule>/options`                             | `settings:authorization.<rule>` `read`            |                                               | `AuthorizationOptions`                                 |
+| `GET /<rule>/subjects/:type`                      | `settings:authorization.<rule>` `read`            | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
+| `POST /<rule>/subjects/:type/resolve`             | `settings:authorization.<rule>` `read`            | `{ ids: string[] }`                           | `SubjectOption[]`, each with `manage?`                 |
+| `GET /<rule>/subjects/:type/:id/members`          | `settings:authorization.<rule>` `read`            | query `search?`, `page`, `pageSize`           | `{ items: SubjectOption[], total }`                    |
+| `GET /<rule>/records/:collection`                 | `settings:authorization.<rule>` `read`            |                                               | `[{ id, label, description? }]`                        |
 
-`<rule>` is each of `default-access`, `sharing-rules` and `restriction-rules`, present only when that plugin is configured. Options, subjects and records stay per plugin, each gated by that plugin's own settings item. A subject directory may enforce further read checks of its own. The inspector evaluates one subject: a user includes the `authenticated` audience and resolved memberships, while inspecting a team describes that team's grants alone.
+`<rule>` is each of `default-access`, `sharing-rules` and `restriction-rules`, present only when that plugin is configured. Options, subjects and records stay per plugin, each gated by that plugin's own settings item. A subject directory may enforce further read checks of its own. The inspector evaluates one subject: a user includes the `authenticated` audience and resolved memberships, while inspecting a team describes that team's grants alone. `configured` also answers `identity: { subjects }`, the subjects a request for that principal would carry, and `sets: [{ key, title?, sources }]`, where `sources` lists the assignments, to the principal itself or to one of those subjects, that bring each effective set; the default set has none.
+
+Subject pagination accepts `page >= 1` and `1 <= pageSize <= 100` (default 30) and answers `400 { code: 'INVALID_PAGINATION' }` otherwise. A type without a collection selection, or without `members` for the members route, answers `404 { code: 'UNKNOWN_SUBJECT_TYPE' }`.
 
 `AuthorizationOptions` is `{ sections: [{ name, title, order, subsections: [{ name, title, recordType?, resources: [{ type, id, title, description?, group?, actions: [{ name, title }], dataScopes? }] }] }], resourceGroups?, subjectTypes, recordAccess, collections }`. A subsection with `recordType` (`{ type: 'page', actions }`) lists no resources: the client supplies them. `dataScopes` maps a business action to its data scopes; subsections without resources are omitted, and rule options list only composites with data scopes, with every title as sent by the server, either a string or `{ key, ns }`.
 
@@ -447,7 +452,16 @@ Settings action names are semantic. Permission sets declare `read`, `create`, `u
 
 ## Subjects and transactions
 
-`authz.subjects.add(type, { resolveFor?, filterActive, administration? })` declares an inherited subject type such as teams; it returns a function that removes it. `administration` is `{ title, selection }` where `selection` is `{ type: 'fixed', id }` or `{ type: 'collection', list(query, context), resolve(ids, context) }`, answering `{ items: [{ id, title, description? }], total }` and items respectively. For a user removal, bind `authz.permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` to the same transaction as the mutation and call `notifyAssignmentsChanged(subject)` after commit.
+`authz.subjects.add(type, { resolveFor?, filterActive, administration? })` declares an inherited subject type such as teams; it returns a function that removes it. `administration` is `{ title, selection }` where `selection` is `{ type: 'fixed', id }` or `{ type: 'collection', list(query, context), resolve(ids, context) }`, answering `{ items: [{ id, title, description? }], total }` and items respectively.
+
+`administration` may also implement two optional capabilities, which the options announce as `subjectTypes[].members: true` and `subjectTypes[].manage: true`:
+
+- `members(id, { search?, page, pageSize }, { authz })` answers `{ items, total }`: the users the subject contains, one `SubjectOption` per user, read-only. A hierarchical subject such as a department answers its effective members, its direct members and those of its descendants. The permission-set assignments tab offers a Members drawer for such a subject, with an Inspect link per member.
+- `manage(id)` answers where the subject is managed, an application-relative path including `/settings` and without the deployment base path, or `undefined`. The `resolve` route copies it onto each item as `manage`, and the assignments tab and the members drawer link to it.
+
+Both callbacks run after the calling surface's settings check, like `list` and `resolve`.
+
+A permission-set assignment change to a `user` refreshes that user's clients; a change to any other subject, `authenticated` included, refreshes every client, because only the subject's owner knows which users it reaches. For a user removal, bind `authz.permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` to the same transaction as the mutation and call `notifyAssignmentsChanged(subject)` after commit.
 
 ## `@nocobase/app-plugin-authorization/server`
 
@@ -496,7 +510,8 @@ The root entry `@nocobase/app-plugin-authorization` exports exactly the same nam
 | `DatabaseAuthorizationConditions`     | type     | `{ type: 'database'; collection; action; scope; fields; relations?; fieldAccess?; allFields? }`                                                                             | Conditions of a collection decision.                                                                      |
 | `DatabaseAuthorizationParams`         | type     | `{ operation?: { resource; action }; fields?: { input?, output?, filter?, sort?, group? } }`                                                                                | Params of a collection check.                                                                             |
 | `AuthorizationCollection`             | type     | `{ name, fields, relations?, primaryKey, generatedPrimaryKey }`                                                                                                             | Collection metadata read from the database.                                                               |
-| `SubjectAdministration`               | type     | `{ title; selection }`                                                                                                                                                      | The `administration` of a subject type.                                                                   |
+| `SubjectAdministration`               | type     | `{ title; selection; members?; manage? }`                                                                                                                                   | The `administration` of a subject type.                                                                   |
+| `SubjectMembersQuery`                 | type     | `{ search?; page; pageSize }`                                                                                                                                               | What `members` receives.                                                                                  |
 | `SubjectOption`                       | type     | `{ id; title; description? }`                                                                                                                                               | One subject in a picker.                                                                                  |
 | `SubjectSelectionContext`             | type     | `{ authz: AuthorizationContext }`                                                                                                                                           | What directory callbacks receive.                                                                         |
 | `AUTHORIZATION_NAMESPACE`             | const    | `'@nocobase/app-plugin-authorization'`                                                                                                                                      | The plugin's translation namespace.                                                                       |
@@ -593,14 +608,15 @@ authz.routes.add('/sharing-rules', createRouteHandler(router));
 | `AuthorizationPermission`      | type     | `{ resource; actions }`                                                                                                 | One entry of a snapshot.                      |
 | `AuthorizationRecordOption`    | type     | `{ id; label; description? }`                                                                                           | One record in a records route.                |
 | `AuthorizationSubject`         | type     | `{ type; id }`                                                                                                          | A subject.                                    |
-| `ConfiguredAccess`             | type     | `{ unrestricted; types; resources }`                                                                                    | What `inspectConfigured` answers.             |
+| `ConfiguredAccess`             | type     | `{ unrestricted; types; resources; identity?; sets? }`                                                                  | What `inspectConfigured` answers.             |
+| `ConfiguredPermissionSet`      | type     | `{ key; title?; sources: AuthorizationSubject[] }`                                                                      | One effective set and what brings it.         |
 | `PermissionGrant`              | type     | `{ resource: { type; id }; actions: PermissionGrantAction[] }`                                                          | One grant of a set.                           |
 | `PermissionGrantAction`        | type     | `{ action; policy? }`                                                                                                   | One action of a grant.                        |
 | `PermissionSetProtection`      | type     | `{ owner; allow: PermissionSetWriteOperation[]; assignableTo? }`                                                        | Who may change a protected set.               |
 | `PermissionSetWriteOperation`  | type     | `'create' \| 'update' \| 'delete' \| 'assign' \| 'revoke'`                                                              | A write a protection allows.                  |
 | `ResourceRef`                  | type     | `{ type; id }`                                                                                                          | The target of a check or grant.               |
 | `SubjectPage`                  | type     | `{ items: SubjectOption[]; total }`                                                                                     | One page of a subject search.                 |
-| `SubjectOption`                | type     | `{ id; title; description? }`                                                                                           | One subject in a picker.                      |
+| `SubjectOption`                | type     | `{ id; title; description?; manage? }`                                                                                  | One subject in a picker.                      |
 | `AuthorizationDecision`        | type     | `{ effect; conditions?; reasons; checks? }`                                                                             | What the inspector answers.                   |
 | `AuthorizationInspectInput`    | type     | `{ subject; resource; action }`                                                                                         | Body of `POST /inspector/decision`.           |
 | `AuthorizationInspection`      | type     | `{ resource; action; decision }`                                                                                        | One batch or composite check.                 |
@@ -615,6 +631,7 @@ authz.routes.add('/sharing-rules', createRouteHandler(router));
 | `getEffective(subject)`                                                                                                     | `GET /permission-sets/effective/:type/:id`                               |
 | `listAssignments(key)`, `assign(key, input)`, `revoke(key, id)`                                                             | `/permission-sets/:key/assignments[/:id]`                                |
 | `loadOptions(path)`, `listSubjects(path, type, query)`, `resolveSubjects(path, type, ids)`, `listRecords(path, collection)` | `/<path>/options`, `/<path>/subjects/...`, `/<path>/records/:collection` |
+| `listSubjectMembers(path, type, id, { search?, page, pageSize })`                                                           | `GET /<path>/subjects/:type/:id/members`                                 |
 | `inspect(input)`, `inspectBatch(subject, checks)`, `inspectConfigured(subject)`                                             | `/inspector/decision`, `/inspector/batch`, `/inspector/configured`       |
 
 ## `@nocobase/app-plugin-authorization/client/plugin`
@@ -679,6 +696,7 @@ Exactly what the rule plugins import to build their settings pages; the workspac
 | `SelectionMark`               | component | Shows one record selection compactly.              |
 | `SubjectsEditor`              | component | Picks subjects.                                    |
 | `useSubjectNames`             | hook      | Resolves subject titles.                           |
+| `useSubjectDetails`           | hook      | Resolves subject titles and `manage` paths.        |
 | `subjectKey`                  | function  | Stable key of a subject.                           |
 | `defaultSelection`            | function  | The initial selection of a rule action.            |
 | `incompleteSelection`         | function  | Whether a selection still needs input.             |

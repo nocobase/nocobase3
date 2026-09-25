@@ -8,6 +8,7 @@ import { ConfirmDialog } from './confirm-dialog.js';
 export function RuleDrawer({
   title,
   description,
+  actions,
   dirty = false,
   busy = false,
   onClose,
@@ -15,6 +16,8 @@ export function RuleDrawer({
 }: {
   title: string;
   description?: string;
+  /** Rendered in the header, before the close button. */
+  actions?: ReactNode;
   dirty?: boolean;
   busy?: boolean;
   onClose: () => void;
@@ -49,15 +52,18 @@ export function RuleDrawer({
                   </Dialog.Description>
                 ) : null}
               </div>
-              <Button
-                variant='ghost'
-                size='icon'
-                aria-label={t('common.close')}
-                disabled={busy}
-                onClick={close}
-              >
-                <X />
-              </Button>
+              <div className='flex shrink-0 items-center gap-2'>
+                {actions}
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  aria-label={t('common.close')}
+                  disabled={busy}
+                  onClick={close}
+                >
+                  <X />
+                </Button>
+              </div>
             </header>
             <fieldset
               disabled={busy}

@@ -74,6 +74,7 @@ export type {
 } from './database/model.js';
 export type {
   SubjectAdministration,
+  SubjectMembersQuery,
   SubjectOption,
   SubjectSelectionContext,
 } from './subjects.js';

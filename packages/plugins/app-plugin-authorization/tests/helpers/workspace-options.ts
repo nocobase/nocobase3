@@ -163,6 +163,8 @@ export function wire(
       type: type.value,
       title: type.label,
       selection: type.selection ?? { type: 'collection' },
+      ...(type.members ? { members: true as const } : {}),
+      ...(type.manage ? { manage: true as const } : {}),
     })),
     recordAccess: options.recordAccess.map((entry) => ({
       key: entry.value,

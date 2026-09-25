@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   AuthorizationSubject,
   SubjectTypeOption,
@@ -9,11 +9,22 @@ export function subjectKey(subject: AuthorizationSubject): string {
   return JSON.stringify([subject.type, subject.id]);
 }
 
-export function useSubjectNames(
+/** What a resolved subject is called, and where it is managed when its type says. */
+export interface SubjectDetails {
+  title: string;
+  manage?: string;
+}
+
+/**
+ * Resolves collection subjects through the surface's `resolve` route, keyed
+ * by {@link subjectKey}. Fixed audiences carry their type's label; a subject
+ * nobody resolved is absent.
+ */
+export function useSubjectDetails(
   settings: string,
   types: readonly SubjectTypeOption[],
   subjects: readonly AuthorizationSubject[],
-): Readonly<Record<string, string>> {
+): Readonly<Record<string, SubjectDetails>> {
   const authz = useAuthorizationClient();
   const identity = JSON.stringify([
     settings,
@@ -28,7 +39,7 @@ export function useSubjectNames(
   ]);
   const [state, setState] = useState<{
     identity: string;
-    names: Record<string, string>;
+    details: Record<string, SubjectDetails>;
   }>();
   useEffect(() => {
     let active = true;
@@ -37,7 +48,7 @@ export function useSubjectNames(
       Pick<SubjectTypeOption, 'value' | 'selection'>[],
       AuthorizationSubject[],
     ];
-    const names: Record<string, string> = {};
+    const details: Record<string, SubjectDetails> = {};
     async function resolve(): Promise<void> {
       await Promise.all(
         types.map(async (type) => {
@@ -54,34 +65,56 @@ export function useSubjectNames(
                 ids.slice(offset, offset + 100),
               );
               for (const item of items)
-                names[subjectKey({ type: type.value, id: item.id })] =
-                  item.title;
+                details[subjectKey({ type: type.value, id: item.id })] = {
+                  title: item.title,
+                  ...(item.manage === undefined ? {} : { manage: item.manage }),
+                };
             } catch {
               /* Unknown or unreadable objects keep their ids. */
             }
           }
         }),
       );
-      if (active) setState({ identity, names });
+      if (active) setState({ identity, details });
     }
     void resolve();
     return () => {
       active = false;
     };
   }, [authz, identity]);
-  return {
-    ...(state?.identity === identity ? state.names : {}),
-    ...Object.fromEntries(
-      types.flatMap((type) =>
-        type.selection?.type === 'fixed'
-          ? [
-              [
-                subjectKey({ type: type.value, id: type.selection.id }),
-                type.label,
-              ],
-            ]
-          : [],
+  const resolved = state?.identity === identity ? state.details : undefined;
+  return useMemo(
+    () => ({
+      ...resolved,
+      ...Object.fromEntries(
+        types.flatMap((type) =>
+          type.selection?.type === 'fixed'
+            ? [
+                [
+                  subjectKey({ type: type.value, id: type.selection.id }),
+                  { title: type.label },
+                ],
+              ]
+            : [],
+        ),
       ),
-    ),
-  };
+    }),
+    [resolved, types],
+  );
+}
+
+/** {@link useSubjectDetails}, reduced to each subject's title. */
+export function useSubjectNames(
+  settings: string,
+  types: readonly SubjectTypeOption[],
+  subjects: readonly AuthorizationSubject[],
+): Readonly<Record<string, string>> {
+  const details = useSubjectDetails(settings, types, subjects);
+  return useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(details).map(([key, value]) => [key, value.title]),
+      ),
+    [details],
+  );
 }

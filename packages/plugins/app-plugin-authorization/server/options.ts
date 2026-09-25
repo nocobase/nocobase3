@@ -74,6 +74,10 @@ export interface AuthorizationOptionsSubjectType {
   readonly type: string;
   readonly title: OptionText;
   readonly selection: { type: 'fixed'; id: string } | { type: 'collection' };
+  /** Set when the type lists its members at `subjects/:type/:id/members`. */
+  readonly members?: true;
+  /** Set when resolved subjects may carry a `manage` path. */
+  readonly manage?: true;
 }
 
 export interface AuthorizationOptionsRecordAccess {
@@ -234,6 +238,8 @@ export async function authorizationOptions(
             administration.selection.type === 'fixed'
               ? { type: 'fixed' as const, id: administration.selection.id }
               : { type: 'collection' as const },
+          ...(administration.members ? { members: true as const } : {}),
+          ...(administration.manage ? { manage: true as const } : {}),
         },
       ];
     }),

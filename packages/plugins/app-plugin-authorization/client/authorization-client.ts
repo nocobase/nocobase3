@@ -122,6 +122,8 @@ export interface AuthorizationOptionsResponse {
     type: string;
     title: LocalizedText;
     selection: { type: 'fixed'; id: string } | { type: 'collection' };
+    members?: true;
+    manage?: true;
   }[];
   readonly recordAccess: readonly {
     key: string;
@@ -191,12 +193,18 @@ export interface DatabaseCollectionOption {
 
 export interface SubjectTypeOption extends SelectOption {
   selection?: { type: 'fixed'; id: string } | { type: 'collection' };
+  /** True when `listSubjectMembers` answers for this type. */
+  members?: boolean;
+  /** True when resolved subjects may carry a `manage` path. */
+  manage?: boolean;
 }
 
 export interface SubjectOption {
   id: string;
   title: string;
   description?: string;
+  /** Where the subject is managed, an application-relative path; resolution only. */
+  manage?: string;
 }
 
 /** The workspace model an `options` response is localized into. */
@@ -254,6 +262,17 @@ export interface ConfiguredAccess {
   unrestricted: boolean;
   types: readonly string[];
   resources: readonly { type: string; id: string }[];
+  /** The subjects the principal inherits, as a request would resolve them. */
+  identity?: { subjects: readonly AuthorizationSubject[] };
+  /** Each effective set with the assignments that bring it; none for a default set. */
+  sets?: readonly ConfiguredPermissionSet[];
+}
+
+export interface ConfiguredPermissionSet {
+  key: string;
+  title?: PermissionSet['title'];
+  /** The principal itself for a direct assignment, else an inherited subject. */
+  sources: readonly AuthorizationSubject[];
 }
 
 export interface SubjectPage {
@@ -407,6 +426,21 @@ export class AuthorizationClient {
     return this.api
       .request<DataResponse<SubjectPage>>({
         path: `authz/${path}/subjects/${encodeURIComponent(type)}`,
+        query,
+      })
+      .then((response) => response.data);
+  }
+
+  /** One page of the users a subject contains, from the surface's route. */
+  listSubjectMembers(
+    path: string,
+    type: string,
+    id: string,
+    query: { search?: string; page: number; pageSize: number },
+  ): Promise<SubjectPage> {
+    return this.api
+      .request<DataResponse<SubjectPage>>({
+        path: `authz/${path}/subjects/${encodeURIComponent(type)}/${encodeURIComponent(id)}/members`,
         query,
       })
       .then((response) => response.data);
