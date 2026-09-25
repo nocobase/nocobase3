@@ -282,7 +282,7 @@ export async function publishToHub(
     if (options.deploy && data.operationId == null)
       throw new PublishingError(
         'NO_DEPLOYMENT',
-        'Hub did not confirm a deployment. Use app deploy --release-id to deploy an existing Release.',
+        'Hub did not confirm a deployment. Use release deploy --release-id to deploy an existing Release.',
         1,
       );
     result = {
@@ -346,7 +346,7 @@ export async function publishToHub(
     if (typeof result.operationId !== 'string')
       throw new PublishingError(
         'NO_DEPLOYMENT',
-        'Release already exists without a deployment. Use app deploy --release-id to deploy it.',
+        'Release already exists without a deployment. Use release deploy --release-id to deploy it.',
         1,
       );
     while (true) {

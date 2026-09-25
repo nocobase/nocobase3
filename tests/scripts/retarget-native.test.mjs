@@ -53,7 +53,7 @@ for (const template of templates) {
         await copyFile(
           path.join(
             repoRoot,
-            'packages/tools/app-tools/src/scripts/utils',
+            'packages/app/app-cli/src/tools/scripts/utils',
             script,
           ),
           path.join(scripts, script),

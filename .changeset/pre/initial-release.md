@@ -18,7 +18,7 @@
 '@nocobase/app-template-hub': patch
 '@nocobase/snowflake': patch
 '@nocobase/logging': patch
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 '@nocobase/queue': patch
 '@nocobase/session': patch
 ---

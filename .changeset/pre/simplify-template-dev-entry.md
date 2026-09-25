@@ -1,9 +1,9 @@
 ---
-"@nocobase/app-tools": patch
-"@nocobase/app-template-default": patch
-"@nocobase/app-template-examples": patch
-"@nocobase/app-template-hub": patch
-"@nocobase/app-skills": patch
+'@nocobase/app-cli': patch
+'@nocobase/app-template-default': patch
+'@nocobase/app-template-examples': patch
+'@nocobase/app-template-hub': patch
+'@nocobase/app-skills': patch
 ---
 
 Replace template development forwarding files with a single dev entry and a direct proxy helper import. Expose the dev lifecycle through the tools launcher and keep development implementation modules and tests inside app-tools.

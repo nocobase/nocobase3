@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { finished } from 'node:stream/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { publishToHub } from '../src/hub-publishing.js';
+import { publishToHub } from '../src/hub-publishing.ts';
 
 vi.mock('node:fs', async (importOriginal) => {
   const fs = await importOriginal<typeof import('node:fs')>();

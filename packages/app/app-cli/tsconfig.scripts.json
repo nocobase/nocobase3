@@ -1,0 +1,14 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "isolatedDeclarations": false,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.scripts.tsbuildinfo"
+  },
+  "include": ["src/tools/scripts/**/*.mjs"],
+  "exclude": []
+}

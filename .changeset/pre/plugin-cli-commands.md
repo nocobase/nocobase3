@@ -1,5 +1,5 @@
 ---
-'@nocobase/nb3-cli': major
+'@nocobase/app-cli': major
 '@nocobase/app-template-default': minor
 '@nocobase/app-template-hub': minor
 '@nocobase/app-plugin-cli-example': minor

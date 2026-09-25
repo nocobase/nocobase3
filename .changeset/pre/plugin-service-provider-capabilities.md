@@ -1,6 +1,6 @@
 ---
 '@nocobase/create-plugin': minor
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 ---
 
 Replace the ambiguous plugin scaffold capabilities `server.providers`, `client.providers`, and `client.bootstrap` with `server.service-providers`, `client.service-providers`, and `client.react-providers`.

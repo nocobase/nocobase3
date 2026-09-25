@@ -9,7 +9,7 @@ import {
   ConfigInitError,
   findAvailableDialects,
   runConfigInit,
-} from '../src/lib/config-init.js';
+} from '../src/lib/config-init.ts';
 
 const temporaryDirectories: string[] = [];
 
@@ -290,7 +290,7 @@ describe('runConfigInit', () => {
       expect(result).toMatchObject({
         status: 'unchanged',
         configFile: existing,
-        nextCommands: ['pnpm config:check', 'pnpm dev'],
+        nextCommands: ['pnpm nocobase config check', 'pnpm dev'],
       });
       expect(await readFile(existing, 'utf8')).toBe('kept');
     },
@@ -398,7 +398,7 @@ describe('runConfigInit', () => {
     });
     expect(postgres).toMatchObject({
       status: 'configured',
-      nextCommands: ['pnpm config:check', 'pnpm dev'],
+      nextCommands: ['pnpm nocobase config check', 'pnpm dev'],
       requiredSettings: [
         'database.connections.main.host',
         'database.connections.main.port',

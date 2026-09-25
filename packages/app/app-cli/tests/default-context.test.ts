@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createDefaultCommandContext } from '../src/default-context.js';
+import { createDefaultCommandContext } from '../src/default-context.ts';
 
 const roots: string[] = [];
 afterEach(() => {

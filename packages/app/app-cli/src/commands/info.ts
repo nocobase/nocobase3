@@ -1,4 +1,4 @@
-import { AppCommand } from '../context.js';
+import { AppCommand } from '../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 import { readFile } from 'node:fs/promises';

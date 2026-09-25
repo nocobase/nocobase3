@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 
-import { checkAppLocales } from '../src/commands/i18n-check.js';
+import { checkAppLocales } from '../src/commands/locales/check.ts';
 
 const roots: string[] = [];
 afterEach(() => {

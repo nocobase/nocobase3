@@ -1,7 +1,6 @@
 ---
 '@nocobase/app-cli': minor
 '@nocobase/app-server': minor
-'@nocobase/app-tools': minor
 '@nocobase/app-template-default': minor
 '@nocobase/app-template-examples': minor
 '@nocobase/app-template-hub': minor
