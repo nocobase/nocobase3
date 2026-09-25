@@ -29,7 +29,7 @@ export default function NotificationDemoPage(): ReactElement {
         <p className='text-sm text-muted-foreground'>
           {translateDemo('description', {
             defaultValue:
-              "These actions use Refine's notification API and the enabled Sonner-backed notification provider plugin.",
+              "These actions use Refine's notification API and the enabled Base UI notification provider plugin.",
           })}
         </p>
       </header>

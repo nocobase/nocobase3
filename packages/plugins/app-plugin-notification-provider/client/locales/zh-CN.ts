@@ -11,7 +11,7 @@ export default {
   clientRouteExample: '客户端路由示例',
   notificationProvider: '通知提供器',
   description:
-    '这些操作使用 Refine 的通知 API，以及已启用的基于 Sonner 的通知提供器插件。',
+    '这些操作使用 Refine 的通知 API，以及已启用的基于 Base UI 的通知提供器插件。',
   showSuccess: '显示成功通知',
   showError: '显示错误通知',
   showUndoable: '显示可撤销通知',

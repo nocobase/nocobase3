@@ -2,9 +2,8 @@ import type {
   NotificationProvider,
   OpenNotificationParams,
 } from '@refinedev/core';
-import { toast } from 'sonner';
 
-import { UndoableNotification } from './components/undoable-notification.js';
+import { toast } from './toast-manager.js';
 
 export interface NotificationProviderOptions {
   readonly undoLabel?: string;
@@ -19,44 +18,47 @@ export function createNotificationProvider(
     open(params: OpenNotificationParams): void {
       switch (params.type) {
         case 'success':
-          toast.success(params.message, {
+          toast.add({
             id: params.key,
+            type: 'success',
+            title: params.message,
             description: params.description,
-            richColors: true,
           });
           return;
         case 'error':
-          toast.error(params.message, {
+          toast.add({
             id: params.key,
+            type: 'error',
+            priority: 'high',
+            title: params.message,
             description: params.description,
-            richColors: true,
           });
           return;
         case 'progress':
-          toast.custom(
-            (toastId) => (
-              <UndoableNotification
-                cancelMutation={params.cancelMutation}
-                description={params.description}
-                message={params.message}
-                onClose={() => toast.dismiss(toastId)}
-                toastId={toastId}
-                undoLabel={undoLabel}
-              />
-            ),
-            {
-              duration: (params.undoableTimeout ?? 5) * 1000,
+          {
+            let toastId = '';
+            toastId = toast.add({
               id: params.key,
-              unstyled: true,
-            },
-          );
+              type: 'progress',
+              title: params.message,
+              description: params.description,
+              timeout: (params.undoableTimeout ?? 5) * 1000,
+              actionProps: {
+                children: undoLabel,
+                onClick: () => {
+                  params.cancelMutation?.();
+                  toast.close(toastId);
+                },
+              },
+            });
+          }
           return;
         default:
           return;
       }
     },
     close(key: string): void {
-      toast.dismiss(key);
+      toast.close(key);
     },
   };
 }

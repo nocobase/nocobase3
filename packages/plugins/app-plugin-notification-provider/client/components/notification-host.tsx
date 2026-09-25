@@ -5,10 +5,5 @@ import { Toaster } from './toaster.js';
 export function NotificationHost({
   children,
 }: PropsWithChildren): ReactElement {
-  return (
-    <>
-      {children}
-      <Toaster />
-    </>
-  );
+  return <Toaster>{children}</Toaster>;
 }

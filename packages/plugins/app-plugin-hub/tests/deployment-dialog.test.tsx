@@ -1,7 +1,10 @@
 import { useState, type ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Toaster, toast } from 'sonner';
+import {
+  Toaster,
+  toast,
+} from '@nocobase/app-plugin-notification-provider/client/toast';
 import { DeploymentDialog } from '../client/pages/hub/configuration.js';
 import type { AppDetail, ConfigMode } from '../client/pages/hub/types.js';
 
@@ -82,11 +85,11 @@ function Dialog({
 
 describe('Hub deployment configuration step', () => {
   beforeEach(() => {
-    render(<Toaster position='top-right' />);
+    render(<Toaster />);
   });
 
   afterEach(() => {
-    toast.dismiss();
+    toast.close();
   });
 
   it('starts an existing deployment draft from current config rather than the template', async () => {
@@ -116,9 +119,8 @@ describe('Hub deployment configuration step', () => {
       /Failed to load configuration template/,
     );
     expect(notification).toBeVisible();
-    const toaster = notification.closest('[data-sonner-toaster]');
-    expect(toaster).toHaveAttribute('data-x-position', 'right');
-    expect(toaster).toHaveAttribute('data-y-position', 'top');
+    const toastViewport = notification.closest('[data-slot="toast-viewport"]');
+    expect(toastViewport).toHaveClass('fixed', 'top-4', 'right-4');
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
     expect(
       screen.queryByRole('textbox', { name: 'New configuration' }),

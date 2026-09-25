@@ -1,5 +1,5 @@
 import { PageHeader } from '../../components/page-header.js';
-import { toast } from 'sonner';
+import { toast } from '@nocobase/app-plugin-notification-provider/client/toast';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
@@ -69,7 +69,7 @@ export function ApiKeys({
         throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(secret);
       setCopied(true);
-      toast.success(t('apiKeys.copied'), { position: 'top-right' });
+      toast.add({ type: 'success', title: t('apiKeys.copied') });
       return true;
     } catch {
       setCopied(false);

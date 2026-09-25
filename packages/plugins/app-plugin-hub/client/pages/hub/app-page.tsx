@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '@nocobase/app-plugin-notification-provider/client/toast';
 import { LoaderCircle } from 'lucide-react';
 import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
@@ -817,8 +817,9 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
               setReleasesCollapsed(false);
               setArtifact(undefined);
               setUploadOpen(false);
-              toast.success(
-                t(
+              toast.add({
+                type: 'success',
+                title: t(
                   capabilities.deploy &&
                     capabilities['read-release'] &&
                     capabilities['read-config'] &&
@@ -826,8 +827,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
                     ? 'releases.uploaded'
                     : 'releases.uploadedOnly',
                 ),
-                { position: 'top-right', duration: 4000 },
-              );
+                timeout: 4000,
+              });
             })
           }
         />

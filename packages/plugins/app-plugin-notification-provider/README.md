@@ -1,11 +1,11 @@
 # @nocobase/app-plugin-notification-provider
 
-Client-only App plugin that connects Refine notifications to Sonner.
+Client-only App plugin that connects Refine notifications to the Base UI Toast component.
 
 The plugin has three independent client contributions:
 
 - `client/service-provider.ts` registers `refine.setNotificationProvider(...)`.
-- `client/react-providers.ts` mounts the global Sonner notification host.
+- `client/react-providers.ts` mounts the global Base UI Toast host.
 - `client/routes.ts` exposes a lazy notification test page at
   `/notification-provider`.
 
@@ -36,4 +36,4 @@ Register the plugin in an application package:
 With the default App base path, open `/main/notification-provider` after
 signing in. The page can trigger success, error, and undoable notifications.
 
-Applications that only need notifications can register `notificationProvider({ demo: false })` in `client/plugins.ts`. This omits the demo route while retaining the Refine notification provider and global Sonner host. The default preserves the existing demo route.
+Applications that only need notifications can register `notificationProvider({ demo: false })` in `client/plugins.ts`. This omits the demo route while retaining the Refine notification provider and global Base UI Toast host. The same manager is exported from `@nocobase/app-plugin-notification-provider/client/toast` for application notifications outside Refine.

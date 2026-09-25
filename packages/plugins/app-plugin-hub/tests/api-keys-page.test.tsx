@@ -1,4 +1,7 @@
-import { Toaster, toast } from 'sonner';
+import {
+  Toaster,
+  toast,
+} from '@nocobase/app-plugin-notification-provider/client/toast';
 import userEvent from '@testing-library/user-event';
 import {
   fireEvent,
@@ -76,8 +79,8 @@ beforeEach(() => {
     configurable: true,
     value: undefined,
   });
-  toast.dismiss();
-  render(<Toaster position='top-right' />);
+  toast.close();
+  render(<Toaster />);
   mocks.request.mockReset();
 });
 

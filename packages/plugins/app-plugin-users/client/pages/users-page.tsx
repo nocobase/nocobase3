@@ -3,7 +3,7 @@ import { useClientApplication } from '@nocobase/app-client';
 import { PermissionSelection } from '../components/permission-selection.js';
 import { PermissionAssignmentDrawer } from '../components/permission-assignment-drawer.js';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
-import { toast } from 'sonner';
+import { toast } from '@nocobase/app-plugin-notification-provider/client/toast';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
 import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
@@ -121,11 +121,13 @@ export default function UsersPage(): ReactElement {
   const reportError = useCallback(
     (reason: unknown) => {
       const code = reason instanceof ApiClientError ? reason.code : undefined;
-      toast.error(
-        t(`errors.${code ?? 'operationFailed'}`, {
+      toast.add({
+        type: 'error',
+        priority: 'high',
+        title: t(`errors.${code ?? 'operationFailed'}`, {
           defaultValue: readError(reason, t('errors.operationFailed')),
         }),
-      );
+      });
     },
     [t],
   );
@@ -559,7 +561,10 @@ export default function UsersPage(): ReactElement {
               await users.remove(deleteUser.id);
               setDeleteUser(undefined);
               if (result.items.length === 1 && page > 1) setPage(page - 1);
-              toast.success(t('deletion.success'));
+              toast.add({
+                type: 'success',
+                title: t('deletion.success'),
+              });
             })
           }
         />

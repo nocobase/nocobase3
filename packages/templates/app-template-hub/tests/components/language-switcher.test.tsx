@@ -14,7 +14,7 @@ import { I18nProvider } from '@nocobase/i18n/client';
 import { I18nRuntime } from '@nocobase/i18n';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { toast } from 'sonner';
+import { toast } from '@nocobase/app-plugin-notification-provider/client/toast';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -25,8 +25,8 @@ import {
 
 import { LanguageSwitcher } from '@/layouts/components/language-switcher';
 
-vi.mock('sonner', () => ({
-  toast: { info: vi.fn(), error: vi.fn() },
+vi.mock('@nocobase/app-plugin-notification-provider/client/toast', () => ({
+  toast: { add: vi.fn() },
 }));
 
 const APP = '@nocobase/app-template-hub';
@@ -171,8 +171,7 @@ describe('LanguageSwitcher', () => {
     expect(
       await screen.findByRole('menuitemradio', { name: '中文' }),
     ).toBeChecked();
-    expect(toast.info).not.toHaveBeenCalled();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.add).not.toHaveBeenCalled();
   });
 
   it('closes while synchronization is pending and reports server fallback', async () => {
@@ -204,13 +203,18 @@ describe('LanguageSwitcher', () => {
     resolveRequest(createServerResponse(true));
 
     await waitFor(() =>
-      expect(toast.info).toHaveBeenCalledWith(FALLBACK_NOTICE),
+      expect(toast.add).toHaveBeenCalledWith({
+        type: 'info',
+        title: FALLBACK_NOTICE,
+      }),
     );
     await user.click(screen.getByRole('button', { name: 'Account' }));
     expect(
       await screen.findByRole('menuitem', { name: /语言\s*中文/ }),
     ).not.toHaveAttribute('aria-disabled');
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.add).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error' }),
+    );
     await user.keyboard('{Escape}{Escape}');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Account' })).toHaveFocus(),
@@ -232,10 +236,16 @@ describe('LanguageSwitcher', () => {
 
     await waitFor(() => expect(runtime.getLocale()).toBe('zh-CN'));
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(CHANGE_FAILED_NOTICE),
+      expect(toast.add).toHaveBeenCalledWith({
+        type: 'error',
+        priority: 'high',
+        title: CHANGE_FAILED_NOTICE,
+      }),
     );
     expect(readStoredLocale()).toBe('zh-CN');
-    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.add).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'info' }),
+    );
     await user.keyboard('{Escape}{Escape}');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Account' })).toHaveFocus(),

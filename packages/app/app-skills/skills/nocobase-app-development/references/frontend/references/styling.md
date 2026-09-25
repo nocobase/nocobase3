@@ -15,7 +15,7 @@ Rules for using them:
 - Do not import anything from the reference pages, and do not add routes for them. If a reference page reaches the router, `tests/logic/client-routes.test.ts` fails.
 - The reference pages' copy lives in `client/pages/reference/locales/`, not in the application's copy. For UI you copy over, rewrite the copy under `client/locales/` with your own keys (see `i18n.md`).
 - Do not copy these two things as they are:
-  - **Toasts**: the reference pages and their README use `@/components/ui/toast` and mount their own `<Toaster />` in the page. This application uses sonner; see section 7.
+  - **Toasts**: the reference pages and their README use `@/components/ui/toast` and mount their own `<Toaster />` in the page. Application-wide notifications use the shared Base UI manager; see section 7.
   - **How they open**: the create dialog and the detail `Sheet` in the reference pages use open state held inside the component. In this application, create, edit, and detail views are child routes by default (`RouteDialog` / `RouteDrawer`, see `overlay.md`); you can borrow their appearance, but write how they open as `overlay.md` describes.
 
 ## 2. Components are built on Base UI, not Radix
@@ -379,9 +379,9 @@ export function ProjectStatusChart({
 
 ## 7. Toasts
 
-- Use sonner: `import { toast } from 'sonner'`, and call `toast.success(...)`, `toast.info(...)`, or `toast.error(...)` in event handlers.
-- You do not need to mount a `Toaster` yourself. The registered `@nocobase/app-plugin-notification-provider` (`client/plugins.ts`) mounts sonner's `Toaster` at the outermost layer of the application: toasts appear in the top-right corner and take their colors from `--popover`, `--popover-foreground`, and `--border`, so they follow the theme. Mounting another one produces duplicate toasts.
-- Do not use `@/components/ui/toast`. It is a separate Base UI toast component; the application does not mount its `Toaster`, so calling it displays nothing. The `toast.add(...)` calls in the reference pages and README do not apply to this application.
+- Use the shared Base UI manager: `import { toast } from '@nocobase/app-plugin-notification-provider/client/toast'`, then call `toast.add({ type, title, description })` in event handlers.
+- You do not need to mount a `Toaster` yourself. The registered `@nocobase/app-plugin-notification-provider` (`client/plugins.ts`) mounts the Base UI Toaster globally; it appears in the top-right corner and follows the application theme. Mounting another one produces duplicate notifications.
+- `@/components/ui/toast` has an independent manager used by the reference pages. Do not use it for application-wide notifications; use the shared manager instead.
 - For which kind of message to use in which situation and how to write the copy, see `api.md` and `../ui-guidelines.md` (T3.7, C5, C6).
 
 ## 8. Semantic tokens
@@ -624,7 +624,7 @@ export function HeaderActions({
 - Do not define a custom set of spacing or colors within a single page.
 - Do not hand-write components shadcn already provides, and do not write `asChild`.
 - Do not import from `client/pages/reference/`, and do not add routes for it.
-- Do not use `@/components/ui/toast`, and do not mount your own `Toaster`.
+- Use the shared toast manager for application notifications; only reference demo pages mount their local `Toaster`.
 
 ## 18. Verification
 

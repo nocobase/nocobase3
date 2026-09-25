@@ -11,7 +11,7 @@ export default {
   clientRouteExample: 'Client route example',
   notificationProvider: 'Notification provider',
   description:
-    "These actions use Refine's notification API and the enabled Sonner-backed notification provider plugin.",
+    "These actions use Refine's notification API and the enabled Base UI notification provider plugin.",
   showSuccess: 'Show success',
   showError: 'Show error',
   showUndoable: 'Show undoable',

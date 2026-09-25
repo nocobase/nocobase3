@@ -1,20 +1,21 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { toast } from 'sonner';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createNotificationProvider } from '../client/notification-provider.js';
-
-vi.mock('sonner', () => ({
-  toast: {
-    custom: vi.fn(() => 'toast-id'),
-    dismiss: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-  },
+const { add, close } = vi.hoisted(() => ({
+  add: vi.fn(() => 'generated-toast-id'),
+  close: vi.fn(),
 }));
 
+vi.mock('../client/toast-manager.js', () => ({ toast: { add, close } }));
+
+import { createNotificationProvider } from '../client/notification-provider.js';
+import { toast } from '../client/toast-manager.js';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe('notification provider', () => {
-  it('maps Refine success and error notifications to Sonner', () => {
+  it('maps Refine success and error notifications to Base UI toasts', () => {
     const provider = createNotificationProvider();
 
     provider.open({
@@ -30,19 +31,22 @@ describe('notification provider', () => {
       type: 'error',
     });
 
-    expect(toast.success).toHaveBeenCalledWith('Saved', {
+    expect(toast.add).toHaveBeenNthCalledWith(1, {
       description: 'Created',
       id: 'success-key',
-      richColors: true,
+      title: 'Saved',
+      type: 'success',
     });
-    expect(toast.error).toHaveBeenCalledWith('Failed', {
+    expect(toast.add).toHaveBeenNthCalledWith(2, {
       description: 'Try again',
       id: 'error-key',
-      richColors: true,
+      priority: 'high',
+      title: 'Failed',
+      type: 'error',
     });
   });
 
-  it('renders progress notifications with an undo action', () => {
+  it('adds progress notifications with an undo action and timeout', () => {
     const cancelMutation = vi.fn();
     const provider = createNotificationProvider({ undoLabel: '撤销' });
 
@@ -55,18 +59,20 @@ describe('notification provider', () => {
       undoableTimeout: 8,
     });
 
-    expect(toast.custom).toHaveBeenCalledWith(expect.any(Function), {
-      duration: 8000,
+    expect(toast.add).toHaveBeenCalledWith({
+      actionProps: expect.objectContaining({ children: '撤销' }),
+      description: 'Will be committed shortly',
       id: 'progress-key',
-      unstyled: true,
+      timeout: 8000,
+      title: 'Saving',
+      type: 'progress',
     });
 
-    const renderer = vi.mocked(toast.custom).mock.calls[0][0];
-    render(renderer('generated-toast-id'));
-    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    const options = vi.mocked(toast.add).mock.calls[0][0];
+    options.actionProps?.onClick?.({} as never);
 
     expect(cancelMutation).toHaveBeenCalledOnce();
-    expect(toast.dismiss).toHaveBeenCalledWith('generated-toast-id');
+    expect(toast.close).toHaveBeenCalledWith('generated-toast-id');
   });
 
   it('closes notifications by key', () => {
@@ -74,6 +80,6 @@ describe('notification provider', () => {
 
     provider.close('notification-key');
 
-    expect(toast.dismiss).toHaveBeenCalledWith('notification-key');
+    expect(toast.close).toHaveBeenCalledWith('notification-key');
   });
 });

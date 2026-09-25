@@ -2,6 +2,7 @@ export {
   createNotificationProvider,
   type NotificationProviderOptions,
 } from './notification-provider.js';
+export { Toaster, toast, type ToasterProps } from './toast.js';
 export { default as reactProviders } from './react-providers.js';
 export { default as routes } from './routes.js';
 

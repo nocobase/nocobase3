@@ -7,7 +7,9 @@ const { signOut, refresh, errorToast } = vi.hoisted(() => ({
   refresh: vi.fn(),
   errorToast: vi.fn(),
 }));
-vi.mock('sonner', () => ({ toast: { error: errorToast } }));
+vi.mock('@nocobase/app-plugin-notification-provider/client/toast', () => ({
+  toast: { add: errorToast },
+}));
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
     t: (_key: string, options: { defaultValue: string }) =>
@@ -52,7 +54,11 @@ describe('account menu sign out', () => {
     await signOutFromMenu();
     await waitFor(() =>
       expect(errorToast).toHaveBeenCalledWith(
-        'Unable to sign out. Please try again.',
+        expect.objectContaining({
+          type: 'error',
+          priority: 'high',
+          title: 'Unable to sign out. Please try again.',
+        }),
       ),
     );
     expect(refresh).not.toHaveBeenCalled();

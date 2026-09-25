@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '@nocobase/app-plugin-notification-provider/client/toast';
 import { Badge } from '../../components/ui/badge.js';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.js';
 import { Button } from '../../components/ui/button.js';
@@ -112,11 +112,12 @@ export function ErrorNotification({
   }, [onClose]);
   useEffect(() => {
     const text = message ?? description;
-    const toastId = toast.error(title ?? text, {
+    const toastId = toast.add({
+      type: 'error',
+      priority: 'high',
+      title: title ?? text,
       id: `hub-error:${code ?? ''}:${text}`,
-      position: 'top-right',
-      closeButton: true,
-      duration: 8000,
+      timeout: 8000,
       description: (
         <>
           {title ? <p>{text}</p> : null}
@@ -128,10 +129,10 @@ export function ErrorNotification({
           ) : null}
         </>
       ),
-      onDismiss: () => onCloseRef.current?.(),
+      onClose: () => onCloseRef.current?.(),
     });
     return () => {
-      toast.dismiss(toastId);
+      toast.close(toastId);
     };
   }, [title, description, message, technicalMessage, code]);
   return null;

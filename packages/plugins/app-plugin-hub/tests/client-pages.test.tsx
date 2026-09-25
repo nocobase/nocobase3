@@ -1,4 +1,7 @@
-import { Toaster, toast } from 'sonner';
+import {
+  Toaster,
+  toast,
+} from '@nocobase/app-plugin-notification-provider/client/toast';
 import {
   act,
   cleanup,
@@ -231,7 +234,7 @@ function Logs(): ReactElement {
 
 describe('Hub client pages', () => {
   beforeEach(() => {
-    render(<Toaster position='top-right' />);
+    render(<Toaster />);
     mocks.client.request.mockReset();
     mocks.authorization.can.mockReset().mockResolvedValue(true);
     mocks.authorization.invalidate.mockReset();
@@ -243,7 +246,7 @@ describe('Hub client pages', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
-    toast.dismiss();
+    toast.close();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -615,11 +618,12 @@ describe('Hub client pages', () => {
     expect(name).toHaveValue('My TMS');
     expect(id).toHaveValue('tms');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    const notification = screen
-      .getByText('Application ID is unavailable')
-      .closest('[data-sonner-toaster]');
-    expect(notification).toHaveAttribute('data-x-position', 'right');
-    expect(notification).toHaveAttribute('data-y-position', 'top');
+    const notification = screen.getByText('Application ID is unavailable');
+    expect(notification.closest('[data-slot="toast-viewport"]')).toHaveClass(
+      'fixed',
+      'top-4',
+      'right-4',
+    );
   });
 
   it('debounces catalog search and sends the trimmed query to the server', async () => {

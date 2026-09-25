@@ -34,7 +34,7 @@ Write the logic a page needs (loading data, the search box, error checks) direct
 
 **Icons**: `lucide-react`; an icon inside a button gets `data-icon='inline-start'` (before the text) or `'inline-end'` (after the text).
 
-**Toasts**: `import { toast } from 'sonner'`. The `@nocobase/app-plugin-notification-provider` plugin that the application registers already mounts sonner's Toaster globally, so call `toast` directly. `client/components/ui/toast.tsx` is a different toast component that the application does not mount; do not use it.
+**Toasts**: import `toast` from `@nocobase/app-plugin-notification-provider/client/toast` and call `toast.add({ type, title, description })`. The registered notification-provider plugin mounts the Base UI Toaster globally. `client/components/ui/toast.tsx` has a separate manager for reference pages; do not use it for application-wide notifications.
 
 **Copy**: all user-visible text goes through translation keys; see `references/i18n.md`.
 
