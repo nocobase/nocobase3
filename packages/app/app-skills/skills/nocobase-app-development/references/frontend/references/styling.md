@@ -381,6 +381,7 @@ export function ProjectStatusChart({
 
 - Use `import { toast } from '@/components/ui/toast'`, and call `toast.add({ type, title })` in event handlers. `type` is `'success'`, `'info'`, `'warning'`, `'error'`, or `'loading'`; `description` adds a second line; `priority: 'high'` makes an error announce to screen readers at once.
 - You do not need to mount a `Toaster` yourself. `client/react-providers.ts` mounts the application's `Toaster` once, in the `application` layer: toasts appear in the bottom-right corner and take their colors from `--popover`, `--popover-foreground`, and `--border`, so they follow the theme. Mounting another one renders every toast twice, because both listen to the same `toast` manager.
+- Toasts stay above dialogs, sheets and popovers because a `[data-slot='toast-viewport']` rule at the end of `client/styles.css` lifts the viewport to `z-index: 100`. Every overlay in `client/components/ui/` uses `z-50`, and the toaster, mounted first, would otherwise paint under a dialog opened later. Keep that rule, and leave the generated component's `z-50` alone.
 - Plugin pages report through the same host with Base UI's `Toast.useToastManager()`, which throws when no provider is mounted. Keep the `toaster` entry when you customize `client/react-providers.ts`.
 - For which kind of message to use in which situation and how to write the copy, see `api.md` and `../ui-guidelines.md` (T3.7, C5, C6).
 

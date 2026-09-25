@@ -112,3 +112,11 @@
 @utility shadow-2xl {
   @apply shadow-(--shadow-2xl);
 }
+
+/* The application's one toaster mounts before any dialog opens, and every
+   overlay shares z-50, so a dialog portaled later would paint over its toasts.
+   Lift the viewport here rather than in the generated component; left outside
+   any layer so it outranks the component's z-50 utility. */
+[data-slot='toast-viewport'] {
+  z-index: 100;
+}
