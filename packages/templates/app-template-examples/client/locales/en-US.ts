@@ -214,6 +214,9 @@ const enUS = {
     allowClose: 'Allow closing this layer',
     historyHint:
       'Turn off closing to keep this layer open when you press Escape, click outside, or use Close. Browser back and forward still navigate normally.',
+    showToast: 'Show a notification',
+    toastTitle: 'Shown from inside the overlay',
+    toastDescription: 'Notifications stay above dialogs and drawers.',
   },
   numbers: {
     title: 'Numeric types',

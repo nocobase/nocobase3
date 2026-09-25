@@ -8,7 +8,6 @@
 '@nocobase/app-plugin-hub': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-in-app': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-users': patch
 '@nocobase/app-template-default': patch
 '@nocobase/app-template-examples': patch

@@ -4,7 +4,6 @@
 '@nocobase/app-host': patch
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/app-plugin-database-example': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-queue-example': patch
 '@nocobase/app-plugin-realtime-example': patch
 '@nocobase/app-plugin-routes-example': patch

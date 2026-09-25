@@ -7,7 +7,6 @@
 '@nocobase/app-plugin-i18n': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-in-app': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-notification-providers': patch
 '@nocobase/app-plugin-workflow': patch
 '@nocobase/app-plugin-cli-example': patch

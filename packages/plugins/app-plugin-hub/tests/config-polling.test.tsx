@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
+import { render } from './render.js';
 import type { ConfigEditorProps } from '../client/components/config-editor.js';
 
 const mocks = vi.hoisted(() => ({

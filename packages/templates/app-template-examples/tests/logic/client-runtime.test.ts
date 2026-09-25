@@ -93,6 +93,10 @@ describe('app client runtime', () => {
     expect(app.refineConfig.options?.title).toEqual({
       text: 'Configured application',
     });
+    // Plugin pages call Base UI's useToastManager(), which throws without it.
+    expect(runtime.reactProviders).toContainEqual(
+      expect.objectContaining({ name: 'toaster', layer: 'application' }),
+    );
     expect(app.refineConfig.resources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

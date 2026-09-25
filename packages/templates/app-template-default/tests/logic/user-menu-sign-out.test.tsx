@@ -2,12 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserMenu } from '../../client/layouts/components/user-menu.tsx';
 
-const { signOut, refresh, errorToast } = vi.hoisted(() => ({
+const { signOut, refresh, addToast } = vi.hoisted(() => ({
   signOut: vi.fn(),
   refresh: vi.fn(),
-  errorToast: vi.fn(),
+  addToast: vi.fn(),
 }));
-vi.mock('sonner', () => ({ toast: { error: errorToast } }));
+vi.mock('@/components/ui/toast', () => ({ toast: { add: addToast } }));
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
     t: (_key: string, options: { defaultValue: string }) =>
@@ -42,7 +42,7 @@ describe('account menu sign out', () => {
     signOut.mockResolvedValue({ data: { success: true }, error: null });
     await signOutFromMenu();
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    expect(errorToast).not.toHaveBeenCalled();
+    expect(addToast).not.toHaveBeenCalled();
   });
   it('reports a rejected origin without pretending the session ended', async () => {
     signOut.mockResolvedValue({
@@ -51,9 +51,11 @@ describe('account menu sign out', () => {
     });
     await signOutFromMenu();
     await waitFor(() =>
-      expect(errorToast).toHaveBeenCalledWith(
-        'Unable to sign out. Please try again.',
-      ),
+      expect(addToast).toHaveBeenCalledWith({
+        type: 'error',
+        priority: 'high',
+        title: 'Unable to sign out. Please try again.',
+      }),
     );
     expect(refresh).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Open account menu' }));
@@ -64,7 +66,7 @@ describe('account menu sign out', () => {
   it('reports network failures and allows retry', async () => {
     signOut.mockRejectedValue(new Error('Network unavailable'));
     await signOutFromMenu();
-    await waitFor(() => expect(errorToast).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(addToast).toHaveBeenCalledTimes(1));
     expect(refresh).not.toHaveBeenCalled();
   });
 });

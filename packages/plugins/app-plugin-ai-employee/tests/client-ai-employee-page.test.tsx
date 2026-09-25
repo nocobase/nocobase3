@@ -24,8 +24,8 @@ vi.mock('@nocobase/app-client', () => ({
   createApiClient: () => mocks.api,
   resolveAppUrl: (value: string) => value,
 }));
-vi.mock('@refinedev/core', () => ({
-  useNotification: () => ({ open: mocks.notify }),
+vi.mock('@base-ui/react/toast', () => ({
+  Toast: { useToastManager: () => ({ add: mocks.notify }) },
 }));
 vi.mock('../client/locales/index.js', () => ({
   useT: () => (key: string) => key,
