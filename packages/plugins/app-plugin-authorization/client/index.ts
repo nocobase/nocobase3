@@ -12,6 +12,7 @@ export {
   type AuthorizationOptionsResponse,
   type AuthorizationPermission,
   type AuthorizationReason,
+  type AuthorizationRequirement,
   type AuthorizationRecordOption,
   type AuthorizationSnapshot,
   type AuthorizationSubject,

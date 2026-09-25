@@ -29,14 +29,14 @@ function inMenuOrder(
   return [...routes].sort(compareNavigationOrder);
 }
 
-/** Discover page grants from the route tree, in menu order. */
+/** Discover page grants from the route tree, in menu order. `skip` and `unrestricted` pages offer none. */
 export function grantablePages(
   routes: readonly AppClientRegisteredRoute[],
   group?: string,
 ): readonly GrantablePage[] {
   const pages = inMenuOrder(routes).flatMap((route) => [
     ...(route.componentLoader &&
-    route.authz !== 'skip' &&
+    typeof route.authz === 'object' &&
     route.authz.resource.type === PAGE_RESOURCE_TYPE &&
     route.authz.action === 'access'
       ? [
