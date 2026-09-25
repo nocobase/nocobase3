@@ -34,7 +34,7 @@ describe('plugin page authorization', () => {
     // A page may check another resource type; each plugin still offers a page grant.
     const granted = pages.filter(
       (route) =>
-        route.authz !== 'skip' &&
+        typeof route.authz === 'object' &&
         route.authz.resource.type === 'page' &&
         route.authz.action === 'access',
     );
