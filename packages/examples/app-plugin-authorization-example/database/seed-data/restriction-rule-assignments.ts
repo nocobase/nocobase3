@@ -6,18 +6,13 @@ export function restrictionRuleAssignmentRows({
   now,
 }: SalesSeedContext) {
   const subjects = [
-    ...[
-      users.assistant,
-      users.engineer,
-      users.manager,
-      users.delivery,
-      users.coordinator,
-    ].map((id) => ({ type: 'user', id })),
-    ...['proposal', 'delivery'].map((id) => ({
-      type: 'example.sales.team',
-      id,
-    })),
-  ];
+    users.assistant,
+    users.engineer,
+    users.manager,
+    users.delivery,
+    users.proposal,
+    users.coordinator,
+  ].map((id) => ({ type: 'user', id }));
   return restrictionRules.flatMap((rule) =>
     subjects.map((subject) => ({
       id: randomUUID(),

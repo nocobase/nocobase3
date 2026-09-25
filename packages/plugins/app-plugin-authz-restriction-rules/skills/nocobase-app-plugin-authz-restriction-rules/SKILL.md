@@ -17,7 +17,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for composite
 4. Bind policies on all protected reads and writes. For relation targets, declare relation record access explicitly; a standalone collection restriction is not inherited by nested relation writes.
 5. Verify the excluded row stays inaccessible after adding broad sharing and another permission set, across each protected operation, and that unrelated actors keep their intended access.
 
-In the sales example the coordinator's direct confidentiality restriction persists when its team's permission set is removed. Test with ordinary users: unrestricted identities skip every rule.
+In the sales example every account carries the confidentiality restriction directly, so it holds whichever permission set grants the action. Test with ordinary users: unrestricted identities skip every rule.
 
 ## Install
 

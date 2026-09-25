@@ -2,7 +2,7 @@
 
 ## Inherited teams or departments
 
-Register the type through `authz.subjects.add('sales.team', { resolveFor, filterActive, administration })` in provider boot and call the function it returns on shutdown. `resolveFor(principal)` returns membership IDs from the authoritative team service; `filterActive(ids, transaction?)` excludes inactive/deleted teams. Use the passed transaction when reading validity during protected assignment changes. The complete registration below follows the current sales example. It assumes the feature owns `salesTeams` (id, title, active) and `salesTeamMembers` (userId, teamId); adapt those table names to the customer model.
+Register the type through `authz.subjects.add('sales.team', { resolveFor, filterActive, administration })` in provider boot and call the function it returns on shutdown. `resolveFor(principal)` returns membership IDs from the authoritative team service; `filterActive(ids, transaction?)` excludes inactive/deleted teams. Use the passed transaction when reading validity during protected assignment changes. The registration below is a minimal flat team. It assumes the feature owns `salesTeams` (id, title, active) and `salesTeamMembers` (userId, teamId); adapt those table names to the customer model.
 
 ```ts
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';

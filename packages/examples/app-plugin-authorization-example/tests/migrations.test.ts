@@ -22,8 +22,7 @@ it('creates the final sales schema and metadata in one reversible migration', as
     query: connection.query,
   };
   const collections = [
-    'authorizationExampleTeams',
-    'authorizationExampleTeamMembers',
+    'authorizationExampleCarriers',
     'authorizationExampleSalesMembers',
     'authorizationExampleProjects',
     'authorizationExampleQuotes',
@@ -160,7 +159,7 @@ describe('against the seeded example', () => {
     ).toMatchObject({ type: 'hasMany' });
     expect(
       (await connection.collections.getPhysical(ORDERS))?.columns.some(
-        (column) => column.columnName === 'delivery_team_id',
+        (column) => column.columnName === 'carrier_id',
       ),
     ).toBe(true);
     await migration.down!(context);
@@ -201,8 +200,8 @@ describe('against the seeded example', () => {
       PROJECTS,
       QUOTES,
       ORDERS,
-      'authorizationExampleTeams',
-      'authorizationExampleTeamMembers',
+      'authorizationExampleCarriers',
+      'authorizationExampleOrderCarriers',
     ])
       expect(await connection.collections.getPhysical(name)).toBeUndefined();
   });

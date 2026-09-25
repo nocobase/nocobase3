@@ -110,12 +110,12 @@ After a write, reload affected records and relationship controls, preserve the c
 
 ## Delivery relation controls
 
-The order relation endpoint returns existing relations, permitted relation operations and target options derived from the `manageRelations` policy. Offer only allowed create/update/upsert/connect/disconnect/set/delete controls. Existing relation reads use the View policy; mutation eligibility also requires an eligible order and business state. Team options come from the relation target scope, for example active teams. They do not use the authorization-management subject picker.
+The order relation endpoint returns existing relations, permitted relation operations and target options derived from the `manageRelations` policy. Offer only allowed create/update/upsert/connect/disconnect/set/delete controls. Existing relation reads use the View policy; mutation eligibility also requires an eligible order and business state. Carrier options come from the relation target scope, for example active carriers. They do not use the authorization-management subject picker.
 
 Example request bodies for the current plugin's `POST authorization-example/sales/orders/:id/relations` are:
 
 ```json
-{ "deliveryTeam": { "connect": { "id": "delivery" } } }
+{ "carrier": { "connect": { "id": "express" } } }
 ```
 
 ```json
@@ -130,7 +130,7 @@ Example request bodies for the current plugin's `POST authorization-example/sale
 {
   "collaborators": {
     "connect": [
-      { "where": { "id": "proposal" }, "through": { "note": "Review" } }
+      { "where": { "id": "freight" }, "through": { "note": "Review" } }
     ]
   }
 }

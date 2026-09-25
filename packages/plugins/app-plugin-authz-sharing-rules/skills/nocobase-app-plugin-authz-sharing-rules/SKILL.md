@@ -18,7 +18,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for composite
 5. Verify the handover works, an unshared parent still blocks the workflow, restrictions still exclude confidential records, and sharing alone cannot activate a missing operation.
 6. Revoke the recipient or the team's permission set and verify the next request loses only that source. Independent direct-user sharing and direct assignments must survive.
 
-The sales example's Proposal team handover shares quote edit and submit plus the parent project's submit scope. Do not copy its demo ids into a production rule.
+The sales example's quote-7 handover shares quote edit and submit plus the parent project's submit scope with a delegated engineer. Do not copy its demo ids into a production rule.
 
 ## Install
 

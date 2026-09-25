@@ -1,6 +1,6 @@
 # Code declarations, seeds and administrator configuration
 
-Use the current sales example as the model: four job permission sets, three business collections, separate page access, a two-scope quote submission, team inheritance and delivery relations. Code defines the business permission model; seeds provide initial business permission configuration that administrators can continue editing in the backend. The example additionally seeds fictional accounts and records for practice; those fixtures are separate from the production permission configuration pattern.
+Use the current sales example as the model: four job permission sets, three business collections, separate page access, a two-scope quote submission, a delegated quote handover and delivery relations. For a job inherited through an organisation, see `@nocobase/app-plugin-departments-example`. Code defines the business permission model; seeds provide initial business permission configuration that administrators can continue editing in the backend. The example additionally seeds fictional accounts and records for practice; those fixtures are separate from the production permission configuration pattern.
 
 ## Permission model versus editable configuration
 

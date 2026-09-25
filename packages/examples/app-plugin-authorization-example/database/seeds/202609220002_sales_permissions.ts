@@ -6,8 +6,7 @@ import type { SalesSeedContext } from '../seed-data/context.js';
 import { userProfiles, userRows, type UserKey } from '../seed-data/users.js';
 import { accountRows } from '../seed-data/accounts.js';
 import { salesMemberRows } from '../seed-data/sales-members.js';
-import { teams } from '../seed-data/teams.js';
-import { teamMemberRows } from '../seed-data/team-members.js';
+import { carriers } from '../seed-data/carriers.js';
 import { permissionSetRows } from '../seed-data/permission-sets.js';
 import { permissionSetAssignmentRows } from '../seed-data/permission-set-assignments.js';
 import { defaultAccessRuleRows } from '../seed-data/default-access-rules.js';
@@ -32,10 +31,9 @@ const seed: SeedDefinition = defineSeed({
     await query.insertInto('user').values(userRows(context)).execute();
     await query.insertInto('account').values(accountRows(context)).execute();
     await query.insertInto(MEMBERS).values(salesMemberRows(context)).execute();
-    await query.insertInto('authorizationExampleTeams').values(teams).execute();
     await query
-      .insertInto('authorizationExampleTeamMembers')
-      .values(teamMemberRows(context))
+      .insertInto('authorizationExampleCarriers')
+      .values(carriers)
       .execute();
 
     await query

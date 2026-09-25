@@ -1,6 +1,6 @@
 # Build a business module with authorization
 
-Use a quote submission workflow as the reference: engineers prepare quotes; project responsibility determines whether they can submit them; proposal teams can receive explicit handovers. Orders have separate delivery responsibilities; submitting a quote does not create an order. The same design applies to approvals, service tickets and project work. Source examples live in `@nocobase/app-plugin-authorization-example` in the source workspace; an installed App implements these patterns in its own feature files.
+Use a quote submission workflow as the reference: engineers prepare quotes; project responsibility determines whether they can submit them; a delegated engineer can receive an explicit handover. Orders have separate delivery responsibilities; submitting a quote does not create an order. The same design applies to approvals, service tickets and project work. Source examples live in `@nocobase/app-plugin-authorization-example` in the source workspace; an installed App implements these patterns in its own feature files.
 
 ## 1. Write the responsibility matrix
 
@@ -16,7 +16,7 @@ Resolve unclear cases before granting access: may users consult colleagues' quot
 
 ## 2. Model and declare
 
-Model ownership and preparer ids, project relations, region membership and team membership as business data. Make membership changes an authorized business API. Keep credentials and fixture accounts out of production feature seeds.
+Model ownership and preparer ids, project relations, region membership and any team or department membership as business data. Make membership changes an authorized business API. Keep credentials and fixture accounts out of production feature seeds.
 
 Create `server/sales-resources.ts` using the complete `quotes` declaration in [runtime integration](runtime-api.md#declare-a-business-operation). `defineDatabasePermission` declares fields and relation capabilities; `defineCompositeResource` binds them to data scope keys. A `submit` action binds `quotes` to quote read and status update and `projects` to parent read. Give independently controlled collections separate keys even when a workflow edits only one of them.
 
@@ -178,13 +178,13 @@ Complete this configuration as part of delivering the permission feature, for bo
 
 Create the engineer set with page access and quote actions as separate grants. Configure edit with the preparer selection; submit with the preparer and region selections. Do not use project ownership as an edit default if that would reopen a colleague's quote.
 
-The following rule-based extensions require the corresponding installed Skills; follow [capability discovery](optional-capabilities.md) first. Without them, describe the missing capability as separate development rather than assuming the example configuration is available. Add default access only for an intentional baseline. Add sharing for the delegation exception: the delegated quote's edit and submit scopes plus its actual parent project's submit scope, assigned to the Proposal team. Sharing the quote does not automatically grant its parent or the submit action. Add restrictions for confidential records at the appropriate boundary; a collection restriction covers all operation branches when the invariant must apply everywhere.
+The following rule-based extensions require the corresponding installed Skills; follow [capability discovery](optional-capabilities.md) first. Without them, describe the missing capability as separate development rather than assuming the example configuration is available. Add default access only for an intentional baseline. Add sharing for the delegation exception: the delegated quote's edit and submit scopes plus its actual parent project's submit scope, assigned to the delegated engineer. Sharing the quote does not automatically grant its parent or the submit action. Add restrictions for confidential records at the appropriate boundary; a collection restriction covers all operation branches when the invariant must apply everywhere.
 
 Use the three optional rule Skills for implementation. Follow [code declarations and seeds](code-and-seeds.md) for an executable permission-set declaration, persistence row shapes and initialization rules. Migrations contain schema operations only. Keep demonstration account creation and practice reset out of production features.
 
 ## 6. Relations and transitions
 
-An order's team, checks and collaborators have different capabilities. The delivery role may connect an active team, create/update/delete checks, and set collaborators with a public `note`; that does not permit editing team records or an internal join-table note. Declare each through the fluent relation API and keep protected foreign keys out of root writable fields.
+An order's carrier, checks and collaborating carriers have different capabilities. The delivery role may connect an active carrier, create/update/delete checks, and set collaborators with a public `note`; that does not permit editing carrier records or an internal join-table note. Declare each through the fluent relation API and keep protected foreign keys out of root writable fields.
 
 Read expansion and relation mutation need separate allowlists. Test nested create/update/upsert/delete and connect/disconnect/set only where the feature offers them. Upsert requires both create and update grants. A denied nested operation must roll back the entire mutation. The complete relation declaration pattern is in [fluent declarations](fluent-registration.md).
 
@@ -194,4 +194,4 @@ Business state remains an independent rule: completed orders can be read while d
 
 Declare `authz` on every entry client route, which nested pages inherit; a business page uses `{ resource: { type: 'page', id }, action: 'access' }` with a stable id. Follow [client development](client-development.md), including a complete action component. Use `useCan({ resource, action })` for action visibility and the server's per-record eligibility for row controls. Show useful loading/error/retry behavior. Invalidate affected lists and relationship controls after mutation while preserving the current selection when appropriate.
 
-Verify using the real route factory and database: an engineer can edit an out-of-region draft but cannot submit it; a colleague's quote remains unwritable; a delegated quote still needs parent access; confidential rows remain excluded despite sharing; removing a team source leaves unrelated direct responsibilities intact. Verify page-only permission cannot read data and action-only permission cannot open the page. Use ordinary accounts, not root, and inspect decisions for both success and denial.
+Verify using the real route factory and database: an engineer can edit an out-of-region draft but cannot submit it; a colleague's quote remains unwritable; a delegated quote still needs parent access; confidential rows remain excluded despite sharing; when a job is inherited through a team or department, removing that source leaves unrelated direct responsibilities intact. Verify page-only permission cannot read data and action-only permission cannot open the page. Use ordinary accounts, not root, and inspect decisions for both success and denial.

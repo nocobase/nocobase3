@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { definePermissionSet } from '@nocobase/authorization/permission-sets';
 import { DEPARTMENT_SUBJECT } from '../server/index.js';
 import { ADMIN, createTestApp, createTree, type TestApp } from './helpers.js';
 
@@ -45,6 +46,50 @@ describe('the department subject type', () => {
     expect(
       options.subjectTypes.find((type) => type.type === DEPARTMENT_SUBJECT),
     ).toMatchObject({ members: true, manage: true });
+  });
+
+  it('is listed and resolved only with the permission-sets settings entry', async () => {
+    await test.organization.createDepartment({
+      id: 'gate-1',
+      title: 'Gate department',
+    });
+    const user = await test.signUp('subjectGate');
+    const list = (cookie?: string): Promise<Response> =>
+      test.request('GET', `${SURFACE}?page=1&pageSize=10&search=Gate`, {
+        cookie,
+      });
+    const resolve = (ids: string[], cookie?: string): Promise<Response> =>
+      test.request('POST', `${SURFACE}/resolve`, { cookie, json: { ids } });
+
+    expect((await list()).status).toBe(401);
+    expect((await resolve(['gate-1'])).status).toBe(401);
+    expect((await list(user.cookie)).status).toBe(403);
+    expect((await resolve(['gate-1'], user.cookie)).status).toBe(403);
+    expect((await resolve([], user.cookie)).status).toBe(403);
+
+    const set = definePermissionSet('subject-gate')
+      .grant(
+        test.authz.settings.grant('authorization.permission-sets', ['read']),
+      )
+      .build();
+    await test.authz.permissionSets.create(set);
+    await test.authz.permissionSets.assign({
+      permissionSet: set.key,
+      subject: { type: 'user', id: user.id },
+    });
+
+    const listed = await list(user.cookie);
+    expect(listed.status).toBe(200);
+    expect(
+      ((await listed.json()) as { data: { total: number } }).data.total,
+    ).toBe(1);
+    const resolved = await resolve(['gate-1'], user.cookie);
+    expect(resolved.status).toBe(200);
+    expect(((await resolved.json()) as { data: Option[] }).data).toEqual([
+      expect.objectContaining({ id: 'gate-1', title: 'Gate department' }),
+    ]);
+    const empty = await resolve([], user.cookie);
+    expect(((await empty.json()) as { data: Option[] }).data).toEqual([]);
   });
 
   describe('selection', () => {
@@ -139,9 +184,10 @@ describe('the department subject type', () => {
             .execute();
           connection.mockClear();
           // Disabling the child drops it and its descendant, read through the transaction alone.
-          expect(await type.filterActive(ids, transaction)).toEqual([
-            'fa-root',
-          ]);
+          expect(
+            await type.filterActive([...ids, 'fa-missing'], transaction),
+          ).toEqual(['fa-root']);
+          expect(await type.filterActive([], transaction)).toEqual([]);
           expect(connection).not.toHaveBeenCalled();
           throw new Rollback();
         }),
