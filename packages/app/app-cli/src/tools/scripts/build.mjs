@@ -85,33 +85,25 @@ function copyCollectionMetadata() {
     withFileTypes: true,
   })) {
     if (!connection.isDirectory()) continue;
-    const collectionsDir = path.join(
-      databaseDir,
-      connection.name,
-      'collections',
-    );
-    if (!fs.existsSync(collectionsDir)) continue;
-    for (const entry of fs.readdirSync(collectionsDir, {
-      withFileTypes: true,
-    })) {
+    const metadataDir = path.join(databaseDir, connection.name, 'metadata');
+    if (!fs.existsSync(metadataDir)) continue;
+    for (const entry of fs.readdirSync(metadataDir, { withFileTypes: true })) {
       if (
-        !entry.isDirectory() ||
+        !entry.isFile() ||
+        !entry.name.endsWith('.json') ||
         entry.name.startsWith('.') ||
         entry.name.startsWith('_')
       )
         continue;
-      const source = path.join(collectionsDir, entry.name, 'metadata.json');
-      if (!fs.existsSync(source)) continue;
       const target = path.join(
         distDir,
         'database',
         connection.name,
-        'collections',
+        'metadata',
         entry.name,
-        'metadata.json',
       );
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.copyFileSync(source, target);
+      fs.copyFileSync(path.join(metadataDir, entry.name), target);
       copied += 1;
     }
   }
@@ -297,10 +289,10 @@ run('Rewrite server path aliases', 'pnpm', [
   'tsconfig.server.json',
 ]);
 writeCliEntry();
-// tsc emits only TypeScript. An external connection reads its supplemental metadata from
-// `database/<connection>/collections/*/metadata.json` at runtime, so those files have to travel with the server or a
-// deployment resolves every external Collection without titles or relations and reports nothing wrong. Only
-// `metadata.json` is copied: `collection.json` and `schema.json` are derived output nothing reads back.
+// tsc emits only TypeScript. An external connection reads its hand-written supplemental metadata from
+// `database/<connection>/metadata/<name>.json` at runtime, so those files have to travel with the server or a
+// deployment resolves every external Collection without titles or relations and reports nothing wrong.
+// `database/<connection>/collections/` is not copied: it is a local cache of the database nothing reads back.
 copyCollectionMetadata();
 // Same reason, different asset: a Skill is a `SKILL.md`, and the AI Employee plugin reads the application's from
 // `<applicationRoot>/ai/skills`, which is `dist` once deployed.

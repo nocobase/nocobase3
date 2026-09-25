@@ -2,7 +2,7 @@
 
 Use this page to switch the application's database or add a connection: the dialect packages and their fields, what `server/config/database.ts` and `config.yml` each own, and the installation and typing problems that follow. For schema changes read [migrations and seeds](migrations.md); for runtime queries read [database and data access](database-and-data.md).
 
-What a connection means once code touches it — `schemaManagement` as a schema-ownership boundary rather than read-only credentials, and what `database/<connectionName>/collections/` holds for a managed connection versus an external one — is in `.agents/skills/nocobase-db/SKILL.md` sections 1 and 6.
+What a connection means once code touches it — `schemaManagement` as a schema-ownership boundary rather than read-only credentials, and what `database/<connectionName>/collections/` and `metadata/` hold — is in `.agents/skills/nocobase-db/SKILL.md` sections 1 and 6.
 
 ## Creating and configuring an application
 
@@ -142,7 +142,7 @@ Connection names used by database tasks contain only letters, digits, underscore
 
 The default connection runs migrations and seeds at startup unless disabled. Other connections default to `autoRun: false`; enable each task explicitly when startup should run it. Plugin sources are added only to the default connection. See [task ordering and source selection](migrations.md#multiple-connections).
 
-At the application layer, an external connection without a configured metadata store uses `database/<connectionName>/collections/` by default. A connection-level `metadataStore` or shared `database.metadataStore` can provide another source. Metadata directory strings resolve relative to the application root. Account for the target's naming conventions and collection metadata when verifying runtime access.
+At the application layer, an external connection without a configured metadata store reads `database/<connectionName>/metadata/<name>.json` by default: one hand-written metadata document per Collection, committed. A connection-level `metadataStore` or shared `database.metadataStore` can provide another source; a directory string names a directory in the same layout, resolves relative to the application root, and may not be a generated `collections/` directory. Account for the target's naming conventions and collection metadata when verifying runtime access.
 
 Use one managed connection per physical database/schema. The application rejects identical configured managed targets before running tasks; hostname aliases, symlinks and driver routing can hide a shared target. Different history table names do not isolate schema ownership. External connections are excluded from this duplicate-ownership check.
 

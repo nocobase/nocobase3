@@ -61,10 +61,10 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-journal',
   '/database.sqlite-wal',
   '/database.sqlite-shm',
-  // Written by `pnpm nocobase collections generate`: a snapshot of what this machine's database resolves every Collection
-  // to, regenerated after migrating rather than committed. Only the managed connection the template ships is named,
-  // because an `external` connection keeps its metadata.json in the repository as the metadata source.
-  '/database/main/collections/',
+  // Written by `pnpm nocobase collections generate`: a cache of what this machine's database resolves every Collection
+  // to, for every connection, regenerated rather than committed. Hand-written metadata lives in
+  // `database/<connection>/metadata/` instead, so the whole collections directory can be ignored.
+  '/database/*/collections/',
   '/.agents/',
   '/.claude/skills/',
   '/.agent-annotations/',

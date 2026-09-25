@@ -114,6 +114,17 @@ Older releases may include `MIGRATION.md`. Treat it as historical context and ve
 
 `config.yml`, optional generated `.env`, `.gitignore`, `.npmrc`, and `pnpm-workspace.yaml` were written by the generator or by `pnpm nocobase config init` and appear in no diff at all.
 
+### Hand-written Collection metadata moved out of `collections/`
+
+A release whose `nocobase-db` Skill documents `database/<connection>/metadata/` keeps an external connection's hand-written metadata there, one `<name>.json` per Collection holding only the metadata document, and treats `database/<connection>/collections/` as a gitignored cache for every connection. An application upgraded from an earlier release still has its metadata at `database/<connection>/collections/<name>/metadata.json`, and startup then fails with an error naming that layout; nothing is read from it silently. For each external connection, and for any `metadataStore` string that pointed into a `collections/` directory:
+
+1. Create `database/<connection>/metadata/` and write each Collection's `"document"` value from `collections/<name>/metadata.json` to `metadata/<name>.json`. Skip a file whose `"document"` is `null`: it held no metadata.
+2. Point a `metadataStore` string at the new directory, such as `database/shared-crm/metadata` instead of `database/shared-crm/collections`.
+3. Delete the old `database/<connection>/collections/` directory, commit the `metadata/` files, and run `pnpm nocobase collections generate --all` to rebuild the cache.
+4. Replace the `/database/<name>/collections/` lines in `.gitignore`, which no diff shows, with the single `/database/*/collections/`.
+
+An application without an external connection only needs step 4.
+
 ## Where the user's code lives
 
 ```text

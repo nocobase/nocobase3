@@ -400,7 +400,7 @@ const enUS = {
     eyebrow: 'External database example',
     title: 'CRM orders',
     description:
-      'These rows live in a database this application does not own. The externalCrm connection reads its schema, never changes it, and layers titles and the customer relation on top from database/externalCrm/collections/*/metadata.json. The page addresses everything by logical name; the crm_ table prefix never appears here.',
+      'These rows live in a database this application does not own. The externalCrm connection reads its schema, never changes it, and layers titles and the customer relation on top from database/externalCrm/metadata/*.json. The page addresses everything by logical name; the crm_ table prefix never appears here.',
     readOnly: 'Read-only',
     customers: '{{count}} customers',
     filter: 'Filter by status',

@@ -114,8 +114,10 @@ export type AppDatabaseConnectionConfig<
   seeds?: Partial<AppDatabaseSeedConfig>;
   /**
    * Where supplemental metadata comes from. An `external` connection that
-   * sets nothing here or at the top level reads
-   * `database/<connection>/collections/*\/metadata.json`.
+   * sets nothing here or at the top level reads the hand-written
+   * `database/<connection>/metadata/<name>.json` files. A string is a
+   * directory in that layout, relative to the application root; it may not
+   * be a generated `collections/` directory.
    */
   metadataStore?: AppMetadataStoreConfig;
 };

@@ -24,7 +24,7 @@ let directory: string;
 let database: NonNullable<ReturnType<typeof createAppDatabaseManager>>;
 
 // Resolving paths against the template root is what makes the default
-// metadata source database/externalCrm/collections/*/metadata.json — the
+// metadata source database/externalCrm/metadata/<name>.json — the
 // committed files — apply, exactly as it does for the running application.
 const paths = createAppPaths({
   rootDir: path.resolve(import.meta.dirname, '../..'),
@@ -79,7 +79,7 @@ describe('external CRM example', () => {
   it('resolves the CRM tables to Collections through naming and metadata', async () => {
     const orders = await database.collections('externalCrm').get('orders');
     // Title, field titles and the relation all come from the committed
-    // database/externalCrm/collections/orders/metadata.json.
+    // database/externalCrm/metadata/orders.json.
     expect(orders).toMatchObject({
       name: 'orders',
       title: 'CRM orders',

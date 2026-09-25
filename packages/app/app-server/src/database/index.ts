@@ -45,6 +45,7 @@ export { prepareAppDatabaseStorage } from './storage.js';
 export {
   isCollectionMetadataStoreInstance,
   resolveAppCollectionsDirectory,
+  resolveAppMetadataDirectory,
   resolveAppMetadataStore,
   type ResolveAppMetadataStoreOptions,
 } from './collections-directory.js';

@@ -27,12 +27,11 @@ dist-ssr
 /config.yml
 /.env
 
-# Written by `pnpm nocobase collections generate` for each managed connection: a snapshot of what this machine's database
-# resolves every Collection to, down to the dialect's physical types. It describes a database rather than the
-# application, so it is regenerated after migrating rather than committed. An `external` connection is the exception —
-# there `metadata.json` is the metadata source and belongs in the repository — so the managed connections are named
-# one by one rather than ignoring `database/*/collections/`.
-/database/main/collections/
+# Written by `pnpm nocobase collections generate`: a cache of what this machine's database resolves every Collection
+# to, down to the dialect's physical types, for every connection. It describes a database rather than the application,
+# so it is regenerated rather than committed. Hand-written metadata lives beside it in `database/<connection>/metadata/`
+# and is committed.
+/database/*/collections/
 
 # Local SQLite database, at the path config.example.yml gives the default connection
 /database.sqlite

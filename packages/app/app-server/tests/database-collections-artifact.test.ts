@@ -67,7 +67,7 @@ function fixture() {
         dialect: 'sqlite',
         filename: paths.storage('external/data.sqlite'),
         // No metadataStore: an external connection reads
-        // database/external/collections/*/metadata.json by default.
+        // database/external/metadata/<name>.json by default.
         schemaManagement: 'external',
       },
     },
@@ -159,6 +159,7 @@ describe('generateAppCollectionsArtifact', () => {
     );
     expect(manifest).toEqual({
       formatVersion: 1,
+      generated: true,
       connection: 'main',
       dialect: 'sqlite',
       schemaManagement: 'managed',
@@ -357,9 +358,10 @@ describe('generateAppCollectionsArtifact', () => {
     }
   });
 
-  it('treats metadata.json as the source for an external connection: scaffold, edit, regenerate, keep on drop', async () => {
+  it("reads an external connection's metadata from database/<connection>/metadata/ and never writes there", async () => {
     const { config, paths } = fixture();
     const directory = paths.database('external/collections');
+    const metadataDirectory = paths.database('external/metadata');
     // The schema belongs to the foreign system: create it as that system
     // would, with the raw client rather than the Builder.
     const setup = createAppDatabaseManager(config, paths)!;
@@ -373,6 +375,7 @@ describe('generateAppCollectionsArtifact', () => {
       await setup.destroy();
     }
 
+    // Before anyone writes metadata, the cache still describes the table.
     // Each run opens its own manager, as the CLI does, so the directory store
     // re-reads the files.
     const first = await generateAppCollectionsArtifact(config, {
@@ -381,41 +384,36 @@ describe('generateAppCollectionsArtifact', () => {
     });
     expect(first.results[0]).toMatchObject({
       status: 'completed',
-      orphans: [],
       manifest: {
         schemaManagement: 'external',
         migrationHead: null,
         collections: ['legacyAccounts'],
       },
     });
-    const metadataFile = path.join(directory, 'legacyAccounts/metadata.json');
-    expect(readJson<CollectionArtifactMetadataFile>(metadataFile)).toEqual({
-      formatVersion: 1,
-      name: 'legacyAccounts',
-      document: null,
-    });
+    expect(first.results[0].unusedMetadata).toBeUndefined();
+    expect(
+      readJson<CollectionArtifactMetadataFile>(
+        path.join(directory, 'legacyAccounts/metadata.json'),
+      ).document,
+    ).toBeNull();
+    expect(existsSync(metadataDirectory)).toBe(false);
 
-    // A person fills in the scaffold, in whatever formatting they like.
-    writeFileSync(
-      metadataFile,
-      JSON.stringify({
-        name: 'legacyAccounts',
-        formatVersion: 1,
-        document: {
-          version: 1,
-          name: 'legacyAccounts',
-          title: 'Legacy accounts',
-          fields: { code: { title: 'Account code' } },
-        },
-      }),
-    );
+    // A person writes the metadata, in whatever formatting they like.
+    mkdirSync(metadataDirectory, { recursive: true });
+    const source = path.join(metadataDirectory, 'legacyAccounts.json');
+    const handWritten = JSON.stringify({
+      version: 1,
+      name: 'legacyAccounts',
+      title: 'Legacy accounts',
+      fields: { code: { title: 'Account code' } },
+    });
+    writeFileSync(source, handWritten);
     const second = await generateAppCollectionsArtifact(config, {
       paths,
       connection: 'external',
     });
-    // collection.json picks the metadata up and metadata.json is only
-    // reformatted; a changed Collection is rewritten as a unit, so schema.json
-    // is written too even though its content is the same.
+    // A changed Collection is rewritten as a unit, so schema.json is written
+    // too even though its content is the same.
     expect(second.results[0].written).toEqual([
       'legacyAccounts/collection.json',
       'legacyAccounts/metadata.json',
@@ -428,23 +426,11 @@ describe('generateAppCollectionsArtifact', () => {
     expect(
       collection.collection.fields?.find((field) => field.name === 'code'),
     ).toMatchObject({ title: 'Account code' });
-    expect(
-      readJson<CollectionArtifactMetadataFile>(metadataFile).document,
-    ).toMatchObject({
-      title: 'Legacy accounts',
-    });
-    const check = await generateAppCollectionsArtifact(config, {
-      paths,
-      connection: 'external',
-      check: true,
-    });
-    expect(check.results[0]).toMatchObject({
-      status: 'completed',
-      differences: [],
-    });
+    // The source is read, never reformatted.
+    expect(readFileSync(source, 'utf8')).toBe(handWritten);
 
-    // The foreign system drops the table. The generated files go; the
-    // metadata, which nothing else holds, stays and is reported.
+    // The foreign system drops the table. The cache follows the database; the
+    // hand-written file stays where it is and is reported as unused.
     const teardown = createAppDatabaseManager(config, paths)!;
     try {
       const knex = await teardown.connection('external').client<Knex>();
@@ -458,14 +444,16 @@ describe('generateAppCollectionsArtifact', () => {
     });
     expect(third.results[0]).toMatchObject({
       status: 'completed',
-      deleted: ['legacyAccounts/collection.json', 'legacyAccounts/schema.json'],
-      orphans: ['legacyAccounts'],
+      deleted: [
+        'legacyAccounts/collection.json',
+        'legacyAccounts/metadata.json',
+        'legacyAccounts/schema.json',
+      ],
+      unusedMetadata: ['legacyAccounts'],
       manifest: { collections: [] },
     });
-    expect(existsSync(metadataFile)).toBe(true);
-    expect(
-      existsSync(path.join(directory, 'legacyAccounts/collection.json')),
-    ).toBe(false);
+    expect(existsSync(path.join(directory, 'legacyAccounts'))).toBe(false);
+    expect(readFileSync(source, 'utf8')).toBe(handWritten);
     const afterDrop = await generateAppCollectionsArtifact(config, {
       paths,
       connection: 'external',
@@ -474,8 +462,80 @@ describe('generateAppCollectionsArtifact', () => {
     expect(afterDrop.results[0]).toMatchObject({
       status: 'completed',
       differences: [],
-      orphans: ['legacyAccounts'],
+      unusedMetadata: ['legacyAccounts'],
     });
+  });
+
+  it('refuses the old layout, metadata written by hand inside collections/, instead of reading nothing', async () => {
+    const { config, paths } = fixture();
+    const legacy = paths.database('external/collections/legacyAccounts');
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(
+      path.join(legacy, 'metadata.json'),
+      JSON.stringify({
+        formatVersion: 1,
+        name: 'legacyAccounts',
+        document: { version: 1, name: 'legacyAccounts', title: 'Legacy' },
+      }),
+    );
+    expect(() => createAppDatabaseManager(config, paths)).toThrow(
+      /old location.*metadata\.json.*database\/external\/metadata\/<name>\.json/,
+    );
+
+    // Once moved, the generated cache beside the new directory is no longer
+    // mistaken for the old layout, even though it holds metadata.json files.
+    rmSync(paths.database('external/collections'), {
+      recursive: true,
+      force: true,
+    });
+    mkdirSync(paths.database('external/metadata'), { recursive: true });
+    const setup = createAppDatabaseManager(config, paths)!;
+    try {
+      const knex = await setup.connection('external').client<Knex>();
+      await knex.schema.createTable('legacy_accounts', (table) => {
+        table.increments('id');
+      });
+    } finally {
+      await setup.destroy();
+    }
+    writeFileSync(
+      paths.database('external/metadata/legacyAccounts.json'),
+      JSON.stringify({ version: 1, name: 'legacyAccounts', title: 'Legacy' }),
+    );
+    const generated = await generateAppCollectionsArtifact(config, {
+      paths,
+      connection: 'external',
+    });
+    expect(generated.ok).toBe(true);
+    rmSync(paths.database('external/metadata'), {
+      recursive: true,
+      force: true,
+    });
+    // A generated cache alone, with no metadata directory, is not the old layout.
+    const reopened = createAppDatabaseManager(config, paths)!;
+    await reopened.destroy();
+  });
+
+  it('refuses a metadata store pointed at a generated collections directory', async () => {
+    const { config, paths } = fixture();
+    const result = await generateAppCollectionsArtifact(
+      {
+        ...config,
+        connections: {
+          ...config.connections,
+          external: {
+            ...config.connections.external,
+            metadataStore: 'database/external/collections',
+          },
+        },
+      },
+      { paths, connection: 'external' },
+    );
+    expect(result).toMatchObject({ ok: false, status: 'failed' });
+    expect(result.results[0].error).toMatch(
+      /generated collections directory.*database\/<connection>\/metadata/,
+    );
+    expect(existsSync(paths.database('external/collections'))).toBe(false);
   });
 
   it('plans only the selected connection, so an unrelated misconfiguration does not fail it', async () => {

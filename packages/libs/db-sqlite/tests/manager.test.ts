@@ -1145,17 +1145,11 @@ describe('declarative metadata store configuration', () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), 'nocobase-declarative-store-'),
     );
-    mkdirSync(path.join(directory, 'collections', 'orders'), {
-      recursive: true,
-    });
+    mkdirSync(path.join(directory, 'metadata'), { recursive: true });
     writeFileSync(
-      path.join(directory, 'collections', 'orders', 'metadata.json'),
+      path.join(directory, 'metadata', 'orders.json'),
       `${JSON.stringify(
-        {
-          formatVersion: 1,
-          name: 'orders',
-          document: { version: 1, name: 'orders', title: 'CRM orders' },
-        },
+        { version: 1, name: 'orders', title: 'CRM orders' },
         null,
         2,
       )}\n`,
@@ -1173,7 +1167,7 @@ describe('declarative metadata store configuration', () => {
           schemaManagement: 'external',
           metadataStore: {
             type: 'directory',
-            directory: path.join(directory, 'collections'),
+            directory: path.join(directory, 'metadata'),
           },
         },
       },
@@ -1200,7 +1194,7 @@ describe('declarative metadata store configuration', () => {
       const shared = createTestDatabase({
         metadataStore: {
           type: 'directory',
-          directory: path.join(directory, 'collections'),
+          directory: path.join(directory, 'metadata'),
         },
         connections: {
           crm: {

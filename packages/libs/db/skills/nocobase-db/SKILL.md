@@ -294,14 +294,17 @@ A Collection is what the database resolves to once physical schema and metadata 
 
 **`pnpm nocobase collections generate` writes it to disk, for you to read.** It reads every Collection of a connection and writes `collection.json`, `metadata.json` and `schema.json` per Collection under `database/<connection>/collections/<name>/`, plus one `_manifest.json` for the connection. Run it after migrating and read the artifact before writing a query — it is the reliable way to learn the real field names, types, nullability, keys and relations instead of guessing them from a migration you have not read. `--connection <name>` and `--all` select connections; `--check` writes nothing and exits non-zero when the files are stale.
 
-Who owns those files depends on `schemaManagement`, and this asymmetry matters:
+Those files are a cache for every connection, external ones included: gitignored, safe to delete, and never read at runtime. Never edit them — change the migration, or the metadata, and regenerate.
 
-| Connection | `database/<connection>/collections/`                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `managed`  | Derived output, gitignored. Migrations remain the only authority on schema, and nothing reads these files at runtime. Regenerate rather than edit. |
-| `external` | Committed input. `metadata.json` is the default metadata source for a connection with no configured store — editing it changes runtime behavior.   |
+What is written by hand sits beside the cache, in its own directory:
 
-So never edit a managed connection's artifacts to "fix" a schema — change the migration and regenerate. And never delete an external connection's, which would remove the metadata the application runs on.
+| Directory                            | Written by             | Holds                                                                                                                                      |
+| ------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `database/<connection>/migrations/`  | People                 | The authority on a `managed` connection's schema                                                                                           |
+| `database/<connection>/metadata/`    | People                 | One `<name>.json` metadata document per Collection: the default metadata source of an `external` connection, committed and read at startup |
+| `database/<connection>/collections/` | `collections generate` | The cache described above                                                                                                                  |
+
+So an external connection's titles, descriptions and relations are edited in `metadata/<name>.json`, and deleting that directory removes the metadata the application runs on; deleting `collections/` costs nothing but a regeneration.
 
 **`db.collections()` reads it at runtime**, for code that has to adapt to the schema rather than assume it:
 

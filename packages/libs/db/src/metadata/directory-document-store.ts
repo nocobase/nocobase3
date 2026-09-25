@@ -1,11 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import {
-  COLLECTION_ARTIFACT_FILE_NAMES,
-  COLLECTION_ARTIFACT_FORMAT_VERSION,
-  type CollectionArtifactMetadataFile,
-} from '../collection/artifact/format.js';
+import { COLLECTION_ARTIFACT_FILE_NAMES } from '../collection/artifact/format.js';
 import { validateCollectionArtifactDirectoryName } from '../collection/artifact/names.js';
 import type {
   CollectionMetadataStore,
@@ -33,20 +29,28 @@ import { validateCollectionMetadataDocument } from './validation.js';
 
 export interface DirectoryCollectionMetadataStoreOptions {
   /**
-   * A Collection artifact directory: `<directory>/<name>/metadata.json` per
-   * Collection, in the format `serializeCollectionArtifact()` writes. Relative
-   * paths resolve against the process working directory, so callers that know
-   * an application root should resolve them first.
+   * A directory of hand-written metadata: one `<name>.json` per Collection,
+   * holding that Collection's metadata document. Relative paths resolve
+   * against the process working directory, so callers that know an application
+   * root should resolve them first.
    */
   readonly directory: string;
 }
 
+/** The file suffix of one Collection's metadata document in a directory store. */
+const COLLECTION_METADATA_FILE_EXTENSION = '.json';
+
 /**
- * Reads supplemental Collection metadata from the `metadata.json` files of a
- * Collection artifact directory. The files are the source: for an external
- * connection nothing else can hold metadata, and the generator writes the
- * same format, so what it scaffolds is what this store reads back. Read-only,
- * like the Module store; the files are edited in the repository.
+ * Reads supplemental Collection metadata from a directory of `<name>.json`
+ * files, each one a Collection metadata document. The files are the source:
+ * for an external connection nothing else can hold metadata, so they are
+ * written by hand and committed. Read-only, like the Module store.
+ *
+ * This is deliberately a different layout from the Collection artifacts
+ * `serializeCollectionArtifact()` writes, whose `<name>/metadata.json` is a
+ * derived copy. A directory in that layout is refused rather than read, so a
+ * store pointed at generated artifacts cannot mistake a snapshot for its
+ * source.
  */
 export class DirectoryCollectionMetadataStore implements CollectionMetadataStore {
   readonly capabilities: CollectionMetadataStoreCapabilities = Object.freeze({
@@ -75,7 +79,6 @@ export class DirectoryCollectionMetadataStore implements CollectionMetadataStore
     const next = new Map<string, StoredCollectionMetadata>();
     for (const [name, file] of this.metadataFiles()) {
       const document = readMetadataDocument(name, file);
-      if (document === undefined) continue;
       next.set(name, { document, revision: contentRevision(document) });
     }
     this.documents.clear();
@@ -111,26 +114,38 @@ export class DirectoryCollectionMetadataStore implements CollectionMetadataStore
     throw new CollectionMetadataStoreReadOnlyError('delete', this.directory);
   }
 
-  /** A missing directory is an empty store: the first generate run creates it. */
+  /** A missing directory is an empty store: nothing has been written yet. */
   private *metadataFiles(): Iterable<[name: string, file: string]> {
     if (!existsSync(this.directory)) return;
     const entries = readdirSync(this.directory, { withFileTypes: true })
       .filter(
-        (entry) =>
-          entry.isDirectory() &&
-          !entry.name.startsWith('.') &&
-          !entry.name.startsWith('_'),
+        (entry) => !entry.name.startsWith('.') && !entry.name.startsWith('_'),
       )
-      .map((entry) => entry.name)
-      .sort();
-    for (const name of entries) {
-      validateCollectionArtifactDirectoryName(name);
-      const file = path.join(
-        this.directory,
-        name,
-        COLLECTION_ARTIFACT_FILE_NAMES.metadata,
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const file = path.join(this.directory, entry.name);
+      if (entry.isDirectory()) {
+        if (
+          existsSync(path.join(file, COLLECTION_ARTIFACT_FILE_NAMES.metadata))
+        ) {
+          throw new CollectionMetadataStoreOptionsError(
+            `${this.directory} holds ${entry.name}/${COLLECTION_ARTIFACT_FILE_NAMES.metadata}, the layout of generated Collection artifacts. A metadata directory holds one <name>${COLLECTION_METADATA_FILE_EXTENSION} per Collection containing only its metadata document: move the "document" of ${path.join(entry.name, COLLECTION_ARTIFACT_FILE_NAMES.metadata)} to ${entry.name}${COLLECTION_METADATA_FILE_EXTENSION}.`,
+          );
+        }
+        continue;
+      }
+      if (
+        !entry.isFile() ||
+        !entry.name.endsWith(COLLECTION_METADATA_FILE_EXTENSION)
+      ) {
+        continue;
+      }
+      const name = entry.name.slice(
+        0,
+        -COLLECTION_METADATA_FILE_EXTENSION.length,
       );
-      if (existsSync(file)) yield [name, file];
+      validateCollectionArtifactDirectoryName(name);
+      yield [name, file];
     }
   }
 }
@@ -138,7 +153,7 @@ export class DirectoryCollectionMetadataStore implements CollectionMetadataStore
 function readMetadataDocument(
   name: string,
   file: string,
-): CollectionMetadataDocument | undefined {
+): CollectionMetadataDocument {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(file, 'utf8'));
@@ -147,29 +162,10 @@ function readMetadataDocument(
       `${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new CollectionMetadataStoreOptionsError(
-      `${file} must hold an object with formatVersion, name and document.`,
-    );
-  }
-  const record = parsed as Partial<CollectionArtifactMetadataFile>;
-  if (record.formatVersion !== COLLECTION_ARTIFACT_FORMAT_VERSION) {
-    throw new CollectionMetadataStoreOptionsError(
-      `${file} has formatVersion ${JSON.stringify(record.formatVersion)}; this store reads formatVersion ${COLLECTION_ARTIFACT_FORMAT_VERSION}.`,
-    );
-  }
-  if (record.name !== name) {
-    throw new CollectionMetadataStoreOptionsError(
-      `${file} names Collection ${JSON.stringify(record.name)} but sits in directory "${name}".`,
-    );
-  }
-  if (record.document === null || record.document === undefined) {
-    return undefined;
-  }
-  const document = validateCollectionMetadataDocument(record.document);
+  const document = validateCollectionMetadataDocument(parsed);
   if (document.name !== name) {
     throw new CollectionMetadataStoreOptionsError(
-      `${file} holds a document for Collection "${document.name}" but sits in directory "${name}".`,
+      `${file} holds the metadata document of Collection "${document.name}"; rename the file or the document's name so they match.`,
     );
   }
   return document;

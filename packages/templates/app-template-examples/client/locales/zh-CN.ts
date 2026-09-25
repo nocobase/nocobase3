@@ -376,7 +376,7 @@ const zhCN: AppResource = {
     eyebrow: '外部数据库示例',
     title: 'CRM 订单',
     description:
-      '这些数据存放在一个不属于本应用的数据库里。externalCrm 连接只读取它的结构、从不修改，并从 database/externalCrm/collections/*/metadata.json 叠加标题和客户关系。页面全部按逻辑名访问，crm_ 表前缀不会出现在这里。',
+      '这些数据存放在一个不属于本应用的数据库里。externalCrm 连接只读取它的结构、从不修改，并从 database/externalCrm/metadata/*.json 叠加标题和客户关系。页面全部按逻辑名访问，crm_ 表前缀不会出现在这里。',
     readOnly: '只读',
     customers: '{{count}} 位客户',
     filter: '按状态筛选',
