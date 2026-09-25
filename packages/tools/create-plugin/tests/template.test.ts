@@ -106,6 +106,7 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'registry/component-ui/plugin-feature-card.tsx',
     'registry.config.json',
   ],
+  cli: ['cli/index.ts', 'cli/info.ts', 'tests/cli.test.ts'],
   skills: ['skills/nocobase-app-plugin-__NOCOBASE_SHORT_NAME__/SKILL.md'],
 };
 
@@ -143,6 +144,7 @@ describe('bundled capability templates', () => {
 
     expect(files).toContain('cli/index.ts');
     expect(files).toContain('cli/info.ts');
+    expect(files).toContain('tests/cli.test.ts');
   });
 
   it('omits the CLI entry when the capability is not selected', async () => {
@@ -153,6 +155,7 @@ describe('bundled capability templates', () => {
     );
 
     expect(files.some((file) => file.startsWith('cli/'))).toBe(false);
+    expect(files).not.toContain('tests/cli.test.ts');
   });
 
   it('always emits the agent documentation, with CLAUDE.md deferring to AGENTS.md', async () => {

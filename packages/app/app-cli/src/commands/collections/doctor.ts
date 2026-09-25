@@ -4,9 +4,28 @@ import type { Interfaces } from '@oclif/core';
 
 import {
   runAppCollectionsDoctor,
+  type AppCollectionsDoctorConnectionResult,
   type AppCollectionsDoctorResult,
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
+
+import { CommandError, type CommandSuggestion } from '../../command/errors.ts';
+import { withAppRuntime } from '../../command/lifecycle.ts';
+import {
+  connectionFailureMessage,
+  selectionArgs,
+  toDatabaseCommandError,
+} from '../../database-command.ts';
+
+/** What `collections doctor` returns, which is `result` under `--json`. */
+export interface CollectionsDoctorResult {
+  /** `not-configured` when no database is configured, so nothing was checked; absent otherwise. */
+  readonly state?: 'not-configured';
+  /** Whether --fix deleted the records whose table is gone. */
+  readonly fix: boolean;
+  /** One entry per connection checked. */
+  readonly results: readonly AppCollectionsDoctorConnectionResult[];
+}
 
 export default class CollectionsDoctor extends AppCommand {
   static override summary =
@@ -21,15 +40,10 @@ export default class CollectionsDoctor extends AppCommand {
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     fix: Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -46,39 +60,87 @@ export default class CollectionsDoctor extends AppCommand {
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<CollectionsDoctorResult> {
     const { flags } = await this.parse(CollectionsDoctor);
     let result: AppCollectionsDoctorResult;
     try {
-      const runtime = await appContextOf(this).loadRuntime();
-      result = await runAppCollectionsDoctor(
-        runtime.config.get<AppDatabaseConfig>('database')!,
-        {
-          paths: runtime.paths,
-          connection: flags.connection,
-          all: flags.all,
-          fix: flags.fix,
-        },
+      result = await withAppRuntime(appContextOf(this), (runtime) =>
+        runAppCollectionsDoctor(
+          runtime.config.get<AppDatabaseConfig>('database')!,
+          {
+            paths: runtime.paths,
+            connection: flags.connection,
+            all: flags.all,
+            fix: flags.fix,
+          },
+        ),
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (flags.json)
-        this.logJson({ ok: false, status: 'failed', error: message });
-      else this.log(message);
-      this.exit(1);
-      return;
+      throw toDatabaseCommandError(error, flags.connection);
     }
 
-    if (flags.json) this.logJson(result);
-    else this.report(result);
+    this.report(result);
 
-    const remaining = result.results.some((entry) =>
-      (entry.issues ?? []).some(
+    const failed = result.results.filter((entry) => entry.status === 'failed');
+    if (failed.length) {
+      throw new CommandError(
+        connectionFailureMessage(
+          'Could not check the Collection metadata of',
+          failed,
+        ),
+        {
+          code: 'COLLECTIONS_CONNECTION_FAILED',
+          details: {
+            connections: failed.map((entry) => entry.connection),
+            fix: result.fix,
+            results: result.results,
+          },
+        },
+      );
+    }
+    const remaining = result.results.flatMap((entry) =>
+      (entry.issues ?? []).filter(
         (issue) =>
           !issue.orphaned || !(entry.repaired ?? []).includes(issue.name),
       ),
     );
-    if (!result.ok || remaining) this.exit(1);
+    if (remaining.length) {
+      const suggestions: (string | CommandSuggestion)[] = [];
+      if (remaining.some((issue) => issue.orphaned)) {
+        suggestions.push({
+          message: 'Delete the records whose table is gone:',
+          run: {
+            command: 'pnpm',
+            args: [
+              'nocobase',
+              'collections',
+              'doctor',
+              '--fix',
+              ...selectionArgs(flags),
+            ],
+          },
+        });
+      }
+      if (remaining.some((issue) => !issue.orphaned)) {
+        suggestions.push(
+          'Write a migration that reconciles the records whose table exists but no longer matches.',
+        );
+      }
+      throw new CommandError(
+        `${String(remaining.length)} Collection metadata ${remaining.length === 1 ? 'record disagrees' : 'records disagree'} with the schema.`,
+        {
+          code: 'COLLECTION_ISSUES_REMAIN',
+          suggestions,
+          details: { fix: result.fix, results: result.results },
+        },
+      );
+    }
+
+    if (result.status === 'not-configured') {
+      this.setStatus('success-noop');
+      return { state: 'not-configured', fix: result.fix, results: [] };
+    }
+    return { fix: result.fix, results: result.results };
   }
 
   private report(result: AppCollectionsDoctorResult): void {

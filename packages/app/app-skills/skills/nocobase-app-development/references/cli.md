@@ -37,7 +37,7 @@ Every command listed takes `--connection <name>` or `--all` where connections ap
 
 ## Conventions an agent relies on
 
-- **`--json`** prints one JSON document on stdout, success or failure; warnings go to stderr. Read its `ok` and `status` together with the exit code rather than parsing text.
+- **`--json`** prints one JSON document on stdout, success or failure, the same shape for every command: `{ schemaVersion, ok, command, status, result | error, warnings }`. `status` is `success`, `success-noop` (nothing needed changing), `partial-success` or `failure`. Read `result` on success; on failure read `error.code`, `error.suggestions` — each a `message` and, where the next step is a command, a `run` with its `command` and `args` — and `error.details`. Read `warnings` too, and check the exit code rather than parsing text. `NOCOBASE_CONTENT_TYPE=json` turns `--json` on for every command in a session. What the application logs while a command runs goes to stderr.
 - **Exit codes** are `0` for success, `1` for a runtime failure and `2` for invalid usage; `release upload` and `release deploy` add `3` for a result the Hub could not confirm. Keep a non-zero exit visible in your report; do not rerun until it passes by changing flags.
 - **Paths** given in a flag resolve from the current directory, as with any command line. The exception is `config init --config`, which resolves against the application root, the same way as `APP_CONFIG_FILE`. A default path a command names in its `--help`, such as the `release upload` archive, is inside the application.
 - **Preview first.** `plugin register`, `plugin unregister`, `plugin update`, `package remove`, `skills sync` and `db repair` take `--dry-run`. Use it before any change whose effect you have not already confirmed with the user.
@@ -54,11 +54,7 @@ An external connection's metadata — titles, descriptions and relations its sch
 
 ## The application's own commands
 
-A command this application owns is a file under `cli/commands/` that default-exports an oclif `Command` subclass. Its path is its name below the `app` topic: `cli/commands/sync-orders.ts` answers to `pnpm nocobase app sync-orders`, and `cli/commands/orders/sync.ts` to `pnpm nocobase app orders sync`. There is no index to update. Files and directories starting with `_`, and directories named `lib`, are skipped, so helpers can sit beside the commands.
-
-Do not name a directory under `cli/commands/` `dist`, `build`, `coverage` or `generated`: each is ignored by `.gitignore`, Prettier or the shared ESLint preset, so a command inside one would go unlinted, or never reach git, without any warning.
-
-Keep a command module cheap to import — load heavy work inside `run()` — because help loads every command class. Commands are static tooling: they read and write files and packages and must not start the application or resolve its services. `cli/` is compiled into `dist`, so an application command also runs in a deployment and may import only packages in `dependencies`.
+An application's own commands answer under the `app` topic, one file per command under `cli/commands/`. To add or change one, read [adding an application command](commands.md).
 
 ## In a built dist/
 

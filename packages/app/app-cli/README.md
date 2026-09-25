@@ -38,7 +38,7 @@ In a source application the bin registers the application's own `tsx` before it 
 
 `tests/builtin-commands.test.ts` asserts the exact list, so adding, renaming or removing a command is a deliberate edit there.
 
-`--json` prints one JSON document on stdout, success or failure, and a failure also exits non-zero. Exit codes are `0` for success, `1` for a runtime error and `2` for a usage error; `release upload` and `release deploy` add `3` for a result the Hub could not confirm. A path given in a flag resolves from the current directory.
+`--json` prints one JSON document on stdout, success or failure, in the shape described under "Writing commands" below, and a failure also exits non-zero. Exit codes are `0` for success, `1` for a runtime error and `2` for a usage error; `release upload` and `release deploy` add `3` for a result the Hub could not confirm. `NOCOBASE_CONTENT_TYPE=json` turns it on for every command. A path given in a flag resolves from the current directory; a default path a command names in its `--help` is inside the application.
 
 ### Topics are a flat namespace
 
@@ -51,6 +51,29 @@ A file's path below a commands directory is its command id: `src/commands/db/app
 A built-in command is dispatched with nothing else loaded. Only a run that needs the whole tree — help, an `app` command, a plugin's command — imports the application's `cli/plugins.ts` and `cli/commands/`, so `pnpm install` running `nocobase skills sync`, or `plugin register` repairing a broken `cli/plugins.ts`, never depends on every plugin's CLI entry importing.
 
 Plugins are not discovered. `cli/plugins.ts` lists them explicitly, because the array order is both command registration order and hook order, and because a plugin installed is not a plugin enabled. `pnpm nocobase plugin register` writes the entry.
+
+## Writing commands
+
+Every command — built-in, an application's, or a plugin's — extends `AppCommand` from the package root:
+
+| Export                                | What it is                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppCommand`                          | The base class. `this.rootDir` is the application root; `this.withApp(async ({ app, env }) => …)` creates the application, runs the callback, and always shuts it down and destroys its runtime; `this.setStatus()` marks a success as `success-noop` or `partial-success` |
+| `CommandError`                        | What `run()` throws on failure: `new CommandError(message, { code, suggestions, details, exit })`                                                                                                                                                                          |
+| `appPath({ description, default })`   | A path flag whose value arrives absolute: a typed value from the current directory, the default from the application root                                                                                                                                                  |
+| `defineCliPlugin`, `defineCliPlugins` | A plugin's `cli/index.ts`, and an application's `cli/plugins.ts`                                                                                                                                                                                                           |
+| `bindAppCommand` from `./testing`     | A command pinned to a fixture application, for tests                                                                                                                                                                                                                       |
+
+`run()` returns the result and throws `CommandError` on failure. `AppCommand` provides `--json` and prints one document either way:
+
+```json
+{ "schemaVersion": 1, "ok": true, "command": "db apply", "status": "success", "result": {}, "warnings": [] }
+{ "schemaVersion": 1, "ok": false, "command": "db apply", "status": "failure", "error": { "code": "CONNECTION_FAILED", "message": "…", "suggestions": [], "details": {} }, "warnings": [] }
+```
+
+A command writes text for people with `this.log`, which `--json` silences, progress with `this.logToStderr`, and warnings with `this.warn`, which `--json` collects into `warnings`. It never calls `this.exit()`, `this.logJson()` or `console.log`: `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`. What the application logs while a command runs goes to stderr. The runner closes a runtime a command left open and names the command on stderr; a command that uses `withApp()` never triggers it.
+
+The root entry is kept free of the server runtime and the optional peers, because every plugin's `cli/index.ts` imports it whenever the command tree is assembled; `tests/deployment-imports.test.ts` holds it there. The `nocobase-app-development` and `nocobase-plugin-development` Skills carry the full authoring guide.
 
 ## Plugin contract
 

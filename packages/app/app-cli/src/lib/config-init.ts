@@ -13,6 +13,7 @@ import {
 } from '@nocobase/app-server/database';
 import { parseDocument } from 'yaml';
 
+import type { CommandSuggestion } from '../command/errors.ts';
 import { buildConfigFile } from './config-file.ts';
 import { configureDatabase } from './database-config.ts';
 
@@ -40,24 +41,32 @@ export type ConfigInitErrorReason =
 
 export class ConfigInitError extends Error {
   public readonly reason: ConfigInitErrorReason;
-  /** A command the user can run as-is to get past this, when one exists. */
-  public readonly suggestedCommand?: string;
+  /** The command that gets past this, as the executable and its arguments, when one exists. */
+  public readonly suggestion?: CommandSuggestion;
   public readonly details?: Readonly<Record<string, unknown>>;
 
   public constructor(
     reason: ConfigInitErrorReason,
     message: string,
     options: {
-      readonly suggestedCommand?: string;
+      readonly suggestion?: CommandSuggestion;
       readonly details?: Readonly<Record<string, unknown>>;
     } = {},
   ) {
     super(message);
     this.name = 'ConfigInitError';
     this.reason = reason;
-    this.suggestedCommand = options.suggestedCommand;
+    this.suggestion = options.suggestion;
     this.details = options.details;
   }
+}
+
+/**
+ * The stable `--json` error code for a configuration command's refusal: its reason in UPPER_SNAKE, such as
+ * `DRIVER_MISSING` for `driver-missing`.
+ */
+export function configErrorCode(reason: string): string {
+  return reason.toUpperCase().replaceAll('-', '_');
 }
 
 export interface ConfigInitOptions {
@@ -529,7 +538,7 @@ function assertDriverInstalled(
     'driver-missing',
     `The ${dialect} driver is not installed.`,
     {
-      suggestedCommand: installCommand(where.rootDir, packageName),
+      suggestion: installSuggestion(where.rootDir, packageName),
       details: { dialect, missingDrivers: [packageName] },
     },
   );
@@ -547,12 +556,13 @@ function noDriversError(where: DriverLocation): ConfigInitError {
   return new ConfigInitError(
     'no-drivers',
     `No database driver is installed. Install the one this application should use, for example: ${packageName}.`,
-    { suggestedCommand: installCommand(where.rootDir, packageName) },
+    { suggestion: installSuggestion(where.rootDir, packageName) },
   );
 }
 
 /**
- * The `pnpm add` for a driver, pinned to the range the installed runtime accepts.
+ * The `pnpm add` for a driver, pinned to the range the installed runtime accepts, as a suggestion whose `run` holds the
+ * executable and its arguments.
  *
  * A bare `pnpm add @nocobase/db-postgres` installs whatever is newest, which during a prerelease can be a version the
  * application's `@nocobase/app-server` was never built against. The runtime declares every official driver as an
@@ -560,14 +570,31 @@ function noDriversError(where: DriverLocation): ConfigInitError {
  * request, and the answer describes this application rather than the latest release. Without a readable range, or in a
  * workspace where it is still a `workspace:` protocol, the command falls back to the bare name.
  */
+export function installSuggestion(
+  rootDir: string,
+  packageName: string,
+): CommandSuggestion {
+  return {
+    message: 'Install the driver:',
+    run: {
+      command: 'pnpm',
+      args: ['add', installSpecifier(rootDir, packageName)],
+    },
+  };
+}
+
+/** The same `pnpm add` as one line a shell runs as written, for the `fix` of a `config check` finding. */
 export function installCommand(rootDir: string, packageName: string): string {
-  const range = readPeerRange(rootDir, packageName);
-  if (range === undefined) return `pnpm add ${packageName}`;
-  const specifier = `${packageName}@${range}`;
+  const specifier = installSpecifier(rootDir, packageName);
   // A range such as `>=1 <2` has to reach pnpm as one argument.
   return /^[\w@/.^~*+-]+$/u.test(specifier)
     ? `pnpm add ${specifier}`
     : `pnpm add ${JSON.stringify(specifier)}`;
+}
+
+function installSpecifier(rootDir: string, packageName: string): string {
+  const range = readPeerRange(rootDir, packageName);
+  return range === undefined ? packageName : `${packageName}@${range}`;
 }
 
 function readPeerRange(

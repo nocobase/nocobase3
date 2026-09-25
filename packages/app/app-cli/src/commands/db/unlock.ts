@@ -2,7 +2,10 @@ import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseUnlockCommand } from '../../database-command.ts';
+import {
+  runDatabaseUnlockCommand,
+  type DatabaseCommandResult,
+} from '../../database-command.ts';
 
 export default class AppDbUnlock extends AppCommand {
   static override summary =
@@ -17,15 +20,10 @@ export default class AppDbUnlock extends AppCommand {
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -42,16 +40,14 @@ export default class AppDbUnlock extends AppCommand {
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<DatabaseCommandResult> {
     const { flags } = await this.parse(AppDbUnlock);
-    await runDatabaseUnlockCommand(
-      {
-        log: (message) => this.log(message),
-        logJson: (value) => this.logJson(value),
-        exit: (code) => this.exit(code),
-      },
+    const result = await runDatabaseUnlockCommand(
+      this,
       flags,
       appContextOf(this),
     );
+    if (result.state === 'not-configured') this.setStatus('success-noop');
+    return result;
   }
 }

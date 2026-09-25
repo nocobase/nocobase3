@@ -4,7 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 
-import { checkAppLocales } from '../src/commands/locales/check.ts';
+import LocalesCheck, {
+  checkAppLocales,
+} from '../src/commands/locales/check.ts';
+import { CommandError } from '../src/command/errors.ts';
+import { bindAppCommand } from './app-command.ts';
+import { runAppCommand } from './command-output.ts';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -17,6 +22,10 @@ function fixture(
 ): string {
   const root = mkdtempSync(path.join(os.tmpdir(), 'i18n-check-'));
   roots.push(root);
+  writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'fixture', nocobase: { templateKind: 'default' } }),
+  );
 
   for (const [side, locales] of Object.entries(sides)) {
     if (locales.length === 0) continue;
@@ -86,4 +95,78 @@ it('ignores index.ts when reading the declared languages', async () => {
     ['en-US'],
     ['en-US'],
   ]);
+});
+
+it('returns both sides as the --json result when they agree', async () => {
+  const root = fixture({
+    client: ['en-US', 'zh-CN'],
+    server: ['en-US', 'zh-CN'],
+  });
+  const run = await runAppCommand(
+    bindAppCommand(LocalesCheck, { rootDir: root }),
+    ['--json'],
+    root,
+  );
+
+  expect(run.json()).toEqual({
+    schemaVersion: 1,
+    ok: true,
+    command: expect.any(String),
+    status: 'success',
+    result: {
+      sides: [
+        { side: 'client', locales: ['en-US', 'zh-CN'] },
+        { side: 'server', locales: ['en-US', 'zh-CN'] },
+      ],
+      clientOnly: [],
+      serverOnly: [],
+    },
+    warnings: [],
+  });
+  expect(run.exitCode).toBeUndefined();
+});
+
+it('fails with LOCALES_MISMATCH and the comparison in error.details', async () => {
+  const root = fixture({
+    client: ['en-US', 'es-ES'],
+    server: ['en-US', 'ja-JP'],
+  });
+  const run = await runAppCommand(
+    bindAppCommand(LocalesCheck, { rootDir: root }),
+    ['--json'],
+    root,
+  );
+
+  expect(run.json()).toMatchObject({
+    ok: false,
+    status: 'failure',
+    error: {
+      code: 'LOCALES_MISMATCH',
+      details: {
+        sides: [
+          { side: 'client', locales: ['en-US', 'es-ES'] },
+          { side: 'server', locales: ['en-US', 'ja-JP'] },
+        ],
+        clientOnly: ['es-ES'],
+        serverOnly: ['ja-JP'],
+      },
+    },
+  });
+  expect(run.exitCode).toBe(1);
+});
+
+it('prints each mismatch for people and exits non-zero', async () => {
+  const root = fixture({ client: ['en-US', 'es-ES'], server: ['en-US'] });
+  const run = await runAppCommand(
+    bindAppCommand(LocalesCheck, { rootDir: root }),
+    [],
+    root,
+  );
+
+  expect(run.stdout).toContain('es-ES: declared in client/locales only');
+  expect(run.error).toBeInstanceOf(CommandError);
+  expect(run.error).toMatchObject({
+    oclif: { exit: 1 },
+    suggestions: [expect.stringContaining('copy en-US.ts')],
+  });
 });

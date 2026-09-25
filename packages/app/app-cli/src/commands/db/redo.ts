@@ -5,6 +5,7 @@ import type { Interfaces } from '@oclif/core';
 import {
   collectionsRefreshAllowed,
   runDatabaseRedoCommand,
+  type DatabaseCommandResult,
 } from '../../database-command.ts';
 
 export default class AppDbRedo extends AppCommand {
@@ -20,16 +21,11 @@ export default class AppDbRedo extends AppCommand {
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     collections: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -52,22 +48,17 @@ export default class AppDbRedo extends AppCommand {
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<DatabaseCommandResult> {
     const { flags } = await this.parse(AppDbRedo);
-    await runDatabaseRedoCommand(
-      {
-        log: (message) => this.log(message),
-        logJson: (value) => this.logJson(value),
-        exit: (code) => this.exit(code),
-        warn: (message) => {
-          this.warn(message);
-        },
-      },
+    const result = await runDatabaseRedoCommand(
+      this,
       {
         ...flags,
         collections: flags.collections && collectionsRefreshAllowed(),
       },
       appContextOf(this),
     );
+    if (result.state === 'not-configured') this.setStatus('success-noop');
+    return result;
   }
 }

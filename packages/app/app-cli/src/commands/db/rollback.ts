@@ -5,6 +5,7 @@ import type { Interfaces } from '@oclif/core';
 import {
   collectionsRefreshAllowed,
   runDatabaseRollbackCommand,
+  type DatabaseCommandResult,
 } from '../../database-command.ts';
 
 export default class AppDbRollback extends AppCommand {
@@ -19,16 +20,11 @@ export default class AppDbRollback extends AppCommand {
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     collections: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -51,22 +47,17 @@ export default class AppDbRollback extends AppCommand {
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<DatabaseCommandResult> {
     const { flags } = await this.parse(AppDbRollback);
-    await runDatabaseRollbackCommand(
-      {
-        log: (message) => this.log(message),
-        logJson: (value) => this.logJson(value),
-        exit: (code) => this.exit(code),
-        warn: (message) => {
-          this.warn(message);
-        },
-      },
+    const result = await runDatabaseRollbackCommand(
+      this,
       {
         ...flags,
         collections: flags.collections && collectionsRefreshAllowed(),
       },
       appContextOf(this),
     );
+    if (result.state === 'not-configured') this.setStatus('success-noop');
+    return result;
   }
 }

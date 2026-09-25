@@ -9,12 +9,17 @@ import CliExampleGreet from './greet.ts';
  *
  * The keys are sub-command names. `greet` becomes `nocobase cli-example greet`, and the colon in `artifact:build` nests one
  * level further, into `nocobase cli-example artifact build`.
+ *
+ * `commands` are available wherever the application runs, a built `dist/` included. `devCommands` exist only in a
+ * source checkout: `artifact:build` reads source directories that a built `dist/` does not carry.
  */
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: '@nocobase/app-plugin-cli-example',
   description: 'Example commands contributed by a plugin.',
   commands: {
     greet: CliExampleGreet,
+  },
+  devCommands: {
     'artifact:build': CliExampleArtifactBuild,
   },
   /**

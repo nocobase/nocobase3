@@ -58,8 +58,12 @@ export class CommandError extends Errors.CLIError {
       exit: options.exit ?? 1,
       suggestions: suggestions.map(renderSuggestion),
     });
-    if (options.cause !== undefined) this.cause = options.cause;
-    this.name = 'CommandError';
+    // A cause that only repeats the message would print it twice under "Caused by".
+    const repeatsMessage =
+      options.cause instanceof Error && options.cause.message === message;
+    if (options.cause !== undefined && !repeatsMessage) {
+      this.cause = options.cause;
+    }
     this.errorCode = options.code;
     this.commandSuggestions = suggestions;
     this.exitCode = options.exit ?? 1;
@@ -149,5 +153,14 @@ function toSuggestion(
 
 function renderSuggestion(suggestion: CommandSuggestion): string {
   if (suggestion.run === undefined) return suggestion.message;
-  return `${suggestion.message} ${[suggestion.run.command, ...suggestion.run.args].join(' ')}`;
+  const line = [suggestion.run.command, ...suggestion.run.args]
+    .map(quoteForShell)
+    .join(' ');
+  return `${suggestion.message} ${line}`;
+}
+
+/** Quotes an argument for a POSIX shell when it would otherwise split or be interpreted, so the line can be pasted. */
+function quoteForShell(argument: string): string {
+  if (/^[\w@%+=:,./-]+$/u.test(argument)) return argument;
+  return `'${argument.replaceAll("'", `'\\''`)}'`;
 }

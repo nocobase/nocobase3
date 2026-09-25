@@ -6,17 +6,27 @@ import {
   type OfficialDialect,
 } from '@nocobase/app-server/database';
 
+import { CommandError } from '../../command/errors.ts';
+import { withAppRuntime } from '../../command/lifecycle.ts';
 import { AppCommand, appContextOf } from '../../context.ts';
 import {
   ConfigInitError,
+  configErrorCode,
   runConfigInit,
   type ConfigInitResult,
 } from '../../lib/config-init.ts';
 import {
   confirmWriteAnyway,
+  PromptCancelledError,
   promptConnection,
   selectDialect,
 } from '../../lib/prompts.ts';
+
+/**
+ * What `config init` reports: everything but whether it wrote the file, which is the envelope's `status` — `success`
+ * when it did, `success-noop` when the application was already configured.
+ */
+export type AppConfigInitResult = Omit<ConfigInitResult, 'status'>;
 
 export default class AppConfigInit extends AppCommand {
   static override summary =
@@ -34,7 +44,6 @@ export default class AppConfigInit extends AppCommand {
     dialect: Interfaces.OptionFlag<string | undefined>;
     config: Interfaces.OptionFlag<string | undefined>;
     force: Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     dialect: Flags.string({
       options: [...OFFICIAL_DIALECTS],
@@ -49,21 +58,18 @@ export default class AppConfigInit extends AppCommand {
       default: false,
       description: 'Replace an existing configuration file.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<AppConfigInitResult> {
     const { flags } = await this.parse(AppConfigInit);
-    const interactive = flags.json === false && process.stdin.isTTY === true;
-    let result: ConfigInitResult;
+    const interactive = !this.jsonEnabled() && process.stdin.isTTY === true;
+    let outcome: ConfigInitResult;
 
     try {
-      result = await runConfigInit({
-        rootDir: appContextOf(this).rootDir,
+      outcome = await runConfigInit({
+        rootDir: this.rootDir,
         dialect: flags.dialect,
+        // Not an appPath(): like APP_CONFIG_FILE, a relative --config names a path inside the application.
         configPath: flags.config,
         force: flags.force,
         selectDialect: interactive
@@ -87,33 +93,16 @@ export default class AppConfigInit extends AppCommand {
           : undefined,
       });
     } catch (error) {
-      this.reportFailure(error, flags.json);
-      return;
+      throw toCommandError(error);
     }
 
-    if (flags.json) {
-      this.logJson({
-        ok: true,
-        status: result.status,
-        mode: result.mode,
-        ...(result.dialect ? { dialect: result.dialect } : {}),
-        configFile: result.configFile,
-        configKey: result.configKey,
-        overriddenByEnvironment: result.overriddenByEnvironment,
-        requiredSettings: result.requiredSettings,
-        nextCommands: result.nextCommands,
-        ...(result.connectionTest
-          ? { connectionTest: result.connectionTest }
-          : {}),
-      });
-      return;
-    }
-
-    if (result.status === 'unchanged') {
+    const { status, ...result } = outcome;
+    if (status === 'unchanged') {
+      this.setStatus('success-noop');
       this.log(
         `Already configured: ${result.configFile}. Edit it with pnpm nocobase config set, or run with --force to replace it.`,
       );
-      return;
+      return result;
     }
     this.log(`Wrote ${result.configFile} for ${result.dialect}.`);
     if (result.requiredSettings.length > 0) {
@@ -130,6 +119,7 @@ export default class AppConfigInit extends AppCommand {
         `Note: ${result.overriddenByEnvironment.join(' and ')} are set in this environment and override the file.`,
       );
     }
+    return result;
   }
 
   /**
@@ -137,8 +127,7 @@ export default class AppConfigInit extends AppCommand {
    * that only its code defaults set is seen too. Unknown when the configuration does not load.
    */
   private async readConfiguredDialect(): Promise<string | undefined> {
-    const runtime = await appContextOf(this).loadRuntime();
-    try {
+    return withAppRuntime(appContextOf(this), async (runtime) => {
       const database = runtime.config.get<{
         default?: string;
         connections?: Record<string, { dialect?: unknown }>;
@@ -146,35 +135,30 @@ export default class AppConfigInit extends AppCommand {
       const name = database?.default ?? 'main';
       const dialect = database?.connections?.[name]?.dialect;
       return typeof dialect === 'string' ? dialect : undefined;
-    } finally {
-      await runtime.scope.destroy();
-    }
+    });
   }
+}
 
-  /** Input problems exit 2 and operational ones exit 1, matching the create command. */
-  private reportFailure(error: unknown, json: boolean): void {
-    const configError = error instanceof ConfigInitError ? error : undefined;
-    const message = error instanceof Error ? error.message : String(error);
-    const exitCode = configError?.reason === 'unknown-dialect' ? 2 : 1;
-
-    if (json) {
-      this.logJson({
-        ok: false,
-        status: 'failed',
-        reason: configError?.reason ?? 'failed',
-        error: message,
-        ...(configError?.suggestedCommand
-          ? { suggestedCommand: configError.suggestedCommand }
-          : {}),
-        ...(configError?.details ?? {}),
-      });
-    } else {
-      this.log(message);
-      if (configError?.suggestedCommand) {
-        this.log(`  ${configError.suggestedCommand}`);
-      }
-    }
-
-    this.exit(exitCode);
+/**
+ * A refusal becomes a `CommandError` named after its reason, such as `DRIVER_MISSING`, carrying the command that gets
+ * past it and the details the refusal holds. Input problems exit 2 and operational ones exit 1, matching the create
+ * command.
+ */
+function toCommandError(error: unknown): CommandError {
+  if (error instanceof ConfigInitError) {
+    return new CommandError(error.message, {
+      code: configErrorCode(error.reason),
+      exit: error.reason === 'unknown-dialect' ? 2 : 1,
+      suggestions: error.suggestion ? [error.suggestion] : [],
+      details: error.details,
+      cause: error,
+    });
   }
+  if (error instanceof PromptCancelledError) {
+    return new CommandError(error.message, { code: 'CANCELLED', cause: error });
+  }
+  return new CommandError(
+    error instanceof Error ? error.message : String(error),
+    { code: 'CONFIG_INIT_FAILED', cause: error },
+  );
 }

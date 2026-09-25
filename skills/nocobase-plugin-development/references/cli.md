@@ -2,6 +2,8 @@
 
 Read this reference when a plugin must add commands to an App's `pnpm nocobase` tree or run plugin-owned commands at defined points in the App build or development startup.
 
+This reference describes `@nocobase/app-cli` 1.0.0-beta.0 and later. When the App or plugin you work in depends on an earlier version, follow the `AGENTS.md` and Skills that version installed instead.
+
 CLI is an explicit composition surface alongside Client and Server. A plugin may contribute any subset of `./client`, `./server`, and `./cli`; the presence of one never implies another.
 
 ## Command ownership and boundaries
@@ -14,20 +16,117 @@ An App CLI assembles three command sources:
 | `app *`                                                                          | The App's `cli/commands/`, one file per command                      |
 | `<plugin-topic> *`                                                               | A plugin exported through `./cli` and registered in `cli/plugins.ts` |
 
-Use plugin CLI commands for work a person or CI invokes explicitly from files and packages, such as validating static declarations or generating artifacts. The plugin declaration is imported while the command tree is assembled, before an App Runtime or ServiceContainer exists. Put runtime operations behind authenticated Server APIs, Services, or Jobs rather than assuming the CLI can resolve a running application.
+Use plugin CLI commands for work a person or CI invokes explicitly, such as validating static declarations, generating artifacts, or a one-shot maintenance step against the App's database. The plugin declaration is imported while the command tree is assembled, before any App exists; a command that needs the App creates it with `withApp()` when it runs, as described below. Work that users trigger while the App is serving belongs behind authenticated Server APIs, Services, or Jobs, not in a command.
 
 Topics share one flat namespace. A plugin's topic is its package name without the scope and `app-plugin-` prefix — `@nocobase/app-plugin-demo` mounts under `demo` — so it needs no declaration and cannot collide with another plugin. The built-in topics avoid every official plugin name; a plugin whose name is a built-in topic or top-level command (`RESERVED_TOPICS` in `packages/app/app-cli/src/runtime/builtin.ts`) fails assembly. Command keys are lower-case kebab-case and may use colon-separated nesting: `artifact:build` becomes `nocobase demo artifact build`.
 
-## Implement an oclif command
+<!-- command-authoring:start -->
 
-Commands are oclif `Command` subclasses:
+## Write the command
+
+Every command extends `AppCommand` from `@nocobase/app-cli` (1.0.0-beta.0 or later). It is an oclif `Command` with the application wired in and one output contract.
+
+Choose what the command reaches for:
+
+| The command needs                                  | Use                                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------------------- |
+| Files in the application                           | `this.rootDir`, the application root the runner located; nothing is loaded |
+| Configuration, paths, the environment, or services | `await this.withApp(async ({ app, env }) => { … })`                        |
+| The full application lifecycle                     | `await app.start()` inside the `withApp()` callback                        |
+
+`withApp()` creates the application from `server/app`, runs the callback, then shuts the application down and destroys its runtime, whether the callback returns or throws. It registers and starts nothing: call `app.registerProviders()` to resolve services, and `app.start()` only when the command needs every provider running, because starting also starts workers and schedules. `app.config` and `app.paths` (`root()`, `storage()`, `database()`) need neither. `app` is valid only inside the callback; return what the command needs from it.
+
+### Output
+
+`run()` returns the command's result and throws `CommandError` when it fails. `AppCommand` provides `--json` and turns either into one document on stdout:
+
+```json
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "orders export",
+  "status": "success",
+  "result": { "exported": 42 },
+  "warnings": []
+}
+```
+
+```json
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "orders export",
+  "status": "failure",
+  "error": {
+    "code": "NO_ORDERS",
+    "message": "There are no orders to export.",
+    "suggestions": [],
+    "details": { "from": "2026-09-01" }
+  },
+  "warnings": []
+}
+```
+
+| To                        | Write                                                                   | Without `--json`                   | With `--json`                |
+| ------------------------- | ----------------------------------------------------------------------- | ---------------------------------- | ---------------------------- |
+| Tell a person the result  | `this.log(text)`                                                        | stdout                             | nothing                      |
+| Give a program the result | `return { … }`                                                          | nothing                            | `result`                     |
+| Report progress           | `this.logToStderr(text)`                                                | stderr                             | nothing                      |
+| Warn                      | `this.warn(text)`                                                       | stderr                             | `warnings`                   |
+| Fail                      | `throw new CommandError(message, { code, suggestions, details, exit })` | message and suggestions, on stderr | `error`, and a non-zero exit |
+
+- `code` is a stable UPPER_SNAKE name a caller branches on. `suggestions` are strings or `{ message, run: { command, args } }`; give `run` when the next step is a command. `details` is plain data the caller needs to act on. `exit` defaults to `1`; use `2` for invalid usage.
+- `status` is `success` unless the command calls `this.setStatus('success-noop')` or `this.setStatus('partial-success')`; a failure is always `failure`.
+- The result is a public contract that callers and scripts come to rely on: declare its type, keep it to plain data, and never include a secret or a large text.
+- Do not call `this.exit()`, `this.logJson()` or `console.log`. Each puts something on stdout the document does not account for; `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`.
+
+Records the application logs while a command runs go to stderr, so stdout carries only the command's own output.
+
+### Paths
+
+Declare a path flag with `appPath({ description, default })`. The command receives an absolute path: a value the user typed resolves from the current directory, and the default resolves from the application root, wherever the command was run. Do not resolve it again, and do not use `process.cwd()` for application files.
+
+### Keep the module cheap
+
+The command tree is assembled for `--help` too, so every command module is imported before any command runs. Keep top-level imports to `@nocobase/app-cli`, `@oclif/core` and Node built-ins, and load anything heavy with `await import()` inside `run()`.
+
+### Test
+
+`@nocobase/app-cli/testing` runs a command without the runner:
+
+```ts
+import { bindAppCommand, runAppCommand } from '@nocobase/app-cli/testing';
+
+const Bound = bindAppCommand(OrdersExport, {
+  rootDir: fixtureRoot,
+  id: 'app:orders:export',
+});
+const run = await runAppCommand(Bound, ['--dry-run', '--json']);
+
+expect(run.json()).toMatchObject({
+  ok: true,
+  status: 'success-noop',
+  result: { exported: 0 },
+});
+```
+
+`bindAppCommand()` pins the command to a fixture application, the way the runner would point it at the one it located; `id` is the id the runner would give it, colon-separated, so the document names the command. Pass `loadRuntime` and `createApp` as well to replace the application with a stub. `runAppCommand()` returns what `run()` returned as `result`, what escaped it as `error`, the `exitCode`, the captured `stdout` and `stderr`, and `json()` for the `--json` document. Assert on those rather than on printed text.
+
+<!-- command-authoring:end -->
+
+## Example command
 
 ```ts
 // cli/greet.ts
-import { Args, Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { AppCommand } from '@nocobase/app-cli';
+import { Args, Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 
-export default class DemoGreet extends Command {
+export interface DemoGreetResult {
+  readonly message: string;
+}
+
+export default class DemoGreet extends AppCommand {
   static override summary = 'Print a greeting.';
 
   static override examples: Command.Example[] = [
@@ -43,40 +142,20 @@ export default class DemoGreet extends Command {
 
   static override flags: {
     loud: Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
-    loud: Flags.boolean({
-      default: false,
-      description: 'Upper-case the greeting.',
-    }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one JSON result.',
-    }),
+    loud: Flags.boolean({ default: false, description: 'Upper-case the greeting.' }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<DemoGreetResult> {
     const { args, flags } = await this.parse(DemoGreet);
-    const message = flags.loud
-      ? `HELLO, ${args.target.toUpperCase()}!`
-      : `Hello, ${args.target}.`;
-
-    if (flags.json) {
-      this.logJson({ ok: true, message });
-      return;
-    }
+    const message = flags.loud ? `HELLO, ${args.target.toUpperCase()}!` : `Hello, ${args.target}.`;
     this.log(message);
+    return { message };
   }
 }
 ```
 
-Use `<%= config.bin %>` and `<%= command.id %>` in examples so help reflects the actual assembled binary and path.
-
-Explicit `args`, `flags`, and `examples` types matter because plugin packages emit declarations with `isolatedDeclarations`. Type each flag precisely, such as `Interfaces.BooleanFlag<boolean>`; a broad `Interfaces.FlagInput` can make the parsed result lose its useful type.
-
-Keep command modules cheap to import. Load heavy SDKs or optional dependencies with `await import()` inside the named `run()` method so `--help` does not initialize them.
-
-For machine-readable behavior, emit one JSON document on stdout for a success and for a failure alike, and preserve a nonzero exit code on failure, which is what the built-in commands do. Treat exit code `2` as invalid usage and `1` as a runtime error unless the command has a documented, stable extension.
+Use `<%= config.bin %>` and `<%= command.id %>` in examples so help reflects the actual assembled binary and path. Explicit `args`, `flags`, `examples` and result types matter because plugin packages emit declarations with `isolatedDeclarations`; type each flag precisely, such as `Interfaces.BooleanFlag<boolean>`, because a broad `Interfaces.FlagInput` loses the parsed type.
 
 ## Declare the CLI plugin
 
@@ -208,7 +287,7 @@ Hooks run in `cli/plugins.ts` order and then declaration order. One failure stop
 
 ## Development-only commands
 
-A plugin puts commands that need its sources or development tooling in `devCommands`; they are registered in a source checkout and left out of the built `dist/`. Keep each command module cheap to import either way, because help loads every command class: import the heavy work inside `run()`.
+A plugin puts commands that need its sources or development tooling in `devCommands`; they are registered in a source checkout and left out of the built `dist/`.
 
 An App's own commands in `cli/commands/` are compiled with the server and always registered, so they must run from a deployment. The dependency check at the end of `nocobase build`, also available as `nocobase dist check`, fails when one imports a package the deployment does not declare.
 
@@ -225,7 +304,7 @@ Use the App's CLI for normal lifecycle work:
 | `pnpm nocobase skills sync`                  | Synchronizes Skills from direct NocoBase dependencies and explicitly registered plugins without upgrading packages                                                 |
 | `pnpm nocobase package remove <package>`     | Removes a direct NocoBase package and its synchronized Skills; plugin packages reuse full unregistration                                                           |
 
-Prefer `--dry-run --json` when an Agent needs a plan. If an uninstalled plugin is requested, register dry-run returns `requires-installation` because it cannot inspect exports until the package exists; install it and rerun to compute the wiring plan. Read the JSON `ok` and `status` fields, preserve nonzero failure exits, and treat `success-noop`, `partial-success`, and `requires-installation` as distinct outcomes.
+Prefer `--dry-run --json` when an Agent needs a plan. If an uninstalled plugin is requested, register dry-run returns `partial-success` with `result.state: "requires-installation"`, because it cannot inspect exports until the package exists; install it and rerun to compute the wiring plan. Read the JSON `ok` and `status` fields, preserve nonzero failure exits, and treat `success-noop` and `partial-success` as distinct outcomes.
 
 `plugin inspect` proves only that readable static registration surfaces agree. It does not execute commands or hooks, start Runtime contributions, evaluate permissions, test behavior, or replace package and App validation.
 
@@ -233,13 +312,13 @@ From the repository root, pass `--workspace-root .`: the command selects `app-te
 
 ## Verification
 
-- Run the plugin's focused lint, typecheck, tests, and build; include a test that imports the production `./cli` definition and asserts the real command or hook contract.
+- Run the plugin's focused lint, typecheck, tests, and build; include a test that imports the production `./cli` definition and asserts the real command or hook contract, and a test that runs each command through `bindAppCommand`.
 - Register the plugin in a target App and verify the exact `cli/plugins.ts` import and array entry.
 - Run `pnpm nocobase <topic> --help`, the command's normal path, its JSON path when offered, invalid input, and a representative failure.
 - For hooks, run the affected App build or dev startup and verify the expected artifact or behavior at the selected stage.
 - Build the target App and run `node dist/cli/index.js <topic> --help` to confirm that `commands` are present and `devCommands` are absent in the deployment.
 
-Current implementation and maintained examples:
+Current implementation and maintained examples, in the `nocobase/nocobase3` repository:
 
 - CLI plugin types (`packages/app/app-cli/src/plugins/types.ts`)
 - CLI plugin validation (`packages/app/app-cli/src/plugins/define.ts`)

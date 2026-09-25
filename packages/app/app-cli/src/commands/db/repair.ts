@@ -2,7 +2,10 @@ import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseRepairCommand } from '../../database-command.ts';
+import {
+  runDatabaseRepairCommand,
+  type DatabaseCommandResult,
+} from '../../database-command.ts';
 
 export default class AppDbRepair extends AppCommand {
   static override summary =
@@ -17,16 +20,11 @@ export default class AppDbRepair extends AppCommand {
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     'dry-run': Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -47,16 +45,14 @@ export default class AppDbRepair extends AppCommand {
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<DatabaseCommandResult> {
     const { flags } = await this.parse(AppDbRepair);
-    await runDatabaseRepairCommand(
-      {
-        log: (message) => this.log(message),
-        logJson: (value) => this.logJson(value),
-        exit: (code) => this.exit(code),
-      },
+    const result = await runDatabaseRepairCommand(
+      this,
       { ...flags, dryRun: flags['dry-run'] },
       appContextOf(this),
     );
+    if (result.state === 'not-configured') this.setStatus('success-noop');
+    return result;
   }
 }

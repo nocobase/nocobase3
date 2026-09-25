@@ -1,5 +1,5 @@
-import { Args, Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { Args, Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -19,30 +19,76 @@ import {
   hasServerPluginEntry,
   pluginPackageName,
 } from '../../lib/plugin-registration.ts';
-import {
-  classifyPluginError,
-  pluginJsonFailure,
-  pluginJsonSuccess,
-} from '../../lib/plugin-json.ts';
+import { classifyPluginError } from '../../lib/plugin-json.ts';
 import {
   createServerPluginsEditor,
   readServerPlugins,
 } from '../../lib/server-plugins.ts';
 import { collectPluginSkills } from '../../lib/skills-sync.ts';
 import { resolveAppRoot } from '../../lib/workspace-app.ts';
+import { AppCommand } from '../../context.ts';
 
-interface InspectIssue {
+/** An inconsistency between the plugin's package and how the App records and wires it. */
+export interface PluginInspectIssue {
   readonly code: string;
   readonly message: string;
   readonly severity: 'error' | 'warning';
 }
 
-interface InspectSuggestion {
+/** A command that repairs an issue, as an executable and its arguments. */
+export interface PluginInspectSuggestion {
   readonly command: string;
   readonly args: readonly string[];
 }
 
-export default class PluginInspect extends Command {
+/** Whether a composition root registers the plugin, and at which position. */
+export interface PluginInspectComposition {
+  readonly registered: boolean;
+  readonly order?: number;
+}
+
+/** How the App's synchronized Skills compare with the ones the installed plugin ships. */
+export interface PluginInspectSkills {
+  readonly checked: boolean;
+  /** Why the Skills were not compared, when `checked` is false. */
+  readonly reason?: 'plugin-not-installed';
+  readonly source: readonly string[];
+  readonly synchronized: readonly string[];
+  readonly missing: readonly string[];
+  readonly stale: readonly string[];
+  readonly contentMatches: boolean;
+}
+
+export interface PluginInspectResult {
+  readonly app: { readonly packageName: string; readonly appRoot: string };
+  readonly plugin: {
+    readonly packageName: string;
+    readonly installed: boolean;
+    readonly pluginDirectory: string | undefined;
+    readonly exports: {
+      readonly client: boolean;
+      readonly serverPlugin: boolean;
+      readonly cli: boolean;
+    };
+  };
+  readonly dependency: {
+    readonly field: 'dependencies' | 'devDependencies' | undefined;
+    readonly range: string | undefined;
+  };
+  readonly registration: { readonly enabled: boolean };
+  readonly composition: {
+    readonly client: PluginInspectComposition;
+    readonly server: PluginInspectComposition;
+    readonly cli: PluginInspectComposition;
+  };
+  readonly skills: PluginInspectSkills;
+  readonly consistent: boolean;
+  readonly issues: readonly PluginInspectIssue[];
+  /** Commands that repair the issues. An inconsistency is a finding, not a failure, so these live in the result. */
+  readonly suggestions: readonly PluginInspectSuggestion[];
+}
+
+export default class PluginInspect extends AppCommand {
   static override summary = "Inspect a plugin's static registration state.";
   static override description =
     'Reads the installed package, dependency records, Client and Server composition roots, and synchronized Skills without modifying the App.';
@@ -62,7 +108,6 @@ export default class PluginInspect extends Command {
     dir: Interfaces.OptionFlag<string | undefined>;
     app: Interfaces.OptionFlag<string | undefined>;
     'workspace-root': Interfaces.OptionFlag<string | undefined>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
@@ -75,44 +120,33 @@ export default class PluginInspect extends Command {
       description:
         'Monorepo root. Selects app-template-default unless --app is provided.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<PluginInspectResult> {
+    const { args, flags } = await this.parse(PluginInspect);
+    let result: PluginInspectResult;
     try {
-      const { args, flags } = await this.parse(PluginInspect);
       const appRoot = await resolveAppRoot({
         app: flags.app,
         dir: flags.dir,
         workspaceRoot: flags['workspace-root'],
       });
-      const packageName = pluginPackageName(args.name);
-      const result = await inspectPlugin(
+      result = await inspectPlugin(
         appRoot,
-        packageName,
+        pluginPackageName(args.name),
         targetArgs(flags),
       );
-      const response = pluginJsonSuccess('plugin:inspect', 'success', result);
-      if (flags.json) {
-        this.logJson(response);
-      } else {
-        this.log(
-          `${packageName}: ${result.issues.length === 0 ? 'registration state is consistent' : `${result.issues.length} issue(s) found`}`,
-        );
-        for (const issue of result.issues) {
-          this.log(`  ${issue.severity}: ${issue.message}`);
-        }
-      }
     } catch (error) {
-      if (!this.argv.includes('--json')) throw error;
-      this.logJson(
-        pluginJsonFailure('plugin:inspect', classifyPluginError(error)),
-      );
-      process.exitCode = 1;
+      throw classifyPluginError(error);
     }
+    const { issues, plugin } = result;
+    this.log(
+      `${plugin.packageName}: ${issues.length === 0 ? 'registration state is consistent' : `${issues.length} issue(s) found`}`,
+    );
+    for (const issue of issues) {
+      this.log(`  ${issue.severity}: ${issue.message}`);
+    }
+    return result;
   }
 }
 
@@ -120,7 +154,7 @@ async function inspectPlugin(
   appRoot: string,
   packageName: string,
   target: readonly string[],
-): Promise<Record<string, unknown> & { issues: InspectIssue[] }> {
+): Promise<PluginInspectResult> {
   const manifest = JSON.parse(
     await readFile(path.join(appRoot, 'package.json'), 'utf8'),
   ) as {
@@ -146,7 +180,7 @@ async function inspectPlugin(
   const cliExport = pluginDirectory
     ? await hasCliPluginEntry(pluginDirectory)
     : false;
-  const issues: InspectIssue[] = [];
+  const issues: PluginInspectIssue[] = [];
 
   if (!pluginDirectory)
     issues.push({
@@ -183,7 +217,7 @@ async function inspectPlugin(
       severity: 'error',
     });
 
-  const skills = pluginDirectory
+  const skills: PluginInspectSkills = pluginDirectory
     ? await inspectSkills(appRoot, packageName, pluginDirectory)
     : {
         checked: false,
@@ -236,7 +270,7 @@ async function inspectComposition(
   appRoot: string,
   packageName: string,
   kind: 'client' | 'server' | 'cli',
-): Promise<{ registered: boolean; order?: number }> {
+): Promise<PluginInspectComposition> {
   const file =
     kind === 'client'
       ? await readClientPlugins(appRoot)
@@ -261,14 +295,7 @@ async function inspectSkills(
   appRoot: string,
   packageName: string,
   pluginDirectory: string,
-): Promise<
-  Record<string, unknown> & {
-    checked: true;
-    missing: string[];
-    stale: string[];
-    contentMatches: boolean;
-  }
-> {
+): Promise<PluginInspectSkills> {
   const source = await collectPluginSkills({ packageName, pluginDirectory });
   const targetRoot = path.join(appRoot, '.agents', 'skills');
   const synchronized = await safeDirectoryNames(targetRoot);
@@ -356,7 +383,7 @@ function suggestionFor(
   code: string,
   packageName: string,
   target: readonly string[],
-): InspectSuggestion {
+): PluginInspectSuggestion {
   const shortName = packageName.replace('@nocobase/app-plugin-', '');
   if (code === 'PLUGIN_NOT_INSTALLED')
     return {
@@ -383,10 +410,10 @@ function suggestionFor(
 }
 
 function suggestionsFor(
-  issues: readonly InspectIssue[],
+  issues: readonly PluginInspectIssue[],
   packageName: string,
   target: readonly string[],
-): InspectSuggestion[] {
+): PluginInspectSuggestion[] {
   const notInstalled = issues.find(
     ({ code }) => code === 'PLUGIN_NOT_INSTALLED',
   );
@@ -399,8 +426,8 @@ function suggestionsFor(
 }
 
 function uniqueSuggestions(
-  suggestions: readonly InspectSuggestion[],
-): InspectSuggestion[] {
+  suggestions: readonly PluginInspectSuggestion[],
+): PluginInspectSuggestion[] {
   const seen = new Set<string>();
   return suggestions.filter((suggestion) => {
     const key = JSON.stringify([suggestion.command, suggestion.args]);

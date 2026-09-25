@@ -1,6 +1,6 @@
-import { AppCommand, appContextOf } from '../../context.ts';
-import { type Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { AppCommand } from '../../context.ts';
+import { CommandError } from '../../command/errors.ts';
+import type { Command } from '@oclif/core';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -16,6 +16,22 @@ interface LocaleSide {
 export interface LocaleCheckResult {
   readonly ok: boolean;
   readonly sides: readonly LocaleSide[];
+  readonly clientOnly: readonly string[];
+  readonly serverOnly: readonly string[];
+}
+
+/** One side as `locales check` reports it: the directory is left out, since it is always `<side>/locales`. */
+export interface LocalesCheckSide {
+  readonly side: 'client' | 'server';
+  readonly locales: readonly string[];
+}
+
+/**
+ * What `locales check` returns, and what `error.details` carries when the two sides disagree. Under `--json` the
+ * envelope's `ok` says whether they agree.
+ */
+export interface LocalesCheckCommandResult {
+  readonly sides: readonly LocalesCheckSide[];
   readonly clientOnly: readonly string[];
   readonly serverOnly: readonly string[];
 }
@@ -89,34 +105,19 @@ export default class AppI18nCheck extends AppCommand {
     '<%= config.bin %> <%= command.id %> --json',
   ];
 
-  static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
-  } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
-  };
-
-  public async run(): Promise<void> {
-    const { flags } = await this.parse(AppI18nCheck);
-    const root = appContextOf(this).rootDir;
-    const result = await checkAppLocales(root);
-    const { ok, sides, clientOnly, serverOnly } = result;
-
-    if (flags.json) {
-      this.logJson({
-        ok: result.ok,
-        sides: result.sides.map((entry) => ({
-          side: entry.side,
-          locales: entry.locales,
-        })),
-        clientOnly: result.clientOnly,
-        serverOnly: result.serverOnly,
-      });
-      if (!ok) this.exit(1);
-      return;
-    }
+  public async run(): Promise<LocalesCheckCommandResult> {
+    await this.parse(AppI18nCheck);
+    const { ok, sides, clientOnly, serverOnly } = await checkAppLocales(
+      this.rootDir,
+    );
+    const report: LocalesCheckCommandResult = {
+      sides: sides.map((entry) => ({
+        side: entry.side,
+        locales: entry.locales,
+      })),
+      clientOnly,
+      serverOnly,
+    };
 
     for (const entry of sides) {
       this.log(`${entry.side}: ${entry.locales.join(', ')}`);
@@ -126,12 +127,12 @@ export default class AppI18nCheck extends AppCommand {
       this.log(
         'Only one side declares locales; nothing to compare. Add the other when both halves need translated text.',
       );
-      return;
+      return report;
     }
 
     if (ok) {
       this.log('\nClient and server declare the same languages.');
-      return;
+      return report;
     }
 
     this.log('');
@@ -145,9 +146,12 @@ export default class AppI18nCheck extends AppCommand {
         `  ${locale}: declared in server/locales only — nothing can select it.`,
       );
     }
-    this.log(
-      `\nAdd the matching file when both halves need this language; copy ${SOURCE_LOCALE}.ts from the other side as a starting point.`,
-    );
-    this.exit(1);
+    throw new CommandError('Client and server declare different languages.', {
+      code: 'LOCALES_MISMATCH',
+      suggestions: [
+        `Add the matching file when both halves need this language; copy ${SOURCE_LOCALE}.ts from the other side as a starting point.`,
+      ],
+      details: report,
+    });
   }
 }

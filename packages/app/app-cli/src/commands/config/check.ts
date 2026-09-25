@@ -1,12 +1,20 @@
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
+import { CommandError } from '../../command/errors.ts';
 import { AppCommand, appContextOf } from '../../context.ts';
 import {
   runConfigCheck,
   type ConfigCheckConnectMode,
   type ConfigCheckResult,
 } from '../../lib/config-check.ts';
+import { ConfigInitError, configErrorCode } from '../../lib/config-init.ts';
+
+/**
+ * What `config check` reports, on success and, as `error.details`, on failure: every finding — warnings included —
+ * each connection it tried, and what the browser receives.
+ */
+export type AppConfigCheckResult = Omit<ConfigCheckResult, 'ok'>;
 
 export default class AppConfigCheck extends AppCommand {
   static override summary =
@@ -23,7 +31,6 @@ export default class AppConfigCheck extends AppCommand {
   static override flags: {
     connect: Interfaces.BooleanFlag<boolean | undefined>;
     strict: Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     connect: Flags.boolean({
       allowNo: true,
@@ -34,58 +41,59 @@ export default class AppConfigCheck extends AppCommand {
       default: false,
       description: 'Treat warnings as failures.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<AppConfigCheckResult> {
     const { flags } = await this.parse(AppConfigCheck);
     const connect: ConfigCheckConnectMode =
       flags.connect === undefined ? 'auto' : flags.connect ? 'always' : 'never';
 
-    let result: ConfigCheckResult;
+    let checked: ConfigCheckResult;
     try {
-      result = await runConfigCheck({
-        rootDir: appContextOf(this).rootDir,
+      // The runtime is loaded here rather than through withAppRuntime, because a load that fails is a finding rather
+      // than an error; runConfigCheck destroys the scope of one that loads.
+      checked = await runConfigCheck({
+        rootDir: this.rootDir,
         loadRuntime: () => appContextOf(this).loadRuntime(),
         connect,
       });
     } catch (error) {
       // Only an application that cannot be found at all ends up here; every problem with the configuration itself
       // is a finding.
-      const message = error instanceof Error ? error.message : String(error);
-      if (flags.json)
-        this.logJson({ ok: false, status: 'failed', error: message });
-      else this.log(message);
-      this.exit(2);
-      return;
+      throw new CommandError(
+        error instanceof Error ? error.message : String(error),
+        {
+          code:
+            error instanceof ConfigInitError
+              ? configErrorCode(error.reason)
+              : 'CONFIG_CHECK_FAILED',
+          exit: 2,
+          cause: error,
+        },
+      );
     }
 
-    const failed =
-      !result.ok ||
-      (flags.strict &&
-        result.findings.some((finding) => finding.level === 'warning'));
+    const { ok, ...result } = checked;
+    this.report(result);
 
-    if (flags.json) {
-      this.logJson({
-        ok: !failed,
-        status: failed ? 'failed' : 'passed',
-        mode: result.mode,
-        ...(result.configFile ? { configFile: result.configFile } : {}),
-        findings: result.findings,
-        connections: result.connections,
-        public: result.public,
-      });
-    } else {
-      this.report(result);
+    const errors = count(result, 'error');
+    const warnings = count(result, 'warning');
+    if (!ok) {
+      throw new CommandError(
+        `The configuration has ${plural(errors, 'error')} that would stop the application from starting.`,
+        { code: 'CONFIG_INVALID', details: result },
+      );
     }
-
-    if (failed) this.exit(1);
+    if (flags.strict && warnings > 0) {
+      throw new CommandError(
+        `The configuration has ${plural(warnings, 'warning')}, which --strict treats as failures.`,
+        { code: 'CONFIG_INVALID', details: result },
+      );
+    }
+    return result;
   }
 
-  private report(result: ConfigCheckResult): void {
+  private report(result: AppConfigCheckResult): void {
     this.log(
       result.configFile
         ? `Checked ${result.configFile}`
@@ -115,6 +123,17 @@ export default class AppConfigCheck extends AppCommand {
       if (finding.fix) this.log(`    ${finding.fix}`);
     }
   }
+}
+
+function count(
+  result: AppConfigCheckResult,
+  level: 'error' | 'warning',
+): number {
+  return result.findings.filter((finding) => finding.level === level).length;
+}
+
+function plural(amount: number, noun: string): string {
+  return `${amount} ${noun}${amount === 1 ? '' : 's'}`;
 }
 
 function flattenPublic(

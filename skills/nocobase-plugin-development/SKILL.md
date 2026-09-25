@@ -1,6 +1,6 @@
 ---
 name: nocobase-plugin-development
-description: Develop and maintain NocoBase v3 plugins in this source workspace, including scaffolding, shadcn UI, Client/Server/CLI contributions, database resources, Registry items, Plugin Skills, and target App registration. Use when creating or changing packages/plugins/app-plugin-* or example plugins. Not for legacy NocoBase v2 plugins or application-only development.
+description: Develop and maintain NocoBase v3 plugins in a NocoBase 3 source workspace, including scaffolding, shadcn UI, Client/Server/CLI contributions, database resources, Registry items, Plugin Skills, and target App registration. Use when creating or changing packages/plugins/app-plugin-* or example plugins. Not for legacy NocoBase v2 plugins or application-only development.
 ---
 
 # NocoBase Plugin Development

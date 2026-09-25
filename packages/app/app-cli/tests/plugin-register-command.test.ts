@@ -1,6 +1,7 @@
 import type { Config } from '@oclif/core';
 import { existsSync } from 'node:fs';
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -11,7 +12,7 @@ import {
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { runCommand as runPackageManager } from '../src/lib/run-command.ts';
 import { loadTestConfig, runCommand } from './helpers.ts';
@@ -147,7 +148,7 @@ describe('app plugin register command', () => {
     };
     expect(registerResponse).toMatchObject({
       ok: true,
-      operation: 'plugin:register',
+      command: 'plugin register',
       status: 'success',
     });
     expect(registerResponse.result.plan).toMatchObject({
@@ -174,7 +175,7 @@ describe('app plugin register command', () => {
     };
     expect(unregisterResponse).toMatchObject({
       ok: true,
-      operation: 'plugin:unregister',
+      command: 'plugin unregister',
       status: 'success',
     });
     expect(unregisterResponse.result.skillRemovals).toEqual([
@@ -216,10 +217,11 @@ describe('app plugin register command', () => {
       expect(JSON.parse(result.stdout)).toMatchObject({
         schemaVersion: 1,
         ok: true,
-        operation: 'plugin:register',
-        status: 'requires-installation',
+        command: 'plugin register',
+        // The preview stops at the install: the plugin's exports decide the rest of the plan.
+        status: 'partial-success',
         result: {
-          planStatus: 'requires-installation',
+          state: 'requires-installation',
           commands: [
             {
               command: packageManager,
@@ -242,7 +244,7 @@ describe('app plugin register command', () => {
     ]);
     expect(JSON.parse(registered.stdout)).toMatchObject({
       ok: true,
-      operation: 'plugin:register',
+      command: 'plugin register',
       status: 'success-noop',
     });
 
@@ -253,7 +255,7 @@ describe('app plugin register command', () => {
     ]);
     expect(JSON.parse(unregistered.stdout)).toMatchObject({
       ok: true,
-      operation: 'plugin:unregister',
+      command: 'plugin unregister',
       status: 'success-noop',
     });
   });
@@ -279,7 +281,7 @@ describe('app plugin register command', () => {
 
     expect(JSON.parse(result.stdout)).toMatchObject({
       ok: true,
-      operation: 'plugin:unregister',
+      command: 'plugin unregister',
       status: 'success',
       result: {
         removedSkills: ['nocobase-app-plugin-audit-log'],
@@ -298,7 +300,7 @@ describe('app plugin register command', () => {
     ]);
     expect(JSON.parse(empty.stdout)).toMatchObject({
       ok: true,
-      operation: 'plugin:update',
+      command: 'plugin update',
       status: 'success-noop',
       result: { packageNames: [], commands: [] },
     });
@@ -318,7 +320,7 @@ describe('app plugin register command', () => {
     ]);
     expect(JSON.parse(planned.stdout)).toMatchObject({
       ok: true,
-      operation: 'plugin:update',
+      command: 'plugin update',
       status: 'success',
       result: {
         mode: 'dry-run',
@@ -364,7 +366,7 @@ describe('app plugin register command', () => {
     };
     expect(response).toMatchObject({
       ok: true,
-      operation: 'plugin:inspect',
+      command: 'plugin inspect',
       status: 'success',
     });
     expect(response.result.issues).toEqual([]);
@@ -842,7 +844,7 @@ describe('app plugin register command', () => {
     const response = JSON.parse(dryRun.stdout) as {
       schemaVersion: number;
       ok: boolean;
-      operation: string;
+      command: string;
       status: string;
       result: {
         dryRun: boolean;
@@ -852,7 +854,7 @@ describe('app plugin register command', () => {
     expect(response).toMatchObject({
       schemaVersion: 1,
       ok: true,
-      operation: 'skills:sync',
+      command: 'skills sync',
       status: 'success',
     });
     expect(response.result.dryRun).toBe(true);
@@ -901,7 +903,7 @@ describe('app plugin register command', () => {
     expect(JSON.parse(synchronized.stdout)).toMatchObject({
       schemaVersion: 1,
       ok: true,
-      operation: 'skills:sync',
+      command: 'skills sync',
       status: 'success',
       result: {
         dryRun: true,
@@ -952,20 +954,202 @@ describe('app plugin register command', () => {
     const response = JSON.parse(lines[0]) as {
       schemaVersion: number;
       ok: boolean;
-      operation: string;
+      command: string;
       status: string;
-      error: { code: string; message: string; suggestions: string[] };
+      error: {
+        code: string;
+        message: string;
+        suggestions: { message: string }[];
+      };
     };
     expect(response).toMatchObject({
       schemaVersion: 1,
       ok: false,
-      operation: 'skills:sync',
+      command: 'skills sync',
       status: 'failure',
       error: {
         code: 'PLUGIN_NOT_INSTALLED',
         message: expect.any(String),
-        suggestions: expect.any(Array),
+        suggestions: [
+          {
+            message:
+              'Run the App package manager install, then retry the sync.',
+          },
+        ],
       },
     });
+  });
+
+  it('reports a --json failure with its code and suggestion, and exits 1', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+    const previousExitCode = process.exitCode;
+    let exitCode: typeof process.exitCode;
+    let stdout: string;
+    try {
+      ({ stdout } = await runCommand(config, 'plugin:register', [
+        'not-installed',
+        '--dir',
+        appRoot,
+        '--no-install',
+        '--json',
+      ]));
+      exitCode = process.exitCode;
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+
+    expect(JSON.parse(stdout)).toEqual({
+      schemaVersion: 1,
+      ok: false,
+      command: 'plugin register',
+      status: 'failure',
+      error: {
+        code: 'PLUGIN_NOT_INSTALLED',
+        message: `@nocobase/app-plugin-not-installed is not installed in ${appRoot} and --no-install was given.`,
+        suggestions: [{ message: 'Install dependencies and retry.' }],
+      },
+      warnings: [],
+    });
+    expect(exitCode).toBe(1);
+  });
+
+  it('reports invalid usage under --json with exit code 2', async () => {
+    const previousExitCode = process.exitCode;
+    let exitCode: typeof process.exitCode;
+    let stdout: string;
+    try {
+      ({ stdout } = await runCommand(config, 'skills:sync', [
+        '--package',
+        '@nocobase/app-skills',
+        '--plugin',
+        'audit-log',
+        '--json',
+      ]));
+      exitCode = process.exitCode;
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: false,
+      command: 'skills sync',
+      status: 'failure',
+    });
+    expect(exitCode).toBe(2);
+  });
+
+  it('keeps the package manager exit code when an install fails', async () => {
+    const appRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'nb3-register-command-'),
+    );
+    created.push(appRoot);
+    await writeFile(
+      path.join(appRoot, 'package.json'),
+      JSON.stringify({ name: 'demo-app', packageManager: 'pnpm@11.0.0' }),
+    );
+    const binRoot = path.join(appRoot, 'fake-bin');
+    await mkdir(binRoot, { recursive: true });
+    await writeFile(path.join(binRoot, 'pnpm'), '#!/bin/sh\nexit 17\n');
+    await chmod(path.join(binRoot, 'pnpm'), 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${binRoot}${path.delimiter}${previousPath ?? ''}`;
+    try {
+      await expect(
+        runCommand(config, 'plugin:register', ['audit-log', '--dir', appRoot]),
+      ).rejects.toMatchObject({
+        message: 'pnpm exited with code 17. Nothing was registered.',
+        errorCode: 'PLUGIN_COMMAND_FAILED',
+        oclif: { exit: 17 },
+      });
+    } finally {
+      process.env.PATH = previousPath;
+    }
+  });
+
+  it('unregisters as a partial success, with an issue and a warning, when the package manager fails', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+    const manifestPath = path.join(appRoot, 'package.json');
+    await runCommand(config, 'plugin:register', [
+      'audit-log',
+      '--dir',
+      appRoot,
+      '--no-install',
+    ]);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    await writeFile(
+      manifestPath,
+      JSON.stringify({ ...manifest, packageManager: 'pnpm@11.0.0' }),
+    );
+    const binRoot = path.join(appRoot, 'fake-bin');
+    await mkdir(binRoot, { recursive: true });
+    await writeFile(path.join(binRoot, 'pnpm'), '#!/bin/sh\nexit 17\n');
+    await chmod(path.join(binRoot, 'pnpm'), 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${binRoot}${path.delimiter}${previousPath ?? ''}`;
+    let stdout: string;
+    try {
+      ({ stdout } = await runCommand(config, 'plugin:unregister', [
+        'audit-log',
+        '--dir',
+        appRoot,
+        '--json',
+      ]));
+    } finally {
+      process.env.PATH = previousPath;
+    }
+
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      command: 'plugin unregister',
+      status: 'partial-success',
+      result: {
+        mode: 'unregister',
+        removedSkills: ['nocobase-app-plugin-audit-log'],
+        issues: [
+          {
+            code: 'PACKAGE_MANAGER_FAILED',
+            suggestions: [
+              {
+                message:
+                  'Remove the package dependency manually and reinstall dependencies.',
+              },
+            ],
+          },
+        ],
+      },
+      warnings: [
+        'pnpm exited with code 17; the package may still be installed. Continuing to unregister it.',
+      ],
+    });
+    expect(
+      await readFile(path.join(appRoot, 'client', 'plugins.ts'), 'utf8'),
+    ).not.toContain('audit-log');
+  });
+
+  it('prints the same summary for the flagless sync every template postinstall runs', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+    await runCommand(config, 'plugin:register', [
+      'audit-log',
+      '--dir',
+      appRoot,
+      '--no-install',
+    ]);
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(appRoot);
+    let stdout: string;
+    try {
+      ({ stdout } = await runCommand(config, 'skills:sync'));
+    } finally {
+      cwd.mockRestore();
+    }
+
+    expect(stdout).toBe(
+      [
+        'Synchronized NocoBase package skills for demo-app',
+        '  copy nocobase-app-plugin-audit-log (@nocobase/app-plugin-audit-log)',
+      ].join('\n'),
+    );
   });
 });

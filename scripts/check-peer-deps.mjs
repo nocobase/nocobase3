@@ -38,6 +38,10 @@ export const IDENTITY_SENSITIVE_PACKAGES = new Map([
     'exports React contexts plus identity-keyed API and realtime client tokens',
   ],
   ['@nocobase/app-portal-sdk', 'exports the nocobaseClient module singleton'],
+  [
+    '@nocobase/app-cli',
+    'AppCommand reads the application the runner located and the runtimes it tracks; a plugin command built on a second copy runs under another version of that contract',
+  ],
   ['@nocobase/i18n', 'exports React contexts for the i18n runtime'],
   [
     '@nocobase/queue',

@@ -1,8 +1,26 @@
-import { Args, Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { AppCommand, CommandError } from '@nocobase/app-cli';
+import { Args, Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 import path from 'node:path';
 
-export default class WorkflowCheck extends Command {
+import type { WorkflowSourceIssue } from '../build/index.js';
+import type { WorkflowFlatIr } from '../server/instructions/definition.js';
+
+/** What `workflow check` returns, and the `result` of its `--json` document. */
+export interface WorkflowCheckResult {
+  /** The `workflow.ts` that was checked. */
+  readonly file: string;
+  readonly nodes: number;
+  /** The compiled flat IR, only with `--ir`. */
+  readonly ir?: WorkflowFlatIr;
+}
+
+/** The `error.details` of a failed check. */
+export interface WorkflowCheckFailureDetails {
+  readonly issues: readonly WorkflowSourceIssue[];
+}
+
+export default class WorkflowCheck extends AppCommand {
   static override summary = 'Validate a source-managed workflow package.';
   static override description =
     'Runs the Workflow typecheck, evaluation, schema, semantic, and compile validation phases without loading or running the workflow.';
@@ -25,39 +43,59 @@ export default class WorkflowCheck extends Command {
 
   static override flags: {
     ir: Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     ir: Flags.boolean({
       default: false,
       description:
         'Print the compiled flat IR, the definition an Artifact would carry.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<WorkflowCheckResult> {
     const { args, flags } = await this.parse(WorkflowCheck);
-    const { checkWorkflowPackage } = await import('../build/index.js');
-    const result = await checkWorkflowPackage(path.resolve(args.package));
-    const output = {
-      ok: true,
-      status: 'success',
-      file: result.file,
-      nodes: result.ir.nodes.length,
-      ...(flags.ir ? { ir: result.ir } : {}),
+    const { checkWorkflowPackage, WorkflowSourceCheckError } =
+      await import('../build/index.js');
+    // A path typed on the command line resolves from the current directory, as with any command line.
+    const packagePath = path.resolve(args.package);
+    let checked: Awaited<ReturnType<typeof checkWorkflowPackage>>;
+    try {
+      checked = await checkWorkflowPackage(packagePath);
+    } catch (error) {
+      if (error instanceof WorkflowSourceCheckError) {
+        const details: WorkflowCheckFailureDetails = { issues: error.issues };
+        throw new CommandError(error.message, {
+          code: 'WORKFLOW_CHECK_FAILED',
+          details,
+          cause: error,
+        });
+      }
+      if (isMissing(error, packagePath)) {
+        throw new CommandError(`Workflow package not found: ${packagePath}`, {
+          code: 'WORKFLOW_PACKAGE_NOT_FOUND',
+          suggestions: [
+            'Pass a workflow package directory or its workflow.ts, relative to the current directory.',
+          ],
+          cause: error,
+        });
+      }
+      throw error;
+    }
+    const result: WorkflowCheckResult = {
+      file: checked.file,
+      nodes: checked.ir.nodes.length,
+      ...(flags.ir ? { ir: checked.ir } : {}),
     };
 
-    if (flags.json) {
-      this.logJson(output);
-      return;
-    }
     if (flags.ir) {
-      this.log(JSON.stringify(result.ir, null, 2));
-      return;
+      this.log(JSON.stringify(checked.ir, null, 2));
+      return result;
     }
-    this.log(`Workflow check passed: ${output.file} (${output.nodes} nodes)`);
+    this.log(`Workflow check passed: ${result.file} (${result.nodes} nodes)`);
+    return result;
   }
+}
+
+function isMissing(error: unknown, target: string): boolean {
+  const failure = error as NodeJS.ErrnoException | undefined;
+  return failure?.code === 'ENOENT' && failure.path === target;
 }

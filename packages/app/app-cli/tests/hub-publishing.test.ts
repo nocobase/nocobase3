@@ -5,9 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bindAppCommand } from './app-command.ts';
+import { runAppCommand, type CommandRun } from './command-output.ts';
 import Deploy from '../src/commands/release/deploy.ts';
 import Upload from '../src/commands/release/upload.ts';
-import { publishToHub } from '../src/hub-publishing.ts';
+import { publishRelease, publishToHub } from '../src/hub-publishing.ts';
 
 let root: string;
 const env = {
@@ -22,6 +23,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });
 });
 const response = (data: object) =>
@@ -524,6 +526,99 @@ describe('Hub publishing client', () => {
   });
 });
 
+describe('failure details', () => {
+  it('carries none for a local error found before any request', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const failure = await publishToHub(
+      'upload',
+      { wait: true },
+      root,
+      env,
+    ).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: 'WAIT_REQUIRES_DEPLOY' });
+    expect((failure as { details?: unknown }).details).toBeUndefined();
+  });
+
+  it('names the Release a confirmed upload left without a deployment', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        response({ releaseId: 'existing', operationId: null, reused: true }),
+      ),
+    );
+    await expect(
+      publishToHub('upload', { deploy: true, wait: false }, root, env),
+    ).rejects.toMatchObject({
+      code: 'NO_DEPLOYMENT',
+      details: {
+        idempotencyKey: createHash('sha256').update('artifact').digest('hex'),
+        releaseId: 'existing',
+      },
+    });
+  });
+
+  it('names the deployment a timed-out wait leaves running', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ operationId: 'op-1', status: 'queued' }),
+        )
+        .mockResolvedValueOnce(response({ status: 'deploying' })),
+    );
+    await expect(
+      publishToHub('deploy', { 'release-id': 'r1', timeout: 0.01 }, root, env),
+    ).rejects.toMatchObject({
+      code: 'WAIT_TIMEOUT',
+      exitCode: 3,
+      details: {
+        idempotencyKey: expect.any(String),
+        releaseId: 'r1',
+        operationId: 'op-1',
+        operationStatus: 'deploying',
+      },
+    });
+  });
+
+  it('keeps the reuse warning apart from the typed result', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        response({ operationId: 'op-1', status: 'succeeded', reused: true }),
+      ),
+    );
+    const { result, warning } = await publishRelease(
+      'deploy',
+      { 'release-id': 'r1', wait: true },
+      root,
+      env,
+    );
+    expect(result).not.toHaveProperty('warning');
+    expect(warning).toContain('--idempotency-key');
+  });
+});
+
+function command(
+  operation: 'upload' | 'deploy',
+  argv: readonly string[],
+): Promise<CommandRun> {
+  const Command = bindAppCommand(operation === 'deploy' ? Deploy : Upload, {
+    rootDir: root,
+  });
+  Command.id = `release:${operation}`;
+  return runAppCommand(Command, argv, root);
+}
+
+const connection = [
+  '--hub',
+  env.HUB_URL,
+  '--app-id',
+  env.HUB_APP_ID,
+  '--api-key',
+  env.HUB_API_KEY,
+];
+
 describe('CLI command output', () => {
   it.each([
     ['deploy', [], 'succeeded', true],
@@ -538,17 +633,6 @@ describe('CLI command output', () => {
   ] as const)(
     '%s %j reports %s with polling=%s',
     async (operation, flags, status, polls) => {
-      const { Config } = await import('@oclif/core');
-      const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
-      const ReleaseUpload = bindAppCommand(Upload, { rootDir: root });
-      const config = await Config.load({
-        root,
-        pjson: {
-          name: 'publishing-test',
-          version: '0.0.0',
-          oclif: { bin: 'nocobase' },
-        },
-      });
       const fetcher = vi
         .fn()
         .mockResolvedValueOnce(
@@ -556,42 +640,36 @@ describe('CLI command output', () => {
         )
         .mockResolvedValueOnce(response({ status }));
       vi.stubGlobal('fetch', fetcher);
-      const Command = operation === 'deploy' ? ReleaseDeploy : ReleaseUpload;
-      const command = new Command(
-        [
-          '--json',
-          '--hub',
-          env.HUB_URL,
-          '--app-id',
-          env.HUB_APP_ID,
-          '--api-key',
-          env.HUB_API_KEY,
-          ...(operation === 'deploy'
-            ? ['--release-id', 'r1']
-            : ['--file', path.join(root, 'storage/exports/dist.tar.gz')]),
-          ...flags,
-        ],
-        config,
-      );
-      const output = vi
-        .spyOn(command, 'logJson')
-        .mockImplementation(() => undefined);
+      const run = await command(operation, [
+        '--json',
+        ...connection,
+        ...(operation === 'deploy'
+          ? ['--release-id', 'r1']
+          : ['--file', path.join(root, 'storage/exports/dist.tar.gz')]),
+        ...flags,
+      ]);
+      // json() throws unless stdout is exactly one document.
+      const json = run.json();
       if (status === 'failed') {
-        await expect(command.run()).rejects.toMatchObject({
-          oclif: { exit: 1 },
-        });
-        expect(output.mock.calls[0]?.[0]).toMatchObject({
+        expect(run.exitCode).toBe(1);
+        expect(json).toMatchObject({
           ok: false,
-          error: { code: 'DEPLOYMENT_FAILED' },
+          command: `release ${operation}`,
+          status: 'failure',
+          error: {
+            code: 'DEPLOYMENT_FAILED',
+            details: { operationId: 'op-1', operationStatus: 'failed' },
+          },
         });
       } else {
-        await command.run();
-        expect(output.mock.calls[0]?.[0]).toMatchObject({
+        expect(run.exitCode).toBeUndefined();
+        expect(json).toMatchObject({
           ok: true,
+          command: `release ${operation}`,
+          status: 'success',
           ...(polls ? { result: { operationStatus: 'succeeded' } } : {}),
         });
       }
-      expect(output).toHaveBeenCalledTimes(1);
       expect(fetcher).toHaveBeenCalledTimes(polls ? 2 : 1);
       if (polls)
         expect(String(fetcher.mock.calls[1]?.[0])).toMatch(
@@ -600,43 +678,21 @@ describe('CLI command output', () => {
     },
   );
   it('prints one JSON envelope and a parameter exit code without echoing secret arguments', async () => {
-    const { Config } = await import('@oclif/core');
-    const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
-    const config = await Config.load({
-      root,
-      pjson: {
-        name: 'publishing-test',
-        version: '0.0.0',
-        oclif: { bin: 'nocobase' },
-      },
-    });
-    const command = new ReleaseDeploy(
-      ['--json', '--api-key', env.HUB_API_KEY],
-      config,
-    );
-    const output = vi
-      .spyOn(command, 'logJson')
-      .mockImplementation(() => undefined);
-    await expect(command.run()).rejects.toMatchObject({ oclif: { exit: 2 } });
-    expect(output).toHaveBeenCalledTimes(1);
-    expect(output.mock.calls[0]?.[0]).toMatchObject({
+    const run = await command('deploy', [
+      '--json',
+      '--api-key',
+      env.HUB_API_KEY,
+    ]);
+    expect(run.exitCode).toBe(2);
+    expect(run.json()).toMatchObject({
       ok: false,
+      command: 'release deploy',
       status: 'failure',
       error: { code: 'INVALID_ARGUMENTS' },
     });
-    expect(JSON.stringify(output.mock.calls)).not.toContain(env.HUB_API_KEY);
+    expect(run.stdout + run.stderr).not.toContain(env.HUB_API_KEY);
   });
-  it('exits with failure JSON when upload --deploy has no confirmed deployment', async () => {
-    const { Config } = await import('@oclif/core');
-    const ReleaseUpload = bindAppCommand(Upload, { rootDir: root });
-    const config = await Config.load({
-      root,
-      pjson: {
-        name: 'publishing-test',
-        version: '0.0.0',
-        oclif: { bin: 'nocobase' },
-      },
-    });
+  it('fails with the Release to deploy when upload --deploy has no confirmed deployment', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -645,44 +701,23 @@ describe('CLI command output', () => {
           response({ releaseId: 'existing', operationId: null, reused: true }),
         ),
     );
-    const command = new ReleaseUpload(
-      [
-        '--json',
-        '--deploy',
-        '--hub',
-        env.HUB_URL,
-        '--app-id',
-        env.HUB_APP_ID,
-        '--api-key',
-        env.HUB_API_KEY,
-        '--file',
-        path.join(root, 'storage/exports/dist.tar.gz'),
-      ],
-      config,
-    );
-    const output = vi
-      .spyOn(command, 'logJson')
-      .mockImplementation(() => undefined);
-    await expect(command.run()).rejects.toMatchObject({ oclif: { exit: 1 } });
-    expect(output).toHaveBeenCalledTimes(1);
-    expect(output.mock.calls[0]?.[0]).toMatchObject({
+    const run = await command('upload', [
+      '--json',
+      '--deploy',
+      ...connection,
+      '--file',
+      path.join(root, 'storage/exports/dist.tar.gz'),
+    ]);
+    expect(run.exitCode).toBe(1);
+    expect(run.json()).toMatchObject({
       ok: false,
+      command: 'release upload',
       status: 'failure',
-      error: { code: 'NO_DEPLOYMENT' },
+      error: { code: 'NO_DEPLOYMENT', details: { releaseId: 'existing' } },
     });
   });
 
-  it('warns in human output when the Hub reused an earlier deployment', async () => {
-    const { Config } = await import('@oclif/core');
-    const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
-    const config = await Config.load({
-      root,
-      pjson: {
-        name: 'publishing-test',
-        version: '0.0.0',
-        oclif: { bin: 'nocobase' },
-      },
-    });
+  it('warns when the Hub reused an earlier deployment, and reports the run as a no-op', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation(() =>
@@ -695,38 +730,26 @@ describe('CLI command output', () => {
         ),
       ),
     );
-    const command = new ReleaseDeploy(
-      [
-        '--hub',
-        env.HUB_URL,
-        '--app-id',
-        env.HUB_APP_ID,
-        '--api-key',
-        env.HUB_API_KEY,
-        '--release-id',
-        'r1',
-      ],
-      config,
-    );
-    const log = vi.spyOn(command, 'log').mockImplementation(() => undefined);
-    const warn = vi.spyOn(command, 'warn').mockImplementation(() => undefined);
-    await command.run();
-    expect(log).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain('--idempotency-key');
+    const argv = [...connection, '--release-id', 'r1'];
+
+    const human = await command('deploy', argv);
+    expect(human.error).toBeUndefined();
+    expect(human.stdout.trim().split('\n')).toEqual([
+      expect.stringMatching(/^Deployment op-1: succeeded\. Retry key: /),
+    ]);
+    expect(human.stderr).toContain('--idempotency-key');
+
+    const json = (await command('deploy', ['--json', ...argv])).json();
+    expect(json).toMatchObject({
+      ok: true,
+      status: 'success-noop',
+      result: { operationId: 'op-1', reused: true },
+      warnings: [expect.stringContaining('--idempotency-key')],
+    });
+    expect(json.result).not.toHaveProperty('warning');
   });
 
   it('allows --no-wait to return the accepted deployment status', async () => {
-    const { Config } = await import('@oclif/core');
-    const ReleaseDeploy = bindAppCommand(Deploy, { rootDir: root });
-    const config = await Config.load({
-      root,
-      pjson: {
-        name: 'publishing-test',
-        version: '0.0.0',
-        oclif: { bin: 'nocobase' },
-      },
-    });
     vi.stubGlobal(
       'fetch',
       vi
@@ -734,35 +757,56 @@ describe('CLI command output', () => {
         .mockResolvedValue(response({ operationId: 'op-1', status: 'queued' })),
     );
     await writeFile(path.join(root, 'runtime.yml'), 'feature: parsed\n');
-    const command = new ReleaseDeploy(
-      [
-        '--json',
-        '--hub',
-        env.HUB_URL,
-        '--app-id',
-        env.HUB_APP_ID,
-        '--api-key',
-        env.HUB_API_KEY,
-        '--release-id',
-        'r1',
-        '--no-wait',
-        '--config',
-        path.join(root, 'runtime.yml'),
-      ],
-      config,
-    );
-    const output = vi
-      .spyOn(command, 'logJson')
-      .mockImplementation(() => undefined);
-    await command.run();
+    const run = await command('deploy', [
+      '--json',
+      ...connection,
+      '--release-id',
+      'r1',
+      '--no-wait',
+      '--config',
+      path.join(root, 'runtime.yml'),
+    ]);
     expect(
       JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string),
     ).toMatchObject({ config: { mode: 'file', content: 'feature: parsed\n' } });
-    expect(output).toHaveBeenCalledTimes(1);
-    expect(output.mock.calls[0]?.[0]).toMatchObject({
+    expect(run.json()).toMatchObject({
       ok: true,
       status: 'success',
       result: { operationStatus: 'queued' },
+      warnings: [],
     });
+  });
+
+  it('uploads the default archive from the App root, and a typed --file from the current directory', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'hub-cli-cwd-'));
+    try {
+      await writeFile(path.join(cwd, 'other.tar.gz'), 'other');
+      const bodies: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (_url: URL, init: RequestInit) => {
+          const chunks: Buffer[] = [];
+          for await (const chunk of init.body as unknown as AsyncIterable<Buffer>)
+            chunks.push(Buffer.from(chunk));
+          bodies.push(Buffer.concat(chunks).toString());
+          return response({ releaseId: 'r1', operationId: null });
+        }),
+      );
+      vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+
+      const defaulted = await command('upload', ['--json', ...connection]);
+      const typed = await command('upload', [
+        '--json',
+        ...connection,
+        '--file',
+        'other.tar.gz',
+      ]);
+
+      expect(defaulted.json()).toMatchObject({ ok: true });
+      expect(typed.json()).toMatchObject({ ok: true });
+      expect(bodies).toEqual(['artifact', 'other']);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });

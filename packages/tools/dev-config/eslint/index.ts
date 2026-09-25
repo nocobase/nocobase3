@@ -33,6 +33,7 @@ const portalNodeFiles: string[] = [
   'cli/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
   '*.config.{js,mjs,cjs,ts,mts,cts}',
 ];
+const commandFiles: string[] = ['**/cli/**/*.{js,mjs,cjs,ts,tsx,mts,cts}'];
 const defaultIgnores: string[] = [
   '**/dist/**',
   '**/build/**',
@@ -208,6 +209,69 @@ export const vitest: Linter.Config[] = [
   },
 ];
 
+const APP_SERVER_NODE = '@nocobase/app-server/node';
+
+/**
+ * Commands in an application's or a plugin's `cli/` run inside the `nocobase` command line, which owns stdout and puts
+ * the application away after the command. Each rule names what to use instead of the thing it refuses.
+ */
+export const commandRules: Linter.Config[] = [
+  {
+    name: '@nocobase/dev-config/cli-commands',
+    files: commandFiles,
+    ignores: testFiles,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: APP_SERVER_NODE,
+              message:
+                'Use withApp() from AppCommand instead of creating the application yourself.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'process',
+          property: 'cwd',
+          message:
+            'Use this.rootDir for application files, or an appPath() flag for paths the user passes.',
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `ImportExpression[source.value='${APP_SERVER_NODE}']`,
+          message:
+            'Use withApp() from AppCommand instead of creating the application yourself.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name=/^(log|info|debug|table)$/]",
+          message:
+            'Use this.log for text and return the result from run(); console output bypasses --json.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.type='ThisExpression'][callee.property.name='exit']",
+          message:
+            'Return the result or throw CommandError instead of calling exit().',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.type='ThisExpression'][callee.property.name='logJson']",
+          message:
+            'Return the result from run(); AppCommand prints the --json document.',
+        },
+      ],
+    },
+  },
+];
+
 const createConfig = ({
   tsconfigRootDir = process.cwd(),
   ignores = [],
@@ -238,6 +302,7 @@ const createConfig = ({
     name: '@nocobase/dev-config/untyped-support-files',
     files: [...testFiles, ...toolingFiles],
   },
+  ...commandRules,
   {
     name: '@nocobase/dev-config/local-rules',
     files: allFiles,

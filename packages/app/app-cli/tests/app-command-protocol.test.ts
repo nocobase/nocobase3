@@ -383,3 +383,23 @@ describe('outside the runner', () => {
     });
   });
 });
+
+describe('suggestions for people', () => {
+  it('quote an argument a shell would split, so the printed line can be pasted', () => {
+    const error = new CommandError('The driver is missing', {
+      code: 'DRIVER_MISSING',
+      suggestions: [
+        {
+          message: 'Install the driver:',
+          run: {
+            command: 'pnpm',
+            args: ['add', '@nocobase/db-mysql@>=1.0.0 <2.0.0'],
+          },
+        },
+      ],
+    });
+    expect(error.suggestions).toEqual([
+      "Install the driver: pnpm add '@nocobase/db-mysql@>=1.0.0 <2.0.0'",
+    ]);
+  });
+});

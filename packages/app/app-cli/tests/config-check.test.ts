@@ -12,8 +12,12 @@ import {
 import { MissingDatabaseDriversError } from '@nocobase/app-server/database';
 import sqliteDriver from '@nocobase/db-sqlite';
 
+import AppConfigCheck from '../src/commands/config/check.ts';
+import { CommandError } from '../src/command/errors.ts';
 import type { AppCommandRuntime } from '../src/context.ts';
 import { runConfigCheck } from '../src/lib/config-check.ts';
+import { bindAppCommand } from './app-command.ts';
+import { runAppCommand } from './command-output.ts';
 
 const directories: string[] = [];
 
@@ -380,5 +384,170 @@ describe('runConfigCheck', () => {
         }),
       );
     });
+  });
+});
+
+describe('config check --json', () => {
+  const run = async (
+    setup: Setup,
+    argv: readonly string[] = [],
+    json = true,
+  ) => {
+    const { rootDir, runtime, destroyed } = await createRuntime(setup);
+    const output = await runAppCommand(
+      bindAppCommand(AppConfigCheck, {
+        rootDir,
+        loadRuntime: async () => runtime,
+      }),
+      [...(json ? ['--json'] : []), '--no-connect', ...argv],
+      rootDir,
+    );
+    return { output, destroyed, rootDir };
+  };
+
+  it('returns findings, connections and what the browser receives', async () => {
+    const { output, destroyed, rootDir } = await run({
+      file: 'auth:\n  secret: a-real-secret\n',
+    });
+
+    expect(output.exitCode).toBeUndefined();
+    expect(output.json()).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      status: 'success',
+      result: {
+        mode: 'source',
+        configFile: path.join(rootDir, 'config.yml'),
+        // A warning does not fail the check, and stays in the result.
+        findings: [
+          expect.objectContaining({
+            level: 'warning',
+            code: 'session-secret-ephemeral',
+          }),
+        ],
+        connections: [],
+        public: {},
+      },
+    });
+    expect(output.json().result).not.toHaveProperty('ok');
+    expect(destroyed()).toBe(true);
+  });
+
+  it('fails with CONFIG_INVALID and keeps every finding in details', async () => {
+    const { output, destroyed } = await run({
+      file: 'auth:\n  secret: replace-with-a-unique-secret\ndatabse:\n  x: 1\n',
+    });
+
+    expect(output.exitCode).toBe(1);
+    const json = output.json();
+    expect(json).toMatchObject({
+      ok: false,
+      status: 'failure',
+      error: {
+        code: 'CONFIG_INVALID',
+        message: expect.stringContaining('1 error'),
+        details: { mode: 'source', connections: [], public: {} },
+      },
+    });
+    const { findings } = (json.error as { details: { findings: unknown[] } })
+      .details;
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 'error',
+          code: 'secret-placeholder',
+          key: 'auth.secret',
+          fix: expect.any(String),
+        }),
+        expect.objectContaining({ level: 'warning', code: 'unknown-key' }),
+      ]),
+    );
+    expect(destroyed()).toBe(true);
+  });
+
+  it('fails on warnings with --strict', async () => {
+    const { output } = await run({ file: 'auth:\n  secret: a-real-secret\n' }, [
+      '--strict',
+    ]);
+
+    expect(output.exitCode).toBe(1);
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'CONFIG_INVALID',
+        message: expect.stringContaining('--strict'),
+        details: {
+          findings: [
+            expect.objectContaining({ code: 'session-secret-ephemeral' }),
+          ],
+        },
+      },
+    });
+  });
+
+  it('reports a configuration that does not load as findings, not as its own error', async () => {
+    const { rootDir } = await createRuntime({ file: SECRETS });
+    const output = await runAppCommand(
+      bindAppCommand(AppConfigCheck, {
+        rootDir,
+        loadRuntime: async () => {
+          throw new MissingDatabaseDriversError([
+            {
+              connection: 'main',
+              dialect: 'postgres',
+              packageName: '@nocobase/db-postgres',
+            },
+          ]);
+        },
+      }),
+      ['--json'],
+      rootDir,
+    );
+
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'CONFIG_INVALID',
+        details: {
+          findings: [
+            expect.objectContaining({
+              code: 'driver-missing',
+              fix: 'pnpm add @nocobase/db-postgres',
+            }),
+          ],
+        },
+      },
+    });
+  });
+
+  it('refuses a directory that holds no application with APPLICATION_NOT_FOUND and exit 2', async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-empty-'));
+    directories.push(rootDir);
+
+    const output = await runAppCommand(
+      bindAppCommand(AppConfigCheck, { rootDir }),
+      ['--json'],
+      rootDir,
+    );
+
+    expect(output.exitCode).toBe(2);
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: { code: 'APPLICATION_NOT_FOUND' },
+    });
+  });
+
+  it('prints the findings for people before failing', async () => {
+    const { output } = await run(
+      { file: 'auth:\n  secret: replace-with-a-unique-secret\n' },
+      [],
+      false,
+    );
+
+    expect(output.stdout).toContain(
+      '✗ auth.secret: auth.secret is still the placeholder',
+    );
+    expect(output.error).toBeInstanceOf(CommandError);
+    expect(output.error).toMatchObject({ oclif: { exit: 1 } });
   });
 });

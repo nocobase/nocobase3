@@ -50,7 +50,7 @@ This repository's Skills are committed under the root `skills/` directory, and n
 
 Because a Skill is read through links one directory deeper than where it is committed, a relative Markdown link from a Skill into the rest of the repository resolves differently depending on the path it was opened through. Refer to repository files by their path from the repository root in a code span, such as `packages/app/app-cli/src/lib/skills-sync.ts`, and keep relative links for files inside the Skill itself.
 
-`skills/` holds two kinds of Skill. `nocobase-plugin-development` is for developing plugins in this repository. `nocobase-create-app` is installed globally by users, so that an agent knows how to reach NocoBase 3 before any application exists, with `npx skills add nocobase/nocobase3 --skill nocobase-create-app -g`; `--skill` is required because the `skills` CLI reads the whole directory and would otherwise offer the development Skill alongside it. Before merging a change to a global Skill, try it against the unreleased checkout with `pnpm unreleased:*`, as [skills/README.md](skills/README.md) describes: the published packages cannot show whether a Skill works with behavior that has not been released yet.
+`skills/` holds two kinds of Skill. `nocobase-plugin-development` is for developing plugins in a NocoBase 3 source workspace: this checkout links it, and it can also be installed globally with `npx skills add nocobase/nocobase3 --skill nocobase-plugin-development -g`, so it must not depend on a relative link into the repository. `nocobase-create-app` is installed globally by users, so that an agent knows how to reach NocoBase 3 before any application exists, with `npx skills add nocobase/nocobase3 --skill nocobase-create-app -g`; `--skill` is required because the `skills` CLI reads the whole directory and would otherwise offer the development Skill alongside it. Before merging a change to a global Skill, try it against the unreleased checkout with `pnpm unreleased:*`, as [skills/README.md](skills/README.md) describes: the published packages cannot show whether a Skill works with behavior that has not been released yet.
 
 Every Skill in `skills/` is released by merging, not by publishing. `npx skills add` reads the default branch, so a change reaches every user the moment it lands on `develop`, while `pnpm create @nocobase/app` installs whatever version was last published to npm. A global Skill may therefore describe only behavior that has already been released: a change that documents a new command or flag waits until the release that ships it, and says so in its pull request. Nothing enforces this — `scripts/require-changesets.mjs` looks only at `packages/`, and there is no version to bump. Keep such a Skill to the entry point and hand over to the application's own `AGENTS.md` and `.agents/skills/` as soon as the application exists, because those are synchronized from the installed version and a global Skill is not.
 
@@ -276,16 +276,17 @@ When you do add an entry, record what breaks without it rather than only the pac
 
 The current entries:
 
-| Package                      | What breaks when a second copy exists                                                                                                                |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@nocobase/service-provider` | `ServiceContainer` keys its `Map` by the token object itself, so two `createServiceToken` calls with the same name produce two keys that never match |
-| `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueManagerToken` and `driveManagerToken`                                         |
-| `@nocobase/db`               | Exports `databaseManagerToken` and migration identity                                                                                                |
-| `@nocobase/app-client`       | Exports React contexts plus the identity-keyed `apiClientToken` and `realtimeClientToken`                                                            |
-| `@nocobase/app-portal-sdk`   | Exports `nocobaseClient`, a module-level singleton holding session state                                                                             |
-| `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                  |
-| `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                               |
-| any `@nocobase/app-plugin-*` | Plugins export tokens for one another, such as `authenticationToken` and `notificationServiceToken`                                                  |
+| Package                      | What breaks when a second copy exists                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@nocobase/service-provider` | `ServiceContainer` keys its `Map` by the token object itself, so two `createServiceToken` calls with the same name produce two keys that never match                     |
+| `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueManagerToken` and `driveManagerToken`                                                             |
+| `@nocobase/db`               | Exports `databaseManagerToken` and migration identity                                                                                                                    |
+| `@nocobase/app-client`       | Exports React contexts plus the identity-keyed `apiClientToken` and `realtimeClientToken`                                                                                |
+| `@nocobase/app-portal-sdk`   | Exports `nocobaseClient`, a module-level singleton holding session state                                                                                                 |
+| `@nocobase/app-cli`          | `AppCommand` reads the application the runner located and the runtimes it tracks, so a plugin command built on a second copy runs under another version of that contract |
+| `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                                      |
+| `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                                                   |
+| any `@nocobase/app-plugin-*` | Plugins export tokens for one another, such as `authenticationToken` and `notificationServiceToken`                                                                      |
 
 ### Why a second copy is worth this much trouble
 

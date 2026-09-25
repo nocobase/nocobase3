@@ -12,18 +12,18 @@ writing commands for another plugin.
 
 A plugin contributes commands by exporting a `./cli` entry. The application lists that entry in `cli/plugins.ts`, and `pnpm nocobase` assembles it into one command tree alongside the built-in commands of `@nocobase/app-cli`, such as `config *`, `db *`, `plugin *` and `build`, and the application's own `app *` commands.
 
-Commands are static: they operate on files and packages. They do not start the application, connect to the database, or
-resolve services from the container.
+Every command extends `AppCommand` from `@nocobase/app-cli`: it returns its result, throws `CommandError` on failure, and gets `--json` from the base class. By default a command is static tooling that operates on files and packages; one that needs the application creates it with `this.withApp(async ({ app }) => …)`. The `nocobase-plugin-development` Skill's CLI reference has the whole contract.
 
 ## The three pieces
 
-**A command** is an oclif `Command` subclass — the same shape the built-in commands use:
+**A command** is an `AppCommand` subclass — the same base the built-in commands use:
 
 ```ts
 // cli/greet.ts
-import { Args, Command, Flags } from '@oclif/core';
+import { AppCommand } from '@nocobase/app-cli';
+import { Args, Flags } from '@oclif/core';
 
-export default class Greet extends Command {
+export default class Greet extends AppCommand {
   static override summary = 'Print a greeting.';
   static override examples = ['<%= config.bin %> <%= command.id %> world'];
   static override args = {
@@ -33,18 +33,18 @@ export default class Greet extends Command {
     loud: Flags.boolean({ default: false, description: 'Upper-case it.' }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<{ message: string }> {
     const { args, flags } = await this.parse(Greet);
-    this.log(
-      flags.loud
-        ? `HELLO, ${args.target.toUpperCase()}!`
-        : `Hello, ${args.target}.`,
-    );
+    const message = flags.loud
+      ? `HELLO, ${args.target.toUpperCase()}!`
+      : `Hello, ${args.target}.`;
+    this.log(message); // for people; silent under --json
+    return { message }; // the --json result
   }
 }
 ```
 
-**The entry** names the package and declares the command map. The topic is derived from the package name, without its scope and `app-plugin-` prefix, so `@nocobase/app-plugin-cli-example` mounts under `cli-example`:
+**The entry** names the package and declares the command maps: `commands` run wherever the application runs, a built `dist/` included, and `devCommands` only in a source checkout. The topic is derived from the package name, without its scope and `app-plugin-` prefix, so `@nocobase/app-plugin-cli-example` mounts under `cli-example`:
 
 ```ts
 // cli/index.ts
@@ -55,7 +55,9 @@ import Greet from './greet.ts';
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: '@nocobase/app-plugin-cli-example',
   description: 'Example commands contributed by a plugin.',
-  commands: { greet: Greet, 'artifact:build': ArtifactBuild },
+  commands: { greet: Greet },
+  // Reads source directories a built dist/ does not carry, so it is registered only in a source checkout.
+  devCommands: { 'artifact:build': ArtifactBuild },
 });
 
 export default cliPlugin;
@@ -98,7 +100,7 @@ Both are peers, so the application supplies them. `@nocobase/app-cli` is the run
 `--help`. A class declaration costs nothing; load anything expensive inside `run()` with `await import()`, as
 `cli/artifact-build.ts` does.
 
-**Follow the output conventions.** `--json` writes one machine-readable result to stdout, on success and on failure alike, and a failure also exits non-zero. Exit codes are `0` success, `1` runtime error, `2` argument error.
+**Follow the output conventions.** Return the result from `run()` and throw `CommandError` on failure; `AppCommand` turns either into the one `--json` document on stdout, and a failure also exits non-zero. Never call `this.exit()`, `this.logJson()` or `console.log`. Exit codes are `0` success, `1` runtime error, `2` argument error.
 
 ## Verify
 
