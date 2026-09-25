@@ -138,11 +138,6 @@ export interface OrganizationService {
     userId: string,
     options: { readonly descendants: boolean },
   ): Promise<readonly string[]>;
-  /** One active department, plus its active descendants when asked; empty when it is missing or inactive. */
-  selectedDepartments(
-    departmentId: string,
-    options: { readonly descendants: boolean },
-  ): Promise<readonly string[]>;
   /** Users with an active direct membership in any of the departments. */
   membersOf(departmentIds: readonly string[]): Promise<readonly string[]>;
   /** The region the organisation gives a user: its primary department's first, else another department's. */

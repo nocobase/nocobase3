@@ -10,8 +10,17 @@ import {
   type TestUser,
 } from './helpers.js';
 
-/** North projects the engineer set's "own region" scope selects; this tree carries no confidentiality restriction. */
-const NORTH = ['project-1', 'project-2', 'project-4'];
+/**
+ * North projects the engineer set's "own region" scope selects, the seeded demo ones included; this tree carries no
+ * confidentiality restriction.
+ */
+const NORTH = [
+  'dept-project-northgate',
+  'dept-project-riverside',
+  'project-1',
+  'project-2',
+  'project-4',
+];
 
 interface Case {
   /** Holds the set only through the department tree. */

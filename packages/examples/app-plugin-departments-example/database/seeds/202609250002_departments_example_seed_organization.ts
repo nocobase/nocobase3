@@ -13,19 +13,25 @@ import {
   SEED_PERMISSION_SETS,
   SEED_SHARING_RULES,
   SHARING_ASSIGNMENTS,
-  STAFF_MEMBERSHIPS,
   seedRegionOf,
   type SeedAssignment,
   type SeedRuleAssignment,
 } from '../seed-data/organization.js';
+import { SEED_ORDERS, SEED_PROJECTS, SEED_QUOTES } from '../seed-data/sales.js';
 
 const DEPARTMENT_SUBJECT = 'org.department';
 const SALES_MEMBERS = 'authorizationExampleSalesMembers';
+const PROJECTS = 'authorizationExampleProjects';
+const QUOTES = 'authorizationExampleQuotes';
+const ORDERS = 'authorizationExampleOrders';
+const NOTES = 'Fictional demonstration record';
 
 /**
  * The example trading company on top of the authorization example's sales and delivery domain: its department
  * tree, the demo accounts with their memberships, the authorization example's permission sets and rules assigned
- * to departments and people, and each regional account's sales-member row, as an HR sync would write it.
+ * to departments and people, each regional account's sales-member row, as an HR sync would write it, and a few
+ * projects, quotes and an order owned by the demo accounts in the authorization example's sales tables. The
+ * authorization example's own accounts and rows are never touched.
  *
  * Each row is written only when its key is missing, so an administrator's later edits survive a replay. Accounts
  * are keyed by email and written straight into the authentication plugin's `user` and `account` tables; an account
@@ -196,33 +202,6 @@ const seed: SeedDefinition = defineSeed({
           assignment,
         );
 
-    // The authorization example's salespeople join the sales departments once; a removed membership stays removed.
-    for (const staff of STAFF_MEMBERSHIPS) {
-      const user = await query
-        .selectFrom('user')
-        .select('id')
-        .where('email', '=', staff.email)
-        .executeTakeFirst();
-      if (!user) continue;
-      const userId = String(user.id);
-      const existing = await query
-        .selectFrom('departmentMembers')
-        .select('id')
-        .where('userId', '=', userId)
-        .executeTakeFirst();
-      if (existing) continue;
-      await query
-        .insertInto('departmentMembers')
-        .values({
-          id: randomUUID(),
-          departmentId: staff.departmentId,
-          userId,
-          primary: true,
-          active: true,
-        })
-        .execute();
-    }
-
     let password: string | undefined;
     for (const account of DEMO_ACCOUNTS) {
       const existing = await query
@@ -283,6 +262,78 @@ const seed: SeedDefinition = defineSeed({
           .insertInto(SALES_MEMBERS)
           .values({ id: userId, region })
           .execute();
+    }
+
+    // Demo sales data owned by this example's staff. A row whose owner account is missing is skipped.
+    async function userIdOf(email: string): Promise<string | undefined> {
+      const user = await query
+        .selectFrom('user')
+        .select('id')
+        .where('email', '=', email)
+        .executeTakeFirst();
+      return user ? String(user.id) : undefined;
+    }
+    async function missing(table: string, id: string): Promise<boolean> {
+      return !(await query
+        .selectFrom(table)
+        .select('id')
+        .where('id', '=', id)
+        .executeTakeFirst());
+    }
+    for (const project of SEED_PROJECTS) {
+      const ownerId = await userIdOf(project.ownerEmail);
+      if (!ownerId || !(await missing(PROJECTS, project.id))) continue;
+      await query
+        .insertInto(PROJECTS)
+        .values({
+          id: project.id,
+          title: project.title,
+          region: project.region,
+          ownerId,
+          confidential: false,
+          notes: NOTES,
+        })
+        .execute();
+    }
+    for (const quote of SEED_QUOTES) {
+      const preparedById = await userIdOf(quote.preparedByEmail);
+      if (!preparedById || !(await missing(QUOTES, quote.id))) continue;
+      if (await missing(PROJECTS, quote.projectId)) continue;
+      const preparer = DEMO_ACCOUNTS.find(
+        (account) => account.email === quote.preparedByEmail,
+      );
+      await query
+        .insertInto(QUOTES)
+        .values({
+          id: quote.id,
+          projectId: quote.projectId,
+          preparedById,
+          preparedByName: preparer?.name ?? quote.preparedByEmail,
+          title: quote.title,
+          notes: NOTES,
+          amount: quote.amount,
+          status: quote.status,
+        })
+        .execute();
+    }
+    for (const order of SEED_ORDERS) {
+      if (!(await missing(ORDERS, order.id))) continue;
+      if (
+        (await missing(PROJECTS, order.projectId)) ||
+        (await missing(QUOTES, order.quoteId))
+      )
+        continue;
+      await query
+        .insertInto(ORDERS)
+        .values({
+          id: order.id,
+          projectId: order.projectId,
+          quoteId: order.quoteId,
+          title: order.title,
+          status: 'ready',
+          deliveryReference: null,
+        })
+        .execute();
     }
   },
 });

@@ -1,11 +1,9 @@
 // @vitest-environment node
-import { selection } from '@nocobase/authorization/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   SCOPE_MY_DEPARTMENTS,
   SCOPE_MY_DEPARTMENTS_AND_BELOW,
-  SCOPE_SELECTED_DEPARTMENT,
 } from '../server/index.js';
 import {
   createProject,
@@ -135,51 +133,6 @@ describe('department data scopes', () => {
       expect(await read(viewer)).toEqual([]);
     } finally {
       await test.organization.setActive('sc-root', true);
-    }
-  });
-
-  it('Selected department reads its params, with and without descendants', async () => {
-    const only = await holder(
-      'scSelected',
-      selection.recordAccess(SCOPE_SELECTED_DEPARTMENT, {
-        departmentId: 'sc-a',
-        includeDescendants: false,
-      }) as { type: 'recordAccess'; key: string; params?: unknown },
-    );
-    expect(await read(only)).toEqual(['sc-a']);
-
-    const below = await holder(
-      'scSelectedBelow',
-      selection.recordAccess(SCOPE_SELECTED_DEPARTMENT, {
-        departmentId: 'sc-a',
-        includeDescendants: true,
-      }) as { type: 'recordAccess'; key: string; params?: unknown },
-    );
-    expect(await read(below)).toEqual(['sc-a', 'sc-a1']);
-    expect(await read(below, 'quotes')).toEqual(['sc-a-quote', 'sc-a1-quote']);
-
-    // The chosen department disabled selects nothing.
-    await test.organization.setActive('sc-a', false);
-    try {
-      expect(await read(below)).toEqual([]);
-    } finally {
-      await test.organization.setActive('sc-a', true);
-    }
-  });
-
-  it('Selected department selects nothing without valid params', async () => {
-    for (const [name, params] of [
-      ['scNoParams', undefined],
-      ['scBadId', { departmentId: 7 }],
-      ['scBadFlag', { departmentId: 'sc-a', includeDescendants: 'yes' }],
-      ['scMissing', { departmentId: 'sc-nowhere' }],
-    ] as const) {
-      const user = await holder(name, {
-        type: 'recordAccess',
-        key: SCOPE_SELECTED_DEPARTMENT,
-        ...(params === undefined ? {} : { params }),
-      });
-      expect({ name, ids: await read(user) }).toEqual({ name, ids: [] });
     }
   });
 

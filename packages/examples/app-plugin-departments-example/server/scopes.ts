@@ -17,38 +17,14 @@ import {
   QUOTES,
   SCOPE_MY_DEPARTMENTS,
   SCOPE_MY_DEPARTMENTS_AND_BELOW,
-  SCOPE_SELECTED_DEPARTMENT,
 } from './resources.js';
 import type { OrganizationService } from './tokens.js';
-
-/** The params of the selected-department scope, as a grant or rule stores them. */
-export interface SelectedDepartmentParams {
-  readonly departmentId: string;
-  readonly includeDescendants?: boolean;
-}
 
 /** The column holding the record's owner; orders have none and follow their project's. */
 const OWNER_FIELD: Readonly<Record<string, string>> = {
   [PROJECTS]: 'ownerId',
   [QUOTES]: 'preparedById',
 };
-
-/** Stored params are data, not trusted input: anything but the documented shape selects nothing. */
-function readSelectedParams(
-  params: unknown,
-): { departmentId: string; descendants: boolean } | undefined {
-  if (!params || typeof params !== 'object' || Array.isArray(params))
-    return undefined;
-  const departmentId: unknown = Reflect.get(params, 'departmentId');
-  const includeDescendants: unknown = Reflect.get(params, 'includeDescendants');
-  if (typeof departmentId !== 'string' || !departmentId) return undefined;
-  if (
-    includeDescendants !== undefined &&
-    typeof includeDescendants !== 'boolean'
-  )
-    return undefined;
-  return { departmentId, descendants: includeDescendants === true };
-}
 
 function anyOf(
   field: string,
@@ -89,7 +65,7 @@ async function ownedBy(
 }
 
 /**
- * Registers the three department data scopes on the sales example's projects, quotes and orders. Each resolves
+ * Registers the two department data scopes on the sales example's projects, quotes and orders. Each resolves
  * from the database on every request; the principal is the only input taken from the request.
  */
 export function registerDepartmentScopes(
@@ -123,31 +99,6 @@ export function registerDepartmentScopes(
         .description(label('scopes.mineAndBelowHint'))
         .collections(PROJECTS, QUOTES, ORDERS)
         .resolver(viewerScope(true)),
-    ),
-  );
-  authz.recordAccess.define(
-    defineRecordAccess(SCOPE_SELECTED_DEPARTMENT, (access) =>
-      access
-        .title(label('scopes.selected'))
-        .description(label('scopes.selectedHint'))
-        .collections(PROJECTS, QUOTES, ORDERS)
-        .params<SelectedDepartmentParams>({
-          type: 'object',
-          properties: {
-            departmentId: { type: 'string' },
-            includeDescendants: { type: 'boolean' },
-          },
-          required: ['departmentId'],
-        })
-        .resolver(async ({ params, collection }) => {
-          const selected = readSelectedParams(params);
-          if (!selected) return false;
-          const departments = await organization.selectedDepartments(
-            selected.departmentId,
-            { descendants: selected.descendants },
-          );
-          return ownedBy(database, organization, collection, departments);
-        }),
     ),
   );
 }

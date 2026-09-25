@@ -16,14 +16,12 @@ const enUS = {
     mineAndBelow: 'My departments and below',
     mineAndBelowHint:
       'Records owned by active members of your departments and of every department below them.',
-    selected: 'Selected department',
-    selectedHint:
-      'Records owned by active members of one department, optionally with the departments below it. The department is set in a seed or through the API.',
   },
   // Titles of the seeded permission sets and sharing rule.
   sets: {
     head: 'Department head',
     projectViewer: 'Department project viewer',
+    projectViewerOwn: 'Project viewer (own)',
   },
   rules: {
     salesProjects: 'Share sales projects with Delivery',

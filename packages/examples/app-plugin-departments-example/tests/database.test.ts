@@ -101,7 +101,7 @@ describe('organization migration', () => {
 });
 
 describe('organization seed', () => {
-  it('writes the tree, the demo accounts, their assignments and regions once, and a replay changes nothing', async () => {
+  it('writes the tree, the demo accounts, their assignments, regions and sales data once, and a replay changes nothing', async () => {
     const first = await createTestApp();
     const directory = first.directory;
     const snapshot = async (app: typeof first) => {
@@ -177,6 +177,41 @@ describe('organization seed', () => {
           .where('email', 'like', 'sales_%@example.test')
           .orderBy('email', 'asc')
           .execute(),
+        projects: await query
+          .selectFrom('authorizationExampleProjects')
+          .innerJoin('user', 'user.id', 'authorizationExampleProjects.ownerId')
+          .select([
+            'authorizationExampleProjects.id',
+            'region',
+            'confidential',
+            'email',
+          ])
+          .where('authorizationExampleProjects.id', 'like', 'dept-%')
+          .orderBy('authorizationExampleProjects.id', 'asc')
+          .execute(),
+        quotes: await query
+          .selectFrom('authorizationExampleQuotes')
+          .innerJoin(
+            'user',
+            'user.id',
+            'authorizationExampleQuotes.preparedById',
+          )
+          .select([
+            'authorizationExampleQuotes.id',
+            'projectId',
+            'preparedByName',
+            'status',
+            'email',
+          ])
+          .where('authorizationExampleQuotes.id', 'like', 'dept-%')
+          .orderBy('authorizationExampleQuotes.id', 'asc')
+          .execute(),
+        orders: await query
+          .selectFrom('authorizationExampleOrders')
+          .select(['id', 'projectId', 'quoteId', 'status'])
+          .where('id', 'like', 'dept-%')
+          .orderBy('id', 'asc')
+          .execute(),
         sets: await query
           .selectFrom('authorizationPermissionSets')
           .select(['key', 'title'])
@@ -219,7 +254,7 @@ describe('organization seed', () => {
           ['example-sales-engineer', 'eric@departments.example'],
           ['example-sales-manager', 'grace@departments.example'],
           ['departments-example-project-viewer', 'north-sales'],
-          ['departments-example-project-viewer', 'delivery'],
+          ['departments-example-project-viewer-own', 'delivery'],
           ['departments-example-head', '*'],
         ]),
       );
@@ -239,6 +274,13 @@ describe('organization seed', () => {
             ns: '@nocobase/app-plugin-departments-example',
           }),
         ],
+        [
+          'departments-example-project-viewer-own',
+          JSON.stringify({
+            key: 'sets.projectViewerOwn',
+            ns: '@nocobase/app-plugin-departments-example',
+          }),
+        ],
       ]);
       expect(seeded.sharingRules).toEqual([
         {
@@ -249,12 +291,8 @@ describe('organization seed', () => {
               action: 'view',
               scopeKey: 'projects',
               selection: {
-                type: 'recordAccess',
-                key: 'org.selectedDepartment',
-                params: {
-                  departmentId: 'sales-center',
-                  includeDescendants: true,
-                },
+                type: 'records',
+                ids: ['dept-project-riverside', 'dept-project-bayview'],
               },
             },
           ]),
@@ -272,12 +310,45 @@ describe('organization seed', () => {
           subjectId: 'executive-office',
         },
       ]);
-      // The authorization example's salespeople join the sales departments.
-      expect(seeded.staff.map((row) => [row.email, row.departmentId])).toEqual([
-        ['sales_assistant@example.test', 'north-sales'],
-        ['sales_engineer@example.test', 'north-sales'],
-        ['sales_manager@example.test', 'south-sales'],
-        ['sales_proposal@example.test', 'north-sales'],
+      // The authorization example's accounts stay outside the organisation.
+      expect(seeded.staff).toEqual([]);
+      // Demo sales data owned by this example's staff, in each owner's department region.
+      expect(
+        seeded.projects.map((row) => [
+          row.id,
+          row.region,
+          Boolean(row.confidential),
+          row.email,
+        ]),
+      ).toEqual([
+        ['dept-project-bayview', 'South', false, 'eric@departments.example'],
+        ['dept-project-northgate', 'North', false, 'leo@departments.example'],
+        ['dept-project-riverside', 'North', false, 'leo@departments.example'],
+        ['dept-project-southport', 'South', false, 'eric@departments.example'],
+      ]);
+      expect(seeded.quotes).toEqual([
+        {
+          id: 'dept-quote-bayview',
+          projectId: 'dept-project-bayview',
+          preparedByName: 'Eric Liu',
+          status: 'accepted',
+          email: 'eric@departments.example',
+        },
+        {
+          id: 'dept-quote-riverside',
+          projectId: 'dept-project-riverside',
+          preparedByName: 'Leo Wang',
+          status: 'draft',
+          email: 'leo@departments.example',
+        },
+      ]);
+      expect(seeded.orders).toEqual([
+        {
+          id: 'dept-order-bayview',
+          projectId: 'dept-project-bayview',
+          quoteId: 'dept-quote-bayview',
+          status: 'ready',
+        },
       ]);
       // Heads are appointed with their accounts.
       const heads = Object.fromEntries(
@@ -322,10 +393,16 @@ describe('organization seed', () => {
       // The seeded password signs in.
       await first.signIn('grace@departments.example', DEMO_PASSWORD);
 
-      // An administrator renames a department; a deliberate replay must keep that.
+      // An administrator renames a department and edits a demo project; a deliberate replay must keep both.
       await first.organization.updateDepartment('sales-center', {
         title: 'Sales and marketing',
       });
+      await first.database
+        .connection()
+        .query.updateTable('authorizationExampleProjects')
+        .set({ region: 'West' })
+        .where('id', '=', 'dept-project-southport')
+        .execute();
       await first.database
         .connection()
         .query.deleteFrom('__nocobase_seeds')
@@ -350,6 +427,15 @@ describe('organization seed', () => {
         expect(replayed.members).toEqual(seeded.members);
         expect(replayed.regions).toEqual(seeded.regions);
         expect(replayed.staff).toEqual(seeded.staff);
+        expect(replayed.projects).toEqual(
+          seeded.projects.map((row) =>
+            row.id === 'dept-project-southport'
+              ? { ...row, region: 'West' }
+              : row,
+          ),
+        );
+        expect(replayed.quotes).toEqual(seeded.quotes);
+        expect(replayed.orders).toEqual(seeded.orders);
         expect(replayed.sets).toEqual(seeded.sets);
         expect(replayed.sharingRules).toEqual(seeded.sharingRules);
         expect(replayed.departments).toEqual(

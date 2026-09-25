@@ -14,8 +14,8 @@ import {
   label,
   SCOPE_MY_DEPARTMENTS,
   SCOPE_MY_DEPARTMENTS_AND_BELOW,
-  SCOPE_SELECTED_DEPARTMENT,
 } from '../../server/resources.js';
+import { SHARED_WITH_DELIVERY } from './sales.js';
 
 export interface SeedDepartment {
   readonly id: string;
@@ -111,12 +111,14 @@ function viewWith(composite: string, scopeKey: string, recordAccess: string) {
 }
 
 /**
- * This organisation's own permission sets, one per job role. Relative scopes let one set serve every holder: the
- * head set reaches each head's own departments and those below them, whoever the head is.
+ * This organisation's own permission sets. Relative scopes let one set serve every holder: the head set reaches
+ * each head's own departments and those below them, whoever the head is; the own-projects viewer reaches the
+ * projects each holder owns, through the built-in `recordsIOwn` on `ownerId`.
  */
 export const DEPARTMENT_SETS = {
   head: 'departments-example-head',
   projectViewer: 'departments-example-project-viewer',
+  projectViewerOwn: 'departments-example-project-viewer-own',
 } as const;
 
 export const SEED_PERMISSION_SETS: readonly PermissionSet[] = [
@@ -142,6 +144,13 @@ export const SEED_PERMISSION_SETS: readonly PermissionSet[] = [
     .grant(
       ...pageAccess(PROJECTS_COMPOSITE),
       viewWith(PROJECTS_COMPOSITE, 'projects', SCOPE_MY_DEPARTMENTS),
+    )
+    .build(),
+  definePermissionSet(DEPARTMENT_SETS.projectViewerOwn)
+    .title(label('sets.projectViewerOwn'))
+    .grant(
+      ...pageAccess(PROJECTS_COMPOSITE),
+      viewWith(PROJECTS_COMPOSITE, 'projects', 'recordsIOwn'),
     )
     .build(),
 ];
@@ -185,10 +194,10 @@ export const DEPARTMENT_ASSIGNMENTS: readonly SeedAssignment[] = [
     subjectType: DEPARTMENT_SUBJECT,
     subjectId: 'north-sales',
   },
-  // Delivery needs the projects view action for the sales-projects sharing rule to widen; its own projects are none.
+  // Delivery needs the projects view action for the sales-projects sharing rule to widen; it owns no project.
   {
-    id: 'departments-example:delivery:project-viewer',
-    permissionSetKey: DEPARTMENT_SETS.projectViewer,
+    id: 'departments-example:delivery:project-viewer-own',
+    permissionSetKey: DEPARTMENT_SETS.projectViewerOwn,
     subjectType: DEPARTMENT_SUBJECT,
     subjectId: 'delivery',
   },
@@ -201,7 +210,10 @@ export const DEPARTMENT_ASSIGNMENTS: readonly SeedAssignment[] = [
   },
 ];
 
-/** This organisation's own sharing rule: Delivery reads the projects of Sales Center and every department below it. */
+/**
+ * This organisation's own sharing rule: Delivery reads the sales projects it prepares for. It selects records by id;
+ * a viewer-relative scope such as 本部门及下属部门 is computed for the viewer, so it cannot name another department.
+ */
 export const SEED_SHARING_RULES: readonly SharingRule[] = [
   {
     key: 'departments-example-sales-projects',
@@ -211,10 +223,7 @@ export const SEED_SHARING_RULES: readonly SharingRule[] = [
       {
         action: 'view',
         scopeKey: 'projects',
-        selection: selection.recordAccess(SCOPE_SELECTED_DEPARTMENT, {
-          departmentId: 'sales-center',
-          includeDescendants: true,
-        }),
+        selection: selection.records([...SHARED_WITH_DELIVERY]),
       },
     ],
     subjects: [{ type: DEPARTMENT_SUBJECT, id: 'delivery' }],
@@ -249,7 +258,7 @@ export const SHARING_ASSIGNMENTS: readonly SeedRuleAssignment[] = [
     ruleId: 'example-selected-projects',
     subjectId: 'executive-office',
   },
-  // Delivery prepares for what Sales Center is selling.
+  // Delivery prepares the sales projects it is about to deliver.
   {
     id: 'departments-example:delivery:sales-projects',
     ruleId: 'departments-example-sales-projects',
@@ -333,22 +342,6 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     memberships: [{ departmentId: 'north-sales', primary: true }],
     heads: ['north-sales'],
   },
-];
-
-/**
- * The authorization example's salespeople own and prepare its projects and quotes, so they join the sales
- * departments; owner-based department scopes read their memberships. Their sales regions already match these
- * departments. The coordinator, whose project lies in another region, and the delivery specialist stay outside
- * the organisation, as the authorization example has them.
- */
-export const STAFF_MEMBERSHIPS: readonly {
-  readonly email: string;
-  readonly departmentId: string;
-}[] = [
-  { email: 'sales_assistant@example.test', departmentId: 'north-sales' },
-  { email: 'sales_engineer@example.test', departmentId: 'north-sales' },
-  { email: 'sales_proposal@example.test', departmentId: 'north-sales' },
-  { email: 'sales_manager@example.test', departmentId: 'south-sales' },
 ];
 
 export const DEMO_PASSWORD = 'departments-demo';

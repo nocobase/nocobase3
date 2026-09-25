@@ -4,10 +4,9 @@ export const PACKAGE_NAME = '@nocobase/app-plugin-departments-example';
 export const DEPARTMENT_SUBJECT = 'org.department';
 /** The fixed subject meaning every user who heads an active department; its only id is `*`. */
 export const DEPARTMENT_HEAD_SUBJECT = 'org.departmentHead';
-/** Record access keys: the owner belongs to the viewer's departments, to those and below, or to a chosen one. */
+/** Record access keys: the owner belongs to the viewer's departments, or to those and every one below them. */
 export const SCOPE_MY_DEPARTMENTS = 'org.myDepartments';
 export const SCOPE_MY_DEPARTMENTS_AND_BELOW = 'org.myDepartmentsAndBelow';
-export const SCOPE_SELECTED_DEPARTMENT = 'org.selectedDepartment';
 /** The settings item that gates the Departments settings page and its endpoints. */
 export const DEPARTMENTS_SETTINGS = 'departments';
 /** The authorization example's table its "own region" record access reads; the region sync writes it. */

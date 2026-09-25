@@ -589,14 +589,6 @@ export function createOrganizationService(
       return descendants ? activeSubtrees(tree, [...direct]) : [...direct];
     },
 
-    async selectedDepartments(departmentId, { descendants }) {
-      const tree = await loadTree();
-      if (activeChainOf(tree, departmentId) === undefined) return [];
-      return descendants
-        ? activeSubtrees(tree, [departmentId])
-        : [departmentId];
-    },
-
     async membersOf(departmentIds) {
       const memberships = await activeMemberships(database.connection(), {
         departmentIds,

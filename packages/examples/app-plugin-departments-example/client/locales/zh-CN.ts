@@ -11,13 +11,11 @@ const zhCN: DepartmentsExampleResource = {
     mineHint: '你所属或负责的部门中，在职成员拥有的记录。',
     mineAndBelow: '本部门及下属部门',
     mineAndBelowHint: '你的部门及其所有下属部门中，在职成员拥有的记录。',
-    selected: '指定部门',
-    selectedHint:
-      '指定部门（可包含其下属部门）中在职成员拥有的记录。部门在种子数据或 API 中设置。',
   },
   sets: {
     head: '部门负责人',
     projectViewer: '同部门项目查看',
+    projectViewerOwn: '项目只读（本人负责）',
   },
   rules: {
     salesProjects: '销售项目共享给交付部',

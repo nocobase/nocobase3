@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { selection } from '@nocobase/authorization/core';
+import { definePermissionSet } from '@nocobase/authorization/permission-sets';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { DEMO_PASSWORD } from '../database/seed-data/organization.js';
@@ -59,26 +61,74 @@ describe('with the authorization plugin alone', () => {
     const sophia = await test.signIn(email('sophia'), DEMO_PASSWORD);
     const owen = await test.signIn(email('owen'), DEMO_PASSWORD);
     const nina = await test.signIn(email('nina'), DEMO_PASSWORD);
-    // No restriction rule hides the confidential project-4 here: without that plugin, keep it out of the scopes.
+    // The department scopes select the demo projects of this example's staff, none of them confidential.
     expect(await readSales(test, sophia)).toEqual({
       status: 200,
-      ids: ['project-1', 'project-2', 'project-3', 'project-4'],
+      ids: [
+        'dept-project-bayview',
+        'dept-project-northgate',
+        'dept-project-riverside',
+        'dept-project-southport',
+      ],
     });
     expect(await readSales(test, owen)).toEqual({
       status: 200,
-      ids: ['project-1', 'project-2', 'project-4'],
+      ids: ['dept-project-northgate', 'dept-project-riverside'],
     });
     expect(await readSales(test, owen, 'orders')).toMatchObject({
       status: 200,
     });
     // North Sales colleagues through the department project viewer set.
     expect((await readSales(test, nina)).ids).toEqual(
-      expect.arrayContaining(['project-1', 'project-2']),
+      expect.arrayContaining([
+        'dept-project-northgate',
+        'dept-project-riverside',
+      ]),
     );
   });
 
   it('gives Delivery nothing it would have received from the missing sharing rule', async () => {
+    // Delivery's own-projects set opens the page and reaches no project: its members own none.
+    for (const name of ['mia', 'chen']) {
+      const cookie = await test.signIn(email(name), DEMO_PASSWORD);
+      expect({ name, ...(await readSales(test, cookie)) }).toEqual({
+        name,
+        status: 200,
+        ids: [],
+      });
+    }
+  });
+
+  it('can hand specific records to a department only with a set that grants the action on them', async () => {
+    // The permission-set alternative to the sharing rule: the action and the records in one grant.
+    const set = definePermissionSet('delivery-selected-projects')
+      .grant({
+        resource: { type: 'composite', id: 'example.sales.projects' },
+        actions: [
+          {
+            action: 'view',
+            policy: {
+              type: 'composite',
+              scopes: { projects: selection.records(['dept-project-bayview']) },
+            },
+          },
+        ],
+      })
+      .build();
+    await test.authz.permissionSets.create(set);
+    const assignment = await test.authz.permissionSets.assign({
+      permissionSet: set.key,
+      subject: { type: DEPARTMENT_SUBJECT, id: 'delivery' },
+    });
     const mia = await test.signIn(email('mia'), DEMO_PASSWORD);
+    try {
+      expect(await readSales(test, mia)).toEqual({
+        status: 200,
+        ids: ['dept-project-bayview'],
+      });
+    } finally {
+      await test.authz.permissionSets.revoke(assignment.id);
+    }
     expect(await readSales(test, mia)).toEqual({ status: 200, ids: [] });
   });
 });
