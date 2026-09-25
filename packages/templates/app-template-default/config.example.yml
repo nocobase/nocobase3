@@ -105,7 +105,8 @@ database:
     #     autoRun: false
     #   seeds:
     #     autoRun: false
-    # Existing external databases require a runtime metadataStore and do not run tasks.
+    # An existing database another system owns sets schemaManagement: external and runs no tasks. Its titles,
+    # descriptions and relations are read from database/<connection>/metadata/<name>.json unless metadataStore says otherwise.
 
 snowflake:
   # Assign a unique worker ID to each concurrently running instance.
