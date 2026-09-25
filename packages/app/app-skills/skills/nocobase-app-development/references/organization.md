@@ -6,6 +6,8 @@ Use this reference when permission sets should follow where people sit in the or
 
 Build this when access follows a department tree: a user belongs to several departments, one of them primary, and a permission set assigned to a department reaches everyone in it and in the departments below it. Departments and memberships are disabled rather than deleted, because assignments and history keep referring to them. Positions and roles are not built in; model them the same way when the business needs them (section 12).
 
+The paths below are an application's. When the organisation ships as a plugin package instead, the same code moves to the plugin layout that the repository's plugin development Skill describes: migrations and seeds under `database/migrations` and `database/seeds` with names derived from the package, providers and routes declared through `defineServerPlugin`, and pages through `defineClientPlugin`.
+
 ## 2. Model decisions
 
 | Table               | Fields                                                                                                      |
@@ -66,7 +68,18 @@ Put the rules in one service registered by a provider, as [services and jobs](se
 export interface OrganizationService {
   /** Every department with `parentId`, `active` and `sortOrder`, for the settings tree. */
   listTree(): Promise<readonly Department[]>;
-  /** The picker page: active departments only, title search, stable order. */
+  getDepartment(id: string): Promise<Department | undefined>;
+  createDepartment(input: {
+    id?: string;
+    title: string;
+    parentId?: string | null;
+  }): Promise<Department>;
+  /** A new `parentId` changes what the subtree inherits, so a move returns the subtree's members as `changed`. */
+  updateDepartment(
+    id: string,
+    input: { title?: string; parentId?: string | null; sortOrder?: number },
+  ): Promise<{ department: Department; changed: readonly string[] }>;
+  /** The picker page: active departments only, literal title search, stable order. */
   listDepartments(query: {
     search?: string;
     page: number;
@@ -79,6 +92,11 @@ export interface OrganizationService {
     departmentId: string,
     connection?: DatabaseConnection,
   ): Promise<readonly string[] | undefined>;
+  /** The ids whose whole chain is active, from one tree read. */
+  filterActive(
+    ids: readonly string[],
+    connection?: DatabaseConnection,
+  ): Promise<readonly string[]>;
   /** Active direct departments of an active membership, plus their ancestors. */
   departmentsOf(
     userId: string,
@@ -89,6 +107,8 @@ export interface OrganizationService {
     departmentId: string,
     query: { search?: string; page: number; pageSize: number },
   ): Promise<{ items: readonly SubjectOption[]; total: number }>;
+  /** The details page: active direct memberships with `primary`. */
+  directMembers(departmentId: string): Promise<readonly DirectMember[]>;
   /** Each write runs in one transaction and returns the user ids whose membership changed. */
   addMember(input: {
     departmentId: string;
@@ -104,7 +124,7 @@ export interface OrganizationService {
 }
 ```
 
-`effectiveMembers` collects the active memberships of the department's active subtree, then pages through users with `userAdministrationServiceToken`'s `list({ userIds, search, status: 'enabled', page, pageSize })`, so search and paging follow the user directory. Describe each member with the titles of its direct departments inside the subtree. `setActive` returns every member of the subtree, and `removeMember` the removed user.
+`listDepartments` searches through a Repository filter's `includes`, which matches the text literally, so `%` and `_` mean themselves; sort by title, then id, so pages never repeat or skip a row. `effectiveMembers` collects the active memberships of the department's active subtree, then pages through users with `userAdministrationServiceToken`'s `list({ userIds, search, status: 'enabled', page, pageSize })`, so search and paging follow the user directory. Describe each member with the titles of its direct departments inside the subtree. `setActive` returns every member of the subtree, and `removeMember` the removed user.
 
 ## 5. Routes
 
@@ -132,7 +152,7 @@ routes.post('/departments/:id/members', async (c) => {
 });
 ```
 
-Validate every input, including that `userId` names an enabled user and that a new `parentId` creates no cycle. Answer an unknown department with 404.
+`require` throws `AuthorizationDeniedError` from `@nocobase/authorization/core`, which becomes a 500 unless the router maps it: add `routes.onError` that answers it with 403, and the service's own validation errors with 400, 404 or 409. Validate every input, including that `userId` names an enabled user and that a new `parentId` creates no cycle. Answer an unknown department with 404.
 
 ## 6. Settings pages
 
@@ -201,12 +221,8 @@ export function registerDepartments(
     resolveFor: async (principal) =>
       principal.type === 'user' ? organization.departmentsOf(principal.id) : [],
     // Protected assignment checks pass their transaction; read through it.
-    filterActive: async (ids, transaction) => {
-      const active: string[] = [];
-      for (const id of ids)
-        if (await organization.activeChain(id, transaction)) active.push(id);
-      return active;
-    },
+    filterActive: (ids, transaction) =>
+      organization.filterActive(ids, transaction),
     administration: {
       title: 'Departments',
       selection: {
@@ -242,11 +258,11 @@ Assigning or revoking a permission set on a department needs nothing from you: a
 
 ## 9. Seeds
 
-A seed writes an idempotent department tree and memberships, keyed on the fixed ids, parents before children, and skips rows that already exist so an administrator's later changes survive. Assign initial permission sets to departments with `subjectType: 'org.department'` rows in `authorizationPermissionSetAssignments`, after checking the `(permissionSetKey, subjectType, subjectId)` triple. Follow the authorization Skill's `references/code-and-seeds.md` for the permission-set and assignment rows and [migrations and seeds](migrations.md) for where seeds run. Seed only real users you know; memberships of demonstration accounts belong to demonstration data, not to production initialization.
+A seed writes an idempotent department tree and memberships, keyed on the fixed ids, parents before children, and skips rows that already exist so an administrator's later changes survive. Assign initial permission sets to departments with `subjectType: 'org.department'` rows in `authorizationPermissionSetAssignments`, after checking the `(permissionSetKey, subjectType, subjectId)` triple. Follow the authorization Skill's `references/code-and-seeds.md` for the permission-set and assignment rows and [migrations and seeds](migrations.md) for where seeds run. Seed only real users you know; memberships of demonstration accounts belong to demonstration data, not to production initialization. A seed cannot create an account: its container resolves only `idGeneratorToken`, and the user tables belong to the authentication plugin. When a demonstration needs accounts, create them in a provider's `start` through `userAdministrationServiceToken`, only when an account with that email does not exist yet, and add its membership through the organisation service in the same step, so a restart never re-adds a membership an administrator removed.
 
 ## 10. Test matrix
 
-Follow [testing and verification](testing.md) for the layers and fixtures. Cover at least:
+Follow [testing and verification](testing.md) for the layers and fixtures. Most of the matrix needs the real authorization routes and middleware, so start the application itself with the authentication and authorization plugins, and the sharing-rules plugin for the cross-department case, on a temporary SQLite database; startup then runs every plugin's migrations and seeds. Sign users up through `POST /api/auth/sign-up/email` and reuse the cookie, and create permission sets and assignments through `authz.permissionSets`. When a test composes the `Application` by hand instead of through `resolveAppRuntime`, resolve the plugins with `resolveAppServerPlugins(rootDir, defineServerPlugins([...]))`, since that is what finds each plugin's migrations and seeds, and name the driver in the database configuration, `drivers: { sqlite }`. Cover at least:
 
 | Area                  | Cases                                                                                                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -260,7 +276,27 @@ Follow [testing and verification](testing.md) for the layers and fixtures. Cover
 | Cross-department case | A sharing rule that lists a department lets its members reach another department's records only for the action they already hold, and removing either required scope denies it again                    |
 | Refresh               | Each membership write notifies exactly the users it changed, after commit                                                                                                                               |
 
-For the cross-department case, give the business records a `departmentId` and, when a data scope should follow the organisation, a record access such as `org.ownDepartments` whose resolver reads the principal's departments from the organisation service (`authz.recordAccess.define`, see the authorization Skill's `references/business-module.md`); a resolver receives the principal, never client input. Grant the operation through a permission set first, then share the other department's records with a sharing rule whose subject is the receiving department, as the `nocobase-app-plugin-authz-sharing-rules` Skill describes; sharing never grants the operation itself. Run the business endpoint, not only the inspector.
+For the cross-department case, give the business records a `departmentId` and, when a data scope should follow the organisation, a record access such as `org.ownDepartments` whose resolver reads the principal's departments from the organisation service (`authz.recordAccess.define`, see the authorization Skill's `references/business-module.md`); a resolver receives the principal, never client input. There is no `$in` operator; match a list of ids as a union of equality conditions:
+
+```ts
+authz.recordAccess.define(
+  defineRecordAccess('org.ownDepartments', (access) =>
+    access
+      .title('My departments')
+      .collections('projects')
+      .resolver(async ({ principal }) => {
+        if (principal.type !== 'user') return false;
+        const ids = await organization.departmentsOf(principal.id);
+        // No department selects nothing, never every record.
+        return ids.length
+          ? anyScope(ids.map((id) => condition('departmentId', '$eq', id)))
+          : false;
+      }),
+  ),
+);
+```
+
+`anyScope` and `condition` come from `@nocobase/app-plugin-authorization/server`. When the resolver answers `false` for a caller who holds the action, the decision is still conditional, but the collection's policy has `read: false`, and a Repository bound to it throws rather than returning no rows. Check `policy.read === false` in the endpoint and answer the empty result. Grant the operation through a permission set first, then share the other department's records with a sharing rule whose subject is the receiving department, as the `nocobase-app-plugin-authz-sharing-rules` Skill describes; sharing never grants the operation itself. Run the business endpoint, not only the inspector.
 
 ## 11. Pitfalls
 
