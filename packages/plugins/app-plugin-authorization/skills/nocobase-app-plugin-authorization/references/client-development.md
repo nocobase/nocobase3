@@ -1,6 +1,6 @@
 # Client routes, action visibility and record eligibility
 
-Use the sales example's three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. Every client route declares `authz`; nothing is inferred from the route name. The overview is an authenticated demonstration guide that declares `authz: 'skip'`, which is not a pattern for business pages.
+Use the sales example's three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. Declare `authz` on every entry page; nothing is inferred from the route name. The overview is an authenticated demonstration guide that declares `authz: 'skip'`, which is not a pattern for business pages.
 
 ## Register the runtime first
 
@@ -23,7 +23,7 @@ export default defineAppRoutes([
 ]);
 ```
 
-The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. A page route without `authz` is rejected at registration; declare `'skip'` explicitly for a page that needs no check beyond sign-in, and remember that `'skip'` does not bypass parent guards. The permission workspace lists every route whose `authz` checks `page` `access`, under the Pages entry with its navigation groups as resource groups, from the client route tree in menu order; there is no server page registration. `authz.pages.grant('sales.quotes')` builds the matching grant for seeds and provisioning. Composites and settings items are listed under the subsections the server places them in with `authz.ui.place` (subsections are added with `authz.ui.sections.add`), or under their default section's "Other". A page grant opens an entry; business data needs its own action grants, and renaming a page id orphans the grants that reference it.
+The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. Declare `authz` on the first page of every path. A nested page that omits it inherits its nearest ancestor page's value, and a child's own value overrides it. A first page that omits it still registers, with a development warning, but defaults to `'unrestricted'` on a protected App page or a settings page, which only identities with unrestricted access such as root may open or see, and to `'skip'` on a guest, optional or dev page; always declare it rather than rely on that. Declare `'skip'` for a page that needs no check beyond sign-in, and remember that `'skip'` does not bypass parent guards. `'unrestricted'` may also be declared for a root-only page; nothing grants it, so it is never listed in the permission workspace. The permission workspace lists every route whose `authz` checks `page` `access`, under the Pages entry with its navigation groups as resource groups, from the client route tree in menu order; there is no server page registration. `authz.pages.grant('sales.quotes')` builds the matching grant for seeds and provisioning. Composites and settings items are listed under the subsections the server places them in with `authz.ui.place` (subsections are added with `authz.ui.sections.add`), or under their default section's "Other". A page grant opens an entry; business data needs its own action grants, and renaming a page id orphans the grants that reference it.
 
 ## Check feature visibility
 
@@ -37,9 +37,9 @@ const permission = useCan({
 // permission: { can, isPending, error, retry }
 ```
 
-Call Hooks inside a component or custom Hook. While pending or failed, `can` is false; show a loading state or retryable permission error without exposing stale actions. `{ enabled: false }` as the second argument skips a check. Never call Hooks conditionally. A successful check means the feature is granted, not that a particular quote can be submitted.
+Call Hooks inside a component or custom Hook. While pending or failed, `can` is false; show a loading state or retryable permission error without exposing stale actions. `{ enabled: false }` as the second argument skips a check. `useCan('unrestricted')` passes only for an identity whose snapshot is unrestricted, such as root; route guards and menus use it for `authz: 'unrestricted'` pages. Never call Hooks conditionally. A successful check means the feature is granted, not that a particular quote can be submitted.
 
-React code can obtain the shared client with `useAuthorizationClient()`. Outside React, resolve `authorizationClientToken` from the App container and call `client.can({ resource, action })`. `useAuthorizationRevision()` supports custom state that must reload on invalidation. Avoid a module-global client or permission response surviving an identity change. The standard provider and `useCan` already handle session invalidation; do not duplicate snapshot caching. After a change that affects permissions, call `client.invalidate()` so the next check reloads `snapshot()`.
+React code can obtain the shared client with `useAuthorizationClient()`. Outside React, resolve `authorizationClientToken` from the App container and call `client.can({ resource, action })`, or `client.can('unrestricted')` to ask whether the identity has unrestricted access. `useAuthorizationRevision()` supports custom state that must reload on invalidation. Avoid a module-global client or permission response surviving an identity change. The standard provider and `useCan` already handle session invalidation; do not duplicate snapshot caching. After a change that affects permissions, call `client.invalidate()` so the next check reloads `snapshot()`.
 
 ## Obtain row eligibility from the server
 
@@ -140,7 +140,7 @@ These are demonstration IDs; fetch actual options in a customer App. Never expos
 
 ## Settings screens
 
-Use `defineSettingsRoutes` with a lazy page module, navigation keys and `authz: { resource: { type: 'settings', id }, action: 'read' }` naming a settings item registered on the server with `authz.settings.add`. Every settings route states `authz`; there is no default. Do not put `/settings` in its declared path. Check read and each write action separately in the endpoints. Existing permission-set and rule screens already provide assignment and data scope editing; reuse them rather than building another editor.
+Use `defineSettingsRoutes` with a lazy page module, navigation keys and `authz: { resource: { type: 'settings', id }, action: 'read' }` naming a settings item registered on the server with `authz.settings.add`. Declare `authz` on every settings entry page: one that omits it defaults to `'unrestricted'`, which only root may open. Do not put `/settings` in its declared path. Check read and each write action separately in the endpoints. Existing permission-set and rule screens already provide assignment and data scope editing; reuse them rather than building another editor.
 
 For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save and error states. Read-only access renders data without writable controls. Options and search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; the example's team picker relies on existing management permissions.
 

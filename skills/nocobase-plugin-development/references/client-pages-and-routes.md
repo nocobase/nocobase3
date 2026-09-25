@@ -66,7 +66,7 @@ Descendants inherit their entry route’s auth mode and cannot switch it.
 
 ## Declaring `authz`
 
-Every page route, on every surface and at every depth, declares `authz`: a `{ resource: { type, id }, action }` request or `'skip'`. Nothing is inferred from the route name, and registration rejects a page without it. A product page usually checks `{ resource: { type: 'page', id }, action: 'access' }` with a stable id; a settings page checks the `settings` item its server registered. Every parent check must pass before its children render, so a child that needs nothing more declares `'skip'`. Menus, page loaders and permission discovery all read the declared value. A request is checked independently of `auth`. Route groups cannot declare `authz`.
+Declare `authz` on the first page of every path: a `{ resource: { type, id }, action }` request, `'skip'`, or `'unrestricted'` for a page only root may open. Nothing is inferred from the route name. A nested page that omits it inherits its nearest ancestor page's value. An entry page that omits it still registers, with a development warning, and defaults to `'unrestricted'` on a protected App or settings page and to `'skip'` on a guest, optional or dev page; always declare it. A product page usually checks `{ resource: { type: 'page', id }, action: 'access' }` with a stable id; a settings page checks the `settings` item its server registered. Every parent check must pass before its children render, so a child that needs nothing more may declare `'skip'`. Menus, page loaders and permission discovery all read the declared value. A request is checked independently of `auth`. Route groups cannot declare `authz`.
 
 ### Opting a page out of authorization
 
@@ -116,7 +116,7 @@ defineSettingsRoutes([
 
 `navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `authz` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
-There is no default for a settings page: declare the settings item it belongs to, or `'skip'` for a page every signed-in user may open, and enforce the same rule on the server. Register the item on the server with `authz.settings.add`; see [system settings](system-settings.md).
+Declare the settings item a settings page belongs to (one that omits it opens only for root), or `'skip'` for a page every signed-in user may open, and enforce the same rule on the server. Register the item on the server with `authz.settings.add`; see [system settings](system-settings.md).
 
 ### Dev routes
 

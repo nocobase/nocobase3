@@ -110,7 +110,7 @@ export default function OrdersPage(): ReactElement {
 - import 路径使用 `.js`，即使页面文件的实际扩展名是 `.tsx`。
 - `path` 只填写应用内部路径，不要加入部署前缀。比如应用部署在 `/main` 下，路由写 `/orders`，浏览器访问地址就是 `/main/orders`。
 - 路由不配置 `navigation` 时，页面仍然可以通过 URL 访问，但不会出现在菜单中，详情页通常采用这种方式。
-- 每个页面都必须声明 `authz`：`{ resource: { type: 'page', id }, action: 'access' }` 让页面出现在权限配置中并按权限显示，`'skip'` 表示不检查（子页面、访客页面常用）。系统不会根据路由名称推断，缺少 `authz` 的页面在注册时报错，详见[路由参考](./reference/routes)。
+- 在每条路径的第一个页面上声明 `authz`：`{ resource: { type: 'page', id }, action: 'access' }` 让页面出现在权限配置中并按权限显示，`'skip'` 表示不检查（访客页面常用），`'unrestricted'` 表示只有 root 等拥有无限制权限的身份可以打开。子页面省略 `authz` 时继承最近的上级页面的值，子页面自己声明的值会覆盖继承值。系统不会根据路由名称推断。第一个页面省略 `authz` 不会导致应用无法启动：需要登录的页面默认为 `'unrestricted'`，除 root 外对所有人隐藏；访客页面和可选登录页面默认为 `'skip'`，开发环境会输出警告。建议始终显式声明，详见[路由参考](./reference/routes)。
 
 ## 页面目录和子页面
 

@@ -87,6 +87,18 @@ describe('useCan without a Refine provider', () => {
     });
   });
 
+  it('checks the unrestricted requirement against the snapshot', async () => {
+    const { wrapper, request, client } = setup();
+    const { result } = renderHook(() => useCan('unrestricted'), { wrapper });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.can).toBe(false);
+    request.mockResolvedValue({
+      data: { unrestricted: true, permissions: [] },
+    });
+    act(() => client.invalidate());
+    await waitFor(() => expect(result.current.can).toBe(true));
+  });
+
   it('does not query disabled checks and rechecks when enabled again', async () => {
     const { wrapper, client } = setup();
     const can = vi.spyOn(client, 'can').mockResolvedValue(true);

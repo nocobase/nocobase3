@@ -33,7 +33,7 @@ menu entry, as the App page in this example does. Pages with children must place
 `<Outlet />` at the intended content location; pure navigation groups have no
 `componentLoader`. Refine resources serve CRUD configuration, not menus.
 
-Every page route declares `authz`; nothing is inferred from the route name, and a page without it is rejected at registration. The App page checks a page grant, the Settings page names the check it requires, and the development page declares `'skip'`, which checks nothing beyond sign-in and parent routes:
+Each entry page declares `authz`; nothing is inferred from the route name. Nested pages inherit it, and an entry page that omits it registers with a development warning and a default of `'unrestricted'` (root only) on protected App and settings pages or `'skip'` on guest, optional and dev pages. The App page checks a page grant, the Settings page names the check it requires, and the development page declares `'skip'`, which checks nothing beyond sign-in and parent routes:
 
 ```ts
 defineAppRoutes([

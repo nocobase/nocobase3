@@ -16,7 +16,7 @@ import {
   AuthorizationClient,
   authorizationClientToken,
 } from '@nocobase/app-plugin-authorization/client';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, Outlet, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -247,6 +247,92 @@ describe('settings centre', () => {
           packageName: 'test',
           source: 'plugin',
           path: '/settings/overlay',
+          componentLoader: loader,
+        },
+      ],
+    );
+    expect(await screen.findByText('Access denied')).toBeVisible();
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { unrestricted: false, opens: false },
+    { unrestricted: true, opens: true },
+  ])(
+    'opens and lists an unrestricted-only page only for unrestricted identities: %j',
+    async ({ unrestricted, opens }) => {
+      const loader = vi.fn(async () => ({
+        default: () => <h3>Root only content</h3>,
+      }));
+      const page = (
+        name: string,
+        authz: AppClientRegisteredRoute['authz'],
+        componentLoader: AppClientRegisteredRoute['componentLoader'],
+      ): AppClientRegisteredRoute => ({
+        auth: 'required',
+        authz,
+        id: name,
+        name,
+        packageName: 'test',
+        source: 'plugin',
+        path: `/settings/${name}`,
+        navigation: { title: name },
+        componentLoader,
+      });
+      const snapshot = new AuthorizationClient({
+        request: async () => ({ data: { unrestricted, permissions: [] } }),
+      } as never);
+      renderSettings(
+        '/settings/root-only',
+        { can: (requirement) => snapshot.can(requirement) },
+        [],
+        [],
+        [],
+        [
+          page('open', 'skip', async () => ({ default: () => null })),
+          page('root-only', 'unrestricted', loader),
+        ],
+      );
+      expect(await screen.findByRole('link', { name: 'open' })).toBeVisible();
+      if (opens) {
+        expect(await screen.findByText('Root only content')).toBeVisible();
+        expect(screen.getByRole('link', { name: 'root-only' })).toBeVisible();
+      } else {
+        // Hidden from the menu, so the settings centre moves on to a page the user may open.
+        await waitFor(() =>
+          expect(screen.getByRole('link', { name: 'open' })).toHaveAttribute(
+            'aria-current',
+            'page',
+          ),
+        );
+        expect(
+          screen.queryByRole('link', { name: 'root-only' }),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText('Root only content')).not.toBeInTheDocument();
+        expect(loader).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('denies an unrestricted-only page opened by URL to anyone else', async () => {
+    const loader = vi.fn(async () => ({ default: () => <h3>Root page</h3> }));
+    const snapshot = new AuthorizationClient({
+      request: async () => ({ data: { unrestricted: false, permissions: [] } }),
+    } as never);
+    renderSettings(
+      '/settings/root-page',
+      { can: (requirement) => snapshot.can(requirement) },
+      [],
+      [],
+      [
+        {
+          auth: 'required',
+          authz: 'unrestricted',
+          id: 'root-page',
+          name: 'root-page',
+          packageName: 'test',
+          source: 'plugin',
+          path: '/settings/root-page',
           componentLoader: loader,
         },
       ],

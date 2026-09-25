@@ -20,7 +20,7 @@ What each of the five route types is for.
 
 ## `authz` on client routes
 
-Every page route on every surface declares `authz`, either `'skip'` or a `{ resource: { type, id }, action }` request that the client checks before loading the page component. Nothing is inferred from the route name, a page without `authz` is rejected at registration, and settings pages have no default. `'skip'` skips only this page's check, not sign-in or parent checks. A denied page is hidden from its navigation and its URL does not load the component; server endpoints the page calls still check authorization themselves.
+`authz` is `'skip'`, `'unrestricted'` or a `{ resource: { type, id }, action }` request that the client checks before loading the page component. Nothing is inferred from the route name. Declare it on the first page of every path: a nested page that omits it inherits the value of its nearest ancestor page, through groups and any number of levels, and a child's own value overrides it. A first page that omits it still registers, with a development warning: a protected App page (`auth: 'required'`) or a settings page defaults to `'unrestricted'`, which only identities with unrestricted access such as root may open, and a `guest` or `optional` App page or a dev page defaults to `'skip'`. `'unrestricted'` may also be declared for a root-only page and is never offered as a grant. `'skip'` skips only this page's check, not sign-in or parent checks. A denied page is hidden from its navigation and its URL does not load the component; server endpoints the page calls still check authorization themselves.
 
 ```ts
 defineAppRoutes([

@@ -58,7 +58,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ]);
     expect(
       resolved.settings.map((setting) =>
-        setting.authz === 'skip'
+        typeof setting.authz !== 'object'
           ? undefined
           : `${setting.authz.resource.type}.${setting.authz.resource.id}`,
       ),
@@ -311,6 +311,12 @@ describe('@nocobase/app-plugin-authorization client', () => {
         authz: { resource: { type: 'hub.app', id: '*' }, action: 'read' },
       }),
       route({ name: 'login', auth: 'guest', authz: 'skip' }),
+      route({
+        name: 'root-only',
+        // Unrestricted identities only: nothing grants it, so it is no page option.
+        authz: 'unrestricted',
+        navigation: { title: 'Root only' },
+      }),
       route({ name: 'group', componentLoader: undefined }),
       route({
         name: 'reports',
@@ -357,6 +363,17 @@ describe('permission snapshot lifecycle', () => {
     data: { permissions: [{ resource, actions: ['access'] }] },
   };
   const denied = { data: { permissions: [] } };
+
+  it('passes an unrestricted requirement only for an unrestricted snapshot', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(granted)
+      .mockResolvedValueOnce({ data: { unrestricted: true, permissions: [] } });
+    const client = new AuthorizationClient({ request } as never);
+    expect(await client.can('unrestricted')).toBe(false);
+    client.invalidate();
+    expect(await client.can('unrestricted')).toBe(true);
+  });
 
   it('refetches permissions across admin, operator, and admin sessions and notifies subscribers of each invalidation', async () => {
     const request = vi
