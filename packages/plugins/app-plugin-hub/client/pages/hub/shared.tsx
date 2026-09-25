@@ -113,6 +113,10 @@ export function ErrorNotification({
   }, [onClose]);
   useEffect(() => {
     const text = message ?? description;
+    // The cleanup closes this toast when the error is replaced or unmounted.
+    // Base UI calls onClose synchronously for that too, and reporting it
+    // would make the parent clear the error that replaced this one.
+    let closedByCleanup = false;
     // Default priority on purpose: a high-priority toast stays aria-hidden
     // until the viewport is focused, which would hide the details toggle.
     const toastId = add({
@@ -131,9 +135,12 @@ export function ErrorNotification({
           ) : null}
         </>
       ),
-      onClose: () => onCloseRef.current?.(),
+      onClose: () => {
+        if (!closedByCleanup) onCloseRef.current?.();
+      },
     });
     return () => {
+      closedByCleanup = true;
       close(toastId);
     };
   }, [add, close, title, description, message, technicalMessage, code]);

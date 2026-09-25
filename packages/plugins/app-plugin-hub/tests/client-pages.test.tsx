@@ -811,6 +811,34 @@ describe('Hub client pages', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps a replacing error on screen and reports neither the replaced nor the unmounted one as dismissed', async () => {
+    const onClose = vi.fn();
+    const view = render(
+      <ErrorNotification message='First failure' onClose={onClose} />,
+    );
+    expect(await screen.findByText('First failure')).toBeInTheDocument();
+
+    view.rerender(
+      <ErrorNotification message='Second failure' onClose={onClose} />,
+    );
+    expect(await screen.findByText('Second failure')).toBeInTheDocument();
+    expect(screen.queryByText('First failure')).not.toBeInTheDocument();
+
+    view.unmount();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('reports an error notification that closed on its own', () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    render(<ErrorNotification message='Timed failure' onClose={onClose} />);
+
+    act(() => {
+      vi.advanceTimersByTime(8000);
+    });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it('closes the lifecycle confirmation before showing a restart failure', async () => {
     const rawMessage = 'Restart failed: App "hdsp" failed to reload';
     const apiError = Object.assign(new Error(rawMessage), {
