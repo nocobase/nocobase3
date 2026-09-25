@@ -26,7 +26,7 @@ dist-ssr
 # Local application configuration
 /config.yml
 
-# Written by `pnpm collections:generate` for each managed connection: a snapshot of what this machine's database
+# Written by `pnpm nocobase collections generate` for each managed connection: a snapshot of what this machine's database
 # resolves every Collection to, down to the dialect's physical types. It describes a database rather than the
 # application, so it is regenerated after migrating rather than committed. An `external` connection is the exception —
 # there `metadata.json` is the metadata source and belongs in the repository — so the managed connections are named

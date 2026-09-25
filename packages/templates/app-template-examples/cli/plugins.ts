@@ -1,7 +1,7 @@
 import {
   defineCliPlugins,
   type AppCliPlugins,
-} from '@nocobase/nb3-cli/plugins';
+} from '@nocobase/app-cli/plugins';
 import cliExample from '@nocobase/app-plugin-cli-example/cli';
 import workflow from '@nocobase/app-plugin-workflow/cli';
 import scheduler from '@nocobase/app-plugin-scheduler/cli';

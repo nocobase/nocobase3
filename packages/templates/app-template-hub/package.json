@@ -93,8 +93,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/app-tools": "workspace:^",
-    "@shadcn/react": "^0.3.1"
+    "@shadcn/react": "^0.3.1",
+    "tar": "catalog:"
   },
   "files": [
     ".env.example",
@@ -106,7 +106,6 @@
     "database/*/migrations/**",
     "database/*/seeds/**",
     "public",
-    "scripts",
     "tests",
     "index.html",
     "components.json",
@@ -134,10 +133,10 @@
     "directory": "packages/templates/app-template-hub"
   },
   "scripts": {
-    "postinstall": "pnpm skills:sync",
-    "dev": "node --import tsx ./scripts/dev.mjs",
-    "build": "node ./scripts/build.mjs",
-    "start": "node ./scripts/start.mjs",
+    "postinstall": "nocobase skills sync",
+    "dev": "nocobase dev",
+    "build": "nocobase build",
+    "start": "nocobase start",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
@@ -147,28 +146,7 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "nocobase": "tsx ./cli/index.ts",
-    "config:init": "tsx ./cli/index.ts app config init",
-    "config:check": "tsx ./cli/index.ts app config check",
-    "config:set": "tsx ./cli/index.ts app config set",
-    "config:env": "tsx ./cli/index.ts app config env",
-    "collections:generate": "tsx ./cli/index.ts app collections generate",
-    "db:apply": "tsx ./cli/index.ts app db apply",
-    "db:reset": "tsx ./cli/index.ts app db reset",
-    "db:repair": "tsx ./cli/index.ts app db repair",
-    "db:rollback": "tsx ./cli/index.ts app db rollback",
-    "db:redo": "tsx ./cli/index.ts app db redo",
-    "db:unlock": "tsx ./cli/index.ts app db unlock",
-    "db:doctor": "tsx ./cli/index.ts app db doctor",
-    "plugin:register": "nocobase plugin register",
-    "plugin:inspect": "nocobase plugin inspect",
-    "plugin:unregister": "nocobase plugin unregister",
-    "plugin:update": "nocobase plugin update",
-    "package:remove": "nocobase package remove",
-    "skills:sync": "nocobase skills sync",
-    "server:deps:retarget": "node ./scripts/server-deps.mjs retarget",
-    "server:deps:verify": "node ./scripts/server-deps.mjs verify"
+    "test:coverage": "vitest run --coverage"
   },
   "browserslist": {
     "production": [
@@ -194,7 +172,6 @@
     "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/db-sqlite": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",

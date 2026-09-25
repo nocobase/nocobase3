@@ -108,11 +108,11 @@ export function formatHelp(binary: string): string {
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
     '  The generated app is not configured yet. Configure it inside the app directory with:',
-    '    pnpm config:init',
+    '    pnpm nocobase config init',
     '',
     '  That writes config.yml with generated secrets for SQLite, whose driver the app already has.',
     '  For another database, install its driver and name the dialect:',
     '    pnpm add @nocobase/db-postgres',
-    '    pnpm config:init --dialect postgres',
+    '    pnpm nocobase config init --dialect postgres',
   ].join('\n');
 }

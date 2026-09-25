@@ -125,7 +125,7 @@ if [ ! -d "$APP_DIR/node_modules" ]; then
   exit 1
 fi
 
-# Creation deliberately leaves the application unconfigured; `config:init` is what writes this file.
+# Creation deliberately leaves the application unconfigured; `config init` is what writes this file.
 if [ -e "$APP_DIR/config.yml" ]; then
   echo "::error::create-app wrote config.yml, which config:init owns"
   exit 1
@@ -133,7 +133,7 @@ fi
 
 cd "$APP_DIR"
 
-echo "::group::Configure the application with pnpm config:init"
+echo "::group::Configure the application with pnpm nocobase config init"
 # Which dialects an application can run on is decided by the driver it depends on, so a non-SQLite run installs one
 # first — exactly the two commands the documentation gives a user switching databases.
 if [ -n "$DIALECT" ] && [ "$DIALECT" != "sqlite" ]; then
@@ -141,10 +141,10 @@ if [ -n "$DIALECT" ] && [ "$DIALECT" != "sqlite" ]; then
 fi
 CONFIG_INIT_ARGS=("--json")
 if [ -n "$DIALECT" ]; then CONFIG_INIT_ARGS+=("--dialect=$DIALECT"); fi
-pnpm config:init "${CONFIG_INIT_ARGS[@]}" > "$WORKDIR/config-init.json"
+pnpm nocobase config init "${CONFIG_INIT_ARGS[@]}" > "$WORKDIR/config-init.json"
 node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(!r.ok) process.exit(1)' "$WORKDIR/config-init.json"
 if [ ! -f "$APP_DIR/config.yml" ]; then
-  echo "::error::pnpm config:init reported success without writing config.yml"
+  echo "::error::pnpm nocobase config init reported success without writing config.yml"
   exit 1
 fi
 if [ -n "$CONFIG" ]; then
@@ -152,19 +152,19 @@ if [ -n "$CONFIG" ]; then
 fi
 echo "::endgroup::"
 
-echo "::group::Check the configuration with pnpm config:check"
+echo "::group::Check the configuration with pnpm nocobase config check"
 # Loads the configuration through the application and, for anything but SQLite, connects to the database — so a
 # broken configuration fails here with a named cause rather than as a startup that never becomes ready.
-if ! pnpm config:check --json > "$WORKDIR/config-check.json"; then
+if ! pnpm nocobase config check --json > "$WORKDIR/config-check.json"; then
   cat "$WORKDIR/config-check.json"
-  echo "::error::pnpm config:check reported a problem with the generated configuration"
+  echo "::error::pnpm nocobase config check reported a problem with the generated configuration"
   exit 1
 fi
 echo "::endgroup::"
 echo "::group::Synchronize NocoBase package Skills"
 # create-app reports a synchronization failure as a warning. Exercise the command
 # explicitly so an invalid published Skill cannot pass this smoke test.
-pnpm skills:sync
+pnpm nocobase skills sync
 echo "::endgroup::"
 
 echo "::group::Test the application with pnpm test"
@@ -413,9 +413,9 @@ cp "$APP_DIR/config.yml" "$DEPLOY_DIR/config.yml"
 mkdir -p "$DEPLOY_DIR/storage"
 # The deployment guide checks the configuration from inside dist before starting, with the build's own CLI. This is the
 # only place dist/cli is run at all, so a CLI that builds but does not run in a deployment fails here.
-if ! (cd "$DEPLOY_DIR/dist" && APP_CONFIG_FILE="$DEPLOY_DIR/config.yml" pnpm config:check --json > "$WORKDIR/deploy-config-check.json"); then
+if ! (cd "$DEPLOY_DIR/dist" && APP_CONFIG_FILE="$DEPLOY_DIR/config.yml" pnpm nocobase config check --json > "$WORKDIR/deploy-config-check.json"); then
   cat "$WORKDIR/deploy-config-check.json"
-  echo "::error::pnpm config:check failed in the deployed archive"
+  echo "::error::pnpm nocobase config check failed in the deployed archive"
   exit 1
 fi
 
@@ -444,7 +444,7 @@ echo "::group::Retarget native modules for another platform"
 OTHER_TARGET=$(node -e 'console.log(process.platform === "linux" && process.arch === "x64" ? "linux-arm64" : "linux-x64")')
 RETARGET_LOG="$WORKDIR/retarget.log"
 echo "Retargeting for $OTHER_TARGET"
-if ! pnpm server:deps:retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
+if ! pnpm nocobase server-deps retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
   echo "::endgroup::"
   echo "::error::Retargeting native modules for $OTHER_TARGET failed"
   exit 1

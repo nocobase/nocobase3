@@ -30,7 +30,7 @@ test('publishes the default template as source instead of a runtime library', as
   assert.equal(manifest.exports, undefined);
   assert.ok(manifest.files.includes('server'));
   // The database directory ships as source too. It is named by part rather than whole so that the
-  // Collection artifacts `collections:generate` writes under database/<connection>/collections/ stay
+  // Collection artifacts `collections generate` writes under database/<connection>/collections/ stay
   // out of the tarball; template-framework-alignment pins which parts.
   assert.ok(manifest.files.some((entry) => entry.startsWith('database/')));
   assert.ok(!manifest.files.includes('dist'));

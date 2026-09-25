@@ -33,6 +33,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
+// \`pnpm nocobase <topic> <command>\` is recorded under the script name it replaced, so the scenarios below read the
+// same whichever form the smoke script uses.
+if (process.argv[2] === 'nocobase') {
+  const id = process.argv.splice(2, 3).slice(1).join(':');
+  process.argv.splice(2, 0, id === 'server-deps:retarget' ? 'server:deps:retarget' : id);
+}
 const command = process.argv[2];
 const scenario = process.env.SMOKE_SCENARIO;
 const state = process.env.SMOKE_STATE;
@@ -323,7 +329,7 @@ for (const [scenario, commands, error] of [
   [
     'deploy-config-check-fails',
     ['dev', 'build', 'start', 'deploy:config:check'],
-    'pnpm config:check failed in the deployed archive',
+    'pnpm nocobase config check failed in the deployed archive',
   ],
   [
     'standalone-exits',
@@ -359,7 +365,7 @@ test('stops before anything runs when the configuration check fails', async (t) 
   const result = await runSmoke(t, 'config-check-fails');
   assert.equal(result.code, 1, result.output);
   assert.deepEqual(result.commands, ['config:init', 'config:check']);
-  assert.match(result.output, /pnpm config:check reported a problem/u);
+  assert.match(result.output, /pnpm nocobase config check reported a problem/u);
 });
 
 test('stops before dev when NocoBase package Skills cannot be synchronized', async (t) => {
