@@ -106,7 +106,7 @@
     "database/tsconfig.json",
     "database/*/migrations/**",
     "database/*/seeds/**",
-    "database/externalCrm/collections/**",
+    "database/externalCrm/metadata/**",
     "public",
     "tests",
     "index.html",

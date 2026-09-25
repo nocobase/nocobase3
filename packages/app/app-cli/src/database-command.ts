@@ -9,7 +9,9 @@ import type { AppCommandContext, AppCommandRuntime } from './context.ts';
 import {
   AppDatabaseTaskError,
   type AppDatabaseConfig,
+  refreshAppCollectionsArtifact,
   runAppDatabaseTasks,
+  type AppCollectionsRefreshResult,
   type AppDatabaseTaskKind,
   type AppDatabaseTaskResult,
   type AppDatabaseTasksResult,
@@ -18,16 +20,50 @@ import {
 import type { AppDatabaseTask } from '@nocobase/app-server/database';
 import { createInterface } from 'node:readline/promises';
 
+import { applicationState } from './runtime/command-store.ts';
+
 interface CommandOutput {
   log(message: string): void;
   logJson(value: unknown): void;
   exit(code: number): never;
+  /** Where a refresh failure is reported; `log` when absent. */
+  warn?(message: string): void;
 }
 
 interface DatabaseSelectionFlags {
   json: boolean;
   all: boolean;
   connection?: string;
+  /**
+   * Regenerate `database/<connection>/collections/` for every connection whose
+   * migrations this run changed. Off unless a caller asks, so a programmatic
+   * caller never writes files it did not expect; the commands pass their
+   * `--collections` flag, which defaults to on.
+   */
+  collections?: boolean;
+}
+
+/** How one connection's Collection cache refresh went, after the migrations that made it stale. */
+export type DatabaseCollectionsRefresh = AppCollectionsRefreshResult;
+
+/** A database command's result, plus the cache refreshes it ran; `collections` is absent when none ran. */
+export type DatabaseCommandResult = AppDatabaseTasksResult & {
+  collections?: DatabaseCollectionsRefresh[];
+};
+
+/**
+ * Whether this run may write the Collection cache. A built `dist/` is a
+ * deployment: the cache is for whoever develops the application, and nothing
+ * there reads it, so a deployment's `db apply` leaves no files behind.
+ */
+export function collectionsRefreshAllowed(): boolean {
+  try {
+    return applicationState().location.kind !== 'deployment';
+  } catch {
+    // Not run through the CLI runner, as in a test that binds a command
+    // directly: nothing says this is a deployment.
+    return true;
+  }
 }
 
 /**
@@ -98,6 +134,7 @@ export async function runDatabaseApplyCommand(
       }
     }
   }
+  reportCollectionsRefresh(command, result, flags.json);
   if (!result.ok) command.exit(1);
 }
 
@@ -137,6 +174,7 @@ export async function runDatabaseRollbackCommand(
 
   if (flags.json) command.logJson(result);
   else reportDatabaseEntries(command, result);
+  reportCollectionsRefresh(command, result, flags.json);
   if (!result.ok) command.exit(1);
 }
 
@@ -182,6 +220,7 @@ export async function runDatabaseRedoCommand(
 
   if (flags.json) command.logJson(result);
   else reportDatabaseEntries(command, result);
+  reportCollectionsRefresh(command, result, flags.json);
   if (!result.ok) command.exit(1);
 }
 
@@ -365,8 +404,9 @@ async function executeWithApplication(
   flags: DatabaseSelectionFlags,
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
   run: (app: Application) => Promise<AppDatabaseTasksResult>,
-): Promise<AppDatabaseTasksResult | undefined> {
+): Promise<DatabaseCommandResult | undefined> {
   let result: AppDatabaseTasksResult | undefined;
+  let collections: DatabaseCollectionsRefresh[] | undefined;
   let runtime: AppCommandRuntime | undefined;
   let app: Application | undefined;
   try {
@@ -377,6 +417,18 @@ async function executeWithApplication(
       app = await context.createApp(runtime);
       app.registerProviders();
       result = await run(app);
+      // Before shutdown, on the manager the migrations just used: the cache
+      // is read from the database state this run left behind.
+      if (flags.collections) {
+        collections = await refreshAppCollectionsArtifact(
+          app.config.get<AppDatabaseConfig>('database')!,
+          result,
+          {
+            paths: app.paths,
+            database: app.container.resolve(databaseManagerToken),
+          },
+        );
+      }
     } catch (error) {
       failed = true;
       failure = error;
@@ -420,7 +472,28 @@ async function executeWithApplication(
     result = error.result;
   }
   if (!result) throw new Error('Database task returned no result.');
-  return result;
+  return collections ? { ...result, collections } : result;
+}
+
+function reportCollectionsRefresh(
+  command: CommandOutput,
+  result: DatabaseCommandResult,
+  json: boolean,
+): void {
+  for (const entry of result.collections ?? []) {
+    if (entry.status === 'failed') {
+      const message = `Could not refresh the Collection cache of "${entry.connection}": ${entry.error}. The migrations are applied; run "nocobase collections generate --connection ${entry.connection}" to rebuild it.`;
+      if (command.warn) command.warn(message);
+      else if (!json) command.log(`WARNING: ${message}`);
+      continue;
+    }
+    if (json) continue;
+    const written = entry.written?.length ?? 0;
+    const deleted = entry.deleted?.length ?? 0;
+    command.log(
+      `[${entry.connection}] collections: ${written || deleted ? `refreshed (${written} written, ${deleted} deleted)` : 'up to date'}`,
+    );
+  }
 }
 
 /** Every drifted record across the plan, flattened for counting and display. */

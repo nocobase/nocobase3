@@ -140,7 +140,7 @@ describe('application config', () => {
         naming: { underscored: true, tablePrefix: 'crm_' },
       });
       // No store is configured: an external connection reads
-      // database/externalCrm/collections/*/metadata.json by default.
+      // database/externalCrm/metadata/<name>.json by default.
       expect(database.connections.externalCrm.metadataStore).toBeUndefined();
       expect(
         resolveAppMetadataStore(undefined, {
@@ -150,10 +150,7 @@ describe('application config', () => {
         }),
       ).toEqual({
         type: 'directory',
-        directory: path.join(
-          templateRootDir,
-          'database/externalCrm/collections',
-        ),
+        directory: path.join(templateRootDir, 'database/externalCrm/metadata'),
       });
       const analytics = planAppDatabaseTasks(
         database,

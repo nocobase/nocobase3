@@ -48,7 +48,9 @@ Every command listed takes `--connection <name>` or `--all` where connections ap
 
 `database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection, plus `_manifest.json` — written by `pnpm nocobase collections generate`. Read these files, and search across them, rather than inferring the model from migrations.
 
-For a managed connection the directory is a local snapshot: gitignored, and stale after any migration until regenerated. Run `pnpm nocobase collections generate` after `db apply`, `db rollback`, `db redo` or `db reset`, and before relying on the files; `--check` exits non-zero when they are out of date. Never edit them by hand or import them from a migration. An external connection is different: there `metadata.json` is the metadata source and is committed.
+The directory is a local cache for every connection, external ones included: gitignored, safe to delete, and never read back. `db apply`, `db redo`, `db rollback` and `db reset` refresh it for each connection whose migrations they change, and `pnpm dev` does the same after its startup migrations; a built `dist/` never writes it. Run `pnpm nocobase collections generate` yourself only when a command ran with `--no-collections` or warned that the refresh failed, after editing an external connection's `metadata/`, or after another system changed an external connection's schema. `--check` exits non-zero when the files are out of date. Never edit them by hand or import them from a migration.
+
+An external connection's metadata — titles, descriptions and relations its schema cannot express — is written by hand in `database/<connection>/metadata/<name>.json`, one metadata document per Collection, and committed. Edit those files, then regenerate so the cache reflects them; the command reports a document whose Collection the database no longer has as unused metadata.
 
 ## The application's own commands
 

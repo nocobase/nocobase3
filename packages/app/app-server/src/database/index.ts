@@ -45,11 +45,15 @@ export { prepareAppDatabaseStorage } from './storage.js';
 export {
   isCollectionMetadataStoreInstance,
   resolveAppCollectionsDirectory,
+  resolveAppMetadataDirectory,
   resolveAppMetadataStore,
   type ResolveAppMetadataStoreOptions,
 } from './collections-directory.js';
 export {
   generateAppCollectionsArtifact,
+  refreshAppCollectionsArtifact,
+  type AppCollectionsRefreshResult,
+  type RefreshAppCollectionsArtifactOptions,
   type AppCollectionsArtifactConnectionResult,
   type AppCollectionsArtifactDifference,
   type AppCollectionsArtifactDifferenceKind,

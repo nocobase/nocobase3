@@ -11,7 +11,7 @@ import {
 export default class AppCollectionsGenerate extends AppCommand {
   static override summary = 'Write Collection artifacts from the database.';
   static override description =
-    'Reads every Collection of a managed connection and writes collection.json, metadata.json and schema.json under database/<connection>/collections/<name>/, plus one _manifest.json per connection. The files are derived: migrations stay the only authority on schema and nothing reads them back at runtime. Runs the default connection unless --connection or --all is specified; external connections are included and record no migration head.';
+    "Reads every Collection of the selected connections and writes collection.json, metadata.json and schema.json under database/<connection>/collections/<name>/, plus one _manifest.json per connection. The directory is a cache of what the database resolves to, for external connections too: it is gitignored, safe to delete, and nothing reads it back. Migrations stay the authority on schema; an external connection's hand-written metadata lives in database/<connection>/metadata/<name>.json, which this command reads and never writes. Runs the default connection unless --connection or --all is specified.";
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
@@ -95,6 +95,10 @@ export default class AppCollectionsGenerate extends AppCommand {
       if (entry.deleted?.length)
         this.log(`  Deleted: ${entry.deleted.join(', ')}`);
       if (entry.unchanged) this.log(`  Unchanged: ${entry.unchanged}`);
+      if (entry.unusedMetadata?.length)
+        this.log(
+          `  Metadata for Collections the database does not have: ${entry.unusedMetadata.join(', ')}. Fix or remove them in the connection's metadata directory.`,
+        );
       if (entry.differences) {
         if (entry.differences.length === 0) this.log('  Up to date.');
         else if (entry.directoryExists === false) {

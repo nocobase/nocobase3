@@ -28,8 +28,7 @@ function artifactDirectory(): string {
 }
 
 function writeMetadataFile(directory: string, name: string, content: string) {
-  mkdirSync(path.join(directory, name), { recursive: true });
-  writeFileSync(path.join(directory, name, 'metadata.json'), content);
+  writeFileSync(path.join(directory, `${name}.json`), content);
 }
 
 const ordersDocument = {
@@ -39,31 +38,25 @@ const ordersDocument = {
   fields: { amount: { title: 'Amount' } },
 };
 
-function metadataFile(name: string, document: unknown): string {
-  return `${JSON.stringify({ formatVersion: 1, name, document }, null, 2)}\n`;
+function metadataFile(document: unknown): string {
+  return `${JSON.stringify(document, null, 2)}\n`;
 }
 
 describe('DirectoryCollectionMetadataStore', () => {
-  it('reads the metadata.json of every Collection directory', async () => {
+  it('reads one <name>.json metadata document per Collection', async () => {
     const directory = artifactDirectory();
-    writeMetadataFile(
-      directory,
-      'orders',
-      metadataFile('orders', ordersDocument),
-    );
+    writeMetadataFile(directory, 'orders', metadataFile(ordersDocument));
     writeMetadataFile(
       directory,
       'customers',
-      metadataFile('customers', {
-        version: 1,
-        name: 'customers',
-        title: 'Customers',
-      }),
+      metadataFile({ version: 1, name: 'customers', title: 'Customers' }),
     );
-    // Not Collection directories: the manifest, dot entries, and stray files.
-    writeFileSync(path.join(directory, '_manifest.json'), '{}\n');
-    mkdirSync(path.join(directory, '.staging-x'));
+    // Not metadata documents: underscore and dot entries, other files, and
+    // directories without the generated layout.
+    writeFileSync(path.join(directory, '_notes.json'), '{}\n');
+    mkdirSync(path.join(directory, '.cache'));
     writeFileSync(path.join(directory, 'README.md'), 'ignored\n');
+    mkdirSync(path.join(directory, 'drafts'));
 
     const store = new DirectoryCollectionMetadataStore({ directory });
     expect(await store.get('orders')).toEqual({
@@ -77,19 +70,15 @@ describe('DirectoryCollectionMetadataStore', () => {
     expect(await store.get('missing')).toBeUndefined();
   });
 
-  it('treats a missing directory and a null document as no metadata', async () => {
+  it('treats a missing directory as no metadata', async () => {
     const directory = artifactDirectory();
     const empty = new DirectoryCollectionMetadataStore({
       directory: path.join(directory, 'not-created-yet'),
     });
     expect((await empty.list()).items).toEqual([]);
-
-    writeMetadataFile(directory, 'orders', metadataFile('orders', null));
-    const scaffolded = new DirectoryCollectionMetadataStore({ directory });
-    expect(await scaffolded.get('orders')).toBeUndefined();
   });
 
-  it('reads back exactly what the artifact serializer wrote', async () => {
+  it('refuses a directory of generated Collection artifacts and says how to move it', async () => {
     const directory = artifactDirectory();
     const resolution = resolveCollection({
       physical: structuredClone(ordersResolverFixture.physical),
@@ -103,59 +92,57 @@ describe('DirectoryCollectionMetadataStore', () => {
       physical: ordersResolverFixture.physical,
       metadata: ordersResolverFixture.metadata,
     });
-    writeMetadataFile(directory, 'orders', files.metadata);
+    mkdirSync(path.join(directory, 'orders'));
+    writeFileSync(
+      path.join(directory, 'orders', 'metadata.json'),
+      files.metadata,
+    );
 
-    const store = new DirectoryCollectionMetadataStore({ directory });
-    expect((await store.get('orders'))?.document).toEqual(
-      JSON.parse(JSON.stringify(ordersResolverFixture.metadata)),
+    const failure = new DirectoryCollectionMetadataStore({ directory }).get(
+      'orders',
+    );
+    await expect(failure).rejects.toBeInstanceOf(
+      CollectionMetadataStoreOptionsError,
+    );
+    await expect(failure).rejects.toThrow(
+      /layout of generated Collection artifacts.*move the "document" of orders\/metadata\.json to orders\.json/,
     );
   });
 
   it.each([
-    ['invalid JSON', '{ not json', /not valid JSON/],
-    ['an array', '[]\n', /must hold an object/],
     [
-      'another format version',
-      metadataFile('orders', ordersDocument).replace(
-        '"formatVersion": 1',
-        '"formatVersion": 2',
-      ),
-      /formatVersion 2/,
-    ],
-    [
-      'a name that differs from its directory',
-      metadataFile('other', ordersDocument),
-      /names Collection "other"/,
+      'invalid JSON',
+      '{ not json',
+      CollectionMetadataStoreOptionsError,
+      /not valid JSON/,
     ],
     [
       'a document for another Collection',
-      metadataFile('orders', { ...ordersDocument, name: 'other' }),
-      /document for Collection "other"/,
+      metadataFile({ ...ordersDocument, name: 'other' }),
+      CollectionMetadataStoreOptionsError,
+      /metadata document of Collection "other"/,
     ],
   ])(
     'rejects a file holding %s and names the file',
-    async (_case, content, message) => {
+    async (_case, content, type, message) => {
       const directory = artifactDirectory();
       writeMetadataFile(directory, 'orders', content);
       const store = new DirectoryCollectionMetadataStore({ directory });
       const failure = store.get('orders');
-      await expect(failure).rejects.toBeInstanceOf(
-        CollectionMetadataStoreOptionsError,
-      );
+      await expect(failure).rejects.toBeInstanceOf(type);
       await expect(failure).rejects.toThrow(message);
       await expect(failure).rejects.toThrow(
-        path.join(directory, 'orders', 'metadata.json'),
+        path.join(directory, 'orders.json'),
       );
     },
   );
 
-  it('validates the document itself', async () => {
+  it.each([
+    ['an array', []],
+    ['an invalid document', { version: 1, name: 'orders', fields: 'nope' }],
+  ])('validates %s as a metadata document', async (_case, document) => {
     const directory = artifactDirectory();
-    writeMetadataFile(
-      directory,
-      'orders',
-      metadataFile('orders', { version: 1, name: 'orders', fields: 'nope' }),
-    );
+    writeMetadataFile(directory, 'orders', metadataFile(document));
     await expect(
       new DirectoryCollectionMetadataStore({ directory }).get('orders'),
     ).rejects.toBeInstanceOf(CollectionMetadataValidationError);
