@@ -1,0 +1,220 @@
+// @vitest-environment node
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import {
+  createTestApp,
+  createTree,
+  organizationSettingsSet,
+  type TestApp,
+  type TestUser,
+} from './helpers.js';
+
+const BASE = '/api/departments-example';
+
+describe('organization routes', () => {
+  let test: TestApp;
+  let nobody: TestUser;
+  let reader: TestUser;
+  let manager: TestUser;
+
+  beforeAll(async () => {
+    test = await createTestApp();
+    const { authz } = test;
+    nobody = await test.signUp('routesNobody');
+    reader = await test.signUp('routesReader');
+    manager = await test.signUp('routesManager');
+    const read = organizationSettingsSet(authz, 'routes-read', ['read']);
+    const update = organizationSettingsSet(authz, 'routes-update', [
+      'read',
+      'update',
+    ]);
+    await authz.permissionSets.create(read);
+    await authz.permissionSets.create(update);
+    await authz.permissionSets.assign({
+      permissionSet: read.key,
+      subject: { type: 'user', id: reader.id },
+    });
+    await authz.permissionSets.assign({
+      permissionSet: update.key,
+      subject: { type: 'user', id: manager.id },
+    });
+    await createTree(test.organization, [
+      ['rt-root', null],
+      ['rt-child', 'rt-root'],
+    ]);
+  }, 60_000);
+
+  afterAll(async () => {
+    await test.close();
+  });
+
+  it('answers 401 without a session', async () => {
+    for (const pathname of [
+      `${BASE}/departments`,
+      `${BASE}/departments/rt-root/members`,
+      `${BASE}/users`,
+      `${BASE}/directory`,
+    ])
+      expect((await test.request('GET', pathname)).status).toBe(401);
+    expect(
+      (
+        await test.request('POST', `${BASE}/departments`, {
+          json: { title: 'Anonymous' },
+        })
+      ).status,
+    ).toBe(401);
+  });
+
+  it('answers 403 without the organization settings item', async () => {
+    const response = await test.request('GET', `${BASE}/departments`, {
+      cookie: nobody.cookie,
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('lets read list but not write', async () => {
+    const list = await test.request('GET', `${BASE}/departments`, {
+      cookie: reader.cookie,
+    });
+    expect(list.status).toBe(200);
+    const body = (await list.json()) as { data: { id: string }[] };
+    expect(body.data.map((row) => row.id)).toContain('rt-child');
+
+    expect(
+      (
+        await test.request('GET', `${BASE}/departments/rt-root/members`, {
+          cookie: reader.cookie,
+        })
+      ).status,
+    ).toBe(200);
+    for (const [method, pathname, json] of [
+      ['POST', `${BASE}/departments`, { title: 'Reader' }],
+      ['PUT', `${BASE}/departments/rt-root/active`, { active: false }],
+      ['POST', `${BASE}/departments/rt-root/members`, { userId: reader.id }],
+    ] as const)
+      expect(
+        (await test.request(method, pathname, { cookie: reader.cookie, json }))
+          .status,
+      ).toBe(403);
+    expect(
+      (await test.request('GET', `${BASE}/users`, { cookie: reader.cookie }))
+        .status,
+    ).toBe(403);
+  });
+
+  it('lets update write, and validates input', async () => {
+    const created = await test.request('POST', `${BASE}/departments`, {
+      cookie: manager.cookie,
+      json: { id: 'rt-new', title: 'New', parentId: 'rt-root' },
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({
+      data: { id: 'rt-new', parentId: 'rt-root', active: true },
+    });
+
+    const cases: [string, string, unknown, number][] = [
+      ['POST', `${BASE}/departments`, { title: '' }, 400],
+      ['POST', `${BASE}/departments`, { id: 'rt-new', title: 'Again' }, 409],
+      ['POST', `${BASE}/departments`, { title: 'X', parentId: 'nope' }, 400],
+      ['PATCH', `${BASE}/departments/rt-root`, { parentId: 'rt-child' }, 400],
+      ['PUT', `${BASE}/departments/rt-root/active`, { active: 'no' }, 400],
+      ['POST', `${BASE}/departments/nope/members`, { userId: manager.id }, 404],
+      ['POST', `${BASE}/departments/rt-root/members`, { userId: 'ghost' }, 400],
+      [
+        'DELETE',
+        `${BASE}/departments/rt-root/members/${nobody.id}`,
+        undefined,
+        404,
+      ],
+    ];
+    for (const [method, pathname, json, status] of cases)
+      expect(
+        (
+          await test.request(method, pathname, {
+            cookie: manager.cookie,
+            ...(json === undefined ? {} : { json }),
+          })
+        ).status,
+        `${method} ${pathname}`,
+      ).toBe(status);
+    expect(
+      (
+        await test.request('GET', `${BASE}/departments/nope`, {
+          cookie: manager.cookie,
+        })
+      ).status,
+    ).toBe(404);
+
+    const users = await test.request(
+      'GET',
+      `${BASE}/users?search=routesnobody&page=1&pageSize=10`,
+      { cookie: manager.cookie },
+    );
+    expect(users.status).toBe(200);
+    expect(await users.json()).toMatchObject({
+      data: { items: [{ id: nobody.id }], total: 1 },
+    });
+  });
+
+  it('notifies each affected user after the membership write commits', async () => {
+    const notify = vi.spyOn(
+      test.authz.permissionSets,
+      'notifyAssignmentsChanged',
+    );
+    // Record, at notification time, whether the write is already visible outside its transaction.
+    const committed: boolean[] = [];
+    notify.mockImplementation(async (subject) => {
+      const row = await test.database
+        .connection()
+        .query.selectFrom('departmentMembers')
+        .select('active')
+        .where('userId', '=', subject.id)
+        .where('departmentId', '=', 'rt-child')
+        .executeTakeFirst();
+      committed.push(row !== undefined);
+    });
+    try {
+      const member = await test.signUp('routesMember');
+      const added = await test.request(
+        'POST',
+        `${BASE}/departments/rt-child/members`,
+        { cookie: manager.cookie, json: { userId: member.id } },
+      );
+      expect(added.status).toBe(201);
+      expect(notify.mock.calls).toEqual([[{ type: 'user', id: member.id }]]);
+      expect(committed).toEqual([true]);
+
+      // Disabling the parent reaches every member below it.
+      notify.mockClear();
+      const disabled = await test.request(
+        'PUT',
+        `${BASE}/departments/rt-root/active`,
+        { cookie: manager.cookie, json: { active: false } },
+      );
+      expect(disabled.status).toBe(200);
+      expect(notify.mock.calls).toEqual([[{ type: 'user', id: member.id }]]);
+
+      // A write that fails notifies nobody.
+      notify.mockClear();
+      const failed = await test.request(
+        'DELETE',
+        `${BASE}/departments/rt-child/members/${nobody.id}`,
+        { cookie: manager.cookie },
+      );
+      expect(failed.status).toBe(404);
+      expect(notify).not.toHaveBeenCalled();
+
+      const removed = await test.request(
+        'DELETE',
+        `${BASE}/departments/rt-child/members/${member.id}`,
+        { cookie: manager.cookie },
+      );
+      expect(removed.status).toBe(200);
+      expect(notify.mock.calls).toEqual([[{ type: 'user', id: member.id }]]);
+    } finally {
+      notify.mockRestore();
+      await test.organization.setActive('rt-root', true);
+    }
+  });
+});
