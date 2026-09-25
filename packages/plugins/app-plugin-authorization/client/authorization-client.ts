@@ -122,8 +122,6 @@ export interface AuthorizationOptionsResponse {
     type: string;
     title: LocalizedText;
     selection: { type: 'fixed'; id: string } | { type: 'collection' };
-    members?: true;
-    manage?: true;
   }[];
   readonly recordAccess: readonly {
     key: string;
@@ -193,18 +191,13 @@ export interface DatabaseCollectionOption {
 
 export interface SubjectTypeOption extends SelectOption {
   selection?: { type: 'fixed'; id: string } | { type: 'collection' };
-  /** True when `listSubjectMembers` answers for this type. */
-  members?: boolean;
-  /** True when resolved subjects may carry a `manage` path. */
-  manage?: boolean;
 }
 
 export interface SubjectOption {
   id: string;
-  title: string;
-  description?: string;
-  /** Where the subject is managed, an application-relative path; resolution only. */
-  manage?: string;
+  /** Plain text, or a `{ key, ns }` descriptor rendered in the viewer's language. */
+  title: LocalizedText;
+  description?: LocalizedText;
 }
 
 /** The workspace model an `options` response is localized into. */
@@ -426,21 +419,6 @@ export class AuthorizationClient {
     return this.api
       .request<DataResponse<SubjectPage>>({
         path: `authz/${path}/subjects/${encodeURIComponent(type)}`,
-        query,
-      })
-      .then((response) => response.data);
-  }
-
-  /** One page of the users a subject contains, from the surface's route. */
-  listSubjectMembers(
-    path: string,
-    type: string,
-    id: string,
-    query: { search?: string; page: number; pageSize: number },
-  ): Promise<SubjectPage> {
-    return this.api
-      .request<DataResponse<SubjectPage>>({
-        path: `authz/${path}/subjects/${encodeURIComponent(type)}/${encodeURIComponent(id)}/members`,
         query,
       })
       .then((response) => response.data);

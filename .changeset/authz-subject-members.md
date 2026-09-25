@@ -1,5 +1,0 @@
----
-'@nocobase/app-plugin-authorization': minor
----
-
-List a subject's members and link to its management page. A subject type's `administration` may now implement `members(id, { search?, page, pageSize }, { authz })`, served at `GET <surface>/subjects/:type/:id/members` on every surface that lists subjects, and `manage(id)`, an application-relative settings path that `resolve` responses carry as `manage`. The options mark such types with `members: true` and `manage: true`, and the client adds `listSubjectMembers` and `useSubjectDetails`. The permission-set assignments tab shows a read-only Members drawer, with an Inspect link per member, and a Manage link for those subjects. `POST /inspector/configured` also answers the inherited `identity.subjects` and, per effective set, the assignments that bring it; the inspector shows both. A permission-set assignment change to any subject other than a user now refreshes every signed-in client, so members of a department or team see the change without reloading.

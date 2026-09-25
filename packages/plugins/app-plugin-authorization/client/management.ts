@@ -46,12 +46,7 @@ export { defaultSelection, firstActions } from './components/rule-utils.js';
 export { SelectionMark } from './components/selection-marks.js';
 export { SelectField } from './components/select-field.js';
 export { useRuleDraft } from './components/use-rule-draft.js';
-export {
-  subjectKey,
-  useSubjectDetails,
-  useSubjectNames,
-  type SubjectDetails,
-} from './components/use-subject-names.js';
+export { subjectKey, useSubjectNames } from './components/use-subject-names.js';
 export {
   titleText,
   useAuthorizationTranslation,

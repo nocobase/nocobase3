@@ -235,179 +235,44 @@ describe('the options and subject routes', () => {
     ).toBe(404);
   });
 
-  it("lists a subject's members and decorates resolved subjects with their management path", async () => {
+  it('passes translation descriptors in subject titles and descriptions through unchanged', async () => {
     const authz = authorization();
-    const members = vi.fn(
-      (
-        id: string,
-        query: { search?: string; page: number; pageSize: number },
-      ) =>
-        Promise.resolve({
-          items: [
-            {
-              id: 'alice',
-              title: `${id}:${query.search}:${query.page}:${query.pageSize}`,
-              description: 'Sales',
-            },
-          ],
-          total: 61,
-        }),
-    );
+    const title = { key: 'seed.sales', ns: '@example/departments' };
+    const description = { key: 'seed.company', ns: '@example/departments' };
     authz.subjects.add('department', {
       filterActive: async (ids) => ids,
       administration: {
         title: 'Departments',
         selection: {
           type: 'collection',
-          list: async () => ({ items: [], total: 0 }),
-          resolve: async (ids) =>
-            ids.map((id) => ({ id, title: `Department ${id}` })),
-        },
-        members,
-        manage: (id) =>
-          id === 'hidden' ? undefined : `/settings/organization/${id}`,
-      },
-    });
-    authz.subjects.add('project', {
-      filterActive: async (ids) => ids,
-      administration: {
-        title: 'Projects',
-        selection: {
-          type: 'collection',
-          list: async () => ({ items: [], total: 0 }),
-          resolve: async (ids) => ids.map((id) => ({ id, title: id })),
+          list: async () => ({
+            items: [{ id: 'sales', title, description }],
+            total: 1,
+          }),
+          resolve: async (ids) => ids.map((id) => ({ id, title })),
         },
       },
     });
     const router = await localizedRouter(authz);
-    const data = await options(router);
-    expect(data.subjectTypes).toContainEqual({
-      type: 'department',
-      title: 'Departments',
-      selection: { type: 'collection' },
-      members: true,
-      manage: true,
-    });
-    expect(data.subjectTypes).toContainEqual({
-      type: 'project',
-      title: 'Projects',
-      selection: { type: 'collection' },
-    });
-    for (const surface of ['permission-sets', 'inspector', 'sharing-rules']) {
-      const listed = await router.request(
-        `/api/authz/${surface}/subjects/department/sales%2Feast/members?search=ali&page=3&pageSize=30`,
-      );
-      expect(listed.status).toBe(200);
-      expect(await listed.json()).toEqual({
-        data: {
-          items: [
-            { id: 'alice', title: 'sales/east:ali:3:30', description: 'Sales' },
-          ],
-          total: 61,
-        },
-      });
-    }
-    expect(members).toHaveBeenLastCalledWith(
-      'sales/east',
-      { search: 'ali', page: 3, pageSize: 30 },
-      expect.objectContaining({ authz: expect.anything() }),
+    const listed = await router.request(
+      '/api/authz/sharing-rules/subjects/department',
+      { headers: { 'accept-language': 'zh-CN' } },
     );
-    members.mockClear();
-    expect(
-      (
-        await router.request(
-          '/api/authz/permission-sets/subjects/department/sales/members?pageSize=101',
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await router.request(
-          '/api/authz/permission-sets/subjects/department/sales/members?page=0',
-        )
-      ).status,
-    ).toBe(400);
-    expect(members).not.toHaveBeenCalled();
-    for (const type of ['project', 'unknown'])
-      expect(
-        (
-          await router.request(
-            `/api/authz/permission-sets/subjects/${type}/sales/members`,
-          )
-        ).status,
-      ).toBe(404);
+    expect(await listed.json()).toEqual({
+      data: { items: [{ id: 'sales', title, description }], total: 1 },
+    });
     const resolved = await router.request(
-      '/api/authz/permission-sets/subjects/department/resolve',
+      '/api/authz/sharing-rules/subjects/department/resolve',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ids: ['sales', 'hidden'] }),
+        body: JSON.stringify({ ids: ['sales'] }),
       },
     );
     expect(await resolved.json()).toEqual({
-      data: [
-        {
-          id: 'sales',
-          title: 'Department sales',
-          manage: '/settings/organization/sales',
-        },
-        { id: 'hidden', title: 'Department hidden' },
-      ],
-    });
-    const plain = await router.request(
-      '/api/authz/permission-sets/subjects/project/resolve',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ids: ['apollo'] }),
-      },
-    );
-    expect(await plain.json()).toEqual({
-      data: [{ id: 'apollo', title: 'apollo' }],
+      data: [{ id: 'sales', title }],
     });
   });
-
-  it.each([
-    ['permission-sets', 'read'],
-    ['inspector', 'inspect'],
-    ['sharing-rules', 'read'],
-  ])(
-    'gates %s member listings before the callback runs',
-    async (surface, action) => {
-      const authz = authorization();
-      const members = vi.fn().mockResolvedValue({ items: [], total: 0 });
-      authz.subjects.add('department', {
-        filterActive: async (ids) => ids,
-        administration: {
-          title: 'Departments',
-          selection: {
-            type: 'collection',
-            list: vi.fn(),
-            resolve: vi.fn(),
-          },
-          members,
-        },
-      });
-      const require = vi
-        .fn()
-        .mockRejectedValue(
-          new AuthorizationDeniedError({ effect: 'deny', reasons: [] }),
-        );
-      const router = await localizedRouter(authz, require);
-      expect(
-        (
-          await router.request(
-            `/api/authz/${surface}/subjects/department/sales/members`,
-          )
-        ).status,
-      ).toBe(403);
-      expect(members).not.toHaveBeenCalled();
-      expect(require).toHaveBeenCalledWith({
-        resource: { type: 'settings', id: `authorization.${surface}` },
-        action,
-      });
-    },
-  );
 
   it.each(['permission-sets', 'sharing-rules'])(
     'gates %s subject searches and resolution before callbacks run',

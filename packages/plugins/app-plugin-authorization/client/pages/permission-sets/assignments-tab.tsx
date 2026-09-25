@@ -1,11 +1,9 @@
 import { Checkbox } from '../../components/ui/checkbox.js';
 import { SelectField } from '../../components/select-field.js';
 import {
-  useSubjectDetails,
+  useSubjectNames,
   subjectKey,
 } from '../../components/use-subject-names.js';
-import { MembersDrawer } from '../../components/members-drawer.js';
-import { Link } from 'react-router';
 import { SubjectsEditor } from '../../components/subjects-editor.js';
 import { useState, type ReactElement } from 'react';
 
@@ -71,22 +69,13 @@ export function Assignments({
     readonly ids: readonly string[];
     readonly label: string;
   }>();
-  // The subject whose members the drawer lists.
-  const [membersOf, setMembersOf] = useState<AuthorizationSubject>();
-  const details = useSubjectDetails(
+  const names = useSubjectNames(
     'permission-sets',
     subjectTypes,
     assignments.map((item) => item.subject),
   );
   const subjectLabel = (subject: AuthorizationSubject): string =>
-    details[subjectKey(subject)]?.title ?? `${subject.type}: ${subject.id}`;
-  const typeOf = (subject: AuthorizationSubject) =>
-    subjectTypes.find((type) => type.value === subject.type);
-  // Users are members themselves; other subjects may list theirs.
-  const hasMembers = (subject: AuthorizationSubject): boolean =>
-    subject.type !== 'user' && typeOf(subject)?.members === true;
-  const manageOf = (subject: AuthorizationSubject): string | undefined =>
-    subject.type === 'user' ? undefined : details[subjectKey(subject)]?.manage;
+    names[subjectKey(subject)] ?? `${subject.type}: ${subject.id}`;
   const query = search.trim().toLowerCase();
   const visible = assignments.filter((item) => {
     const label = subjectLabel(item.subject).toLowerCase();
@@ -217,32 +206,10 @@ export function Assignments({
                   {subjectLabel(item.subject)}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-muted-foreground'>
-                  {typeOf(item.subject)?.label ?? item.subject.type}
+                  {subjectTypes.find((type) => type.value === item.subject.type)
+                    ?.label ?? item.subject.type}
                 </TableCell>
-                <TableCell className='whitespace-nowrap px-5 py-4 text-right'>
-                  {hasMembers(item.subject) ? (
-                    <Button
-                      size='sm'
-                      variant='ghost'
-                      aria-label={t('members.openNamed', {
-                        label: subjectLabel(item.subject),
-                      })}
-                      onClick={() => setMembersOf(item.subject)}
-                    >
-                      {t('members.open')}
-                    </Button>
-                  ) : null}
-                  {manageOf(item.subject) ? (
-                    <Link
-                      aria-label={t('members.manageNamed', {
-                        label: subjectLabel(item.subject),
-                      })}
-                      className='inline-flex h-8 items-center rounded-lg px-2.5 text-sm font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none'
-                      to={manageOf(item.subject)!}
-                    >
-                      {t('members.manage')}
-                    </Link>
-                  ) : null}
+                <TableCell className='px-5 py-4 text-right'>
                   <Button
                     size='sm'
                     variant='ghost'
@@ -297,18 +264,6 @@ export function Assignments({
           label: pendingRevoke?.label ?? '',
         })}
       </ConfirmDialog>
-      {membersOf ? (
-        <MembersDrawer
-          settings='permission-sets'
-          subject={membersOf}
-          title={subjectLabel(membersOf)}
-          typeLabel={typeOf(membersOf)?.label ?? membersOf.type}
-          {...(manageOf(membersOf) === undefined
-            ? {}
-            : { manage: manageOf(membersOf) })}
-          onClose={() => setMembersOf(undefined)}
-        />
-      ) : null}
       {addOpen ? (
         <AssignmentPicker
           assignments={assignments}

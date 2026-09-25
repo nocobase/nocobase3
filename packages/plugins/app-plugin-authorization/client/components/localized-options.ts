@@ -104,8 +104,6 @@ export function localizeOptions(
       value: type.type,
       label: text(type.title),
       selection: type.selection,
-      ...(type.members ? { members: true } : {}),
-      ...(type.manage ? { manage: true } : {}),
     })),
     collections: raw.collections,
     recordAccess: raw.recordAccess.map((entry) => ({

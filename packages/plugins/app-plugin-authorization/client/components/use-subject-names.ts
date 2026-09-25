@@ -1,31 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   AuthorizationSubject,
+  LocalizedText,
   SubjectTypeOption,
 } from '../authorization-client.js';
+import { titleText, useAuthorizationTranslation } from '../i18n.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
 
 export function subjectKey(subject: AuthorizationSubject): string {
   return JSON.stringify([subject.type, subject.id]);
 }
 
-/** What a resolved subject is called, and where it is managed when its type says. */
-export interface SubjectDetails {
-  title: string;
-  manage?: string;
-}
-
-/**
- * Resolves collection subjects through the surface's `resolve` route, keyed
- * by {@link subjectKey}. Fixed audiences carry their type's label; a subject
- * nobody resolved is absent.
- */
-export function useSubjectDetails(
+export function useSubjectNames(
   settings: string,
   types: readonly SubjectTypeOption[],
   subjects: readonly AuthorizationSubject[],
-): Readonly<Record<string, SubjectDetails>> {
+): Readonly<Record<string, string>> {
   const authz = useAuthorizationClient();
+  const t = useAuthorizationTranslation();
   const identity = JSON.stringify([
     settings,
     types
@@ -39,7 +31,7 @@ export function useSubjectDetails(
   ]);
   const [state, setState] = useState<{
     identity: string;
-    details: Record<string, SubjectDetails>;
+    names: Record<string, LocalizedText>;
   }>();
   useEffect(() => {
     let active = true;
@@ -48,7 +40,7 @@ export function useSubjectDetails(
       Pick<SubjectTypeOption, 'value' | 'selection'>[],
       AuthorizationSubject[],
     ];
-    const details: Record<string, SubjectDetails> = {};
+    const names: Record<string, LocalizedText> = {};
     async function resolve(): Promise<void> {
       await Promise.all(
         types.map(async (type) => {
@@ -65,56 +57,41 @@ export function useSubjectDetails(
                 ids.slice(offset, offset + 100),
               );
               for (const item of items)
-                details[subjectKey({ type: type.value, id: item.id })] = {
-                  title: item.title,
-                  ...(item.manage === undefined ? {} : { manage: item.manage }),
-                };
+                names[subjectKey({ type: type.value, id: item.id })] =
+                  item.title;
             } catch {
               /* Unknown or unreadable objects keep their ids. */
             }
           }
         }),
       );
-      if (active) setState({ identity, details });
+      if (active) setState({ identity, names });
     }
     void resolve();
     return () => {
       active = false;
     };
   }, [authz, identity]);
-  const resolved = state?.identity === identity ? state.details : undefined;
-  return useMemo(
-    () => ({
-      ...resolved,
-      ...Object.fromEntries(
-        types.flatMap((type) =>
-          type.selection?.type === 'fixed'
-            ? [
-                [
-                  subjectKey({ type: type.value, id: type.selection.id }),
-                  { title: type.label },
-                ],
-              ]
-            : [],
-        ),
+  const resolved = state?.identity === identity ? state.names : {};
+  return {
+    // Titles may be translation descriptors; they render in the current language.
+    ...Object.fromEntries(
+      Object.entries(resolved).map(([name, title]) => [
+        name,
+        titleText(title, t),
+      ]),
+    ),
+    ...Object.fromEntries(
+      types.flatMap((type) =>
+        type.selection?.type === 'fixed'
+          ? [
+              [
+                subjectKey({ type: type.value, id: type.selection.id }),
+                type.label,
+              ],
+            ]
+          : [],
       ),
-    }),
-    [resolved, types],
-  );
-}
-
-/** {@link useSubjectDetails}, reduced to each subject's title. */
-export function useSubjectNames(
-  settings: string,
-  types: readonly SubjectTypeOption[],
-  subjects: readonly AuthorizationSubject[],
-): Readonly<Record<string, string>> {
-  const details = useSubjectDetails(settings, types, subjects);
-  return useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(details).map(([key, value]) => [key, value.title]),
-      ),
-    [details],
-  );
+    ),
+  };
 }
