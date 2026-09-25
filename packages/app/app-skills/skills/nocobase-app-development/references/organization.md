@@ -16,7 +16,7 @@ The paths below are an application's. When the organisation ships as a plugin pa
 | `departmentMembers` | `id` string primary key, `departmentId`, `userId`, `primary` default false, `active` default true           |
 
 - Ids are stable strings. Permission-set assignments, sharing rules and seeds store the department id, so never reuse or renumber one. Generate them with `idGeneratorToken` or use a fixed code chosen by the administrator.
-- `departmentMembers` is unique on `(departmentId, userId)`, indexed on `userId`. `userId` is the authentication plugin's user id; read users only through `userAdministrationServiceToken` from `@nocobase/app-plugin-authentication`, never through its table.
+- `departmentMembers` is unique on `(departmentId, userId)`, indexed on `userId`. `userId` is the authentication plugin's user id; read users only through `userAdministrationServiceToken` from `@nocobase/app-plugin-authentication`, never through its table. A seed that creates demonstration accounts is the one exception, described under seeds below.
 - A department tree is small enough to load whole. Resolve ancestors and descendants in memory from one `select id, parentId, active` and stop at a node already visited, so a cycle written by mistake cannot loop forever. Reject a `parentId` that would create a cycle when saving.
 - A department counts only while it and every ancestor are active. Disabling a parent therefore disables its subtree without touching child rows.
 - At most one active primary membership per user. Clear the others and set the new one inside the same transaction as the membership write.
@@ -152,7 +152,7 @@ routes.post('/departments/:id/members', async (c) => {
 });
 ```
 
-`require` throws `AuthorizationDeniedError` from `@nocobase/authorization/core`, which becomes a 500 unless the router maps it: add `routes.onError` that answers it with 403, and the service's own validation errors with 400, 404 or 409. Validate every input, including that `userId` names an enabled user and that a new `parentId` creates no cycle. Answer an unknown department with 404.
+A denied `require` answers `403 { code: 'FORBIDDEN', message }` on its own; add `routes.onError` only for the service's own validation errors, answering 400, 404 or 409, and rethrow anything else. Validate every input, including that `userId` names an enabled user and that a new `parentId` creates no cycle. Answer an unknown department with 404.
 
 ## 6. Settings pages
 
@@ -258,7 +258,7 @@ Assigning or revoking a permission set on a department needs nothing from you: a
 
 ## 9. Seeds
 
-A seed writes an idempotent department tree and memberships, keyed on the fixed ids, parents before children, and skips rows that already exist so an administrator's later changes survive. Assign initial permission sets to departments with `subjectType: 'org.department'` rows in `authorizationPermissionSetAssignments`, after checking the `(permissionSetKey, subjectType, subjectId)` triple. Follow the authorization Skill's `references/code-and-seeds.md` for the permission-set and assignment rows and [migrations and seeds](migrations.md) for where seeds run. Seed only real users you know; memberships of demonstration accounts belong to demonstration data, not to production initialization. A seed cannot create an account: its container resolves only `idGeneratorToken`, and the user tables belong to the authentication plugin. When a demonstration needs accounts, create them in a provider's `start` through `userAdministrationServiceToken`, only when an account with that email does not exist yet, and add its membership through the organisation service in the same step, so a restart never re-adds a membership an administrator removed.
+A seed writes an idempotent department tree and memberships, keyed on the fixed ids, parents before children, and skips rows that already exist so an administrator's later changes survive. Assign initial permission sets to departments with `subjectType: 'org.department'` rows in `authorizationPermissionSetAssignments`, after checking the `(permissionSetKey, subjectType, subjectId)` triple. Follow the authorization Skill's `references/code-and-seeds.md` for the permission-set and assignment rows and [migrations and seeds](migrations.md) for where seeds run. Seed only real users you know; memberships of demonstration accounts belong to demonstration data, not to production initialization. When a demonstration needs accounts, seed them: with the seed's `query`, insert the `user` row and a `credential` `account` row whose `accountId` is the user id and whose `password` comes from `hashPassword` in `better-auth/crypto`, declared in `dependencies`. Write an account only when no user has its email, and write its memberships and direct assignments in the same step, so a replay never re-adds what an administrator removed. `database/seeds/202609220002_sales_permissions.ts` in `@nocobase/app-plugin-authorization-example` is the reference.
 
 ## 10. Test matrix
 
@@ -296,7 +296,7 @@ authz.recordAccess.define(
 );
 ```
 
-`anyScope` and `condition` come from `@nocobase/app-plugin-authorization/server`. When the resolver answers `false` for a caller who holds the action, the decision is still conditional, but the collection's policy has `read: false`, and a Repository bound to it throws rather than returning no rows. Check `policy.read === false` in the endpoint and answer the empty result. Grant the operation through a permission set first, then share the other department's records with a sharing rule whose subject is the receiving department, as the `nocobase-app-plugin-authz-sharing-rules` Skill describes; sharing never grants the operation itself. Run the business endpoint, not only the inspector.
+`anyScope` and `condition` come from `@nocobase/app-plugin-authorization/server`. When the resolver answers `false` for a caller who holds the action, the policy's scope matches no rows, so the bound Repository returns an empty result; only a caller without the grant is denied. Grant the operation through a permission set first, then share the other department's records with a sharing rule whose subject is the receiving department, as the `nocobase-app-plugin-authz-sharing-rules` Skill describes; sharing never grants the operation itself. Run the business endpoint, not only the inspector.
 
 ## 11. Pitfalls
 
