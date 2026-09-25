@@ -9,7 +9,7 @@ A sharing rule adds selected records, or a record access selection, for the subj
 
 Read the installed `nocobase-app-plugin-authorization` Skill first for composite resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-sharing-rules/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
 
-For sharing between departments, such as a department receiving another department's records through a 指定部门 / Selected department selection, read the application development Skill's `references/organization/permission-design.md` first. Its core works with permission sets alone and gives the permission-set alternative; its optional sharing section covers this plugin.
+For sharing between departments, read the application development Skill's `references/organization/permission-design.md` first. A rule whose recipient is a department shares specific records with it; a viewer-relative department scope such as 本部门及下属部门 is computed for the viewer and cannot select another department's records. The guide's optional sharing section covers this plugin, and its core section says what remains with permission sets alone.
 
 ## Development workflow
 

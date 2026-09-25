@@ -1,6 +1,6 @@
 # Department scopes and heads
 
-Part of [the organisation dimension](../organization.md). It registers the department-head subject type and three owner-based data scopes; [permission design](permission-design.md) explains when to use each. Everything here needs only the authorization plugin.
+Part of [the organisation dimension](../organization.md). It registers the department-head subject type and two owner-based data scopes; [permission design](permission-design.md) explains when to use each. Everything here needs only the authorization plugin.
 
 ## Department heads
 
@@ -33,15 +33,13 @@ const releaseHeads = authz.subjects.add<DatabaseConnection>(
 
 `headedBy(userId)` returns the departments whose `managerId` is the user and whose whole ancestor chain is active, from one tree read. Assign the head set to `{ type: 'org.departmentHead', id: '*' }` once.
 
-## Three owner-based data scopes
+## Two owner-based data scopes
 
-Add three reads to the organisation service. Each loads the tree once and counts only departments whose whole ancestor chain is active.
+Add two reads to the organisation service. Each loads the tree once and counts only departments whose whole ancestor chain is active.
 
 ```ts
 /** Active memberships and headed departments, plus every active descendant when `descendants` is set. */
 viewerDepartments(userId: string, options: { descendants: boolean }): Promise<readonly string[]>;
-/** One active department, plus its active descendants when asked; empty when it is missing or inactive. */
-selectedDepartments(departmentId: string, options: { descendants: boolean }): Promise<readonly string[]>;
 /** Users with an active direct membership in any of the departments. */
 membersOf(departmentIds: readonly string[]): Promise<readonly string[]>;
 ```
@@ -131,60 +129,14 @@ export function registerDepartmentScopes(
         .resolver(viewer(true)),
     ),
   );
-  authz.recordAccess.define(
-    defineRecordAccess('org.selectedDepartment', (access) =>
-      access
-        .title(label('scopes.selected'))
-        .collections('projects', 'quotes', 'orders')
-        .params<{ departmentId: string; includeDescendants?: boolean }>({
-          type: 'object',
-          properties: {
-            departmentId: { type: 'string' },
-            includeDescendants: { type: 'boolean' },
-          },
-          required: ['departmentId'],
-        })
-        .resolver(async ({ params, collection }) => {
-          // Stored params are data: anything but the documented shape selects nothing.
-          const departmentId: unknown = Reflect.get(
-            Object(params),
-            'departmentId',
-          );
-          const below: unknown = Reflect.get(
-            Object(params),
-            'includeDescendants',
-          );
-          if (typeof departmentId !== 'string' || !departmentId) return false;
-          if (below !== undefined && typeof below !== 'boolean') return false;
-          return ownedBy(
-            database,
-            organization,
-            collection,
-            await organization.selectedDepartments(departmentId, {
-              descendants: below === true,
-            }),
-          );
-        }),
-    ),
-  );
 }
 ```
 
-Call `params()` before `resolver()`: it starts a new builder without the resolver. Localize every title as a `{ key, ns }` descriptor, such as 本部门 / My departments, 本部门及下属部门 / My departments and below and 指定部门 / Selected department, and add a description where the title alone is ambiguous.
+Localize every title as a `{ key, ns }` descriptor, such as 本部门 / My departments and 本部门及下属部门 / My departments and below, and add a description where the title alone is ambiguous.
 
-A resolver receives the principal and the stored params, never client input. Collection names above are illustrative; use the application's own, and resolve a record without an owner through its real parent relationship.
+A resolver receives the principal, never client input. Collection names above are illustrative; use the application's own, and resolve a record without an owner through its real parent relationship.
 
-The permission workspace and the rule editors list these scopes, but they edit params only for the built-in custom filter. Choosing 指定部门 there stores it without params, which selects nothing, so provision it where the params are written explicitly:
-
-```ts
-import { selection } from '@nocobase/authorization/core';
-
-const salesCenterAndBelow = selection.recordAccess('org.selectedDepartment', {
-  departmentId: 'sales-center',
-  includeDescendants: true,
-});
-// A permission-set grant: projects.grant({ view: { projects: salesCenterAndBelow } })
-```
+Both scopes are computed for the viewer, so neither can select another department's records. Do not add a scope that names a department in params to fill that gap: it cannot be edited in the permission workspace, and cross-department access is expressed by selecting the records themselves, as [permission design](permission-design.md#cross-department-work-with-permission-sets-alone) describes.
 
 ## Provision with optional rule plugins
 
@@ -227,7 +179,7 @@ Declare the optional plugins as optional peers, or as development dependencies w
 
 ## Verify
 
-- 本部门 with a viewer in two departments, and without any department; 本部门及下属部门 with a disabled child, a disabled ancestor and a removed member; 指定部门 with and without descendants and with missing or malformed params.
+- 本部门 with a viewer in two departments, and without any department; 本部门及下属部门 with a disabled child, a disabled ancestor and a removed member.
 - Heads: `resolveFor` for a head, a non-head and a head of a disabled department; a head change moves access from the previous head to the new one on the next request and notifies both.
 - A transfer: moving an owner between departments moves their records between the two departments' viewers and heads.
 - The whole organisation boots, migrates and seeds with the authorization plugin alone.

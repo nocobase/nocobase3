@@ -67,7 +67,7 @@ authz.recordAccess.define(
 );
 ```
 
-When the resolver answers `false` for a caller who holds the action, the policy's scope matches no rows, so the bound Repository returns an empty result; only a caller without the grant is denied. To let one department reach another department's records, assign the receiving department a permission set whose grant uses a 指定部门 / Selected department scope; with the optional sharing-rules plugin, grant the operation through a set and share the records with a rule instead, as [permission design](permission-design.md#optional-cross-department-sharing) describes.
+When the resolver answers `false` for a caller who holds the action, the policy's scope matches no rows, so the bound Repository returns an empty result; only a caller without the grant is denied. A department scope is computed for the viewer, so it never reaches another department's records. To let one department see another's records, share those specific records with the receiving department through the optional sharing-rules plugin, or, without it, grant a set that names the records, as [permission design](permission-design.md#cross-department-work-with-permission-sets-alone) describes.
 
 ## Organisation attributes feed business data scopes
 

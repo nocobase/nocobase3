@@ -2,7 +2,7 @@
 
 Part of [the organisation dimension](../organization.md). Use it to decide who gets what once departments exist: which permission sets to write, whom to assign them to and which data scope each grant uses. [Department scopes and heads](scopes.md) has the registration code.
 
-The core needs only the authorization plugin: permission sets, the department and department-head subject types, and the three department data scopes. Default access, sharing rules and restriction rules are separate, optional plugins; the sections that use them are marked optional and each gives the permission-set alternative where there is one. Before designing with one, confirm it is installed as the authorization Skill's `references/optional-capabilities.md` describes.
+The core needs only the authorization plugin: permission sets, the department and department-head subject types, and the two department data scopes. Default access, sharing rules and restriction rules are separate, optional plugins; the sections that use them are marked optional and each gives the permission-set alternative where there is one. Before designing with one, confirm it is installed as the authorization Skill's `references/optional-capabilities.md` describes.
 
 ## Core design with permission sets
 
@@ -36,17 +36,14 @@ Title the subject type with the same localized term as the department's Head fie
 
 ### Choose the scope by the relationship
 
-| Scope                                       | Selects records whose owner is an active member of | Use it for                                                             |
-| ------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| 本部门 / My departments                     | The viewer's own departments                       | Peer visibility: colleagues see each other's work                      |
-| 本部门及下属部门 / My departments and below | Those departments and every one below them         | Heads and managers overseeing their part of the tree                   |
-| 指定部门 / Selected department              | One chosen department, optionally with those below | A fixed grant from one unit to another, such as Delivery reading Sales |
+| Scope                                       | Selects records whose owner is an active member of | Use it for                                           |
+| ------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| 本部门 / My departments                     | The viewer's own departments                       | Peer visibility: colleagues see each other's work    |
+| 本部门及下属部门 / My departments and below | Those departments and every one below them         | Heads and managers overseeing their part of the tree |
 
-The relative scopes are relative to the viewer, not to the subject the set is assigned to: a member of two departments sees the owners of both.
+Both scopes are relative to the viewer, not to the subject the set is assigned to: a member of two departments sees the owners of both. Because they are computed for whoever reads, neither can express "another department's data": 本部门及下属部门 assigned to Delivery selects what Delivery's members own, never what Sales owns. Cross-department access therefore selects the records themselves, as [cross-department work](#cross-department-work-with-permission-sets-alone) describes.
 
 Only active memberships in departments whose whole ancestor chain is active count, on the owner's side and the viewer's; disabling a department ends both.
-
-指定部门 carries `{ departmentId, includeDescendants }` params. Set them in a seed or through the permission-set and rule APIs; the permission workspace offers the scope but edits params only for the built-in custom filter, and a selection without valid params must select nothing.
 
 ### Owner-based or record-carried department
 
@@ -62,13 +59,17 @@ Attributes the organisation owns, such as a department's region, belong on the d
 
 ### Cross-department work with permission sets alone
 
-Give the receiving department a set whose grant uses 指定部门: for Delivery to read Sales Center's projects, assign Delivery a project viewer set scoped to 指定部门 = Sales Center with its descendants. It grants the action and the records together, so it suits a standing arrangement.
+The department scopes cannot give one department another department's records, so without the sharing-rules plugin there is no department-relative way to do it. What remains is a grant that names the records: a composite grant's data scope may be a record selection instead of a record access key, such as `projects.grant({ view: { projects: selection.records(['project-12', 'project-15']) } })`, or the built-in custom filter on a column the records carry. Assign that set to the receiving department. It works, but it grants the action and the records together, so it is a set per arrangement rather than per job role, and every change to the list edits the set. Keep it for a small, standing arrangement; when the list changes often or must be reviewed apart from job roles, install the sharing-rules plugin.
+
+Do not give the receiving department a viewer-relative scope in the hope of reaching the other unit: it reaches what the receiving department's own members own, which for a member of two departments includes colleagues nobody meant to share.
 
 ## Optional: cross-department sharing
 
-Requires the sharing-rules plugin. A sharing rule adds records to an action its subjects already hold; it never grants the action.
+Requires the sharing-rules plugin. A sharing rule has recipients (授权对象), which may be a department, and shares either specific records or a data scope with them. It adds records to an action the recipients already hold; it never grants the action.
 
-Assign the receiving department a light set that grants the action with a scope of its own, such as 本部门, then share the other unit's records with a rule whose subject is that department and whose selection is 指定部门. Removing the rule removes only the widened records.
+For one department to see another's records, the rule's recipient is the receiving department and its selection is the specific records. A data scope does not work here: the department scopes are computed for the viewer, so 本部门及下属部门 in a rule for Delivery still selects Delivery's own records.
+
+The receiving department needs the action, so assign it a light set that grants it with a scope that reaches nothing unintended, such as 本人拥有的记录 / Records I Own (`recordsIOwn`): Delivery's members own no projects, so what they see is exactly what the rule shares. A viewer-relative scope such as 本部门 would also show a member who belongs to a second department that department's records. Without the plugin, the seed skips the rule and the department sees nothing through it. Removing the rule removes only the widened records.
 
 Prefer sharing over the permission-set alternative when the arrangement is an exception administrators turn on and off, or when it should be reviewed apart from the job roles. Seed the rule and its assignment only after confirming the plugin's Collections exist.
 
@@ -92,11 +93,11 @@ Because it is global, changing a resource's default reaches every holder, includ
 
 A trading company with a Sales Center (North Sales and South Sales below it), a Delivery department and an Executive Office:
 
-| Who                          | What they see                                              | How it is granted                                                                           | Why                                                                  |
-| ---------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Every salesperson            | The sales pages, and orders of their region                | Assistant set assigned to Sales Center; region scope                                        | The shared baseline of the sales unit                                |
-| North Sales members          | Each other's projects, read-only                           | Project viewer set with 本部门, assigned to North Sales                                     | Peer visibility within one team                                      |
-| Engineers                    | Their region's projects, editable                          | Engineer set assigned to each engineer                                                      | A job role the assistants beside them must not inherit               |
-| Sales Center and North heads | Projects, quotes and orders of their departments and below | Head set with 本部门及下属部门, assigned once to Department heads                           | Follows each appointment; one set for every level                    |
-| Delivery                     | Sales Center's projects                                    | Project viewer set assigned to Delivery; optional sharing rule with 指定部门 = Sales Center | The action from the set, the records from the rule or a 指定部门 set |
-| Everyone in the company      | Nothing confidential                                       | Optional restriction assigned to the root department                                        | One company-wide invariant                                           |
+| Who                          | What they see                                              | How it is granted                                                                                            | Why                                                                             |
+| ---------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Every salesperson            | The sales pages, and orders of their region                | Assistant set assigned to Sales Center; region scope                                                         | The shared baseline of the sales unit                                           |
+| North Sales members          | Each other's projects, read-only                           | Project viewer set with 本部门, assigned to North Sales                                                      | Peer visibility within one team                                                 |
+| Engineers                    | Their region's projects, editable                          | Engineer set assigned to each engineer                                                                       | A job role the assistants beside them must not inherit                          |
+| Sales Center and North heads | Projects, quotes and orders of their departments and below | Head set with 本部门及下属部门, assigned once to Department heads                                            | Follows each appointment; one set for every level                               |
+| Delivery                     | The sales projects it prepares                             | Own-projects viewer set (`recordsIOwn`) assigned to Delivery; optional sharing rule selecting those projects | The action from the set, the records from the rule; without the plugin, nothing |
+| Everyone in the company      | Nothing confidential                                       | Optional restriction assigned to the root department                                                         | One company-wide invariant                                                      |
