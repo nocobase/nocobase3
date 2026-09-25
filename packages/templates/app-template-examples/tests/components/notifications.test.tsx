@@ -217,6 +217,9 @@ it('expands and collapses overflowing message bodies independently', async () =>
     </MemoryRouter>,
   );
   await screen.findByText('Long message body');
+  // Each row starts observing in an effect, which can still be pending once its text is in the DOM. Measuring before
+  // both rows observe measures nothing, and "Show more" never appears — the failure a loaded CI runner produced.
+  await waitFor(() => expect(measurements).toHaveLength(2));
   act(() => measurements.forEach((measure) => measure()));
   const expand = await screen.findByRole('button', { name: 'Show more' });
   expect(expand).toHaveAttribute('aria-expanded', 'false');

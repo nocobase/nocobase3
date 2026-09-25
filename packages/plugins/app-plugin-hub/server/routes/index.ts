@@ -7,7 +7,6 @@ import { HUB_RELEASE_ACTIONS } from '../../shared/permissions.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  permissionSetsToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
@@ -41,7 +40,7 @@ import {
   deploymentResponse,
   deploymentListResponse,
 } from './responses.js';
-import { HUB_ACTIVE_ROLE_KEYS } from '../authorization.js';
+import { HUB_PERMISSION_SET_KEYS } from '../authorization.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 
@@ -51,7 +50,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const routes = new Hono<AuthorizationEnv>();
     const authentication = container.resolve(authenticationToken);
     const authorization = container.resolve(authorizationToken);
-    const permissionSets = container.resolve(permissionSetsToken);
+    const { permissionSets } = authorization;
     const hub = container.resolve(hubServiceToken);
     const securityLogger = container.has(loggingToken)
       ? container.resolve(loggingToken).getLogger('security')
@@ -283,7 +282,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         sets.map((permissionSet) => [permissionSet.key, permissionSet]),
       );
       return context.json({
-        data: HUB_ACTIVE_ROLE_KEYS.flatMap((key) => {
+        data: HUB_PERMISSION_SET_KEYS.flatMap((key) => {
           const permissionSet = byKey.get(key);
           return permissionSet
             ? [

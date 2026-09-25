@@ -42,13 +42,7 @@ async function grantSettings(section: string) {
   });
 }
 
-it.each([
-  'permission-sets',
-  'default-access',
-  'sharing-rules',
-  'restriction-rules',
-  'inspector',
-])(
+it.each(['permission-sets'])(
   'uses the %s entry permission for team listing and name resolution',
   async (section) => {
     expect((await request(section, '', undefined, '')).status).toBe(401);

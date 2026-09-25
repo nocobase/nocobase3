@@ -1,8 +1,6 @@
 @AGENTS.md
 
-For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` (from the application root).
-
-For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+For UI styling and for creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/frontend/references/theme.md` (from the application root). It defines the shared color, font, size, spacing, radius and shadow contract; prefer its Tailwind utilities so components respond to theme changes, and keep deliberate fixed-size exceptions explicit.
 
 ## Compiled migration and seed manifests
 

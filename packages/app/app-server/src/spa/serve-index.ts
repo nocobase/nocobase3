@@ -7,10 +7,11 @@ export async function serveSpaIndex(
   indexPath: string,
   runtimeGlobals?: SpaRuntimeGlobals,
   clientConfig?: SpaClientConfigMap,
+  publicConfig?: SpaClientConfigMap,
 ): Promise<Response> {
   const html = await readFile(indexPath, 'utf8');
   return new Response(
-    injectSpaRuntimeHtml(html, { clientConfig, runtimeGlobals }),
+    injectSpaRuntimeHtml(html, { clientConfig, publicConfig, runtimeGlobals }),
     {
       headers: {
         'cache-control': 'no-cache',

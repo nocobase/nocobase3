@@ -7,7 +7,7 @@
   {
     "type": "file",
     "name": "overview",
-    "label": "Before you start"
+    "label": "Overview"
   },
   {
     "type": "file",
@@ -23,5 +23,11 @@
     "type": "file",
     "name": "first-feature",
     "label": "Let your AI Agent build your first feature"
+  },
+  {
+    "type": "dir",
+    "name": "ai-agent",
+    "label": "Working with an AI Agent",
+    "collapsed": true
   }
 ]

@@ -1,10 +1,10 @@
-import type { AuthorizationScope } from './authorization.js';
+import type { AuthorizationContext } from './authorization.js';
 
 export interface AuthorizationRouteRequest {
   request: Request;
   /** The request path relative to where the application mounted the dispatcher. */
   path: string;
-  authorization: Pick<AuthorizationScope, 'require'>;
+  authorization: AuthorizationContext;
 }
 
 export type AuthorizationRouteHandler = (

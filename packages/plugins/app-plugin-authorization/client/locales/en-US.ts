@@ -152,11 +152,6 @@ const messages = {
   permissionWorkspace: {
     pageAccessHint:
       'Page access controls entry. Business permissions control data operations.',
-    categories: {
-      pages: 'Page permissions',
-      business: 'Business permissions',
-      administration: 'Administration',
-    },
     specifyScope: 'Specify scope: {{scope}}',
     inheritScope:
       'If unspecified, configured default scopes, sharing and restriction rules still apply.',
@@ -248,13 +243,14 @@ const messages = {
       error: 'Inspection failed',
     },
     reasonCodes: {
-      PAGE_ACCESS_GRANTED: 'Page access is granted',
-      PAGE_ACCESS_DENIED: 'Page access is not granted',
+      NO_MATCHING_GRANT: 'Nothing grants this operation',
+      RESOURCE_ACTION_NOT_SUPPORTED:
+        'This resource does not offer this operation',
       USER_CONTEXT_REQUIRED:
         'This scope depends on a specific user and cannot be resolved from this subject alone.',
       GRANT_MATCHED: 'This operation is granted',
-      SCOPE_EXPANDED: 'Expands accessible records',
-      SCOPE_RESTRICTED: 'Restricts accessible records',
+      SELECTION_EXPANDED: 'Expands accessible records',
+      SELECTION_RESTRICTED: 'Restricts accessible records',
       NO_OBJECT_PERMISSION: 'This operation has not been granted',
       NO_RECORD_ACCESS: 'No accessible record scope',
       UNRESTRICTED_ACCESS: 'Unrestricted access',

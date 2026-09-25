@@ -27,8 +27,8 @@ export default defineAIEmployee({
 Use only the business context and Tools available in the current conversation.
 Never invent customer facts, commitments, or dates.
 Ask one precise question when required information is missing.`,
+  // `find-customer` 由这个 Skill 点名，加载 Skill 时一并激活，不用再列进 tools
   skills: ['customer-follow-up'],
-  tools: [{ name: 'find-customer', autoCall: false }],
   chatSettings: {
     systemPromptMode: 'default',
     enableSkills: true,
@@ -57,6 +57,10 @@ Ask one precise question when required information is missing.`,
 | `tools`        | 否       | `{ name, autoCall? }` 数组，名称必须已经注册    |
 | `chatSettings` | 否       | 控制系统提示词模式以及 Skill、Tool 是否参与对话 |
 | `sort`         | 否       | 列表排序值                                      |
+
+`skills` 和 `tools` 不是同一件事的两种写法。只要有任何已注册的 Skill 点名了某个 Tool，这个 Tool 对所有员工都不再是基础 Tool，要等会话加载那个 Skill 之后才可用；把它列进员工的 `tools` 也不会让它提前出现。所以 `tools` 只用来列没有被任何 Skill 点名的 Tool。
+
+`autoCall` 只对 `CUSTOM` Tool 生效，`SPECIFIED` 和 `GENERAL` Tool 是否自动执行只看 `defaultPermission === 'ALLOW'`。对列进 `tools` 的 `CUSTOM` Tool，`autoCall` 会完全取代 `defaultPermission`：`autoCall: true` 会跳过确认，即使 Tool 声明的是 `ASK`；不写 `autoCall` 则需要确认，即使 Tool 声明的是 `ALLOW`。另外，员工第一次注册时 `autoCall` 会写入数据库，之后以数据库里保存的值为准，再改代码里的 `autoCall` 不会影响已部署的员工，需要管理员在设置页修改。
 
 `chatSettings.systemPromptMode` 支持 `default`、`raw` 和 `none`。默认使用 `default` 就够了；只有需要完整替换或关闭默认系统提示词拼装时，才使用另外两种模式。
 

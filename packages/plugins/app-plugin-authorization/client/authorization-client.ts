@@ -1,13 +1,14 @@
 import type { ApiClient } from '@nocobase/app-client';
 import type {
+  AuthorizationSnapshot,
   ResourceRef,
-  AuthorizationPermissionsSnapshot,
 } from '@nocobase/authorization/core';
 
 export type {
-  ResourceRef,
   AuthorizationPermission,
-  AuthorizationPermissionsSnapshot,
+  AuthorizationSnapshot,
+  RecordSelection,
+  ResourceRef,
 } from '@nocobase/authorization/core';
 
 export interface AuthorizationCheck {
@@ -39,7 +40,7 @@ export interface PermissionSet {
   key: string;
   title?: string | { key: string; ns: string };
   grants: readonly PermissionGrant[];
-  /** Present when the set is protected; `allow` lists the operations the generic API still performs. */
+  /** Present when the set is protected; `allow` lists what the generic API may still do. */
   readonly protection?: PermissionSetProtection;
   /** True when holding this set grants unrestricted access. */
   readonly unrestricted?: boolean;
@@ -61,86 +62,150 @@ export interface PermissionAssignmentInput {
   subject: { type: string; id: string };
 }
 
+/** A title as the server sends it. */
 export type LocalizedText =
-  string | { key: string; ns: string; defaultValue?: string };
+  string | { key: string; ns?: string; defaultValue?: string };
 
-export interface SelectOption<Text = string> {
-  category?: 'business' | 'pages' | 'administration';
-  value: string;
-  label: Text;
-  description?: Text;
+/** One grantable action as the server sends it. */
+interface OptionsActionResponse {
+  name: string;
+  title: LocalizedText;
 }
-export interface ResourceOption<Text = string> extends SelectOption<Text> {
-  searchText?: string;
-  ruleScopes?: readonly {
-    action: string;
-    scopeKey: string;
-    label: Text;
-    collection: string;
-    policies?: readonly string[];
+
+/** What every `options` route answers. */
+export interface AuthorizationOptionsResponse {
+  readonly sections: readonly {
+    name: string;
+    title: LocalizedText;
+    order: number;
+    subsections: readonly {
+      name: string;
+      title: LocalizedText;
+      /** Set when the client supplies the resources, such as pages. */
+      recordType?: { type: string; actions: readonly OptionsActionResponse[] };
+      resources: readonly {
+        type: string;
+        id: string;
+        title: LocalizedText;
+        description?: LocalizedText;
+        group?: string;
+        actions: readonly OptionsActionResponse[];
+        dataScopes?: Readonly<
+          Record<
+            string,
+            readonly {
+              key: string;
+              title: LocalizedText;
+              collection: string;
+              fields: readonly string[];
+              recordAccess: readonly string[];
+              defaultValue?: string;
+            }[]
+          >
+        >;
+      }[];
+    }[];
   }[];
-  actionScopes?: Readonly<
-    Record<
-      string,
-      {
-        policyType: string;
-        fields: readonly {
-          key: string;
-          collectionFields?: readonly string[];
-          label: Text;
-          defaultValue: string;
-          options: readonly SelectOption<Text>[];
-        }[];
-      }
-    >
-  >;
-  group?: string;
-  actions?: readonly SelectOption<Text>[];
+  readonly resourceGroups?: readonly {
+    name: string;
+    title: LocalizedText;
+    parent?: string;
+    order?: number;
+  }[];
+  readonly subjectTypes: readonly {
+    type: string;
+    title: LocalizedText;
+    selection: { type: 'fixed'; id: string } | { type: 'collection' };
+  }[];
+  readonly recordAccess: readonly {
+    key: string;
+    title: LocalizedText;
+    description?: LocalizedText;
+    collections: readonly string[];
+  }[];
+  readonly collections: readonly { name: string; fields: readonly string[] }[];
 }
-export interface ResourceGroupOption<Text = string> extends SelectOption<Text> {
-  children?: readonly ResourceGroupOption<Text>[];
-}
-export interface ResourceTypeOption<Text = string> {
-  category?: 'business' | 'pages' | 'administration';
-  groups?: readonly ResourceGroupOption<Text>[];
+
+export interface SelectOption {
   value: string;
-  label: Text;
-  resources: readonly ResourceOption<Text>[];
-  actions: readonly SelectOption<Text>[];
+  label: string;
+  description?: string;
 }
+
+/** One data scope of a composite action, as the workspace edits it. */
+export interface DataScopeOption {
+  key: string;
+  label: string;
+  collection: string;
+  collectionFields: readonly string[];
+  /** `''` selects nothing: only default access and sharing apply. */
+  defaultValue: string;
+  /** `''` first, then the record access this scope offers. */
+  options: readonly SelectOption[];
+}
+
+export interface ResourceOption extends SelectOption {
+  /** The resource type grants store; never displayed. */
+  type: string;
+  searchText?: string;
+  group?: string;
+  actions?: readonly SelectOption[];
+  /** Composite items only: the data scopes of each action. */
+  dataScopes?: Readonly<Record<string, readonly DataScopeOption[]>>;
+}
+
+export interface ResourceGroupOption extends SelectOption {
+  children?: readonly ResourceGroupOption[];
+}
+
+/** A left-side entry: its resources, grouped by `groups`. */
+export interface SubsectionOption {
+  value: string;
+  label: string;
+  /** Set when the client supplies the resources, such as `page`. */
+  recordType?: string;
+  /** The record type's actions, else every action its resources name. */
+  actions: readonly SelectOption[];
+  groups: readonly ResourceGroupOption[];
+  resources: readonly ResourceOption[];
+}
+
+/** A left-side heading. */
+export interface SectionOption {
+  value: string;
+  label: string;
+  order: number;
+  subsections: readonly SubsectionOption[];
+}
+
 export interface DatabaseCollectionOption {
   name: string;
   fields: readonly string[];
 }
-export interface SubjectTypeOption<Text = string> extends SelectOption<Text> {
+
+export interface SubjectTypeOption extends SelectOption {
   selection?: { type: 'fixed'; id: string } | { type: 'collection' };
 }
+
 export interface SubjectOption {
   id: string;
   title: string;
   description?: string;
 }
-export type SubjectSettings = string;
-export interface AuthorizationOptions<Text = string> {
-  resourceGroups?: readonly SelectOption<Text>[];
-  plugins: readonly string[];
-  resourceTypes: readonly ResourceTypeOption<Text>[];
-  subjectTypes: readonly SubjectTypeOption<Text>[];
+
+/** The workspace model an `options` response is localized into. */
+export interface AuthorizationOptions {
+  sections: readonly SectionOption[];
+  subjectTypes: readonly SubjectTypeOption[];
   collections: readonly DatabaseCollectionOption[];
-  recordAccessPolicies: readonly SelectOption<Text>[];
+  recordAccess: readonly SelectOption[];
 }
+
 export interface AuthorizationRecordOption {
   id: string;
   label: string;
   description?: string;
 }
-export type AccessScope =
-  | { type: 'all' }
-  | { type: 'ids'; ids: readonly string[] }
-  | {
-      type: 'database';
-      recordAccess: string | { key: string; params?: unknown };
-    };
 
 export interface AuthorizationSubject {
   type: string;
@@ -178,19 +243,33 @@ export interface AuthorizationInspection {
   decision: AuthorizationDecision;
 }
 
+/** What a subject's stored grants cover, without deciding any of them. */
+export interface ConfiguredAccess {
+  unrestricted: boolean;
+  types: readonly string[];
+  resources: readonly { type: string; id: string }[];
+}
+
+export interface SubjectPage {
+  items: readonly SubjectOption[];
+  total: number;
+}
+
 interface DataResponse<T> {
   data: T;
 }
 
+/** Session-scoped access to `/api/authz`. */
 export class AuthorizationClient {
-  private snapshot?: Promise<AuthorizationPermissionsSnapshot>;
-  private permissionsRevision = 0;
+  private cached?: Promise<AuthorizationSnapshot>;
+  private currentRevision = 0;
   private readonly invalidationListeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
 
+  /** Whether the session's snapshot permits the check. */
   async can({ resource, action }: AuthorizationCheck): Promise<boolean> {
-    const snapshot = await this.permissions();
+    const snapshot = await this.snapshot();
     if (snapshot.unrestricted) return true;
     return snapshot.permissions.some(
       (permission) =>
@@ -201,110 +280,67 @@ export class AuthorizationClient {
     );
   }
 
-  permissions(): Promise<AuthorizationPermissionsSnapshot> {
-    if (!this.snapshot) {
-      const request: Promise<AuthorizationPermissionsSnapshot> = this.api
-        .request<DataResponse<AuthorizationPermissionsSnapshot>>({
+  /** `GET authz/permissions`, cached until `invalidate()`. */
+  snapshot(): Promise<AuthorizationSnapshot> {
+    if (!this.cached) {
+      const request: Promise<AuthorizationSnapshot> = this.api
+        .request<DataResponse<AuthorizationSnapshot>>({
           path: 'authz/permissions',
         })
         .then(
           (response) =>
-            this.snapshot === request ? response.data : this.permissions(),
+            this.cached === request ? response.data : this.snapshot(),
           (error: unknown) => {
             // A request from an earlier session must not evict its successor.
-            if (this.snapshot !== request) return this.permissions();
-            this.snapshot = undefined;
+            if (this.cached !== request) return this.snapshot();
+            this.cached = undefined;
             throw error;
           },
         );
-      this.snapshot = request;
+      this.cached = request;
     }
-    return this.snapshot;
+    return this.cached;
   }
 
-  getPermissionsRevision(): number {
-    return this.permissionsRevision;
+  /** Changes whenever the snapshot is invalidated. */
+  revision(): number {
+    return this.currentRevision;
+  }
+
+  invalidate(): void {
+    this.cached = undefined;
+    this.currentRevision += 1;
+    for (const listener of this.invalidationListeners) listener();
+  }
+
+  onInvalidated(listener: () => void): () => void {
+    this.invalidationListeners.add(listener);
+    return () => {
+      this.invalidationListeners.delete(listener);
+    };
   }
 
   listPermissionSets(): Promise<readonly PermissionSet[]> {
-    return this.api
-      .request<DataResponse<readonly PermissionSet[]>>({
-        path: 'authz/permission-sets',
-      })
-      .then((response) => response.data);
+    return this.get('authz/permission-sets');
   }
 
-  loadOptions(path: string): Promise<AuthorizationOptions<LocalizedText>> {
-    return this.get<AuthorizationOptions<LocalizedText>>(path);
+  getPermissionSet(key: string): Promise<PermissionSet> {
+    return this.get(`authz/permission-sets/${encodeURIComponent(key)}`);
   }
-  /**
-   * Users come from the Users API rather than from Authorization, which knows
-   * subject ids and nothing about accounts. It authorizes separately, so this
-   * request can be refused while the settings page itself is allowed.
-   */
-  listSubjects(
-    settings: SubjectSettings,
-    type: string,
-    query: { search?: string; page: number; pageSize: number },
-  ): Promise<{ items: readonly SubjectOption[]; total: number }> {
-    return this.api
-      .request<
-        DataResponse<{ items: readonly SubjectOption[]; total: number }>
-      >({
-        path: `authz/${settings}/subjects/${encodeURIComponent(type)}`,
-        query,
-      })
-      .then((response) => response.data);
-  }
-  resolveSubjects(
-    settings: SubjectSettings,
-    type: string,
-    ids: readonly string[],
-  ): Promise<readonly SubjectOption[]> {
-    return this.send<readonly SubjectOption[]>(
-      `authz/${settings}/subjects/${encodeURIComponent(type)}/resolve`,
-      'POST',
-      { ids },
-    );
-  }
-  /** What one person may do on one resource, and why the application says so. */
-  inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {
-    return this.send<AuthorizationDecision>('authz/inspect', 'POST', input);
-  }
-  inspectConfigured(subject: AuthorizationSubject): Promise<{
-    unrestricted: boolean;
-    types: readonly string[];
-    resources: readonly { type: string; id: string }[];
-  }> {
-    return this.send('authz/inspect/configured', 'POST', { subject });
-  }
-  inspectBatch(
-    subject: AuthorizationSubject,
-    checks: readonly Omit<AuthorizationInspectInput, 'subject'>[],
-  ): Promise<readonly AuthorizationInspection[]> {
-    return this.send('authz/inspect/batch', 'POST', { subject, checks });
-  }
+
   createPermissionSet(input: PermissionSetInput): Promise<PermissionSet> {
-    return this.api
-      .request<DataResponse<PermissionSet>>({
-        path: 'authz/permission-sets',
-        method: 'POST',
-        json: input,
-      })
-      .then((response) => response.data);
+    return this.send('authz/permission-sets', 'POST', input);
   }
 
   updatePermissionSet(
     key: string,
     input: PermissionSetInput,
   ): Promise<PermissionSet> {
-    return this.api
-      .request<DataResponse<PermissionSet>>({
-        path: `authz/permission-sets/${encodeURIComponent(key)}`,
-        method: 'PUT',
-        json: input,
-      })
-      .then((response) => response.data);
+    return this.send(
+      `authz/permission-sets/${encodeURIComponent(key)}`,
+      'PUT',
+      input,
+    );
   }
 
   async deletePermissionSet(key: string): Promise<void> {
@@ -314,47 +350,93 @@ export class AuthorizationClient {
     });
   }
 
+  /** The sets a subject holds. */
+  getEffective(
+    subject: AuthorizationSubject,
+  ): Promise<readonly PermissionSet[]> {
+    return this.get(
+      `authz/permission-sets/effective/${encodeURIComponent(subject.type)}/${encodeURIComponent(subject.id)}`,
+    );
+  }
+
   listAssignments(
     permissionSet: string,
   ): Promise<readonly PermissionSetAssignment[]> {
-    return this.api
-      .request<DataResponse<readonly PermissionSetAssignment[]>>({
-        path: `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
-      })
-      .then((response) => response.data);
+    return this.get(
+      `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
+    );
   }
 
   assign(
     permissionSet: string,
     input: PermissionAssignmentInput,
   ): Promise<PermissionSetAssignment> {
-    return this.api
-      .request<DataResponse<PermissionSetAssignment>>({
-        path: `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
-        method: 'POST',
-        json: input,
-      })
-      .then((response) => response.data);
+    return this.send(
+      `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
+      'POST',
+      input,
+    );
   }
 
-  async revoke(assignmentId: string): Promise<void> {
+  async revoke(permissionSet: string, assignmentId: string): Promise<void> {
     await this.api.request({
-      path: `authz/permission-sets/assignments/${encodeURIComponent(assignmentId)}`,
+      path: `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments/${encodeURIComponent(assignmentId)}`,
       method: 'DELETE',
     });
   }
 
-  invalidatePermissions(): void {
-    this.snapshot = undefined;
-    this.permissionsRevision += 1;
-    for (const listener of this.invalidationListeners) listener();
+  /** `GET authz/<path>/options`; `path` is the surface, such as `permission-sets`. */
+  loadOptions(path: string): Promise<AuthorizationOptionsResponse> {
+    return this.get(`authz/${path}/options`);
   }
 
-  onPermissionsInvalidated(listener: () => void): () => void {
-    this.invalidationListeners.add(listener);
-    return () => {
-      this.invalidationListeners.delete(listener);
-    };
+  /** Subjects of one type, from the surface's own directory route. */
+  listSubjects(
+    path: string,
+    type: string,
+    query: { search?: string; page: number; pageSize: number },
+  ): Promise<SubjectPage> {
+    return this.api
+      .request<DataResponse<SubjectPage>>({
+        path: `authz/${path}/subjects/${encodeURIComponent(type)}`,
+        query,
+      })
+      .then((response) => response.data);
+  }
+
+  resolveSubjects(
+    path: string,
+    type: string,
+    ids: readonly string[],
+  ): Promise<readonly SubjectOption[]> {
+    return this.send(
+      `authz/${path}/subjects/${encodeURIComponent(type)}/resolve`,
+      'POST',
+      { ids },
+    );
+  }
+
+  listRecords(
+    path: string,
+    collection: string,
+  ): Promise<readonly AuthorizationRecordOption[]> {
+    return this.get(`authz/${path}/records/${encodeURIComponent(collection)}`);
+  }
+
+  /** What one subject may do on one resource, and why. */
+  inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {
+    return this.send('authz/inspector/decision', 'POST', input);
+  }
+
+  inspectBatch(
+    subject: AuthorizationSubject,
+    checks: readonly Omit<AuthorizationInspectInput, 'subject'>[],
+  ): Promise<readonly AuthorizationInspection[]> {
+    return this.send('authz/inspector/batch', 'POST', { subject, checks });
+  }
+
+  inspectConfigured(subject: AuthorizationSubject): Promise<ConfiguredAccess> {
+    return this.send('authz/inspector/configured', 'POST', { subject });
   }
 
   private get<T>(path: string): Promise<T> {
@@ -362,6 +444,7 @@ export class AuthorizationClient {
       .request<DataResponse<T>>({ path })
       .then((response) => response.data);
   }
+
   private send<T>(
     path: string,
     method: 'POST' | 'PUT',

@@ -136,8 +136,5 @@ export const mimoProviderOptions: LLMProviderMeta = {
   title: 'MiMo',
   supportWebSearch: true,
   supportedModel: [SupportedModel.LLM],
-  models: {
-    [SupportedModel.LLM]: ['mimo-v2.5-pro', 'mimo-v2.5'],
-  },
   provider: MiMoProvider,
 };

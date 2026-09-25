@@ -43,12 +43,18 @@ function createFixture(
       ...(enabledTools === undefined ? {} : { enabledTools }),
     },
   };
+  // Web search is state now, so a case that varies it varies the state.
+  const { webSearch = true, ...restOverrides } = overrides as {
+    webSearch?: boolean;
+  } & Partial<AIEmployeeAgentContextProviderOptions>;
   const options = {
     employee,
-    sessionId: 'test',
-    actor: { id: 1, roles: [], isRoot: false },
     currentConversation: { sessionId: 'test' },
-    toolRuntimeContext: {},
+    agentContext: {
+      actor: { id: 1, roles: [], isRoot: false },
+      state: { sessionId: 'test', webSearch },
+      runtime: { logger: { warn: vi.fn(), error: vi.fn() } },
+    },
     toolsManager: {
       listTools: vi.fn(async (filter: { scope?: string }) =>
         tools.filter((entry) => !filter.scope || entry.scope === filter.scope),
@@ -68,12 +74,10 @@ function createFixture(
     },
     conversations: { findOne: async () => null },
     toolMessages: { find: async () => [] },
-    webSearch: true,
-    tools: [{ name: 'extra' }],
     ...(sessionTools
       ? { skillSettings: { tools: sessionTools, toolsVersion: 1 } }
       : {}),
-    ...overrides,
+    ...restOverrides,
   } as unknown as AIEmployeeAgentContextProviderOptions;
   return {
     provider: new AIEmployeeAgentContextProvider(options),
@@ -98,7 +102,6 @@ describe('employee tool switch runtime', () => {
           'general',
           'specified',
           'custom',
-          'extra',
           SYSTEM_TOOLS.GET_SKILL,
           SYSTEM_TOOLS.WEB_SEARCH,
           SYSTEM_TOOLS.KNOWLEDGE_BASE,
@@ -186,7 +189,7 @@ describe('employee tool switch runtime', () => {
     },
   );
 
-  it.each(['employee', 'request', 'general'])(
+  it.each(['employee', 'general'])(
     'checks KB access for %s injections while retaining deliberately configured legacy web search',
     async (source) => {
       const optional = [SYSTEM_TOOLS.WEB_SEARCH, SYSTEM_TOOLS.KNOWLEDGE_BASE];
@@ -199,9 +202,6 @@ describe('employee tool switch runtime', () => {
             isEnabledKnowledgeBase: async () => true,
             hasAccessibleKnowledgeBase: async () => false,
           } as unknown as AIEmployeeAgentContextProviderOptions['knowledgeBaseManager'],
-          ...(source === 'request'
-            ? { tools: optional.map((name) => ({ name })) }
-            : {}),
         },
       );
       if (source === 'employee') {
@@ -226,7 +226,7 @@ describe('employee tool switch runtime', () => {
     },
   );
 
-  it('filters general, custom, system, web search, knowledge base and extra injections in the full discovered map', async () => {
+  it('filters general, custom, system, web search and knowledge base candidates in the full discovered map', async () => {
     for (const selected of [[], ['specified']]) {
       const { provider } = createFixture(selected);
       const { discovery, names } = await active(provider);

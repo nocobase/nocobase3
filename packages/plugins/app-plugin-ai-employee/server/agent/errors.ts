@@ -30,9 +30,24 @@ export function normalizeAgentError(
   }
   return new AgentServiceError(
     'PROVIDER_ERROR',
-    fallbackMessage || cause?.message || 'Agent execution failed',
+    cause?.message || fallbackMessage || 'Agent execution failed',
     {
       cause: error,
     },
+  );
+}
+
+/**
+ * Classifies a failure raised while resolving the model, LLM service, or
+ * provider. The execution phase decides the code, so no message matching is
+ * involved and a new configuration failure needs no change here.
+ */
+export function toConfigurationError(error: unknown): AgentServiceError {
+  if (error instanceof AgentServiceError) return error;
+  const cause = error as { message?: string } | undefined;
+  return new AgentServiceError(
+    'CONFIGURATION_ERROR',
+    cause?.message || 'Agent model configuration is unavailable',
+    { cause: error },
   );
 }

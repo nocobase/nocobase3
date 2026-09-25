@@ -10,7 +10,7 @@ import {
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permission-sets';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 

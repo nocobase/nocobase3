@@ -6,6 +6,7 @@ import type {
   ConfigProvider,
 } from '@nocobase/config';
 import type { FileProviderOptions } from '@nocobase/config/providers/file';
+import type { ConfigIssue } from './validation.js';
 
 export interface AppConfigSource {
   readonly provider: ConfigProvider;
@@ -34,6 +35,12 @@ export interface AppConfigAccessor {
   get<TValue = unknown>(key: string): TValue | undefined;
   raw(): ConfigMap;
   reload(): Promise<AppConfigReloadResult>;
+  /** Issues the sections' declared rules find; an accessor without declared rules may omit it. */
+  validate?(): Promise<readonly ConfigIssue[]>;
+  /** Values the sections publish to the browser; an accessor without declared rules may omit it. */
+  publicValues?(): ConfigMap;
+  /** Every published path in full, such as `auth.emailAndPassword.disableSignUp`. */
+  publicPaths?(): readonly string[];
   subscribe<TValue>(
     namespace: string,
     listener: AppConfigChangeListener<TValue>,

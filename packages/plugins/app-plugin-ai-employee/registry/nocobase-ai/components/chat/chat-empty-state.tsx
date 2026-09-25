@@ -3,6 +3,7 @@ import { useAIChatBase } from '../../providers/index.js';
 import { ArrowUpRight, Send, TextCursorInput } from 'lucide-react';
 import { AIEmployeeAvatar } from './ai-employee-avatar.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
+import { withStableKeys } from '../../shared/keys.js';
 
 export function ChatEmptyState() {
   const t = useAITranslate();
@@ -23,11 +24,14 @@ export function ChatEmptyState() {
         </p>
         {availableTasks.length ? (
           <div className='mt-6 grid gap-2 text-left'>
-            {availableTasks.map((task, index) => {
+            {withStableKeys(
+              availableTasks,
+              (task) => task.title ?? task.message?.user ?? 'task',
+            ).map(({ key, item: task }, index) => {
               const Icon = task.autoSend ? Send : TextCursorInput;
               return (
                 <Button
-                  key={`${task.title ?? 'task'}-${index}`}
+                  key={key}
                   variant='outline'
                   className='h-auto justify-start gap-3 whitespace-normal px-3 py-3 text-left font-normal'
                   onClick={() => runTask(task)}

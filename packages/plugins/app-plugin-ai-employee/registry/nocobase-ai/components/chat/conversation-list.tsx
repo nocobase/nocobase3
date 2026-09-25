@@ -36,13 +36,7 @@ import {
   X,
   LoaderCircle,
 } from 'lucide-react';
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ConversationList({
@@ -81,14 +75,21 @@ export function ConversationList({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
 
-  useEffect(() => {
+  // Both of these adjust state while rendering, which React supports for
+  // state derived from a changed input and which avoids the extra render an
+  // effect would cost.
+  const [syncedRenameTarget, setSyncedRenameTarget] = useState(renameTarget);
+  if (syncedRenameTarget !== renameTarget) {
+    setSyncedRenameTarget(renameTarget);
     setRenameTitle(renameTarget?.title ?? '');
     setRenameError(undefined);
-  }, [renameTarget]);
+  }
 
-  useEffect(() => {
+  const [syncedSearch, setSyncedSearch] = useState(conversationSearch);
+  if (syncedSearch !== conversationSearch) {
+    setSyncedSearch(conversationSearch);
     setSearchValue(conversationSearch);
-  }, [conversationSearch]);
+  }
 
   const submitRename = async (event: FormEvent) => {
     event.preventDefault();
@@ -207,7 +208,7 @@ export function ConversationList({
         }}
       >
         <DialogContent>
-          <form onSubmit={submitRename}>
+          <form onSubmit={(event) => void submitRename(event)}>
             <DialogHeader>
               <DialogTitle>
                 {t('chat.rename.title', 'Rename conversation')}

@@ -143,6 +143,7 @@ describe('server package generation', () => {
         'config:init': 'node ./cli/index.js app config init',
         'config:check': 'node ./cli/index.js app config check',
         'config:set': 'node ./cli/index.js app config set',
+        'config:env': 'node ./cli/index.js app config env',
       },
       engines: { node: '>=24.0.0' },
     });
@@ -221,6 +222,39 @@ describe('server package generation', () => {
       /allowBuilds:\n(?:.*\n)*? {2}better-sqlite3: true/,
     );
     expect(workspace).toMatch(/ {2}tesseract\.js: false/);
+  });
+
+  it("carries the application's registry settings, and nothing else, into dist/.npmrc", () => {
+    const { root } = createWorkspace();
+    writeFileSync(
+      path.join(root, '.npmrc'),
+      [
+        '@nocobase:registry=https://npm.example.test',
+        'strict-peer-dependencies=false',
+        '//npm.example.test/:_authToken=secret-token',
+        '  registry = https://registry.example.test/',
+        '',
+      ].join('\n'),
+    );
+
+    expect(generate(root).status).toBe(0);
+
+    const npmrc = readFileSync(path.join(root, 'dist', '.npmrc'), 'utf8');
+    expect(npmrc).toContain('@nocobase:registry=https://npm.example.test');
+    expect(npmrc).toContain('registry = https://registry.example.test/');
+    expect(npmrc).not.toContain('secret-token');
+    expect(npmrc).not.toContain('strict-peer-dependencies');
+  });
+
+  it('writes no dist/.npmrc when the application names no registry', () => {
+    const { root } = createWorkspace();
+    writeFileSync(
+      path.join(root, '.npmrc'),
+      'strict-peer-dependencies=false\n',
+    );
+
+    expect(generate(root).status).toBe(0);
+    expect(existsSync(path.join(root, 'dist', '.npmrc'))).toBe(false);
   });
 
   it('adds only the database drivers the application declares', () => {

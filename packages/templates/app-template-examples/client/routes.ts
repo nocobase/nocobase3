@@ -38,16 +38,22 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/route-overlays',
     navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
     breadcrumb: { title: 'navigation.routeOverlays' },
+    authz: {
+      resource: { type: 'page', id: 'routeOverlays' },
+      action: 'access',
+    },
     componentLoader: () => import('./pages/route-overlays/index.js'),
     children: [
       {
         name: 'routeDialogExample',
         path: 'dialog',
+        authz: 'skip',
         componentLoader: () => import('./pages/route-overlays/dialog/index.js'),
         children: [
           {
             name: 'routeDialogDrawerExample',
             path: 'drawer',
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/dialog/drawer.js'),
           },
@@ -56,11 +62,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       {
         name: 'routeDrawerExample',
         path: 'drawer',
+        authz: 'skip',
         componentLoader: () => import('./pages/route-overlays/drawer/index.js'),
         children: [
           {
             name: 'routeDrawerDialogExample',
             path: 'dialog',
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/drawer/dialog.js'),
           },
@@ -72,12 +80,14 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         name: 'routeChildPages',
         path: 'pages',
         breadcrumb: { title: 'routeOverlays.childPagesTitle' },
+        authz: 'skip',
         componentLoader: () => import('./pages/route-overlays/pages/index.js'),
         children: [
           {
             name: 'routeChildPageQuotation',
             path: 'quotation',
             breadcrumb: { title: 'routeOverlays.topicQuotation' },
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/pages/quotation/index.js'),
             children: [
@@ -85,6 +95,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
               {
                 name: 'routeChildPageDialog',
                 path: 'dialog',
+                authz: 'skip',
                 componentLoader: () =>
                   import('./pages/route-overlays/pages/quotation/dialog.js'),
               },
@@ -94,6 +105,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
             name: 'routeChildPageOnboarding',
             path: 'onboarding',
             breadcrumb: { title: 'routeOverlays.topicOnboarding' },
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/pages/onboarding.js'),
           },
@@ -101,6 +113,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
             name: 'routeChildPageRenewal',
             path: 'renewal',
             breadcrumb: { title: 'routeOverlays.topicRenewal' },
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/pages/renewal.js'),
           },
@@ -118,6 +131,10 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    authz: {
+      resource: { type: 'page', id: 'numeric-examples' },
+      action: 'access',
+    },
     componentLoader: () => import('./pages/numeric-examples.js'),
     name: 'numeric-examples',
     navigation: { title: 'navigation.numbers', icon: Hash },
@@ -125,6 +142,10 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    authz: {
+      resource: { type: 'page', id: 'i18n-examples' },
+      action: 'access',
+    },
     componentLoader: () => import('./pages/i18n-examples/index.js'),
     name: 'i18n-examples',
     navigation: { title: 'navigation.i18nExamples', icon: Languages },
@@ -132,6 +153,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    authz: { resource: { type: 'page', id: 'external-crm' }, action: 'access' },
     componentLoader: () => import('./pages/external-crm.js'),
     name: 'external-crm',
     navigation: { title: 'navigation.externalCrm', icon: Plug },
@@ -139,24 +161,28 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/login.js'),
     name: 'login',
     path: '/login',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/register.js'),
     name: 'register',
     path: '/register',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/forgot-password.js'),
     name: 'forgot-password',
     path: '/forgot-password',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/reset-password.js'),
     name: 'reset-password',
     path: '/reset-password',

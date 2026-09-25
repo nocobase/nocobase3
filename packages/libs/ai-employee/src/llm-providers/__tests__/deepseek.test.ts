@@ -14,6 +14,7 @@ import {
   ToolMessage,
 } from '@langchain/core/messages';
 import { convertMessagesToResponsesInput } from '@langchain/openai';
+import { Readable } from 'node:stream';
 import type OpenAI from 'openai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '../../types/index.js';
@@ -654,5 +655,47 @@ describe('DeepSeek Responses parsing and persistence', () => {
         },
       }),
     ).toBe('one copy');
+  });
+});
+
+describe('DeepSeek attachments', () => {
+  const parse = (filename: string, mimetype: string) =>
+    new DeepSeekProvider({
+      serviceOptions: { apiKey: 'k' },
+    }).parseAttachment(
+      {
+        id: 1,
+        title: filename,
+        filename,
+        mimetype,
+        path: `ai-files/1-${filename}`,
+        disk: 'local',
+      } as never,
+      {
+        fileStorage: {
+          openMetadata: async () => ({
+            stream: Readable.from([Buffer.from('hello')]),
+          }),
+        } as never,
+        documentLoader: {
+          load: async () => ({ supported: true, text: 'extracted' }),
+        },
+        getHeader: () => '',
+      },
+    );
+
+  it('sends an image to the model as a content block', async () => {
+    await expect(parse('chart.png', 'image/png')).resolves.toMatchObject({
+      placement: 'contentBlocks',
+      content: { image_url: { url: 'data:image/png;base64,aGVsbG8=' } },
+    });
+  });
+
+  it('keeps a document on the loader rather than the model API', async () => {
+    const parsed = (await parse('report.pdf', 'application/pdf')) as {
+      placement: string;
+      content: unknown;
+    };
+    expect(parsed.placement).not.toBe('contentBlocks');
   });
 });

@@ -16,6 +16,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'navAttachments' },
           breadcrumb: { title: 'navAttachments' },
+          authz: {
+            resource: { type: 'page', id: 'file-repository-attachments' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/attachments.js'),
         },
         {
@@ -24,6 +28,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'navProfiles' },
           breadcrumb: { title: 'navProfiles' },
+          authz: {
+            resource: { type: 'page', id: 'file-repository-profile-avatars' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/profile-avatars.js'),
         },
         {
@@ -32,6 +40,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'navOrders' },
           breadcrumb: { title: 'navOrders' },
+          authz: {
+            resource: { type: 'page', id: 'file-repository-order-attachments' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/order-attachments.js'),
         },
       ],

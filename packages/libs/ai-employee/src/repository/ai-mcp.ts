@@ -11,6 +11,8 @@ export type MCPEntity = {
   headers?: Record<string, string>;
   restart?: Record<string, any>;
   sort?: number;
+  /** Permissions an administrator set, keyed by the server's own tool name. */
+  toolPermissions?: Record<string, 'ASK' | 'ALLOW'>;
 };
 
 export interface AIMCPRepository extends CollectionRepository<MCPEntity> {}

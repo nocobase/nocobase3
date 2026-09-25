@@ -147,11 +147,11 @@ describe('account permission changes without a browser reload', () => {
     const view = setup();
     await expectMenu(true);
     view.request.mockResolvedValue(permissions(false));
-    act(() => view.client.invalidatePermissions());
+    act(() => view.client.invalidate());
     expect(screen.queryByText('users content')).not.toBeInTheDocument();
     await expectMenu(false);
     view.request.mockResolvedValue(permissions(true));
-    act(() => view.client.invalidatePermissions());
+    act(() => view.client.invalidate());
     await expectMenu(true);
   });
 
@@ -160,7 +160,7 @@ describe('account permission changes without a browser reload', () => {
     const view = setup();
     await expectMenu(true);
     view.request.mockRejectedValue(new Error('Offline'));
-    act(() => view.client.invalidatePermissions());
+    act(() => view.client.invalidate());
     await waitFor(() =>
       expect(
         screen.getByRole('navigation', { name: 'Pages' }).textContent,
@@ -171,7 +171,7 @@ describe('account permission changes without a browser reload', () => {
     );
     expect(screen.queryByText('users content')).not.toBeInTheDocument();
     view.request.mockResolvedValue(permissions(true));
-    act(() => view.client.invalidatePermissions());
+    act(() => view.client.invalidate());
     await expectMenu(true);
   });
 

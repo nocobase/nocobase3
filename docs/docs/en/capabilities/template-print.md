@@ -114,7 +114,7 @@ Provide the original template, generated file, viewer name, and a specific diffe
 
 ## Related links
 
-- [Writing requirements](../ai/writing-requirements.md) — Give the App Agent clear business rules
+- [Writing requirements](../get-started/ai-agent/writing-requirements.md) — Give the App Agent clear business rules
 - [Files](./file.md) — Uploads, attachments, and file access
 - [Permissions](./authorization.md) — Access to data and features
 - [Plugin Skills](../plugin-development/skills.md) — Publishing, synchronizing, and maintaining Skills

@@ -1,20 +1,17 @@
 import type {
-  AccessScope,
   AuthorizationOptions,
+  RecordSelection,
 } from '../authorization-client.js';
+import { resourceActions } from './localized-options.js';
 
 export function firstActions(
   options: AuthorizationOptions,
   type: string,
   resourceId?: string,
 ): readonly string[] {
-  const resourceType = options.resourceTypes.find(
-    (item) => item.value === type,
-  );
-  const actions =
-    resourceType?.resources.find((item) => item.value === resourceId)
-      ?.actions ?? resourceType?.actions;
-  const action = actions?.slice().sort(compareActions)[0];
+  const action = resourceActions(options, { type, id: resourceId })
+    .slice()
+    .sort(compareActions)[0];
   return action ? [action.value] : [];
 }
 
@@ -30,8 +27,10 @@ export function compareActions(
     (rightIndex < 0 ? order.length : rightIndex)
   );
 }
-export function defaultScope(options: AuthorizationOptions): AccessScope {
-  return options.recordAccessPolicies[0]
-    ? { type: 'database', recordAccess: options.recordAccessPolicies[0].value }
-    : { type: 'all' };
+/** The selection a new rule action starts with. */
+export function defaultSelection(
+  options: AuthorizationOptions,
+): RecordSelection {
+  const first = options.recordAccess[0];
+  return first ? { type: 'recordAccess', key: first.value } : { type: 'all' };
 }

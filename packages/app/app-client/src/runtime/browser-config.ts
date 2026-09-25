@@ -4,17 +4,32 @@ const RUNTIME_CONFIG_VERSION = 1;
 export interface AppClientRuntimeConfigPayload {
   readonly version: 1;
   readonly config: unknown;
+  /** Values the server publishes, read through `config.public`. Absent when the server publishes none. */
+  readonly public?: unknown;
 }
 
 export function readAppClientRuntimeConfig(
   document: Document | undefined = globalThis.document,
 ): unknown {
+  return readRuntimeConfigPayload(document)?.config ?? {};
+}
+
+/** The values the server published, or an empty object when the page carries none. */
+export function readAppClientPublicConfig(
+  document: Document | undefined = globalThis.document,
+): unknown {
+  return readRuntimeConfigPayload(document)?.public ?? {};
+}
+
+function readRuntimeConfigPayload(
+  document: Document | undefined,
+): AppClientRuntimeConfigPayload | undefined {
   if (!document) {
-    return {};
+    return undefined;
   }
   const element = document.getElementById(RUNTIME_CONFIG_ELEMENT_ID);
   if (!element) {
-    return {};
+    return undefined;
   }
   const source = element.textContent?.trim();
   if (!source) {
@@ -34,7 +49,7 @@ export function readAppClientRuntimeConfig(
       `Client runtime config data block must use version ${RUNTIME_CONFIG_VERSION} and contain a config object.`,
     );
   }
-  return payload.config;
+  return payload;
 }
 
 function isRuntimeConfigPayload(

@@ -35,11 +35,14 @@ export type AIChatContextValue = {
   draft: string;
   attachments: AIChatAttachment[];
   uploadingAttachments: boolean;
+  /** Whether the next message asks the model to search the web. */
+  webSearch: boolean;
   workContext: AIWorkContextItem[];
   editingMessageId?: string;
   setDraft: (value: string) => void;
   uploadFiles: (files: File[]) => Promise<void>;
   removeAttachment: (uid: string) => void;
+  setWebSearch: (enabled: boolean) => void;
   addWorkContext: (item: AIWorkContextItem) => void;
   removeWorkContext: (item: AIWorkContextItem) => void;
   send: () => Promise<void>;

@@ -2,13 +2,19 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-const providerState = vi.hoisted(() => ({
-  values: [] as boolean[],
-  modelSupportsWebSearch: true,
+const shown = vi.hoisted(() => ({
+  providerWebSearch: [] as Array<boolean | undefined>,
+  windowProps: undefined as
+    | {
+        enableAttachments?: boolean;
+        enableWebSearch?: boolean;
+        composerActions?: Array<{ key: string }>;
+      }
+    | undefined,
 }));
 
 vi.mock('../registry/nocobase-ai/components/index.js', () => ({
@@ -26,15 +32,12 @@ vi.mock('../registry/nocobase-ai/providers/index.js', () => ({
     children,
     webSearch,
   }: PropsWithChildren<{ webSearch?: boolean }>) => {
-    providerState.values.push(webSearch ?? false);
+    shown.providerWebSearch.push(webSearch);
     return <>{children}</>;
   },
   useAIChatBase: () => ({
     id: 'chat-test',
     addWorkContext: vi.fn(),
-    currentModel: {
-      supportWebSearch: providerState.modelSupportsWebSearch,
-    },
     focusComposer: vi.fn(),
   }),
 }));
@@ -51,29 +54,10 @@ vi.mock('../client/dev/demo/container-showcase.js', () => ({
   ContainerShowcase: ({
     windowProps,
   }: {
-    windowProps: {
-      composerActions?: Array<{
-        key: string;
-        label: string;
-        active?: boolean;
-        disabled?: boolean;
-        onClick?: () => void;
-      }>;
-    };
+    windowProps: NonNullable<typeof shown.windowProps>;
   }) => {
-    const action = windowProps.composerActions?.find(
-      (candidate) => candidate.key === 'web-search',
-    );
-    return (
-      <button
-        type='button'
-        aria-pressed={action?.active}
-        disabled={action?.disabled}
-        onClick={action?.onClick}
-      >
-        {action?.label}
-      </button>
-    );
+    shown.windowProps = windowProps;
+    return null;
   },
 }));
 
@@ -108,32 +92,17 @@ vi.mock('../registry/nocobase-ai/shared/ui/table.js', () => {
 import { AIChatPage } from '../client/dev/demo/index.js';
 
 describe('AIChatPage', () => {
-  it('passes the web search action state to AIChatProvider', () => {
-    providerState.values.length = 0;
-    providerState.modelSupportsWebSearch = true;
+  it("uses the composer's own web search toggle, beside attachments", () => {
+    shown.providerWebSearch.length = 0;
     render(<AIChatPage />);
 
-    const webSearchAction = screen.getByRole('button', {
-      name: 'Web search',
+    expect(shown.windowProps).toMatchObject({
+      enableAttachments: true,
+      enableWebSearch: true,
     });
-    expect(webSearchAction).toHaveAttribute('aria-pressed', 'false');
-    expect(providerState.values.at(-1)).toBe(false);
-
-    fireEvent.click(webSearchAction);
-
-    expect(webSearchAction).toHaveAttribute('aria-pressed', 'true');
-    expect(providerState.values.at(-1)).toBe(true);
-  });
-
-  it('disables web search for an unsupported model', () => {
-    providerState.values.length = 0;
-    providerState.modelSupportsWebSearch = false;
-    render(<AIChatPage />);
-
-    const webSearchAction = screen.getByRole('button', {
-      name: 'Current model does not support web search',
-    });
-    expect(webSearchAction).toBeDisabled();
-    expect(providerState.values.at(-1)).toBe(false);
+    expect(
+      shown.windowProps?.composerActions?.map((action) => action.key),
+    ).toEqual(['pick-page-element']);
+    expect(shown.providerWebSearch).toEqual([undefined]);
   });
 });

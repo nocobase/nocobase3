@@ -110,6 +110,16 @@ export class AuthenticationProvider<
     const logger = container.has(loggingToken)
       ? container.resolve(loggingToken).getLogger('auth')
       : undefined;
+    const publicPaths = this.app.config.publicPaths?.();
+    if (
+      publicPaths &&
+      !publicPaths.includes('auth.emailAndPassword.disableSignUp')
+    ) {
+      logger?.warn(
+        {},
+        'The auth section is not declared with defineAuthConfig, so its settings are not validated and the browser cannot tell whether sign-up is open. Declare it with defineAuthConfig from @nocobase/app-plugin-authentication/server in server/config/auth.ts.',
+      );
+    }
     const auth = createAuthentication({
       connection: database?.connection(),
       secondaryStorage: createAuthStorage(caching),

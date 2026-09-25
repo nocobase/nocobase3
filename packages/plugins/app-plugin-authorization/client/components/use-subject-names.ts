@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type {
   AuthorizationSubject,
-  SubjectSettings,
   SubjectTypeOption,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
@@ -11,7 +10,7 @@ export function subjectKey(subject: AuthorizationSubject): string {
 }
 
 export function useSubjectNames(
-  settings: SubjectSettings,
+  settings: string,
   types: readonly SubjectTypeOption[],
   subjects: readonly AuthorizationSubject[],
 ): Readonly<Record<string, string>> {
@@ -34,7 +33,7 @@ export function useSubjectNames(
   useEffect(() => {
     let active = true;
     const [settings, types, subjects] = JSON.parse(identity) as [
-      SubjectSettings,
+      string,
       Pick<SubjectTypeOption, 'value' | 'selection'>[],
       AuthorizationSubject[],
     ];

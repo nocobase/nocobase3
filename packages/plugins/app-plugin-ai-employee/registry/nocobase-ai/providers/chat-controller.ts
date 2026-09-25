@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { AIEmployeeTaskTrigger } from './types.js';
 
 export type AIChatControllerSnapshot = {
@@ -62,12 +62,11 @@ export function createAIChatController(): AIChatController {
   };
 }
 
-export function useAIChatController() {
-  const controllerRef = useRef<AIChatController | null>(null);
-  if (!controllerRef.current) {
-    controllerRef.current = createAIChatController();
-  }
-  return controllerRef.current;
+export function useAIChatController(): AIChatController {
+  // A lazy state initializer rather than a ref, so the controller is created
+  // once without the render writing to a ref.
+  const [controller] = useState(createAIChatController);
+  return controller;
 }
 
 const visibleControllerSnapshot: AIChatControllerSnapshot = { open: true };

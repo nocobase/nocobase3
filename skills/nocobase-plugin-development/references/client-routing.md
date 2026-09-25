@@ -32,6 +32,7 @@ const routes: readonly AppClientRouteContribution[] = [
       auth: 'required',
       navigation: { title: 'navigation.orders' },
       breadcrumb: { title: 'breadcrumbs.orders' },
+      authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
       componentLoader: () => import('./pages/orders-page.js'),
     },
   ]),
@@ -49,6 +50,7 @@ const routes: readonly AppClientRouteContribution[] = [
       name: 'orders',
       path: '/orders',
       navigation: { title: 'navigation.ordersDev' },
+      authz: 'skip',
       componentLoader: () => import('./pages/orders-dev-page.js'),
     },
   ]),
@@ -65,7 +67,7 @@ Each page module must default-export a React component. Declaration modules rema
 
 App Routes accept `auth: 'required' | 'guest' | 'optional'`. Omitted authentication defaults to `required`; child Routes inherit their ancestor's value and cannot change it. Reserved authentication paths such as `/login`, `/register`, `/forgot-password`, and `/reset-password` must use `guest`.
 
-Settings and Dev Routes require an authenticated user. A Settings page containing sensitive administration UI should also declare a stable `authz` resource and action. If access is denied, the page is omitted from available navigation and its loader is not run.
+Settings and Dev Routes require an authenticated user. Every page route on every surface declares `authz`, a stable `{ resource: { type, id }, action }` or `'skip'`; registration rejects a page without it, and nothing is inferred from the route name. A Settings page checks the settings item its server registers with `authz.settings.add`. If access is denied, the page is omitted from available navigation and its loader is not run.
 
 Client `auth` and `authz` control navigation and page loading only. Every Server Route called by the page must install and test its own authentication and authorization. Similar Client and Server route names create no automatic connection.
 
@@ -89,12 +91,14 @@ export default defineAppRoutes([
         name: 'orders',
         path: '/orders',
         navigation: { title: 'navigation.orders' },
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
         componentLoader: () => import('./pages/orders.js'),
         children: [
           {
             name: 'order-detail',
             path: ':orderId',
             breadcrumb: { title: 'breadcrumbs.orderDetail' },
+            authz: 'skip',
             componentLoader: () => import('./pages/order-detail.js'),
           },
         ],
@@ -133,6 +137,10 @@ defineSettingsRoutes([
         name: 'audit-log',
         path: '/audit-log',
         navigation: { title: 'navigation.auditLog' },
+        authz: {
+          resource: { type: 'settings', id: 'audit-log' },
+          action: 'read',
+        },
         componentLoader: () => import('./pages/audit-log-settings.js'),
       },
     ],

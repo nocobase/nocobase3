@@ -173,7 +173,11 @@ async function router(actorId?: string) {
   container.instance(userManagementServiceToken, management);
   container.instance(userRoleScopeRegistryToken, roles);
   if (!registered) {
-    await new UsersProvider({ container } as AppPluginApplication).boot();
+    // As the Hub template configures it: the Hub owns role assignment.
+    await new UsersProvider({
+      container,
+      config: { get: () => ({ permissionSets: false }) },
+    } as unknown as AppPluginApplication).boot();
     registered = true;
   }
   return apiRoutes.createRouter({ container } as AppPluginApplication);

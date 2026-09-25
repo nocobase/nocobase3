@@ -30,7 +30,7 @@ export function CustomerAssistant() {
     <NocoBaseAIRootProvider>
       <AIChatProvider id='customer-assistant'>
         <ChatInline>
-          <AIChatWindow enableAttachments />
+          <AIChatWindow enableAttachments enableWebSearch />
         </ChatInline>
       </AIChatProvider>
     </NocoBaseAIRootProvider>

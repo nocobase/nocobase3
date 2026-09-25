@@ -1,17 +1,16 @@
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   isFrontendToolInvokeResult,
 } from '../../agent/context/ai-employee/common/frontend-tool-contracts.js';
-import type { AgentFrontendToolService } from '../../agent/contracts.js';
+import {
+  findCurrentFrontendTool,
+  readFrontendToolResult,
+} from '../../agent/context/ai-employee/frontend-tools.js';
+import { repositoryFactoryToken } from '../../tokens.js';
 
-type FrontendToolContext = AgentContext<
-  {},
-  { frontendTools: AgentFrontendToolService }
->;
-
-export default defineTools<FrontendToolContext>({
+export default defineTools({
   scope: 'GENERAL',
   execution: 'frontend',
   defaultPermission: 'ALLOW',
@@ -34,14 +33,19 @@ export default defineTools<FrontendToolContext>({
         .describe('Arguments that match the loaded frontend tool schema.'),
     }),
   },
+  dependencies: { repositories: repositoryFactoryToken },
   invoke: async (ctx, args, runtime) => {
-    const tool = await ctx.services.frontendTools.find(args.toolId);
+    const tool = await findCurrentFrontendTool(
+      ctx.deps.repositories.aiConversations,
+      args.toolId,
+      ctx.state,
+    );
     if (!tool)
       return {
         status: 'error',
         content: 'Frontend tool is unavailable in the current conversation.',
       };
-    const result = ctx.services.frontendTools.readResult(runtime.toolCallId);
+    const result = readFrontendToolResult(ctx.state, runtime.toolCallId);
     if (!result?.provided)
       return {
         status: 'error',

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { AIEmployeeAgentContextProvider } from '../server/agent/context/ai-employee/context.js';
 
-const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
+const createFixture = (
+  promptMode: 'default' | 'raw' | 'none' = 'default',
+  state: Record<string, unknown> = {},
+) => {
   const provider = {
     parseResponseMetadata: vi.fn((output) => [output.id, output.metadata]),
   } as unknown as LLMProvider;
@@ -14,7 +17,21 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       model: 'model-1',
     })),
   };
-  const toolRuntimeContext = { actor, ai: {} };
+  const agentContext = {
+    actor,
+    ai: {},
+    state: { sessionId: 'session-1', ...state },
+    runtime: { logger: { warn: vi.fn(), error: vi.fn() } },
+  };
+  const employeeModel = {
+    llmService: 'employee-service',
+    model: 'employee-model',
+  };
+  // The provider asks the manager that owns the employee's model policy.
+  const resolveModel = vi.fn(
+    async (_employee: unknown, model?: unknown) => model ?? employeeModel,
+  );
+  const aiEmployeesManager = { resolveModel };
   const options = {
     employee: {
       username: 'dara',
@@ -22,9 +39,8 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       about: 'Employee prompt',
       chatSettings: { systemPromptMode: promptMode },
     },
-    sessionId: 'session-1',
-    actor,
-    toolRuntimeContext,
+    agentContext,
+    aiEmployeesManager,
     llmProviderManager,
     toolsManager: {},
     skillsManager: {},
@@ -40,7 +56,6 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       hasAccessibleKnowledgeBase: vi.fn(async () => false),
     },
     builtInManager: { setupBuiltInInfo: vi.fn() },
-    execution: {},
   } as any;
   const context = new AIEmployeeAgentContextProvider(options);
   const toolContext = {
@@ -57,7 +72,14 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       .spyOn(context, 'getActivatedSkillToolNames')
       .mockResolvedValue(new Set()),
   };
-  return { provider, context, toolContext, llmProviderManager };
+  return {
+    provider,
+    context,
+    toolContext,
+    llmProviderManager,
+    resolveModel,
+    employeeModel,
+  };
 };
 
 describe('AIEmployeeAgentContextProvider', () => {
@@ -68,18 +90,40 @@ describe('AIEmployeeAgentContextProvider', () => {
     expect(await none.context.getSystemPrompt([])).toBe('');
   });
 
-  it('resolves the model selected by each request', async () => {
-    const { context, llmProviderManager } = createFixture();
-    const first = { llmService: 'service-1', model: 'model-1' };
-    const second = { llmService: 'service-2', model: 'model-2' };
+  it('resolves the model the turn asked for through the employee policy', async () => {
+    const asked = { llmService: 'service-1', model: 'model-1' };
+    const { context, llmProviderManager, resolveModel } = createFixture(
+      'default',
+      { model: asked },
+    );
 
-    await context.resolveLLM({ model: first });
-    await context.resolveLLM({ model: second });
+    // The model is the agent's, not a request's: every call resolves the one
+    // the turn asked for, through the employee's policy.
+    await context.resolveLLM();
+    await context.resolveLLM();
 
-    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(1, first);
-    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(2, second);
-    await expect(context.resolveLLM({})).rejects.toThrow(
-      'AI employee model is required',
+    expect(resolveModel).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ username: 'dara' }),
+      asked,
+    );
+    expect(resolveModel).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ username: 'dara' }),
+      asked,
+    );
+    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(1, asked);
+    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(2, asked);
+  });
+
+  it('falls back to the employee model when the turn selected none', async () => {
+    const { context, llmProviderManager, employeeModel } = createFixture();
+
+    await expect(context.resolveLLM()).resolves.toMatchObject({
+      llmService: 'test-service',
+    });
+    expect(llmProviderManager.getLLMService).toHaveBeenCalledWith(
+      employeeModel,
     );
   });
 

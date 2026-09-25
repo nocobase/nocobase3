@@ -335,12 +335,14 @@ describe('@nocobase/app-plugin-users resource authorization', () => {
     const container = new ServiceContainer();
     container.instance(authorizationToken, {
       resourceTypes: { add },
-      subjects: { define: vi.fn() },
+      subjects: { add: vi.fn() },
     } as unknown as Authorization);
     const provider = new UsersProvider({
       appName: 'test',
       publicBasePath: '',
-      config: {} as AppPluginApplication['config'],
+      config: {
+        get: () => ({ permissionSets: false }),
+      } as unknown as AppPluginApplication['config'],
       paths: {} as AppPluginApplication['paths'],
       router: {} as AppPluginApplication['router'],
       container,

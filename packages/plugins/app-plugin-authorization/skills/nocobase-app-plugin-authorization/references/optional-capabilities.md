@@ -1,6 +1,6 @@
 # Optional authorization capabilities
 
-Permission sets, page authorization, business resource declarations and database policy enforcement belong to the main authorization plugin. Default access, sharing rules and restriction rules are separate optional plugins.
+Permission sets, page authorization, composite declarations, workspace placement and database policy enforcement belong to the main authorization plugin. Default access, sharing rules and restriction rules are separate optional plugins.
 
 | Requirement                                                       | Installed Skill                               |
 | ----------------------------------------------------------------- | --------------------------------------------- |

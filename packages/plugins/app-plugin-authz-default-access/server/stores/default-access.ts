@@ -1,7 +1,13 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/management';
-import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
-import type { DefaultAccessStore } from '@nocobase/authorization/default-access';
+import type { RuleAction } from '@nocobase/authorization/core';
+import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/extension';
+import type {
+  DefaultAccessRule,
+  DefaultAccessStore,
+} from '@nocobase/authorization/default-access';
+
+const RULES = 'authorizationDefaultAccessRules';
+const COLUMNS = ['key', 'resourceType', 'resourceId', 'actions'] as const;
 
 export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseConnection> {
   constructor(private readonly connection: DatabaseConnectionSource) {}
@@ -14,82 +20,75 @@ export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseCo
 
   async list(): Promise<readonly DefaultAccessRule[]> {
     const rows = await this.connection()
-      .query.selectFrom('authorizationDefaultAccessRules')
-      .select(['id', 'resourceType', 'resourceId', 'actions'])
-      .orderBy('resourceType', 'asc')
-      .orderBy('resourceId', 'asc')
+      .query.selectFrom(RULES)
+      .select([...COLUMNS])
+      .orderBy('key', 'asc')
       .execute();
-    return rows.map((row) => this.fromRow(row));
+    return rows.map((row) => fromRow(row));
   }
 
-  async get(
-    resourceType: string,
-    resourceId: string,
-  ): Promise<DefaultAccessRule | undefined> {
+  async get(key: string): Promise<DefaultAccessRule | undefined> {
     const row = await this.connection()
-      .query.selectFrom('authorizationDefaultAccessRules')
-      .select(['id', 'resourceType', 'resourceId', 'actions'])
-      .where('resourceType', '=', resourceType)
-      .where('resourceId', '=', resourceId)
+      .query.selectFrom(RULES)
+      .select([...COLUMNS])
+      .where('key', '=', key)
       .executeTakeFirst();
-    if (!row) return undefined;
-    return this.fromRow(row);
+    return row && fromRow(row);
   }
 
-  async set(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
+  async create(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
     const now = new Date();
-    await this.connection().transaction(async (connection): Promise<void> => {
-      const existing = await connection.query
-        .selectFrom('authorizationDefaultAccessRules')
-        .select('id')
-        .where('resourceType', '=', rule.resource.type)
-        .where('resourceId', '=', rule.resource.id)
-        .executeTakeFirst();
-      const id = existing ? String(existing.id) : crypto.randomUUID();
-      if (existing)
-        await connection.query
-          .updateTable('authorizationDefaultAccessRules')
-          .set({
-            actions: JSON.stringify(rule.actions),
-            updatedAt: now,
-          })
-          .where('resourceType', '=', rule.resource.type)
-          .where('resourceId', '=', rule.resource.id)
-          .execute();
-      else
-        await connection.query
-          .insertInto('authorizationDefaultAccessRules')
-          .values({
-            id,
-            resourceType: rule.resource.type,
-            resourceId: rule.resource.id,
-            actions: JSON.stringify(rule.actions),
-            createdAt: now,
-            updatedAt: now,
-          })
-          .execute();
-    });
+    await this.connection()
+      .query.insertInto(RULES)
+      .values({
+        id: crypto.randomUUID(),
+        ...toValues(rule),
+        createdAt: now,
+        updatedAt: now,
+      })
+      .execute();
     return rule;
   }
 
-  async delete(resourceType: string, resourceId: string): Promise<void> {
+  async update(
+    key: string,
+    rule: DefaultAccessRule,
+  ): Promise<DefaultAccessRule> {
     await this.connection()
-      .query.deleteFrom('authorizationDefaultAccessRules')
-      .where('resourceType', '=', resourceType)
-      .where('resourceId', '=', resourceId)
+      .query.updateTable(RULES)
+      .set({ ...toValues(rule), updatedAt: new Date() })
+      .where('key', '=', key)
       .execute();
+    return rule;
   }
 
-  private fromRow(row: object): DefaultAccessRule {
-    const value = row as Record<string, unknown>;
-    return {
-      resource: {
-        type: String(value.resourceType),
-        id: String(value.resourceId),
-      },
-      actions: parseJson(value.actions, []),
-    };
+  async delete(key: string): Promise<void> {
+    await this.connection()
+      .query.deleteFrom(RULES)
+      .where('key', '=', key)
+      .execute();
   }
+}
+
+function toValues(rule: DefaultAccessRule): Record<string, unknown> {
+  return {
+    key: rule.key,
+    resourceType: rule.resource.type,
+    resourceId: rule.resource.id,
+    actions: JSON.stringify(rule.actions),
+  };
+}
+
+function fromRow(row: object): DefaultAccessRule {
+  const value = row as Record<string, unknown>;
+  return {
+    key: String(value.key),
+    resource: {
+      type: String(value.resourceType),
+      id: String(value.resourceId),
+    },
+    actions: parseJson<readonly RuleAction[]>(value.actions, []),
+  };
 }
 
 function parseJson<T>(value: unknown, fallback: T): T {

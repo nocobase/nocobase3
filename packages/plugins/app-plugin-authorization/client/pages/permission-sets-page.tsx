@@ -10,7 +10,7 @@ import {
 
 export default function PermissionSetsPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/permission-sets/options');
+  const page = useAuthorizationPageData('permission-sets');
   const options = useResourceOptions(page.options);
   return (
     <PermissionsPage

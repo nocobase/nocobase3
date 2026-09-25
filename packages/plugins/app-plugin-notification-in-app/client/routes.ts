@@ -9,6 +9,7 @@ const routes: AppClientDevRoutesContribution = defineDevRoutes([
     name: 'notification-in-app',
     path: '/notification-in-app',
     navigation: { title: 'nav.devInbox', icon: Bell },
+    authz: 'skip',
     componentLoader: () => import('./dev/notification-in-app-page.js'),
   },
 ]);

@@ -106,11 +106,13 @@ describe('app runtime', () => {
         {
           name: 'home',
           path: '/',
+          authz: { resource: { type: 'page', id: 'home' }, action: 'access' },
           componentLoader: async () => ({ default: Page }),
         },
         {
           name: 'about',
           path: '/about',
+          authz: { resource: { type: 'page', id: 'about' }, action: 'access' },
           componentLoader: async () => ({ default: Page }),
         },
       ]),

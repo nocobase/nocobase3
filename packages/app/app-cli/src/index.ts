@@ -6,6 +6,7 @@ import Info from './commands/info.js';
 import ConfigCheck from './commands/config-check.js';
 import ConfigInit from './commands/config-init.js';
 import ConfigSet from './commands/config-set.js';
+import ConfigEnv from './commands/config-env.js';
 import DbApply from './commands/db-apply.js';
 import DbReset from './commands/db-reset.js';
 import DbRepair from './commands/db-repair.js';
@@ -31,6 +32,7 @@ export function createAppCommands(options: AppCommandsOptions): AppCliCommands {
     'config:init': ConfigInit,
     'config:check': ConfigCheck,
     'config:set': ConfigSet,
+    'config:env': ConfigEnv,
     'db:apply': DbApply,
     'db:reset': DbReset,
     'db:repair': DbRepair,

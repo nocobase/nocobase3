@@ -1,3 +1,5 @@
+import type { ServiceToken } from '@nocobase/service-provider';
+
 export type ToolsScope = 'SPECIFIED' | 'GENERAL' | 'CUSTOM';
 export type ToolsPermission = 'ASK' | 'ALLOW';
 export type ToolsFrom = 'loader' | 'workflow' | 'mcp';
@@ -5,6 +7,20 @@ export type ToolsFrom = 'loader' | 'workflow' | 'mcp';
 export type ToolsRuntime = {
   toolCallId: string;
   writer: (chunk: any) => void;
+};
+
+/**
+ * What a tool declares it needs, as tokens of the application's own container.
+ * Nothing new registers them: a tool names a token the App already binds, and
+ * the resolved value arrives on `AgentContext.deps` when the tool runs.
+ */
+export type ToolsDependencies = Record<string, ServiceToken<any>>;
+
+export type ResolvedService<TToken> =
+  TToken extends ServiceToken<infer TService> ? TService : never;
+
+export type ResolvedDeps<TTokens extends ToolsDependencies> = {
+  [K in keyof TTokens]: ResolvedService<TTokens[K]>;
 };
 
 export type ToolsEntity<TContext = unknown> = {
@@ -21,6 +37,8 @@ export type ToolsEntity<TContext = unknown> = {
   i18n?: { namespace: string };
   introduction?: { title: string; about?: string };
   definition: { name: string; description: string; schema?: any };
+  /** Container tokens this tool declared. Resolved per execution into `ctx.deps`. */
+  dependencies?: ToolsDependencies;
   invoke: (ctx: TContext, args: any, runtime: ToolsRuntime) => Promise<any>;
 };
 

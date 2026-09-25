@@ -1,104 +1,77 @@
 import type { AuthorizationRouteHandler } from '@nocobase/authorization/core';
+import type {
+  SharingRule,
+  SharingRulesApi,
+} from '@nocobase/authorization/sharing-rules';
 import {
   createRouteHandler,
+  createRuleSupportRoutes,
   createSettingsRouter,
+  parse,
   requireSettings,
-} from '@nocobase/app-plugin-authorization/server/management';
-import {
-  object,
-  ruleBase,
-  scope,
-  string,
-  strings,
-} from '@nocobase/app-plugin-authorization/server/management';
-import type { SharingRule } from '@nocobase/authorization/sharing-rules';
-import type { SharingRulesApi } from '@nocobase/authorization/sharing-rules';
+  validateDataScopeRule,
+  type AuthorizationExtensionHost,
+} from '@nocobase/app-plugin-authorization/server/extension';
 
-/** Where the plugin registers its routes, and the prefix every path below carries. */
-export const SHARING_RULES_ROUTE_PATH = '/sharing-rules';
+/** The rule name, route prefix and settings item suffix. */
+export const SHARING_RULES_RULE = 'sharing-rules';
+export const SHARING_RULES_SETTINGS: string = `authorization.${SHARING_RULES_RULE}`;
+const PATH = `/${SHARING_RULES_RULE}`;
 
 type SharingRulesAdministrationApi = Omit<SharingRulesApi, 'withTransaction'>;
 
+/** Every `/sharing-rules` route, gated by `settings:authorization.sharing-rules`. */
 export function createSharingRulesHandler(
+  authz: AuthorizationExtensionHost,
   api: SharingRulesAdministrationApi,
-  validate: (rule: SharingRule) => void = () => {},
 ): AuthorizationRouteHandler {
-  const checked = (value: unknown): SharingRule => {
-    const rule = parseSharingRule(value);
-    validate(rule);
-    return rule;
-  };
   const routes = createSettingsRouter();
-
-  routes.get(SHARING_RULES_ROUTE_PATH, async (context) => {
-    await requireSettings(context.env.authorization, 'sharing-rules', 'read');
+  const checked = (value: unknown): SharingRule => {
+    const rule = parse.rule(value, { withSubjects: true });
+    validateDataScopeRule(authz, rule);
+    return { ...rule, subjects: rule.subjects ?? [] };
+  };
+  routes.route('/', createRuleSupportRoutes(authz, SHARING_RULES_RULE));
+  routes.get(PATH, async (context) => {
+    await requireSettings(
+      context.env.authorization,
+      SHARING_RULES_SETTINGS,
+      'read',
+    );
     return context.json({ data: await api.list() });
   });
-
-  routes.post(SHARING_RULES_ROUTE_PATH, async (context) => {
-    await requireSettings(context.env.authorization, 'sharing-rules', 'create');
+  routes.post(PATH, async (context) => {
+    await requireSettings(
+      context.env.authorization,
+      SHARING_RULES_SETTINGS,
+      'create',
+    );
     return context.json(
       { data: await api.create(checked(await context.req.json())) },
       201,
     );
   });
-
-  routes.put(`${SHARING_RULES_ROUTE_PATH}/:key`, async (context) => {
-    await requireSettings(context.env.authorization, 'sharing-rules', 'update');
+  routes.put(`${PATH}/:key`, async (context) => {
+    await requireSettings(
+      context.env.authorization,
+      SHARING_RULES_SETTINGS,
+      'update',
+    );
+    const key = context.req.param('key');
+    if (!(await api.get(key)))
+      return context.json({ code: 'RULE_NOT_FOUND' }, 404);
     return context.json({
-      data: await api.update(
-        context.req.param('key'),
-        checked(await context.req.json()),
-      ),
+      data: await api.update(key, checked(await context.req.json())),
     });
   });
-
-  routes.delete(`${SHARING_RULES_ROUTE_PATH}/:key`, async (context) => {
-    await requireSettings(context.env.authorization, 'sharing-rules', 'delete');
+  routes.delete(`${PATH}/:key`, async (context) => {
+    await requireSettings(
+      context.env.authorization,
+      SHARING_RULES_SETTINGS,
+      'delete',
+    );
     await api.delete(context.req.param('key'));
     return context.body(null, 204);
   });
-
   return createRouteHandler(routes);
-}
-
-function parseSharingRule(value: unknown): SharingRule {
-  const input = object(value, 'sharing rule');
-  return { ...ruleBase(input), actions: sharingActions(input.actions) };
-}
-
-function sharingActions(value: unknown): SharingRule['actions'] {
-  if (!Array.isArray(value)) throw new TypeError('actions must be an array');
-  return value.map((entry) => {
-    const item = object(entry, 'action');
-    const selection = object(item.selection, 'selection');
-    if (selection.type !== 'records' && selection.type !== 'policy') {
-      throw new TypeError('selection type must be records or policy');
-    }
-    if (selection.type === 'records') {
-      return {
-        action: string(item.action, 'action'),
-        ...(item.scopeKey === undefined
-          ? {}
-          : { scopeKey: string(item.scopeKey, 'scopeKey') }),
-        selection: {
-          type: 'records' as const,
-          ids: strings(selection.ids, 'ids'),
-        },
-      };
-    }
-    const policy = scope(selection.policy);
-    if (policy.type === 'ids') {
-      throw new TypeError(
-        'Sharing policy cannot use specific IDs; use records selection instead',
-      );
-    }
-    return {
-      action: string(item.action, 'action'),
-      ...(item.scopeKey === undefined
-        ? {}
-        : { scopeKey: string(item.scopeKey, 'scopeKey') }),
-      selection: { type: 'policy' as const, policy },
-    };
-  });
 }

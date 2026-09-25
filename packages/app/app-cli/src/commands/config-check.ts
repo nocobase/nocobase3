@@ -76,6 +76,7 @@ export default class AppConfigCheck extends AppCommand {
         ...(result.configFile ? { configFile: result.configFile } : {}),
         findings: result.findings,
         connections: result.connections,
+        public: result.public,
       });
     } else {
       this.report(result);
@@ -96,6 +97,13 @@ export default class AppConfigCheck extends AppCommand {
         `  ${connection.status === 'ok' ? '✓' : '✗'} database "${connection.name}" (${connection.dialect})`,
       );
     }
+    const published = flattenPublic(result.public);
+    if (published.length > 0) {
+      this.log('Published to the browser (config.public):');
+      for (const [path, value] of published) {
+        this.log(`  ${path} = ${JSON.stringify(value)}`);
+      }
+    }
     if (result.findings.length === 0) {
       this.log('No problems found.');
       return;
@@ -107,4 +115,16 @@ export default class AppConfigCheck extends AppCommand {
       if (finding.fix) this.log(`    ${finding.fix}`);
     }
   }
+}
+
+function flattenPublic(
+  value: Readonly<Record<string, unknown>>,
+  prefix = '',
+): [string, unknown][] {
+  return Object.entries(value).flatMap(([key, item]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return typeof item === 'object' && item !== null && !Array.isArray(item)
+      ? flattenPublic(item as Record<string, unknown>, path)
+      : [[path, item] as [string, unknown]];
+  });
 }

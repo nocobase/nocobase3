@@ -10,7 +10,7 @@ import {
 } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
-import { updateLLMService } from '../client/llm-service-service.js';
+import { updateLLMServiceEnabledModels } from '../client/llm-service-service.js';
 import LLMServicePage from '../client/pages/llm-service-page.js';
 
 const service = {
@@ -40,11 +40,11 @@ vi.mock('../client/llm-service-service.js', async (importOriginal) => ({
       value: `provider-${index}`,
       label: `Provider model ${index}`,
     })),
-  updateLLMService: vi.fn(),
+  updateLLMServiceEnabledModels: vi.fn(),
 }));
 
 beforeEach(() => {
-  vi.mocked(updateLLMService).mockReset();
+  vi.mocked(updateLLMServiceEnabledModels).mockReset();
 });
 
 async function openEditor() {
@@ -90,7 +90,7 @@ it('uses the shared portal, accessible title and buttons, and restores focus aft
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
   );
   await waitFor(() => expect(trigger).toHaveFocus());
-  expect(updateLLMService).not.toHaveBeenCalled();
+  expect(updateLLMServiceEnabledModels).not.toHaveBeenCalled();
 });
 
 it('dismisses on backdrop interaction without saving', async () => {
@@ -103,7 +103,7 @@ it('dismisses on backdrop interaction without saving', async () => {
   await waitFor(() =>
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
   );
-  expect(updateLLMService).not.toHaveBeenCalled();
+  expect(updateLLMServiceEnabledModels).not.toHaveBeenCalled();
 });
 
 it.each(['Cancel', 'Close'])(
@@ -117,7 +117,7 @@ it.each(['Cancel', 'Close'])(
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
-    expect(updateLLMService).not.toHaveBeenCalled();
+    expect(updateLLMServiceEnabledModels).not.toHaveBeenCalled();
     fireEvent.click(trigger);
     expect(await screen.findByLabelText('Model ID')).toHaveValue('model-1');
   },
@@ -202,7 +202,9 @@ it('filters by model ID, shows no matches, and restores options when search is c
 });
 
 it('keeps edits visible on save failure and closes after a successful retry', async () => {
-  vi.mocked(updateLLMService).mockRejectedValueOnce(new Error('Save failed'));
+  vi.mocked(updateLLMServiceEnabledModels).mockRejectedValueOnce(
+    new Error('Save failed'),
+  );
   await openEditor();
   fireEvent.change(screen.getByLabelText('Model ID'), {
     target: { value: 'model-2' },
@@ -214,7 +216,7 @@ it('keeps edits visible on save failure and closes after a successful retry', as
     mode: 'custom' as const,
     models: [{ value: 'model-2', label: 'Model one' }],
   };
-  vi.mocked(updateLLMService).mockResolvedValueOnce({
+  vi.mocked(updateLLMServiceEnabledModels).mockResolvedValueOnce({
     ...service,
     enabledModels,
   });
@@ -222,9 +224,9 @@ it('keeps edits visible on save failure and closes after a successful retry', as
   await waitFor(() =>
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
   );
-  expect(updateLLMService).toHaveBeenLastCalledWith(
+  expect(updateLLMServiceEnabledModels).toHaveBeenLastCalledWith(
     service.name,
-    { enabledModels },
+    enabledModels,
     api,
   );
 });

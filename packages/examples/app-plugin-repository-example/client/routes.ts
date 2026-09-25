@@ -16,6 +16,7 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'sortTitle' },
           breadcrumb: { title: 'sortTitle' },
+          authz: { resource: { type: 'page', id: 'sort' }, action: 'access' },
           componentLoader: () => import('./pages/sort-page.js'),
         },
         {
@@ -24,6 +25,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'selectCombineTitle' },
           breadcrumb: { title: 'selectCombineTitle' },
+          authz: {
+            resource: { type: 'page', id: 'select-combine' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/select-combine-page.js'),
         },
         {
@@ -32,6 +37,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'relationMutationsTitle' },
           breadcrumb: { title: 'relationMutationsTitle' },
+          authz: {
+            resource: { type: 'page', id: 'relation-mutations' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/relation-mutations-page.js'),
         },
         {
@@ -40,6 +49,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'findManyTitle' },
           breadcrumb: { title: 'findManyTitle' },
+          authz: {
+            resource: { type: 'page', id: 'find-many' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/find-many-page.js'),
         },
         {
@@ -48,6 +61,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'aggregateTitle' },
           breadcrumb: { title: 'aggregateTitle' },
+          authz: {
+            resource: { type: 'page', id: 'aggregate' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/aggregate-page.js'),
         },
         {
@@ -56,6 +73,7 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'atomicTitle' },
           breadcrumb: { title: 'atomicTitle' },
+          authz: { resource: { type: 'page', id: 'atomic' }, action: 'access' },
           componentLoader: () => import('./pages/atomic-page.js'),
         },
       ],
@@ -71,6 +89,7 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'customers' },
           breadcrumb: { title: 'customers' },
+          authz: { resource: { type: 'page', id: 'crm' }, action: 'access' },
           componentLoader: () => import('./pages/crm-page.js'),
         },
         {
@@ -79,6 +98,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'contacts' },
           breadcrumb: { title: 'contacts' },
+          authz: {
+            resource: { type: 'page', id: 'contacts' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/contacts-page.js'),
         },
       ],
@@ -94,6 +117,7 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'orders' },
           breadcrumb: { title: 'orders' },
+          authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
           componentLoader: () => import('./pages/orders-page.js'),
         },
         {
@@ -102,6 +126,7 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'items' },
           breadcrumb: { title: 'items' },
+          authz: { resource: { type: 'page', id: 'items' }, action: 'access' },
           componentLoader: () => import('./pages/items-page.js'),
         },
         {
@@ -110,6 +135,10 @@ const routes: readonly AppClientRouteContribution[] = [
           auth: 'required',
           navigation: { title: 'products' },
           breadcrumb: { title: 'products' },
+          authz: {
+            resource: { type: 'page', id: 'products' },
+            action: 'access',
+          },
           componentLoader: () => import('./pages/products-page.js'),
         },
       ],

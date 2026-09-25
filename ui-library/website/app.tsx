@@ -1,14 +1,21 @@
 import {
+  AppWindow,
+  Blocks,
   Check,
   Copy,
+  Heading,
+  Layers,
+  LayoutTemplate,
   Monitor,
   Moon,
+  PanelRight,
   RefreshCw,
   Search,
   ShieldCheck,
   Smartphone,
   Sun,
   Tablet,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   createContext,
@@ -44,6 +51,9 @@ import {
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
 import { AuthenticationUiDemo } from './demo/auth/auth-ui';
+import { PageContainerDemo } from './demo/components/page-container';
+import { PageHeaderDemo } from './demo/components/page-header';
+import { RouteOverlaysDemo } from './demo/components/route-overlays';
 
 interface RegistryItem {
   name: string;
@@ -65,6 +75,35 @@ const authUiItem: RegistryItem = {
     iframeHeight: 720,
   },
   type: 'registry:block',
+};
+
+interface ItemPreview {
+  /** The demo route rendered in the item's preview frame. */
+  readonly path: string;
+  readonly icon: LucideIcon;
+}
+
+// Items are not discovered: each one is wired here, and routed to its demo in `AppContent`.
+const itemPreviews: Record<string, ItemPreview> = {
+  'auth-ui': { path: '/demo/auth/auth-ui/login', icon: ShieldCheck },
+  'page-container': {
+    path: '/demo/components/page-container',
+    icon: LayoutTemplate,
+  },
+  'page-header': { path: '/demo/components/page-header', icon: Heading },
+  // The three route overlays share one demo; each preview opens the route that presents its component.
+  'route-dialog': {
+    path: '/demo/components/route-overlays/new',
+    icon: AppWindow,
+  },
+  'route-drawer': {
+    path: '/demo/components/route-overlays/SO-1043',
+    icon: PanelRight,
+  },
+  'route-child-page': {
+    path: '/demo/components/route-overlays/report',
+    icon: Layers,
+  },
 };
 
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -105,8 +144,18 @@ export function App(): ReactElement {
 }
 
 function AppContent(): ReactElement {
-  if (window.location.pathname.startsWith('/demo/auth/auth-ui')) {
+  const { pathname } = window.location;
+  if (pathname.startsWith('/demo/auth/auth-ui')) {
     return <AuthenticationUiDemo />;
+  }
+  if (pathname.startsWith('/demo/components/page-container')) {
+    return <PageContainerDemo />;
+  }
+  if (pathname.startsWith('/demo/components/page-header')) {
+    return <PageHeaderDemo />;
+  }
+  if (pathname.startsWith('/demo/components/route-overlays')) {
+    return <RouteOverlaysDemo />;
   }
 
   return <RegistryDocs />;
@@ -343,6 +392,7 @@ function RegistrySidebarItem({
 }): ReactElement {
   const { setOpenMobile } = useSidebar();
   const label = item.title ?? item.name;
+  const Icon = itemPreviews[item.name]?.icon ?? Blocks;
 
   return (
     <SidebarMenuItem>
@@ -361,7 +411,7 @@ function RegistrySidebarItem({
         }
         tooltip={label}
       >
-        <ShieldCheck aria-hidden='true' />
+        <Icon aria-hidden='true' />
         <span className='group-data-[collapsible=icon]:hidden'>{label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -373,8 +423,7 @@ function RegistryPreviewSection({
 }: {
   item: RegistryItem;
 }): ReactElement {
-  const previewPath =
-    item.name === 'auth-ui' ? '/demo/auth/auth-ui/login' : undefined;
+  const previewPath = itemPreviews[item.name]?.path;
 
   return (
     <section className='scroll-mt-4' data-registry-item='true' id={item.name}>
@@ -534,6 +583,7 @@ function RegistryPreview({
             path={previewPath}
             reloadKey={refreshKey}
             theme={resolved}
+            title={`${item.title ?? item.name} preview`}
             viewport={viewport}
           />
         </CardContent>
@@ -583,12 +633,14 @@ function PreviewCanvas({
   path,
   reloadKey,
   theme,
+  title,
   viewport,
 }: {
   height: number;
   path: string;
   reloadKey: number;
   theme: ResolvedTheme;
+  title: string;
   viewport: PreviewViewport;
 }): ReactElement {
   const viewportStyle: CSSProperties =
@@ -620,7 +672,7 @@ function PreviewCanvas({
         }}
         src={`${path}?theme=${theme}&preview=${theme}-${reloadKey}`}
         style={{ ...viewportStyle, height }}
-        title='Password authentication preview'
+        title={title}
       />
     </div>
   );

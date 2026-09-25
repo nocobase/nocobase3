@@ -13,7 +13,11 @@ const seed: SeedDefinition = defineSeed({
     const initialAdmin = config.get<unknown>('users.initialAdmin');
     const credentials =
       initialAdmin === undefined
-        ? { username: 'nocobase', password: 'admin123' }
+        ? {
+            username: 'nocobase',
+            email: 'admin@nocobase.com',
+            password: 'admin123',
+          }
         : initialAdmin;
     if (
       !credentials ||
@@ -22,16 +26,25 @@ const seed: SeedDefinition = defineSeed({
     ) {
       throw new Error('users.initialAdmin must be an object.');
     }
-    const { username = 'nocobase', password } = credentials as Record<
-      string,
-      unknown
-    >;
+    const {
+      username = 'nocobase',
+      email = 'admin@nocobase.com',
+      password,
+    } = credentials as Record<string, unknown>;
     if (
       typeof username !== 'string' ||
       !/^[a-zA-Z0-9_.]{3,30}$/.test(username)
     ) {
       throw new Error(
         'users.initialAdmin.username must contain 3–30 letters, digits, underscores or dots.',
+      );
+    }
+    if (
+      typeof email !== 'string' ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      throw new Error(
+        'users.initialAdmin.email must be a valid email address.',
       );
     }
     if (typeof password !== 'string' || password.trim().length === 0) {
@@ -48,7 +61,7 @@ const seed: SeedDefinition = defineSeed({
         id: userId,
         name: 'Super Admin',
         username: username.toLowerCase(),
-        email: 'admin@nocobase.com',
+        email: email.toLowerCase(),
         emailVerified: true,
         createdAt: now,
         updatedAt: now,

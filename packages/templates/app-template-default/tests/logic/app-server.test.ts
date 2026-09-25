@@ -525,6 +525,50 @@ describe('app server', () => {
     );
   });
 
+  it('publishes whether sign-up is open, and keeps the rest of auth off the page', async () => {
+    const appRoot = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-embedded-root-'),
+    );
+    tempDirs.push(appRoot);
+    const clientDir = path.join(appRoot, 'dist', 'client');
+    mkdirSync(clientDir, { recursive: true });
+    createEmbeddedPluginFixture(appRoot);
+    writeFileSync(
+      path.join(appRoot, 'config.yml'),
+      [
+        'auth:',
+        '  secret: test-auth-secret-at-least-32-characters',
+        '  emailAndPassword:',
+        '    disableSignUp: true',
+      ].join('\n'),
+    );
+    writeFileSync(
+      path.join(clientDir, 'index.html'),
+      '<script type="module" src="/app-template-default/assets/index.js"></script>',
+    );
+
+    const app = await createEmbeddedServer(
+      createEmbeddedTestScope({
+        id: 'app-template-default',
+        basePath: '/app-template-default',
+        rootDir: appRoot,
+        clientDir,
+      }),
+    );
+
+    const html = await (await requestApp(app, 'http://localhost/')).text();
+    const payload = JSON.parse(
+      /<script id="nocobase-runtime-config" type="application\/json">(.*?)<\/script>/u.exec(
+        html,
+      )![1],
+    ) as { config: Record<string, unknown>; public: Record<string, unknown> };
+    expect(payload.public.auth).toEqual({
+      emailAndPassword: { enabled: true, disableSignUp: true },
+    });
+    expect(payload.config.auth).toBeUndefined();
+    expect(html).not.toContain('test-auth-secret-at-least-32-characters');
+  });
+
   it('reads embedded runtime config from the application root without using process.env', async () => {
     const appRoot = mkdtempSync(
       path.join(tmpdir(), 'nocobase-app-template-default-embedded-root-'),

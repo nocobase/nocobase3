@@ -12,7 +12,7 @@ import {
   listLLMProviders,
   listLLMServices,
   listProviderModels,
-  updateLLMService,
+  updateLLMServiceEnabled,
 } from '../client/llm-service-service.ts';
 
 function createClient(): {
@@ -126,7 +126,7 @@ describe('AI Employee application client transport', () => {
 
     await listLLMServices(client);
     await listLLMProviders(client);
-    await updateLLMService('deepseek/chat', { enabled: true }, client);
+    await updateLLMServiceEnabled('deepseek/chat', true, client);
     await listProviderModels('deepseek', 'chat model', client);
 
     expect(request).toHaveBeenNthCalledWith(1, {
@@ -138,10 +138,9 @@ describe('AI Employee application client transport', () => {
       method: 'GET',
     });
     expect(request).toHaveBeenNthCalledWith(3, {
-      path: 'ai/llmServices:update',
-      method: 'PUT',
-      query: { key: 'deepseek/chat' },
-      json: { enabled: true },
+      path: 'ai/llmServices:updateEnabled',
+      method: 'POST',
+      json: { name: 'deepseek/chat', enabled: true },
     });
     expect(request).toHaveBeenNthCalledWith(4, {
       path: 'ai/ai:listProviderModels',

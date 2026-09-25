@@ -14,7 +14,6 @@ import {
 import {
   createAppAuthorization,
   authorizationToken,
-  permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
 import usersPlugin, {
   userManagementServiceToken,
@@ -30,7 +29,7 @@ import { registerHubResources } from '../server/authorization.js';
 import { apiRoutes as hubApiRoutes } from '../server/routes/index.js';
 import { hubServiceToken, type HubService } from '../server/tokens.js';
 
-const HUB_ROLES = ['hub-administrator', 'hub-operator', 'hub-viewer'] as const;
+const HUB_ROLES = ['hub-administrator', 'hub-operator'] as const;
 const UsersProvider = usersPlugin.serviceProviders[0]!;
 const userApiRoutes = usersPlugin.routes[0]!;
 
@@ -332,7 +331,7 @@ describe('Hub role API permissions', () => {
     async (role) => {
       const snapshot = await authorization
         .for({ principal: { type: 'user', id: role } })
-        .permissions();
+        .snapshot();
       const container = new ServiceContainer();
       container.instance(apiClientToken, {
         request: vi.fn().mockResolvedValue({ data: snapshot }),
@@ -350,15 +349,12 @@ describe('Hub role API permissions', () => {
         container.resolve(clientToken).can(check);
       expect(
         await can({ resource: { type: 'hub.app', id: '*' }, action: 'remove' }),
-      ).toBe(role !== 'hub-viewer');
+      ).toBe(true);
       const routes = createHubRoutes().routes;
       const tabs = routes[0]!.children![0]!.children!;
       for (const tab of tabs) {
         if (!('authz' in tab) || !tab.authz || tab.authz === 'skip') continue;
-        const allowed =
-          role !== 'hub-viewer' ||
-          ['deployments', 'releases'].includes(tab.path!);
-        expect(await can(tab.authz), `${role}: ${tab.name}`).toBe(allowed);
+        expect(await can(tab.authz), `${role}: ${tab.name}`).toBe(true);
       }
       const apiKeysAuthz = routes[1]!.authz;
       if (!apiKeysAuthz || apiKeysAuthz === 'skip')
@@ -431,7 +427,7 @@ describe('Hub role API permissions', () => {
     });
 
     it('binds catalog scope to each user and ignores forged filters', async () => {
-      for (const userId of ['hub-operator', 'operator-two', 'hub-viewer']) {
+      for (const userId of ['hub-operator', 'operator-two']) {
         const app = await router(userId);
         expect(
           (
@@ -544,7 +540,6 @@ function createRoleApplication(
     },
   } as unknown as Auth);
   container.instance(authorizationToken, authorization);
-  container.instance(permissionSetsToken, authorization.permissionSets);
   container.instance(hubServiceToken, hub);
   container.instance(userManagementServiceToken, users);
   return createApplication(container);
@@ -554,7 +549,10 @@ function createApplication(container: ServiceContainer): AppPluginApplication {
   return {
     appName: 'hub',
     publicBasePath: '',
-    config: {} as AppPluginApplication['config'],
+    // As the Hub template configures it: the Hub owns role assignment.
+    config: {
+      get: () => ({ permissionSets: false }),
+    } as unknown as AppPluginApplication['config'],
     paths: {} as AppPluginApplication['paths'],
     router: {} as AppPluginApplication['router'],
     container,

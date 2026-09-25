@@ -59,20 +59,31 @@ describe('configured initial administrator', () => {
   }
 
   it.each([
-    { initialAdmin: undefined, username: 'nocobase', password: 'admin123' },
     {
-      initialAdmin: { username: 'Custom.Admin', password: 'custom-password' },
+      initialAdmin: undefined,
+      username: 'nocobase',
+      email: 'admin@nocobase.com',
+      password: 'admin123',
+    },
+    {
+      initialAdmin: {
+        username: 'Custom.Admin',
+        email: 'Owner@Example.com',
+        password: 'custom-password',
+      },
       username: 'custom.admin',
+      email: 'owner@example.com',
       password: 'custom-password',
     },
     {
       initialAdmin: { password: 'only-password' },
       username: 'nocobase',
+      email: 'admin@nocobase.com',
       password: 'only-password',
     },
   ])(
     'creates working credentials for $username',
-    async ({ initialAdmin, username, password }) => {
+    async ({ initialAdmin, username, email, password }) => {
       const database = await setup();
       await seed(database, initialAdmin);
       const connection = database.connection();
@@ -82,6 +93,7 @@ describe('configured initial administrator', () => {
         .execute();
       expect(users).toHaveLength(1);
       expect(users[0]?.username).toBe(username);
+      expect(users[0]?.email).toBe(email);
       const accounts = await connection.query
         .selectFrom('account')
         .selectAll()
@@ -101,6 +113,14 @@ describe('configured initial administrator', () => {
         }),
       );
       expect(response.status).toBe(200);
+      const emailResponse = await auth.handler(
+        new Request('http://localhost/api/auth/sign-in/email', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        }),
+      );
+      expect(emailResponse.status).toBe(200);
       await seed(database, {
         username: 'changed',
         password: 'changed-password',
@@ -121,6 +141,8 @@ describe('configured initial administrator', () => {
     { password: 123 },
     null,
     { username: 'x', password: 'secret' },
+    { email: 'not-an-email', password: 'secret' },
+    { email: 42, password: 'secret' },
   ])(
     'rejects invalid explicit config without falling back, and permits retry: %j',
     async (initialAdmin) => {

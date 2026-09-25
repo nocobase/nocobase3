@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "1.0.0-beta.26",
+  "version": "1.0.0-beta.28",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.26"
+    "defaultTemplateVersion": "1.0.0-beta.28"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -120,6 +120,8 @@
     "tsconfig.node.json",
     "tsconfig.server.json",
     "ecosystem.config.js",
+    "Dockerfile",
+    "Dockerfile.dockerignore",
     "docker-compose.yml",
     "config.example.yml",
     "README.MD",
@@ -155,6 +157,7 @@
     "config:init": "tsx ./cli/index.ts app config init",
     "config:check": "tsx ./cli/index.ts app config check",
     "config:set": "tsx ./cli/index.ts app config set",
+    "config:env": "tsx ./cli/index.ts app config env",
     "collections:generate": "tsx ./cli/index.ts app collections generate",
     "db:apply": "tsx ./cli/index.ts app db apply",
     "db:reset": "tsx ./cli/index.ts app db reset",

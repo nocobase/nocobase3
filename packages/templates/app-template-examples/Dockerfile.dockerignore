@@ -1,0 +1,39 @@
+# Read by BuildKit for the Dockerfile beside it, whichever directory is the build context. Patterns are relative to
+# that context, which is the application root in a generated application and the repository root inside nocobase3,
+# so every entry is written to match at any depth.
+
+# Rebuilt inside the image.
+**/node_modules
+**/dist
+**/.pnpm-store
+
+# Runtime configuration, secrets, and data. They are mounted into the container, never copied into the image.
+**/config.yml
+**/config.toml
+**/.env
+**/.env.*
+**/storage
+**/database.sqlite*
+
+# Local tooling and test output.
+.git
+**/.agents
+**/.claude
+**/.agent-annotations
+**/coverage
+**/playwright-report
+**/test-results
+**/logs
+**/*.log
+**/.DS_Store
+
+# The application's own build, for DIST=prebuilt. Re-included last and whole, because the rules above would otherwise
+# strip dependency directories inside it that happen to share a name with them, such as langchain's `storage/`.
+!dist
+!dist/**
+!packages/templates/*/dist
+!packages/templates/*/dist/**
+
+# Except the server settings `pnpm build` extracts from local .env files, which can include DB_PASSWORD.
+dist/.env
+packages/templates/*/dist/.env

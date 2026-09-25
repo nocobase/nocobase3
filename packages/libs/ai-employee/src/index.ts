@@ -16,7 +16,6 @@ export * from './llm-providers/mistral.js';
 export * from './llm-providers/ollama.js';
 export * from './llm-providers/orcarouter.js';
 export * from './llm-providers/shengsuanyun.js';
-export * from './llm-providers/tongyi.js';
 export * from './llm-providers/xai.js';
 export * from './llm-providers/openai/index.js';
 export * from './llm-providers/deepseek/index.js';

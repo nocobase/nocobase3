@@ -3,8 +3,10 @@ import path from 'node:path';
 
 import { isPlaceholderSecret } from '@nocobase/app-server/config';
 import {
+  checkConnections,
   MissingDatabaseDriversError,
   type AppDatabaseConfig,
+  type ConnectionCheckResult,
 } from '@nocobase/app-server/database';
 
 import type { AppCommandRuntime } from '../context.js';
@@ -18,10 +20,6 @@ import {
   closestKey,
   exampleSections,
 } from './config-keys.js';
-import {
-  checkConnections,
-  type ConnectionCheckResult,
-} from './database-connections.js';
 
 export type ConfigCheckLevel = 'error' | 'warning';
 
@@ -33,6 +31,7 @@ export type ConfigCheckCode =
   | 'session-secret-ephemeral'
   | 'unknown-key'
   | 'unexpanded-reference'
+  | 'invalid'
   | 'connection-failed';
 
 export interface ConfigCheckFinding {
@@ -71,6 +70,11 @@ export interface ConfigCheckResult {
   readonly configFile?: string;
   readonly findings: readonly ConfigCheckFinding[];
   readonly connections: readonly ConnectionCheckResult[];
+  /**
+   * What the browser receives through `config.public`, nested under section names. Lets a change be checked without
+   * opening the application.
+   */
+  readonly public: Readonly<Record<string, unknown>>;
 }
 
 /** Sections whose `${NAME}` references are expanded, by the AI employee plugin. Everywhere else they are literal. */
@@ -101,7 +105,7 @@ export async function runConfigCheck(
     runtime = await options.loadRuntime();
   } catch (error) {
     findings.push(...loadFailureFindings(error, rootDir, mode));
-    return { ok: false, mode, findings, connections: [] };
+    return { ok: false, mode, findings, connections: [], public: {} };
   }
 
   try {
@@ -114,6 +118,16 @@ export async function runConfigCheck(
     );
 
     findings.push(...secretFindings(runtime, configFile));
+    // The rules each section declares with defineAppConfig, the same ones a start enforces.
+    for (const issue of await runtime.config.validate()) {
+      findings.push({
+        level: issue.level,
+        code: 'invalid',
+        key: issue.path,
+        message: `${issue.path} ${issue.message}`,
+        ...(issue.fix ? { fix: issue.fix } : {}),
+      });
+    }
 
     const layers = runtime.config.layers();
     const known = new Set([
@@ -151,6 +165,7 @@ export async function runConfigCheck(
       configFile: existsSync(configFile) ? configFile : undefined,
       findings,
       connections,
+      public: runtime.config.publicValues(),
     };
   } finally {
     await runtime.scope.destroy();

@@ -50,24 +50,5 @@ export class XAIProvider extends LLMProvider {
 export const xaiProviderOptions: LLMProviderMeta = {
   title: 'xAI',
   supportedModel: [SupportedModel.LLM],
-  models: {
-    [SupportedModel.LLM]: [
-      'grok-4',
-      'grok-4-1',
-      'grok-4-1-fast',
-      'grok-4-1-fast-non-reasoning',
-      'grok-3',
-      'grok-3-fast',
-      'grok-3-fast-beta',
-      'grok-3-beta',
-      'grok-3-mini',
-      'grok-3-mini-fast',
-      'grok-3-mini-beta',
-      'grok-3-mini-fast-beta',
-      'grok-2',
-      'grok-2-vision',
-      'grok-vision-beta',
-    ],
-  },
   provider: XAIProvider,
 };

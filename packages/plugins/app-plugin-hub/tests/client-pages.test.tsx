@@ -33,8 +33,8 @@ const mocks = vi.hoisted(() => ({
   },
   authorization: {
     can: vi.fn(),
-    invalidatePermissions: vi.fn(),
-    onPermissionsInvalidated: vi.fn(() => () => undefined),
+    invalidate: vi.fn(),
+    onInvalidated: vi.fn(() => () => undefined),
   },
 }));
 
@@ -234,8 +234,8 @@ describe('Hub client pages', () => {
     render(<Toaster position='top-right' />);
     mocks.client.request.mockReset();
     mocks.authorization.can.mockReset().mockResolvedValue(true);
-    mocks.authorization.invalidatePermissions.mockReset();
-    mocks.authorization.onPermissionsInvalidated
+    mocks.authorization.invalidate.mockReset();
+    mocks.authorization.onInvalidated
       .mockReset()
       .mockReturnValue(() => undefined);
   });

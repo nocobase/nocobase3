@@ -139,11 +139,12 @@ export default function ConversationCenterPageComponent(): ReactElement {
 
   return (
     <section
-      className='flex min-w-0 flex-col gap-4'
+      className='flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1'
       aria-label={t('Conversations')}
     >
-      {/* The viewport constraint keeps history scrollable without expanding the settings page. */}
-      <div className='flex h-[clamp(24rem,68dvh,56rem)] min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm'>
+      {/* Below lg the viewport constraint keeps history scrollable without expanding the page; from lg the settings
+        shell passes its height down, so the panes fill what is left instead of guessing it from the viewport. */}
+      <div className='flex h-[clamp(24rem,68dvh,56rem)] min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm lg:h-auto lg:min-h-0 lg:flex-1'>
         <aside
           aria-label={t('Conversations')}
           className={cn(

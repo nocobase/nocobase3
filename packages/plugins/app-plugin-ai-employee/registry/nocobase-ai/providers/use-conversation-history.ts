@@ -39,7 +39,9 @@ export function useConversationHistory({
     new Map<string, Promise<AIChatMessage[]>>(),
   );
   const [loadingId, setLoadingId] = useState<string>();
-  surfaceOpenRef.current = chatSurfaceOpen;
+  useEffect(() => {
+    surfaceOpenRef.current = chatSurfaceOpen;
+  }, [chatSurfaceOpen]);
 
   const refresh = useCallback(
     (

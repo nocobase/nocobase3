@@ -8,7 +8,7 @@ import {
   AIToolRendererProvider,
   type AIToolRendererMap,
 } from './tools/tool-renderer-provider.js';
-import type { AIPageContextFailurePolicy } from './page-elements/page-element-provider.js';
+import type { AIPageContextFailurePolicy } from './page-elements/page-element-store.js';
 
 export type NocoBaseAIRootProviderProps = AIProviderProps & {
   toolRenderers?: AIToolRendererMap;

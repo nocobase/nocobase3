@@ -16,17 +16,15 @@ Templates ship their tests into generated applications. Keep them runnable from 
 
 ## What to test, by change
 
-| You changed         | Test at least                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------- |
-| A server route      | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload      |
-| A public webhook    | Missing signature, invalid signature, valid signature, duplicate delivery                   |
-| A migration         | `up` produces the expected schema; `down` reverses it; against a real database              |
-| A seed              | First run, run against existing data, repeat run                                            |
-| A service           | Its domain behavior, with its dependencies supplied directly                                |
-| A job               | `execute()` with a realistic payload; a second run is harmless; failures behave as intended |
-| A page or component | What renders and what happens on interaction                                                |
-| A route declaration | Path, auth mode, and that `componentLoader()` actually resolves                             |
-| Translations        | Both languages render real text                                                             |
+| You changed      | Test at least                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload            |
+| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                         |
+| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                    |
+| A seed           | First run, run against existing data, repeat run                                                  |
+| A service        | Its domain behavior, with its dependencies supplied directly                                      |
+| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended       |
+| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy |
 
 ## Testing a route
 
@@ -51,9 +49,9 @@ expect(response.status).toBe(401);
 
 Do not add a `registerRoutes(router, ...)` helper just to make a route testable. It moves the security boundary out of the thing you are testing.
 
-## Testing components
+## Testing the frontend
 
-`@testing-library/react` with jsdom is configured, and jest-dom matchers are already installed. Assert what a user can observe — visible text, roles, what a click does — not internal state.
+Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md).
 
 ## Testing migrations
 
@@ -79,10 +77,9 @@ Add focused regression coverage when behavior changes. Documentation-only change
 
 Then verify the affected behavior, selecting only the applicable steps below. Green commands mean the code compiles and the assertions you wrote hold — not that the feature works:
 
-- Open the page and use it, in both light and dark themes.
+- For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took; a quick change needs only static checks.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
 - Confirm `pnpm db:apply` applies cleanly.
-- Switch language and confirm the text changes.
 
 ## Reporting
 

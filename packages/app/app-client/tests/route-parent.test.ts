@@ -29,6 +29,10 @@ describe.each(['app', 'dev'] as const)('%s parent contributions', (surface) => {
               name: 'last',
               path: '/last',
               navigation: { title: 'Last', order: 10 },
+              authz: {
+                resource: { type: 'page', id: 'last' },
+                action: 'access',
+              },
               componentLoader: page,
             },
           ],
@@ -37,6 +41,7 @@ describe.each(['app', 'dev'] as const)('%s parent contributions', (surface) => {
           name: 'first',
           path: '/first',
           navigation: { title: 'First', order: -10 },
+          authz: { resource: { type: 'page', id: 'first' }, action: 'access' },
           componentLoader: page,
         },
       ]),
@@ -55,9 +60,19 @@ describe.each(['app', 'dev'] as const)('%s parent contributions', (surface) => {
           parent: 'nested',
           name: 'leaf',
           path: '/leaf',
+          authz: { resource: { type: 'page', id: 'leaf' }, action: 'access' },
           componentLoader: page,
         },
-        { parent, name: 'sibling', path: '/sibling', componentLoader: page },
+        {
+          parent,
+          name: 'sibling',
+          path: '/sibling',
+          authz: {
+            resource: { type: 'page', id: 'sibling' },
+            action: 'access',
+          },
+          componentLoader: page,
+        },
       ]),
     };
     for (const contributions of [
@@ -98,8 +113,22 @@ describe.each(['app', 'dev'] as const)('%s parent contributions', (surface) => {
     for (const parent of ['missing', 'page']) {
       expect(() =>
         resolve([
-          { name: 'page', path: '/page', componentLoader: page },
-          { parent, name: 'child', path: '/child', componentLoader: page },
+          {
+            name: 'page',
+            path: '/page',
+            authz: { resource: { type: 'page', id: 'page' }, action: 'access' },
+            componentLoader: page,
+          },
+          {
+            parent,
+            name: 'child',
+            path: '/child',
+            authz: {
+              resource: { type: 'page', id: 'child' },
+              action: 'access',
+            },
+            componentLoader: page,
+          },
         ]),
       ).toThrow('missing group');
     }
@@ -115,7 +144,13 @@ describe.each(['app', 'dev'] as const)('%s parent contributions', (surface) => {
           name: 'a',
           navigation: { title: 'A' },
           children: [
-            { parent: 'a', name: 'b', path: '/b', componentLoader: page },
+            {
+              parent: 'a',
+              name: 'b',
+              path: '/b',
+              authz: { resource: { type: 'page', id: 'b' }, action: 'access' },
+              componentLoader: page,
+            },
           ],
         },
       ]),
@@ -144,6 +179,7 @@ it('inherits app auth across plugins and rejects changing it', () => {
         name: 'leaf',
         path: '/leaf',
         ...(auth ? { auth } : {}),
+        authz: 'skip' as const,
         componentLoader: page,
       },
     ]),

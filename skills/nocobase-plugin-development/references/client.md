@@ -71,7 +71,7 @@ export const reactProviders = (options: AuditLogClientOptions) =>
   ]);
 ```
 
-Public deployment configuration belongs to the target App's `client/config/*.ts`, is assembled with the runtime's public JSON payload, and is read through `app.config.get()`. Neither Client config nor plugin options may contain server credentials; expose only the minimum protected data through a Server API.
+Public deployment configuration belongs to the target App's `client/config/*.ts`, is assembled with the runtime's public JSON payload, and is read through `app.config.get()`. A server value the browser needs is listed in `public` of that section's server `defineAppConfig` and read through `app.config.public.get()` at the same path; `app.config.get()` never returns it. Declare those fields by augmenting `PublicAppConfig` from `@nocobase/app-client`, which is what makes the path and value type-checked. Neither Client config nor plugin options may contain server credentials; expose only the minimum protected data through a Server API.
 
 ## Client ServiceProviders
 

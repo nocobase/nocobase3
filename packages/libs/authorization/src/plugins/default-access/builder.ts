@@ -1,41 +1,47 @@
-import type {
-  AuthorizationActions,
-  AuthorizationResourceReference,
-} from '../../core/builders.js';
-import { appendScopedAction } from '../internal/rule-builder.js';
-import type { DefaultAccessRule, DefaultAccessAction } from './model.js';
-import type { AccessConstraintValue } from '../../core/constraints.js';
+import {
+  COMPOSITE_RESOURCE_TYPE,
+  type CompositeResourceActions,
+  type CompositeResourceReference,
+} from '../../core/composite.js';
+import type { RecordSelection } from '../../core/selection.js';
+import { appendRuleAction } from '../internal/rules.js';
+import type { DefaultAccessRule } from './model.js';
 
-export class DefaultAccessRuleBuilder<A extends AuthorizationActions> {
+export class DefaultAccessRuleBuilder<A extends CompositeResourceActions> {
   constructor(
-    private readonly resource: AuthorizationResourceReference<A>,
+    private readonly resource: CompositeResourceReference<A>,
     private readonly definition: DefaultAccessRule,
   ) {}
+
   scope<N extends keyof A & string>(
     action: N,
     scopeKey: keyof A[N] & string,
-    scope: AccessConstraintValue,
+    selection: RecordSelection,
   ): DefaultAccessRuleBuilder<A> {
+    this.resource.scope(action, scopeKey);
     return new DefaultAccessRuleBuilder(this.resource, {
       ...this.definition,
-      actions: appendScopedAction<A, N, DefaultAccessAction>(
-        this.resource,
-        this.definition.actions,
+      actions: appendRuleAction(this.definition.actions, {
         action,
         scopeKey,
-        { action, scopeKey, scope },
-      ),
+        selection,
+      }),
     });
   }
+
   build(): DefaultAccessRule {
     return structuredClone(this.definition);
   }
 }
-export function defaultAccessRule<A extends AuthorizationActions>(
-  resource: AuthorizationResourceReference<A>,
+
+export function defineDefaultAccessRule<A extends CompositeResourceActions>(
+  key: string,
+  resource: CompositeResourceReference<A>,
 ): DefaultAccessRuleBuilder<A> {
+  if (!key) throw new TypeError('A rule needs a key');
   return new DefaultAccessRuleBuilder(resource, {
-    resource: { type: 'resource', id: resource.name },
+    key,
+    resource: { type: COMPOSITE_RESOURCE_TYPE, id: resource.name },
     actions: [],
   });
 }

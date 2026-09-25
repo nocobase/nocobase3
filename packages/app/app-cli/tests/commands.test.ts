@@ -19,6 +19,7 @@ describe('application command factories', () => {
       'config:init',
       'config:check',
       'config:set',
+      'config:env',
       'db:apply',
       'db:reset',
       'db:repair',

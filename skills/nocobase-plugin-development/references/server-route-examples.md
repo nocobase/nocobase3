@@ -21,6 +21,7 @@ The examples keep reusable behavior behind service interfaces. A Route owns HTTP
 
 ```ts
 // server/tokens.ts
+import type { RepositoryPolicy } from '@nocobase/db';
 import {
   createServiceToken,
   type ServiceToken,
@@ -36,8 +37,12 @@ export interface CreateOrderInput {
 }
 
 export interface OrderService {
-  list(): Promise<readonly OrderRecord[]>;
-  create(input: CreateOrderInput): Promise<OrderRecord>;
+  /** Reads through `policy` when given: rows, fields and relations it allows. */
+  list(policy?: RepositoryPolicy): Promise<readonly OrderRecord[]>;
+  create(
+    input: CreateOrderInput,
+    policy?: RepositoryPolicy,
+  ): Promise<OrderRecord>;
 }
 
 export interface PaymentDelivery {
@@ -210,7 +215,7 @@ import {
   AuthorizationDeniedError,
   type AuthorizationEnv,
 } from '@nocobase/authorization/core';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 
 import type { CreateOrderInput, OrderService } from '../tokens.js';
 
@@ -234,21 +239,33 @@ export function createOrderAdminRoutes(
   routes.use('*', options.authentication.required());
   routes.use('*', options.authorization.middleware());
 
-  routes.get('/', async (context) => {
-    await context.get('authz').require({
-      resource: { type: 'database.collection', id: 'main.orders' },
-      action: 'read',
+  // The feature gate: a registered settings item, whose check never depends on records.
+  const gate = (context: Context<AuthorizationEnv>, action: string) =>
+    context.get('authz').require({
+      resource: { type: 'settings', id: 'orders-admin' },
+      action,
     });
-    return context.json({ data: await options.orders.list() });
+  // Data access: the collection's CRUD decisions folded into one Repository policy.
+  const policy = (context: Context<AuthorizationEnv>) =>
+    options.authorization.database.policyFor('orders', context.get('authz'));
+
+  routes.get('/', async (context) => {
+    await gate(context, 'read');
+    const orders = await policy(context);
+    if (orders.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
+    return context.json({ data: await options.orders.list(orders) });
   });
 
   routes.post('/', async (context) => {
-    await context.get('authz').require({
-      resource: { type: 'database.collection', id: 'main.orders' },
-      action: 'create',
-    });
+    await gate(context, 'create');
+    const orders = await policy(context);
+    if (orders.create === false)
+      return context.json({ code: 'FORBIDDEN' }, 403);
     const input = parseCreateOrderInput(await context.req.json());
-    return context.json({ data: await options.orders.create(input) }, 201);
+    return context.json(
+      { data: await options.orders.create(input, orders) },
+      201,
+    );
   });
 
   return routes;
@@ -266,7 +283,7 @@ function parseCreateOrderInput(value: unknown): CreateOrderInput {
 }
 ```
 
-The current authorization middleware reads the session set by `Auth.required()`, establishes the request identity, and stores an `AuthorizationScope` in `context.get('authz')`. Install middleware in that order. `require()` throws `AuthorizationDeniedError` for a denied decision, so the HTTP boundary must map it to `403` or rely on an App-owned equivalent error mapper.
+The current authorization middleware reads the session set by `Auth.required()`, establishes the request identity, and stores an `AuthorizationContext` in `context.get('authz')`. Install middleware in that order. `require()` throws `AuthorizationDeniedError` for a denied or conditional decision, so the HTTP boundary must map it to `403` or rely on an App-owned equivalent error mapper. Use it only for the feature gate: the owning provider registers `authz.settings.add({ id: 'orders-admin', title, actions: [{ name: 'read' }, { name: 'create' }] })` and `authz.database.collections.add({ name: 'orders', title })`, where a collection id is the collection name. Never call `require` on a `database.collection` check: a grant with record access makes it conditional, so it is denied even when some rows are allowed. Bind the policy from `authz.database.policyFor` to the Repository instead, or, for a business operation, `authorize` the business action and bind `decision.conditions.database[collection]`, as `packages/app/app-skills/skills/nocobase-app-development/references/server-routes.md` describes.
 
 The child router is still plugin-owned code, not a new framework contribution API. The framework contribution resolves the owner-exported Tokens and mounts the returned `Hono`.
 

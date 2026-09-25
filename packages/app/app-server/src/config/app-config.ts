@@ -8,6 +8,10 @@ import { tomlParser } from '@nocobase/config/parsers/toml';
 import { yamlParser } from '@nocobase/config/parsers/yaml';
 import type { Logger } from '@nocobase/logging';
 import { fileProvider } from '@nocobase/config/providers/file';
+import {
+  environmentProvider,
+  type EnvironmentMapping,
+} from '@nocobase/config/providers/env';
 
 import type {
   AppConfigChangeListener,
@@ -17,6 +21,14 @@ import type {
   AppConfigSource,
 } from './app-config-types.js';
 import type { AppPaths } from './types.js';
+import type { AppConfigRules } from './define-app-config.js';
+import {
+  AppConfigInvalidError,
+  collectPublicConfig,
+  listPublicPaths,
+  validateConfigSections,
+  type ConfigIssue,
+} from './validation.js';
 
 export class AppConfig {
   private readonly sources: AppConfigSource[] = [];
@@ -27,6 +39,7 @@ export class AppConfig {
   private current: Config | undefined;
   private defaults = new Config();
   private overrides = new Config();
+  private readonly sections = new Map<string, AppConfigRules>();
   private reloadPromise: Promise<AppConfigReloadResult> | undefined;
   private logger?: Pick<Logger, 'debug'>;
   private loadDurationMs?: number;
@@ -96,6 +109,89 @@ export class AppConfig {
     this.current = next;
   }
 
+  /**
+   * Registers the validators and public paths sections declare, as collected by `defaultAppConfigs`. A section
+   * registered twice keeps both sets: every validator runs and the public paths are combined.
+   */
+  public defineSections(sections: ReadonlyMap<string, AppConfigRules>): void {
+    for (const [section, rules] of sections) {
+      const existing = this.sections.get(section);
+      this.sections.set(
+        section,
+        existing
+          ? {
+              validators: [...existing.validators, ...rules.validators],
+              public: [...new Set([...existing.public, ...rules.public])],
+              env: { ...existing.env, ...rules.env },
+            }
+          : rules,
+      );
+    }
+  }
+
+  /**
+   * Adds the environment variables sections declare, as one more source above everything already loaded, and
+   * recomputes the configuration. Called once the sections are known, which is after the application's own sources
+   * were loaded; a variable an application also maps itself to the same field is harmless.
+   */
+  public async loadSectionEnvironment(
+    environment: Readonly<Record<string, string | undefined>>,
+  ): Promise<void> {
+    const mappings: Record<string, EnvironmentMapping> = {};
+    for (const [section, rules] of this.sections) {
+      for (const [variable, mapping] of Object.entries(rules.env ?? {})) {
+        const absolute = { ...mapping, path: `${section}.${mapping.path}` };
+        const existing = mappings[variable];
+        if (existing && existing.path !== absolute.path) {
+          throw new Error(
+            `Environment variable ${variable} is declared for both ${existing.path} and ${absolute.path}.`,
+          );
+        }
+        mappings[variable] = absolute;
+      }
+    }
+    if (Object.keys(mappings).length === 0) return;
+    this.sources.push({
+      provider: environmentProvider(environment, {
+        name: 'section-environment',
+        mappings,
+      }),
+    });
+    this.current = await this.loadConfig();
+  }
+
+  /** Every environment variable the sections declare, in full, such as `{ AUTH_SECRET: 'auth.secret' }`. */
+  public sectionEnvironmentVariables(): Readonly<Record<string, string>> {
+    const variables: Record<string, string> = {};
+    for (const [section, rules] of this.sections) {
+      for (const [variable, mapping] of Object.entries(rules.env ?? {})) {
+        variables[variable] = `${section}.${mapping.path}`;
+      }
+    }
+    return variables;
+  }
+
+  /** Every issue the declared rules find in the current configuration, warnings included. Throws nothing. */
+  public async validate(): Promise<readonly ConfigIssue[]> {
+    if (this.sections.size === 0) return [];
+    return validateConfigSections(
+      this.requireCurrent().raw(),
+      this.overrides.raw(),
+      this.sections,
+    );
+  }
+
+  /** The values sections publish to the browser, nested under their section names. */
+  public publicValues(): ConfigMap {
+    if (this.sections.size === 0) return {};
+    return collectPublicConfig(this.requireCurrent().raw(), this.sections);
+  }
+
+  /** Every published path in full, such as `auth.emailAndPassword.disableSignUp`. */
+  public publicPaths(): readonly string[] {
+    return listPublicPaths(this.sections);
+  }
+
   public raw(): ConfigMap {
     return this.requireCurrent().raw();
   }
@@ -142,7 +238,18 @@ export class AppConfig {
 
   private async performReload(): Promise<AppConfigReloadResult> {
     const previous = this.requireCurrent();
+    const previousOverrides = this.overrides;
     const next = await this.loadConfig();
+    // A reload that breaks a declared rule is refused and the running configuration stays as it was.
+    const issues = await validateConfigSections(
+      next.raw(),
+      this.overrides.raw(),
+      this.sections,
+    );
+    if (issues.some((issue) => issue.level === 'error')) {
+      this.overrides = previousOverrides;
+      throw new AppConfigInvalidError(issues);
+    }
     const namespaces = new Set([...previous.mapKeys(''), ...next.mapKeys('')]);
     const changedNamespaces = [...namespaces]
       .filter(

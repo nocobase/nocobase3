@@ -1,12 +1,18 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 export interface PageHeaderProps {
   readonly title: ReactNode;
   readonly description?: ReactNode;
+  /** Page-level actions, aligned to the right of the title from the `sm` breakpoint up. */
   readonly actions?: ReactNode;
 }
 
-export function PageHeader({ actions, description, title }: PageHeaderProps) {
+/** The heading of a page: its only `h1`, an optional description, and the actions that apply to the whole page. */
+export function PageHeader({
+  actions,
+  description,
+  title,
+}: PageHeaderProps): ReactElement {
   return (
     <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
       <div className='min-w-0'>
@@ -25,5 +31,3 @@ export function PageHeader({ actions, description, title }: PageHeaderProps) {
     </header>
   );
 }
-
-PageHeader.displayName = 'PageHeader';

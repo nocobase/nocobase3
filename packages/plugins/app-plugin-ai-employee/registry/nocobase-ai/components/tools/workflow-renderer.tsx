@@ -2,7 +2,7 @@ import { Button } from '../../shared/ui/button.js';
 import { CheckCircle2, GitBranch } from 'lucide-react';
 import { useState } from 'react';
 import { MarkdownMessage } from '../chat/markdown-message.js';
-import { getNocoBaseToolCallMetadata } from '../chat/tool-call-card.js';
+import { getNocoBaseToolCallMetadata } from '../chat/tool-call-utils.js';
 import type { AIToolRendererProps } from './tool-renderer-provider.js';
 import { asRecord, asString } from './tool-renderer-utils.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';

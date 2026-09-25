@@ -728,7 +728,7 @@ export default function AIEmployeePage(): ReactElement {
       open={employeeListOpen}
       onOpenChange={setEmployeeListExpanded}
       render={<main />}
-      className={`grid h-[clamp(52rem,85dvh,68rem)] min-h-0 grid-cols-[44px_minmax(0,1fr)] overflow-hidden lg:h-[clamp(40rem,80dvh,64rem)] ${employeeListOpen ? 'grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'grid-rows-[minmax(0,1fr)] lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'} lg:grid-rows-[minmax(0,1fr)]`}
+      className={`grid h-[clamp(52rem,85dvh,68rem)] min-h-0 grid-cols-[44px_minmax(0,1fr)] overflow-hidden lg:h-auto lg:flex-1 ${employeeListOpen ? 'grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'grid-rows-[minmax(0,1fr)] lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'} lg:grid-rows-[minmax(0,1fr)]`}
     >
       <CollapsibleContent
         keepMounted

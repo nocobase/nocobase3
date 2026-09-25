@@ -111,7 +111,7 @@ The template is downloaded (`@nocobase/app-template-default@latest` by default) 
 - `.npmrc` records the registry the template came from, scoped to `@nocobase`, so later installs in the project resolve NocoBase packages from the same place; it is omitted for the public npm
 - `.gitignore` is written when the template ships none, so the `config.yml` that `config:init` later writes cannot be committed
 - `pnpm-workspace.yaml` gets its `allowBuilds` decisions (see below)
-- A hub additionally gets `.env`, derived from the template's `.env.example` with `APP_NAME` set
+- A hub additionally gets `.env`, copied from the template's `.env.example`
 - Dependencies are installed (skip with `--no-install`)
 - The application's own `pnpm skills:sync` runs, copying skills from its direct `@nocobase/*` dependencies and registered plugins into `.agents/skills/`. This has to come after the install, because the sync resolves packages out of `node_modules`. A failure is only a warning; the generated application still runs, and the command can be re-run in the application directory at any time. Older templates that only provide `plugin:skills:sync` continue to work through the compatibility entry point
 

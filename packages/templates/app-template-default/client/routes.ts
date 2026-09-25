@@ -18,24 +18,28 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/login.js'),
     name: 'login',
     path: '/login',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/register.js'),
     name: 'register',
     path: '/register',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/forgot-password.js'),
     name: 'forgot-password',
     path: '/forgot-password',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/reset-password.js'),
     name: 'reset-password',
     path: '/reset-password',

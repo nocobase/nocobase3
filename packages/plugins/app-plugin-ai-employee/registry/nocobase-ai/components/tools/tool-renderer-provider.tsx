@@ -1,34 +1,18 @@
+import { useMemo, type PropsWithChildren } from 'react';
 import {
-  createContext,
-  useContext,
-  useMemo,
-  type ComponentType,
-  type PropsWithChildren,
-} from 'react';
-import type { ToolCallPart } from '../chat/tool-call-card.js';
+  AIToolRendererContext,
+  type AIToolRendererMap,
+} from './tool-renderer-context.js';
 import { builtInToolRenderers } from './builtin-tool-renderers.js';
 import { BusinessReportDialogProvider } from './business-report-dialog.js';
 
-export type AIToolRendererProps = {
-  part: ToolCallPart;
-  disabled: boolean;
-  onEdit: (input: unknown) => void | Promise<void>;
-  onApprove: () => void | Promise<void>;
-  onReject: (message?: string) => void | Promise<void>;
-  onRevise: () => void;
-};
-
-export type AIToolRenderer = ComponentType<AIToolRendererProps>;
-export type AIToolRendererDefinition = {
-  component: AIToolRenderer;
-  handlesApproval?: boolean;
-  standalone?: boolean;
-};
-export type AIToolRendererEntry = AIToolRenderer | AIToolRendererDefinition;
-export type AIToolRendererMap = Record<string, AIToolRendererEntry>;
-
-const AIToolRendererContext =
-  createContext<AIToolRendererMap>(builtInToolRenderers);
+export type {
+  AIToolRenderer,
+  AIToolRendererDefinition,
+  AIToolRendererEntry,
+  AIToolRendererMap,
+  AIToolRendererProps,
+} from './tool-renderer-context.js';
 
 export function AIToolRendererProvider({
   renderers,
@@ -46,10 +30,4 @@ export function AIToolRendererProvider({
       </AIToolRendererContext.Provider>
     </BusinessReportDialogProvider>
   );
-}
-
-export function useAIToolRenderer(toolName: string) {
-  const entry = useContext(AIToolRendererContext)[toolName];
-  if (!entry) return undefined;
-  return typeof entry === 'function' ? { component: entry } : entry;
 }

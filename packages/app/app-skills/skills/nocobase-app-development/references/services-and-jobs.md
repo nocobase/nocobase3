@@ -175,7 +175,33 @@ Two things to decide before shipping one:
 
 ### Application code configuration
 
-Each file under `server/config/` defines one section with `defineAppConfig((runtime) => options)` from `@nocobase/app-server/config`. `server/config/index.ts` imports those sections and exports `defaultAppConfigs({ auth })`. The client uses the same helpers from `@nocobase/app-client`.
+Each file under `server/config/` defines one section with `defineAppConfig` from `@nocobase/app-server/config`. `server/config/index.ts` imports those sections and exports `defaultAppConfigs({ auth })`. The client uses the same helpers from `@nocobase/app-client`, in their function form only.
+
+On the server, `defineAppConfig((runtime) => options)` declares defaults alone. The object form adds rules:
+
+```ts
+const billing: AppConfigFactory<BillingConfig> = defineAppConfig({
+  defaults: { currency: 'USD', trialDays: 14 }, // or (runtime) => ({ ... })
+  async validate(value, ctx) {
+    if (value.trialDays < 0) ctx.error('trialDays', 'must not be negative.');
+  },
+  public: ['currency'],
+});
+```
+
+- `validate` receives the section's final value — code defaults, then `config.yml`, then environment mappings — and reports with `ctx.error(path, message, { fix })` or `ctx.warning(path, message)`, paths relative to the section. It runs at startup, on reload and in `pnpm config:check`; an error stops the start and refuses the reload. Treat the value as untrusted input. It may read local files but must not reach the network or write anything; database reachability stays with `config:check`.
+- `public` lists leaf fields the browser may read. The browser reads them with `config.public.get('<section>.<field>')`, never `config.get`, which in development throws when asked for a published path. Anything not listed never reaches the browser, so secrets need no declaration; an object, function or instance cannot be listed. `config.public.get` only accepts paths declared in `PublicAppConfig`, so declare each section's public fields once on the client and a mistyped path or value type fails `pnpm typecheck`:
+
+  ```ts
+  declare module '@nocobase/app-client' {
+    interface PublicAppConfig {
+      billing: { currency?: string };
+    }
+  }
+  ```
+
+- When a plugin owns a section, use the plugin's wrapper instead, such as `defineAuthConfig` from `@nocobase/app-plugin-authentication/server` for `auth`, so its rules apply; prefer a plugin hook such as `useSignUpAvailable()` over reading published paths yourself.
+- `pnpm config:check --json` reports every rule violation with code `invalid` and lists what the browser receives under `public`, so a change can be verified without opening the application.
 
 The runtime definition declares `createAppConfig` for the loader and `defaultConfigs` for the aggregated configuration factory. `resolveAppRuntime()` assembles `runtime.config`. The entry point then calls `createApp(runtime)`, which binds `runtime.app` and uses the same configuration object. Services start afterwards.
 
@@ -183,11 +209,11 @@ Code configuration executes once per application. Callbacks can capture `runtime
 
 Edit `server/config/auth.ts` for authentication options, using `AuthConfig` from `@nocobase/app-plugin-authentication/server` and `username` from `better-auth/plugins`. Edit `client/config/auth.ts` for native client options, using `AuthConfig` from the `/client` entry and `usernameClient` from `better-auth/client/plugins`. Keep deployment secrets in YAML or environment variables. Better Auth instances are created once; reloading configuration does not recreate them.
 
-Authorization integration belongs to the installed `nocobase-app-plugin-authorization` Skill; see [application permission development](authorization.md). The main plugin supplies permission sets, pages and database authorization. App feature development registers business resources and preserves system permission configuration. For default access, sharing or restrictions, locate the corresponding `nocobase-app-plugin-authz-default-access`, `nocobase-app-plugin-authz-sharing-rules` or `nocobase-app-plugin-authz-restriction-rules` Skill and follow its integration instructions. If that Skill is absent, treat the capability as unsupported and explain that it needs separate development; do not assume its factories, endpoints or tables exist. `authorizationToken` resolves the main service and `permissionSetsToken` its permission-set API.
+Authorization integration belongs to the installed `nocobase-app-plugin-authorization` Skill; see [application permission development](authorization.md). The main plugin supplies permission sets, pages, settings, composite resources, workspace placement and database authorization. App feature development registers its composites and preserves system permission configuration. For default access, sharing or restrictions, locate the corresponding `nocobase-app-plugin-authz-default-access`, `nocobase-app-plugin-authz-sharing-rules` or `nocobase-app-plugin-authz-restriction-rules` Skill and follow its integration instructions. If that Skill is absent, treat the capability as unsupported and explain that it needs separate development; do not assume its factories, endpoints or tables exist. `authorizationToken` is the only service token; permission sets are `authz.permissionSets` on the instance it resolves.
 
 Module defaults are assembled by `server/config/index.ts`; inspect its imports before assuming a section exists. Common sections include application, authentication, database, storage, localization, logging, queue, server, session, snowflake, and SPA settings, while a template or installed capability may add or omit sections. The client defaults are assembled independently under `client/config/`.
 
-Factories receive `runtime` and can use `runtime.paths`, and `runtime.plugins` for application directories, routing, and resolved plugin metadata. Providers read sections with `app.config.get<ModuleConfig>('module')`. Runtime configuration reload subscriptions use `app.config.subscribe<ModuleConfig>('module', listener)`. Environment mappings live in `server/environment.ts`; each variable has one explicit target. Keep deployment parameters in `config.example.yml`, behavior defaults in TS, and reserve environment overrides for secrets and startup integration.
+Factories receive `runtime` and can use `runtime.paths`, and `runtime.plugins` for application directories, routing, and resolved plugin metadata. Providers read sections with `app.config.get<ModuleConfig>('module')`. Runtime configuration reload subscriptions use `app.config.subscribe<ModuleConfig>('module', listener)`. Environment variables are declared by the section they set, in `env` of its `defineAppConfig` with paths relative to the section, such as `env: { APP_SERVER_PORT: envInteger('port') }` in `server/config/server.ts`; a plugin's wrapper declares its own, as `defineAuthConfig` does for `AUTH_SECRET`. There is no separate mapping file. `pnpm config:env` lists every variable the application reads, the path each sets and whether it is set, including those the runtime reads itself such as `APP_BASE_PATH`; a variable named in `.env.example` must be one of them. Keep deployment parameters in `config.example.yml`, behavior defaults in TS, and reserve environment overrides for secrets and startup integration.
 
 ## Persistent logging
 

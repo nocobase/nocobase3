@@ -20,7 +20,10 @@ const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
 
 export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
-/** Authorization checked before this page loads; skip does not bypass parent guards. */
+/**
+ * Authorization checked before this page loads. Every page declares it: nothing
+ * is inferred. `skip` opts out explicitly and does not bypass parent guards.
+ */
 export type AppClientRouteAuthz =
   | 'skip'
   | {
@@ -45,7 +48,7 @@ export interface AppClientRoutePageDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
-  readonly authz?: AppClientRouteAuthz;
+  readonly authz: AppClientRouteAuthz;
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader: AppClientRouteComponentLoader;
@@ -92,6 +95,17 @@ export type AppClientSettingIcon = ComponentType<{
 /**
  * Navigation metadata shared by App, Settings and Dev routes.
  */
+/**
+ * How the menu orders sibling routes: by `navigation.order`, lower first,
+ * defaulting to 0. Use it with a stable sort so ties keep registration order.
+ */
+export function compareNavigationOrder(
+  left: { readonly navigation?: { readonly order?: number } },
+  right: { readonly navigation?: { readonly order?: number } },
+): number {
+  return (left.navigation?.order ?? 0) - (right.navigation?.order ?? 0);
+}
+
 export interface AppClientSettingsRouteNavigation {
   /** Lower values appear first among siblings; defaults to 0, with ties in registration order. */
   readonly order?: number;
@@ -121,8 +135,8 @@ export interface AppClientSettingsRoutePageDefinition {
   readonly path: string;
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
-  /** Authorization checked before the page is loaded. */
-  readonly authz?: AppClientRouteAuthz;
+  /** Authorization checked before the page is loaded; required. */
+  readonly authz: AppClientRouteAuthz;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientSettingsRouteDefinition[];
 }
@@ -786,11 +800,7 @@ function assembleRoutes(
   };
   for (const node of all) visit(node);
   const sort = (nodes: RouteNode[]): void => {
-    nodes.sort(
-      (a, b) =>
-        (a.definition.navigation?.order ?? 0) -
-        (b.definition.navigation?.order ?? 0),
-    );
+    nodes.sort((a, b) => compareNavigationOrder(a.definition, b.definition));
     for (const node of nodes) if (node.children) sort(node.children);
   };
   sort(roots);
@@ -1171,7 +1181,7 @@ function resolveRouteTree(
       source,
       ...(breadcrumb ? { breadcrumb } : {}),
       ...(navigation ? { navigation } : {}),
-      authz: normalizeRouteAuthz(route, id, isPage, auth, context),
+      authz: normalizeRouteAuthz(route, id, isPage),
       ...(isPage
         ? {
             componentLoader: wrapRouteComponentLoader(
@@ -1199,8 +1209,6 @@ function normalizeRouteAuthz(
   route: RouteNode['definition'],
   id: string,
   isPage: boolean,
-  auth: AppClientRouteAuth,
-  context: RouteResolveContext,
 ): AppClientRouteAuthz {
   if ('access' in route) {
     throw new Error(
@@ -1233,15 +1241,11 @@ function normalizeRouteAuthz(
       action: value.action,
     });
   }
-  return isPage &&
-    auth === 'required' &&
-    context.surface === 'app' &&
-    !context.hasPageAncestor
-    ? Object.freeze({
-        resource: Object.freeze({ type: 'page', id: route.name.trim() }),
-        action: 'access',
-      })
-    : 'skip';
+  if (isPage)
+    throw new Error(
+      `Client route "${id}" must declare authz: { resource: { type, id }, action } or "skip".`,
+    );
+  return 'skip';
 }
 
 function normalizeRouteAuth(

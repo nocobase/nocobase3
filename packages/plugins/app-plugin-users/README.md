@@ -19,11 +19,12 @@ users;
 
 The default route is `/settings/users`. Set `mount: 'app'` to mount the same
 owned route under the App and add its protected primary-navigation entry. The
-route and navigation use the same `page:users/access` check. Provide
+route and navigation use the same check, `access` on page `users`. Provide
 `componentLoader` to replace only the page implementation without changing its
 identity, path, or navigation.
 
-The application must grant `page:users/access` and the required `user` actions.
+The application must grant `access` on page `users` and the required `user`
+actions on `{ type: 'user', id: '*' }`.
 Users does not create roles or grant access by itself.
 
 ## Server contracts
@@ -72,7 +73,7 @@ pnpm --filter @nocobase/app-plugin-users build
 
 ## Authorization subject selector
 
-When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.
+When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `read` on `{ type: 'user', id: '*' }` before querying; the authorization plugin separately checks settings-page access and assignment writes.
 
 ## Permission-set integration
 

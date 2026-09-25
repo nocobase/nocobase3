@@ -5,11 +5,8 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { databaseManagerToken } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 
-import {
-  createAgentContext,
-  type AppAgentContext,
-} from '../../server/agent/context.js';
-import type { ConversationExecution } from '../../server/agent/contracts.js';
+import type { AgentContext, AgentState } from '@nocobase/ai-employee';
+import { createAgentContext } from '../../server/agent/context.js';
 import type { Actor } from '../../server/types.js';
 import {
   ManagerFactory,
@@ -41,10 +38,10 @@ export function createTestActor(overrides: Partial<Actor> = {}): Actor {
   };
 }
 
-export function createTestConversationExecution(
-  overrides: ConversationExecution = {},
-): ConversationExecution {
-  return { ...overrides };
+export function createTestAgentState(
+  overrides: Partial<AgentState> = {},
+): AgentState {
+  return { sessionId: 'test-session', ...overrides };
 }
 
 export class TestAIResourceRegistrar extends AIResourceRegistrar {
@@ -97,40 +94,26 @@ export function createTestAIEmployeeFixture() {
 
 export function createTestAgentContext({
   actor = createTestActor(),
-  execution = createTestConversationExecution(),
-  state,
+  state = createTestAgentState(),
 }: {
   actor?: Actor;
-  execution?: ConversationExecution;
-  state?: Parameters<typeof createAgentContext>[0]['state'];
-} = {}): AppAgentContext {
+  state?: AgentState;
+} = {}): AgentContext {
   const fixture = createTestAIEmployeeFixture();
   return createAgentContext({
     actor,
-    state: {
-      sessionId: execution.sessionId,
-      messageId: execution.messageId,
-      messages: execution.messages ? [...execution.messages] : undefined,
-      model: execution.model ? { ...execution.model } : undefined,
-      webSearch: execution.webSearch,
-      important: execution.important,
-      frontendTools: execution.frontendTools
-        ? [...execution.frontendTools]
-        : undefined,
-      toolCallResults: execution.toolCallResults
-        ? [...execution.toolCallResults]
-        : undefined,
-      timezone: execution.timezone,
-      ...state,
-    },
-    ai: fixture.deps.ai,
-    database: fixture.deps.database,
-    logger: fixture.deps.logging.getLogger('ai-employee-test'),
-    repositories: fixture.repositories,
-    aiEmployeesManager: fixture.managers.aiEmployeesManager,
-    aiConversationsManager: fixture.managers.aiConversationsManager,
-    builtInManager: fixture.managers.builtInManager,
-    knowledgeBaseManager: fixture.managers.knowledgeBaseManager,
-    subAgentsDispatcher: fixture.managers.subAgentsDispatcher,
+    state,
+    runtime: { logger: fixture.deps.logging.getLogger('ai-employee-test') },
   });
+}
+
+/**
+ * The context a tool that declared `dependencies` receives. Tests build it the
+ * way `AgentService` does: the execution context plus that tool's own deps.
+ */
+export function withTestToolDeps<TDeps>(
+  context: AgentContext,
+  deps: TDeps,
+): AgentContext<TDeps> {
+  return { ...context, deps };
 }

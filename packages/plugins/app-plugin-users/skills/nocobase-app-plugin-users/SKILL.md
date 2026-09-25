@@ -24,10 +24,7 @@ user, account, or Session storage.
 - HTTP API: `/api/users`, `/api/users/options`, and the user-specific update,
   enable, disable, role-scope, password-reset, and Session-revocation routes.
 
-Every HTTP route requires Authentication and Authorization. Routes check a
-`user` resource with one of `read`, `create`, `update`, `disable`, `enable`,
-`assign-role`, `reset-password`, or `revoke-sessions`. Account creation checks
-both `create` and `assign-role`.
+Every HTTP route requires Authentication and Authorization. Routes check the `user` record type with one of `read`, `create`, `update`, `disable`, `enable`, `assign-role`, `reset-password`, `revoke-sessions` or `delete`. Account creation checks both `create` and `assign-role`. `delete` is permitted only while an application role scope can clean a deleted user up.
 
 ## Register and place the page
 
@@ -36,13 +33,12 @@ both `create` and `assign-role`.
 2. Configure the Client factory. `users({ mount: 'settings', path: '/users' })`
    produces `/settings/users`; `mount: 'app'` makes the path App-relative and
    registers a primary-navigation entry protected by the same page access rule.
-3. Grant `page:users/access` to roles that may open the page.
-4. Grant only the `user` actions those roles need. The plugin creates no roles
-   and grants no access by itself.
+3. Grant the page, `{ resource: { type: 'page', id: 'users' }, actions: [{ action: 'access' }] }` or `authz.pages.grant('users')`, to roles that may open it.
+4. Grant only the `user` actions those roles need, on `{ type: 'user', id: '*' }` because `user` is a record type. The plugin creates no roles and grants no access by itself.
 5. Use `componentLoader` only to replace the page implementation. It does not
    change the route identity, mount, or path.
 
-The default `app` permission-set scope is supplied by Users whenever `permissionSetsToken` is available. Do not copy a user-roles Provider into an application. Set `users.permissionSets: false` to replace the default with an application-owned scope; Hub uses this setting.
+The default `app` permission-set scope is supplied by Users whenever the Authorization plugin's `authorizationToken` is available. Do not copy a user-roles Provider into an application. Set `users.permissionSets: false` to replace the default with an application-owned scope; Hub uses this setting.
 
 ## Add an application role scope
 
@@ -87,9 +83,7 @@ uses it for list pages and falls back to `get()` for existing scopes.
 
 - Browser route access is only navigation control. The Server independently
   authenticates and authorizes every request.
-- An App-mounted page hides its primary-navigation entry until
-  `page:users/access` is allowed. Direct navigation is checked separately by
-  the Client Route.
+- An App-mounted page hides its primary-navigation entry until `access` on page `users` is allowed. Direct navigation is checked separately by the Client Route.
 - A conditional grant is not accepted as an unrestricted user-management
   grant; use explicit static grants for this resource.
 - The plugin does not provide user deletion or invitations.
@@ -100,7 +94,7 @@ uses it for list pages and falls back to `get()` for existing scopes.
 
 ## Verification
 
-- A role without `page:users/access` cannot navigate to the page.
+- A role without `access` on page `users` cannot navigate to the page.
 - Anonymous API requests return `401`; authenticated requests without the
   requested `user` action return `403`.
 - Creating a user with a required role scope creates both records, while role

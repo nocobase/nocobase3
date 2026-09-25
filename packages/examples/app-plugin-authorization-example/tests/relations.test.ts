@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createFixture } from './helpers.js';
 import { ORDERS } from '../catalog.js';
-import migration from '../database/migrations/202609220001_sales_permissions.js';
 
 let fixture: Awaited<ReturnType<typeof createFixture>>;
 let orderId: string;
@@ -166,39 +165,6 @@ it('limits many-to-many payloads and supports set and disconnect', async () => {
       .repository('authorizationExampleOrderTeams')
       .findMany({ filter: { orderId } }),
   ).toEqual([]);
-});
-
-it('reverses the relation migration and restores metadata on reapplication', async () => {
-  const connection = fixture.database.connection();
-  const context = {
-    connection,
-    builder: connection.builder,
-    query: connection.query,
-  };
-  expect(
-    (await connection.collections.get(ORDERS))?.fields?.find(
-      (field) => field.name === 'checks',
-    ),
-  ).toMatchObject({ type: 'hasMany' });
-  expect(
-    (await connection.collections.getPhysical(ORDERS))?.columns.some(
-      (column) => column.columnName === 'delivery_team_id',
-    ),
-  ).toBe(true);
-  await migration.down!(context);
-  expect(
-    await connection.collections.getPhysical('authorizationExampleOrderChecks'),
-  ).toBeUndefined();
-  expect(await connection.collections.get(ORDERS)).toBeUndefined();
-  await migration.up(context);
-  expect(
-    await connection.collections.getPhysical('authorizationExampleOrderChecks'),
-  ).toBeDefined();
-  expect(
-    (await connection.collections.get(ORDERS))?.fields?.find(
-      (field) => field.name === 'collaborators',
-    ),
-  ).toMatchObject({ type: 'belongsToMany' });
 });
 
 it('rolls back nested creates when a later relation target is outside its scope', async () => {

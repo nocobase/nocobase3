@@ -216,7 +216,7 @@ export default function UsersPage(): ReactElement {
   }, [load]);
 
   useEffect(
-    () => authorization.onPermissionsInvalidated(() => void load()),
+    () => authorization.onInvalidated(() => void load()),
     [authorization, load],
   );
 
@@ -227,7 +227,7 @@ export default function UsersPage(): ReactElement {
       await load();
     } catch (reason) {
       if (reason instanceof ApiClientError && reason.status === 403) {
-        authorization.invalidatePermissions();
+        authorization.invalidate();
       }
       reportError(reason);
     } finally {
@@ -288,7 +288,7 @@ export default function UsersPage(): ReactElement {
               setPage(1);
             }}
           >
-            <SelectTrigger className='w-48'>
+            <SelectTrigger className='w-56'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

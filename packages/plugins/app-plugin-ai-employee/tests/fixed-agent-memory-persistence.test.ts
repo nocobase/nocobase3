@@ -71,6 +71,7 @@ function createProvider(
   };
   const context = new FixedAgentContextProvider({
     sessionId: 'fixed-session',
+    agentContext: { state: { sessionId: 'fixed-session' } } as never,
     model: { llmService: 'memory-test-service', model: 'memory-test-model' },
     provider,
     providerName: llm.providerName,
@@ -140,42 +141,30 @@ const tool = (name: string): ToolsEntity =>
     execution: 'backend',
   }) as ToolsEntity;
 
-it('resolves request models over the fixed default and exposes tools', async () => {
+it('runs on the model it was created with and exposes its tools', async () => {
   const defaultProvider = {} as LLMProvider;
-  const overrideProvider = {} as LLMProvider;
   const context = new FixedAgentContextProvider({
     sessionId: 'context-session',
+    agentContext: { state: { sessionId: 'context-session' } } as never,
     model: { llmService: 'default-service', model: 'default-model' },
     provider: defaultProvider,
     providerName: 'default-provider',
     systemPrompt: 'fixed prompt',
     tools: new Map([['search', tool('search')]]),
     activeTools: new Set(['search']),
-    resolveLLM: async (model) => ({
-      providerName: 'override-provider',
-      llmService: model.llmService,
-      model: model.model,
-      provider: overrideProvider,
-    }),
   });
   await expect(context.getSystemPrompt([])).resolves.toBe('fixed prompt');
   await expect(context.discoveredTools()).resolves.toMatchObject({
     tools: new Map([['search', tool('search')]]),
   });
-  await expect(context.resolveLLM({})).resolves.toMatchObject({
+  // A request carries no model, so every call resolves the same one.
+  await expect(context.resolveLLM()).resolves.toMatchObject({
     providerName: 'default-provider',
     model: 'default-model',
     provider: defaultProvider,
   });
-  await expect(
-    context.resolveLLM({
-      model: { llmService: 'override-service', model: 'override-model' },
-    }),
-  ).resolves.toMatchObject({
-    providerName: 'override-provider',
-    llmService: 'override-service',
-    model: 'override-model',
-    provider: overrideProvider,
+  await expect(context.resolveLLM()).resolves.toMatchObject({
+    model: 'default-model',
   });
 });
 
@@ -186,13 +175,11 @@ it('creates a reusable Fixed AgentService through the factory with Memory Persis
   const persistence = new MemoryConversationPersistence('factory-memory');
   const provider = {
     createModel: () =>
-      new FakeListChatModel({
-        responses: [
-          new AIMessage('factory-first'),
-          new AIMessage('factory-second'),
-        ],
-      }),
+      new FakeListChatModel({ responses: ['factory-first', 'factory-second'] }),
     resolveTools: () => [],
+    prepareStoredAssistantAdditionalKwargs: (
+      additionalKwargs?: Record<string, unknown>,
+    ) => additionalKwargs,
   } as unknown as LLMProvider;
   vi.spyOn(
     fixture.deps.ai.llmProviderManager,
@@ -216,6 +203,8 @@ it('creates a reusable Fixed AgentService through the factory with Memory Persis
   const service = await factory.createAgent({
     sessionId: 'factory-memory',
     persistence,
+    actor: { id: 1, roles: [], isRoot: false },
+    runtime: { logger: fixture.deps.logging.getLogger('ai-employee-test') },
   });
   await service.invoke({ userMessages: [message('factory-one')] });
   await service.invoke({ userMessages: [message('factory-two')] });

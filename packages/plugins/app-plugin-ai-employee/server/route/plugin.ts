@@ -8,8 +8,8 @@ import {
 import { loggingToken } from '@nocobase/app-server/logging';
 import { Hono } from 'hono';
 
-import { serviceFactoryToken } from '../factory/service-factory.js';
 import { createAIEmployeeRoutes } from './index.js';
+import { serviceFactoryToken } from '../tokens.js';
 
 export const aiEmployeeApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {

@@ -1,38 +1,43 @@
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { useTranslation } from '@nocobase/i18n/client';
+import { XIcon } from 'lucide-react';
 import {
   createContext,
-  useContext,
-  type RefObject,
   useCallback,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useLocation, useNavigate, type To } from 'react-router';
+
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
-  DialogOverlay,
   DialogClose,
-  DialogPortal,
   DialogDescription,
+  DialogOverlay,
+  DialogPortal,
   DialogTitle,
-} from './ui/dialog';
-import { RouteOverlayContext } from './use-route-overlay';
-import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
-import { useTranslation } from '@nocobase/i18n/client';
-import { XIcon } from 'lucide-react';
-import { Button } from './ui/button';
-import { cn } from '../lib/utils';
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+
+import { RouteOverlayContext } from './use-route-overlay.js';
 
 export interface RouteOverlayProps {
-  title: ReactNode;
-  description?: ReactNode;
-  children?: ReactNode;
-  footer?: ReactNode;
-  closeTo?: To;
-  beforeClose?: () => boolean | Promise<boolean>;
-  className?: string;
+  readonly title: ReactNode;
+  readonly description?: ReactNode;
+  readonly children?: ReactNode;
+  readonly footer?: ReactNode;
+  /** Where closing navigates. Defaults to the parent route, keeping the current search string. */
+  readonly closeTo?: To;
+  /** Runs before every close; resolving `false` keeps the overlay open, for example to guard unsaved changes. */
+  readonly beforeClose?: () => boolean | Promise<boolean>;
+  readonly className?: string;
 }
 
 // Lets an overlay rendered through another overlay's outlet return focus into
@@ -42,7 +47,10 @@ export interface RouteOverlayProps {
 const ParentPopupContext =
   createContext<RefObject<HTMLDivElement | null> | null>(null);
 
-/** Application-owned presentation; route registration stays unchanged. */
+/**
+ * The shared implementation of `RouteDialog` and `RouteDrawer`: a modal that is open for as long as its route matches,
+ * and closes by navigating away from it. Route registration stays with the application.
+ */
 export function RouteOverlay({
   title,
   description,
@@ -52,7 +60,7 @@ export function RouteOverlay({
   beforeClose,
   className,
   drawer = false,
-}: RouteOverlayProps & { drawer?: boolean }) {
+}: RouteOverlayProps & { readonly drawer?: boolean }): ReactElement {
   const { t } = useTranslation();
   const parentPopup = useContext(ParentPopupContext);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -169,7 +177,9 @@ export function RouteOverlay({
                 }
               >
                 <XIcon />
-                <span className='sr-only'>{t('actions.close')}</span>
+                <span className='sr-only'>
+                  {t('routeOverlay.close', { defaultValue: 'Close' })}
+                </span>
               </DialogClose>
             </DialogPrimitive.Popup>
           </DialogPortal>

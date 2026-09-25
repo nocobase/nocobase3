@@ -1,7 +1,12 @@
 export { default } from './plugin.js';
 export * from './auth.js';
 export * from './auth-storage.js';
-export { resolveAuthSecret } from './config.js';
+export {
+  AUTH_PUBLIC_PATHS,
+  defineAuthConfig,
+  resolveAuthSecret,
+  validateAuthConfig,
+} from './config.js';
 export * from './better-auth/database-adapter.js';
 export {
   AuthenticationProvider,

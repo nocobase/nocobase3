@@ -6,7 +6,7 @@ keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,图标'
 
 # 界面和样式
 
-NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。
+NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。从 [NocoBase UI Library](http://ui.nocobase.com) 安装的业务组件同样放在 `client/components/`，例如模板预装的 `PageContainer`、`PageHeader` 和路由浮层组件；认证界面 `auth-ui` 这类完整功能则放在 `client/extensions/nocobase-<item>/`。
 
 普通界面样式使用主题变量。这样同一套组件可以适配浅色主题、深色主题和其他主题预设。
 
@@ -152,7 +152,7 @@ export function OrderForm(): ReactElement {
 
 不要用 `dark:` 为普通颜色单独补一套样式。只在主题变量无法表达需求时使用它；经常需要使用 `dark:` 通常说明样式中混入了硬编码颜色。
 
-主题预设的变量定义在 `client/theme/themes/*.css`，修改整套外观时应该调整主题变量，而不是逐个页面覆盖样式。完整的主题配置方式见[主题](../capabilities/theme)，变量清单见[主题变量](../reference/theme-tokens)。
+主题预设的变量定义在 `client/theme/themes/*.css`，修改整套外观时应该调整主题变量，而不是逐个页面覆盖样式。完整的主题配置方式见[主题](../capabilities/theme)，变量清单见[主题变量](./reference/theme-tokens)。
 
 ## 使用图标
 
@@ -248,5 +248,5 @@ export default function OrdersPage(): ReactElement {
 
 - [页面和菜单](./pages-and-routes) — 声明页面路由、菜单和访问控制
 - [多语言](./i18n) — 为界面文案添加翻译
-- [主题变量](../reference/theme-tokens) — 查看颜色、字体、字号、间距、圆角和阴影
+- [主题变量](./reference/theme-tokens) — 查看颜色、字体、字号、间距、圆角和阴影
 - [主题](../capabilities/theme) — 新增和修改主题预设

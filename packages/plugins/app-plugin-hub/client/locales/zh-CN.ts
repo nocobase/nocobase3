@@ -514,12 +514,10 @@ const zhCN: HubResource = {
     names: {
       'hub-administrator': '平台管理员',
       'hub-operator': '应用管理员',
-      'hub-viewer': '查看者（历史角色）',
     },
     descriptions: {
       'hub-administrator': '管理全部应用、发布 API Key 和用户权限',
       'hub-operator': '管理自己创建的应用及自己的发布 API Key',
-      'hub-viewer': '仅可查看有权限的应用及运行状态',
     },
     groups: {
       visibility: '应用与状态',

@@ -33,6 +33,7 @@ class DefaultAgentProviders implements AgentProviders {
   public readonly logger: Logger;
   public readonly features: AgentProviders['features'];
   public readonly checkpointer: AgentProviders['checkpointer'];
+  public readonly container: AgentProviders['container'];
 
   public constructor(options: CreateAgentProvidersOptions) {
     this.conversation = options.conversation;
@@ -41,6 +42,7 @@ class DefaultAgentProviders implements AgentProviders {
     this.converters = options.converters ?? new DefaultChatMessageConverters();
     this.features = { ...DEFAULT_AGENT_FEATURES, ...(options.features ?? {}) };
     this.checkpointer = options.checkpointer;
+    this.container = options.container;
   }
 }
 

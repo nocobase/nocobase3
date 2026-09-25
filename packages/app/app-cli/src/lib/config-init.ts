@@ -4,19 +4,17 @@ import path from 'node:path';
 
 import { createAppPaths } from '@nocobase/app-server/config';
 import {
+  checkConnections,
   OFFICIAL_DIALECTS,
   resolveDatabaseConfig,
   type AppDatabaseConfig,
+  type ConnectionCheckResult,
   type OfficialDialect,
 } from '@nocobase/app-server/database';
 import { parseDocument } from 'yaml';
 
 import { buildConfigFile } from './config-file.js';
 import { configureDatabase } from './database-config.js';
-import {
-  checkConnections,
-  type ConnectionCheckResult,
-} from './database-connections.js';
 
 /**
  * Where the command is running, which decides both what it may offer and what it can tell the user to do about a
@@ -137,7 +135,7 @@ const CONFIG_EXTENSIONS = ['.yml', '.yaml', '.toml', '.json'] as const;
  * Secrets the standard templates map from the environment.
  *
  * The mapping belongs to the application, not to this command, so this is a check for the conventional names rather
- * than an authoritative reading of `server/environment.ts`. It only ever produces a warning: a value set here wins
+ * than an authoritative reading of the sections' `env` declarations, which `config:env` lists. It only ever produces a warning: a value set here wins
  * over the file, so writing a fresh secret into `config.yml` would look like it worked and change nothing.
  */
 const ENVIRONMENT_SECRETS = ['AUTH_SECRET', 'SESSION_SECRET'] as const;

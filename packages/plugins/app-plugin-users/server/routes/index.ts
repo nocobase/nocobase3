@@ -13,7 +13,7 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permission-sets';
 import { Hono } from 'hono';
 
 import {

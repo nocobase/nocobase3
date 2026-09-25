@@ -4,10 +4,6 @@
     "link": "/get-started/"
   },
   {
-    "text": "AI Agent",
-    "link": "/ai/"
-  },
-  {
     "text": "Tutorials",
     "link": "/tutorials/"
   },
@@ -18,14 +14,6 @@
   {
     "text": "Capabilities",
     "link": "/capabilities/"
-  },
-  {
-    "text": "Deployment",
-    "link": "/deployment/"
-  },
-  {
-    "text": "Reference",
-    "link": "/reference/"
   },
   {
     "text": "Plugins",

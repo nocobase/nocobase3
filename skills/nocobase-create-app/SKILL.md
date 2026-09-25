@@ -80,17 +80,16 @@ Tell the user:
 - The application directory and the URL.
 - The first sign-in account. It comes from `users.initialAdmin` in the configuration: by default the username `nocobase` (email `admin@nocobase.com`) with the password `admin123`. Read that key rather than assuming the defaults, never repeat a password the user chose, and remind them to change the default one after signing in.
 - That the service was started by this session and stops when the session ends, and how to start it again: `pnpm dev` in the application directory, run in their own terminal or by the next session.
-- To start a new agent session in the application directory before continuing, so that the application's `AGENTS.md` and Skills are loaded. They appeared after this session started, so this session may not have loaded them; a new session loads them reliably. Say exactly how:
-  - When the application is in this session's directory, the user only needs to end this session and start a new one in the same directory.
-  - Otherwise, give the full path and the command that starts your own agent there, for example `cd /work/my-app && claude` for Claude Code.
-  - In a desktop client, the user opens that directory as the project and starts a new session there.
-- What to ask for in the new session:
+- Where to continue. The application's `AGENTS.md` and Skills appeared after this session started. Some agents pick them up without a restart; others load them only when a session starts. Check which case applies instead of assuming:
+  - **They are loaded here** (for example, the application's `nocobase-app-development` Skill is among your available Skills, and the application directory is this session's working directory): tell the user they can continue in this session. No new session is needed.
+  - **They are not loaded here**: tell the user to start a new agent session in the application directory, and say exactly how. When the application is in this session's directory, they only need to end this session and start a new one in the same directory. Otherwise, give the full path and the command that starts your own agent there, for example `cd /work/my-app && claude` for Claude Code. In a desktop client, they open that directory as the project and start a new session there.
+- What to ask for next, in this session or the new one:
   - A small first feature, for example: "Read the project's AGENTS.md first, then add an order list where signed-in users can create and edit orders, saved to the application database."
   - The step-by-step guide: https://github.com/nocobase/nocobase3/blob/develop/docs/docs/en/get-started/first-feature.md
 
-Keep this handover short: one line per point, commands and paths in code formatting, and only the session case that applies to this user.
+Keep this handover short: one line per point, commands and paths in code formatting, and only the case that applies to this user.
 
-If the user wants to keep working in this session instead, do not rely on those Skills being loaded: follow the application's `AGENTS.md` and read the relevant `.agents/skills/<name>/SKILL.md` directly.
+If the Skills are not loaded but the user wants to keep working in this session anyway, do not rely on them: follow the application's `AGENTS.md` and read the relevant `.agents/skills/<name>/SKILL.md` directly.
 
 ## Troubleshooting
 

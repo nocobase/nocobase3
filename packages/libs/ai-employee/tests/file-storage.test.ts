@@ -106,7 +106,7 @@ describe('DriveFileStorage', () => {
       id: '42',
       disk: 'public',
       key: 'ai-files/42-hello-world.TXT',
-      filename: 'hello-world.TXT',
+      filename: 'hello world.TXT',
       extname: '.txt',
       size: 5,
       mimeType: 'text/plain',

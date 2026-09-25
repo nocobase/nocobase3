@@ -114,7 +114,7 @@ PDF 转换通常需要额外的服务端转换环境。比如选择 Carbone 和 
 
 ## 相关链接
 
-- [描述需求](../ai/writing-requirements.md)——向应用 Agent 提供明确的业务规则
+- [描述需求](../get-started/ai-agent/writing-requirements.md)——向应用 Agent 提供明确的业务规则
 - [文件](./file.md)——上传、附件和文件访问
 - [权限](./authorization.md)——数据和功能的访问范围
 - [Plugin Skills](../plugin-development/skills.md)——Skill 的发布、同步和维护方式

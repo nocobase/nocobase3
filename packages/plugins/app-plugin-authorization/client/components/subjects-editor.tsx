@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type {
   AuthorizationSubject,
   SubjectOption,
-  SubjectSettings,
   SubjectTypeOption,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
@@ -21,7 +20,7 @@ export function SubjectsEditor({
   onChange,
 }: {
   types: readonly SubjectTypeOption[];
-  settings: SubjectSettings;
+  settings: string;
   value: readonly AuthorizationSubject[];
   excluded?: readonly AuthorizationSubject[];
   onChange: (value: readonly AuthorizationSubject[]) => void;

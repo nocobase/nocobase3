@@ -9,6 +9,10 @@ import { PasswordResetForm } from '../../client/extensions/nocobase-auth-ui/form
 import { PasswordResetRequestForm } from '../../client/extensions/nocobase-auth-ui/forms/password-reset-request-form.js';
 import { Loading } from '../../client/components/loading.js';
 
+vi.mock('@nocobase/app-plugin-authentication/client', () => ({
+  useSignUpAvailable: () => true,
+}));
+
 vi.mock('@nocobase/app-plugin-authentication/client/actions', () => ({
   usePasswordLogin: () => ({ isPending: false, submit: vi.fn() }),
   usePasswordRegistration: () => ({ isPending: false, submit: vi.fn() }),

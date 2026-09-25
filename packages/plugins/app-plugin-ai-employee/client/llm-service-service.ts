@@ -140,19 +140,35 @@ export async function listLLMProviders(
   });
 }
 
-export async function updateLLMService(
+export function updateLLMServiceEnabled(
   name: string,
-  values: { enabled?: boolean; enabledModels?: EnabledModelsConfig },
+  enabled: boolean,
+  client?: ApiClient,
+): Promise<LLMService> {
+  return updateLLMServiceField('updateEnabled', { name, enabled }, client);
+}
+
+export function updateLLMServiceEnabledModels(
+  name: string,
+  enabledModels: EnabledModelsConfig,
+  client?: ApiClient,
+): Promise<LLMService> {
+  return updateLLMServiceField(
+    'updateEnabledModels',
+    { name, enabledModels },
+    client,
+  );
+}
+
+async function updateLLMServiceField(
+  action: 'updateEnabled' | 'updateEnabledModels',
+  body: { name: string } & Record<string, unknown>,
   client?: ApiClient,
 ): Promise<LLMService> {
   const response = await requestAIAction<unknown>(
     'llmServices',
-    'update',
-    {
-      method: 'PUT',
-      query: { key: name },
-      body: values,
-    },
+    action,
+    { method: 'POST', body },
     client,
   );
   const value = dataOf(response);
@@ -160,8 +176,8 @@ export async function updateLLMService(
     throw new Error('LLM service response is invalid.');
   const item = value as Record<string, unknown>;
   return {
-    name: String(item.name ?? name),
-    title: String(item.title ?? name),
+    name: String(item.name ?? body.name),
+    title: String(item.title ?? body.name),
     provider: String(item.provider ?? ''),
     enabled: item.enabled !== false,
     enabledModels: normalizeEnabledModels(item.enabledModels),

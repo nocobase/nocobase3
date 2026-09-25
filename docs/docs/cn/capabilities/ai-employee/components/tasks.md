@@ -33,6 +33,8 @@ const analyzeCustomer: AIEmployeeTask = {
 
 `autoSend: true` 会立即发送，适合结果明确且无额外确认的任务；`false` 只把内容放入输入框，让用户检查和补充。
 
+`skillSettings.tools` 是白名单：列表非空时，这个会话只能使用列出的 Tool，而且这份设置会存进会话，之后每一轮都生效。上面的示例因此只能用 `find-customer`，以及 Skill 在加载时激活、同时也列在这里的 Tool。任务不需要收窄时就不要写 `tools`，员工会保留自己的全部 Tool。任务收窄了 Tool、上下文里又引用了表单时，聊天框会自动把 `formFiller` 加进这个列表。
+
 ## 在记录旁边显示快捷入口
 
 ```tsx

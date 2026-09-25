@@ -1,3 +1,5 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { cachingToken } from '@nocobase/app-server/caching';
 import {
@@ -153,6 +155,66 @@ describe('AIEmployeeProvider application config', () => {
     await expect(manager.getLLMService('obsolete')).resolves.toBeUndefined();
   });
 
+  it('reapplies an overriding model list over the stored one on start, and keeps the enable switch', async () => {
+    const deps = createTestAppDeps();
+    databases.push(deps.database);
+    await deps.database.connect();
+    await createMigrator({
+      database: deps.database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: new URL('../database/migrations', import.meta.url).pathname,
+    }).latest();
+    await new RepositoryFactory({
+      connection: deps.database.connection(),
+    }).llmServices.create({
+      values: {
+        name: 'openai',
+        title: 'OpenAI',
+        provider: 'openai',
+        options: {},
+        enabledModels: {
+          mode: 'custom',
+          models: [{ label: 'User model', value: 'user-model' }],
+        },
+        modelOptions: {},
+        enabled: false,
+        sort: 0,
+      },
+    });
+    const { provider, container } = await createProvider(
+      () => ({
+        ai: {
+          llmServices: [
+            {
+              name: 'openai',
+              provider: 'openai',
+              enabledModels: [
+                { label: 'Configured model', value: 'configured-model' },
+              ],
+              overrideEnabledModels: true,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+
+    provider.register();
+    await provider.boot();
+
+    await expect(
+      container
+        .resolve(aiManagerToken)
+        .llmServiceManager.getLLMService('openai'),
+    ).resolves.toMatchObject({
+      enabled: false,
+      enabledModels: {
+        mode: 'custom',
+        models: [{ label: 'Configured model', value: 'configured-model' }],
+      },
+    });
+  });
+
   it('synchronizes initial and reloaded snapshots and unsubscribes on shutdown', async () => {
     let current: AIEmployeeConfig = {
       llmServices: [
@@ -224,6 +286,87 @@ describe('AIEmployeeProvider application config', () => {
     await expect(manager.listLLMServices()).resolves.toHaveLength(2);
   });
 
+  it('keeps an MCP server an administrator disabled disabled across a restart', async () => {
+    const deps = createTestAppDeps();
+    databases.push(deps.database);
+    await deps.database.connect();
+    await createMigrator({
+      database: deps.database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: new URL('../database/migrations', import.meta.url).pathname,
+    }).latest();
+    const config = () => ({
+      ai: {
+        mcpServers: {
+          search: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+        },
+      },
+    });
+    // The server is never reachable here, which must not stop the start.
+    const first = await createProvider(config, deps);
+    first.provider.register();
+    await first.provider.boot();
+    await first.container
+      .resolve(aiManagerToken)
+      .mcpServerManager.updateMCPEnabled('search', false);
+    await first.provider.shutdown();
+
+    const second = await createProvider(config, deps);
+    second.provider.register();
+    await second.provider.boot();
+
+    await expect(
+      second.container
+        .resolve(aiManagerToken)
+        .mcpServerManager.getMCP('search'),
+    ).resolves.toMatchObject({ enabled: false });
+  });
+
+  it('keeps an MCP tool permission an administrator set across a restart', async () => {
+    const mcp = await startMCPServer(['setDefaultCity']);
+    const deps = createTestAppDeps();
+    databases.push(deps.database);
+    await deps.database.connect();
+    await createMigrator({
+      database: deps.database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: new URL('../database/migrations', import.meta.url).pathname,
+    }).latest();
+    const config = () => ({
+      ai: { mcpServers: { search: { transport: 'http', url: mcp.url } } },
+    });
+    const permissionOf = async (container: ServiceContainer) => {
+      const tools = await container
+        .resolve(aiManagerToken)
+        .mcpServerManager.listMCPTools();
+      return tools.search?.find(
+        (tool) => tool.name === 'mcp-search-setDefaultCity',
+      )?.permission;
+    };
+
+    try {
+      const first = await createProvider(config, deps);
+      first.provider.register();
+      await first.provider.boot();
+      expect(await permissionOf(first.container)).toBe('ASK');
+      await first.container
+        .resolve(serviceFactoryToken)
+        .mcpServerService.updateToolPermission({
+          input: { toolName: 'mcp-search-setDefaultCity', permission: 'ALLOW' },
+        });
+      await first.provider.shutdown();
+
+      const second = await createProvider(config, deps);
+      second.provider.register();
+      await second.provider.boot();
+
+      expect(await permissionOf(second.container)).toBe('ALLOW');
+      await second.provider.shutdown();
+    } finally {
+      await mcp.close();
+    }
+  });
+
   it('uses new config state after a removed service is added again', async () => {
     let current: AIEmployeeConfig = {
       llmServices: [
@@ -267,6 +410,60 @@ describe('AIEmployeeProvider application config', () => {
     });
   });
 });
+
+/** A Streamable HTTP MCP server answering only what a client needs to list tools. */
+async function startMCPServer(
+  toolNames: readonly string[],
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server: Server = createServer((request, response) => {
+    if (request.method !== 'POST') {
+      response.writeHead(405).end();
+      return;
+    }
+    let body = '';
+    request.on('data', (chunk: Buffer) => (body += chunk.toString()));
+    request.on('end', () => {
+      const message = JSON.parse(body) as {
+        id?: number | string;
+        method: string;
+        params?: { protocolVersion?: string };
+      };
+      if (message.id === undefined) {
+        response.writeHead(202).end();
+        return;
+      }
+      const result =
+        message.method === 'initialize'
+          ? {
+              protocolVersion: message.params?.protocolVersion,
+              capabilities: { tools: {} },
+              serverInfo: { name: 'test-mcp', version: '1.0.0' },
+            }
+          : message.method === 'tools/list'
+            ? {
+                tools: toolNames.map((name) => ({
+                  name,
+                  description: name,
+                  inputSchema: { type: 'object', properties: {} },
+                })),
+              }
+            : {};
+      response
+        .writeHead(200, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${port}/mcp`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
 
 async function createProvider(
   readConfig: () => Record<string, unknown>,

@@ -1,6 +1,7 @@
 import type { InferUIMessageChunk } from 'ai';
 import type { AIChatMessage, AISubAgentConversation } from './types.js';
 import type { NocoBaseStreamEvent } from './stream-parser.js';
+import { toText } from '../shared/text.js';
 import {
   getToolCallState,
   getToolProviderMetadata,
@@ -67,8 +68,9 @@ const toToolPart = (
       toolName,
       state: 'output-error',
       input,
-      errorText: String(
-        toolCall.content ?? toolCall.output ?? 'Tool call failed',
+      errorText: toText(
+        toolCall.content ?? toolCall.output,
+        'Tool call failed',
       ),
       callProviderMetadata,
     };

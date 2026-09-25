@@ -40,16 +40,18 @@ export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
             })
           : undefined,
       indexPath: spa.indexPath,
-      clientConfig: createPublicClientConfig(
+      clientConfig: createClientConfig(
         app.config.get<SpaClientConfigMap>('client') ?? {},
-        {
-          appBasePath: app.publicBasePath,
-          apiUrl,
+        { appBasePath: app.publicBasePath, apiUrl },
+      ),
+      // Computed per page so a configuration reload reaches the next page load.
+      publicConfig: () =>
+        createPublicConfig(
+          (app.config.publicValues?.() ?? {}) as SpaClientConfigMap,
           // Read by path rather than through the definition, so these routes stay usable in an application composed
           // without the i18n config registered. The browser falls back to its own default when nothing is published.
-          defaultLocale: app.config.get<string>('i18n.defaultLocale'),
-        },
-      ),
+          app.config.get<string>('i18n.defaultLocale'),
+        ),
       runtimeGlobals: createNocoBaseSpaRuntimeGlobals({
         appBasePath: app.publicBasePath,
         apiUrl,
@@ -59,11 +61,9 @@ export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
     return router;
   });
 
-function createPublicClientConfig(
+function createClientConfig(
   configured: SpaClientConfigMap,
-  runtime: Pick<NocoBaseSpaRuntimeConfig, 'appBasePath' | 'apiUrl'> & {
-    readonly defaultLocale: string | undefined;
-  },
+  runtime: Pick<NocoBaseSpaRuntimeConfig, 'appBasePath' | 'apiUrl'>,
 ): SpaClientConfigMap {
   return {
     ...configured,
@@ -75,11 +75,21 @@ function createPublicClientConfig(
       ...readConfigSection(configured.api),
       baseURL: runtime.apiUrl,
     },
-    // The browser reads the same `i18n.defaultLocale` the server does, rather than a separate client-side copy that
-    // could disagree with it. It is published here because the client only ever receives the `client` section.
-    ...(runtime.defaultLocale === undefined
-      ? {}
-      : { i18n: { defaultLocale: runtime.defaultLocale } }),
+  };
+}
+
+/**
+ * What sections publish through `public`, plus the one value the runtime itself always publishes: the browser starts in
+ * the same `i18n.defaultLocale` the server does, rather than a separate client-side copy that could disagree with it.
+ */
+function createPublicConfig(
+  published: SpaClientConfigMap,
+  defaultLocale: string | undefined,
+): SpaClientConfigMap {
+  if (defaultLocale === undefined) return published;
+  return {
+    ...published,
+    i18n: { ...readConfigSection(published.i18n), defaultLocale },
   };
 }
 

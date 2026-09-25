@@ -7,14 +7,13 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 import type { AIManager, FileStorage } from '@nocobase/ai-employee';
 import type { Caching } from '@nocobase/caching';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { Actor, Translate } from '../../types.js';
-import type { ConversationExecution } from '../../agent/contracts.js';
+import type { Actor } from '../../types.js';
+import type { AgentUserDecisionResult } from '../../agent/contracts.js';
 import type { AIFileEntity } from '../../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
@@ -28,13 +27,15 @@ import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
-import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
-import { createAgentContext } from '../../agent/context.js';
+import type { AgentInvokeResult } from '../../agent/types.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
+  AgentRuntime,
+  AgentState,
   SubAgentConversationMetadata,
   AIMessageInput,
 } from '@nocobase/ai-employee';
+import { agentServiceFactoryToken } from '../../tokens.js';
 
 export type SubAgentTask = {
   sessionId: string;
@@ -43,15 +44,16 @@ export type SubAgentTask = {
   question: string;
   skillSettings?: Record<string, any>;
   webSearch?: boolean;
-  messages?: AIMessageInput[];
+  /** See `AgentState.handoffMessages`. */
+  handoffMessages?: AIMessageInput[];
   writer?: (chunk: any) => void;
 };
 
 export interface SubAgentExecutionOptions {
   readonly actor: Actor;
-  readonly execution?: ConversationExecution;
-  readonly translate?: Translate;
-  readonly getHeader?: (name: string) => string | undefined;
+  /** The dispatching agent's own, inherited by the sub-agent. */
+  readonly state: AgentState;
+  readonly runtime: AgentRuntime;
 }
 
 export class SubAgentsDispatcher {
@@ -125,6 +127,7 @@ export class SubAgentsDispatcher {
     this.workContextHandler = workContextHandler;
     this.documentLoaders = documentLoaders;
     void this.ai;
+    void this.aiEmployeesManager;
     void this.database;
     void this.databaseManager;
     void this.logger;
@@ -171,13 +174,8 @@ export class SubAgentsDispatcher {
     return '';
   }
 
-  private extractLastMessageText(result: any): string {
-    const messages = result?.messages;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return '';
-    }
-
-    return this.extractTextContent(messages.at(-1)?.content);
+  private extractLastMessageText(result: AgentInvokeResult): string {
+    return this.extractTextContent(result.message?.content);
   }
 
   private async resolveSubAgentSessionId(
@@ -246,7 +244,7 @@ export class SubAgentsDispatcher {
       question,
       skillSettings,
       webSearch,
-      messages,
+      handoffMessages,
       writer,
     } = task;
     const userId = options.actor.id;
@@ -254,63 +252,26 @@ export class SubAgentsDispatcher {
       throw new Error('User not authenticated');
     }
 
-    const resolvedModel = await this.aiEmployeesManager.resolveModel(
-      employee,
-      model,
-    );
-    const execution = options.execution;
-    const agentContext = createAgentContext({
-      actor: options.actor,
-      state: {
-        sessionId,
-        messageId: execution?.messageId,
-        messages: messages
-          ? [...messages]
-          : execution?.messages
-            ? [...execution.messages]
-            : undefined,
-        model: { ...resolvedModel },
-        webSearch: webSearch ?? execution?.webSearch,
-        important: execution?.important,
-        frontendTools: execution?.frontendTools
-          ? [...execution.frontendTools]
-          : undefined,
-        toolCallResults: execution?.toolCallResults
-          ? [...execution.toolCallResults]
-          : undefined,
-        timezone: execution?.timezone,
-      },
-      ai: this.ai,
-      database: this.databaseManager,
-      authorization: this.container?.has(authorizationToken)
-        ? this.container.resolve(authorizationToken)
-        : undefined,
-      logger: this.logger,
-      repositories: this.repositories,
-      aiEmployeesManager: this.aiEmployeesManager,
-      aiConversationsManager: this.aiConversationsManager,
-      builtInManager: this.builtInManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      subAgentsDispatcher: this,
-      translate: options.translate,
-      getHeader: options.getHeader,
-    });
     if (!this.container) {
       throw new Error('SubAgentsDispatcher requires an App container');
     }
     const agentServiceFactory = this.container.resolve(
       agentServiceFactoryToken,
     );
+    // Its own session is the only change this dispatcher makes to the state.
     const agent = await agentServiceFactory.createAIEmployee({
       username: employee.username,
       actor: options.actor,
       from: 'sub-agent',
-      translate: options.translate,
-      getHeader: options.getHeader,
-      sessionId,
+      runtime: options.runtime,
       skillSettings,
-      webSearch,
-      tools: undefined,
+      state: {
+        ...options.state,
+        sessionId,
+        handoffMessages,
+        model,
+        webSearch: webSearch ?? options.state.webSearch,
+      },
     });
     const lastMessage = await this.repositories.aiMessages.findOne({
       filter: {
@@ -323,20 +284,21 @@ export class SubAgentsDispatcher {
           lastMessage.messageId,
         )
       : null;
-    const context: Record<string, unknown> = { agentContext };
+    const runtime: Record<string, unknown> = {};
+    // Only where it means something: the user interrupted this sub-agent's
+    // tool call, so their message is answering it.
     if (
-      messages &&
+      handoffMessages?.length &&
       decisions?.decisions?.some(
         (decision: { type: 'approve' | 'edit' | 'reject' }) =>
           decision.type === 'reject',
       )
     ) {
-      context.appendMessages = messages;
+      runtime.appendMessages = handoffMessages;
     }
 
     const result = await agent.invoke({
       userDecisions: decisions ?? undefined,
-      model: resolvedModel,
       userMessages: decisions
         ? undefined
         : [
@@ -349,7 +311,7 @@ export class SubAgentsDispatcher {
             },
           ],
       writer,
-      context,
+      runtime,
     });
 
     writer?.({
@@ -382,7 +344,10 @@ export class SubAgentsDispatcher {
     return Boolean(aiToolMessage);
   }
 
-  async reject(sessionId: string, actorId: string | number): Promise<unknown> {
+  async reject(
+    sessionId: string,
+    actorId: string | number,
+  ): Promise<AgentUserDecisionResult | null | undefined> {
     const userId = actorId;
     if (!userId) {
       throw new Error('User not authenticated');

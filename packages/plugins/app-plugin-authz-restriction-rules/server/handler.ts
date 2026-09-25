@@ -1,87 +1,80 @@
 import type { AuthorizationRouteHandler } from '@nocobase/authorization/core';
+import type {
+  RestrictionRule,
+  RestrictionRulesApi,
+} from '@nocobase/authorization/restriction-rules';
 import {
   createRouteHandler,
+  createRuleSupportRoutes,
   createSettingsRouter,
+  parse,
   requireSettings,
-} from '@nocobase/app-plugin-authorization/server/management';
-import {
-  actionScopes,
-  object,
-  ruleBase,
-} from '@nocobase/app-plugin-authorization/server/management';
-import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
-import type { RestrictionRulesApi } from '@nocobase/authorization/restriction-rules';
+  validateDataScopeRule,
+  type AuthorizationExtensionHost,
+} from '@nocobase/app-plugin-authorization/server/extension';
 
-/** Where the plugin registers its routes, and the prefix every path below carries. */
-export const RESTRICTION_RULES_ROUTE_PATH = '/restriction-rules';
+/** The rule name, route prefix and settings item suffix. */
+export const RESTRICTION_RULES_RULE = 'restriction-rules';
+export const RESTRICTION_RULES_SETTINGS: string = `authorization.${RESTRICTION_RULES_RULE}`;
+const PATH = `/${RESTRICTION_RULES_RULE}`;
 
 type RestrictionRulesAdministrationApi = Omit<
   RestrictionRulesApi,
   'withTransaction'
 >;
 
+/** Every `/restriction-rules` route, gated by `settings:authorization.restriction-rules`. */
 export function createRestrictionRulesHandler(
+  authz: AuthorizationExtensionHost,
   api: RestrictionRulesAdministrationApi,
-  validate: (rule: RestrictionRule) => void = () => {},
 ): AuthorizationRouteHandler {
-  const checked = (value: unknown): RestrictionRule => {
-    const rule = parseRestrictionRule(value);
-    validate(rule);
-    return rule;
-  };
   const routes = createSettingsRouter();
-
-  routes.get(RESTRICTION_RULES_ROUTE_PATH, async (context) => {
+  const checked = (value: unknown): RestrictionRule => {
+    const rule = parse.rule(value, { withSubjects: true });
+    validateDataScopeRule(authz, rule);
+    return { ...rule, subjects: rule.subjects ?? [] };
+  };
+  routes.route('/', createRuleSupportRoutes(authz, RESTRICTION_RULES_RULE));
+  routes.get(PATH, async (context) => {
     await requireSettings(
       context.env.authorization,
-      'restriction-rules',
+      RESTRICTION_RULES_SETTINGS,
       'read',
     );
     return context.json({ data: await api.list() });
   });
-
-  routes.post(RESTRICTION_RULES_ROUTE_PATH, async (context) => {
+  routes.post(PATH, async (context) => {
     await requireSettings(
       context.env.authorization,
-      'restriction-rules',
+      RESTRICTION_RULES_SETTINGS,
       'create',
     );
     return context.json(
-      {
-        data: await api.create(checked(await context.req.json())),
-      },
+      { data: await api.create(checked(await context.req.json())) },
       201,
     );
   });
-
-  routes.put(`${RESTRICTION_RULES_ROUTE_PATH}/:key`, async (context) => {
+  routes.put(`${PATH}/:key`, async (context) => {
     await requireSettings(
       context.env.authorization,
-      'restriction-rules',
+      RESTRICTION_RULES_SETTINGS,
       'update',
     );
+    const key = context.req.param('key');
+    if (!(await api.get(key)))
+      return context.json({ code: 'RULE_NOT_FOUND' }, 404);
     return context.json({
-      data: await api.update(
-        context.req.param('key'),
-        checked(await context.req.json()),
-      ),
+      data: await api.update(key, checked(await context.req.json())),
     });
   });
-
-  routes.delete(`${RESTRICTION_RULES_ROUTE_PATH}/:key`, async (context) => {
+  routes.delete(`${PATH}/:key`, async (context) => {
     await requireSettings(
       context.env.authorization,
-      'restriction-rules',
+      RESTRICTION_RULES_SETTINGS,
       'delete',
     );
     await api.delete(context.req.param('key'));
     return context.body(null, 204);
   });
-
   return createRouteHandler(routes);
-}
-
-function parseRestrictionRule(value: unknown): RestrictionRule {
-  const input = object(value, 'restriction rule');
-  return { ...ruleBase(input), actions: actionScopes(input.actions) };
 }

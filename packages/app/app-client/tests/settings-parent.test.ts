@@ -12,7 +12,9 @@ const owner = {
       name: 'authorization',
       path: '/authorization',
       navigation: { title: 'Permissions' },
-      children: [{ name: 'sets', path: '/sets', componentLoader: page }],
+      children: [
+        { name: 'sets', path: '/sets', authz: 'skip', componentLoader: page },
+      ],
     },
   ]),
 };
@@ -31,18 +33,30 @@ describe('settings parent contributions', () => {
           name: 'inspector',
           path: '/inspector',
           navigation: { title: 'Inspector', order: 100 },
+          authz: {
+            resource: { type: 'page', id: 'inspector' },
+            action: 'access',
+          },
           componentLoader: page,
         },
         {
           parent: 'authorization',
           name: 'sharing',
           path: '/sharing',
+          authz: {
+            resource: { type: 'page', id: 'sharing' },
+            action: 'access',
+          },
           componentLoader: page,
         },
         {
           parent: 'authorization',
           name: 'restrictions',
           path: '/restrictions',
+          authz: {
+            resource: { type: 'page', id: 'restrictions' },
+            action: 'access',
+          },
           componentLoader: page,
         },
       ]),
@@ -94,6 +108,7 @@ describe('settings parent contributions', () => {
           parent: 'nested',
           name: 'audit',
           path: '/audit',
+          authz: { resource: { type: 'page', id: 'audit' }, action: 'access' },
           componentLoader: page,
         },
         {
@@ -118,7 +133,16 @@ describe('settings parent contributions', () => {
         resolveAppClientContributions([
           owner,
           contribution([
-            { parent, name: 'audit', path: '/audit', componentLoader: page },
+            {
+              parent,
+              name: 'audit',
+              path: '/audit',
+              authz: {
+                resource: { type: 'page', id: 'audit' },
+                action: 'access',
+              },
+              componentLoader: page,
+            },
           ]),
         ]),
       ).toThrow('missing group');
@@ -132,7 +156,16 @@ describe('settings parent contributions', () => {
             name: 'a',
             navigation: { title: 'A' },
             children: [
-              { parent: 'a', name: 'b', path: '/b', componentLoader: page },
+              {
+                parent: 'a',
+                name: 'b',
+                path: '/b',
+                authz: {
+                  resource: { type: 'page', id: 'b' },
+                  action: 'access',
+                },
+                componentLoader: page,
+              },
             ],
           },
         ]),
@@ -167,6 +200,7 @@ describe('settings parent contributions', () => {
             parent: 'authorization',
             name: 'sets',
             path: '/other',
+            authz: { resource: { type: 'page', id: 'sets' }, action: 'access' },
             componentLoader: page,
           },
         ]),
@@ -180,6 +214,10 @@ describe('settings parent contributions', () => {
             parent: 'authorization',
             name: 'other',
             path: '/sets',
+            authz: {
+              resource: { type: 'page', id: 'other' },
+              action: 'access',
+            },
             componentLoader: page,
           },
         ]),

@@ -421,9 +421,10 @@ async function createWorkflowApplication(
       grants:
         key === 'manager' || key === 'reader'
           ? [
-              authorization.settings.grant('workflow', [
-                key === 'manager' ? 'manage' : 'read',
-              ]),
+              {
+                resource: { type: 'settings', id: 'workflow' },
+                actions: [{ action: key === 'manager' ? 'manage' : 'read' }],
+              },
             ]
           : [],
     });
