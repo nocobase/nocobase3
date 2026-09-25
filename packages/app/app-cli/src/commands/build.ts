@@ -11,7 +11,9 @@ export default class Build extends ToolCommand {
 Options are passed to the build:
   --target <target>       Deployment platform, such as linux-x64 or linux-arm64-musl (default: current).
   --node-version <major>  Target Node major for an explicit platform target (default: 24).
-  --tar                   Also create storage/exports/dist.tar.gz after a successful build.`;
+  --tar                   Also create storage/exports/dist.tar.gz after a successful build.
+
+build retarget and build verify rerun those two steps on a dist/ that is already built.`;
   static override examples: Command.Example[] = [
     '<%= config.bin %> build',
     '<%= config.bin %> build --target linux-x64 --node-version 24 --tar',

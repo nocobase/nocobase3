@@ -54,7 +54,7 @@ class PackageManagerRemovalError extends Error {
 
 export default class PackageRemove extends PluginUnregister {
   static override summary =
-    'Remove a direct NocoBase package dependency and its synchronized skills.';
+    'Remove a direct NocoBase package dependency and its synchronized Skills.';
   static override description =
     'Removes a directly declared @nocobase/* dependency with the App package manager, then deletes only the skills recorded as belonging to that package. A package already absent from package.json still has stale recorded skills cleaned. Plugin packages also unregister their Client, Server, and CLI contributions.';
 

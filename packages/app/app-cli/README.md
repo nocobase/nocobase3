@@ -20,20 +20,20 @@ In a source application the bin registers the application's own `tsx` before it 
 
 ## Commands
 
-| Command                                                                                 | In a deployment | Notes                                                                |
-| --------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
-| `info`                                                                                  | yes             |                                                                      |
-| `config init`, `config check`, `config set`, `config env`                               | yes             | Act on the application's `config.yml`                                |
-| `db apply`, `db reset`, `db repair`, `db rollback`, `db redo`, `db unlock`, `db doctor` | yes             | Create the application without booting it                            |
-| `collections generate`                                                                  | yes             |                                                                      |
-| `locales check`                                                                         | yes             |                                                                      |
-| `release upload`, `release deploy`                                                      | yes             | Only when `package.json` sets `nocobase.cli.publishing: true`        |
-| `dev`, `build`, `start`                                                                 | no              | `build` passes `--target`, `--node-version` and `--tar` to the build |
-| `server-deps retarget`, `server-deps verify`                                            | no              |                                                                      |
-| `plugin register`, `plugin unregister`, `plugin update`, `plugin inspect`               | no              | Take `--dir`, or `--workspace-root` with `--app` in this repository  |
-| `package remove`, `skills sync`                                                         | no              |                                                                      |
-| `app <name>`                                                                            | yes             | The application's own commands, from `cli/commands/`                 |
-| `<plugin> <name>`                                                                       | plugin decides  | A plugin's commands under the topic its package name gives           |
+| Command                                                                    | In a deployment | Notes                                                                |
+| -------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
+| `info`                                                                     | yes             |                                                                      |
+| `config init`, `config check`, `config set`, `config env`                  | yes             | Act on the application's `config.yml`                                |
+| `db apply`, `db reset`, `db repair`, `db rollback`, `db redo`, `db unlock` | yes             | Create the application without booting it                            |
+| `collections generate`, `collections doctor`                               | yes             |                                                                      |
+| `locales check`                                                            | yes             |                                                                      |
+| `release upload`, `release deploy`                                         | yes             | Only when `package.json` sets `nocobase.cli.publishing: true`        |
+| `dev`, `build`, `start`                                                    | no              | `build` passes `--target`, `--node-version` and `--tar` to the build |
+| `build retarget`, `build verify`                                           | no              |                                                                      |
+| `plugin register`, `plugin unregister`, `plugin update`, `plugin inspect`  | no              | Take `--dir`, or `--workspace-root` with `--app` in this repository  |
+| `package remove`, `skills sync`                                            | no              |                                                                      |
+| `app <name>`                                                               | yes             | The application's own commands, from `cli/commands/`                 |
+| `<plugin> <name>`                                                          | plugin decides  | A plugin's commands under the topic its package name gives           |
 
 `tests/builtin-commands.test.ts` asserts the exact list, so adding, renaming or removing a command is a deliberate edit there.
 

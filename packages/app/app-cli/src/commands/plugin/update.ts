@@ -18,7 +18,7 @@ import {
 } from '../../lib/skills-sync.ts';
 
 export default class PluginUpdate extends Command {
-  static override summary = 'Upgrade plugins and re-synchronize their skills.';
+  static override summary = 'Upgrade plugins and re-synchronize their Skills.';
   static override description =
     "Upgrades the plugin packages through the package manager the app already uses, then re-synchronizes all registered plugins' skills into .agents/skills. Specify a full package name or a short name. Without a name every registered plugin is upgraded. The skills copy is the reason to prefer this over upgrading by hand: skills live in the app, so an upgrade leaves a stale copy behind until something re-runs the sync.";
 

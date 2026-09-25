@@ -37,7 +37,7 @@ const { execFileSync } = require('node:child_process');
 // same whichever form the smoke script uses.
 if (process.argv[2] === 'nocobase') {
   const id = process.argv.splice(2, 3).slice(1).join(':');
-  process.argv.splice(2, 0, id === 'server-deps:retarget' ? 'server:deps:retarget' : id);
+  process.argv.splice(2, 0, id === 'build:retarget' ? 'server:deps:retarget' : id);
 }
 const command = process.argv[2];
 const scenario = process.env.SMOKE_SCENARIO;

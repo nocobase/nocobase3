@@ -15,7 +15,7 @@ export interface ToolCommandOptions {
 /**
  * A command that forwards its arguments untouched to one script.
  *
- * The scripts parse their own options — `build --target`, `server-deps retarget --node-version` — and print their own
+ * The scripts parse their own options — `build --target`, `build retarget --node-version` — and print their own
  * usage, so the command does not declare flags it would only have to keep in step with them.
  */
 export abstract class ToolCommand extends Command {

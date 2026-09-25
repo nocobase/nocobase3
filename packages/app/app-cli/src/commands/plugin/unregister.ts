@@ -73,7 +73,7 @@ type PluginUnregisterFlagInput = Omit<
   Partial<Pick<typeof pluginUnregisterFlags, 'no-install'>>;
 
 export default class PluginUnregister extends Command {
-  static override summary = 'Remove a plugin from this app.';
+  static override summary = 'Remove a plugin from this application.';
   static override description =
     'Undoes what register did: drops the imports and entries from the client and server composition roots, removes the dependency, deletes installed skills, and uninstalls the package.';
 

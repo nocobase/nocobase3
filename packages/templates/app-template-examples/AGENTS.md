@@ -245,7 +245,7 @@ pnpm nocobase locales check          # languages declared on only one side
 pnpm nocobase app sync-orders        # a command this application owns
 ```
 
-Built-in topics are `config`, `db`, `collections`, `locales`, `release` (when `nocobase.cli.publishing` is set in `package.json`), `plugin`, `package`, `skills` and `server-deps`. `app` holds what this application writes for itself, and each registered plugin contributes commands under its package name without the `app-plugin-` prefix — the workflow plugin's are under `workflow`.
+Built-in topics are `config`, `db`, `collections`, `locales`, `release` (when `nocobase.cli.publishing` is set in `package.json`), `plugin`, `package`, `skills` and `build` (for `build retarget` and `build verify`). `app` holds what this application writes for itself, and each registered plugin contributes commands under its package name without the `app-plugin-` prefix — the workflow plugin's are under `workflow`.
 
 Add a command of your own as a file in `cli/commands/` that default-exports an oclif `Command` subclass: `cli/commands/sync-orders.ts` answers to `nocobase app sync-orders`, and `cli/commands/orders/sync.ts` to `nocobase app orders sync`. Files and directories starting with `_`, and directories named `lib`, are skipped, so helpers can sit beside the commands. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
 

@@ -53,16 +53,16 @@ Once the branch is merged, do not edit it at all: write a new migration for the 
 
 Two things are never the answer here. `pnpm nocobase db repair` only rewrites the recorded checksum, so it makes an un-applied change look applied — the schema stays wrong and nothing says so. Editing `__nocobase_migrations`, `__nocobase_collection_metadata` or a physical table by hand splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable, and the next run fails with `Metadata Collection "…" maps to missing physical table "…"` before it reaches your migration.
 
-`pnpm nocobase db doctor` compares every metadata record with the table behind it and reports what disagrees; `--fix` deletes the records whose table is gone, which is the state a hand-rolled reset leaves behind. Anything else it finds is reported only — the table exists and something in it no longer matches what was recorded, which a migration has to reconcile.
+`pnpm nocobase collections doctor` compares every metadata record with the table behind it and reports what disagrees; `--fix` deletes the records whose table is gone, which is the state a hand-rolled reset leaves behind. Anything else it finds is reported only — the table exists and something in it no longer matches what was recorded, which a migration has to reconcile.
 
 Each internal table has a command that maintains it, and none of them should be edited directly:
 
-| Table                                               | Holds                                     | Maintained by                                     |
-| --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
-| `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db apply`, `db rollback`, `db redo`, `db repair` |
-| `__nocobase_seeds`                                  | Which seeds ran                           | `db apply`, `db repair`                           |
-| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`; `db doctor`        |
-| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db unlock`                   |
+| Table                                               | Holds                                     | Maintained by                                       |
+| --------------------------------------------------- | ----------------------------------------- | --------------------------------------------------- |
+| `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db apply`, `db rollback`, `db redo`, `db repair`   |
+| `__nocobase_seeds`                                  | Which seeds ran                           | `db apply`, `db repair`                             |
+| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`; `collections doctor` |
+| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db unlock`                     |
 
 ## When a run is killed while it holds the lock
 

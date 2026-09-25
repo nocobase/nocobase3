@@ -25,7 +25,6 @@ export const DEVELOPMENT_TOPICS: readonly string[] = Object.freeze([
   'dev',
   'package',
   PLUGIN_TOPIC,
-  'server-deps',
   'skills',
   'start',
 ]);
@@ -40,7 +39,6 @@ export const APPLICATION_TOPICS: readonly string[] = Object.freeze([
   'info',
   'locales',
   'release',
-  'server-deps',
   'start',
 ]);
 
@@ -49,24 +47,24 @@ export const PUBLISHING_TOPIC = 'release';
 
 export const builtinTopics: Readonly<Record<string, { description: string }>> =
   Object.freeze({
-    collections: { description: 'Generate Collection artifacts.' },
+    build: { description: 'Build dist/, then retarget or verify it.' },
+    collections: { description: 'Generate and check Collection metadata.' },
     config: {
       description: "Create, check and edit this application's configuration.",
     },
     db: { description: 'Manage database migrations, seeds and locks.' },
     locales: { description: 'Check application localization.' },
     package: {
-      description: 'Manage direct NocoBase package dependencies.',
+      description: 'Remove direct NocoBase packages and their Skills.',
     },
-    [PLUGIN_TOPIC]: { description: 'Manage the plugins this app uses.' },
+    [PLUGIN_TOPIC]: {
+      description: 'Manage the plugins this application uses.',
+    },
     [PUBLISHING_TOPIC]: {
       description: 'Publish application releases to a Hub.',
     },
-    'server-deps': {
-      description: "Retarget or verify the built server's dependencies.",
-    },
     skills: {
-      description: 'Synchronize the agent skills NocoBase packages ship.',
+      description: 'Synchronize the agent Skills NocoBase packages ship.',
     },
   });
 

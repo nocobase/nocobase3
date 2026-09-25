@@ -32,7 +32,8 @@ import {
 } from '../../lib/skills-sync.ts';
 
 export default class PluginRegister extends Command {
-  static override summary = 'Install a plugin and wire it into this app.';
+  static override summary =
+    'Install a plugin and wire it into this application.';
   static override description =
     'Adds the plugin package to dependencies, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
 

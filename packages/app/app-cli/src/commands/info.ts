@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export default class AppInfo extends AppCommand {
-  static override summary = 'Print this application’s name and version.';
+  static override summary = "Print this application's name and version.";
   static override description =
     'Reads the application manifest. A starting point for commands this application owns; replace or extend it as needed.';
 

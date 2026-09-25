@@ -16,7 +16,7 @@ import { resolveAppRoot } from '../../lib/workspace-app.ts';
 
 export default class SkillsSync extends Command {
   static override summary =
-    "Copy NocoBase package skills into the app's .agents/skills.";
+    'Copy NocoBase package Skills into .agents/skills and link them into .claude/skills.';
   static override description =
     "NocoBase packages ship App-facing skills in skills/nocobase-*/ and this copies them into the app's ignored local .agents/skills/ directory. Direct @nocobase/* dependencies and registered plugins are synchronized. Upstream is the single source of truth: each synchronized directory is replaced wholesale, while app-owned skills are preserved. Run this after installing or upgrading packages whose skills changed.";
 

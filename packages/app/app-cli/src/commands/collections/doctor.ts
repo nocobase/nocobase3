@@ -8,7 +8,7 @@ import {
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
 
-export default class AppDbDoctor extends AppCommand {
+export default class CollectionsDoctor extends AppCommand {
   static override summary =
     'Compare stored Collection metadata with the schema behind it.';
   static override description =
@@ -47,7 +47,7 @@ export default class AppDbDoctor extends AppCommand {
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppDbDoctor);
+    const { flags } = await this.parse(CollectionsDoctor);
     let result: AppCollectionsDoctorResult;
     try {
       const runtime = await this.appContext.loadRuntime();

@@ -63,9 +63,7 @@ describe('built-in commands by location', () => {
       expect.arrayContaining(['info', 'db:apply', 'config:init']),
     );
     for (const id of deployment) {
-      expect(id).not.toMatch(
-        /^(build|dev|start|server-deps|plugin|package|skills)(:|$)/,
-      );
+      expect(id).not.toMatch(/^(build|dev|start|plugin|package|skills)(:|$)/);
     }
   });
 
@@ -104,16 +102,16 @@ describe('built-in commands by location', () => {
 });
 
 describe('dispatching a built-in command', () => {
-  const ids = ['db:apply', 'plugin:register', 'build', 'server-deps:verify'];
+  const ids = ['db:apply', 'plugin:register', 'build', 'build:verify'];
 
   it('matches the longest run of leading words', () => {
     expect(matchCommandId(['db', 'apply', '--all'], ids)).toBe('db:apply');
     expect(matchCommandId(['build', '--target', 'linux-x64'], ids)).toBe(
       'build',
     );
-    expect(matchCommandId(['server-deps', 'verify'], ids)).toBe(
-      'server-deps:verify',
-    );
+    expect(matchCommandId(['build', 'verify'], ids)).toBe('build:verify');
+    // The bare command still wins when no subcommand follows it.
+    expect(matchCommandId(['build', '--tar'], ids)).toBe('build');
   });
 
   it('matches nothing for a topic, help, or a command it does not own', () => {
