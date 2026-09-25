@@ -106,12 +106,16 @@ server/                  API server
 ├── standalone.ts        Node entry point
 └── embedded.ts          Entry point when a host process mounts it
 
+cli/                     Command line
+├── plugins.ts           Which plugins contribute commands and build and dev hooks
+└── commands/            Your own commands, under the app topic (created when needed)
+
 database/
-├── migrations/          Your schema history
-└── seeds/               Your required initial data
+└── main/
+    ├── migrations/      Your schema history (initially empty)
+    └── seeds/           Your required initial data (initially empty)
 
 tests/                   Unit and integration tests
-e2e/                     Browser tests needing a real server
 config.yml              Your configuration, written by pnpm nocobase config init; gitignored
 config.example.yml       Documented configuration template
 ```
@@ -358,7 +362,7 @@ Configuration is resolved from the file, environment variables, and defaults in 
 
 ## Testing
 
-Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
+Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`.
 
 ## Working with an AI agent
 

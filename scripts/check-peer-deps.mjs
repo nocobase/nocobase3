@@ -88,8 +88,8 @@ export function findViolations(manifest) {
   return violations;
 }
 
-// Only plugins are checked. A plugin is loaded into an application that already provides the runtime, so it must
-// never install its own copy.
+// Guests are checked: a plugin, or a tool loaded into an application, arrives in an application that already provides
+// the runtime, so it must never install its own copy.
 //
 // The other groups are hosts rather than guests. `packages/app` and `packages/libs` compose the runtime — `app-server`
 // depending on `@nocobase/db` is what puts the single copy in place for everyone else — and `packages/templates` are
@@ -100,8 +100,29 @@ export function findViolations(manifest) {
 // added here.
 const CHECKED_GROUPS = ['plugins', 'examples', 'tools'];
 
+// Guests that live in a host group. `@nocobase/app-cli` sits in `packages/app` but is installed into an application
+// and runs against the `@nocobase/app-server` and `@nocobase/db` the application provides, so it is held to the same
+// rule as a plugin. It came from `packages/tools` (as `nb3-cli` and `app-tools`), where the group rule covered it.
+const CHECKED_PACKAGES = ['app/app-cli'];
+
 export async function collectPackages(repositoryRoot) {
   const packages = [];
+  for (const relative of CHECKED_PACKAGES) {
+    const manifestPath = path.join(
+      repositoryRoot,
+      'packages',
+      relative,
+      'package.json',
+    );
+    try {
+      packages.push({
+        manifest: JSON.parse(await readFile(manifestPath, 'utf8')),
+        manifestPath,
+      });
+    } catch {
+      // Absent in a fixture repository; the group scan below still runs.
+    }
+  }
   for (const group of CHECKED_GROUPS) {
     const groupDirectory = path.join(repositoryRoot, 'packages', group);
     let entries;

@@ -85,13 +85,13 @@ State authentication and authorization separately. Name the caller identity, res
 
 Give a short executable workflow: confirm prerequisites, create App-owned data or permissions, call the public entry, verify an observable result, and diagnose known failures. Use real names and inputs rather than placeholders.
 
-Verification should assert a response, visible page state, database record, Job status, CLI output, or log produced by the public workflow. Skill file equality proves only synchronization. `plugin inspect`, Client inspection, and Server inspection are optional read-only diagnostics for unexpected composition problems and do not prove runtime behavior, permissions, tests, or builds.
+Verification should assert a response, visible page state, database record, Job status, CLI output, or log produced by the public workflow. Skill file equality proves only synchronization. `plugin inspect` is an optional read-only diagnostic for unexpected registration problems and does not prove runtime behavior, permissions, tests, or builds.
 
 Update Plugin Skills in the same change whenever public entries, integration steps, inputs, outputs, ownership, permissions, constraints, or verification change. Internal refactors that preserve the App contract do not require Skill changes.
 
 ## Synchronize to an App
 
-Plugin registration copies shipped Skills by default unless `--no-skills` is given. The preferred standalone command scans directly declared `@nocobase/*` dependencies and explicitly registered plugins:
+Plugin registration copies shipped Skills by default unless `--no-skills` is given. The standalone command scans directly declared `@nocobase/*` dependencies and explicitly registered plugins:
 
 ```bash
 cd packages/templates/app-template-default
@@ -113,5 +113,5 @@ After synchronizing, inspect the App copy only to confirm delivery. Make all con
 Current implementation and maintained example:
 
 - Skills synchronization implementation (`packages/app/app-cli/src/lib/skills-sync.ts`)
-- Preferred Skills sync command (`packages/app/app-cli/src/commands/skills/sync.ts`)
+- Skills sync command (`packages/app/app-cli/src/commands/skills/sync.ts`)
 - Skills Example source (`packages/examples/app-plugin-skills-example/skills/nocobase-app-plugin-skills-example/SKILL.md`)

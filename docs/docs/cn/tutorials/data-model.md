@@ -62,15 +62,14 @@ description: '固定客户、订单、金额和归属字段，为后面的页面
 
 ```bash
 pnpm nocobase db apply
-pnpm nocobase collections generate
 ```
 
-`collections generate` 生成数据库描述文件，不能靠手工修改这些文件来建表。迁移显示已跳过，可能只是启动时已经自动执行；继续检查实际表结构。
+`db apply` 执行迁移后会同时刷新 `database/main/collections/` 下生成的数据库描述文件，不需要再单独执行 `collections generate`。不能靠手工修改这些文件来建表。迁移显示已跳过，可能只是 `pnpm dev` 启动时已经自动执行，开发服务端同样会刷新这些文件；继续检查实际表结构。
 
 ## 检查结果
 
 请 AI Agent 查询两张表，并核对：客户有两个不同的 ID；订单的 `customerId` 引用客户 ID；`number` 有唯一约束；金额是整数。此时订单表为空是正常的。
 
-如果迁移失败，先读出失败的迁移名和原因。不要反复改动已执行文件，也不要使用 `migrate --fresh` 清空之前的练习。
+如果迁移失败，先读出失败的迁移名和原因。不要反复改动已执行文件，也不要为了绕过失败而执行 `pnpm nocobase db reset`：它会删除所有受管表，清空之前的练习。
 
 下一步：[做列表页和详情页](./pages)。

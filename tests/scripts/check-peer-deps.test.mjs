@@ -93,6 +93,13 @@ test('ignores a package depending on itself', () => {
   assert.deepEqual(violations, []);
 });
 
+test('checks the application command line, which an application installs like a plugin', async () => {
+  const packages = await collectPackages(repoRoot);
+  const names = packages.map(({ manifest }) => manifest.name);
+
+  assert.ok(names.includes('@nocobase/app-cli'));
+});
+
 test('every checked package in the repository satisfies the rule', async () => {
   const packages = await collectPackages(repoRoot);
   assert.ok(packages.length > 0, 'expected to discover packages');

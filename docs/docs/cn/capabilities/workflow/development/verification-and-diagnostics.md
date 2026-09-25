@@ -52,7 +52,7 @@ pnpm build
 Artifact 是应用构建后交给运行时加载的不可变工作流版本产物。可以单独构建：
 
 ```bash
-pnpm exec workflow build
+pnpm nocobase workflow build
 ```
 
 默认应用的正常 `pnpm build` 也包含此步骤。开发 Artifact 保留包内 `.ts` 资源，生产 Artifact 收集应用服务端构建在相同相对路径输出的 `.js` 资源，并根据确定性内容生成摘要。

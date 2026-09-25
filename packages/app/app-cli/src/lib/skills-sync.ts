@@ -212,7 +212,7 @@ export async function planSkillsSync({
         !pruneMissingPackages
       ) {
         throw new Error(
-          `Skill name collision: ${skill.name} is already synchronized from ${recordedOwner}. Run a full skills:sync to reconcile package ownership.`,
+          `Skill name collision: ${skill.name} is already synchronized from ${recordedOwner}. Run a full nocobase skills sync to reconcile package ownership.`,
         );
       }
       owners.set(skill.name, skill.packageName);

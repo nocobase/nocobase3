@@ -27,10 +27,7 @@ The plugin reconciles declarations into `schedule_definitions` and the schedule 
 
 `schedulerServiceToken` is the plugin's whole extension surface, with two methods. `registerTarget()` declares what a schedule can point at: how a config is validated, how a firing starts, and how a run that finishes later is inspected, and it returns the handle that reports a terminal outcome. `defineSchedule(definition)` registers a schedule itself; `key` must be unique within the application and forms the schedule's stable identity. Both are read once when the App syncs during startup, so call them from `register()` or `boot()`. Reading and changing schedules afterward is reachable through the HTTP API and the `scheduler sync` command rather than through the service.
 
-Run a non-destructive synchronization with `pnpm nocobase scheduler sync`. A deployment
-may run `pnpm nocobase scheduler sync --finalize` once per App to deactivate declarations
-missing from the complete manifest. The one-shot command does not start the
-Schedule worker.
+Run a non-destructive synchronization with `pnpm nocobase scheduler sync`. A deployment may run `node dist/cli/index.js scheduler sync --finalize` once per App, from any directory, or `pnpm nocobase scheduler sync --finalize` inside `dist/`, to deactivate declarations missing from the complete manifest. The one-shot command does not start the Schedule worker.
 
 ## Verification
 

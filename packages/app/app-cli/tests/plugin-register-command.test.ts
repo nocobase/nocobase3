@@ -438,10 +438,18 @@ describe('app plugin register command', () => {
       'PLUGIN_NOT_INSTALLED',
       'DEPENDENCY_MISSING',
     ]);
+    // A suggestion is a command that exists and targets the same App the inspection did.
     expect(response.result.suggestions).toEqual([
       {
         command: 'pnpm',
-        args: ['plugin:register', 'not-installed'],
+        args: [
+          'nocobase',
+          'plugin',
+          'register',
+          'not-installed',
+          '--dir',
+          appRoot,
+        ],
       },
     ]);
   });

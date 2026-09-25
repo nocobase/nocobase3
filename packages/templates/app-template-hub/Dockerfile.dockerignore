@@ -33,6 +33,9 @@
 !dist/**
 !packages/templates/*/dist
 !packages/templates/*/dist/**
+# `**/dist` also matches the sources of app-cli's `dist` commands, which a build inside nocobase3 compiles.
+!packages/app/app-cli/src/commands/dist
+!packages/app/app-cli/src/commands/dist/**
 
 # Except the server settings `pnpm build` extracts from local .env files, which can include DB_PASSWORD.
 dist/.env

@@ -167,7 +167,7 @@ A CLI plugin can attach commands to App lifecycle stages:
 ```ts
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: '@nocobase/app-plugin-workflow',
-  devCommands: { build: WorkflowBuild },
+  devCommands: { check: WorkflowCheck, build: WorkflowBuild },
   buildHooks: {
     afterServerBuild: [
       {
@@ -183,16 +183,10 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
       },
     ],
   },
-  devHooks: {
-    beforeDev: [
-      {
-        label: 'Prepare workflow artifacts',
-        command: ['pnpm', 'nocobase', 'workflow', 'build'],
-      },
-    ],
-  },
 });
 ```
+
+`devHooks` takes the same shape for the `beforeDev` stage. The Workflow plugin declares none: outside production its loader compiles `server/workflows` on demand, so a build before `pnpm dev` would only slow every start.
 
 Choose a stage by what exists when the hook runs:
 
@@ -216,7 +210,7 @@ Hooks run in `cli/plugins.ts` order and then declaration order. One failure stop
 
 A plugin puts commands that need its sources or development tooling in `devCommands`; they are registered in a source checkout and left out of the built `dist/`. Keep each command module cheap to import either way, because help loads every command class: import the heavy work inside `run()`.
 
-An App's own commands in `cli/commands/` are compiled with the server and always registered, so they must run from a deployment. `verify-server-deps` fails the App build when one imports a package the deployment does not declare.
+An App's own commands in `cli/commands/` are compiled with the server and always registered, so they must run from a deployment. The dependency check at the end of `nocobase build`, also available as `nocobase dist check`, fails when one imports a package the deployment does not declare.
 
 ## Plugin management commands
 

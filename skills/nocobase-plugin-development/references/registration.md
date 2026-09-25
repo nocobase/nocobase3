@@ -78,7 +78,7 @@ pnpm nocobase skills sync
 pnpm nocobase skills sync --package @nocobase/app-plugin-audit-log
 ```
 
-The plugin's top-level `skills/` is the maintained source. The App's `.agents/skills/` is generated, replaced on synchronization, and excluded from Git with the entire App `/.agents/` directory. Do not edit or commit those synchronized copies. `skills sync` remains a compatibility alias; use `skills sync` for new instructions. See [Plugin Skills](plugin-skills.md) for discovery, ownership prefixes, conflict handling, and semantic validation.
+The plugin's top-level `skills/` is the maintained source. The App's `.agents/skills/` is generated, replaced on synchronization, and excluded from Git with the entire App `/.agents/` directory. Do not edit or commit those synchronized copies. See [Plugin Skills](plugin-skills.md) for discovery, ownership prefixes, conflict handling, and semantic validation.
 
 ## Unregister and remove
 

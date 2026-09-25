@@ -45,6 +45,8 @@ Provide `HUB_URL` (including its mount path), `HUB_APP_ID`, and `HUB_API_KEY` th
 
 ### Upload and deploy
 
+`release upload` and `release deploy` are registered only in an application source project whose `package.json` sets `nocobase.cli.publishing` to `true`, and never inside a built `dist/`. The Default template sets it; the Examples and Hub templates do not, so to publish one of those through the CLI, add `"cli": { "publishing": true }` to the `nocobase` field of its `package.json`.
+
 ```bash
 pnpm nocobase release upload --deploy --config ./runtime.yml --wait --json
 ```

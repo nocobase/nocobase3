@@ -38,15 +38,13 @@ const SOURCE_EXTENSIONS = new Set([
 ]);
 
 /**
- * Directories never scanned, whatever a manifest says about them.
+ * Directories never scanned, at any depth, whatever a manifest says about them.
  *
- * `dist` is build output whose imports are already accounted for by the sources it was built from. The rest hold
- * tests and fixtures, which are excluded from every package here by its `files` field — their imports of `vitest`
- * and of fixture-only packages are correctly devDependencies.
+ * They hold tests and fixtures, which are excluded from every package here by its `files` field — their imports of
+ * `vitest` and of fixture-only packages are correctly devDependencies.
  */
 const SKIPPED_DIRECTORIES = new Set([
   'node_modules',
-  'dist',
   'tests',
   'e2e',
   'fixtures',
@@ -72,7 +70,22 @@ const SKIPPED_DIRECTORIES = new Set([
  * generated from exactly one source root, and reading TypeScript keeps `import type` distinguishable from a value
  * import, which the compiled output no longer is.
  */
-const DIST_SOURCE_ROOTS = ['src', 'server', 'client', 'database', 'runtime'];
+const DIST_SOURCE_ROOTS = [
+  'src',
+  'server',
+  'client',
+  'database',
+  'runtime',
+  // A plugin's command-line entry, built into `dist/cli` and imported by the application's `cli/plugins.ts`.
+  'cli',
+];
+
+/**
+ * The package's own build output, skipped only at the package root: its imports are already accounted for by the
+ * sources it was built from. A directory of the same name deeper down is source — `@nocobase/app-cli` keeps the
+ * `dist check` and `dist retarget` commands in `src/commands/dist/`.
+ */
+const BUILD_OUTPUT_DIRECTORY = 'dist';
 
 function publishedDirectories(manifest, entries) {
   const files = manifest.files ?? [];
@@ -86,7 +99,8 @@ function publishedDirectories(manifest, entries) {
   );
 
   return entries.filter((entry) => {
-    if (SKIPPED_DIRECTORIES.has(entry)) return false;
+    if (entry === BUILD_OUTPUT_DIRECTORY || SKIPPED_DIRECTORIES.has(entry))
+      return false;
     if (named.has(entry)) return true;
     return shipsDist && DIST_SOURCE_ROOTS.includes(entry);
   });

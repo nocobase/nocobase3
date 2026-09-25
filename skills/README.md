@@ -130,7 +130,7 @@ Ask for an application exactly as in the published case. A snapshot install can 
 
 - There is no `config.yml` until `pnpm nocobase config init` runs.
 - `.npmrc` contains `@nocobase:registry=http://127.0.0.1:4873/`.
-- `node_modules/@nocobase/app-cli/dist/commands/` contains `config-init.js`, `config-check.js` and `config-set.js`.
+- `node_modules/@nocobase/app-cli/dist/commands/config/` contains `init.js`, `check.js` and `set.js`.
 
 To look at what the local npm registry serves, query it with `curl`. In a shell without the variables above, a scoped registry in your own configuration overrides `npm view --registry`, and the answer comes from `https://npm.nocobase.ai/` instead:
 

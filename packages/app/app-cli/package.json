@@ -96,8 +96,10 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:^",
+    "@refinedev/cli": "^2.16.48",
     "prettier": "catalog:",
     "tar": "catalog:",
+    "tsc-alias": "^1.9.2",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
@@ -106,10 +108,16 @@
     "@nocobase/dev-config": {
       "optional": true
     },
+    "@refinedev/cli": {
+      "optional": true
+    },
     "prettier": {
       "optional": true
     },
     "tar": {
+      "optional": true
+    },
+    "tsc-alias": {
       "optional": true
     },
     "tsx": {

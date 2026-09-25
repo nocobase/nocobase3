@@ -331,7 +331,7 @@ export default class PluginRegister extends Command {
               commands: [{ command: packageManager, args, cwd: appRoot }],
               nextSteps: [
                 'Install the plugin.',
-                'Run plugin:register again to inspect exports and compute the registration plan.',
+                'Run nocobase plugin register again to inspect exports and compute the registration plan.',
               ],
             }),
           );

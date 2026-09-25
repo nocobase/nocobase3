@@ -115,7 +115,7 @@ export default class PackageRemove extends PluginUnregister {
               code: 'PACKAGE_MANAGER_FAILED',
               message: error.message,
               suggestions: [
-                'Fix the package manager error, then run package:remove again.',
+                'Fix the package manager error, then run nocobase package remove again.',
               ],
             }
           : classifyPluginError(error);
