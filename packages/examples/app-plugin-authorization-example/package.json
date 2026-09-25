@@ -91,8 +91,22 @@
     "@nocobase/app-plugin-authz-restriction-rules": "workspace:^",
     "react-router": "catalog:"
   },
+  "peerDependenciesMeta": {
+    "@nocobase/app-plugin-authz-default-access": {
+      "optional": true
+    },
+    "@nocobase/app-plugin-authz-sharing-rules": {
+      "optional": true
+    },
+    "@nocobase/app-plugin-authz-restriction-rules": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@nocobase/api-client": "workspace:*",
+    "@nocobase/app-plugin-authz-default-access": "workspace:*",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:*",
+    "@nocobase/app-plugin-authz-sharing-rules": "workspace:*",
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/jest-dom": "catalog:",

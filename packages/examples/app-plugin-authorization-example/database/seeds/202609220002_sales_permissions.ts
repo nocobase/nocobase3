@@ -19,8 +19,23 @@ import { salesRecords } from '../../server/sales-records.js';
 const seed: SeedDefinition = defineSeed({
   name: '202609220002_sales_permissions',
   transaction: true,
-  async run({ query }) {
+  async run(task) {
+    const { query } = task;
     if (await query.selectFrom(MEMBERS).select('id').executeTakeFirst()) return;
+    // Rule plugins are optional: a missing Collection is reported before any SQL runs, so the probe is safe here.
+    const installed = async (collection: string): Promise<boolean> => {
+      try {
+        await task.repository(collection).exists();
+        return true;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          Reflect.get(error, 'code') === 'COLLECTION_NOT_FOUND'
+        )
+          return false;
+        throw error;
+      }
+    };
     const context: SalesSeedContext = {
       users: Object.fromEntries(
         Object.keys(userProfiles).map((key) => [key, randomUUID()]),
@@ -44,26 +59,31 @@ const seed: SeedDefinition = defineSeed({
       .insertInto('authorizationPermissionSetAssignments')
       .values(permissionSetAssignmentRows(context))
       .execute();
-    await query
-      .insertInto('authorizationDefaultAccessRules')
-      .values(defaultAccessRuleRows(context))
-      .execute();
-    await query
-      .insertInto('authorizationSharingRules')
-      .values(sharingRuleRows(context))
-      .execute();
-    await query
-      .insertInto('authorizationSharingRuleAssignments')
-      .values(sharingRuleAssignmentRows(context))
-      .execute();
-    await query
-      .insertInto('authorizationRestrictionRules')
-      .values(restrictionRuleRows(context))
-      .execute();
-    await query
-      .insertInto('authorizationRestrictionRuleAssignments')
-      .values(restrictionRuleAssignmentRows(context))
-      .execute();
+    if (await installed('authorizationDefaultAccessRules'))
+      await query
+        .insertInto('authorizationDefaultAccessRules')
+        .values(defaultAccessRuleRows(context))
+        .execute();
+    if (await installed('authorizationSharingRules')) {
+      await query
+        .insertInto('authorizationSharingRules')
+        .values(sharingRuleRows(context))
+        .execute();
+      await query
+        .insertInto('authorizationSharingRuleAssignments')
+        .values(sharingRuleAssignmentRows(context))
+        .execute();
+    }
+    if (await installed('authorizationRestrictionRules')) {
+      await query
+        .insertInto('authorizationRestrictionRules')
+        .values(restrictionRuleRows(context))
+        .execute();
+      await query
+        .insertInto('authorizationRestrictionRuleAssignments')
+        .values(restrictionRuleAssignmentRows(context))
+        .execute();
+    }
 
     const records = salesRecords(context.users);
     await query.insertInto(PROJECTS).values(records.projects).execute();
