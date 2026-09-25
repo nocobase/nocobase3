@@ -37,9 +37,12 @@ export function registerDepartments(
 
 - `resolveFor` returns the ids of the user's active memberships whose whole ancestor chain is active, together with those ancestors, deduplicated. A permission set assigned to a parent department therefore reaches members of its children.
 - `filterActive` keeps an id only while its whole chain is active, reading through the transaction it receives.
-- A department subject can hold permission sets, sharing rules and restriction rules alike; each reaches the members of the department and of every active department below it.
+- A department subject can hold permission sets and, when those optional plugins are installed, sharing rules and restriction rules; each reaches the members of the department and of every active department below it.
+- Department heads are a second, fixed subject type registered beside this one: [department scopes and heads](scopes.md#department-heads).
 
 ## Scope business records by department
+
+This is the record-carried scope: the record stays with its department when people move. For scopes by the owner's department, which follow the person, and for when to use each, read [department scopes and heads](scopes.md) and [permission design](permission-design.md#owner-based-or-record-carried-department).
 
 When business records carry a `departmentId` and a data scope should follow the organisation, define a record access whose resolver reads the principal's departments from the organisation service (`authz.recordAccess.define`, see the authorization Skill's `references/business-module.md`). A resolver receives the principal, never client input. There is no `$in` operator; match a list of ids as a union of equality conditions:
 
@@ -64,7 +67,7 @@ authz.recordAccess.define(
 );
 ```
 
-When the resolver answers `false` for a caller who holds the action, the policy's scope matches no rows, so the bound Repository returns an empty result; only a caller without the grant is denied. To let one department reach another department's records, grant the operation through a permission set first, then share those records with a sharing rule whose subject is the receiving department, as the `nocobase-app-plugin-authz-sharing-rules` Skill describes; sharing never grants the operation itself.
+When the resolver answers `false` for a caller who holds the action, the policy's scope matches no rows, so the bound Repository returns an empty result; only a caller without the grant is denied. To let one department reach another department's records, assign the receiving department a permission set whose grant uses a 指定部门 / Selected department scope; with the optional sharing-rules plugin, grant the operation through a set and share the records with a rule instead, as [permission design](permission-design.md#optional-cross-department-sharing) describes.
 
 ## Organisation attributes feed business data scopes
 
@@ -265,7 +268,7 @@ const seed: SeedDefinition = defineSeed({
 export default seed;
 ```
 
-Seeding sharing or restriction rule assignments to a department follows the same check-then-insert shape against the rule plugin's assignment table, as its installed Skill describes, with `subjectType: 'org.department'`.
+Seeding sharing or restriction rule assignments to a department follows the same check-then-insert shape against the rule plugin's assignment table, as its installed Skill describes, with `subjectType: 'org.department'`. Those plugins are optional: probe their Collection first and skip the rows when it is missing, as [provision with optional rule plugins](scopes.md#provision-with-optional-rule-plugins) shows.
 
 ## Positions and roles
 

@@ -8,10 +8,10 @@ Build this when access follows a department tree: a user belongs to several depa
 
 ## Model decisions
 
-| Table               | Fields                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `departments`       | `id` string primary key, `title`, `parentId` nullable, `active` default true, `sortOrder` integer default 0, business attributes |
-| `departmentMembers` | `id` string primary key, `departmentId`, `userId`, `primary` default false, `active` default true                                |
+| Table               | Fields                                                                                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `departments`       | `id` string primary key, `title`, `parentId` nullable, `managerId` nullable (the head), `active` default true, `sortOrder` integer default 0, business attributes |
+| `departmentMembers` | `id` string primary key, `departmentId`, `userId`, `primary` default false, `active` default true                                                                 |
 
 - Ids are stable strings. Permission-set assignments, sharing rules and seeds store the department id, so never reuse or renumber one. Generate them with `idGeneratorToken` or use a fixed code chosen by the administrator.
 - `departmentMembers` is unique on `(departmentId, userId)`, indexed on `userId`. `userId` is the authentication plugin's user id; read users only through `userAdministrationServiceToken` from `@nocobase/app-plugin-authentication`, never through its table. A seed that creates demonstration accounts is the one exception.
@@ -20,15 +20,18 @@ Build this when access follows a department tree: a user belongs to several depa
 - At most one active primary membership per user. Clear the others and set the new one inside the same transaction as the membership write.
 - Business attributes of a department, such as the `region` its members work in, are ordinary nullable columns on `departments` that a sync carries into business data scopes.
 - `title` holds plain text for a department someone creates, and an encoded translation descriptor for a seeded one.
+- `managerId` is the department head, a user who need not be a member; heads are a derived subject type, not a table.
 
 ## Steps
 
 1. Write the tables in one self-contained migration and put the rules in one organisation service: [model and service](organization/model-and-service.md).
 2. Mount the organisation routes and build the settings page under one localized name: [routes and settings page](organization/settings-page.md).
 3. Register the department subject type, sync department attributes into business data, refresh sessions after membership changes, and seed the tree, accounts and assignments: [subjects, sync and seeds](organization/subjects.md).
-4. Cover the test matrix against the real application: [testing](organization/testing.md).
+4. Register the department-head subject type and the department data scopes: [department scopes and heads](organization/scopes.md).
+5. Decide who gets what across departments, heads and cross-department work: [permission design](organization/permission-design.md).
+6. Cover the test matrix against the real application: [testing](organization/testing.md).
 
-Permission-set assignment stays in Settings → Authorization; do not build a second assignment editor.
+Permission-set assignment stays in Settings → Authorization; do not build a second assignment editor. The core works with the authorization plugin alone; default access, sharing rules and restriction rules are optional plugins, so never make the organisation depend on them.
 
 ## Pitfalls
 
