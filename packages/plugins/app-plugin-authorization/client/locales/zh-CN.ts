@@ -264,6 +264,7 @@ const zhCN: AuthorizationResource = {
       SELECTION_RESTRICTED: '限制可访问记录范围',
       NO_OBJECT_PERMISSION: '尚未授予此操作',
       NO_RECORD_ACCESS: '没有可访问的记录范围',
+      EMPTY_RECORD_ACCESS: '记录范围未匹配任何记录',
       UNRESTRICTED_ACCESS: '拥有不受限的访问权限',
     },
     inputFields: '可写字段',

@@ -273,6 +273,7 @@ const messages = {
       SELECTION_RESTRICTED: 'Restricts accessible records',
       NO_OBJECT_PERMISSION: 'This operation has not been granted',
       NO_RECORD_ACCESS: 'No accessible record scope',
+      EMPTY_RECORD_ACCESS: 'The record scope matches no records',
       UNRESTRICTED_ACCESS: 'Unrestricted access',
     },
     inputFields: 'Writable fields',

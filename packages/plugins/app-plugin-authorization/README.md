@@ -307,7 +307,7 @@ Each rule API exists only when its plugin is configured; see the [default access
 
 ## Check access on the server
 
-Every route installs authentication, then `authz.middleware()`, which sets the `authz` variable to the request's `AuthorizationContext`.
+Every route installs authentication, then `authz.middleware()`, which sets the `authz` variable to the request's `AuthorizationContext`. A denied `require` throws `AuthorizationDeniedError`, which answers `403 { code: 'FORBIDDEN', message }` on its own, so a route needs no `onError` for it.
 
 ```ts
 router.use('*', authentication.required(), authz.middleware());
@@ -344,6 +344,8 @@ router.post('/quotes/:id/submit', async (c) => {
 ```
 
 A composite decision's `conditions` are `CompositeResourceConditions` with `database`: one `RepositoryPolicy` per composed collection, built from that action's grants only. `require` rejects conditional decisions, and `can` counts them as false; neither enforces rows.
+
+A policy is `false` only when nothing grants the action, and a Repository refuses to run under it. When a grant exists but its data scope selects no records, such as a record access that answers `false` for a user in no department, the decision stays conditional with the `EMPTY_RECORD_ACCESS` reason and a scope that matches no rows: reads return an empty result, and updates and deletes affect nothing. A grant whose data scopes configure no selection at all is still denied with `NO_RECORD_ACCESS`. Create reads no record scope, so a create grant is unaffected.
 
 For a collection-oriented endpoint, fold the four CRUD decisions into one policy, optionally restricted to one composite action's branch:
 
