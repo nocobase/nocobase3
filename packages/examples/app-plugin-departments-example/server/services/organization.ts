@@ -465,8 +465,17 @@ export function createOrganizationService(
           values.parentId = input.parentId;
           // Moving a department changes what its members inherit.
           changed = await subtreeMemberIds(connection, id);
-          // Heads in the moved subtree now reach a different set of departments below them.
-          for (const node of subtreeOf(tree, id))
+          // Heads in the moved subtree and above its old and new place now reach different departments.
+          const heads = [
+            ...subtreeOf(tree, id),
+            ...(current.parentId === null
+              ? []
+              : (chainOf(tree, current.parentId) ?? [])),
+            ...(input.parentId === null
+              ? []
+              : (chainOf(tree, input.parentId) ?? [])),
+          ];
+          for (const node of heads)
             if (node.managerId !== null) changed.push(node.managerId);
         }
         // A new head gains the department's scope and the old one loses it.

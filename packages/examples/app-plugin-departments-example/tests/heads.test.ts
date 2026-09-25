@@ -195,6 +195,44 @@ describe('department heads', () => {
     }
   });
 
+  it('moves a department from one head to another', async () => {
+    const oldHead = await test.signUp('headsOldRoot');
+    const newHead = await test.signUp('headsNewRoot');
+    await createTree(test.organization, [['hd-other', null]]);
+    await appoint('hd-root', oldHead.id);
+    await appoint('hd-other', newHead.id);
+    expect(await projects(oldHead)).toEqual(['hd-child']);
+    const notify = vi.spyOn(
+      test.authz.permissionSets,
+      'notifyAssignmentsChanged',
+    );
+    notify.mockResolvedValue(undefined);
+    try {
+      const moved = await test.request(
+        'PATCH',
+        `${BASE}/departments/hd-child`,
+        { cookie: admin.cookie, json: { parentId: 'hd-other' } },
+      );
+      expect(moved.status).toBe(200);
+      expect(notify.mock.calls).toEqual(
+        expect.arrayContaining([
+          [{ type: 'user', id: owner.id }],
+          [{ type: 'user', id: oldHead.id }],
+          [{ type: 'user', id: newHead.id }],
+        ]),
+      );
+    } finally {
+      notify.mockRestore();
+    }
+    expect(await projects(oldHead)).toEqual([]);
+    expect(await projects(newHead)).toEqual(['hd-child']);
+    await test.organization.updateDepartment('hd-child', {
+      parentId: 'hd-root',
+    });
+    await appoint('hd-root', null);
+    await appoint('hd-other', null);
+  });
+
   it('rejects a head who is not an enabled user', async () => {
     const response = await test.request(
       'PATCH',
