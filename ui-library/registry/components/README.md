@@ -14,7 +14,7 @@ Single components that pages are built from. Each is its own item, installs into
 
 ## Page layout
 
-`PageContainer` renders a `section` with the full width, the responsive padding (`p-6 md:p-8`) and the spacing between sections (`space-y-6`). It accepts every `section` prop, and `className` is merged with `tailwind-merge`, so it can override the defaults. `PageHeader` renders the page's only `h1`, an optional `description`, and `actions` aligned to the right from the `sm` breakpoint up.
+`PageContainer` renders a `section` with the full width, the responsive padding (`p-6 md:p-8`) and the spacing between sections (`space-y-6`). It accepts every `section` prop, and `className` is merged with `cn`, so it can override the defaults. `PageHeader` renders the page's only `h1`, an optional `description`, and `actions` aligned to the right from the `sm` breakpoint up.
 
 ```tsx
 import { PageContainer } from '@/components/page-container';
@@ -80,4 +80,4 @@ The overlays' close button names itself with `useTranslation()` from `@nocobase/
 
 ## In a plugin
 
-`page-container`, `page-header` and `route-child-page` have no `@/` imports and compile in a plugin as installed. `route-dialog` and `route-drawer` import the `button` and `dialog` primitives as `@/components/ui/<name>`; rewrite those two imports to relative `.js` paths, as [USAGE.md](../../USAGE.md#add-an-item-to-a-plugin) describes.
+`page-header` has no `@/` imports and compiles in a plugin as installed. The others import `cn` from `@/lib/utils`, and `route-dialog` and `route-drawer` also import the `button` and `dialog` primitives as `@/components/ui/<name>`; rewrite those imports to relative `.js` paths, as [USAGE.md](../../USAGE.md#add-an-item-to-a-plugin) describes.

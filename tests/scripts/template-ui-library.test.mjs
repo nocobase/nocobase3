@@ -61,12 +61,24 @@ for (const kind of templates) {
         );
       }
 
-      for (const primitive of item.registryDependencies ?? []) {
+      for (const dependency of item.registryDependencies ?? []) {
+        // `utils` is the `cn` helper at `@/lib/utils`; every other registry dependency is a shadcn primitive.
+        if (dependency === 'utils') {
+          assert.match(
+            fs.readFileSync(
+              path.join(templateRoot, 'client/lib/utils.ts'),
+              'utf8',
+            ),
+            /export function cn\(/u,
+            `${kind}: ${name} needs cn from client/lib/utils.ts`,
+          );
+          continue;
+        }
         assert.ok(
           fs.existsSync(
-            path.join(templateRoot, `client/components/ui/${primitive}.tsx`),
+            path.join(templateRoot, `client/components/ui/${dependency}.tsx`),
           ),
-          `${kind}: ${name} needs the ${primitive} primitive`,
+          `${kind}: ${name} needs the ${dependency} primitive`,
         );
       }
       for (const specifier of item.dependencies ?? []) {

@@ -23,8 +23,7 @@
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
     "react-router": "catalog:",
-    "simple-icons": "^16.30.0",
-    "tailwind-merge": "catalog:"
+    "simple-icons": "^16.30.0"
   },
   "devDependencies": {
     "@nocobase/app-plugin-authentication": "workspace:^",

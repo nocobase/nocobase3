@@ -14,7 +14,6 @@ import {
   type RefObject,
 } from 'react';
 import { useLocation, useNavigate, type To } from 'react-router';
-import { twMerge } from 'tailwind-merge';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +24,7 @@ import {
   DialogPortal,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 import { RouteOverlayContext } from './use-route-overlay.js';
 
@@ -144,7 +144,7 @@ export function RouteOverlay({
                 }
                 return true;
               }}
-              className={twMerge(
+              className={cn(
                 'fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
                 'flex max-h-[calc(100svh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl',
                 // The viewport constraints are deliberate; all ordinary styling uses theme tokens.

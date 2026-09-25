@@ -16,9 +16,10 @@
     "isolatedDeclarations": false,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.registry.tsbuildinfo",
     "paths": {
-      // Items import shadcn primitives the way an application provides them. The preview's copies stand in for
-      // them; the explicit extension is what lets an extensionless alias resolve under NodeNext.
-      "@/components/ui/*": ["./website/components/ui/*.tsx"]
+      // Items import shadcn primitives and the `cn` helper the way an application provides them. The preview's copies
+      // stand in for them; the explicit extension is what lets an extensionless alias resolve under NodeNext.
+      "@/components/ui/*": ["./website/components/ui/*.tsx"],
+      "@/lib/utils": ["./website/lib/utils.ts"]
     }
   },
   "include": ["registry/**/*.ts", "registry/**/*.tsx"]

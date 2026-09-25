@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
-import { twMerge } from 'tailwind-merge';
+
+import { cn } from '@/lib/utils';
 
 export interface RouteChildPageProps {
   readonly children?: ReactNode;
@@ -53,7 +54,7 @@ export function RouteChildPage({
 
   return (
     <div
-      className={twMerge(
+      className={cn(
         'absolute inset-0 overflow-hidden overflow-y-auto bg-background',
         className,
       )}

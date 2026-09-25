@@ -5,8 +5,11 @@
       "type": "registry:component",
       "title": "Page Container",
       "description": "The frame of a page: full width, responsive padding, and the spacing between its sections.",
-      "meta": { "group": "Page layout", "iframeHeight": 560 },
-      "dependencies": ["tailwind-merge@^3.2.0"],
+      "meta": {
+        "group": "Page layout",
+        "iframeHeight": 560
+      },
+      "registryDependencies": ["utils"],
       "docs": "Wrap each page in PageContainer. Content rendered inside another page, such as an inline child route or a tab panel, adds none of its own.",
       "files": [
         {
@@ -21,7 +24,10 @@
       "type": "registry:component",
       "title": "Page Header",
       "description": "The heading of a page: its title, an optional description, and page-level actions.",
-      "meta": { "group": "Page layout", "iframeHeight": 420 },
+      "meta": {
+        "group": "Page layout",
+        "iframeHeight": 420
+      },
       "docs": "Render PageHeader once per page, as the first child of its PageContainer.",
       "files": [
         {
@@ -36,15 +42,17 @@
       "type": "registry:component",
       "title": "Route Dialog",
       "description": "A child route presented as a centered modal dialog, opened and closed by its URL.",
-      "meta": { "group": "Route overlays", "iframeHeight": 640 },
+      "meta": {
+        "group": "Route overlays",
+        "iframeHeight": 640
+      },
       "dependencies": [
         "@base-ui/react@^1.6.0",
         "@nocobase/i18n@^1.0.0-beta.4",
         "lucide-react@^0.487.0",
-        "react-router@^7.0.2",
-        "tailwind-merge@^3.2.0"
+        "react-router@^7.0.2"
       ],
-      "registryDependencies": ["button", "dialog"],
+      "registryDependencies": ["button", "dialog", "utils"],
       "docs": "Return RouteDialog from the component of a child route, and call useRouteOverlay() only from inside it. The close button is translated under routeOverlay.close; add it to your locale resources (Close, 关闭), or it reads Close in every language.",
       "files": [
         {
@@ -69,15 +77,17 @@
       "type": "registry:component",
       "title": "Route Drawer",
       "description": "A child route presented as a modal panel at the right edge, opened and closed by its URL.",
-      "meta": { "group": "Route overlays", "iframeHeight": 640 },
+      "meta": {
+        "group": "Route overlays",
+        "iframeHeight": 640
+      },
       "dependencies": [
         "@base-ui/react@^1.6.0",
         "@nocobase/i18n@^1.0.0-beta.4",
         "lucide-react@^0.487.0",
-        "react-router@^7.0.2",
-        "tailwind-merge@^3.2.0"
+        "react-router@^7.0.2"
       ],
-      "registryDependencies": ["button", "dialog"],
+      "registryDependencies": ["button", "dialog", "utils"],
       "docs": "Return RouteDrawer from the component of a child route, and call useRouteOverlay() only from inside it. The close button is translated under routeOverlay.close; add it to your locale resources (Close, 关闭), or it reads Close in every language.",
       "files": [
         {
@@ -102,8 +112,11 @@
       "type": "registry:component",
       "title": "Route Child Page",
       "description": "A child route presented as a non-modal page covering the content area, keeping the page beneath mounted.",
-      "meta": { "group": "Route overlays", "iframeHeight": 560 },
-      "dependencies": ["tailwind-merge@^3.2.0"],
+      "meta": {
+        "group": "Route overlays",
+        "iframeHeight": 560
+      },
+      "registryDependencies": ["utils"],
       "docs": "Return RouteChildPage from the component of a child route. It covers the nearest positioned ancestor, so render its outlet beside the parent page's container rather than inside it.",
       "files": [
         {

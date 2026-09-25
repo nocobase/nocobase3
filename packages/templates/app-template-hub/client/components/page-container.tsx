@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactElement } from 'react';
-import { twMerge } from 'tailwind-merge';
+
+import { cn } from '@/lib/utils';
 
 export type PageContainerProps = ComponentProps<'section'>;
 
@@ -16,7 +17,7 @@ export function PageContainer({
 }: PageContainerProps): ReactElement {
   return (
     <section
-      className={twMerge('w-full space-y-6 p-6 md:p-8', className)}
+      className={cn('w-full space-y-6 p-6 md:p-8', className)}
       {...props}
     />
   );
