@@ -231,20 +231,13 @@ The development proxy adapts same-origin HTTP and WebSocket Origin headers to th
 
 ## The command line
 
-`pnpm nocobase` runs this application's CLI, the `nocobase` bin of the production dependency `@nocobase/app-cli`. It finds the application from `package.json` and loads this application's `cli/plugins.ts` and `cli/commands/` itself; there is no `cli/index.ts` to maintain. `pnpm dev`, `pnpm build` and `pnpm start` are `nocobase dev`, `nocobase build` and `nocobase start`, and every other command is reached as `pnpm nocobase <topic> <command>` — there is no script alias for it.
+`pnpm nocobase <topic> <command>` runs this application's CLI, the `nocobase` bin of `@nocobase/app-cli`. Only `pnpm dev`, `pnpm build`, `pnpm start` and the quality scripts are scripts; every other command goes through `pnpm nocobase`, with no script alias. `pnpm nocobase --help` lists the tree and `--help` on a command gives its flags.
 
-```bash
-pnpm nocobase --help                 # every topic and command
-pnpm nocobase db apply               # a built-in command
-pnpm nocobase locales check          # languages declared on only one side
-pnpm nocobase app sync-orders        # a command this application owns
-```
+Before running a command, read `.agents/skills/nocobase-app-development/references/cli.md`: it maps tasks to commands, explains the data-model snapshot under `database/<connection>/collections/`, and states the flags an agent must not add on its own — `db reset`, `db rollback`, `db redo` and `db repair` refuse to run without `--force` outside a terminal, and that refusal is not something to work around.
 
-Built-in topics are `config`, `db`, `collections`, `locales`, `release` (when `nocobase.cli.publishing` is set in `package.json`), `plugin`, `package`, `skills` and `dist`. `app` holds what this application writes for itself, and each registered plugin contributes commands under its package name without the `app-plugin-` prefix — the workflow plugin's are under `workflow`.
+A command this application owns is a file under `cli/commands/` whose path is its name below the `app` topic: `cli/commands/sync-orders.ts` answers to `pnpm nocobase app sync-orders`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command. The reference covers the file layout and the directory names to avoid.
 
-Add a command of your own as a file in `cli/commands/` that default-exports an oclif `Command` subclass: `cli/commands/sync-orders.ts` answers to `nocobase app sync-orders`, and `cli/commands/orders/sync.ts` to `nocobase app orders sync`. Files and directories starting with `_`, and directories named `lib`, are skipped, so helpers can sit beside the commands. Do not name a directory there `dist`, `build`, `coverage` or `generated`: each is ignored by `.gitignore`, Prettier or the shared ESLint preset, so a command inside one would go unlinted, or never reach git, without any warning. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
-
-`cli/` is compiled into `dist` alongside the server, and `pnpm build` writes a `dist/cli/index.js` that runs the same CLI without the development commands: `node dist/cli/index.js db apply`, or `pnpm nocobase db apply` inside `dist/`. `db apply` runs migrations and seeds as one plan, each half applying only what is pending. Change shared behavior in `@nocobase/app-cli` rather than copying it into the application; use plugin build and dev hooks for local build and development extensions.
+`cli/` is compiled into `dist`, and a deployment runs the same CLI without the development commands as `node dist/cli/index.js <topic> <command>`. Change shared behavior in `@nocobase/app-cli` rather than copying it into the application; use plugin build and dev hooks for local build and development extensions.
 
 ## Plugins
 

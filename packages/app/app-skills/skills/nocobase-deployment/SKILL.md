@@ -46,6 +46,8 @@ tar -tzf storage/exports/dist.tar.gz | head -30
 
 For a direct server deployment, transfer the archive and extract it into the deployment root. Nothing needs installing there: `pnpm build` already ran `pnpm install --prod` inside `dist/`, and the archive carries the resulting `dist/node_modules`. `dist/package.json` stays in the tree so that the same command can be rerun inside `dist/` on the server if `node_modules` was left out of a copy; that is a repair, not a step of a normal deployment, and it is never run in the application source tree. For Docker, build with the application's own `Dockerfile` instead, which runs `pnpm build` inside the image; keep configuration and storage outside the image. Otherwise ensure the build target matches the server's architecture, libc, and Node ABI.
 
+A `dist/` built for the wrong platform does not need a full rebuild: `pnpm nocobase dist retarget --target <platform> --node-version <major>` in the source checkout reinstalls only its native modules, and `pnpm nocobase dist check` re-verifies that everything the server imports is installed. On the server, run the application's commands as `node dist/cli/index.js <topic> <command>` from any directory, or `pnpm nocobase <topic> <command>` inside `dist/`; only runtime commands exist there. `.agents/skills/nocobase-app-development/references/cli.md` lists them and the flags that must not be added unasked.
+
 ## Decide the data operation
 
 A deployment package carries code and production dependencies, not business data. Keep the existing database and storage mounts for an in-place update. When switching to a new database or server, perform a separate data migration or restore a coordinated backup before allowing users to write.

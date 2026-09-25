@@ -19,7 +19,7 @@ Do not use it to upgrade the template this application was generated from. That 
 
 ## Before you start
 
-Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
+Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it. Before running any `pnpm nocobase` command, read [the command line](references/cli.md): it maps tasks to commands and states the flags an agent must not add on its own.
 
 Confirm you are in an application and not a plugin package. An application has:
 
@@ -81,17 +81,18 @@ The handbook routes each frontend task to its document: pages, routes and naviga
 
 Read the page for the task in front of you. Do not read all of them.
 
-| Task                                                                                                 | Read                                                                                                                   |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Anything under `client/`: pages, routes, components, styling, forms, API calls, copy, frontend tests | [frontend workflow](references/frontend/ui-workflow.md), then [frontend handbook](references/frontend/frontend-dev.md) |
-| Add an API endpoint, a webhook, or a callback; authenticate and authorize it                         | [server routes](references/server-routes.md)                                                                           |
-| Query or write data, resolve the database, work with transactions                                    | [database and data access](references/database-and-data.md)                                                            |
-| Create a table, alter a column, add an index, write required initial data                            | [migrations and seeds](references/migrations.md)                                                                       |
-| Switch the database, register a dialect, add a second connection                                     | [database connections](references/database-connections.md)                                                             |
-| Translate server-produced text, add a language, set the default language                             | [internationalization](references/i18n.md)                                                                             |
-| Add a reusable service, share it across routes, run background or scheduled work                     | [services and jobs](references/services-and-jobs.md)                                                                   |
-| Write server and migration tests, choose a test layer, verify before finishing                       | [testing and verification](references/testing.md)                                                                      |
-| Understand behavior inherited from an official application template                                  | [template variants](references/template-variants.md)                                                                   |
+| Task                                                                                                   | Read                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Anything under `client/`: pages, routes, components, styling, forms, API calls, copy, frontend tests   | [frontend workflow](references/frontend/ui-workflow.md), then [frontend handbook](references/frontend/frontend-dev.md) |
+| Add an API endpoint, a webhook, or a callback; authenticate and authorize it                           | [server routes](references/server-routes.md)                                                                           |
+| Query or write data, resolve the database, work with transactions                                      | [database and data access](references/database-and-data.md)                                                            |
+| Create a table, alter a column, add an index, write required initial data                              | [migrations and seeds](references/migrations.md)                                                                       |
+| Switch the database, register a dialect, add a second connection                                       | [database connections](references/database-connections.md)                                                             |
+| Translate server-produced text, add a language, set the default language                               | [internationalization](references/i18n.md)                                                                             |
+| Add a reusable service, share it across routes, run background or scheduled work                       | [services and jobs](references/services-and-jobs.md)                                                                   |
+| Write server and migration tests, choose a test layer, verify before finishing                         | [testing and verification](references/testing.md)                                                                      |
+| Run a CLI command: configure, migrate, manage plugins, read the data model, add an application command | [the command line](references/cli.md)                                                                                  |
+| Understand behavior inherited from an official application template                                    | [template variants](references/template-variants.md)                                                                   |
 
 A feature with a page and an API usually needs migrations, server routes, and a frontend change that follows the frontend workflow.
 
