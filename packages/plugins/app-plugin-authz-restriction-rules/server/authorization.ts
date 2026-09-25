@@ -55,7 +55,7 @@ export function restrictionRules(
       });
       authz.ui.place(
         { type: 'settings', id: RESTRICTION_RULES_SETTINGS },
-        { section: AUTHORIZATION_SETTINGS_SECTION },
+        { section: AUTHORIZATION_SETTINGS_SECTION, order: 30 },
       );
       authz.routes.add(
         `/${RESTRICTION_RULES_RULE}`,

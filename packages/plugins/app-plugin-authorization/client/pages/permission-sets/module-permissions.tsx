@@ -148,10 +148,10 @@ export function ModulePermissions({
             style={rowStyle}
           >
             <div
-              className='flex min-w-0 items-center gap-2'
+              className='flex min-w-0 flex-col'
               style={{ paddingLeft: 16 + row.depth * 20 }}
             >
-              <span className='min-w-0 truncate font-medium' title={item.value}>
+              <span className='truncate font-medium' title={item.value}>
                 {item.label}
               </span>
               {!pages && (
