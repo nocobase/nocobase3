@@ -21,7 +21,13 @@ import {
   builtinCommandFiles,
   builtinTopicsFor,
 } from './builtin.ts';
-import { setApplicationState, setResolvedCommands } from './command-store.ts';
+import {
+  setApplicationState,
+  setResolvedCommands,
+  takeOpenRuntimes,
+} from './command-store.ts';
+import { commandFailureJson } from '../command/envelope.ts';
+import { describeCommandError } from '../command/errors.ts';
 import { loadCommandFiles } from './discover.ts';
 import { appAt, locateApp, type AppLocation } from './location.ts';
 
@@ -40,8 +46,8 @@ export interface RunAppCliOptions {
 }
 
 export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
+  const argv = [...(options.argv ?? process.argv.slice(2))];
   try {
-    const argv = [...(options.argv ?? process.argv.slice(2))];
     const root = options.root ?? process.env.NOCOBASE_APP_ROOT;
     const location =
       root === undefined || root === ''
@@ -72,11 +78,63 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
     if (runningFromSource) {
       settings.debug = Boolean(process.env.NOCOBASE_CLI_DEBUG);
     }
-    await run(argv, config);
+    try {
+      await run(argv, config);
+    } finally {
+      await closeLeftOpenRuntimes(argv);
+    }
     await flush();
   } catch (error) {
+    // A command reports its own failures. What arrives here failed before or around one — an unknown command, a
+    // broken plugin entry — and under --json it still has to answer with the one document a caller parses.
+    if (jsonRequested(argv)) {
+      const { json, exit } = describeCommandError(error);
+      process.stdout.write(
+        `${JSON.stringify(commandFailureJson(commandWords(argv), json, []), null, 2)}\n`,
+      );
+      process.exitCode = exit;
+      return;
+    }
     await handle(error as Error);
   }
+}
+
+/**
+ * Puts away any runtime a command loaded and did not close, so the process can exit, and names the command so its
+ * author can fix it: `withApp()` closes what it opens, and nothing else should open a runtime.
+ */
+async function closeLeftOpenRuntimes(argv: readonly string[]): Promise<void> {
+  const open = takeOpenRuntimes();
+  if (open.length === 0) return;
+  process.stderr.write(
+    `${commandWords(argv) || 'The command'} left the application open; wrap it in withApp().\n`,
+  );
+  for (const runtime of open) {
+    try {
+      await runtime.close();
+    } catch (error) {
+      process.stderr.write(
+        `Closing the application failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    }
+  }
+}
+
+/** Whether the caller asked for JSON: `--json` before any `--`, or oclif's `NOCOBASE_CONTENT_TYPE=json`. */
+function jsonRequested(argv: readonly string[]): boolean {
+  if (process.env.NOCOBASE_CONTENT_TYPE?.toLowerCase() === 'json') return true;
+  const passThrough = argv.indexOf('--');
+  const json = argv.indexOf('--json');
+  return json !== -1 && (passThrough === -1 || json < passThrough);
+}
+
+function commandWords(argv: readonly string[]): string {
+  const words: string[] = [];
+  for (const argument of argv) {
+    if (argument.startsWith('-')) break;
+    words.push(argument);
+  }
+  return words.join(' ');
 }
 
 /**

@@ -1,4 +1,4 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
@@ -56,7 +56,7 @@ export default class AppDbRepair extends AppCommand {
         exit: (code) => this.exit(code),
       },
       { ...flags, dryRun: flags['dry-run'] },
-      this.appContext,
+      appContextOf(this),
     );
   }
 }

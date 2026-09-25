@@ -5,7 +5,7 @@
 // a publishing failure carries the message `publishToHub` chose, and anything else is reported by code alone because
 // its message may quote a request, a response or an environment value. `NOCOBASE_CLI_DEBUG` prints that cause to
 // stderr, for a person at a terminal who has opted in to seeing it.
-import { AppCommand } from '../context.ts';
+import { AppCommand, appContextOf } from '../context.ts';
 import {
   PublishingError,
   publishToHub,
@@ -40,7 +40,7 @@ export abstract class ReleaseCommand extends AppCommand {
       const result = await publishToHub(
         this.operation,
         flags,
-        this.appContext.rootDir,
+        appContextOf(this).rootDir,
       );
       if (json) {
         this.logJson({

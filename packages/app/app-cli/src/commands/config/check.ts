@@ -1,7 +1,7 @@
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import {
   runConfigCheck,
   type ConfigCheckConnectMode,
@@ -48,8 +48,8 @@ export default class AppConfigCheck extends AppCommand {
     let result: ConfigCheckResult;
     try {
       result = await runConfigCheck({
-        rootDir: this.appContext.rootDir,
-        loadRuntime: () => this.appContext.loadRuntime(),
+        rootDir: appContextOf(this).rootDir,
+        loadRuntime: () => appContextOf(this).loadRuntime(),
         connect,
       });
     } catch (error) {

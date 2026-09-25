@@ -54,10 +54,10 @@ Plugins are not discovered. `cli/plugins.ts` lists them explicitly, because the 
 
 ## Plugin contract
 
-`@nocobase/app-cli/plugins` exports `defineCliPlugin()` and `defineCliPlugins()`:
+`@nocobase/app-cli` exports `defineCliPlugin()` and `defineCliPlugins()`:
 
 ```ts
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli';
 
 import Sync from './sync.ts';
 import Build from './build.ts';

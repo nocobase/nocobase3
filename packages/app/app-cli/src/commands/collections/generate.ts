@@ -1,4 +1,4 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
@@ -49,7 +49,7 @@ export default class AppCollectionsGenerate extends AppCommand {
     const { flags } = await this.parse(AppCollectionsGenerate);
     let result: AppCollectionsArtifactResult;
     try {
-      const runtime = await this.appContext.loadRuntime();
+      const runtime = await appContextOf(this).loadRuntime();
       result = await generateAppCollectionsArtifact(
         runtime.config.get<AppDatabaseConfig>('database')!,
         {

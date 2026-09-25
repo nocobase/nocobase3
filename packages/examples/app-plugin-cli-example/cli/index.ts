@@ -1,4 +1,4 @@
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli';
 
 import CliExampleArtifactBuild from './artifact-build.ts';
 import CliExampleGreet from './greet.ts';

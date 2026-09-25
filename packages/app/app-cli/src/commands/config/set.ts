@@ -1,7 +1,7 @@
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import {
   ConfigSetError,
   runConfigSet,
@@ -43,10 +43,10 @@ export default class AppConfigSet extends AppCommand {
 
     try {
       result = await runConfigSet({
-        rootDir: this.appContext.rootDir,
+        rootDir: appContextOf(this).rootDir,
         assignments: argv.map(String),
         fromEnv: flags['from-env'],
-        loadRuntime: () => this.appContext.loadRuntime(),
+        loadRuntime: () => appContextOf(this).loadRuntime(),
       });
     } catch (error) {
       this.reportFailure(error, flags.json);

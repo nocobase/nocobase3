@@ -20,10 +20,15 @@
     "topicSeparator": " "
   },
   "exports": {
-    "./plugins": {
-      "types": "./src/plugins/index.ts",
-      "import": "./src/plugins/index.ts",
-      "default": "./src/plugins/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "import": "./src/testing.ts",
+      "default": "./src/testing.ts"
     },
     "./runtime": {
       "types": "./src/runtime/index.ts",
@@ -45,10 +50,15 @@
   "publishConfig": {
     "access": "public",
     "exports": {
-      "./plugins": {
-        "types": "./dist/plugins/index.d.ts",
-        "import": "./dist/plugins/index.js",
-        "default": "./dist/plugins/index.js"
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "import": "./dist/testing.js",
+        "default": "./dist/testing.js"
       },
       "./runtime": {
         "types": "./dist/runtime/index.d.ts",

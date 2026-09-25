@@ -1,4 +1,4 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
@@ -66,7 +66,7 @@ export default class AppDbRollback extends AppCommand {
         ...flags,
         collections: flags.collections && collectionsRefreshAllowed(),
       },
-      this.appContext,
+      appContextOf(this),
     );
   }
 }

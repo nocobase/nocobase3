@@ -48,7 +48,7 @@ export default class Greet extends Command {
 
 ```ts
 // cli/index.ts
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli';
 import ArtifactBuild from './artifact-build.ts';
 import Greet from './greet.ts';
 

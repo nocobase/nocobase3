@@ -1,8 +1,13 @@
-import { AppCommand } from '../context.ts';
-import { type Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import type { Command } from '@oclif/core';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+
+import { AppCommand } from '../context.ts';
+
+export interface AppInfoResult {
+  readonly name: string | null;
+  readonly version: string | null;
+}
 
 export default class AppInfo extends AppCommand {
   static override summary = "Print this application's name and version.";
@@ -14,33 +19,15 @@ export default class AppInfo extends AppCommand {
     '<%= config.bin %> <%= command.id %> --json',
   ];
 
-  static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
-  } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
-  };
+  public async run(): Promise<AppInfoResult> {
+    await this.parse(AppInfo);
+    const manifest = JSON.parse(
+      await readFile(path.join(this.rootDir, 'package.json'), 'utf8'),
+    ) as { name?: string; version?: string };
 
-  public async run(): Promise<void> {
-    const { flags } = await this.parse(AppInfo);
-    const manifestPath = path.join(this.appContext.rootDir, 'package.json');
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      name?: string;
-      version?: string;
-    };
-
-    if (flags.json) {
-      this.logJson({
-        ok: true,
-        name: manifest.name,
-        version: manifest.version,
-      });
-      return;
-    }
     this.log(
       `${manifest.name ?? '(unnamed)'} ${manifest.version ?? ''}`.trim(),
     );
+    return { name: manifest.name ?? null, version: manifest.version ?? null };
   }
 }

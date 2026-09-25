@@ -14,6 +14,7 @@ import type { AppLocation } from './location.ts';
 
 const STORE = Symbol.for('@nocobase/app-cli.resolvedCommands');
 const APP_STORE = Symbol.for('@nocobase/app-cli.application');
+const OPEN_RUNTIMES = Symbol.for('@nocobase/app-cli.openRuntimes');
 
 /** What a run knows about the application it is in, for commands oclif loads from a resolved path. */
 export interface ApplicationState {
@@ -22,9 +23,37 @@ export interface ApplicationState {
   readonly loadPlugins: () => Promise<AppCliPlugins | undefined>;
 }
 
+/** A runtime a command loaded and has not put away yet. */
+export interface OpenRuntime {
+  readonly close: () => Promise<void>;
+}
+
 interface CommandStoreHost {
   [STORE]?: Record<string, AppCliCommand>;
   [APP_STORE]?: ApplicationState;
+  [OPEN_RUNTIMES]?: Set<OpenRuntime>;
+}
+
+/**
+ * Records a loaded runtime until its scope is destroyed, so that the runner can close whatever a command left open.
+ * Returns the function that forgets it again.
+ */
+export function trackOpenRuntime(runtime: OpenRuntime): () => void {
+  const host = globalThis as CommandStoreHost;
+  const open = (host[OPEN_RUNTIMES] ??= new Set());
+  open.add(runtime);
+  return () => {
+    open.delete(runtime);
+  };
+}
+
+/** The runtimes still open, forgotten as they are returned. */
+export function takeOpenRuntimes(): OpenRuntime[] {
+  const open = (globalThis as CommandStoreHost)[OPEN_RUNTIMES];
+  if (open === undefined) return [];
+  const runtimes = [...open];
+  open.clear();
+  return runtimes;
 }
 
 export function setResolvedCommands(

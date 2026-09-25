@@ -1,4 +1,4 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
@@ -51,7 +51,7 @@ export default class AppDbUnlock extends AppCommand {
         exit: (code) => this.exit(code),
       },
       flags,
-      this.appContext,
+      appContextOf(this),
     );
   }
 }

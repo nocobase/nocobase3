@@ -84,7 +84,7 @@ Statically import command classes and pass them to `defineCliPlugin()`:
 
 ```ts
 // cli/index.ts
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli';
 
 import DemoArtifactBuild from './artifact-build.ts';
 import DemoGreet from './greet.ts';
@@ -144,7 +144,7 @@ An App owns `cli/plugins.ts`:
 import {
   defineCliPlugins,
   type AppCliPlugins,
-} from '@nocobase/app-cli/plugins';
+} from '@nocobase/app-cli';
 import demo from '@nocobase/app-plugin-demo/cli';
 
 const cliPlugins: AppCliPlugins = defineCliPlugins([demo]);

@@ -1,4 +1,4 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 import { readdir } from 'node:fs/promises';
@@ -100,7 +100,7 @@ export default class AppI18nCheck extends AppCommand {
 
   public async run(): Promise<void> {
     const { flags } = await this.parse(AppI18nCheck);
-    const root = this.appContext.rootDir;
+    const root = appContextOf(this).rootDir;
     const result = await checkAppLocales(root);
     const { ok, sides, clientOnly, serverOnly } = result;
 

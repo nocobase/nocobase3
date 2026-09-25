@@ -6,7 +6,7 @@ import {
   type OfficialDialect,
 } from '@nocobase/app-server/database';
 
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import {
   ConfigInitError,
   runConfigInit,
@@ -62,7 +62,7 @@ export default class AppConfigInit extends AppCommand {
 
     try {
       result = await runConfigInit({
-        rootDir: this.appContext.rootDir,
+        rootDir: appContextOf(this).rootDir,
         dialect: flags.dialect,
         configPath: flags.config,
         force: flags.force,
@@ -137,7 +137,7 @@ export default class AppConfigInit extends AppCommand {
    * that only its code defaults set is seen too. Unknown when the configuration does not load.
    */
   private async readConfiguredDialect(): Promise<string | undefined> {
-    const runtime = await this.appContext.loadRuntime();
+    const runtime = await appContextOf(this).loadRuntime();
     try {
       const database = runtime.config.get<{
         default?: string;

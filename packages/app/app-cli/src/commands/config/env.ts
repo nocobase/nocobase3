@@ -1,7 +1,7 @@
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { runConfigEnv } from '../../lib/config-env.ts';
 
 export default class AppConfigEnv extends AppCommand {
@@ -27,7 +27,7 @@ export default class AppConfigEnv extends AppCommand {
   public async run(): Promise<void> {
     const { flags } = await this.parse(AppConfigEnv);
     const { variables } = await runConfigEnv({
-      loadRuntime: () => this.appContext.loadRuntime(),
+      loadRuntime: () => appContextOf(this).loadRuntime(),
     });
 
     if (flags.json) {
