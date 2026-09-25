@@ -23,6 +23,7 @@ export type AppLocationKind = 'source' | 'deployment' | 'none';
 export const DEVELOPMENT_TOPICS: readonly string[] = Object.freeze([
   'build',
   'dev',
+  'dist',
   'package',
   PLUGIN_TOPIC,
   'skills',
@@ -36,6 +37,7 @@ export const APPLICATION_TOPICS: readonly string[] = Object.freeze([
   'config',
   'db',
   'dev',
+  'dist',
   'info',
   'locales',
   'release',
@@ -47,12 +49,12 @@ export const PUBLISHING_TOPIC = 'release';
 
 export const builtinTopics: Readonly<Record<string, { description: string }>> =
   Object.freeze({
-    build: { description: 'Build dist/, then retarget or verify it.' },
     collections: { description: 'Generate and check Collection metadata.' },
     config: {
       description: "Create, check and edit this application's configuration.",
     },
     db: { description: 'Manage database migrations, seeds and locks.' },
+    dist: { description: 'Retarget or check the built dist/.' },
     locales: { description: 'Check application localization.' },
     package: {
       description: 'Remove direct NocoBase packages and their Skills.',

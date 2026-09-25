@@ -9,8 +9,6 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  */
 const EXPECTED_IDS = [
   'build',
-  'build:retarget',
-  'build:verify',
   'collections:doctor',
   'collections:generate',
   'config:check',
@@ -24,6 +22,8 @@ const EXPECTED_IDS = [
   'db:rollback',
   'db:unlock',
   'dev',
+  'dist:check',
+  'dist:retarget',
   'info',
   'locales:check',
   'package:remove',

@@ -444,7 +444,7 @@ echo "::group::Retarget native modules for another platform"
 OTHER_TARGET=$(node -e 'console.log(process.platform === "linux" && process.arch === "x64" ? "linux-arm64" : "linux-x64")')
 RETARGET_LOG="$WORKDIR/retarget.log"
 echo "Retargeting for $OTHER_TARGET"
-if ! pnpm nocobase build retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
+if ! pnpm nocobase dist retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
   echo "::endgroup::"
   echo "::error::Retargeting native modules for $OTHER_TARGET failed"
   exit 1

@@ -385,10 +385,10 @@ After an interrupted or manual removal, make sure the manifest no longer declare
 
 ### Diagnostics
 
-| Command                        | What it does                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `pnpm nocobase build retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
-| `pnpm nocobase build verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
+| Command                       | What it does                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm nocobase dist retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
+| `pnpm nocobase dist check`    | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
 
 #### Deploying to a different machine
 

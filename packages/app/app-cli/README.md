@@ -29,7 +29,7 @@ In a source application the bin registers the application's own `tsx` before it 
 | `locales check`                                                            | yes             |                                                                      |
 | `release upload`, `release deploy`                                         | yes             | Only when `package.json` sets `nocobase.cli.publishing: true`        |
 | `dev`, `build`, `start`                                                    | no              | `build` passes `--target`, `--node-version` and `--tar` to the build |
-| `build retarget`, `build verify`                                           | no              |                                                                      |
+| `dist retarget`, `dist check`                                              | no              |                                                                      |
 | `plugin register`, `plugin unregister`, `plugin update`, `plugin inspect`  | no              | Take `--dir`, or `--workspace-root` with `--app` in this repository  |
 | `package remove`, `skills sync`                                            | no              |                                                                      |
 | `app <name>`                                                               | yes             | The application's own commands, from `cli/commands/`                 |

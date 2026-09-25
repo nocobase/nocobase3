@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# The `dist` command topic's sources; see the matching exception in .gitignore.
+!packages/app/app-cli/src/commands/dist/
 coverage/
 test-results/
 playwright-report/

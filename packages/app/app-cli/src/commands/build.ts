@@ -13,7 +13,7 @@ Options are passed to the build:
   --node-version <major>  Target Node major for an explicit platform target (default: 24).
   --tar                   Also create storage/exports/dist.tar.gz after a successful build.
 
-build retarget and build verify rerun those two steps on a dist/ that is already built.`;
+dist retarget and dist check rerun those two steps on a dist/ that is already built.`;
   static override examples: Command.Example[] = [
     '<%= config.bin %> build',
     '<%= config.bin %> build --target linux-x64 --node-version 24 --tar',
