@@ -33,6 +33,7 @@ import {
 import { createAppDatabaseManager } from './manager.js';
 import { selectAppDatabaseConnections } from './connection-selection.js';
 import { planAppDatabaseTasks } from './plan.js';
+import type { AppDatabaseTasksResult } from './tasks.js';
 import type { AppDatabaseConfig } from './types.js';
 
 /**
@@ -527,4 +528,82 @@ function removeStaleStaging(directory: string): void {
       });
     }
   }
+}
+
+/** How one connection's Collection cache refresh went, after the migrations that made it stale. */
+export interface AppCollectionsRefreshResult {
+  connection: string;
+  status: 'completed' | 'failed';
+  written?: string[];
+  deleted?: string[];
+  error?: string;
+}
+
+export interface RefreshAppCollectionsArtifactOptions {
+  readonly paths?: AppPaths;
+  /** The manager the migrations ran on, so the cache reads the state they left behind. */
+  readonly database: DatabaseManager;
+}
+
+/**
+ * Regenerates the Collection cache of every connection whose schema a
+ * database run changed: migrations executed, rolled back, or rebuilt from
+ * empty. Seeds write rows, never structure, and a preview changes nothing, so
+ * neither triggers a refresh. Returns `undefined` when nothing changed.
+ *
+ * A failure is reported in the result, never raised: the migrations it
+ * follows are already committed, and the cache can always be rebuilt with
+ * `collections generate`.
+ */
+export async function refreshAppCollectionsArtifact(
+  config: AppDatabaseConfig,
+  result: AppDatabaseTasksResult,
+  options: RefreshAppCollectionsArtifactOptions,
+): Promise<AppCollectionsRefreshResult[] | undefined> {
+  const names = new Set<string>();
+  for (const entry of result.results) {
+    if (
+      entry.kind === 'migrations' &&
+      entry.status === 'completed' &&
+      !entry.dryRun &&
+      (entry.fresh ||
+        (entry.executed?.length ?? 0) > 0 ||
+        (entry.rolledBack?.length ?? 0) > 0)
+    ) {
+      names.add(entry.connection);
+    }
+  }
+  if (names.size === 0) return undefined;
+  const refreshed: AppCollectionsRefreshResult[] = [];
+  for (const connection of names) {
+    try {
+      const outcome = await generateAppCollectionsArtifact(config, {
+        paths: options.paths,
+        database: options.database,
+        connection,
+      });
+      const entry = outcome.results[0];
+      refreshed.push(
+        entry?.status === 'completed'
+          ? {
+              connection,
+              status: 'completed',
+              written: entry.written ?? [],
+              deleted: entry.deleted ?? [],
+            }
+          : {
+              connection,
+              status: 'failed',
+              error: entry?.error ?? 'No Collection cache was generated.',
+            },
+      );
+    } catch (error) {
+      refreshed.push({
+        connection,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return refreshed;
 }

@@ -51,6 +51,9 @@ export {
 } from './collections-directory.js';
 export {
   generateAppCollectionsArtifact,
+  refreshAppCollectionsArtifact,
+  type AppCollectionsRefreshResult,
+  type RefreshAppCollectionsArtifactOptions,
   type AppCollectionsArtifactConnectionResult,
   type AppCollectionsArtifactDifference,
   type AppCollectionsArtifactDifferenceKind,

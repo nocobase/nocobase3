@@ -20,8 +20,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  collectionsRefreshAllowed,
   runDatabaseApplyCommand,
   runDatabaseRedoCommand,
   runDatabaseRepairCommand,
@@ -29,6 +30,7 @@ import {
   runDatabaseUnlockCommand,
 } from '../src/database-command.ts';
 import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
+import { setApplicationState } from '../src/runtime/command-store.ts';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
 
@@ -172,7 +174,7 @@ export default defineSeed({ name: '001_defaults', async run() {} });`,
       await manager.destroy();
     }
   }
-  return { runtime, command, migration, seed, rewrite, lockRow };
+  return { runtime, command, migration, seed, rewrite, lockRow, paths };
 }
 
 it('reports both kinds per connection and honors manual selection', async () => {
@@ -707,4 +709,142 @@ it('releases a lock whose holder stopped beating without --force', async () => {
       ]),
     }),
   );
+});
+
+describe('refreshing the Collection cache', () => {
+  afterEach(() => {
+    setApplicationState(undefined);
+  });
+
+  it('writes the cache after migrations run, and leaves it alone when nothing did', async () => {
+    const { runtime, command, migration, paths } = fixture();
+    migration('main');
+    await runDatabaseApplyCommand(
+      command,
+      { json: true, all: false, collections: true },
+      runtime,
+    );
+    expect(command.logJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        ok: true,
+        collections: [
+          {
+            connection: 'main',
+            status: 'completed',
+            written: [
+              '_manifest.json',
+              'rows/collection.json',
+              'rows/metadata.json',
+              'rows/schema.json',
+            ],
+            deleted: [],
+          },
+        ],
+      }),
+    );
+    expect(
+      existsSync(paths.database('main/collections/rows/schema.json')),
+    ).toBe(true);
+
+    // Nothing is pending, so the schema did not change and nothing is refreshed.
+    await runDatabaseApplyCommand(
+      command,
+      { json: true, all: false, collections: true },
+      runtime,
+    );
+    expect(command.logJson.mock.lastCall?.[0]).not.toHaveProperty(
+      'collections',
+    );
+    expect(command.exit).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing unless asked', async () => {
+    const { runtime, command, migration, paths } = fixture();
+    migration('main');
+    await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+    expect(command.logJson.mock.lastCall?.[0]).not.toHaveProperty(
+      'collections',
+    );
+    expect(existsSync(paths.database('main/collections'))).toBe(false);
+  });
+
+  it('follows a rollback and a reset', async () => {
+    const { runtime, command, migration, paths } = fixture();
+    migration('main');
+    await runDatabaseApplyCommand(
+      command,
+      { json: true, all: false, collections: true },
+      runtime,
+    );
+
+    await runDatabaseRollbackCommand(
+      command,
+      { json: true, all: false, force: true, collections: true },
+      runtime,
+    );
+    expect(command.logJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        collections: [
+          expect.objectContaining({
+            connection: 'main',
+            status: 'completed',
+            deleted: [
+              'rows/collection.json',
+              'rows/metadata.json',
+              'rows/schema.json',
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(existsSync(paths.database('main/collections/rows'))).toBe(false);
+
+    await runDatabaseApplyCommand(
+      command,
+      { json: true, all: false, fresh: true, force: true, collections: true },
+      runtime,
+    );
+    expect(command.logJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        collections: [expect.objectContaining({ status: 'completed' })],
+      }),
+    );
+    expect(existsSync(paths.database('main/collections/rows'))).toBe(true);
+  });
+
+  it('reports a failed refresh without failing the migrations it follows', async () => {
+    const { runtime, command, migration, paths } = fixture();
+    const warn = vi.fn();
+    migration('main');
+    // An entry the generator does not own makes it refuse to write.
+    mkdirSync(paths.database('main/collections'), { recursive: true });
+    writeFileSync(paths.database('main/collections/notes.txt'), 'mine\n');
+
+    await runDatabaseApplyCommand(
+      { ...command, warn },
+      { json: false, all: false, collections: true },
+      runtime,
+    );
+    expect(command.exit).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /Could not refresh the Collection cache of "main": .*notes\.txt.*nocobase collections generate --connection main/,
+      ),
+    );
+    expect(command.log).toHaveBeenCalledWith('Executed: 001_create');
+  });
+
+  it('is not allowed in a built dist/', () => {
+    const loadPlugins = async () => undefined;
+    setApplicationState({
+      location: { kind: 'deployment', root: '/srv/app', publishing: false },
+      loadPlugins,
+    });
+    expect(collectionsRefreshAllowed()).toBe(false);
+    setApplicationState({
+      location: { kind: 'source', root: '/srv/app', publishing: false },
+      loadPlugins,
+    });
+    expect(collectionsRefreshAllowed()).toBe(true);
+  });
 });
