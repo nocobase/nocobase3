@@ -49,7 +49,7 @@ server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
 database/main/seeds/           Required initial data
 database/main/collections/     Generated Collection artifacts; regenerate, never edit
-database/externalCrm/collections/ metadata.json per Collection: the external CRM's metadata source
+database/externalCrm/metadata/   <name>.json per Collection: the external CRM's hand-written metadata
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
@@ -167,7 +167,7 @@ Schema changes are migrations under `database/main/migrations/`. Data the applic
 
 Declare database defaults with `export default defineAppDatabaseConfig((runtime) => ({ connections }))`. Before provider registration, the runtime asynchronously imports configured official drivers; explicit `drivers` registrations override them. Keep `isolatedDeclarations: false` for application server declarations so configuration and connection fields retain inference. See `.agents/skills/nocobase-app-development/references/database-connections.md`.
 
-`database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm nocobase collections generate` after migrating. On a managed connection every file there is derived: edit metadata through migrations or the Collection Metadata Service and regenerate, never by hand. On an `external` connection `metadata.json` is the exception — it is the metadata source, read at startup, so edit it by hand and regenerate; the other files stay derived. Never import any of these files from a migration. `pnpm nocobase collections generate --check` fails when they are out of date.
+`database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm nocobase collections generate` after migrating. Every file there is derived, for every connection: the directory is gitignored, safe to delete, and never read back. Edit a managed connection's metadata through migrations or the Collection Metadata Service. An `external` connection's metadata is written by hand in `database/<connection>/metadata/<name>.json` — one metadata document per Collection, committed and read at startup — and regenerating picks it up. Never import any of these files from a migration. `pnpm nocobase collections generate --check` fails when they are out of date.
 
 ```ts
 const migration: MigrationDefinition = defineMigration({

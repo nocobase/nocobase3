@@ -14,6 +14,7 @@ import {
   assertCollectionArtifactDirectoryNames,
   COLLECTION_ARTIFACT_FILE_NAMES,
   COLLECTION_ARTIFACT_MANIFEST_FILE_NAME,
+  DirectoryCollectionMetadataStore,
   serializeCollectionArtifact,
   serializeCollectionArtifactManifest,
   type CollectionArtifactFileKind,
@@ -25,6 +26,7 @@ import {
 import type { AppPaths } from '../config/index.js';
 import {
   isCollectionMetadataStoreInstance,
+  isAppCollectionsDirectory,
   resolveAppCollectionsDirectory,
   resolveAppMetadataStore,
 } from './collections-directory.js';
@@ -36,8 +38,11 @@ import type { AppDatabaseConfig } from './types.js';
 /**
  * Reads every Collection a connection resolves and writes it under
  * `database/<connection>/collections/<name>/` as three files, plus a
- * connection-level manifest. The files are derived: nothing here is read
- * back at runtime, and migrations remain the only authority on schema.
+ * connection-level manifest. The directory is a cache for every connection,
+ * external ones included: nothing here is read back at runtime, the generator
+ * may rewrite or delete any of it, and migrations — or, for an external
+ * connection, the database it points at and its hand-written
+ * `database/<connection>/metadata/` — remain the authority.
  */
 export interface AppCollectionsArtifactOptions {
   readonly paths?: AppPaths;
@@ -91,11 +96,11 @@ export interface AppCollectionsArtifactConnectionResult {
    */
   directoryExists?: boolean;
   /**
-   * Collections whose `metadata.json` is this connection's metadata source
-   * but which the database no longer has. The file is kept — it is the only
-   * copy — and reported here for a person to decide about.
+   * Hand-written metadata documents, in this connection's metadata directory,
+   * that name a Collection the database does not have. Reported for a person
+   * to fix or remove; the generator never touches that directory.
    */
-  orphans?: string[];
+  unusedMetadata?: string[];
   error?: string;
 }
 
@@ -146,12 +151,7 @@ export async function generateAppCollectionsArtifact(
         results.push(
           await generateForConnection(database.connection(name), directory, {
             check,
-            metadataIsSource: metadataReadFromDirectory(
-              config,
-              name,
-              directory,
-              options.paths,
-            ),
+            metadataDirectory: metadataDirectoryOf(config, name, options.paths),
             migrationHead: () =>
               readMigrationHead(database, config, name, options),
           }),
@@ -215,23 +215,22 @@ async function readMigrationHead(
 
 interface ConnectionRunOptions {
   readonly check: boolean;
-  /** True when the connection reads its metadata from this very directory, so `metadata.json` is input, not output. */
-  readonly metadataIsSource: boolean;
+  /** The directory a directory metadata store reads, when the connection has one. */
+  readonly metadataDirectory: string | undefined;
   readonly migrationHead: () => Promise<string | null>;
 }
 
 /**
- * A connection whose metadata store is a directory store on its own
- * collections directory reads `metadata.json` from the files the generator
- * writes. Regenerating then only normalizes their formatting, and a Collection
- * the database has dropped must keep its file: nothing else holds it.
+ * The directory a connection's metadata store reads hand-written documents
+ * from, if it is a directory store. Such a directory must never be a generated
+ * collections directory — the generator rewrites and deletes files there — so
+ * a store configured onto one is refused before anything is written.
  */
-function metadataReadFromDirectory(
+function metadataDirectoryOf(
   config: AppDatabaseConfig,
   name: string,
-  directory: string,
   paths: AppPaths | undefined,
-): boolean {
+): string | undefined {
   const connection = config.connections[name];
   const store = resolveAppMetadataStore(connection.metadataStore, {
     name,
@@ -239,12 +238,19 @@ function metadataReadFromDirectory(
     shared: config.metadataStore,
     paths,
   });
-  return (
-    store !== undefined &&
-    !isCollectionMetadataStoreInstance(store) &&
-    store.type === 'directory' &&
-    path.resolve(store.directory) === path.resolve(directory)
-  );
+  if (
+    store === undefined ||
+    isCollectionMetadataStoreInstance(store) ||
+    store.type !== 'directory'
+  ) {
+    return undefined;
+  }
+  if (isAppCollectionsDirectory(store.directory, paths)) {
+    throw new Error(
+      `Connection "${name}" reads metadata from ${store.directory}, which is a generated collections directory. Keep hand-written metadata in database/<connection>/metadata/ as one <name>.json per Collection and point metadataStore there.`,
+    );
+  }
+  return path.resolve(store.directory);
 }
 
 async function generateForConnection(
@@ -304,23 +310,16 @@ async function generateForConnection(
   );
 
   const disk = readDirectory(directory);
-  const metadataFile = (name: string) =>
-    path.posix.join(name, COLLECTION_ARTIFACT_FILE_NAMES.metadata);
-  const orphans = options.metadataIsSource
-    ? disk.collections.filter(
-        (name) =>
-          !perCollection.has(name) && disk.files.has(metadataFile(name)),
-      )
-    : [];
-  const orphanMetadata = new Set(orphans.map(metadataFile));
-  const differences = diff(expected, disk).filter(
-    (entry) => !(entry.kind === 'unexpected' && orphanMetadata.has(entry.path)),
-  );
+  const differences = diff(expected, disk);
+  const unusedMetadata =
+    options.metadataDirectory === undefined
+      ? undefined
+      : await unusedMetadataIn(options.metadataDirectory, names);
   const base = {
     connection: connection.name,
     directory,
     manifest,
-    ...(options.metadataIsSource ? { orphans } : {}),
+    ...(unusedMetadata?.length ? { unusedMetadata } : {}),
   };
 
   if (options.check) {
@@ -364,18 +363,10 @@ async function generateForConnection(
     }
     for (const name of disk.collections) {
       if (perCollection.has(name)) continue;
-      const keepMetadata = orphans.includes(name);
       for (const relative of disk.files.keys()) {
-        if (!relative.startsWith(`${name}/`)) continue;
-        if (keepMetadata && relative === metadataFile(name)) continue;
-        deleted.push(relative);
-        if (keepMetadata) {
-          rmSync(path.join(directory, relative), { force: true });
-        }
+        if (relative.startsWith(`${name}/`)) deleted.push(relative);
       }
-      if (!keepMetadata) {
-        rmSync(path.join(directory, name), { recursive: true, force: true });
-      }
+      rmSync(path.join(directory, name), { recursive: true, force: true });
     }
     if (changed.has(COLLECTION_ARTIFACT_MANIFEST_FILE_NAME)) {
       const stagingManifest = path.join(
@@ -402,6 +393,24 @@ async function generateForConnection(
     deleted: deleted.sort(),
     unchanged: countUnchanged(perCollection, differences),
   };
+}
+
+async function unusedMetadataIn(
+  directory: string,
+  collections: readonly string[],
+): Promise<string[]> {
+  const present = new Set(collections);
+  const store = new DirectoryCollectionMetadataStore({ directory });
+  const unused: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await store.list(cursor === undefined ? {} : { cursor });
+    for (const item of page.items) {
+      if (!present.has(item.name)) unused.push(item.name);
+    }
+    cursor = page.nextCursor;
+  } while (cursor !== undefined);
+  return unused.sort();
 }
 
 interface DirectoryState {

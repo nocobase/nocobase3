@@ -105,8 +105,8 @@ database:
         autoRun: true
     # An existing database another system owns: NocoBase reads its schema and never changes it, and no
     # migrations or seeds run against it. Titles, descriptions and relations the schema cannot express are
-    # read from database/<connection>/collections/<name>/metadata.json — edit those files and rerun
-    # `pnpm nocobase collections generate`. The externalCrm connection in server/config/database.ts is the example;
+    # read from database/<connection>/metadata/<name>.json, one hand-written metadata document per Collection.
+    # Rerun `pnpm nocobase collections generate` after editing them to refresh the gitignored cache. The externalCrm connection in server/config/database.ts is the example;
     # point it at the real database here to replace the SQLite stand-in.
     # externalCrm:
     #   dialect: postgres
@@ -116,8 +116,8 @@ database:
     #   password: ${CRM_DATABASE_PASSWORD}
     #   schemaManagement: external
     #   naming: { underscored: true, tablePrefix: crm_ }
-    #   # Optional: read metadata from another collections directory instead of this connection's own.
-    #   # metadataStore: database/shared-crm/collections
+    #   # Optional: read metadata from another directory in the same layout instead of this connection's own.
+    #   # metadataStore: database/shared-crm/metadata
 
 snowflake:
   # Assign a unique worker ID to each concurrently running instance.
