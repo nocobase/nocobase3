@@ -10,7 +10,10 @@ import {
   DEPARTMENT_ASSIGNMENTS,
   RESTRICTION_ASSIGNMENTS,
   SEED_DEPARTMENTS,
+  SEED_PERMISSION_SETS,
+  SEED_SHARING_RULES,
   SHARING_ASSIGNMENTS,
+  STAFF_MEMBERSHIPS,
   seedRegionOf,
   type SeedAssignment,
   type SeedRuleAssignment,
@@ -28,13 +31,32 @@ const SALES_MEMBERS = 'authorizationExampleSalesMembers';
  * are keyed by email and written straight into the authentication plugin's `user` and `account` tables; an account
  * that already exists is left alone, memberships, assignments and region included. An assignment whose permission
  * set or rule is missing is skipped rather than written dangling.
+ *
+ * Sharing and restriction rules belong to optional plugins. When a rule plugin is not installed its collections do
+ * not exist, and everything that would write to them is skipped; the rest works with permission sets alone.
  */
 const seed: SeedDefinition = defineSeed({
   name: '202609250002_departments_example_seed_organization',
   transaction: true,
 
-  async run({ query }) {
+  async run(context) {
+    const { query } = context;
     const now = new Date();
+
+    // A missing Collection is reported before any SQL runs, so probing leaves the transaction usable.
+    async function installed(collection: string): Promise<boolean> {
+      try {
+        await context.repository(collection).exists();
+        return true;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          Reflect.get(error, 'code') === 'COLLECTION_NOT_FOUND'
+        )
+          return false;
+        throw error;
+      }
+    }
 
     async function assign(assignment: SeedAssignment): Promise<void> {
       const set = await query
@@ -106,21 +128,100 @@ const seed: SeedDefinition = defineSeed({
         .execute();
     }
 
+    for (const set of SEED_PERMISSION_SETS) {
+      const existing = await query
+        .selectFrom('authorizationPermissionSets')
+        .select('id')
+        .where('key', '=', set.key)
+        .executeTakeFirst();
+      if (existing) continue;
+      await query
+        .insertInto('authorizationPermissionSets')
+        .values({
+          id: set.key,
+          key: set.key,
+          title:
+            set.title === undefined
+              ? null
+              : encodeAuthorizationTitle(set.title),
+          grants: JSON.stringify(set.grants),
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+    }
+
     for (const assignment of DEPARTMENT_ASSIGNMENTS) await assign(assignment);
-    for (const assignment of SHARING_ASSIGNMENTS)
-      await assignRule(
-        'authorizationSharingRuleAssignments',
-        'authorizationSharingRules',
-        'sharingRuleId',
-        assignment,
-      );
-    for (const assignment of RESTRICTION_ASSIGNMENTS)
-      await assignRule(
-        'authorizationRestrictionRuleAssignments',
-        'authorizationRestrictionRules',
-        'restrictionRuleId',
-        assignment,
-      );
+
+    if (await installed('authorizationSharingRules')) {
+      for (const rule of SEED_SHARING_RULES) {
+        const existing = await query
+          .selectFrom('authorizationSharingRules')
+          .select('id')
+          .where('key', '=', rule.key)
+          .executeTakeFirst();
+        if (existing) continue;
+        await query
+          .insertInto('authorizationSharingRules')
+          .values({
+            id: rule.key,
+            key: rule.key,
+            title:
+              rule.title === undefined
+                ? null
+                : encodeAuthorizationTitle(rule.title),
+            resourceType: rule.resource.type,
+            resourceId: rule.resource.id,
+            actions: JSON.stringify(rule.actions),
+            reason: rule.reason ?? null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .execute();
+      }
+      for (const assignment of SHARING_ASSIGNMENTS)
+        await assignRule(
+          'authorizationSharingRuleAssignments',
+          'authorizationSharingRules',
+          'sharingRuleId',
+          assignment,
+        );
+    }
+    if (await installed('authorizationRestrictionRules'))
+      for (const assignment of RESTRICTION_ASSIGNMENTS)
+        await assignRule(
+          'authorizationRestrictionRuleAssignments',
+          'authorizationRestrictionRules',
+          'restrictionRuleId',
+          assignment,
+        );
+
+    // The authorization example's salespeople join the sales departments once; a removed membership stays removed.
+    for (const staff of STAFF_MEMBERSHIPS) {
+      const user = await query
+        .selectFrom('user')
+        .select('id')
+        .where('email', '=', staff.email)
+        .executeTakeFirst();
+      if (!user) continue;
+      const userId = String(user.id);
+      const existing = await query
+        .selectFrom('departmentMembers')
+        .select('id')
+        .where('userId', '=', userId)
+        .executeTakeFirst();
+      if (existing) continue;
+      await query
+        .insertInto('departmentMembers')
+        .values({
+          id: randomUUID(),
+          departmentId: staff.departmentId,
+          userId,
+          primary: true,
+          active: true,
+        })
+        .execute();
+    }
 
     let password: string | undefined;
     for (const account of DEMO_ACCOUNTS) {
@@ -159,6 +260,14 @@ const seed: SeedDefinition = defineSeed({
         await query
           .insertInto('departmentMembers')
           .values({ id: randomUUID(), userId, ...membership, active: true })
+          .execute();
+      // Appoint the head only where nobody holds the post yet.
+      for (const departmentId of account.heads ?? [])
+        await query
+          .updateTable('departments')
+          .set({ managerId: userId })
+          .where('id', '=', departmentId)
+          .where('managerId', 'is', null)
           .execute();
       for (const key of account.permissionSets ?? [])
         await assign({

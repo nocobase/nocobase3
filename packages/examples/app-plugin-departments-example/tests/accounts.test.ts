@@ -10,7 +10,16 @@ import {
 } from './helpers.js';
 
 const email = (name: string): string => `${name}@departments.example`;
-const ACCOUNTS = ['grace', 'leo', 'nina', 'chen', 'eric', 'mia'] as const;
+const ACCOUNTS = [
+  'grace',
+  'leo',
+  'nina',
+  'chen',
+  'eric',
+  'mia',
+  'sophia',
+  'owen',
+] as const;
 
 /**
  * The seeded accounts against the authorization example's own sales and delivery lists. The company-wide
@@ -56,8 +65,12 @@ describe('the seeded demo accounts', () => {
     });
   });
 
-  it('a sales assistant opens the pages through Sales Center and reads her region’s orders only', async () => {
-    expect(await read('nina')).toEqual({ status: 200, ids: [] });
+  it('a sales assistant opens the pages through Sales Center, reads her North colleagues’ projects and her region’s orders', async () => {
+    // North Sales' project viewer set: projects owned by North Sales members, and no South one.
+    expect(await read('nina')).toEqual({
+      status: 200,
+      ids: ['project-1', 'project-2'],
+    });
     expect(await read('nina', 'quotes')).toEqual({ status: 200, ids: [] });
     expect(await read('nina', 'orders')).toEqual({
       status: 200,
@@ -66,8 +79,11 @@ describe('the seeded demo accounts', () => {
   });
 
   it('Chen holds South sales access and delivery access at once', async () => {
-    // Sales Center's assistant set through South Sales: the pages open.
-    expect(await read('chen')).toEqual({ status: 200, ids: [] });
+    // Delivery's sharing rule shows him Sales Center's projects.
+    expect(await read('chen')).toEqual({
+      status: 200,
+      ids: ['project-1', 'project-2', 'project-3'],
+    });
     // Delivery's set, scoped to his South region by the sharing rule: he may deliver order-3.
     const response = await test.request(
       'GET',
@@ -97,8 +113,12 @@ describe('the seeded demo accounts', () => {
     ).toBe(true);
   });
 
-  it('a delivery specialist without a region opens only the orders page, which lists nothing yet', async () => {
-    expect((await read('mia')).status).toBe(403);
+  it('a delivery specialist without a region reads Sales Center projects through sharing and no orders yet', async () => {
+    expect(await read('mia')).toEqual({
+      status: 200,
+      ids: ['project-1', 'project-2', 'project-3'],
+    });
+    expect((await read('mia', 'quotes')).status).toBe(403);
     expect(await read('mia', 'orders')).toEqual({ status: 200, ids: [] });
 
     // Giving Delivery a region is an organisation change the sync carries into the sales data scope.
@@ -137,8 +157,10 @@ describe('the seeded demo accounts', () => {
       .executeTakeFirstOrThrow();
     await test.authz.permissionSets.revoke(String(assistant.id));
 
-    expect((await read('nina')).status).toBe(403);
-    expect((await read('chen')).status).toBe(403);
+    expect((await read('nina', 'quotes')).status).toBe(403);
+    expect((await read('chen', 'quotes')).status).toBe(403);
+    // North Sales' own project viewer set keeps Nina's projects page.
+    expect((await read('nina')).status).toBe(200);
     // Chen keeps his delivery access, which comes from another department.
     expect((await read('chen', 'orders')).ids).toEqual(['order-3']);
     // The engineers hold their role directly.
@@ -146,5 +168,113 @@ describe('the seeded demo accounts', () => {
       status: 200,
       ids: ['project-1', 'project-2'],
     });
+  });
+
+  it('the Sales Center head sees every North and South project, quote and order', async () => {
+    expect(await read('sophia')).toEqual({
+      status: 200,
+      ids: ['project-1', 'project-2', 'project-3'],
+    });
+    expect(await read('sophia', 'quotes')).toEqual({
+      status: 200,
+      ids: [
+        'quote-1',
+        'quote-2',
+        'quote-3',
+        'quote-5',
+        'quote-6',
+        'quote-7',
+        'quote-history-1',
+        'quote-history-2',
+        'quote-history-3',
+      ],
+    });
+    expect(await read('sophia', 'orders')).toEqual({
+      status: 200,
+      ids: ['order-1', 'order-2', 'order-3'],
+    });
+  });
+
+  it('the North Sales head sees what North Sales people own and prepared', async () => {
+    expect(await read('owen')).toEqual({
+      status: 200,
+      ids: ['project-1', 'project-2'],
+    });
+    // Quotes follow their preparer: quote-6 is a North engineer's draft for a South project.
+    expect(await read('owen', 'quotes')).toEqual({
+      status: 200,
+      ids: [
+        'quote-1',
+        'quote-2',
+        'quote-5',
+        'quote-6',
+        'quote-history-1',
+        'quote-history-2',
+      ],
+    });
+    expect(await read('owen', 'orders')).toEqual({
+      status: 200,
+      ids: ['order-1', 'order-2'],
+    });
+  });
+
+  it('a transfer moves the owner’s records to the new department’s head', async () => {
+    const assistant = await test.database
+      .connection()
+      .query.selectFrom('user')
+      .select('id')
+      .where('email', '=', 'sales_assistant@example.test')
+      .executeTakeFirstOrThrow();
+    const id = String(assistant.id);
+    await test.organization.addMember({
+      departmentId: 'south-sales',
+      userId: id,
+      primary: true,
+    });
+    await test.organization.removeMember('north-sales', id);
+    try {
+      // project-1 follows its owner out of North Sales; the Sales Center head still sees it below her.
+      expect((await read('owen')).ids).toEqual(['project-2']);
+      expect((await read('nina')).ids).toEqual(['project-2']);
+      expect((await read('sophia')).ids).toContain('project-1');
+    } finally {
+      await test.organization.addMember({
+        departmentId: 'north-sales',
+        userId: id,
+        primary: true,
+      });
+      await test.organization.removeMember('south-sales', id);
+    }
+    expect((await read('owen')).ids).toEqual(['project-1', 'project-2']);
+  });
+
+  it('the Delivery sharing rule is what shows Mia the sales projects', async () => {
+    const assignment = await test.database
+      .connection()
+      .query.selectFrom('authorizationSharingRuleAssignments')
+      .selectAll()
+      .where('sharingRuleId', '=', 'departments-example-sales-projects')
+      .where('subjectId', '=', 'delivery')
+      .executeTakeFirstOrThrow();
+    await test.database
+      .connection()
+      .query.deleteFrom('authorizationSharingRuleAssignments')
+      .where('id', '=', String(assignment.id))
+      .execute();
+    try {
+      // The action stays; only the widened records go.
+      expect(await read('mia')).toEqual({ status: 200, ids: [] });
+    } finally {
+      await test.database
+        .connection()
+        .query.insertInto('authorizationSharingRuleAssignments')
+        .values(assignment)
+        .execute();
+    }
+    expect((await read('mia')).ids).toEqual([
+      'project-1',
+      'project-2',
+      'project-3',
+    ]);
   });
 });

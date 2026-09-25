@@ -12,6 +12,8 @@ export interface Department {
   readonly parentId: string | null;
   /** The business region its members work in, such as `North`; `null` when the department has none. */
   readonly region: string | null;
+  /** The department head's user id; the head need not be a member. */
+  readonly managerId: string | null;
   readonly active: boolean;
   readonly sortOrder: number;
 }
@@ -46,6 +48,7 @@ export interface CreateDepartmentInput {
   readonly title: string;
   readonly parentId?: string | null;
   readonly region?: string | null;
+  readonly managerId?: string | null;
   readonly sortOrder?: number;
 }
 
@@ -53,6 +56,7 @@ export interface UpdateDepartmentInput {
   readonly title?: string;
   readonly parentId?: string | null;
   readonly region?: string | null;
+  readonly managerId?: string | null;
   readonly sortOrder?: number;
 }
 
@@ -121,6 +125,26 @@ export interface OrganizationService {
     userId: string,
     connection?: DatabaseConnection,
   ): Promise<readonly string[]>;
+  /** Active departments the user heads, whose whole chain is active. */
+  headedBy(
+    userId: string,
+    connection?: DatabaseConnection,
+  ): Promise<readonly string[]>;
+  /**
+   * The departments a viewer's data scope starts from: active direct memberships and headed departments, each
+   * with an active chain, plus every active descendant when `descendants` is set.
+   */
+  viewerDepartments(
+    userId: string,
+    options: { readonly descendants: boolean },
+  ): Promise<readonly string[]>;
+  /** One active department, plus its active descendants when asked; empty when it is missing or inactive. */
+  selectedDepartments(
+    departmentId: string,
+    options: { readonly descendants: boolean },
+  ): Promise<readonly string[]>;
+  /** Users with an active direct membership in any of the departments. */
+  membersOf(departmentIds: readonly string[]): Promise<readonly string[]>;
   /** The region the organisation gives a user: its primary department's first, else another department's. */
   regionOf(
     userId: string,

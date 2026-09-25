@@ -5,6 +5,23 @@ const zhCN: DepartmentsExampleResource = {
     departments: '部门',
   },
   departments: '部门',
+  heads: '部门负责人',
+  scopes: {
+    mine: '本部门',
+    mineHint: '你所属或负责的部门中，在职成员拥有的记录。',
+    mineAndBelow: '本部门及下属部门',
+    mineAndBelowHint: '你的部门及其所有下属部门中，在职成员拥有的记录。',
+    selected: '指定部门',
+    selectedHint:
+      '指定部门（可包含其下属部门）中在职成员拥有的记录。部门在种子数据或 API 中设置。',
+  },
+  sets: {
+    head: '部门负责人',
+    projectViewer: '同部门项目查看',
+  },
+  rules: {
+    salesProjects: '销售项目共享给交付部',
+  },
   authz: {
     read: '查看',
     update: '管理',
@@ -53,6 +70,7 @@ const zhCN: DepartmentsExampleResource = {
     disabled: '已停用',
   },
   details: {
+    head: '负责人：{{name}}',
     choose: '选择一个部门，查看其成员和详情。',
     notFound: '该部门不存在。',
     tabs: '部门分区',
@@ -84,6 +102,13 @@ const zhCN: DepartmentsExampleResource = {
     title: '名称',
     parent: '上级部门',
     topLevel: '无（顶级部门）',
+    head: '负责人',
+    noHead: '无负责人',
+    headHint:
+      '负责人通过“部门负责人”主体看到本部门及下属部门的记录，不必是部门成员。',
+    searchHead: '搜索要任命为负责人的用户',
+    appoint: '任命',
+    clearHead: '移除负责人',
     region: '区域',
     regionHint: '带区域的部门，其成员会被同步到销售示例中，视为在该区域工作。',
     active: '状态',

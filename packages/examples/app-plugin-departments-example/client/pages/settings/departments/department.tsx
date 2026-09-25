@@ -58,6 +58,11 @@ export default function DepartmentPage(): ReactElement {
         <h2 className='truncate text-lg font-semibold'>
           {titleText(department.title, t, department.id)}
         </h2>
+        {department.manager ? (
+          <Badge className='bg-muted text-foreground'>
+            {t('details.head', { name: department.manager.title })}
+          </Badge>
+        ) : null}
         {department.region ? (
           <Badge className='bg-primary/10 text-primary'>
             {t(`regions.${department.region}`, {
@@ -435,6 +440,8 @@ function BasicInfoTab({
   const [title, setTitle] = useState(originalTitle);
   const [parentId, setParentId] = useState(department.parentId ?? TOP_LEVEL);
   const [region, setRegion] = useState(department.region ?? NO_REGION);
+  const originalHead = department.manager ?? null;
+  const [head, setHead] = useState<UserOption | null>(originalHead);
   const [active, setActive] = useState(department.active);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -450,6 +457,7 @@ function BasicInfoTab({
     title.trim() !== originalTitle ||
     parentId !== (department.parentId ?? TOP_LEVEL) ||
     region !== (department.region ?? NO_REGION) ||
+    (head?.id ?? null) !== (originalHead?.id ?? null) ||
     active !== department.active;
 
   async function save(event: FormEvent): Promise<void> {
@@ -466,6 +474,9 @@ function BasicInfoTab({
           : {}),
         ...(region !== (department.region ?? NO_REGION)
           ? { region: region === NO_REGION ? null : region }
+          : {}),
+        ...((head?.id ?? null) !== (originalHead?.id ?? null)
+          ? { managerId: head?.id ?? null }
           : {}),
       };
       if (Object.keys(changes).length)
@@ -513,6 +524,11 @@ function BasicInfoTab({
           ]}
         />
       </div>
+      <HeadField
+        value={head}
+        disabled={!canUpdate || busy}
+        onChange={setHead}
+      />
       <div className='space-y-1.5 text-sm font-medium'>
         <span>{t('basic.region')}</span>
         <SelectField
@@ -554,5 +570,137 @@ function BasicInfoTab({
         </Button>
       ) : null}
     </form>
+  );
+}
+
+/** The department head: the current choice, a way to clear it, and a user search to appoint another. */
+function HeadField({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: UserOption | null;
+  disabled: boolean;
+  onChange: (user: UserOption | null) => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const api = useDepartmentsApi();
+  const [search, setSearch] = useState('');
+  const [found, setFound] = useState<{
+    readonly search: string;
+    readonly users?: readonly UserOption[];
+    readonly error?: string;
+  }>();
+  const query = disabled ? '' : search.trim();
+
+  useEffect(() => {
+    if (!query) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      api.searchUsers(query, controller.signal).then(
+        (users) => {
+          if (!controller.signal.aborted) setFound({ search: query, users });
+        },
+        (cause: unknown) => {
+          if (!controller.signal.aborted)
+            setFound({ search: query, error: t(errorKey(cause)) });
+        },
+      );
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [api, query, t]);
+
+  const current = found?.search === query ? found : undefined;
+  return (
+    <div className='space-y-1.5 text-sm font-medium'>
+      <span>{t('basic.head')}</span>
+      <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 font-normal'>
+        <span className='min-w-0 truncate' aria-label={t('basic.head')}>
+          {value ? (
+            <>
+              <span className='font-medium'>{value.title}</span>
+              {value.description ? (
+                <span className='ml-2 text-muted-foreground'>
+                  {value.description}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className='text-muted-foreground'>{t('basic.noHead')}</span>
+          )}
+        </span>
+        {value && !disabled ? (
+          <Button
+            type='button'
+            size='sm'
+            variant='ghost'
+            onClick={() => onChange(null)}
+          >
+            {t('basic.clearHead')}
+          </Button>
+        ) : null}
+      </div>
+      {!disabled ? (
+        <div className='relative'>
+          <Search className='pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground' />
+          <Input
+            className='pl-8'
+            aria-label={t('basic.searchHead')}
+            placeholder={t('basic.searchHead')}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+      ) : null}
+      {query ? (
+        !current ? (
+          <p className='px-1 text-sm font-normal text-muted-foreground'>
+            {t('members.searching')}
+          </p>
+        ) : current.error ? (
+          <ErrorBox value={current.error} />
+        ) : current.users?.length ? (
+          <ul className='divide-y rounded-lg border bg-background font-normal'>
+            {current.users.map((user) => (
+              <li
+                key={user.id}
+                className='flex items-center justify-between gap-3 px-3 py-2'
+              >
+                <span className='min-w-0 truncate text-sm'>
+                  <span className='font-medium'>{user.title}</span>
+                  {user.description ? (
+                    <span className='ml-2 text-muted-foreground'>
+                      {user.description}
+                    </span>
+                  ) : null}
+                </span>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='outline'
+                  disabled={user.id === value?.id}
+                  onClick={() => {
+                    onChange(user);
+                    setSearch('');
+                  }}
+                >
+                  {t('basic.appoint')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className='px-1 text-sm font-normal text-muted-foreground'>
+            {t('members.noUsers')}
+          </p>
+        )
+      ) : null}
+      <p className='text-xs font-normal text-muted-foreground'>
+        {t('basic.headHint')}
+      </p>
+    </div>
   );
 }

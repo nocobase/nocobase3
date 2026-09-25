@@ -28,6 +28,7 @@ interface TreeNode {
   readonly title: AuthorizationTitle;
   readonly parentId: string | null;
   readonly region: string | null;
+  readonly managerId: string | null;
   readonly active: boolean;
   readonly sortOrder: number;
 }
@@ -58,6 +59,10 @@ function toNode(row: Record<string, unknown>): TreeNode {
         : text(row.parentId),
     region:
       row.region === null || row.region === undefined ? null : text(row.region),
+    managerId:
+      row.managerId === null || row.managerId === undefined
+        ? null
+        : text(row.managerId),
     active: toBoolean(row.active),
     sortOrder: Number(row.sortOrder ?? 0),
   };
@@ -120,6 +125,27 @@ function subtreeOf(tree: Tree, id: string): TreeNode[] {
     pending.push(...(children.get(node.id) ?? []));
   }
   return result;
+}
+
+/** The departments and every descendant whose whole chain is active. */
+function activeSubtrees(tree: Tree, ids: readonly string[]): string[] {
+  const result = new Set<string>();
+  for (const id of ids) {
+    if (activeChainOf(tree, id) === undefined) continue;
+    for (const node of subtreeOf(tree, id))
+      if (activeChainOf(tree, node.id) !== undefined) result.add(node.id);
+  }
+  return [...result];
+}
+
+/** Active departments the user heads. */
+function headedIn(tree: Tree, userId: string): string[] {
+  return [...tree.values()]
+    .filter(
+      (node) =>
+        node.managerId === userId && activeChainOf(tree, node.id) !== undefined,
+    )
+    .map((node) => node.id);
 }
 
 function validatePage(query: OrganizationPageQuery): void {
@@ -189,7 +215,15 @@ export function createOrganizationService(
   async function loadTree(connection?: DatabaseConnection): Promise<Tree> {
     const rows = await (connection ?? database.connection()).query
       .selectFrom('departments')
-      .select(['id', 'title', 'parentId', 'region', 'active', 'sortOrder'])
+      .select([
+        'id',
+        'title',
+        'parentId',
+        'region',
+        'managerId',
+        'active',
+        'sortOrder',
+      ])
       .execute();
     return new Map(
       rows.map((row) => {
@@ -363,6 +397,8 @@ export function createOrganizationService(
       const sortOrder = input.sortOrder ?? 0;
       if (!Number.isInteger(sortOrder))
         throw new OrganizationError('INVALID_INPUT', 'Invalid sort order.');
+      const managerId = input.managerId ?? null;
+      if (managerId !== null) await requireEnabledUser(managerId);
       return database.transaction(async (connection) => {
         const tree = await loadTree(connection);
         if (tree.has(id))
@@ -373,9 +409,25 @@ export function createOrganizationService(
         validateParent(tree, undefined, parentId);
         await connection.query
           .insertInto('departments')
-          .values({ id, title, parentId, region, active: true, sortOrder })
+          .values({
+            id,
+            title,
+            parentId,
+            region,
+            managerId,
+            active: true,
+            sortOrder,
+          })
           .execute();
-        return { id, title, parentId, region, active: true, sortOrder };
+        return {
+          id,
+          title,
+          parentId,
+          region,
+          managerId,
+          active: true,
+          sortOrder,
+        };
       });
     },
 
@@ -391,6 +443,10 @@ export function createOrganizationService(
         if (!Number.isInteger(input.sortOrder))
           throw new OrganizationError('INVALID_INPUT', 'Invalid sort order.');
         values.sortOrder = input.sortOrder;
+      }
+      if (input.managerId !== undefined) {
+        if (input.managerId !== null) await requireEnabledUser(input.managerId);
+        values.managerId = input.managerId;
       }
       return database.transaction(async (connection) => {
         const tree = await loadTree(connection);
@@ -409,6 +465,15 @@ export function createOrganizationService(
           values.parentId = input.parentId;
           // Moving a department changes what its members inherit.
           changed = await subtreeMemberIds(connection, id);
+          // Heads in the moved subtree now reach a different set of departments below them.
+          for (const node of subtreeOf(tree, id))
+            if (node.managerId !== null) changed.push(node.managerId);
+        }
+        // A new head gains the department's scope and the old one loses it.
+        if ('managerId' in values && values.managerId !== current.managerId) {
+          if (current.managerId !== null) changed.push(current.managerId);
+          if (typeof values.managerId === 'string')
+            changed.push(values.managerId);
         }
         if (Object.keys(values).length) {
           await connection.query
@@ -431,7 +496,10 @@ export function createOrganizationService(
             'DEPARTMENT_NOT_FOUND',
             `Department "${id}" does not exist.`,
           );
-        return { department: toDepartment(department), changed };
+        return {
+          department: toDepartment(department),
+          changed: [...new Set(changed)],
+        };
       });
     },
 
@@ -496,6 +564,35 @@ export function createOrganizationService(
           result.add(id);
       }
       return [...result];
+    },
+
+    async headedBy(userId, connection) {
+      return headedIn(await loadTree(connection), userId);
+    },
+
+    async viewerDepartments(userId, { descendants }) {
+      const connection = database.connection();
+      const tree = await loadTree(connection);
+      const direct = new Set(headedIn(tree, userId));
+      for (const membership of await activeMemberships(connection, { userId }))
+        if (activeChainOf(tree, membership.departmentId) !== undefined)
+          direct.add(membership.departmentId);
+      return descendants ? activeSubtrees(tree, [...direct]) : [...direct];
+    },
+
+    async selectedDepartments(departmentId, { descendants }) {
+      const tree = await loadTree();
+      if (activeChainOf(tree, departmentId) === undefined) return [];
+      return descendants
+        ? activeSubtrees(tree, [departmentId])
+        : [departmentId];
+    },
+
+    async membersOf(departmentIds) {
+      const memberships = await activeMemberships(database.connection(), {
+        departmentIds,
+      });
+      return [...new Set(memberships.map((row) => row.userId))];
     },
 
     async regionOf(userId, connection) {
@@ -659,9 +756,13 @@ export function createOrganizationService(
           .where('id', '=', departmentId)
           .execute();
         // Disabling a parent is a check on the chain, not a cascade: every member below it is affected.
-        const changed = await subtreeMemberIds(connection, departmentId);
-        await syncRegions(connection, changed);
-        return changed;
+        const members = await subtreeMemberIds(connection, departmentId);
+        await syncRegions(connection, members);
+        // So is every head of a department in the subtree.
+        const heads = subtreeOf(tree, departmentId)
+          .map((node) => node.managerId)
+          .filter((id): id is string => id !== null);
+        return [...new Set([...members, ...heads])];
       });
     },
   };

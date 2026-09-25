@@ -6,6 +6,28 @@ const enUS = {
   },
   // One name for the settings entry, the permission workspace and the subject type.
   departments: 'Departments',
+  // The subject type of every department head; the same term as the Head field.
+  heads: 'Department heads',
+  // Data scopes by the record owner's department.
+  scopes: {
+    mine: 'My departments',
+    mineHint:
+      'Records owned by active members of the departments you belong to or head.',
+    mineAndBelow: 'My departments and below',
+    mineAndBelowHint:
+      'Records owned by active members of your departments and of every department below them.',
+    selected: 'Selected department',
+    selectedHint:
+      'Records owned by active members of one department, optionally with the departments below it. The department is set in a seed or through the API.',
+  },
+  // Titles of the seeded permission sets and sharing rule.
+  sets: {
+    head: 'Department head',
+    projectViewer: 'Department project viewer',
+  },
+  rules: {
+    salesProjects: 'Share sales projects with Delivery',
+  },
   authz: {
     read: 'View',
     update: 'Manage',
@@ -56,6 +78,7 @@ const enUS = {
     disabled: 'Disabled',
   },
   details: {
+    head: 'Head: {{name}}',
     choose: 'Select a department to see its members and details.',
     notFound: 'This department does not exist.',
     tabs: 'Department sections',
@@ -87,6 +110,13 @@ const enUS = {
     title: 'Title',
     parent: 'Parent department',
     topLevel: 'None (top level)',
+    head: 'Head',
+    noHead: 'No head',
+    headHint:
+      'The head reaches the records of this department and those below it through the Department heads subject, and need not be a member.',
+    searchHead: 'Search users to appoint as head',
+    appoint: 'Appoint',
+    clearHead: 'Remove head',
     region: 'Region',
     regionHint:
       'Members of a department with a region are synchronised into the sales example as working in that region.',

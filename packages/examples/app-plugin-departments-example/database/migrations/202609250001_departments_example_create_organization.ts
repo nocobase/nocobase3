@@ -10,9 +10,12 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('title', { length: 255, nullable: false });
       collection.string('parentId', { length: 64, nullable: true });
       collection.string('region', { length: 64, nullable: true });
+      // The department head: a user id, who need not be a member.
+      collection.string('managerId', { length: 64, nullable: true });
       collection.boolean('active', { nullable: false, defaultValue: true });
       collection.integer('sortOrder', { nullable: false, defaultValue: 0 });
       collection.index('parentId');
+      collection.index('managerId');
     });
     await builder.createCollection('departmentMembers', (collection) => {
       collection.string('id', { length: 64, nullable: false });

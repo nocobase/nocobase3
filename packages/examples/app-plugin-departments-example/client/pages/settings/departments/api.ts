@@ -9,6 +9,10 @@ export interface Department {
   readonly title: DepartmentTitle;
   readonly parentId: string | null;
   readonly region: string | null;
+  /** The head's user id; the head need not be a member. */
+  readonly managerId?: string | null;
+  /** The head's display name, which the server reads from the user directory. */
+  readonly manager?: UserOption | null;
   readonly active: boolean;
   readonly sortOrder: number;
 }
@@ -30,6 +34,7 @@ export interface DepartmentChanges {
   readonly title?: string;
   readonly parentId?: string | null;
   readonly region?: string | null;
+  readonly managerId?: string | null;
 }
 
 /** What the page hands its department child route through the outlet. */

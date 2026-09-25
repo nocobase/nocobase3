@@ -30,6 +30,7 @@ export class OrganizationProvider extends ServiceProvider<AppPluginApplication> 
     this.release = registerOrganizationAuthorization(
       this.app.container.resolve(authorizationToken),
       this.app.container.resolve(organizationServiceToken),
+      this.app.container.resolve(databaseManagerToken),
     );
   }
 

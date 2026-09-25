@@ -19,8 +19,18 @@ import { DEPARTMENTS_SETTINGS } from '../resources.js';
 import {
   OrganizationError,
   organizationServiceToken,
+  type Department,
   type OrganizationErrorCode,
 } from '../tokens.js';
+
+/** A department as the API answers it: the head's display name travels with its id. */
+interface DepartmentView extends Department {
+  readonly manager: {
+    readonly id: string;
+    readonly title: string;
+    readonly description?: string;
+  } | null;
+}
 
 type RouteContext = Context<AuthorizationEnv>;
 
@@ -83,6 +93,13 @@ function optionalRegion(
   return optionalString(body, 'region');
 }
 
+function optionalManager(
+  body: Record<string, unknown>,
+): string | null | undefined {
+  if (body.managerId === null) return null;
+  return optionalString(body, 'managerId');
+}
+
 function optionalInteger(
   body: Record<string, unknown>,
   key: string,
@@ -143,6 +160,45 @@ export function createOrganizationRoutes(
       await authz.permissionSets.notifyAssignmentsChanged({ type: 'user', id });
   }
 
+  // Heads are read through the user directory, one page per hundred distinct heads.
+  async function withManagers(
+    departments: readonly Department[],
+  ): Promise<DepartmentView[]> {
+    const ids = [
+      ...new Set(
+        departments
+          .map((department) => department.managerId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const names = new Map<string, { title: string; description?: string }>();
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const page = await users.list({
+        userIds: ids.slice(offset, offset + 100),
+        page: 1,
+        pageSize: 100,
+      });
+      for (const user of page.items)
+        names.set(user.id, { title: user.name, description: user.email });
+    }
+    return departments.map((department) => {
+      const name =
+        department.managerId === null
+          ? undefined
+          : names.get(department.managerId);
+      return {
+        ...department,
+        manager:
+          department.managerId === null
+            ? null
+            : {
+                id: department.managerId,
+                ...(name ?? { title: department.managerId }),
+              },
+      };
+    });
+  }
+
   const routes = new Hono<AuthorizationEnv>();
   routes.use('*', auth.required(), authz.middleware());
   // A denied `require` answers 403 on its own; only this plugin's errors need mapping.
@@ -159,7 +215,7 @@ export function createOrganizationRoutes(
 
   routes.get('/departments', async (c) => {
     await requireSettings(c, 'read');
-    return c.json({ data: await organization.listTree() });
+    return c.json({ data: await withManagers(await organization.listTree()) });
   });
 
   routes.post('/departments', async (c) => {
@@ -168,15 +224,21 @@ export function createOrganizationRoutes(
     const id = optionalString(body, 'id');
     const parentId = optionalParent(body);
     const region = optionalRegion(body);
+    const managerId = optionalManager(body);
     const sortOrder = optionalInteger(body, 'sortOrder');
     const department = await organization.createDepartment({
       title: typeof body.title === 'string' ? body.title : '',
       ...(id === undefined ? {} : { id }),
       ...(parentId === undefined ? {} : { parentId }),
       ...(region === undefined ? {} : { region }),
+      ...(managerId === undefined ? {} : { managerId }),
       ...(sortOrder === undefined ? {} : { sortOrder }),
     });
-    return c.json({ data: department }, 201);
+    // A head appointed with the department gains its scope.
+    if (department.managerId !== null)
+      await refreshUsers([department.managerId]);
+    const [view] = await withManagers([department]);
+    return c.json({ data: view }, 201);
   });
 
   routes.get('/departments/:id', async (c) => {
@@ -187,7 +249,8 @@ export function createOrganizationRoutes(
         { code: 'DEPARTMENT_NOT_FOUND', message: 'Department not found' },
         404,
       );
-    return c.json({ data: department });
+    const [view] = await withManagers([department]);
+    return c.json({ data: view });
   });
 
   routes.patch('/departments/:id', async (c) => {
@@ -196,15 +259,19 @@ export function createOrganizationRoutes(
     const title = optionalString(body, 'title');
     const parentId = optionalParent(body);
     const region = optionalRegion(body);
+    const managerId = optionalManager(body);
     const sortOrder = optionalInteger(body, 'sortOrder');
     const result = await organization.updateDepartment(c.req.param('id'), {
       ...(title === undefined ? {} : { title }),
       ...(parentId === undefined ? {} : { parentId }),
       ...(region === undefined ? {} : { region }),
+      ...(managerId === undefined ? {} : { managerId }),
       ...(sortOrder === undefined ? {} : { sortOrder }),
     });
+    // Members whose inheritance moved, and the old and new heads.
     await refreshUsers(result.changed);
-    return c.json({ data: result.department });
+    const [view] = await withManagers([result.department]);
+    return c.json({ data: view });
   });
 
   routes.put('/departments/:id/active', async (c) => {

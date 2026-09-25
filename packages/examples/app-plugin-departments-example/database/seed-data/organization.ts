@@ -1,6 +1,21 @@
-import type { AuthorizationTitle } from '@nocobase/authorization/core';
+import {
+  selection,
+  type AuthorizationTitle,
+} from '@nocobase/authorization/core';
+import {
+  definePermissionSet,
+  type PermissionSet,
+} from '@nocobase/authorization/permission-sets';
+import type { SharingRule } from '@nocobase/authorization/sharing-rules';
 
-import { DEPARTMENT_SUBJECT, label } from '../../server/resources.js';
+import {
+  DEPARTMENT_HEAD_SUBJECT,
+  DEPARTMENT_SUBJECT,
+  label,
+  SCOPE_MY_DEPARTMENTS,
+  SCOPE_MY_DEPARTMENTS_AND_BELOW,
+  SCOPE_SELECTED_DEPARTMENT,
+} from '../../server/resources.js';
 
 export interface SeedDepartment {
   readonly id: string;
@@ -64,6 +79,73 @@ export const SEED_DEPARTMENTS: readonly SeedDepartment[] = [
   },
 ];
 
+/** The sales example's pages and composites, by the ids it registers them under. */
+const PAGES = [
+  'example.sales.projects',
+  'example.sales.quotes',
+  'example.sales.orders',
+] as const;
+const PROJECTS_COMPOSITE = 'example.sales.projects';
+
+function pageAccess(...pages: readonly string[]) {
+  return pages.map((id) => ({
+    resource: { type: 'page', id },
+    actions: [{ action: 'access' }],
+  }));
+}
+
+/** A composite's `view`, with one data scope set to a record access. */
+function viewWith(composite: string, scopeKey: string, recordAccess: string) {
+  return {
+    resource: { type: 'composite', id: composite },
+    actions: [
+      {
+        action: 'view',
+        policy: {
+          type: 'composite' as const,
+          scopes: { [scopeKey]: recordAccess },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * This organisation's own permission sets, one per job role. Relative scopes let one set serve every holder: the
+ * head set reaches each head's own departments and those below them, whoever the head is.
+ */
+export const DEPARTMENT_SETS = {
+  head: 'departments-example-head',
+  projectViewer: 'departments-example-project-viewer',
+} as const;
+
+export const SEED_PERMISSION_SETS: readonly PermissionSet[] = [
+  definePermissionSet(DEPARTMENT_SETS.head)
+    .title(label('sets.head'))
+    .grant(
+      ...pageAccess(...PAGES),
+      viewWith(PROJECTS_COMPOSITE, 'projects', SCOPE_MY_DEPARTMENTS_AND_BELOW),
+      viewWith(
+        'example.sales.quotes',
+        'quotes',
+        SCOPE_MY_DEPARTMENTS_AND_BELOW,
+      ),
+      viewWith(
+        'example.sales.orders',
+        'orders',
+        SCOPE_MY_DEPARTMENTS_AND_BELOW,
+      ),
+    )
+    .build(),
+  definePermissionSet(DEPARTMENT_SETS.projectViewer)
+    .title(label('sets.projectViewer'))
+    .grant(
+      ...pageAccess(PROJECTS_COMPOSITE),
+      viewWith(PROJECTS_COMPOSITE, 'projects', SCOPE_MY_DEPARTMENTS),
+    )
+    .build(),
+];
+
 /** The authorization example's permission sets this organisation reuses. */
 export const SALES_SETS = {
   assistant: 'example-sales-assistant',
@@ -96,6 +178,47 @@ export const DEPARTMENT_ASSIGNMENTS: readonly SeedAssignment[] = [
     subjectType: DEPARTMENT_SUBJECT,
     subjectId: 'delivery',
   },
+  // North Sales colleagues read each other's projects.
+  {
+    id: 'departments-example:north-sales:project-viewer',
+    permissionSetKey: DEPARTMENT_SETS.projectViewer,
+    subjectType: DEPARTMENT_SUBJECT,
+    subjectId: 'north-sales',
+  },
+  // Delivery needs the projects view action for the sales-projects sharing rule to widen; its own projects are none.
+  {
+    id: 'departments-example:delivery:project-viewer',
+    permissionSetKey: DEPARTMENT_SETS.projectViewer,
+    subjectType: DEPARTMENT_SUBJECT,
+    subjectId: 'delivery',
+  },
+  // Assigned once: every head of an active department holds it, and it follows each appointment.
+  {
+    id: 'departments-example:heads:head',
+    permissionSetKey: DEPARTMENT_SETS.head,
+    subjectType: DEPARTMENT_HEAD_SUBJECT,
+    subjectId: '*',
+  },
+];
+
+/** This organisation's own sharing rule: Delivery reads the projects of Sales Center and every department below it. */
+export const SEED_SHARING_RULES: readonly SharingRule[] = [
+  {
+    key: 'departments-example-sales-projects',
+    title: label('rules.salesProjects'),
+    resource: { type: 'composite', id: PROJECTS_COMPOSITE },
+    actions: [
+      {
+        action: 'view',
+        scopeKey: 'projects',
+        selection: selection.recordAccess(SCOPE_SELECTED_DEPARTMENT, {
+          departmentId: 'sales-center',
+          includeDescendants: true,
+        }),
+      },
+    ],
+    subjects: [{ type: DEPARTMENT_SUBJECT, id: 'delivery' }],
+  },
 ];
 
 export interface SeedRuleAssignment {
@@ -126,6 +249,12 @@ export const SHARING_ASSIGNMENTS: readonly SeedRuleAssignment[] = [
     ruleId: 'example-selected-projects',
     subjectId: 'executive-office',
   },
+  // Delivery prepares for what Sales Center is selling.
+  {
+    id: 'departments-example:delivery:sales-projects',
+    ruleId: 'departments-example-sales-projects',
+    subjectId: 'delivery',
+  },
 ];
 
 /** The authorization example's confidentiality restrictions, company-wide through the root department. */
@@ -150,6 +279,8 @@ export interface DemoAccount {
   readonly memberships: readonly DemoMembership[];
   /** The person's job role, assigned to the user directly on top of what the departments pass down. */
   readonly permissionSets?: readonly string[];
+  /** Departments this person heads. */
+  readonly heads?: readonly string[];
 }
 
 /** Fictional accounts for practice; they share {@link DEMO_PASSWORD}. */
@@ -190,6 +321,34 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     email: 'mia@departments.example',
     memberships: [{ departmentId: 'delivery', primary: true }],
   },
+  {
+    name: 'Sophia Sun',
+    email: 'sophia@departments.example',
+    memberships: [{ departmentId: 'sales-center', primary: true }],
+    heads: ['sales-center'],
+  },
+  {
+    name: 'Owen Xu',
+    email: 'owen@departments.example',
+    memberships: [{ departmentId: 'north-sales', primary: true }],
+    heads: ['north-sales'],
+  },
+];
+
+/**
+ * The authorization example's salespeople own and prepare its projects and quotes, so they join the sales
+ * departments; owner-based department scopes read their memberships. Their sales regions already match these
+ * departments. The coordinator, whose project lies in another region, and the delivery specialist stay outside
+ * the organisation, as the authorization example has them.
+ */
+export const STAFF_MEMBERSHIPS: readonly {
+  readonly email: string;
+  readonly departmentId: string;
+}[] = [
+  { email: 'sales_assistant@example.test', departmentId: 'north-sales' },
+  { email: 'sales_engineer@example.test', departmentId: 'north-sales' },
+  { email: 'sales_proposal@example.test', departmentId: 'north-sales' },
+  { email: 'sales_manager@example.test', departmentId: 'south-sales' },
 ];
 
 export const DEMO_PASSWORD = 'departments-demo';

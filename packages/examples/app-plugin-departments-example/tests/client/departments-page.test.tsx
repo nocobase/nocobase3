@@ -74,6 +74,12 @@ const DEPARTMENTS = [
     title: { key: 'seed.northSales', ns: NS },
     parentId: 'trading',
     region: 'North',
+    managerId: 'u9',
+    manager: {
+      id: 'u9',
+      title: 'Owen Xu',
+      description: 'owen@departments.example',
+    },
     active: true,
     sortOrder: 0,
   },
@@ -271,6 +277,49 @@ describe('the Departments settings page', () => {
         path: 'departments-example/departments/north-sales',
         method: 'PATCH',
         json: { title: 'North Sales Team' },
+      }),
+    );
+  });
+
+  it('shows the head and appoints another through the user search', async () => {
+    renderAt('/settings/departments/north-sales?tab=basic');
+    expect(await screen.findByText('details.head')).toBeInTheDocument();
+    expect(screen.getByText('Owen Xu')).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'basic.searchHead' }),
+      {
+        target: { value: 'Mia' },
+      },
+    );
+    const mia = await screen.findByText('Mia Zhao');
+    fireEvent.click(
+      within(mia.closest('li') as HTMLElement).getByRole('button', {
+        name: 'basic.appoint',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'basic.save' }));
+    await waitFor(() =>
+      expect(mocks.request).toHaveBeenCalledWith({
+        path: 'departments-example/departments/north-sales',
+        method: 'PATCH',
+        json: { managerId: 'u3' },
+      }),
+    );
+  });
+
+  it('removes the head', async () => {
+    renderAt('/settings/departments/north-sales?tab=basic');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'basic.clearHead' }),
+    );
+    expect(screen.getByText('basic.noHead')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'basic.save' }));
+    await waitFor(() =>
+      expect(mocks.request).toHaveBeenCalledWith({
+        path: 'departments-example/departments/north-sales',
+        method: 'PATCH',
+        json: { managerId: null },
       }),
     );
   });

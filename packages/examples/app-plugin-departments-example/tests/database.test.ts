@@ -50,6 +50,7 @@ describe('organization migration', () => {
           'title',
           'parent_id',
           'region',
+          'manager_id',
           'active',
           'sort_order',
         ]),
@@ -60,6 +61,10 @@ describe('organization migration', () => {
       expect(departments?.primaryKey?.columns).toEqual(['id']);
       expect(indexes(departments)).toContainEqual({
         columns: ['parent_id'],
+        unique: false,
+      });
+      expect(indexes(departments)).toContainEqual({
+        columns: ['manager_id'],
         unique: false,
       });
 
@@ -111,7 +116,7 @@ describe('organization seed', () => {
       return {
         departments: await query
           .selectFrom('departments')
-          .select(['id', 'title', 'parentId', 'region', 'active'])
+          .select(['id', 'title', 'parentId', 'region', 'managerId', 'active'])
           .orderBy('id', 'asc')
           .execute(),
         assignments: await query
@@ -120,7 +125,10 @@ describe('organization seed', () => {
           .select(['permissionSetKey', 'subjectType', 'subjectId', 'email'])
           .where((where) =>
             where.or([
-              where('subjectType', '=', 'org.department'),
+              where('subjectType', 'in', [
+                'org.department',
+                'org.departmentHead',
+              ]),
               where('subjectId', 'in', demoUsers),
             ]),
           )
@@ -151,6 +159,7 @@ describe('organization seed', () => {
           .selectFrom('departmentMembers')
           .innerJoin('user', 'user.id', 'departmentMembers.userId')
           .select(['departmentId', 'email', 'primary'])
+          .where('email', 'like', '%@departments.example')
           .orderBy('email', 'asc')
           .orderBy('departmentId', 'asc')
           .execute(),
@@ -160,6 +169,24 @@ describe('organization seed', () => {
           .select(['email', 'region'])
           .where('email', 'like', '%@departments.example')
           .orderBy('email', 'asc')
+          .execute(),
+        staff: await query
+          .selectFrom('departmentMembers')
+          .innerJoin('user', 'user.id', 'departmentMembers.userId')
+          .select(['departmentId', 'email'])
+          .where('email', 'like', 'sales_%@example.test')
+          .orderBy('email', 'asc')
+          .execute(),
+        sets: await query
+          .selectFrom('authorizationPermissionSets')
+          .select(['key', 'title'])
+          .where('key', 'like', 'departments-example-%')
+          .orderBy('key', 'asc')
+          .execute(),
+        sharingRules: await query
+          .selectFrom('authorizationSharingRules')
+          .select(['key', 'resourceId', 'actions'])
+          .where('key', 'like', 'departments-example-%')
           .execute(),
       };
     };
@@ -191,10 +218,53 @@ describe('organization seed', () => {
           ['example-sales-engineer', 'leo@departments.example'],
           ['example-sales-engineer', 'eric@departments.example'],
           ['example-sales-manager', 'grace@departments.example'],
+          ['departments-example-project-viewer', 'north-sales'],
+          ['departments-example-project-viewer', 'delivery'],
+          ['departments-example-head', '*'],
         ]),
       );
-      expect(seeded.assignments).toHaveLength(5);
+      expect(seeded.assignments).toHaveLength(8);
+      expect(seeded.sets.map((row) => [row.key, row.title])).toEqual([
+        [
+          'departments-example-head',
+          JSON.stringify({
+            key: 'sets.head',
+            ns: '@nocobase/app-plugin-departments-example',
+          }),
+        ],
+        [
+          'departments-example-project-viewer',
+          JSON.stringify({
+            key: 'sets.projectViewer',
+            ns: '@nocobase/app-plugin-departments-example',
+          }),
+        ],
+      ]);
+      expect(seeded.sharingRules).toEqual([
+        {
+          key: 'departments-example-sales-projects',
+          resourceId: 'example.sales.projects',
+          actions: JSON.stringify([
+            {
+              action: 'view',
+              scopeKey: 'projects',
+              selection: {
+                type: 'recordAccess',
+                key: 'org.selectedDepartment',
+                params: {
+                  departmentId: 'sales-center',
+                  includeDescendants: true,
+                },
+              },
+            },
+          ]),
+        },
+      ]);
       expect(seeded.sharing).toEqual([
+        {
+          sharingRuleId: 'departments-example-sales-projects',
+          subjectId: 'delivery',
+        },
         { sharingRuleId: 'example-delivery-orders', subjectId: 'delivery' },
         { sharingRuleId: 'example-delivery-orders', subjectId: 'sales-center' },
         {
@@ -202,6 +272,21 @@ describe('organization seed', () => {
           subjectId: 'executive-office',
         },
       ]);
+      // The authorization example's salespeople join the sales departments.
+      expect(seeded.staff.map((row) => [row.email, row.departmentId])).toEqual([
+        ['sales_assistant@example.test', 'north-sales'],
+        ['sales_engineer@example.test', 'north-sales'],
+        ['sales_manager@example.test', 'south-sales'],
+        ['sales_proposal@example.test', 'north-sales'],
+      ]);
+      // Heads are appointed with their accounts.
+      const heads = Object.fromEntries(
+        seeded.departments.map((row) => [row.id, row.managerId]),
+      );
+      const userId = (address: string) =>
+        seeded.users.find((row) => row.email === address)?.id;
+      expect(heads['sales-center']).toBe(userId('sophia@departments.example'));
+      expect(heads['north-sales']).toBe(userId('owen@departments.example'));
       expect(seeded.restrictions).toHaveLength(3);
       // Each demo account is a credential account with its memberships.
       expect(seeded.users.map((row) => [row.email, row.providerId])).toEqual(
@@ -232,6 +317,7 @@ describe('organization seed', () => {
         { email: 'eric@departments.example', region: 'South' },
         { email: 'leo@departments.example', region: 'North' },
         { email: 'nina@departments.example', region: 'North' },
+        { email: 'owen@departments.example', region: 'North' },
       ]);
       // The seeded password signs in.
       await first.signIn('grace@departments.example', DEMO_PASSWORD);
@@ -263,6 +349,9 @@ describe('organization seed', () => {
         expect(replayed.users).toEqual(seeded.users);
         expect(replayed.members).toEqual(seeded.members);
         expect(replayed.regions).toEqual(seeded.regions);
+        expect(replayed.staff).toEqual(seeded.staff);
+        expect(replayed.sets).toEqual(seeded.sets);
+        expect(replayed.sharingRules).toEqual(seeded.sharingRules);
         expect(replayed.departments).toEqual(
           seeded.departments.map((row) =>
             row.id === 'sales-center'

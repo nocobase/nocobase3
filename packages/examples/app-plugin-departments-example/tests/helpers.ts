@@ -88,11 +88,12 @@ function cookieOf(response: Response): string {
 /**
  * A real application: authentication, authorization with the three rule plugins, the authorization example this
  * plugin builds on, and this plugin, on a fresh SQLite file. Startup runs every plugin's migrations and seeds,
- * exactly as an installing application does.
+ * exactly as an installing application does. `rules: false` leaves the optional rule plugins out entirely.
  */
 export async function createTestApp(
-  options: { directory?: string } = {},
+  options: { directory?: string; rules?: boolean } = {},
 ): Promise<TestApp> {
+  const rules = options.rules ?? true;
   const directory =
     options.directory ??
     mkdtempSync(path.join(tmpdir(), 'departments-example-'));
@@ -112,7 +113,9 @@ export async function createTestApp(
     },
     authorization: {
       permissionSets: { rootSet: 'root', defaultSet: 'member' },
-      plugins: [defaultAccess(), sharingRules(), restrictionRules()],
+      plugins: rules
+        ? [defaultAccess(), sharingRules(), restrictionRules()]
+        : [],
     },
     caching: createDefaultCachingConfig(),
     database: {
@@ -153,9 +156,9 @@ export async function createTestApp(
       defineServerPlugins([
         authentication,
         authorization,
-        defaultAccessPlugin,
-        sharingRulesPlugin,
-        restrictionRulesPlugin,
+        ...(rules
+          ? [defaultAccessPlugin, sharingRulesPlugin, restrictionRulesPlugin]
+          : []),
         authorizationExample,
         departments,
       ] as readonly AppServerPlugin[]),
@@ -289,4 +292,75 @@ export async function salesRegion(
     .where('id', '=', userId)
     .executeTakeFirst();
   return row ? String(row.region) : undefined;
+}
+
+/** Page access to the three sales pages, and `view` on each composite with its data scope set to `scope`. */
+export function salesViewSet(
+  key: string,
+  scope: string | { type: 'recordAccess'; key: string; params?: unknown },
+): PermissionSet {
+  const view = (composite: string, scopeKey: string) => ({
+    resource: { type: 'composite', id: composite },
+    actions: [
+      {
+        action: 'view',
+        policy: { type: 'composite' as const, scopes: { [scopeKey]: scope } },
+      },
+    ],
+  });
+  return definePermissionSet(key)
+    .grant(
+      ...['projects', 'quotes', 'orders'].map((page) => ({
+        resource: { type: 'page', id: `example.sales.${page}` },
+        actions: [{ action: 'access' }],
+      })),
+      view('example.sales.projects', 'projects'),
+      view('example.sales.quotes', 'quotes'),
+      view('example.sales.orders', 'orders'),
+    )
+    .build();
+}
+
+/** Writes a project owned by `ownerId`, with one quote it prepared and one order, all ids derived from `id`. */
+export async function createProject(
+  test: TestApp,
+  id: string,
+  ownerId: string,
+): Promise<void> {
+  const query = test.database.connection().query;
+  await query
+    .insertInto('authorizationExampleProjects')
+    .values({
+      id,
+      title: `Project ${id}`,
+      region: 'North',
+      ownerId,
+      confidential: false,
+      notes: 'Test',
+    })
+    .execute();
+  await query
+    .insertInto('authorizationExampleQuotes')
+    .values({
+      id: `${id}-quote`,
+      projectId: id,
+      preparedById: ownerId,
+      preparedByName: 'Owner',
+      title: `Quote ${id}`,
+      notes: 'Test',
+      amount: 1000,
+      status: 'draft',
+    })
+    .execute();
+  await query
+    .insertInto('authorizationExampleOrders')
+    .values({
+      id: `${id}-order`,
+      projectId: id,
+      quoteId: `${id}-quote`,
+      title: `Order ${id}`,
+      status: 'ready',
+      deliveryReference: null,
+    })
+    .execute();
 }
