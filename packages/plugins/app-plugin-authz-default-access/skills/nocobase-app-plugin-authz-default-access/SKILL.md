@@ -9,6 +9,8 @@ Default access adds a shared record baseline for every identity that already hol
 
 Read the installed `nocobase-app-plugin-authorization` Skill first for composite resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-default-access/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
 
+For a department-scoped baseline, read the application development Skill's `references/organization/permission-design.md` first. Its core works with permission sets alone, and its optional default-access section explains why a global default suits a department scope only when everyone holding the action belongs to a department.
+
 ## Development workflow
 
 1. Identify which records every holder of a particular operation should receive by default. A read baseline can be broad while edit remains preparer-only; do not copy read defaults into write operations.
