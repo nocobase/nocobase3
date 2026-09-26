@@ -50,12 +50,25 @@ export interface AuthorizationDecision<
   reasons: readonly AuthorizationReason[];
 }
 
+/**
+ * Thrown by `require`. It answers `403 { code: 'FORBIDDEN', message }` on its
+ * own: `getResponse` is the interface Hono's default error handler honours,
+ * and `status` is what request logging reads.
+ */
 export class AuthorizationDeniedError extends Error {
   readonly decision: AuthorizationDecision;
+  readonly status = 403;
 
   constructor(decision: AuthorizationDecision) {
     super(decision.reasons.at(-1)?.message ?? 'Authorization denied');
     this.name = 'AuthorizationDeniedError';
     this.decision = decision;
+  }
+
+  getResponse(): Response {
+    return Response.json(
+      { code: 'FORBIDDEN', message: this.message },
+      { status: this.status },
+    );
   }
 }

@@ -71,8 +71,8 @@ it('only lets administrators restore practice records, resetting only practice o
   expect((await fixture.request('engineer', 'reset', {})).status).toBe(403);
   const query = fixture.database.connection().query;
   await query
-    .deleteFrom('authorizationExampleTeamMembers')
-    .where('userId', '=', fixture.users.proposal)
+    .deleteFrom('authorizationPermissionSetAssignments')
+    .where('subjectId', '=', fixture.users.proposal)
     .execute();
   for (let attempt = 0; attempt < 2; attempt++) {
     expect((await fixture.request('admin', 'reset', {})).status).toBe(200);
@@ -117,7 +117,7 @@ it('only lets administrators restore practice records, resetting only practice o
     .executeTakeFirst())!;
   await query
     .insertInto(orders)
-    .values({ ...original, id: 'custom-order', deliveryTeamId: 'delivery' })
+    .values({ ...original, id: 'custom-order', carrierId: 'express' })
     .execute();
   await query
     .insertInto('authorizationExampleOrderChecks')
@@ -132,10 +132,10 @@ it('only lets administrators restore practice records, resetting only practice o
     ])
     .execute();
   await query
-    .insertInto('authorizationExampleOrderTeams')
+    .insertInto('authorizationExampleOrderCarriers')
     .values([
-      { orderId: 'custom-order', teamId: 'proposal', note: 'Keep' },
-      { orderId: 'order-2', teamId: 'proposal', note: 'Reset' },
+      { orderId: 'custom-order', carrierId: 'freight', note: 'Keep' },
+      { orderId: 'order-2', carrierId: 'freight', note: 'Reset' },
     ])
     .execute();
   expect((await fixture.request('admin', 'reset', {})).status).toBe(200);
@@ -145,7 +145,7 @@ it('only lets administrators restore practice records, resetting only practice o
       .selectAll()
       .where('id', '=', 'custom-order')
       .executeTakeFirst(),
-  ).toMatchObject({ deliveryTeamId: 'delivery' });
+  ).toMatchObject({ carrierId: 'express' });
   expect(
     await query
       .selectFrom('authorizationExampleOrderChecks')
@@ -154,7 +154,7 @@ it('only lets administrators restore practice records, resetting only practice o
   ).toMatchObject([{ id: 'custom-check', done: true }]);
   expect(
     await query
-      .selectFrom('authorizationExampleOrderTeams')
+      .selectFrom('authorizationExampleOrderCarriers')
       .selectAll()
       .execute(),
   ).toMatchObject([{ orderId: 'custom-order', note: 'Keep' }]);

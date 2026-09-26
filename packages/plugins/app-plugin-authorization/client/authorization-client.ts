@@ -195,8 +195,9 @@ export interface SubjectTypeOption extends SelectOption {
 
 export interface SubjectOption {
   id: string;
-  title: string;
-  description?: string;
+  /** Plain text, or a `{ key, ns }` descriptor rendered in the viewer's language. */
+  title: LocalizedText;
+  description?: LocalizedText;
 }
 
 /** The workspace model an `options` response is localized into. */
@@ -254,6 +255,17 @@ export interface ConfiguredAccess {
   unrestricted: boolean;
   types: readonly string[];
   resources: readonly { type: string; id: string }[];
+  /** The subjects the principal inherits, as a request would resolve them. */
+  identity?: { subjects: readonly AuthorizationSubject[] };
+  /** Each effective set with the assignments that bring it; none for a default set. */
+  sets?: readonly ConfiguredPermissionSet[];
+}
+
+export interface ConfiguredPermissionSet {
+  key: string;
+  title?: PermissionSet['title'];
+  /** The principal itself for a direct assignment, else an inherited subject. */
+  sources: readonly AuthorizationSubject[];
 }
 
 export interface SubjectPage {

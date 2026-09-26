@@ -42,8 +42,8 @@ export default function OverviewPage(): ReactElement {
     <PageContainer>
       <PageHeader title={t('sales.title')} description={t('sales.intro')} />
       <section className='space-y-3 rounded-xl border bg-card p-5'>
-        <h2 className='font-semibold'>{t('teams.title')}</h2>
-        <p className='text-sm text-muted-foreground'>{t('teams.coverage')}</p>
+        <h2 className='font-semibold'>{t('access.title')}</h2>
+        <p className='text-sm text-muted-foreground'>{t('access.coverage')}</p>
         {context.error && <p role='alert'>{t(context.error)}</p>}
         <ul className='space-y-2 text-sm'>
           {context.data?.roles.map((role) => (
@@ -56,9 +56,9 @@ export default function OverviewPage(): ReactElement {
               <span className='ml-3 text-muted-foreground'>
                 {role.sources
                   .map((source) =>
-                    source.type === 'example.sales.team'
-                      ? `${t('teams.inherited')} · ${t(`teams.${source.id}`)}`
-                      : t('teams.direct'),
+                    source.type === 'user'
+                      ? t('access.direct')
+                      : `${source.type} · ${source.id}`,
                   )
                   .join(' / ')}
               </span>
@@ -83,7 +83,6 @@ export default function OverviewPage(): ReactElement {
               'manager',
               'delivery',
               'proposal',
-              'dispatch',
               'coordinator',
             ].map((key) => (
               <tr key={key} className='border-t'>
@@ -91,15 +90,11 @@ export default function OverviewPage(): ReactElement {
                 <td>
                   <div>
                     {t(
-                      `roles.${key === 'proposal' ? 'engineer' : key === 'dispatch' ? 'delivery' : key === 'coordinator' ? 'manager' : key}`,
+                      `roles.${key === 'proposal' ? 'engineer' : key === 'coordinator' ? 'manager' : key}`,
                     )}
                   </div>
                   <p className='mt-1 text-muted-foreground'>
-                    {key === 'proposal' || key === 'dispatch'
-                      ? `${t('teams.inherited')} · ${t(`teams.${key === 'proposal' ? 'proposal' : 'delivery'}`)}`
-                      : key === 'coordinator'
-                        ? t('teams.combined')
-                        : `${t('teams.direct')} · ${t(`accountMenus.${key}`)}`}
+                    {`${t('access.direct')} · ${t(`accountMenus.${key}`)}`}
                   </p>
                 </td>
               </tr>
@@ -111,19 +106,17 @@ export default function OverviewPage(): ReactElement {
         <h2 className='font-semibold'>{t('tryTitle')}</h2>
         <p className='text-sm leading-7'>{t('practice.intro')}</p>
         <ol className='space-y-4'>
-          {['read', 'scopes', 'teams', 'combined', 'delivery'].map(
-            (step, index) => (
-              <li key={step} className='space-y-1'>
-                <h3 className='font-medium'>
-                  {index + 1}. {t(`practice.${step}.title`)}
-                </h3>
-                <p className='text-sm'>{t(`practice.${step}.steps`)}</p>
-                <p className='text-sm text-muted-foreground'>
-                  {t(`practice.${step}.reason`)}
-                </p>
-              </li>
-            ),
-          )}
+          {['read', 'scopes', 'handover', 'delivery'].map((step, index) => (
+            <li key={step} className='space-y-1'>
+              <h3 className='font-medium'>
+                {index + 1}. {t(`practice.${step}.title`)}
+              </h3>
+              <p className='text-sm'>{t(`practice.${step}.steps`)}</p>
+              <p className='text-sm text-muted-foreground'>
+                {t(`practice.${step}.reason`)}
+              </p>
+            </li>
+          ))}
         </ol>
         <p className='text-sm text-muted-foreground'>
           {t('reset.description')}
