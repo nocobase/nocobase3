@@ -7,7 +7,17 @@ import {
   type CommandOutcome,
   type InstallInput,
 } from './commands/install.ts';
+import {
+  ROLLBACK_FLAGS,
+  rollback,
+  type RollbackInput,
+} from './commands/rollback.ts';
 import { STATUS_FLAGS, status, type StatusInput } from './commands/status.ts';
+import {
+  UPGRADE_FLAGS,
+  upgrade,
+  type UpgradeInput,
+} from './commands/upgrade.ts';
 import { EXIT_INVALID, EXIT_OK, InstallerError } from './lib/errors.ts';
 import { installInterruptHandlers } from './lib/interrupt.ts';
 import {
@@ -57,10 +67,18 @@ export function formatHelp(binary: string): string {
     '',
     'USAGE',
     `  $ ${binary} install DIRECTORY [FLAGS]`,
+    `  $ ${binary} upgrade [--dir DIRECTORY] [--to VERSION] [FLAGS]`,
+    `  $ ${binary} rollback [--dir DIRECTORY] [--to VERSION] [FLAGS]`,
     `  $ ${binary} status [--dir DIRECTORY] [FLAGS]`,
     '',
     'INSTALL FLAGS',
     ...describeFlags(INSTALL_FLAGS),
+    '',
+    'UPGRADE FLAGS',
+    ...describeFlags(UPGRADE_FLAGS),
+    '',
+    'ROLLBACK FLAGS',
+    ...describeFlags(ROLLBACK_FLAGS),
     '',
     'STATUS FLAGS',
     ...describeFlags(STATUS_FLAGS),
@@ -68,6 +86,8 @@ export function formatHelp(binary: string): string {
     'EXAMPLES',
     `  $ ${binary} install /srv/nocobase/hub --origin https://apps.example.com`,
     `  $ ${binary} install /srv/nocobase/hub --dialect postgres --set database.connections.main.host=db.internal --set-from-env database.connections.main.password=HUB_DB_PASSWORD`,
+    `  $ ${binary} upgrade --dir /srv/nocobase/hub --yes`,
+    `  $ ${binary} rollback --dir /srv/nocobase/hub`,
     `  $ ${binary} status --dir /srv/nocobase/hub --json`,
     '',
     'NOTES',
@@ -159,6 +179,16 @@ export async function runInstaller(
           args: INSTALL_ARGS,
           flags: INSTALL_FLAGS,
         }),
+        deps,
+      );
+    } else if (command === 'upgrade') {
+      outcome = await upgrade(
+        await parseCommand<UpgradeInput>(rest, { flags: UPGRADE_FLAGS }),
+        deps,
+      );
+    } else if (command === 'rollback') {
+      outcome = await rollback(
+        await parseCommand<RollbackInput>(rest, { flags: ROLLBACK_FLAGS }),
         deps,
       );
     } else if (command === 'status') {

@@ -8,17 +8,17 @@ import {
 import { createServer, type Server } from 'node:net';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createWorld, hub, tempDir } from './harness.ts';
+import { createWorld, freePort, hub, tempDir } from './harness.ts';
 
 let temp: ReturnType<typeof tempDir>;
 let root: string;
 
-// A port the test itself holds free-ish: the install only binds and releases it during the precheck.
-const PORT = '13917';
+let PORT: string;
 
-beforeEach(() => {
+beforeEach(async () => {
   temp = tempDir('hub-installer-install-');
   root = path.join(temp.dir, 'hub');
+  PORT = String(await freePort());
 });
 
 afterEach(() => {

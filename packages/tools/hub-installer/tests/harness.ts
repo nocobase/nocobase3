@@ -42,6 +42,8 @@ export interface FakeWorld {
   published: string[];
   /** pm2 status a started process takes, `online` by default. */
   startStatus: string;
+  /** Statuses for the next starts, in order, before `startStatus` applies again. */
+  startQueue: string[];
 }
 
 const buildTarget = () => ({
@@ -70,6 +72,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
     pendingTasks: {},
     published: ['1.0.0', '1.1.0'],
     startStatus: 'online',
+    startQueue: [],
     ...overrides,
   } as FakeWorld;
 
@@ -211,7 +214,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
       processes.set(name, {
         name,
         pid: 4242,
-        status: world.startStatus,
+        status: world.startQueue.shift() ?? world.startStatus,
         restarts: 0,
         cwd,
       });
@@ -306,6 +309,16 @@ export async function hub(
     json: JSON.parse(stdout.text()) as RunResult['json'],
     stderr: stderr.text(),
   };
+}
+
+/** A port nothing listens on right now, so parallel test files never race for a fixed one. */
+export async function freePort(): Promise<number> {
+  const { createServer } = await import('node:net');
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as { port: number };
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
 }
 
 export function tempDir(prefix: string): { dir: string; remove: () => void } {
