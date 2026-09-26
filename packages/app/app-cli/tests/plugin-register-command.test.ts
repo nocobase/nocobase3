@@ -404,13 +404,67 @@ describe('app plugin register command', () => {
       '--json',
     ]);
     const response = JSON.parse(inspected.stdout) as {
-      result: { consistent: boolean; issues: Array<{ code: string }> };
+      result: {
+        consistent: boolean;
+        issues: Array<{ code: string }>;
+        suggestions: Array<{ command: string; args: string[] }>;
+      };
     };
     expect(response.result.consistent).toBe(false);
     expect(response.result.issues.map((issue) => issue.code)).toEqual(
       expect.arrayContaining(['SKILLS_OUT_OF_DATE']),
     );
+    // The full package name through `--package`, not the compatibility `--plugin` that `skills sync` steers away from.
+    expect(response.result.suggestions).toContainEqual({
+      command: 'pnpm',
+      args: [
+        'nocobase',
+        'skills',
+        'sync',
+        '--package',
+        '@nocobase/app-plugin-audit-log',
+        '--dir',
+        appRoot,
+      ],
+    });
     expect(await readFile(manifestPath, 'utf8')).toBe(before);
+  });
+
+  it('suggests commands that target the same workspace application the inspection did', async () => {
+    // The form the repository's own Skills use. Inspection only reads, so the real templates serve as the workspace.
+    const repositoryRoot = path.resolve(
+      import.meta.dirname,
+      '..',
+      '..',
+      '..',
+      '..',
+    );
+    const inspected = await runCommand(config, 'plugin:inspect', [
+      'not-installed',
+      '--workspace-root',
+      repositoryRoot,
+      '--app',
+      'app-template-hub',
+      '--json',
+    ]);
+    const response = JSON.parse(inspected.stdout) as {
+      result: { suggestions: Array<{ command: string; args: string[] }> };
+    };
+    expect(response.result.suggestions).toEqual([
+      {
+        command: 'pnpm',
+        args: [
+          'nocobase',
+          'plugin',
+          'register',
+          'not-installed',
+          '--workspace-root',
+          repositoryRoot,
+          '--app',
+          'app-template-hub',
+        ],
+      },
+    ]);
   });
 
   it('does not report stale Skills when an uninstalled plugin cannot be inspected', async () => {

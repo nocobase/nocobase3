@@ -366,7 +366,8 @@ function suggestionFor(
   if (code === 'SKILLS_OUT_OF_DATE')
     return {
       command: 'pnpm',
-      args: ['nocobase', 'skills', 'sync', '--plugin', shortName, ...target],
+      // `--package` with the full name, not the compatibility `--plugin`: agents copy suggested commands as they are.
+      args: ['nocobase', 'skills', 'sync', '--package', packageName, ...target],
     };
   return {
     command: 'pnpm',

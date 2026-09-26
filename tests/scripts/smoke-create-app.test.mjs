@@ -28,14 +28,27 @@ const otherTarget =
 
 // Exercise the real shell lifecycle with HTTP servers and controlled pnpm outcomes, without downloading an app for
 // every failure case. The CI action separately runs the same script with published packages and the real pnpm.
+// The application CLI's top-level commands, such as `build` and `info`: the files directly under its commands directory.
+// Every other id is `<topic> <command>`. Read rather than listed, so the fake below keeps up when one is added.
+const topLevelCommands = fs
+  .readdirSync(
+    fileURLToPath(
+      new URL('../../packages/app/app-cli/src/commands/', import.meta.url),
+    ),
+  )
+  .filter((entry) => entry.endsWith('.ts'))
+  .map((entry) => entry.slice(0, -'.ts'.length));
+
 const fakePnpm = `#!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
-// \`pnpm nocobase <topic> <command>\` is recorded as \`<topic> <command>\`, the id the application CLI knows it by.
+// \`pnpm nocobase <topic> <command>\` is recorded as \`<topic> <command>\`, and a top-level command such as
+// \`pnpm nocobase build\` as \`build\`: the ids the application CLI knows them by.
 if (process.argv[2] === 'nocobase') {
-  process.argv.splice(2, 3, process.argv.slice(3, 5).join(' '));
+  const words = ${JSON.stringify(topLevelCommands)}.includes(process.argv[3]) ? 1 : 2;
+  process.argv.splice(2, 1 + words, process.argv.slice(3, 3 + words).join(' '));
 }
 const command = process.argv[2];
 const scenario = process.env.SMOKE_SCENARIO;
@@ -295,6 +308,36 @@ for (const basePath of ['', '/main', '/nested/app']) {
     );
   });
 }
+
+test('the fake pnpm records application commands by the id the application CLI knows them by', async (t) => {
+  const state = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-fake-pnpm-')),
+  );
+  t.after(() => fs.rmSync(state, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(state, 'crm'));
+  const fake = path.join(state, 'pnpm');
+  fs.writeFileSync(fake, fakePnpm, { mode: 0o755 });
+  const { spawnSync } = await import('node:child_process');
+  const env = { ...process.env, SMOKE_STATE: state };
+  delete env.NOCOBASE_STRICT_STARTUP;
+  for (const argv of [
+    ['nocobase', 'config', 'check', '--json'],
+    ['nocobase', 'info', '--json'],
+    ['nocobase', 'plugin', 'register', 'audit-log'],
+  ]) {
+    // The id is recorded before the fake acts on it; what it then does with a command it has no branch for — it
+    // refuses to start one without strict startup — does not matter here.
+    spawnSync(process.execPath, [fake, ...argv], {
+      cwd: path.join(state, 'crm'),
+      env,
+      stdio: 'ignore',
+    });
+  }
+  assert.deepEqual(
+    fs.readFileSync(path.join(state, 'commands'), 'utf8').trim().split('\n'),
+    ['config check', 'info', 'plugin register'],
+  );
+});
 
 test('keeps waiting for production readiness when the progress log is unavailable', async (t) => {
   const result = await runSmoke(t, 'start-log-unavailable');

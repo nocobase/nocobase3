@@ -92,7 +92,7 @@ Both are peers, so the application supplies them. `@nocobase/app-cli` is the run
 
 ## Rules that matter
 
-**Topics are one flat namespace.** Every plugin claims the one its package name gives it. The built-in topics and top-level commands, such as `plugin`, `db` and `build`, and `app` for the application are reserved even where their commands are not registered, so a plugin whose name matches one fails CLI assembly with an error naming both claimants, rather than resolving silently. Two plugins can collide only when their package names differ by scope alone.
+**Topics are one flat namespace.** Every plugin claims the one its package name gives it. The built-in topics and top-level commands, such as `plugin`, `db` and `build`, and `app` for the application are reserved even where their commands are not registered, so a plugin whose name matches one fails CLI assembly with an error naming both claimants, rather than resolving silently. Two plugins collide whenever their names match once the scope and an `app-plugin-` prefix are removed: `@acme/reports` and `@acme/app-plugin-reports` both claim `reports`, as do `@nocobase/app-plugin-x` and `@other/x`.
 
 **Keep command modules cheap to import.** The application imports every registered plugin's `./cli` entry to build
 `--help`. A class declaration costs nothing; load anything expensive inside `run()` with `await import()`, as

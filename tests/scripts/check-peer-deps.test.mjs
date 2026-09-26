@@ -7,6 +7,8 @@ import {
   findViolations,
   isIdentitySensitive,
 } from '../../scripts/check-peer-deps.mjs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
@@ -98,6 +100,28 @@ test('checks the application command line, which an application installs like a 
   const names = packages.map(({ manifest }) => manifest.name);
 
   assert.ok(names.includes('@nocobase/app-cli'));
+});
+
+test('fails on a manifest that does not parse instead of leaving its package out', async (t) => {
+  for (const relative of ['app/app-cli', 'plugins/app-plugin-broken']) {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'check-peer-deps-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await mkdir(path.join(root, 'packages', relative), { recursive: true });
+    await writeFile(
+      path.join(root, 'packages', relative, 'package.json'),
+      '{ "name": ',
+    );
+    await assert.rejects(collectPackages(root), SyntaxError, relative);
+  }
+});
+
+test('skips what is absent: a missing manifest, a missing package group', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'check-peer-deps-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, 'packages', 'plugins', 'not-a-package'), {
+    recursive: true,
+  });
+  assert.deepEqual(await collectPackages(root), []);
 });
 
 test('every checked package in the repository satisfies the rule', async () => {

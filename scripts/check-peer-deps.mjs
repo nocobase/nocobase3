@@ -119,8 +119,10 @@ export async function collectPackages(repositoryRoot) {
         manifest: JSON.parse(await readFile(manifestPath, 'utf8')),
         manifestPath,
       });
-    } catch {
-      // Absent in a fixture repository; the group scan below still runs.
+    } catch (error) {
+      // Absent in a fixture repository; the group scan below still runs. Anything else — a manifest that does not
+      // parse, or cannot be read — fails the check rather than dropping the package from it.
+      if (error.code !== 'ENOENT') throw error;
     }
   }
   for (const group of CHECKED_GROUPS) {
@@ -128,7 +130,8 @@ export async function collectPackages(repositoryRoot) {
     let entries;
     try {
       entries = await readdir(groupDirectory, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
       continue;
     }
     for (const entry of entries) {
@@ -141,7 +144,10 @@ export async function collectPackages(repositoryRoot) {
       let manifest;
       try {
         manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-      } catch {
+      } catch (error) {
+        // A directory without a manifest is not a package. One whose manifest does not parse is a package the check
+        // would otherwise pass over in silence.
+        if (error.code !== 'ENOENT') throw error;
         continue;
       }
       packages.push({ manifest, manifestPath });
