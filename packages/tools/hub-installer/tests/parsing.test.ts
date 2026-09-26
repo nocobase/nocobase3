@@ -11,7 +11,9 @@ import {
 import { pendingTaskCount, toSuggestion } from '../src/lib/app-cli.ts';
 import { installerCommand, shellQuote } from '../src/lib/invocation.ts';
 import { waitForHealthy } from '../src/lib/health.ts';
-import { parseJlist } from '../src/lib/pm2.ts';
+import { createPm2, parseJlist, type Pm2 } from '../src/lib/pm2.ts';
+import { checkPm2 } from '../src/lib/prechecks.ts';
+import { InstallerError } from '../src/lib/errors.ts';
 import { resolveTemplateVersion, type FetchLike } from '../src/lib/registry.ts';
 import {
   driverSpecifier,
@@ -292,6 +294,9 @@ describe('suggested commands', () => {
     expect(toSuggestion({ message: 'Check the host.' })).toEqual({
       message: 'Check the host.',
     });
+    expect(toSuggestion({ run: 'pnpm add pg' })).toEqual({
+      message: "(the application CLI's command: pnpm add pg)",
+    });
   });
 });
 
@@ -326,6 +331,38 @@ describe('unsupported Node.js', () => {
           message: expect.stringContaining('v20.11.0') as unknown,
         },
       },
+    );
+  });
+});
+
+describe('pm2 version', () => {
+  const pm2Printing = (stdout: string): Pm2 =>
+    createPm2('pm2', async () => ({ stdout, stderr: '' }));
+
+  it('takes the line that is a version when pm2 prints notices around it', async () => {
+    await expect(
+      pm2Printing(
+        '[PM2] Spawning PM2 daemon with pm2_home=/tmp/x\n5.4.2\n[PM2] In-memory PM2 is out-of-date\n',
+      ).version(),
+    ).resolves.toBe('5.4.2');
+  });
+
+  it('refuses a pm2 older than 4.3 and says so', async () => {
+    await expect(checkPm2(pm2Printing('4.2.3\n'))).rejects.toMatchObject({
+      code: 'PM2_UNSUPPORTED',
+      message: expect.stringContaining('found 4.2.3') as unknown,
+    });
+    await expect(checkPm2(pm2Printing('4.3.0\n'))).resolves.toBe('4.3.0');
+  });
+
+  it('says a version it cannot read is unreadable, not that pm2 is too old', async () => {
+    const error: unknown = await checkPm2(pm2Printing('unknown\n')).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(InstallerError);
+    expect((error as InstallerError).code).toBe('PM2_UNSUPPORTED');
+    expect((error as InstallerError).message).toContain(
+      'printed "unknown", which is not a version',
     );
   });
 });

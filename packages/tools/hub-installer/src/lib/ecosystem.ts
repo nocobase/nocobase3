@@ -56,8 +56,11 @@ module.exports = {
  * Replacing the process rather than starting a child keeps the Hub on the pid pm2 watches, receiving pm2's signals itself
  * and running as the main module. A child would need its signals forwarded, and would outlive a launcher that pm2
  * kills, holding the port the next start needs. Node flags given to the launcher, such as `--max-old-space-size` in
- * `args`, pass on to the Hub. pm2 opens no IPC channel for an `interpreter: 'none'` process, so options that rely on
- * one, such as `wait_ready` and `shutdown_with_message`, are not available.
+ * `args`, pass on to the Hub; pm2's `node_args` does not apply to an `interpreter: 'none'` process.
+ *
+ * pm2 gives the launcher an IPC channel, but the channel does not survive `process.execve`: the Hub starts without
+ * `process.send`, and pm2 options that rely on it, such as `wait_ready` and `shutdown_with_message`, are not
+ * available.
  *
  * The entry is resolved to its real path, so a running Hub keeps loading its modules from the release it started
  * from even after `current` moves on.

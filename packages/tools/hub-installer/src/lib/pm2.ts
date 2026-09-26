@@ -81,7 +81,16 @@ export function createPm2(
   return {
     async version() {
       const { stdout } = await run(bin, ['--version']);
-      return stdout.trim().split('\n').pop() ?? '';
+      // pm2 may print daemon notices around the version, so take the line that is one.
+      const lines = stdout
+        .trim()
+        .split('\n')
+        .map((line) => line.trim());
+      return (
+        [...lines].reverse().find((line) => /^\d+\.\d+\.\d+/u.test(line)) ??
+        lines.at(-1) ??
+        ''
+      );
     },
     async start(ecosystemFile, cwd) {
       await run(bin, ['start', ecosystemFile], { cwd });

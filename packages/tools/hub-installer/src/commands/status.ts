@@ -77,6 +77,11 @@ export async function status(
   ).sort();
 
   const endpoints = endpointsOf(env);
+  if (endpoints.port === null) {
+    deps.reporter.warn(
+      `APP_SERVER_PORT in hub.env is "${env.APP_SERVER_PORT ?? ''}", which is not a port number; the Hub cannot listen on it.`,
+    );
+  }
   const url = healthUrl(env);
   const healthy = await checkHealth(url, deps.fetchImpl);
 
@@ -144,7 +149,7 @@ export async function status(
     },
     summary: [
       `Hub ${state.current} at ${root}`,
-      `  URL       ${endpoints.url} (listening on ${endpoints.host}:${endpoints.port})`,
+      `  URL       ${endpoints.url} (listening on ${endpoints.host}:${endpoints.port ?? `invalid port "${env.APP_SERVER_PORT ?? ''}"`})`,
       `  Health    ${healthy ? 'ok' : 'not answering'} (${url})`,
       `  Process   ${processInfo ? `${processInfo.status}, pid ${processInfo.pid}, ${processInfo.restarts} restarts` : 'not registered with pm2'} (${state.name})`,
       `  Node      machine ${nodeMajor}, release ${currentRelease?.buildTarget.nodeMajor ?? '?'}${nodeMatches ? '' : ' — mismatch'}`,

@@ -159,7 +159,7 @@ export async function runInstaller(
   if (command === '--version') {
     stdout.write(
       json
-        ? `${JSON.stringify({ status: 'success', version: options.version })}\n`
+        ? `${JSON.stringify(successEnvelope(command, { version: options.version }, []))}\n`
         : `${options.version}\n`,
     );
     return EXIT_OK;

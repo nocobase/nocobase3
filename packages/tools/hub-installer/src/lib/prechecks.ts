@@ -100,10 +100,13 @@ export async function checkPm2(pm2: Pm2): Promise<string> {
       ],
     });
   }
-  if (!((compareVersions(version, MINIMUM_PM2_VERSION) ?? -1) >= 0)) {
+  const comparison = compareVersions(version, MINIMUM_PM2_VERSION);
+  if (comparison === undefined || comparison < 0) {
     throw new InstallerError(
       'PM2_UNSUPPORTED',
-      `pm2 ${MINIMUM_PM2_VERSION} or later is required; found ${version || 'an unknown version'}.`,
+      comparison === undefined
+        ? `pm2 ${MINIMUM_PM2_VERSION} or later is required, and \`pm2 --version\` printed "${version}", which is not a version.`
+        : `pm2 ${MINIMUM_PM2_VERSION} or later is required; found ${version}.`,
       {
         exitCode: EXIT_INVALID,
         suggestions: [
