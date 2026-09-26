@@ -114,7 +114,7 @@ export async function checkTargetEmpty(root: string): Promise<boolean> {
         { message: 'Install into a new or empty directory.' },
         {
           message:
-            'To inspect a Hub this installer already set up there, use status instead.',
+            'To manage a Hub this installer already set up there, use status, upgrade or rollback instead.',
         },
       ],
     });

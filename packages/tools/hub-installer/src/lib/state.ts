@@ -21,6 +21,25 @@ export interface HistoryEntry {
   from?: string;
   to: string;
   at: string;
+  /** `rolled-back` for an upgrade that failed after the switch and was undone. */
+  outcome?: 'completed' | 'rolled-back';
+  /** Migration and seed tasks the upgrade applied; a rollback restores the database only when this is above zero. */
+  migrations?: number;
+  /** Backup directory, relative to the root, taken before the upgrade migrated anything. */
+  backup?: string;
+  databaseRestored?: boolean;
+}
+
+/**
+ * An operation that stopped the Hub and has not finished. It is written before the Hub is stopped and cleared once the
+ * operation ends either way, so finding one means the installer was interrupted during the downtime.
+ */
+export interface PendingOperation {
+  action: 'upgrade' | 'rollback';
+  from: string;
+  to: string;
+  startedAt: string;
+  backup?: string;
 }
 
 /** `installer.json`: what the installer knows about the Hub it manages. */
@@ -35,6 +54,7 @@ export interface InstallerState {
   current: string;
   releases: ReleaseRecord[];
   history: HistoryEntry[];
+  pending?: PendingOperation;
 }
 
 export async function readState(layout: Layout): Promise<InstallerState> {

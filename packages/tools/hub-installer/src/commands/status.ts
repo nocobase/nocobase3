@@ -85,6 +85,12 @@ export async function status(
     deps.reporter.warn('pm2 could not be queried; process state is unknown.');
   }
 
+  if (state.pending) {
+    deps.reporter.warn(
+      `${state.pending.action === 'upgrade' ? 'An' : 'A'} ${state.pending.action} from ${state.pending.from} to ${state.pending.to}, started ${state.pending.startedAt}, did not finish. Run \`hub-installer rollback\` to recover: it undoes an interrupted upgrade and finishes an interrupted rollback.`,
+    );
+  }
+
   const currentRelease = state.releases.find(
     (record) => record.version === state.current,
   );
@@ -129,6 +135,7 @@ export async function status(
         release: currentRelease?.buildTarget.nodeMajor ?? null,
         matches: nodeMatches,
       },
+      pending: state.pending ?? null,
       latest,
       updateAvailable: latest === null ? null : latest !== state.current,
     },

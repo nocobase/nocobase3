@@ -4,10 +4,14 @@
  * - `0` success, including a run that found nothing to do
  * - `1` the operation failed, and the running Hub was not touched
  * - `2` invalid usage or a failed precheck, before anything was written
+ * - `3` an upgrade failed after the switch and was rolled back; the previous release is running again
+ * - `4` rolling back failed too; the Hub needs a person, and the error says what to do
  */
 export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
 export const EXIT_INVALID = 2;
+export const EXIT_ROLLED_BACK = 3;
+export const EXIT_ROLLBACK_FAILED = 4;
 
 export interface Suggestion {
   message: string;
