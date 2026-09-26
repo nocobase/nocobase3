@@ -52,7 +52,7 @@ A failed install before the switch leaves the target as it found it. What the fa
 
 ## Status
 
-`status --dir <root> --json` changes nothing; `--offline` also skips asking the registry for a newer version. Report `current`, `endpoints.url`, `health.ok`, `process`, `updateAvailable`, and anything in `warnings`. `node.matches: false` means the machine's Node major changed since the release was built, and the release will not load its native modules. Only an upgrade to a newer version builds a release for the new Node; `upgrade` to the version already installed does nothing. When no newer version exists, the installer cannot rebuild yet: say so, and leave the choice between waiting for a release and returning to the previous Node to the user. A non-null `pending` means an operation was interrupted; see below.
+`status --dir <root> --json` changes nothing; `--offline` also skips asking the registry for a newer version. Report `current`, `endpoints.url`, `health.ok`, `process`, `updateAvailable`, and anything in `warnings`. `node.matches: false` means the machine's Node major changed since the release was built, and the release will not load its native modules until it is built again for this machine: the warning names the command, `upgrade --rebuild`, which builds the installed version again and swaps it in through the same stop, backup and confirmation as an upgrade, so the relay-and-confirm step below applies to it too. An upgrade to a newer version builds for the new Node by itself. A non-null `pending` means an operation was interrupted; see below.
 
 ## Upgrade and roll back
 
@@ -61,7 +61,8 @@ Both stop the Hub and every application it hosts, so the user decides:
 1. Run `upgrade --dir <root> --json` without `--yes`; an upgrade that builds a release needs the same long timeout as an install. It answers `CONFIRMATION_REQUIRED` with `error.details.notes`: what will stop, what is backed up, and any Node major change. Relay those notes and wait for a clear yes before running it again with `--yes`. `success-noop` means the Hub is already on that version.
 2. On any database but SQLite, the installer backs up `config.yml` and `hub.env` but not the database: have the user back the database up first, then add `--backup-done`.
 3. An upgrade keeps three releases, always including the new one and the one it came from, and prunes older ones once it succeeds; pass `--keep <n>` when the user wants more of them to stay available for rollback.
-4. Read the outcome:
+4. `upgrade --rebuild` builds the installed version again for this machine, for a Node major that changed while the Hub was already on the latest version; with `--to` it builds that version rather than reusing a copy on disk. It is confirmed and read like an upgrade, and `result.rebuilt` is true.
+5. Read the outcome:
    - Exit 0: the new release passed its health check. Report `result.from`, `result.to`, `result.migrations` and `result.backup`, relay each of `result.notes`, and name any release in `result.pruned`, which can no longer be rolled back to.
    - Exit 3: the previous release runs again. Report `error.message` and `error.details.log`, and leave the next attempt to the user once the cause is known.
    - Exit 4: the Hub is down. Work through `error.suggestions` with the user, step by step.
@@ -70,7 +71,7 @@ Both stop the Hub and every application it hosts, so the user decides:
 
 ## Recover an interrupted operation
 
-`OPERATION_INTERRUPTED` from `upgrade`, or `pending` in `status`, means an earlier run stopped while the Hub was down. Plain `rollback` recovers, through the same confirmation: it undoes an interrupted upgrade, restoring the database, and finishes an interrupted rollback.
+`OPERATION_INTERRUPTED` from `upgrade`, or `pending` in `status`, means an earlier run stopped while the Hub was down. Plain `rollback` recovers, through the same confirmation: it undoes an interrupted upgrade, restoring the database, and finishes an interrupted rollback. An interrupted rebuild is the exception: `rollback` cannot start a release built for another Node, so the error names `upgrade --rebuild`, which puts back what the interrupted run moved and builds again.
 
 ## Change the origin or port
 

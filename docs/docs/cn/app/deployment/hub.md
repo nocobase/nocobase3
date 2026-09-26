@@ -243,7 +243,7 @@ npx --registry=https://npm.nocobase.ai @nocobase/hub-installer install /srv/noco
 npx --registry=https://npm.nocobase.ai @nocobase/hub-installer upgrade --dir /srv/nocobase/hub
 ```
 
-升级默认升到最新版本，也可以用 `--to` 指定版本。新版本在旧版本继续服务的同时构建，并用新版本检查现有配置和待执行的迁移；之后才开始停机：停止 Hub，备份 SQLite 数据库和配置，切换版本，执行迁移，启动新版本并做健康检查。迁移或启动失败时，安装器会自动回退到旧版本，必要时恢复数据库。停机期间 Hub 托管的应用都不可用，进行中的部署会被标记为失败。使用外部数据库时，安装器无法备份，需要先自行备份，再加 `--backup-done`。
+升级默认升到最新版本，也可以用 `--to` 指定版本。新版本在旧版本继续服务的同时构建，并用新版本检查现有配置和待执行的迁移；之后才开始停机：停止 Hub，备份 SQLite 数据库和配置，切换版本，执行迁移，启动新版本并做健康检查。迁移或启动失败时，安装器会自动回退到旧版本，必要时恢复数据库。停机期间 Hub 托管的应用都不可用，进行中的部署会被标记为失败。使用外部数据库时，安装器无法备份，需要先自行备份，再加 `--backup-done`。服务器换了 Node 大版本、而 Hub 已经是最新版本时，用 `upgrade --dir /srv/nocobase/hub --rebuild` 为当前机器重新构建已安装的版本，流程和升级相同。
 
 `rollback --dir /srv/nocobase/hub` 回到上一次升级前的版本；如果那次升级执行过迁移，会用升级前的备份恢复数据库，升级之后写入 Hub 的数据会丢失。`status --dir /srv/nocobase/hub` 只读，显示当前版本、访问地址和监听地址、健康状态、pm2 进程和是否有可用更新。
 
