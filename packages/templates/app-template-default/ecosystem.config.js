@@ -6,6 +6,9 @@ export const apps = [
     // server. Running node itself keeps standalone.js the main module.
     script: 'node',
     args: './dist/server/standalone.js',
+    // Resolve `args` against this file's directory rather than wherever
+    // `pm2 start` runs, so the path to this file can be given from anywhere.
+    cwd: import.meta.dirname,
     interpreter: 'none',
     env: {
       NODE_ENV: 'production',

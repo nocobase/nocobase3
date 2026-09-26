@@ -124,7 +124,7 @@ WantedBy=multi-user.target
 
 `NOCOBASE_STRICT_STARTUP=true` 让应用在启动失败时以非零状态退出，`Restart=on-failure` 才会真正重启它。由管理员执行 `systemctl daemon-reload` 和 `systemctl enable --now nocobase-crm`。检查 `systemctl status nocobase-crm` 与 `journalctl -u nocobase-crm`。重启使用 `systemctl restart nocobase-crm`。
 
-**使用 pm2 运行。** 不使用 systemd 时，可以用 [pm2](https://pm2.keymetrics.io/) 管理进程。应用项目根目录自带 `ecosystem.config.js`，它让 pm2 直接执行 `node ./dist/server/standalone.js`（`interpreter: 'none'`）并设置 `NODE_ENV=production`。不要改成把 `script` 指向 `standalone.js`：pm2 默认会用自己的包装脚本加载它，`standalone.js` 判断自己不是主模块，就不会启动服务，而 pm2 仍显示进程在线。该文件不在部署包内，需要从项目复制到部署根目录，与 `dist` 并列。其余运行参数通过环境变量传入，或补充到文件的 `env` 中。在部署根目录执行：
+**使用 pm2 运行。** 不使用 systemd 时，可以用 [pm2](https://pm2.keymetrics.io/) 管理进程。应用项目根目录自带 `ecosystem.config.js`，它让 pm2 直接执行 `node ./dist/server/standalone.js`（`interpreter: 'none'`）并设置 `NODE_ENV=production`。不要改成把 `script` 指向 `standalone.js`：pm2 默认会用自己的包装脚本加载它，`standalone.js` 判断自己不是主模块，就不会启动服务，而 pm2 仍显示进程在线。该文件不在部署包内，需要从项目复制到部署根目录，与 `dist` 并列。其余运行参数通过环境变量传入，或补充到文件的 `env` 中。文件里设置了 `cwd: import.meta.dirname`，相对路径按文件所在目录解析，所以可以在任意目录下用文件的完整路径启动，下面的示例在部署根目录执行：
 
 ```bash
 APP_CONFIG_FILE=/srv/nocobase/crm/config.yml \
