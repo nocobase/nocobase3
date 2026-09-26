@@ -29,7 +29,7 @@ Concrete starting points are the [production router tests](server-route-examples
 
 Use an isolated `ServiceContainer` to verify the owner-created Token and lifecycle. Test simple HTTP endpoints by calling the production contribution's `createRouter()` with test services and sending actual requests. Do not introduce `registerXxxRoutes(router, ...)` only to make tests possible. For a coherent complex child router, test both its `createXxxRoutes(options): Hono` behavior and the production contribution's Token resolution, middleware, and mounting.
 
-App integration tests verify `/api` or Root mounting, public base paths, interactions between contributions, real login, and permissions. Every protected Route needs anonymous, authenticated-but-denied, and authorized cases as applicable; a public callback needs tests for its specific signature or protocol boundary. Inspector output is not security evidence.
+App integration tests verify `/api` or Root mounting, public base paths, interactions between contributions, real login, and permissions. Every protected Route needs anonymous, authenticated-but-denied, and authorized cases as applicable; a public callback needs tests for its specific signature or protocol boundary. `plugin inspect` output is not security evidence.
 
 Run migrations against a real test database, verifying both physical schema and metadata. Execute `down` when reversible. Seeds run against the schema migrations establish; test existing records and the declared repetition policy. Queue tests execute handlers and observe persistent effects rather than only finding files. See [Server development](server.md) and [database resources](database.md) for examples and contracts.
 
@@ -70,7 +70,7 @@ Keep checks scoped; workspace-wide tests are not a routine substitute for identi
 
 After exports or packaging changes, inspect source/publish mappings, emitted `.d.ts`, locale chunks, migration/seed manifests, and tarball contents. Runtime libraries ship compiled resources without source directories shadowing them. Read a workspace package's version from its manifest in tests; never assert its current version as a literal. Follow repository changeset and publish-validation rules before a PR/push.
 
-Inspectors are optional diagnostics after composition changes, not a fixed validation phase. Use only the relevant command from [registration](registration.md); `consistent: true` means the observed static composition has no reported conflict, not that implementation or runtime behavior is correct.
+`plugin inspect` is an optional diagnostic after registration changes, not a fixed validation phase. Use it as [registration](registration.md) describes; `consistent: true` means the observed static composition has no reported conflict, not that implementation or runtime behavior is correct.
 
 ## Completion evidence
 

@@ -1,8 +1,7 @@
-import { type Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import type { Command } from '@oclif/core';
 
-import { AppCommand } from '../../context.ts';
-import { runConfigEnv } from '../../lib/config-env.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
+import { runConfigEnv, type ConfigEnvResult } from '../../lib/config-env.ts';
 
 export default class AppConfigEnv extends AppCommand {
   static override summary =
@@ -15,25 +14,13 @@ export default class AppConfigEnv extends AppCommand {
     '<%= config.bin %> <%= command.id %> --json',
   ];
 
-  static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
-  } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
-  };
-
-  public async run(): Promise<void> {
-    const { flags } = await this.parse(AppConfigEnv);
-    const { variables } = await runConfigEnv({
-      loadRuntime: () => this.appContext.loadRuntime(),
+  public async run(): Promise<ConfigEnvResult> {
+    await this.parse(AppConfigEnv);
+    // runConfigEnv destroys the scope of the runtime it loads.
+    const result = await runConfigEnv({
+      loadRuntime: () => appContextOf(this).loadRuntime(),
     });
-
-    if (flags.json) {
-      this.logJson({ ok: true, variables });
-      return;
-    }
+    const { variables } = result;
 
     const width = Math.max(
       ...variables.map((variable) => variable.name.length),
@@ -47,5 +34,6 @@ export default class AppConfigEnv extends AppCommand {
     }
     this.log('');
     this.log('● set in the environment   ○ not set');
+    return result;
   }
 }

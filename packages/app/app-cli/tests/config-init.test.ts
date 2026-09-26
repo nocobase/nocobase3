@@ -2,14 +2,19 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 
+import AppConfigInit from '../src/commands/config/init.ts';
+import type { AppCommandRuntime } from '../src/context.ts';
 import {
   ConfigInitError,
   findAvailableDialects,
+  installCommand,
   runConfigInit,
 } from '../src/lib/config-init.ts';
+import { bindAppCommand } from './app-command.ts';
+import { runAppCommand } from './command-output.ts';
 
 const temporaryDirectories: string[] = [];
 
@@ -164,7 +169,10 @@ describe('runConfigInit', () => {
       runConfigInit({ rootDir, dialect: 'postgres', environment: {} }),
     ).rejects.toMatchObject({
       reason: 'driver-missing',
-      suggestedCommand: 'pnpm add @nocobase/db-postgres',
+      suggestion: {
+        message: 'Install the driver:',
+        run: { command: 'pnpm', args: ['add', '@nocobase/db-postgres'] },
+      },
     });
     expect(existsSync(path.join(rootDir, 'config.yml'))).toBe(false);
 
@@ -208,18 +216,31 @@ describe('runConfigInit', () => {
 
     const suggestion = async (dialect: string) =>
       runConfigInit({ rootDir, dialect, environment: {} }).catch(
-        (error: ConfigInitError) => error.suggestedCommand,
+        (error: ConfigInitError) => error.suggestion?.run,
       );
 
-    expect(await suggestion('postgres')).toBe(
-      'pnpm add @nocobase/db-postgres@^1.2.0-beta.3',
-    );
-    // A range with spaces has to reach pnpm as a single argument.
-    expect(await suggestion('mysql')).toBe(
+    expect(await suggestion('postgres')).toEqual({
+      command: 'pnpm',
+      args: ['add', '@nocobase/db-postgres@^1.2.0-beta.3'],
+    });
+    // A range with spaces is one argument, so nothing has to quote it.
+    expect(await suggestion('mysql')).toEqual({
+      command: 'pnpm',
+      args: ['add', '@nocobase/db-mysql@>=1.0.0 <2.0.0'],
+    });
+    // A workspace protocol means nothing outside this repository, so it is not repeated back.
+    expect(await suggestion('oracle')).toEqual({
+      command: 'pnpm',
+      args: ['add', '@nocobase/db-oracle'],
+    });
+
+    // The one-line form a config check finding carries has to reach pnpm as a single argument too.
+    expect(installCommand(rootDir, '@nocobase/db-mysql')).toBe(
       'pnpm add "@nocobase/db-mysql@>=1.0.0 <2.0.0"',
     );
-    // A workspace protocol means nothing outside this repository, so it is not repeated back.
-    expect(await suggestion('oracle')).toBe('pnpm add @nocobase/db-oracle');
+    expect(installCommand(rootDir, '@nocobase/db-postgres')).toBe(
+      'pnpm add @nocobase/db-postgres@^1.2.0-beta.3',
+    );
   });
 
   it('reports having no driver at all with the command that installs one', async () => {
@@ -229,7 +250,9 @@ describe('runConfigInit', () => {
       runConfigInit({ rootDir, environment: {} }),
     ).rejects.toMatchObject({
       reason: 'no-drivers',
-      suggestedCommand: 'pnpm add @nocobase/db-sqlite',
+      suggestion: {
+        run: { command: 'pnpm', args: ['add', '@nocobase/db-sqlite'] },
+      },
     });
   });
 
@@ -587,7 +610,7 @@ describe('runConfigInit', () => {
 
       expect(error).toBeInstanceOf(ConfigInitError);
       expect(error.reason).toBe('driver-missing');
-      expect(error.suggestedCommand).toBeUndefined();
+      expect(error.suggestion).toBeUndefined();
       expect(error.message).toContain('build again');
     });
   });
@@ -599,5 +622,152 @@ describe('runConfigInit', () => {
     await expect(
       runConfigInit({ rootDir: base, environment: {} }),
     ).rejects.toMatchObject({ reason: 'application-not-found' });
+  });
+});
+
+describe('config init --json', () => {
+  const run = (
+    rootDir: string,
+    argv: readonly string[],
+    loadRuntime?: () => Promise<AppCommandRuntime>,
+  ) =>
+    runAppCommand(
+      bindAppCommand(AppConfigInit, { rootDir, loadRuntime }),
+      ['--json', ...argv],
+      rootDir,
+    );
+
+  it('reports a written configuration as success, with its fields under result', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+
+    const output = await run(rootDir, []);
+
+    expect(output.exitCode).toBeUndefined();
+    expect(output.json()).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      status: 'success',
+      result: {
+        mode: 'source',
+        dialect: 'sqlite',
+        configFile: path.join(rootDir, 'config.yml'),
+        configKey: 'database.connections.main',
+        requiredSettings: [],
+        nextCommands: ['pnpm nocobase config check', 'pnpm dev'],
+      },
+      warnings: [],
+    });
+    expect(output.json().result).not.toHaveProperty('status');
+    expect(existsSync(path.join(rootDir, 'config.yml'))).toBe(true);
+  });
+
+  it('reports an application already configured as success-noop', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+    await writeFile(path.join(rootDir, 'config.yml'), 'kept');
+
+    const output = await run(rootDir, []);
+
+    expect(output.json()).toMatchObject({
+      ok: true,
+      status: 'success-noop',
+      result: { configFile: path.join(rootDir, 'config.yml') },
+    });
+  });
+
+  it('refuses a missing driver with DRIVER_MISSING and the pnpm add that installs it', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+
+    const output = await run(rootDir, ['--dialect', 'postgres']);
+
+    expect(output.exitCode).toBe(1);
+    expect(output.json()).toMatchObject({
+      ok: false,
+      status: 'failure',
+      error: {
+        code: 'DRIVER_MISSING',
+        message: 'The postgres driver is not installed.',
+        suggestions: [
+          {
+            message: 'Install the driver:',
+            run: { command: 'pnpm', args: ['add', '@nocobase/db-postgres'] },
+          },
+        ],
+        details: {
+          dialect: 'postgres',
+          missingDrivers: ['@nocobase/db-postgres'],
+        },
+      },
+    });
+    expect(existsSync(path.join(rootDir, 'config.yml'))).toBe(false);
+  });
+
+  it('refuses a different dialect with ALREADY_CONFIGURED, reading it through a runtime it destroys', async () => {
+    const { rootDir } = await createApplication({
+      drivers: ['sqlite', 'postgres'],
+    });
+    await writeFile(path.join(rootDir, 'config.yml'), 'kept');
+    const destroy = vi.fn(async () => undefined);
+    const runtime = {
+      config: {
+        get: () => ({
+          default: 'main',
+          connections: { main: { dialect: 'sqlite' } },
+        }),
+      },
+      scope: { destroy },
+    } as unknown as AppCommandRuntime;
+
+    const output = await run(
+      rootDir,
+      ['--dialect', 'postgres'],
+      async () => runtime,
+    );
+
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'ALREADY_CONFIGURED',
+        details: {
+          configFile: path.join(rootDir, 'config.yml'),
+          configuredDialect: 'sqlite',
+          requestedDialect: 'postgres',
+        },
+      },
+    });
+    expect(output.exitCode).toBe(1);
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it('refuses an application it cannot find with APPLICATION_NOT_FOUND', async () => {
+    const base = await mkdtemp(path.join(os.tmpdir(), 'nocobase-empty-'));
+    temporaryDirectories.push(base);
+
+    const output = await run(base, []);
+
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: { code: 'APPLICATION_NOT_FOUND' },
+    });
+    expect(output.exitCode).toBe(1);
+  });
+
+  /** --config is not an appPath(): like APP_CONFIG_FILE, it names a path inside the application. */
+  it('resolves --config against the application root, wherever the command runs', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+    await mkdir(path.join(rootDir, 'etc'), { recursive: true });
+    const elsewhere = await mkdtemp(path.join(os.tmpdir(), 'nocobase-cwd-'));
+    temporaryDirectories.push(elsewhere);
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(elsewhere);
+    try {
+      const output = await run(rootDir, ['--config', 'etc/app.yml']);
+
+      expect(output.json()).toMatchObject({
+        ok: true,
+        result: { configFile: path.join(rootDir, 'etc', 'app.yml') },
+      });
+    } finally {
+      cwd.mockRestore();
+    }
+    expect(existsSync(path.join(rootDir, 'etc', 'app.yml'))).toBe(true);
   });
 });

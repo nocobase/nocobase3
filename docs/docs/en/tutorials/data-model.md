@@ -62,15 +62,14 @@ Migrations belong in `database/main/migrations/`; seeds belong in `database/main
 
 ```bash
 pnpm nocobase db apply
-pnpm nocobase collections generate
 ```
 
-The final command generates database descriptions. Editing those generated files does not create a table. A migration reported as skipped may already have run on startup; inspect the actual structure.
+After running the migration, `db apply` also refreshes the generated database descriptions in `database/main/collections/`, so there is no separate `collections generate` step. Editing those generated files does not create a table. A migration reported as skipped may already have run when `pnpm dev` started, which refreshes the same files; inspect the actual structure.
 
 ## Check the result
 
 Ask the AI Agent to query both tables. There should be two customers with distinct IDs, a customer reference on orders, a unique order number constraint, and an integer amount. An empty order table is expected at this point.
 
-If migration fails, inspect the named migration and its error. Do not use `migrate --fresh` to erase earlier work.
+If migration fails, inspect the named migration and its error. Do not run `pnpm nocobase db reset` to get past the failure: it drops every managed table and erases earlier work.
 
 Next: [Build list and detail pages](./pages).

@@ -40,7 +40,7 @@ async function createApp({
   prettier = false,
   typescript = true,
 }: { prettier?: boolean; typescript?: boolean } = {}): Promise<string> {
-  const appRoot = await mkdtemp(path.join(os.tmpdir(), 'nb3-client-'));
+  const appRoot = await mkdtemp(path.join(os.tmpdir(), 'app-cli-client-'));
   created.push(appRoot);
   await writeFile(
     path.join(appRoot, 'package.json'),

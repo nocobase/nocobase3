@@ -83,8 +83,8 @@ The Agent should report its chosen execution model, stable schedule key, timezon
 1. **Confirm whether Scheduler is needed.** The key question is whether administrators need to view tasks, enable or disable them, and track execution records in the UI. Otherwise, an ordinary Queue or Service is more appropriate.
 2. **Choose the execution type based on the business.** Use a workflow job for multiple process steps, node-level visibility, human intervention, or long-running work. Use an ordinary job for a single action that needs neither node-level visibility nor human intervention. The business scenario should determine whether to use a workflow, regardless of whether one already exists.
 3. **Define the task.** In the application or business plugin Provider, resolve `schedulerServiceToken` and call `defineSchedule(definition)`. Use a stable, application-wide unique `key`, preferably with a business namespace such as `sales.daily-report`.
-4. **Synchronize and verify.** Run `pnpm nocobase schedule sync --json`, then sign in as an administrator and open **Settings → Automation → Scheduled Tasks** to check the task, next run time, and execution records.
-5. **Finalize during deployment.** Once the complete plugin manifest is loaded in production, run `pnpm nocobase schedule sync --finalize --json` once per application to soft-deactivate definitions removed from code.
+4. **Synchronize and verify.** Run `pnpm nocobase scheduler sync --json`, then sign in as an administrator and open **Settings → Automation → Scheduled Tasks** to check the task, next run time, and execution records.
+5. **Finalize during deployment.** Once the complete plugin manifest is loaded in production, run `pnpm nocobase scheduler sync --finalize --json` once per application to soft-deactivate definitions removed from code.
 
 ## Common service API
 
@@ -211,7 +211,7 @@ Completion reports use `succeeded`, `failed`, `cancelled`, or `timed_out`. Keep 
 After adding or changing a definition, run this from the target application's root:
 
 ```bash
-pnpm nocobase schedule sync --json
+pnpm nocobase scheduler sync --json
 ```
 
 Normal synchronization loads the complete application, validates registered targets, and non-destructively upserts definitions while preserving the enabled or disabled state administrators set in the UI. Normal application startup also performs a non-destructive synchronization before starting Scheduler's own `schedule` queue worker.
@@ -219,7 +219,7 @@ Normal synchronization loads the complete application, validates registered targ
 During production deployment, once all plugins are loaded, run this once per application:
 
 ```bash
-pnpm nocobase schedule sync --finalize --json
+pnpm nocobase scheduler sync --finalize --json
 ```
 
 `--finalize` soft-deactivates definitions no longer present in the code manifest while preserving their history. Do not finalize in a process that has loaded only some plugins.

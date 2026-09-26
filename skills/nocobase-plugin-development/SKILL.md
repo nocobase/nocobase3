@@ -1,6 +1,6 @@
 ---
 name: nocobase-plugin-development
-description: Develop and maintain NocoBase v3 plugins in this source workspace, including scaffolding, shadcn UI, Client/Server/CLI contributions, database resources, Registry items, Plugin Skills, and target App registration. Use when creating or changing packages/plugins/app-plugin-* or example plugins. Not for legacy NocoBase v2 plugins or application-only development.
+description: Develop and maintain NocoBase v3 plugins in a NocoBase 3 source workspace, including scaffolding, shadcn UI, Client/Server/CLI contributions, database resources, Registry items, Plugin Skills, and target App registration. Use when creating or changing packages/plugins/app-plugin-* or example plugins. Not for legacy NocoBase v2 plugins or application-only development.
 ---
 
 # NocoBase Plugin Development
@@ -53,4 +53,4 @@ When creating a page or writing a page component, refer to [Pages, routes, and m
 3. Implement in the owning plugin. Put domain behavior in Services, HTTP boundaries in Routes, asynchronous orchestration in Jobs, React context in React Providers, and application integration instructions in Plugin Skills.
 4. Keep declarations, source/publish exports, dependencies, published files, tests, README, and Plugin Skills consistent. Remove unused scaffold examples and drafts. Write each Markdown prose paragraph on one physical line, without manual line wrapping.
 5. When integration is part of the request, preview and apply registration to the chosen App, synchronize applicable Skills, and validate the resulting behavior. Do not run creation, registration, migration, or other stateful commands merely because this Skill applies.
-6. Follow [testing and delivery](references/testing.md): run the modified plugin's checks and relevant consumer checks, then verify the requested runtime workflow. Inspectors are optional read-only composition diagnostics, not tests or completion gates. Report results, skipped checks, and remaining limitations accurately.
+6. Follow [testing and delivery](references/testing.md): run the modified plugin's checks and relevant consumer checks, then verify the requested runtime workflow. `plugin inspect` is an optional read-only registration diagnostic, not a test or completion gate. Report results, skipped checks, and remaining limitations accurately.

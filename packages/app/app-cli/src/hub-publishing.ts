@@ -18,19 +18,82 @@ export interface PublishingOptions {
   deploy?: boolean;
   wait?: boolean;
   timeout?: number;
+  /**
+   * Called with one line at each step worth telling a person or an agent about while the command runs: the upload
+   * starting, the deployment being accepted, and each change of deployment status while it waits. Not a flag.
+   */
+  onProgress?: (message: string) => void;
 }
+
+export type ReleaseOperation = 'upload' | 'deploy';
+
+/** A deployment status the Hub reports. Anything else is an unconfirmed result. */
+export type DeploymentStatus =
+  'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled';
+
+/**
+ * What a run had established when it failed: enough to retry with the same idempotency key, or to find the deployment
+ * in Hub. Present only on a failure after the request to Hub was prepared.
+ */
+export interface PublishingErrorDetails {
+  idempotencyKey?: string;
+  releaseId?: string;
+  operationId?: string;
+  operationStatus?: DeploymentStatus;
+}
+
 export class PublishingError extends Error {
   constructor(
     public readonly code: string,
     message: string,
     public readonly exitCode: number,
+    public readonly details?: PublishingErrorDetails | undefined,
   ) {
     super(message);
   }
 }
 
+/** What `release upload` reports. */
+export interface ReleaseUploadResult {
+  releaseId: string;
+  /** SHA-256 of the archive, in hex. */
+  checksum: string;
+  /** Size of the archive in bytes. */
+  size: number;
+  /** The version the Hub recorded for the Release; absent when it reported none. */
+  version: string | undefined;
+  /** The Hub answered with an existing Release, and its deployment with --deploy, instead of creating one. */
+  reused: boolean;
+  /** The deployment started with --deploy; `null` without it. */
+  operationId: string | null;
+  idempotencyKey: string;
+  /** The deployment's last status; present only when the command checked it. */
+  operationStatus?: DeploymentStatus;
+}
+
+/** What `release deploy` reports. */
+export interface ReleaseDeployResult {
+  releaseId: string;
+  operationId: string;
+  operationStatus: DeploymentStatus;
+  idempotencyKey: string;
+  /** Present when the Hub answered with an earlier deployment for the same retry identity. */
+  reused?: true;
+  /** When the Hub created the deployment; present when it reported it. */
+  deploymentCreatedAt?: string;
+}
+
+/** A publishing run's result, and the warning it earned when the Hub reused an earlier deployment. */
+export interface PublishedRelease<TResult> {
+  readonly result: TResult;
+  readonly warning: string | undefined;
+}
+
 /** The archive `nocobase build --tar` writes, relative to the App root. */
 export const DEFAULT_ARTIFACT: string = 'storage/exports/dist.tar.gz';
+
+const UNCONFIRMED_DEPLOYMENT =
+  'Deployment result cannot be confirmed. Check the deployment in Hub before retrying with the same idempotency key.';
 
 /**
  * HTTP-only tooling. It never initializes the application or reads Hub storage.
@@ -45,6 +108,48 @@ export async function publishToHub(
   env: NodeJS.ProcessEnv = process.env,
   cwd: string = process.cwd(),
 ): Promise<Record<string, unknown>> {
+  const { result, warning } = await publishRelease(
+    operation,
+    options,
+    root,
+    env,
+    cwd,
+  );
+  return warning === undefined ? { ...result } : { ...result, warning };
+}
+
+/**
+ * `publishToHub` with a typed result, and with the warning about a reused deployment kept apart from it. The release
+ * commands report through this: the result becomes the command's result and the warning one of its warnings.
+ */
+export function publishRelease(
+  operation: 'upload',
+  options: PublishingOptions,
+  root: string,
+  env?: NodeJS.ProcessEnv,
+  cwd?: string,
+): Promise<PublishedRelease<ReleaseUploadResult>>;
+export function publishRelease(
+  operation: 'deploy',
+  options: PublishingOptions,
+  root: string,
+  env?: NodeJS.ProcessEnv,
+  cwd?: string,
+): Promise<PublishedRelease<ReleaseDeployResult>>;
+export function publishRelease(
+  operation: ReleaseOperation,
+  options: PublishingOptions,
+  root: string,
+  env?: NodeJS.ProcessEnv,
+  cwd?: string,
+): Promise<PublishedRelease<ReleaseUploadResult | ReleaseDeployResult>>;
+export async function publishRelease(
+  operation: ReleaseOperation,
+  options: PublishingOptions,
+  root: string,
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
+): Promise<PublishedRelease<ReleaseUploadResult | ReleaseDeployResult>> {
   // Parse locally so application configuration never mutates the CLI process environment.
   let fileEnv: NodeJS.ProcessEnv = {};
   try {
@@ -146,6 +251,20 @@ export async function publishToHub(
       );
     }
   }
+  // What the run has established so far. A failure from here on carries it, so the caller can retry with the same
+  // idempotency key or find the deployment in Hub.
+  const known: PublishingErrorDetails = {};
+  const failure = (
+    code: string,
+    message: string,
+    exitCode: number,
+  ): PublishingError =>
+    new PublishingError(
+      code,
+      message,
+      exitCode,
+      Object.keys(known).length > 0 ? { ...known } : undefined,
+    );
   base.pathname = `${base.pathname.replace(/\/$/, '')}/api/hub/apps/${encodeURIComponent(appId)}/`;
   const signal = AbortSignal.timeout(timeout * 1000);
   const request = async (
@@ -161,7 +280,7 @@ export async function publishToHub(
         headers: { ...init.headers, authorization: `Bearer ${apiKey}` },
       });
     } catch {
-      throw new PublishingError(
+      throw failure(
         'RESULT_UNKNOWN',
         'Hub could not confirm the result. Retry with the same idempotency key.',
         3,
@@ -171,7 +290,7 @@ export async function publishToHub(
     try {
       payload = await response.json();
     } catch {
-      throw new PublishingError(
+      throw failure(
         'INVALID_HUB_RESPONSE',
         'Hub returned an unreadable response; the result is unknown.',
         3,
@@ -187,21 +306,21 @@ export async function publishToHub(
           ? error.code
           : 'HUB_REQUEST_FAILED';
       // Do not echo raw response text: proxies and remote exceptions can contain credentials.
-      throw new PublishingError(
+      throw failure(
         code,
         `Hub rejected the request (${response.status}, ${code}).`,
         1,
       );
     }
     if (!isRecord(payload) || !isRecord(payload.data))
-      throw new PublishingError(
+      throw failure(
         'INVALID_HUB_RESPONSE',
         'Hub response is missing its result; the outcome is unknown. Check Hub before retrying with the same idempotency key.',
         3,
       );
     return payload.data;
   };
-  let result: Record<string, unknown>;
+  let result: ReleaseUploadResult | ReleaseDeployResult;
   if (operation === 'upload') {
     const file =
       options.file === undefined
@@ -226,6 +345,7 @@ export async function publishToHub(
       );
     }
     const requestKey = options['idempotency-key'] ?? checksum;
+    known.idempotencyKey = requestKey;
     const stream = createReadStream(file);
     // A bounded UTF-8 configuration prefix keeps the archive streaming and unchanged.
     const configBytes = config
@@ -246,6 +366,9 @@ export async function publishToHub(
       ),
     );
     let data: Record<string, unknown>;
+    options.onProgress?.(
+      `Uploading ${path.basename(file)} (${formatBytes(size)})…`,
+    );
     try {
       const init: RequestInit & { duplex: 'half' } = {
         method: 'POST',
@@ -273,46 +396,53 @@ export async function publishToHub(
       // Cleanup errors must not replace the classified Hub request result.
       await streamsFinished;
     }
-    if (!isIdentifier(data.releaseId))
-      throw new PublishingError(
+    const releaseId = data.releaseId;
+    if (!isIdentifier(releaseId))
+      throw failure(
         'INVALID_HUB_RESPONSE',
         'Hub did not return a Release ID.',
         3,
       );
+    known.releaseId = releaseId;
+    const operationId = data.operationId;
     if (
-      (options.deploy && data.operationId === undefined) ||
-      (data.operationId != null && !isIdentifier(data.operationId))
+      (options.deploy && operationId === undefined) ||
+      (operationId != null && !isIdentifier(operationId))
     )
-      throw new PublishingError(
+      throw failure(
         'INVALID_HUB_RESPONSE',
         'Hub returned an invalid deployment ID; the result is unknown.',
         3,
       );
-    if (options.deploy && data.operationId == null)
-      throw new PublishingError(
+    if (options.deploy && operationId == null)
+      throw failure(
         'NO_DEPLOYMENT',
         'Hub did not confirm a deployment. Use release deploy --release-id to deploy an existing Release.',
         1,
       );
+    if (isIdentifier(operationId)) known.operationId = operationId;
     result = {
-      releaseId: data.releaseId,
+      releaseId,
       checksum,
       size,
-      version: data.version,
+      version: typeof data.version === 'string' ? data.version : undefined,
       reused: data.reused === true,
-      operationId: data.operationId ?? null,
+      operationId: isIdentifier(operationId) ? operationId : null,
       idempotencyKey: requestKey,
     };
   } else {
-    if (!options['release-id'])
+    const releaseId = options['release-id'];
+    if (!releaseId)
       throw new PublishingError('MISSING_RELEASE', 'Provide --release-id.', 2);
     const requestKey =
       options['idempotency-key'] ??
       createHash('sha256')
         .update(
-          `${appId}:${options['release-id']}${config ? ':' + createHash('sha256').update(config.content).digest('hex') : ''}`,
+          `${appId}:${releaseId}${config ? ':' + createHash('sha256').update(config.content).digest('hex') : ''}`,
         )
         .digest('hex');
+    known.idempotencyKey = requestKey;
+    known.releaseId = releaseId;
     const data = await request('deploy', {
       method: 'POST',
       headers: {
@@ -320,31 +450,37 @@ export async function publishToHub(
         'idempotency-key': requestKey,
       },
       body: JSON.stringify({
-        releaseId: options['release-id'],
+        releaseId,
         ...(config ? { config } : {}),
       }),
     });
-    if (!isIdentifier(data.operationId))
-      throw new PublishingError(
+    const operationId = data.operationId;
+    if (!isIdentifier(operationId))
+      throw failure(
         'INVALID_HUB_RESPONSE',
         'Hub did not return a deployment ID.',
         3,
       );
-    requireDeploymentStatus(data.status);
-    if (data.status === 'failed' || data.status === 'cancelled')
-      throw new PublishingError(
+    known.operationId = operationId;
+    const status = data.status;
+    if (!isDeploymentStatus(status))
+      throw failure('RESULT_UNKNOWN', UNCONFIRMED_DEPLOYMENT, 3);
+    known.operationStatus = status;
+    if (status === 'failed' || status === 'cancelled')
+      throw failure(
         'DEPLOYMENT_FAILED',
-        `Deployment ${data.operationId} ${data.status}. Use a new idempotency key to retry deployment.`,
+        `Deployment ${operationId} ${status}. Use a new idempotency key to retry deployment.`,
         1,
       );
+    const createdAt = data.createdAt;
     result = {
-      releaseId: options['release-id'],
-      operationId: data.operationId,
-      operationStatus: data.status,
+      releaseId,
+      operationId,
+      operationStatus: status,
       idempotencyKey: requestKey,
-      ...(data.reused === true ? { reused: true } : {}),
-      ...(typeof data.createdAt === 'string' && data.createdAt
-        ? { deploymentCreatedAt: data.createdAt }
+      ...(data.reused === true ? { reused: true as const } : {}),
+      ...(typeof createdAt === 'string' && createdAt
+        ? { deploymentCreatedAt: createdAt }
         : {}),
     };
   }
@@ -352,31 +488,45 @@ export async function publishToHub(
   const checkUploadRetry =
     operation === 'upload' && options.deploy && result.reused === true;
   if (wait || checkUploadRetry) {
-    if (typeof result.operationId !== 'string')
-      throw new PublishingError(
+    const operationId = result.operationId;
+    if (typeof operationId !== 'string')
+      throw failure(
         'NO_DEPLOYMENT',
         'Release already exists without a deployment. Use release deploy --release-id to deploy it.',
         1,
       );
+    if (wait) {
+      options.onProgress?.(
+        `Waiting for deployment ${operationId} (up to ${timeout}s)…`,
+      );
+    }
+    let reported: DeploymentStatus | undefined;
     while (true) {
       const state = await request(
-        `deployments/${encodeURIComponent(result.operationId)}/status`,
+        `deployments/${encodeURIComponent(operationId)}/status`,
         { method: 'GET' },
       );
-      requireDeploymentStatus(state.status);
-      result.operationStatus = state.status;
-      if (state.status === 'succeeded') break;
-      if (state.status === 'failed' || state.status === 'cancelled')
-        throw new PublishingError(
+      const status = state.status;
+      if (!isDeploymentStatus(status))
+        throw failure('RESULT_UNKNOWN', UNCONFIRMED_DEPLOYMENT, 3);
+      if (status !== reported) {
+        options.onProgress?.(`Deployment ${operationId}: ${status}`);
+        reported = status;
+      }
+      result.operationStatus = status;
+      known.operationStatus = status;
+      if (status === 'succeeded') break;
+      if (status === 'failed' || status === 'cancelled')
+        throw failure(
           'DEPLOYMENT_FAILED',
-          `Deployment ${result.operationId} ${String(state.status)}. Inspect it in Hub.`,
+          `Deployment ${operationId} ${status}. Inspect it in Hub.`,
           1,
         );
       if (!wait) break;
       try {
         await delay(1000, undefined, { signal });
       } catch {
-        throw new PublishingError(
+        throw failure(
           'WAIT_TIMEOUT',
           'Timed out waiting for deployment. The deployment may still complete.',
           3,
@@ -386,15 +536,14 @@ export async function publishToHub(
   }
   // A reused operation is history: this command did not deploy anything now, and the App may be
   // running another Release. Reusing a retry identity is deliberate, so this warns rather than fails.
-  if (
+  const warning =
     result.reused === true &&
     (operation === 'deploy' || options.deploy === true)
-  )
-    result.warning =
-      operation === 'deploy'
+      ? operation === 'deploy'
         ? 'Hub reused an earlier deployment for this Release and configuration; nothing was deployed now. Pass a new --idempotency-key to deploy again.'
-        : 'Hub reused an existing Release and its deployment; nothing was deployed now. Pass a new --idempotency-key to publish again.';
-  return result;
+        : 'Hub reused an existing Release and its deployment; nothing was deployed now. Pass a new --idempotency-key to publish again.'
+      : undefined;
+  return { result, warning };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -405,17 +554,18 @@ function isIdentifier(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]+$/.test(value);
 }
 
-function requireDeploymentStatus(status: unknown): void {
-  if (
-    status !== 'queued' &&
-    status !== 'deploying' &&
-    status !== 'succeeded' &&
-    status !== 'failed' &&
-    status !== 'cancelled'
-  )
-    throw new PublishingError(
-      'RESULT_UNKNOWN',
-      'Deployment result cannot be confirmed. Check the deployment in Hub before retrying with the same idempotency key.',
-      3,
-    );
+function isDeploymentStatus(status: unknown): status is DeploymentStatus {
+  return (
+    status === 'queued' ||
+    status === 'deploying' ||
+    status === 'succeeded' ||
+    status === 'failed' ||
+    status === 'cancelled'
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }

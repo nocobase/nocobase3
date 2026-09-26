@@ -119,3 +119,32 @@ test('still reports undeclared and dev-only dependencies, without reporting pros
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('scans the cli/ sources a dist-shipping plugin builds, and source directories named dist', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'runtime-deps-test-'));
+  try {
+    await mkdir(path.join(root, 'cli'));
+    await writeFile(path.join(root, 'cli', 'index.ts'), `import 'cli-only';`);
+    await mkdir(path.join(root, 'src', 'commands', 'dist'), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(root, 'src', 'commands', 'dist', 'check.ts'),
+      `import 'nested-dist-source';`,
+    );
+    // The package's own build output stays unscanned.
+    await mkdir(path.join(root, 'dist'));
+    await writeFile(path.join(root, 'dist', 'index.js'), `import 'built';`);
+    const violations = await findViolations(
+      root,
+      { name: 'fixture', files: ['dist'] },
+      new Set(),
+    );
+    assert.deepEqual(violations.map(({ dependency }) => dependency).sort(), [
+      'cli-only',
+      'nested-dist-source',
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

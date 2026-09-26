@@ -54,6 +54,8 @@ export interface ApplicationOptions<
   readonly paths: AppPaths;
   readonly websocket?: ApplicationWebSocketFactory;
   readonly runtimeLogging?: AppRuntimeLogging;
+  /** Where console log records go; see `AppScope.consoleLogStream`. */
+  readonly consoleLogStream?: 'stdout' | 'stderr';
   readonly strictStartup?: boolean;
 }
 
@@ -86,6 +88,7 @@ export class Application<
 > {
   public readonly strictStartup: boolean;
   public readonly runtimeLogging: AppRuntimeLogging | undefined;
+  public readonly consoleLogStream: 'stdout' | 'stderr' | undefined;
   public readonly config: TConfig;
   public readonly mode: 'standalone' | 'embedded';
   public readonly paths: AppPaths;
@@ -127,6 +130,7 @@ export class Application<
   public constructor(options: ApplicationOptions<TConfig>) {
     this.strictStartup = options.strictStartup ?? false;
     this.runtimeLogging = options.runtimeLogging;
+    this.consoleLogStream = options.consoleLogStream;
     this.config = options.config;
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;

@@ -11,6 +11,7 @@ const EXPECTED_IDS = [
   'build',
   'collections:doctor',
   'collections:generate',
+  'commands',
   'config:check',
   'config:env',
   'config:init',

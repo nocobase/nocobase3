@@ -60,10 +60,7 @@ export default defineAppRuntime({
 resolution collects its route component overrides automatically;
 `routeComponentOverrides` contains only overrides owned by the application.
 
-Static import makes the composition plan available to runtime resolution and
-inspection. It does not register a service, execute lifecycle hooks, render a
-React component, load a route page, or load locale messages. Declaration
-modules must therefore remain side-effect-free.
+Static import makes the composition plan available to runtime resolution. It does not register a service, execute lifecycle hooks, render a React component, load a route page, or load locale messages. Declaration modules must therefore remain side-effect-free.
 
 ## Client entry
 
@@ -333,17 +330,7 @@ TypeScript configuration factory with the runtime and merges its defaults below
 the public values. Services read the assembled configuration through
 `app.config.get()`; `app.config` and `runtime.config` reference the same object.
 
-Only public Browser configuration belongs in this payload. Server secrets must
-never be copied into the HTML data block, Client plugin options, logs, or
-inspection output.
-
-## Inspection boundary
-
-Client inspection imports `client/runtime.ts` and `client/plugins.ts` and reads
-static declarations. It does not create `ClientApplication`, instantiate or run
-ServiceProviders, render React Providers, load route page components, or load
-locale messages. Inspection is a composition diagnostic, not proof of runtime
-behavior.
+Only public Browser configuration belongs in this payload. Server secrets must never be copied into the HTML data block, Client plugin options, or logs.
 
 ## Verification
 

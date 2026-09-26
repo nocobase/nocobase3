@@ -223,7 +223,7 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
         {},
       );
 
-    // `pnpm upload --deploy --wait`: one streamed request creates the Release and
+    // `release upload --deploy --wait`: one streamed request creates the Release and
     // deploys it, then the CLI polls the status route until the Host is serving.
     const uploaded = await cli('upload', first.root, {
       deploy: true,
@@ -249,7 +249,7 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
     expect(await servedVersion()).toBe('1.0.0');
     expect(await revisionNames(hostRevisionsDir())).toEqual([first.checksum]);
 
-    // `pnpm upload` then `pnpm deploy --release-id`: the two-step publishing path.
+    // `release upload` then `release deploy --release-id`: the two-step publishing path.
     const secondUpload = await cli('upload', second.root, {});
     expect(secondUpload).toMatchObject({
       version: '2.0.0',

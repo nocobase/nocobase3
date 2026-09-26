@@ -2,11 +2,11 @@
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { Config } from '@oclif/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Deploy from '../src/commands/release/deploy.ts';
 import Upload from '../src/commands/release/upload.ts';
 import { bindAppCommand } from './app-command.ts';
+import { runAppCommand, type CommandRun } from './command-output.ts';
 
 let root: string;
 beforeEach(async () => {
@@ -19,19 +19,16 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 const secret = 'test-only-response-secret';
-async function command(operation: 'upload' | 'deploy', flags: string[] = []) {
-  const config = await Config.load({
-    root,
-    pjson: {
-      name: 'publishing-test',
-      version: '0.0.0',
-      oclif: { bin: 'nocobase' },
-    },
-  });
+function run(
+  operation: 'upload' | 'deploy',
+  flags: string[] = [],
+): Promise<CommandRun> {
   const Command = bindAppCommand(operation === 'deploy' ? Deploy : Upload, {
     rootDir: root,
   });
-  const instance = new Command(
+  Command.id = `release:${operation}`;
+  return runAppCommand(
+    Command,
     [
       '--json',
       '--hub',
@@ -47,12 +44,8 @@ async function command(operation: 'upload' | 'deploy', flags: string[] = []) {
         : ['--file', path.join(root, 'artifact.tar.gz')]),
       ...flags,
     ],
-    config,
+    root,
   );
-  const output = vi
-    .spyOn(instance, 'logJson')
-    .mockImplementation(() => undefined);
-  return { instance, output };
 }
 
 describe.each(['upload', 'deploy'] as const)(
@@ -73,16 +66,22 @@ describe.each(['upload', 'deploy'] as const)(
           'fetch',
           vi.fn().mockResolvedValue(Response.json(payload)),
         );
-        const { instance, output } = await command(operation, ['--no-wait']);
-        await expect(instance.run()).rejects.toMatchObject({
-          oclif: { exit: 3 },
-        });
-        expect(output).toHaveBeenCalledTimes(1);
-        expect(output.mock.calls[0]?.[0]).toMatchObject({
+        const result = await run(operation, ['--no-wait']);
+        expect(result.exitCode).toBe(3);
+        expect(result.json()).toMatchObject({
           ok: false,
-          error: { code: 'INVALID_HUB_RESPONSE' },
+          command: `release ${operation}`,
+          status: 'failure',
+          error: {
+            code: 'INVALID_HUB_RESPONSE',
+            // What a retry needs: the same key, reported even when the command chose it.
+            details: {
+              idempotencyKey: 'retry-response-test',
+              ...(operation === 'deploy' ? { releaseId: 'r1' } : {}),
+            },
+          },
         });
-        expect(JSON.stringify(output.mock.calls)).not.toContain(secret);
+        expect(result.stdout + result.stderr).not.toContain(secret);
       },
     );
     it.each([
@@ -97,15 +96,13 @@ describe.each(['upload', 'deploy'] as const)(
           'fetch',
           vi.fn().mockResolvedValue(Response.json(payload, { status: 403 })),
         );
-        const { instance, output } = await command(operation, ['--no-wait']);
-        await expect(instance.run()).rejects.toMatchObject({
-          oclif: { exit: 1 },
-        });
-        expect(output.mock.calls[0]?.[0]).toMatchObject({
+        const result = await run(operation, ['--no-wait']);
+        expect(result.exitCode).toBe(1);
+        expect(result.json()).toMatchObject({
           ok: false,
           error: { code: 'HUB_REQUEST_FAILED' },
         });
-        expect(JSON.stringify(output.mock.calls)).not.toContain(
+        expect(result.stdout + result.stderr).not.toContain(
           'contains private text',
         );
       },
@@ -127,11 +124,9 @@ describe('deployment acceptance validation', () => {
         'fetch',
         vi.fn().mockResolvedValue(Response.json({ data })),
       );
-      const { instance, output } = await command('deploy', ['--no-wait']);
-      await expect(instance.run()).rejects.toMatchObject({
-        oclif: { exit: 3 },
-      });
-      expect(output.mock.calls[0]?.[0]).toMatchObject({ ok: false });
+      const result = await run('deploy', ['--no-wait']);
+      expect(result.exitCode).toBe(3);
+      expect(result.json()).toMatchObject({ ok: false });
     },
   );
   it.each(['queued', 'deploying', 'succeeded', 'failed', 'cancelled'])(
@@ -143,18 +138,19 @@ describe('deployment acceptance validation', () => {
           Response.json({ data: { operationId: 'op-1', status } }),
         );
       vi.stubGlobal('fetch', fetcher);
-      const { instance, output } = await command('deploy', ['--no-wait']);
+      const result = await run('deploy', ['--no-wait']);
       if (status === 'failed' || status === 'cancelled') {
-        await expect(instance.run()).rejects.toMatchObject({
-          oclif: { exit: 1 },
-        });
-        expect(output.mock.calls[0]?.[0]).toMatchObject({
+        expect(result.exitCode).toBe(1);
+        expect(result.json()).toMatchObject({
           ok: false,
-          error: { code: 'DEPLOYMENT_FAILED' },
+          error: {
+            code: 'DEPLOYMENT_FAILED',
+            details: { operationId: 'op-1', operationStatus: status },
+          },
         });
       } else {
-        await instance.run();
-        expect(output.mock.calls[0]?.[0]).toMatchObject({
+        expect(result.exitCode).toBeUndefined();
+        expect(result.json()).toMatchObject({
           ok: true,
           result: { operationStatus: status },
         });
@@ -173,9 +169,11 @@ describe('deployment acceptance validation', () => {
             Response.json({ data: { releaseId, operationId: null } }),
           ),
       );
-      const { instance } = await command('upload');
-      await expect(instance.run()).rejects.toMatchObject({
-        oclif: { exit: 3 },
+      const result = await run('upload');
+      expect(result.exitCode).toBe(3);
+      expect(result.json()).toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_HUB_RESPONSE' },
       });
     },
   );
@@ -190,9 +188,14 @@ describe('deployment acceptance validation', () => {
             Response.json({ data: { releaseId: 'r1', operationId } }),
           ),
       );
-      const { instance } = await command('upload', ['--deploy', '--no-wait']);
-      await expect(instance.run()).rejects.toMatchObject({
-        oclif: { exit: 3 },
+      const result = await run('upload', ['--deploy', '--no-wait']);
+      expect(result.exitCode).toBe(3);
+      expect(result.json()).toMatchObject({
+        ok: false,
+        error: {
+          code: 'INVALID_HUB_RESPONSE',
+          details: { idempotencyKey: 'retry-response-test', releaseId: 'r1' },
+        },
       });
     },
   );

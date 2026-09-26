@@ -106,8 +106,8 @@ describe('package remove command', () => {
 
       expect(JSON.parse(result.stdout)).toMatchObject({
         ok: true,
-        operation: 'package:remove',
-        status: 'success',
+        command: 'package remove',
+        status: 'success-noop',
         result: {
           mode: 'dry-run',
           packageName,
@@ -207,7 +207,7 @@ describe('package remove command', () => {
 
     expect(JSON.parse(result.stdout)).toMatchObject({
       ok: true,
-      operation: 'package:remove',
+      command: 'package remove',
       status: 'success',
       result: {
         mode: 'remove',
@@ -281,7 +281,7 @@ describe('package remove command', () => {
 
     expect(JSON.parse(result.stdout)).toMatchObject({
       ok: true,
-      operation: 'package:remove',
+      command: 'package remove',
       status: 'success',
       result: {
         removedFrom: [],
@@ -311,7 +311,7 @@ describe('package remove command', () => {
     ]);
     expect(JSON.parse(result.stdout)).toMatchObject({
       ok: true,
-      operation: 'package:remove',
+      command: 'package remove',
       status: 'success-noop',
     });
     expect(existsSync(path.join(appRoot, '.agents'))).toBe(false);
@@ -391,10 +391,10 @@ describe('package remove command', () => {
     ]);
 
     const response = JSON.parse(result.stdout) as {
-      operation: string;
+      command: string;
       result: { removedFrom: string[]; removedSkills: string[] };
     };
-    expect(response.operation).toBe('package:remove');
+    expect(response.command).toBe('package remove');
     expect(response.result.removedFrom).toEqual(
       expect.arrayContaining([
         'client/plugins.ts',
@@ -439,7 +439,7 @@ describe('package remove command', () => {
       ]);
       expect(JSON.parse(result.stdout)).toMatchObject({
         ok: false,
-        operation: 'package:remove',
+        command: 'package remove',
       });
       expect(process.exitCode).toBe(1);
     } finally {

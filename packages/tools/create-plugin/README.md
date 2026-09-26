@@ -29,11 +29,13 @@ CAPABILITIES
   client.service-providers
   client.react-providers
   client.locales
+  cli
   registry
   skills
 
 OPTIONS
   --with <capability>          Add a capability; may be repeated
+                               all selects every capability listed above
   --empty                      Create only the package foundation
   --display-name <name>        Human-readable package display name
   --description <description>  Package description
@@ -51,6 +53,8 @@ without choosing either one for the plugin. `client.routes` similarly supports
 App and Settings Routes. `client.service-providers` generates application-owned
 Client services and lifecycle hooks, while `client.react-providers` generates
 React context composition owned by the rendered tree.
+
+`cli` adds a CLI plugin in `cli/index.ts`, exported as `./cli`, with one example command under the topic derived from the package name; an application lists it in its `cli/plugins.ts` to get the commands. `--with all` selects every capability at once.
 
 The generator derives Client and Server plugin declarations, package exports,
 dependencies, tests, publication files, Registry scripts, and Plugin Skill

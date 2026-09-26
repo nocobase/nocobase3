@@ -1,11 +1,15 @@
 import { type Command, Flags, type Interfaces } from '@oclif/core';
 
+import { appPath } from '../../command/flags.ts';
 import {
-  ReleaseCommand,
-  type ReleaseFlags,
-} from '../../lib/release-command.ts';
+  publishRelease,
+  type PublishedRelease,
+  type PublishingOptions,
+  type ReleaseDeployResult,
+} from '../../hub-publishing.ts';
+import { ReleaseCommand } from '../../lib/release-command.ts';
 
-export default class ReleaseDeploy extends ReleaseCommand {
+export default class ReleaseDeploy extends ReleaseCommand<ReleaseDeployResult> {
   static override summary = 'Deploy an existing Hub release.';
   static override description =
     'Deploys a Release that is already on the Hub, such as one `release upload` created without --deploy, or an earlier Release to roll back to. It waits for the deployment to finish unless --no-wait is given.\n\nThe Hub, App ID and API key come from the flags, then HUB_URL, HUB_APP_ID and HUB_API_KEY in the environment, then the App root .env. Retrying with the same --idempotency-key is safe when a run could not confirm its result; deploying the same Release again needs a new key.';
@@ -25,9 +29,8 @@ export default class ReleaseDeploy extends ReleaseCommand {
     'idempotency-key': Interfaces.OptionFlag<string | undefined>;
     wait: Interfaces.BooleanFlag<boolean>;
     timeout: Interfaces.OptionFlag<number>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
-    config: Flags.string({
+    config: appPath({
       description:
         'Runtime YAML configuration to deploy with, relative to the current directory. Omit to reuse the current Hub configuration.',
     }),
@@ -61,21 +64,23 @@ export default class ReleaseDeploy extends ReleaseCommand {
       default: 600,
       description: 'Request and wait deadline in seconds.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print a single JSON result.',
-    }),
   };
 
-  protected readonly operation = 'deploy' as const;
   protected readonly failureCode = 'DEPLOY_FAILED';
   protected readonly failureMessage = 'Deployment failed.';
 
-  protected async parseFlags(): Promise<ReleaseFlags> {
+  protected async parseFlags(): Promise<PublishingOptions> {
     return (await this.parse(ReleaseDeploy)).flags;
   }
 
-  protected describe(result: Record<string, unknown>): string {
-    return `Deployment ${String(result.operationId)}: ${String(result.operationStatus)}. Retry key: ${String(result.idempotencyKey)}.`;
+  protected publish(
+    flags: PublishingOptions,
+    root: string,
+  ): Promise<PublishedRelease<ReleaseDeployResult>> {
+    return publishRelease('deploy', flags, root);
+  }
+
+  protected describe(result: ReleaseDeployResult): string {
+    return `Deployment ${result.operationId}: ${result.operationStatus}. Retry key: ${result.idempotencyKey}.`;
   }
 }

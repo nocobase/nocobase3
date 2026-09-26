@@ -4,8 +4,8 @@ This directory holds every Skill this repository commits. `pnpm install` links e
 
 | Skill                                                                 | Who uses it                                        | What it does                                                                                                                              |
 | --------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [`nocobase-create-app`](nocobase-create-app/SKILL.md)                 | Users, installed globally                          | Creates an application with `pnpm create @nocobase/app`, configures it with `config:init`, `config:set` and `config:check`, and starts it |
-| [`nocobase-plugin-development`](nocobase-plugin-development/SKILL.md) | Contributors developing plugins in this repository | Scaffolds, implements, registers and verifies a NocoBase 3 plugin                                                                        |
+| [`nocobase-create-app`](nocobase-create-app/SKILL.md)                 | Users, installed globally                          | Creates an application with `pnpm create @nocobase/app`, configures it with `nocobase config init`, `config set` and `config check`, and starts it |
+| [`nocobase-plugin-development`](nocobase-plugin-development/SKILL.md) | Contributors developing plugins in a NocoBase 3 source workspace, linked by this checkout or installed globally | Scaffolds, implements, registers and verifies a NocoBase 3 plugin |
 
 The rest of this file is about `nocobase-create-app`. It is installed once, globally, so that an agent knows how to reach NocoBase 3 before any application exists. Everything an agent needs after that ships inside the application it creates, under `.agents/skills/`, synchronized from the installed packages.
 
@@ -26,7 +26,7 @@ Use this to install NocoBase with an agent. The packages come from `https://npm.
 npx skills add nocobase/nocobase3 --skill nocobase-create-app -g
 ```
 
-`--skill` is required. The `skills` CLI reads this whole directory, and without it would offer `nocobase-plugin-development`, which is for developing NocoBase itself, alongside this one. Add `-a claude-code`, or another agent's name, to install for one agent only.
+`--skill` is required. The `skills` CLI reads this whole directory, and without it would offer `nocobase-plugin-development`, which is for developing plugins in a NocoBase 3 source workspace, alongside this one. That Skill can be installed the same way, `npx skills add nocobase/nocobase3 --skill nocobase-plugin-development -g`, for an agent working in a fork or another checkout; this checkout links it already. Add `-a claude-code`, or another agent's name, to install for one agent only.
 
 Agents load Skills when a session starts, so start a new session after installing.
 
@@ -113,7 +113,7 @@ The second command must print `http://127.0.0.1:4873/`. `-s` keeps pnpm's own `$
 
 `unreleased:env` prints the same variables `unreleased:create` and `unreleased:smoke` run with, including a session-only store and cache. Setting a few of them by hand is not enough, and fails silently:
 
-- A snapshot carries the same version numbers as the last release until one is cut. A package resolved from `https://npm.nocobase.ai/` looks identical to pnpm, so a partly configured shell produces an application that mixes a new template with old packages, and nothing reports it. The symptoms are a `config.yml` created before `config:init` ran, no `.npmrc`, and `command app:config:check not found`.
+- A snapshot carries the same version numbers as the last release until one is cut. A package resolved from `https://npm.nocobase.ai/` looks identical to pnpm, so a partly configured shell produces an application that mixes a new template with old packages, and nothing reports it. The symptoms are a `config.yml` created before `config init` ran, no `.npmrc`, and a `pnpm nocobase` command reported as not found.
 - `pnpm config set @nocobase:registry …` saves the scoped registry to `auth.ini` in pnpm's global configuration directory, `~/Library/Preferences/pnpm` on macOS. `PNPM_CONFIG_USERCONFIG` does not replace that file, and only `XDG_CONFIG_HOME` moves the directory, so the command sets it for the whole shell. Tools that keep their own settings there, such as `gh`, will not find them until you open a new shell.
 
 If the shell uses an HTTP proxy, keep `127.0.0.1` in `NO_PROXY` so the local npm registry is reached directly.
@@ -130,7 +130,7 @@ Ask for an application exactly as in the published case. A snapshot install can 
 
 - There is no `config.yml` until `pnpm nocobase config init` runs.
 - `.npmrc` contains `@nocobase:registry=http://127.0.0.1:4873/`.
-- `node_modules/@nocobase/app-cli/dist/commands/` contains `config-init.js`, `config-check.js` and `config-set.js`.
+- `node_modules/@nocobase/app-cli/dist/commands/config/` contains `init.js`, `check.js` and `set.js`.
 
 To look at what the local npm registry serves, query it with `curl`. In a shell without the variables above, a scoped registry in your own configuration overrides `npm view --registry`, and the answer comes from `https://npm.nocobase.ai/` instead:
 

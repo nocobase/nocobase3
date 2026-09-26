@@ -203,7 +203,6 @@ There is no automatic Registry update, remove, merge, lockfile, installed-versio
 - Materialize into a temporary or real App and confirm the exact target files and imports.
 - Run the consuming App's focused lint, typecheck, behavior tests, and build; plugin-only typechecking cannot resolve App aliases or prove installed source works.
 - For an automatic extension, verify the real Route override or Provider composition in the App.
-- Use Client inspection only when the installed item actually creates a Client contribution and composition needs diagnosis; it is not a Registry validation gate.
 
 Current implementation and maintained examples:
 

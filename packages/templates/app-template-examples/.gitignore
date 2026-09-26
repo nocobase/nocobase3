@@ -25,6 +25,7 @@ dist-ssr
 
 # Local application configuration
 /config.yml
+/.env
 
 # Written by `pnpm nocobase collections generate`: a cache of what this machine's database resolves every Collection
 # to, down to the dialect's physical types, for every connection. It describes a database rather than the application,

@@ -16,14 +16,14 @@ keywords: 'NocoBase 3,模板打印,Skill,Agent,DOCX,XLSX,PDF,合同'
 
 ```bash
 pnpm add -D @nocobase/app-plugin-template-print
-pnpm nocobase skills:sync --package @nocobase/app-plugin-template-print --json
+pnpm nocobase skills sync --package @nocobase/app-plugin-template-print --json
 ```
 
 如果正在 NocoBase 3 源码工作区中开发，且工作区已经包含这个插件，可以在目标应用目录使用工作区依赖：
 
 ```bash
 pnpm add -D '@nocobase/app-plugin-template-print@workspace:*'
-pnpm nocobase skills:sync --package @nocobase/app-plugin-template-print --json
+pnpm nocobase skills sync --package @nocobase/app-plugin-template-print --json
 ```
 
 尚未发布到所用 registry 的版本需要使用工作区包或本地打包产物。`workspace:*` 仅适用于同一工作区，不能在独立应用中用来下载 npm 包。

@@ -5,8 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 
+import AppConfigSet from '../src/commands/config/set.ts';
 import type { AppCommandRuntime } from '../src/context.ts';
 import { ConfigSetError, runConfigSet } from '../src/lib/config-set.ts';
+import { bindAppCommand } from './app-command.ts';
+import { runAppCommand } from './command-output.ts';
 
 const directories: string[] = [];
 
@@ -279,7 +282,9 @@ describe('runConfigSet', () => {
       }),
     ).rejects.toMatchObject({
       reason: 'not-configured',
-      suggestedCommand: 'pnpm nocobase config init',
+      suggestion: {
+        run: { command: 'pnpm', args: ['nocobase', 'config', 'init'] },
+      },
     });
   });
 
@@ -297,5 +302,92 @@ describe('runConfigSet', () => {
 
     expect(result.configFile).toBe(elsewhere);
     expect(await readFile(elsewhere, 'utf8')).toContain('port: 2');
+  });
+});
+
+describe('config set --json', () => {
+  const run = async (
+    argv: readonly string[],
+    options: Parameters<typeof createApplication>[0] = {},
+  ) => {
+    const { rootDir, configFile, loadRuntime } =
+      await createApplication(options);
+    const output = await runAppCommand(
+      bindAppCommand(AppConfigSet, { rootDir, loadRuntime }),
+      argv,
+      rootDir,
+    );
+    return { output, configFile };
+  };
+
+  it('returns what it changed, and carries what it could not confirm as warnings', async () => {
+    const { output, configFile } = await run(
+      ['--json', 'server.port=16000', 'database.connections.main.password=x'],
+      { environment: { server: { port: 15000 } } },
+    );
+
+    expect(output.exitCode).toBeUndefined();
+    expect(output.json()).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      command: expect.any(String),
+      status: 'success',
+      result: {
+        configFile,
+        changed: ['server.port', 'database.connections.main.password'],
+      },
+      warnings: [
+        expect.stringContaining('looks like a secret'),
+        expect.stringContaining(
+          'server.port was written, but the application still reads a different value',
+        ),
+      ],
+    });
+  });
+
+  it('prints the warnings for people on stderr', async () => {
+    const { output } = await run(['server.port=16000'], {
+      environment: { server: { port: 15000 } },
+    });
+
+    expect(output.stdout).toContain('Updated ');
+    expect(output.stdout).not.toContain('server.port was written');
+    // oclif wraps a warning to the terminal width, so only its start is compared.
+    expect(output.stderr).toContain('Warning: server.port was written');
+  });
+
+  it('sends an unconfigured application to config init, as a command it can run', async () => {
+    const { output } = await run(['--json', 'server.port=1'], { file: null });
+
+    expect(output.exitCode).toBe(1);
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'NOT_CONFIGURED',
+        suggestions: [
+          {
+            message: 'Write one first:',
+            run: { command: 'pnpm', args: ['nocobase', 'config', 'init'] },
+          },
+        ],
+      },
+    });
+  });
+
+  it('refuses an unknown section as invalid usage, with the nearest one in details', async () => {
+    const { output } = await run(['--json', 'databse.connections.main.host=x']);
+
+    expect(output.exitCode).toBe(2);
+    expect(output.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'UNKNOWN_KEY',
+        message: expect.stringContaining('Did you mean "database"?'),
+        details: {
+          key: 'databse.connections.main.host',
+          suggestion: 'database',
+        },
+      },
+    });
   });
 });

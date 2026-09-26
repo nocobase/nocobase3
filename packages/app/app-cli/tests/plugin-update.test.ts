@@ -146,7 +146,7 @@ describe('plugin update command selection', () => {
 
     expect(JSON.parse(result.stdout)).toMatchObject({
       ok: true,
-      operation: 'plugin:update',
+      command: 'plugin update',
       result: {
         mode: 'dry-run',
         packageNames,

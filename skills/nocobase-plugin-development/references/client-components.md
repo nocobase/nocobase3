@@ -234,4 +234,4 @@ Explicit namespace binding selects resources but does not register them. A compo
 - Run the plugin's focused `lint`, `typecheck`, `test`, and `build`; use pack checks when exports or published files change.
 - Exercise the component in the target App when the behavior depends on the real theme, application services, React Providers, routes, or locale composition.
 
-Components do not appear as independent entries in `client:inspect`; the Route or React Provider that assembles them does. Validate component behavior through types, exports, tests, build output, and the target App.
+A component is reached through the Route or React Provider that assembles it. Validate component behavior through types, exports, tests, build output, and the target App.

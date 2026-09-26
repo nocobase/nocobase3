@@ -1,20 +1,27 @@
-import { Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 
+import { CommandError } from '../../command/errors.ts';
+import { AppCommand } from '../../context.ts';
 import {
   applySkillsSync,
   formatSkillsSyncSummary,
   planSkillsSync,
   resolveInstalledPlugins,
+  type SkillsSyncPlan,
 } from '../../lib/skills-sync.ts';
 import {
   classifyPluginError,
-  pluginJsonFailure,
-  pluginJsonSuccess,
+  PLUGIN_COMMAND_FAILED,
 } from '../../lib/plugin-json.ts';
 import { resolveAppRoot } from '../../lib/workspace-app.ts';
 
-export default class SkillsSync extends Command {
+/** The Skills copied and removed, or with `dryRun` the ones that would be. */
+export interface SkillsSyncResult extends SkillsSyncPlan {
+  readonly dryRun: boolean;
+}
+
+export default class SkillsSync extends AppCommand {
   static override summary =
     'Copy NocoBase package Skills into .agents/skills and link them into .claude/skills.';
   static override description =
@@ -35,7 +42,6 @@ export default class SkillsSync extends Command {
     package: Interfaces.OptionFlag<string | undefined>;
     plugin: Interfaces.OptionFlag<string | undefined>;
     'dry-run': Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
@@ -62,67 +68,62 @@ export default class SkillsSync extends Command {
       default: false,
       description: 'Print what would change without writing anything.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print the result as JSON.',
-    }),
   };
 
-  protected readonly operation: string = 'skills:sync';
-
-  public async run(): Promise<void> {
-    try {
-      await this.runUnsafe();
-    } catch (error) {
-      const json = this.argv.includes('--json');
-      if (!json) {
-        throw error;
-      }
-      const classified = classifyPluginError(error);
-      const errorResult =
-        classified.code === 'PLUGIN_NOT_INSTALLED'
-          ? {
-              ...classified,
-              suggestions: [
-                'Run the App package manager install, then retry the sync.',
-              ],
-            }
-          : classified.code === 'PLUGIN_COMMAND_FAILED'
-            ? { ...classified, code: 'SKILLS_SYNC_FAILED' }
-            : classified;
-      this.logJson(pluginJsonFailure(this.operation, errorResult));
-      process.exitCode = 1;
-    }
-  }
-
-  private async runUnsafe(): Promise<void> {
+  public async run(): Promise<SkillsSyncResult> {
     const { flags } = await this.parse(SkillsSync);
-    const appRoot = await resolveAppRoot({
-      app: flags.app,
-      dir: flags.dir,
-      workspaceRoot: flags['workspace-root'],
-    });
-    const dryRun = flags['dry-run'];
-
-    const { appPackageName, plugins } = await resolveInstalledPlugins({
-      appRoot,
-      packageName: flags.package,
-      plugin: flags.plugin,
-    });
-    const planned = await planSkillsSync({
-      appPackageName,
-      appRoot,
-      plugins,
-      pruneMissingPackages:
-        flags.package === undefined && flags.plugin === undefined,
-    });
-    const plan = dryRun ? planned : await applySkillsSync(planned);
-    const result = { ...plan, dryRun };
-
-    if (flags.json) {
-      this.logJson(pluginJsonSuccess(this.operation, 'success', result));
-      return;
+    let result: SkillsSyncResult;
+    try {
+      const appRoot = await resolveAppRoot({
+        app: flags.app,
+        dir: flags.dir,
+        workspaceRoot: flags['workspace-root'],
+      });
+      const { appPackageName, plugins } = await resolveInstalledPlugins({
+        appRoot,
+        packageName: flags.package,
+        plugin: flags.plugin,
+      });
+      const planned = await planSkillsSync({
+        appPackageName,
+        appRoot,
+        plugins,
+        pruneMissingPackages:
+          flags.package === undefined && flags.plugin === undefined,
+      });
+      const dryRun = flags['dry-run'];
+      const plan = dryRun ? planned : await applySkillsSync(planned);
+      result = { ...plan, dryRun };
+      // A dry run changes nothing, and neither does a sync with nothing to copy or remove.
+      if (dryRun || (plan.copies.length === 0 && plan.removals.length === 0)) {
+        this.setStatus('success-noop');
+      }
+    } catch (error) {
+      throw skillsSyncError(error);
     }
     this.log(formatSkillsSyncSummary(result));
+    return result;
   }
+}
+
+/** A plugin command's classification, with the codes and advice that fit a synchronization. */
+function skillsSyncError(error: unknown): CommandError {
+  const classified = classifyPluginError(error);
+  if (classified.errorCode === 'PLUGIN_NOT_INSTALLED') {
+    return new CommandError(classified.message, {
+      code: classified.errorCode,
+      suggestions: [
+        'Run the App package manager install, then retry the sync.',
+      ],
+      cause: error,
+    });
+  }
+  if (classified.errorCode === PLUGIN_COMMAND_FAILED) {
+    return new CommandError(classified.message, {
+      code: 'SKILLS_SYNC_FAILED',
+      suggestions: classified.commandSuggestions,
+      cause: error,
+    });
+  }
+  return classified;
 }

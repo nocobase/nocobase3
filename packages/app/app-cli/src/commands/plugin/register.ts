@@ -1,7 +1,8 @@
-import { Args, Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { Args, Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 import path from 'node:path';
 
+import { AppCommand } from '../../context.ts';
 import {
   addDependencyCommand,
   appPackageManager,
@@ -16,12 +17,16 @@ import {
   applyPluginRegistration,
   planPluginRegistration,
   pluginPackageName,
+  type PluginRegistrationPlan,
 } from '../../lib/plugin-registration.ts';
 import {
   classifyPluginError,
-  pluginJsonFailure,
+  pluginCommandIssue,
+  pluginError,
   pluginPlanForJson,
-  pluginJsonSuccess,
+  type PluginCommandInvocation,
+  type PluginCommandIssue,
+  type PluginPlanJson,
 } from '../../lib/plugin-json.ts';
 import { runAttached, runCommand } from '../../lib/run-command.ts';
 import { resolveAppRoot } from '../../lib/workspace-app.ts';
@@ -29,9 +34,57 @@ import {
   applySkillsSync,
   formatSkillsSyncSummary,
   planSkillsSync,
+  type SkillsSyncPlan,
 } from '../../lib/skills-sync.ts';
 
-export default class PluginRegister extends Command {
+/** The plugin was already registered exactly as asked; status `success-noop`. */
+export interface PluginRegisterNoopResult {
+  readonly appRoot: string;
+  readonly packageName: string;
+  readonly checked: readonly string[];
+  readonly notChecked: readonly string[];
+}
+
+/**
+ * A dry run for a plugin that is not installed yet. Its exports decide the registration plan, so the preview stops at
+ * the install command; status `partial-success`.
+ */
+export interface PluginRegisterInstallRequiredResult {
+  readonly appRoot: string;
+  readonly packageName: string;
+  readonly state: 'requires-installation';
+  readonly commands: readonly PluginCommandInvocation[];
+  readonly nextSteps: readonly string[];
+}
+
+/** Why the plugin's Skills were not copied. */
+export interface PluginRegisterSkillsSkipped {
+  readonly skipped: true;
+  readonly reason: '--no-skills';
+}
+
+/**
+ * What a registration did, or with `mode: 'dry-run'` would do. Status `partial-success` when a composition root has to
+ * be edited by hand, or when the registration stands but its Skills could not be copied (`issues`).
+ */
+export interface PluginRegisterPlanResult {
+  readonly mode: 'dry-run' | 'register';
+  readonly appRoot: string;
+  readonly packageName: string;
+  readonly plan: PluginPlanJson<PluginRegistrationPlan>;
+  /** The Skills copied, or planned in a dry run; absent when copying them failed. */
+  readonly skills?: SkillsSyncPlan | PluginRegisterSkillsSkipped;
+  /** Commands a dry run would still run; always empty, because the plugin is already installed. */
+  readonly commands?: readonly PluginCommandInvocation[];
+  readonly issues?: readonly PluginCommandIssue[];
+}
+
+export type PluginRegisterResult =
+  | PluginRegisterNoopResult
+  | PluginRegisterInstallRequiredResult
+  | PluginRegisterPlanResult;
+
+export default class PluginRegister extends AppCommand {
   static override summary =
     'Install a plugin and wire it into this application.';
   static override description =
@@ -64,7 +117,6 @@ export default class PluginRegister extends Command {
     'no-install': Interfaces.BooleanFlag<boolean>;
     'no-skills': Interfaces.BooleanFlag<boolean>;
     'dry-run': Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
@@ -99,46 +151,51 @@ export default class PluginRegister extends Command {
       default: false,
       description: 'Print what would change without writing anything.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<PluginRegisterResult> {
+    const { args, flags } = await this.parse(PluginRegister);
     try {
-      await this.runUnsafe();
+      return await this.register(args.name, flags);
     } catch (error) {
-      if (!this.argv.includes('--json')) throw error;
-      this.logJson(
-        pluginJsonFailure('plugin:register', classifyPluginError(error)),
-      );
-      process.exitCode = 1;
+      throw classifyPluginError(error);
     }
   }
 
-  private async runUnsafe(): Promise<void> {
-    const { args, flags } = await this.parse(PluginRegister);
+  private async register(
+    name: string,
+    flags: {
+      readonly dir?: string;
+      readonly app?: string;
+      readonly 'workspace-root'?: string;
+      readonly version?: string;
+      readonly disabled: boolean;
+      readonly 'no-install': boolean;
+      readonly 'no-skills': boolean;
+      readonly 'dry-run': boolean;
+    },
+  ): Promise<PluginRegisterResult> {
     const appRoot = await resolveAppRoot({
       app: flags.app,
       dir: flags.dir,
       workspaceRoot: flags['workspace-root'],
     });
     const dryRun = flags['dry-run'];
-    const packageName = pluginPackageName(args.name);
+    const packageName = pluginPackageName(name);
 
     const installed = await this.install({
       appRoot,
       dryRun,
       packageName,
       skipInstall: flags['no-install'],
-      json: flags.json,
       version:
         flags.version ??
         (flags['workspace-root'] === undefined ? undefined : 'workspace:^'),
     });
-    if (installed === undefined) {
-      return;
+    if (typeof installed !== 'string') {
+      // Only a dry run stops here, and a dry run changes nothing.
+      this.setStatus('success-noop');
+      return installed;
     }
 
     const plan = await planPluginRegistration({
@@ -150,24 +207,22 @@ export default class PluginRegister extends Command {
     });
 
     if (!plan.changed) {
-      if (flags.json) {
-        this.logJson(
-          pluginJsonSuccess('plugin:register', 'success-noop', {
-            appRoot,
-            packageName,
-            checked: [
-              'dependency',
-              'client/plugins.ts',
-              'server/plugins.ts',
-              'cli/plugins.ts',
-            ],
-            notChecked: ['skills-content', 'runtime-behavior'],
-          }),
-        );
-      } else {
-        this.log(`${packageName} is already registered.`);
-      }
-      return;
+      this.setStatus('success-noop');
+      this.log(`${packageName} is already registered.`);
+      return {
+        appRoot,
+        packageName,
+        checked: [
+          'dependency',
+          'client/plugins.ts',
+          'server/plugins.ts',
+          'cli/plugins.ts',
+        ],
+        notChecked: ['skills-content', 'runtime-behavior'],
+      };
+    }
+    if (plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit) {
+      this.setStatus('partial-success');
     }
     const skillsPlan = flags['no-skills']
       ? undefined
@@ -176,92 +231,50 @@ export default class PluginRegister extends Command {
           appRoot,
           plugins: [{ packageName, pluginDirectory: installed }],
         });
+    const skipped: PluginRegisterSkillsSkipped = {
+      skipped: true,
+      reason: '--no-skills',
+    };
     if (dryRun) {
-      const status =
-        plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
-          ? 'partial-success'
-          : 'success';
-      if (flags.json) {
-        this.logJson(
-          pluginJsonSuccess('plugin:register', status, {
-            mode: 'dry-run',
-            appRoot,
-            packageName,
-            plan: pluginPlanForJson(plan),
-            skills: skillsPlan ?? { skipped: true, reason: '--no-skills' },
-            commands: [],
-          }),
-        );
-      } else {
-        this.log(this.describe(plan, appRoot, true));
-      }
-      return;
+      // A dry run changes nothing, whatever it would do; a plan that needs manual edits says so in `plan`.
+      this.setStatus('success-noop');
+      this.log(this.describe(plan, appRoot, true));
+      return {
+        mode: 'dry-run',
+        appRoot,
+        packageName,
+        plan: pluginPlanForJson(plan),
+        skills: skillsPlan ?? skipped,
+        commands: [],
+      };
     }
 
     await applyPluginRegistration(appRoot, plan);
-    if (!flags.json) this.log(this.describe(plan, appRoot, false));
+    this.log(this.describe(plan, appRoot, false));
+    const registered = {
+      mode: 'register',
+      appRoot,
+      packageName,
+      plan: pluginPlanForJson(plan),
+    } as const;
 
-    if (flags['no-skills']) {
-      if (flags.json) {
-        this.logJson(
-          pluginJsonSuccess(
-            'plugin:register',
-            plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
-              ? 'partial-success'
-              : 'success',
-            {
-              mode: 'register',
-              appRoot,
-              packageName,
-              plan: pluginPlanForJson(plan),
-              skills: { skipped: true, reason: '--no-skills' },
-            },
-          ),
-        );
-      }
-      return;
+    if (skillsPlan === undefined) {
+      return { ...registered, skills: skipped };
     }
     // Skills are documentation: a failure here is reported but never undoes a registration that already succeeded.
     try {
-      const synced = await applySkillsSync(skillsPlan!);
+      const synced = await applySkillsSync(skillsPlan);
       if (synced.copies.length > 0 || synced.removals.length > 0) {
-        if (!flags.json) this.log(formatSkillsSyncSummary(synced));
+        this.log(formatSkillsSyncSummary(synced));
       }
-      if (flags.json) {
-        this.logJson(
-          pluginJsonSuccess(
-            'plugin:register',
-            plan.manualClientEdit || plan.manualServerEdit || plan.manualCliEdit
-              ? 'partial-success'
-              : 'success',
-            {
-              mode: 'register',
-              appRoot,
-              packageName,
-              plan: pluginPlanForJson(plan),
-              skills: synced,
-            },
-          ),
-        );
-      }
+      return { ...registered, skills: synced };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      if (!flags.json) {
-        this.warn(
-          `${packageName} was registered, but its skills were not copied: ${reason}`,
-        );
-      }
-      if (flags.json) {
-        this.logJson(
-          pluginJsonSuccess('plugin:register', 'partial-success', {
-            mode: 'register',
-            appRoot,
-            packageName,
-            plan: pluginPlanForJson(plan),
-            issues: [classifyPluginError(error)],
-          }),
-        );
-      }
+      this.warn(
+        `${packageName} was registered, but its skills were not copied: ${reason}`,
+      );
+      this.setStatus('partial-success');
+      return { ...registered, issues: [pluginCommandIssue(error)] };
     }
   }
 
@@ -282,28 +295,28 @@ export default class PluginRegister extends Command {
     return version === undefined ? '*' : `^${version}`;
   }
 
-  /** Ensures the package is present, returning where it lives, or undefined when the run should stop. */
+  /**
+   * Ensures the package is present and returns where it lives. A dry run for a package that is not installed returns
+   * the result that reports the install instead, because without the package there is nothing to plan from.
+   */
   private async install({
     appRoot,
     dryRun,
     packageName,
     skipInstall,
-    json,
     version,
   }: {
     appRoot: string;
     dryRun: boolean;
     packageName: string;
     skipInstall: boolean;
-    json: boolean;
     version?: string;
-  }): Promise<string | undefined> {
+  }): Promise<string | PluginRegisterInstallRequiredResult> {
     const existing = await installedPluginDirectory(appRoot, packageName);
     if (skipInstall) {
       if (existing === undefined) {
-        this.error(
+        throw pluginError(
           `${packageName} is not installed in ${appRoot} and --no-install was given.`,
-          { exit: 1 },
         );
       }
       return existing;
@@ -322,55 +335,51 @@ export default class PluginRegister extends Command {
       // Without the package there is nothing to inspect, so a dry run reports the install and stops rather than
       // guessing at edits it cannot compute.
       if (existing === undefined) {
-        if (json) {
-          this.logJson(
-            pluginJsonSuccess('plugin:register', 'requires-installation', {
-              appRoot,
-              packageName,
-              planStatus: 'requires-installation',
-              commands: [{ command: packageManager, args, cwd: appRoot }],
-              nextSteps: [
-                'Install the plugin.',
-                'Run plugin:register again to inspect exports and compute the registration plan.',
-              ],
-            }),
-          );
-        } else {
-          this.log(
-            `Would run: ${packageManager} ${args.join(' ')}\nThen register ${packageName}.`,
-          );
-        }
-        return undefined;
+        this.log(
+          `Would run: ${packageManager} ${args.join(' ')}\nThen register ${packageName}.`,
+        );
+        return {
+          appRoot,
+          packageName,
+          state: 'requires-installation',
+          commands: [{ command: packageManager, args, cwd: appRoot }],
+          nextSteps: [
+            'Install the plugin.',
+            'Run nocobase plugin register again to inspect exports and compute the registration plan.',
+          ],
+        };
       }
       return existing;
     }
 
-    if (!json) this.log(`${packageManager} ${args.join(' ')}`);
-    let exitCode = 0;
-    if (json) {
+    this.log(`${packageManager} ${args.join(' ')}`);
+    // Under --json the package manager's own output would corrupt the one document on stdout, so it is collected
+    // instead of shown; a failure then surfaces as the error the run fails with.
+    if (this.jsonEnabled()) {
       await runCommand(packageManager, [...args], { cwd: appRoot });
     } else {
-      exitCode = await runAttached(packageManager, [...args], { cwd: appRoot });
-    }
-    if (exitCode !== 0) {
-      this.error(
-        `${packageManager} exited with code ${exitCode}. Nothing was registered.`,
-        { exit: exitCode === 0 ? 1 : exitCode },
-      );
+      const exitCode = await runAttached(packageManager, [...args], {
+        cwd: appRoot,
+      });
+      if (exitCode !== 0) {
+        throw pluginError(
+          `${packageManager} exited with code ${exitCode}. Nothing was registered.`,
+          { exit: exitCode },
+        );
+      }
     }
 
     const directory = await installedPluginDirectory(appRoot, packageName);
     if (directory === undefined) {
-      this.error(
+      throw pluginError(
         `${packageManager} reported success but ${packageName} is not in node_modules.`,
-        { exit: 1 },
       );
     }
     return directory;
   }
 
   private describe(
-    plan: Awaited<ReturnType<typeof planPluginRegistration>>,
+    plan: PluginRegistrationPlan,
     appRoot: string,
     dryRun: boolean,
   ): string {

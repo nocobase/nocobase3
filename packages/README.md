@@ -15,11 +15,11 @@ Every package published from this repository lives here, grouped by what it is r
 
 Standalone libraries. Each solves one problem — storage, caching, queuing, logging — and depends on nothing above it. A library here should be usable outside NocoBase without pulling in an application runtime.
 
-`caching` wraps a cache store behind a small interface. `app-i18n` provides the translation mechanism: namespaces, resource loading, and the React and Node bindings, with no routes and no notion of a user.
+`caching` wraps a cache store behind a small interface. `i18n` (`@nocobase/i18n`) provides the translation mechanism: namespaces, resource loading, and the React and Node bindings, with no routes and no notion of a user.
 
 ## `app/`
 
-The runtime an application is assembled from. `app-server-kit` composes configuration, plugins, and providers into a running server; `app-portal-sdk` is the stable API a Portal's source code is written against; `app-skills` publishes the shared agent guidance synchronized into generated applications. `app-cli` is the application's command line — the runtime commands a deployment runs, plugin management, and the `dev` and `build` tooling, which it keeps out of a deployment as optional peers.
+The runtime an application is assembled from. `app-server` composes configuration, plugins, and providers into a running server; `app-portal-sdk` is the stable API a Portal's source code is written against; `app-skills` publishes the shared agent guidance synchronized into generated applications. `app-cli` is the application's command line — the runtime commands a deployment runs, plugin management, and the `dev` and `build` tooling, which it keeps out of a deployment as optional peers.
 
 These packages know what a NocoBase application is, which is what separates them from `libs/`.
 
@@ -53,7 +53,7 @@ Inside a template's own directory, use `pnpm dev`, `pnpm build`, and `pnpm start
 
 ## `tools/`
 
-Everything used to develop and build the packages above, none of which ends up inside a generated application. `dev-config` holds the shared TypeScript, ESLint, Prettier, Vitest, and Vite presets that every other package extends; `create-app` is the scaffolder that turns a template into a project.
+Everything used to develop and build the packages above, none of which ends up in a deployed application's `dist/`. `dev-config` holds the shared TypeScript, ESLint, Prettier, Vitest, and Vite presets that every other package extends; it is also a development dependency of every template, so a generated application installs it for its own configuration and for `nocobase build`, which loads it as an optional peer of `app-cli`. `create-app` is the scaffolder that turns a template into a project.
 
 ## Adding a package
 

@@ -11,15 +11,15 @@ const script = new URL('../../scripts/smoke-create-app.sh', import.meta.url);
 const fullRun = [
   // Configuration comes first: creation leaves the application unconfigured, and nothing after this can run without
   // it.
-  'config:init',
-  'config:check',
-  'skills:sync',
+  'config init',
+  'config check',
+  'skills sync',
   'test',
   'dev',
   'build',
   'start',
-  'deploy:config:check',
-  'server:deps:retarget',
+  'deployed config check',
+  'dist retarget',
 ];
 const otherTarget =
   process.platform === 'linux' && process.arch === 'x64'
@@ -28,16 +28,27 @@ const otherTarget =
 
 // Exercise the real shell lifecycle with HTTP servers and controlled pnpm outcomes, without downloading an app for
 // every failure case. The CI action separately runs the same script with published packages and the real pnpm.
+// The application CLI's top-level commands, such as `build` and `info`: the files directly under its commands directory.
+// Every other id is `<topic> <command>`. Read rather than listed, so the fake below keeps up when one is added.
+const topLevelCommands = fs
+  .readdirSync(
+    fileURLToPath(
+      new URL('../../packages/app/app-cli/src/commands/', import.meta.url),
+    ),
+  )
+  .filter((entry) => entry.endsWith('.ts'))
+  .map((entry) => entry.slice(0, -'.ts'.length));
+
 const fakePnpm = `#!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
-// \`pnpm nocobase <topic> <command>\` is recorded under the script name it replaced, so the scenarios below read the
-// same whichever form the smoke script uses.
+// \`pnpm nocobase <topic> <command>\` is recorded as \`<topic> <command>\`, and a top-level command such as
+// \`pnpm nocobase build\` as \`build\`: the ids the application CLI knows them by.
 if (process.argv[2] === 'nocobase') {
-  const id = process.argv.splice(2, 3).slice(1).join(':');
-  process.argv.splice(2, 0, id === 'dist:retarget' ? 'server:deps:retarget' : id);
+  const words = ${JSON.stringify(topLevelCommands)}.includes(process.argv[3]) ? 1 : 2;
+  process.argv.splice(2, 1 + words, process.argv.slice(3, 3 + words).join(' '));
 }
 const command = process.argv[2];
 const scenario = process.env.SMOKE_SCENARIO;
@@ -47,12 +58,12 @@ if (command === 'config') {
   console.log(process.env.PNPM_CONFIG_REGISTRY);
 } else if (command === 'create') {
   fs.mkdirSync(path.join(process.argv[4], 'node_modules'), { recursive: true });
-  // create-app leaves the application unconfigured and keeps the template's example for config:init to build from.
+  // create-app leaves the application unconfigured and keeps the template's example for config init to build from.
   fs.writeFileSync(path.join(process.argv[4], 'config.example.yml'), 'auth:\\n  secret: replace-me\\n');
   if (process.argv.includes('--json')) console.log(JSON.stringify({ status: 'success', dependenciesInstalled: true }));
-} else if (command === 'config:check' && process.cwd() === path.join(state, 'deploy', 'dist')) {
+} else if (command === 'config check' && process.cwd() === path.join(state, 'deploy', 'dist')) {
   // The deployed archive checks its configuration with its own CLI before it is started.
-  fs.appendFileSync(path.join(state, 'commands'), 'deploy:config:check\\n');
+  fs.appendFileSync(path.join(state, 'commands'), 'deployed config check\\n');
   if (process.env.APP_CONFIG_FILE !== path.join(state, 'deploy', 'config.yml')) throw new Error('The deployed check must read the deployed config.yml');
   if (scenario === 'deploy-config-check-fails') { console.log(JSON.stringify({ ok: false })); process.exit(1); }
   console.log(JSON.stringify({ ok: true, status: 'passed', findings: [] }));
@@ -62,17 +73,17 @@ if (command === 'config') {
   if (command === 'add') {
     // Installing a driver is what decides the dialect; the smoke script runs it only for a non-SQLite run.
     fs.appendFileSync(path.join(state, 'added'), process.argv[3] + '\\n');
-  } else if (command === 'config:init') {
+  } else if (command === 'config init') {
     if (scenario === 'config-init-fails') { console.log(JSON.stringify({ ok: false, reason: 'driver-missing' })); process.exit(1); }
     if (scenario === 'config-init-writes-nothing') { console.log(JSON.stringify({ ok: true })); }
     else {
       fs.writeFileSync('config.yml', 'auth:\\n  secret: generated\\n');
       console.log(JSON.stringify({ ok: true, status: 'configured', dialect: 'sqlite', configFile: path.join(process.cwd(), 'config.yml') }));
     }
-  } else if (command === 'config:check') {
+  } else if (command === 'config check') {
     if (scenario === 'config-check-fails') { console.log(JSON.stringify({ ok: false, findings: [{ level: 'error', code: 'connection-failed' }] })); process.exit(1); }
     console.log(JSON.stringify({ ok: true, status: 'passed', findings: [] }));
-  } else if (command === 'skills:sync') {
+  } else if (command === 'skills sync') {
     if (scenario === 'skills-fails') process.exit(8);
   } else if (command === 'test') {
     if (scenario === 'test-fails') process.exit(10);
@@ -103,7 +114,7 @@ if (command === 'config') {
       if (scenario === 'archive-contains-config') entries.push('config.yml');
       execFileSync('tar', ['-czf', 'storage/exports/dist.tar.gz', ...entries]);
     }
-  } else if (command === 'server:deps:retarget') {
+  } else if (command === 'dist retarget') {
     const target = process.argv[process.argv.indexOf('--target') + 1];
     const nodeVersion = process.argv[process.argv.indexOf('--node-version') + 1];
     if (!target || nodeVersion !== '24') throw new Error('Retarget must name a target and Node 24');
@@ -298,6 +309,36 @@ for (const basePath of ['', '/main', '/nested/app']) {
   });
 }
 
+test('the fake pnpm records application commands by the id the application CLI knows them by', async (t) => {
+  const state = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-fake-pnpm-')),
+  );
+  t.after(() => fs.rmSync(state, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(state, 'crm'));
+  const fake = path.join(state, 'pnpm');
+  fs.writeFileSync(fake, fakePnpm, { mode: 0o755 });
+  const { spawnSync } = await import('node:child_process');
+  const env = { ...process.env, SMOKE_STATE: state };
+  delete env.NOCOBASE_STRICT_STARTUP;
+  for (const argv of [
+    ['nocobase', 'config', 'check', '--json'],
+    ['nocobase', 'info', '--json'],
+    ['nocobase', 'plugin', 'register', 'audit-log'],
+  ]) {
+    // The id is recorded before the fake acts on it; what it then does with a command it has no branch for — it
+    // refuses to start one without strict startup — does not matter here.
+    spawnSync(process.execPath, [fake, ...argv], {
+      cwd: path.join(state, 'crm'),
+      env,
+      stdio: 'ignore',
+    });
+  }
+  assert.deepEqual(
+    fs.readFileSync(path.join(state, 'commands'), 'utf8').trim().split('\n'),
+    ['config check', 'info', 'plugin register'],
+  );
+});
+
 test('keeps waiting for production readiness when the progress log is unavailable', async (t) => {
   const result = await runSmoke(t, 'start-log-unavailable');
   assert.equal(result.code, 0, result.output);
@@ -328,22 +369,22 @@ for (const [scenario, commands, error] of [
   ],
   [
     'deploy-config-check-fails',
-    ['dev', 'build', 'start', 'deploy:config:check'],
+    ['dev', 'build', 'start', 'deployed config check'],
     'pnpm nocobase config check failed in the deployed archive',
   ],
   [
     'standalone-exits',
-    ['dev', 'build', 'start', 'deploy:config:check'],
+    ['dev', 'build', 'start', 'deployed config check'],
     'the deployed archive exited before the application became ready',
   ],
   [
     'retarget-fails',
-    ['dev', 'build', 'start', 'deploy:config:check', 'server:deps:retarget'],
+    ['dev', 'build', 'start', 'deployed config check', 'dist retarget'],
     'Retargeting native modules for',
   ],
   [
     'retarget-leaves-binaries',
-    ['dev', 'build', 'start', 'deploy:config:check', 'server:deps:retarget'],
+    ['dev', 'build', 'start', 'deployed config check', 'dist retarget'],
     'Binaries for other platforms remain',
   ],
 ]) {
@@ -351,9 +392,9 @@ for (const [scenario, commands, error] of [
     const result = await runSmoke(t, scenario);
     assert.equal(result.code, 1, result.output);
     assert.deepEqual(result.commands, [
-      'config:init',
-      'config:check',
-      'skills:sync',
+      'config init',
+      'config check',
+      'skills sync',
       'test',
       ...commands,
     ]);
@@ -364,7 +405,7 @@ for (const [scenario, commands, error] of [
 test('stops before anything runs when the configuration check fails', async (t) => {
   const result = await runSmoke(t, 'config-check-fails');
   assert.equal(result.code, 1, result.output);
-  assert.deepEqual(result.commands, ['config:init', 'config:check']);
+  assert.deepEqual(result.commands, ['config init', 'config check']);
   assert.match(result.output, /pnpm nocobase config check reported a problem/u);
 });
 
@@ -372,9 +413,9 @@ test('stops before dev when NocoBase package Skills cannot be synchronized', asy
   const result = await runSmoke(t, 'skills-fails');
   assert.equal(result.code, 8, result.output);
   assert.deepEqual(result.commands, [
-    'config:init',
-    'config:check',
-    'skills:sync',
+    'config init',
+    'config check',
+    'skills sync',
   ]);
 });
 
@@ -382,9 +423,9 @@ test('stops before dev, build, and start when the generated application tests fa
   const result = await runSmoke(t, 'test-fails');
   assert.equal(result.code, 1, result.output);
   assert.deepEqual(result.commands, [
-    'config:init',
-    'config:check',
-    'skills:sync',
+    'config init',
+    'config check',
+    'skills sync',
     'test',
   ]);
   assert.match(result.output, /pnpm test failed/u);

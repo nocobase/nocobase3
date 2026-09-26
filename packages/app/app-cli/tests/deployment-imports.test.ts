@@ -62,8 +62,10 @@ describe('what a deployment loads', () => {
   it('declares the development tooling as optional peers', () => {
     expect(optionalPeers.sort()).toEqual([
       '@nocobase/dev-config',
+      '@refinedev/cli',
       'prettier',
       'tar',
+      'tsc-alias',
       'tsx',
       'typescript',
       'vite',
@@ -78,7 +80,7 @@ describe('what a deployment loads', () => {
       path.join(packageRoot, 'src/runtime/run.ts'),
       path.join(packageRoot, 'src/runtime/registry.ts'),
       path.join(packageRoot, 'src/help/runtime-help.ts'),
-      path.join(packageRoot, 'src/plugins/index.ts'),
+      path.join(packageRoot, 'src/index.ts'),
       ...commands,
     ];
 
@@ -89,6 +91,14 @@ describe('what a deployment loads', () => {
 
     expect(commands.length).toBeGreaterThan(10);
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps the authoring entry free of the server runtime', () => {
+    // A plugin's cli/index.ts imports this entry whenever the command tree is assembled, --help included. The
+    // application's server is loaded only when a command asks for it, through withApp().
+    const reached = externalImports([path.join(packageRoot, 'src/index.ts')]);
+    expect(reached.has('@nocobase/app-server')).toBe(false);
+    expect(reached.has('@nocobase/db')).toBe(false);
   });
 
   it('registers no development command in a deployment', () => {

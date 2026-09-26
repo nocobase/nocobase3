@@ -176,7 +176,7 @@ export default function DevelopmentPage(): ReactElement {
             <p className='text-sm text-muted-foreground'>
               {t('development.buildDescription', {
                 defaultValue:
-                  'Run in your project directory. The archive is saved to storage/dist.tar.gz.',
+                  'Run in your project directory. The archive is saved to storage/exports/dist.tar.gz.',
               })}
             </p>
             <CopyableText
@@ -209,7 +209,7 @@ export default function DevelopmentPage(): ReactElement {
             <p className='text-sm text-muted-foreground'>
               {t('development.uploadDescription', {
                 defaultValue:
-                  'Upload storage/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
+                  'Upload storage/exports/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
               })}
             </p>
             <div className='flex flex-wrap items-center gap-3'>

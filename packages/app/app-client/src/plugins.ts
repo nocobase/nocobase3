@@ -543,8 +543,8 @@ function isDevelopment(): boolean {
  * reaches the production bundle.
  *
  * `env` is read through a local type and an optional access because this module is compiled by consumers that do not
- * load bundler ambient types, and is imported under plain Node by `client:inspect` and by Vitest, where
- * `import.meta.env` is undefined. Both of those are development contexts, so both see the routes.
+ * load bundler ambient types, and is imported under plain Node by Vitest, where `import.meta.env` is undefined.
+ * That is a development context, so it sees the routes.
  */
 export function defineDevRoutes(
   routes: readonly AppClientDevRouteDefinition[],

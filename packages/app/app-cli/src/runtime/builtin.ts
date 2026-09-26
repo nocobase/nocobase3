@@ -47,6 +47,12 @@ export const APPLICATION_TOPICS: readonly string[] = Object.freeze([
   'start',
 ]);
 
+/**
+ * Built-in commands that read the whole command tree. The runner assembles the tree for them, as it does for help,
+ * instead of dispatching them with nothing else loaded. They are registered wherever the command line runs.
+ */
+export const TREE_COMMANDS: readonly string[] = Object.freeze(['commands']);
+
 /** Registered only when the application's `package.json` sets `nocobase.cli.publishing`. */
 export const PUBLISHING_TOPIC = 'release';
 
@@ -80,6 +86,7 @@ export const RESERVED_TOPICS: readonly string[] = Object.freeze(
       ...Object.keys(builtinTopics),
       ...DEVELOPMENT_TOPICS,
       ...APPLICATION_TOPICS,
+      ...TREE_COMMANDS,
       APP_TOPIC,
     ]),
   ].sort(),

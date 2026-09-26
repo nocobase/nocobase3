@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { bindAppCommand, runAppCommand } from '@nocobase/app-cli/testing';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import WorkflowBuild from '../cli/build.ts';
 import WorkflowCheck from '../cli/check.ts';
@@ -108,36 +109,174 @@ describe('workflow CLI contribution', () => {
     );
 
     expect(JSON.parse(stdout)).toMatchObject({
+      schemaVersion: 1,
       ok: true,
+      command: 'workflow check',
       status: 'success',
+      result: {
+        file: path.join(packageRoot, fixture, 'workflow.ts'),
+        nodes: expect.any(Number),
+      },
+    });
+  });
+});
+
+/**
+ * The commands bound to a throwaway application, the way the runner points them at the one it located. The working
+ * directory is moved elsewhere on purpose: a default path belongs to the application, not to where the command ran.
+ */
+describe('workflow commands bound to an application', () => {
+  let root: string;
+  let elsewhere: string;
+  let Build: typeof WorkflowBuild;
+  let Check: typeof WorkflowCheck;
+
+  beforeEach(async () => {
+    root = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'workflow-cli-'));
+    elsewhere = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), 'workflow-cli-cwd-'),
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(elsewhere);
+    Build = bindAppCommand(WorkflowBuild, {
+      id: 'workflow:build',
+      rootDir: root,
+    });
+    Check = bindAppCommand(WorkflowCheck, {
+      id: 'workflow:check',
+      rootDir: root,
     });
   });
 
-  it('builds application workflow artifacts with default paths', async () => {
-    const root = await fsPromises.mkdtemp(
-      path.join(os.tmpdir(), 'workflow-cli-build-'),
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await fsPromises.rm(root, { recursive: true, force: true });
+    await fsPromises.rm(elsewhere, { recursive: true, force: true });
+  });
+
+  async function writeWorkflow(title: string, nodes = '[]'): Promise<string> {
+    const packagePath = path.join(root, 'server/workflows/example');
+    await fsPromises.mkdir(packagePath, { recursive: true });
+    await fsPromises.writeFile(
+      path.join(packagePath, 'workflow.ts'),
+      `import { defineWorkflow, RunInstruction } from ${JSON.stringify(path.join(packageRoot, 'index.ts'))};\nexport default defineWorkflow({ title: ${JSON.stringify(title)}, nodes: ${nodes} });\n`,
     );
-    try {
-      const packagePath = path.join(root, 'server/workflows/example');
-      await fsPromises.mkdir(packagePath, { recursive: true });
-      await fsPromises.writeFile(
-        path.join(packagePath, 'workflow.ts'),
-        `import { defineWorkflow } from ${JSON.stringify(path.join(packageRoot, 'index.ts'))};\nexport default defineWorkflow({ title: 'CLI build', nodes: [] });\n`,
-      );
-      await execFileAsync(process.execPath, [appCli, 'workflow', 'build'], {
-        cwd: root,
-        env: appEnv,
-      });
-      const keyRoot = path.join(root, 'dist/server/workflows/example');
-      const [digest] = await fsPromises.readdir(keyRoot);
-      await expect(
-        fsPromises.readFile(
-          path.join(keyRoot, digest, 'workflow.json'),
-          'utf8',
-        ),
-      ).resolves.toContain('"title": "CLI build"');
-    } finally {
-      await fsPromises.rm(root, { recursive: true, force: true });
-    }
+    return packagePath;
+  }
+
+  // A config value of the wrong type, which the typecheck phase rejects.
+  const brokenNodes =
+    "[RunInstruction.create({ key: 'run', config: { module: 1 } })]";
+
+  /** The directory of the one Artifact built for the `example` package. */
+  async function artifactDirectory(): Promise<string> {
+    const keyRoot = path.join(root, 'dist/server/workflows/example');
+    const [digest] = await fsPromises.readdir(keyRoot);
+    return path.join(keyRoot, digest ?? '');
+  }
+
+  it('builds from the default paths inside the application, wherever the command runs', async () => {
+    await writeWorkflow('CLI build');
+
+    const run = await runAppCommand(Build, []);
+
+    expect(run.result).toEqual({
+      packages: 1,
+      distRoot: path.join(root, 'dist/server/workflows'),
+    });
+    await expect(
+      fsPromises.readFile(
+        path.join(await artifactDirectory(), 'workflow.json'),
+        'utf8',
+      ),
+    ).resolves.toContain('"title": "CLI build"');
+    await expect(fsPromises.readdir(elsewhere)).resolves.toEqual([]);
+  });
+
+  // `nocobase build` runs the afterServerBuild hook from the application root, with a relative --resource-root.
+  it('reads compiled resources from a relative --resource-root, as the build hook passes it', async () => {
+    await writeWorkflow('Hook build');
+    const compiled = path.join(root, 'dist/server/workflows/example');
+    await fsPromises.mkdir(compiled, { recursive: true });
+    // What `tsc` leaves there: the compiled definition and a module it references.
+    await fsPromises.writeFile(
+      path.join(compiled, 'workflow.js'),
+      'export default {};\n',
+    );
+    await fsPromises.writeFile(
+      path.join(compiled, 'helper.js'),
+      'export {};\n',
+    );
+    vi.mocked(process.cwd).mockReturnValue(root);
+    const [, , , , ...hookArgs] =
+      cliPlugin.buildHooks.afterServerBuild?.[0]?.command ?? [];
+
+    const run = await runAppCommand(Build, hookArgs);
+
+    expect(hookArgs).toEqual(['--resource-root', './dist/server/workflows']);
+    expect(run.result).toMatchObject({ packages: 1 });
+    await expect(
+      fsPromises.readdir(await artifactDirectory()),
+    ).resolves.toContain('helper.js');
+  });
+
+  it('fails a build with WORKFLOW_BUILD_FAILED and the source issues', async () => {
+    await writeWorkflow('Broken build', brokenNodes);
+
+    const run = await runAppCommand(Build, ['--json']);
+
+    expect(run.json()).toMatchObject({
+      ok: false,
+      command: 'workflow build',
+      error: {
+        code: 'WORKFLOW_BUILD_FAILED',
+        message: expect.stringContaining('Workflow package "example"'),
+        details: {
+          sourceRoot: path.join(root, 'server/workflows'),
+          issues: [expect.objectContaining({ phase: 'typecheck' })],
+        },
+      },
+    });
+    expect(run.exitCode).toBe(1);
+  });
+
+  it('prints the checked file and node count as the --json document', async () => {
+    const packagePath = await writeWorkflow('CLI check');
+
+    const run = await runAppCommand(Check, [packagePath, '--json']);
+
+    expect(run.json()).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      command: 'workflow check',
+      status: 'success',
+      result: { file: path.join(packagePath, 'workflow.ts'), nodes: 0 },
+      warnings: [],
+    });
+  });
+
+  it('fails a check with WORKFLOW_CHECK_FAILED and the issues in its details', async () => {
+    const packagePath = await writeWorkflow('Broken check', brokenNodes);
+
+    const run = await runAppCommand(Check, [packagePath, '--json']);
+
+    expect(run.json()).toMatchObject({
+      ok: false,
+      error: {
+        code: 'WORKFLOW_CHECK_FAILED',
+        details: { issues: [expect.objectContaining({ phase: 'typecheck' })] },
+      },
+    });
+    expect(run.exitCode).toBe(1);
+  });
+
+  it('fails a check with WORKFLOW_PACKAGE_NOT_FOUND for a path that does not exist', async () => {
+    const run = await runAppCommand(Check, ['missing']);
+
+    // Without --json the failure escapes for oclif to print. A typed path resolves from the current directory.
+    expect(run.error).toMatchObject({
+      errorCode: 'WORKFLOW_PACKAGE_NOT_FOUND',
+      message: `Workflow package not found: ${path.join(elsewhere, 'missing')}`,
+    });
+    expect(run.exitCode).toBe(1);
   });
 });

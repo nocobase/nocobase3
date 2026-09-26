@@ -106,6 +106,10 @@ server/                  API server
 ├── standalone.ts        Node entry point
 └── embedded.ts          Entry point when a host process mounts it
 
+cli/                     Command line
+├── plugins.ts           Which plugins contribute commands and build and dev hooks
+└── commands/            Your own commands, under the app topic (created when needed)
+
 database/
 └── main/
     ├── migrations/      Your schema history (initially empty)
@@ -412,7 +416,7 @@ HUB_APP_ID=crm
 HUB_API_KEY=your-publishing-key
 ```
 
-Use `release upload --deploy --json` to upload and deploy, or omit `--deploy` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/exports/dist.tar.gz` in the App root; `--timeout` defaults to 600 seconds. `release deploy --release-id <id> --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. With `--json`, each run prints one JSON document on stdout, success or failure; its `operation` is `release:upload` or `release:deploy`. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid arguments or local input, and 3 for an unconfirmed outcome caused by a connection failure, timeout, malformed response, or unknown deployment status. Exit 3 does not mean the deployment failed or was cancelled: inspect the deployment in Hub and retry with the same idempotency key if necessary. `--no-wait` validates the deployment acceptance response too; it never treats an unknown status as successful acceptance.
+Use `release upload --deploy --json` to upload and deploy, or omit `--deploy` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/exports/dist.tar.gz` in the App root; `--timeout` defaults to 600 seconds. `release deploy --release-id <id> --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. With `--json`, each run prints one JSON document on stdout, success or failure; its `command` is `release upload` or `release deploy`, the Hub's answer is in `result`, and a failure's `error.details` carries the idempotency key and any release or deployment ids already known. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid arguments or local input, and 3 for an unconfirmed outcome caused by a connection failure, timeout, malformed response, or unknown deployment status. Exit 3 does not mean the deployment failed or was cancelled: inspect the deployment in Hub and retry with the same idempotency key if necessary. `--no-wait` validates the deployment acceptance response too; it never treats an unknown status as successful acceptance.
 
 Publishing keys reuse Hub's `upload-release` and `deploy` actions and remain restricted to their selected Apps and their owner's current permissions. Uploading with deployment needs both permissions; waiting uses a minimal deployment status endpoint under `deploy`. These commands call Hub over HTTP and never load this application's server or connect directly to Host.
 

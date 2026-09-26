@@ -81,20 +81,21 @@ The handbook routes each frontend task to its document: pages, routes and naviga
 
 Read the page for the task in front of you. Do not read all of them.
 
-| Task                                                                                                   | Read                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Anything under `client/`: pages, routes, components, styling, forms, API calls, copy, frontend tests   | [frontend workflow](references/frontend/ui-workflow.md), then [frontend handbook](references/frontend/frontend-dev.md) |
-| Add an API endpoint, a webhook, or a callback; authenticate and authorize it                           | [server routes](references/server-routes.md)                                                                           |
-| Query or write data, resolve the database, work with transactions                                      | [database and data access](references/database-and-data.md)                                                            |
-| Create a table, alter a column, add an index, write required initial data                              | [migrations and seeds](references/migrations.md)                                                                       |
-| Switch the database, register a dialect, add a second connection                                       | [database connections](references/database-connections.md)                                                             |
-| Translate server-produced text, add a language, set the default language                               | [internationalization](references/i18n.md)                                                                             |
-| Departments, positions or another organisation dimension that permission sets are assigned to          | [organisation dimension](references/organization.md)                                                                   |
-| Design who gets what across departments, heads and cross-department work                               | [organisation permission design](references/organization/permission-design.md)                                         |
-| Add a reusable service, share it across routes, run background or scheduled work                       | [services and jobs](references/services-and-jobs.md)                                                                   |
-| Write server and migration tests, choose a test layer, verify before finishing                         | [testing and verification](references/testing.md)                                                                      |
-| Run a CLI command: configure, migrate, manage plugins, read the data model, add an application command | [the command line](references/cli.md)                                                                                  |
-| Understand behavior inherited from an official application template                                    | [template variants](references/template-variants.md)                                                                   |
+| Task                                                                                                 | Read                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Anything under `client/`: pages, routes, components, styling, forms, API calls, copy, frontend tests | [frontend workflow](references/frontend/ui-workflow.md), then [frontend handbook](references/frontend/frontend-dev.md) |
+| Add an API endpoint, a webhook, or a callback; authenticate and authorize it                         | [server routes](references/server-routes.md)                                                                           |
+| Query or write data, resolve the database, work with transactions                                    | [database and data access](references/database-and-data.md)                                                            |
+| Create a table, alter a column, add an index, write required initial data                            | [migrations and seeds](references/migrations.md)                                                                       |
+| Switch the database, register a dialect, add a second connection                                     | [database connections](references/database-connections.md)                                                             |
+| Translate server-produced text, add a language, set the default language                             | [internationalization](references/i18n.md)                                                                             |
+| Departments, positions or another organisation dimension that permission sets are assigned to        | [organisation dimension](references/organization.md)                                                                   |
+| Design who gets what across departments, heads and cross-department work                             | [organisation permission design](references/organization/permission-design.md)                                         |
+| Add a reusable service, share it across routes, run background or scheduled work                     | [services and jobs](references/services-and-jobs.md)                                                                   |
+| Write server and migration tests, choose a test layer, verify before finishing                       | [testing and verification](references/testing.md)                                                                      |
+| Run a CLI command: configure, migrate, manage plugins, read the data model                           | [the command line](references/cli.md)                                                                                  |
+| Add or change an application command under `cli/commands/`                                           | [adding an application command](references/commands.md)                                                                |
+| Understand behavior inherited from an official application template                                  | [template variants](references/template-variants.md)                                                                   |
 
 A feature with a page and an API usually needs migrations, server routes, and a frontend change that follows the frontend workflow.
 

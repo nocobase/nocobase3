@@ -1,59 +1,42 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-
-import { Command, Flags } from '@oclif/core';
+import { AppCommand } from '@nocobase/app-cli';
+import { Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-export default class ScheduleSync extends Command {
+/** What `scheduler sync` returns, and the `result` of its `--json` document. */
+export interface ScheduleSyncResult {
+  /** Whether declarations missing from the source were deactivated. */
+  readonly finalize: boolean;
+}
+
+export default class ScheduleSync extends AppCommand {
   static override summary = 'Synchronize declared application schedules.';
   static override flags: {
     finalize: Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     finalize: Flags.boolean({
       default: false,
       description: 'Deactivate declarations missing from the source.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<ScheduleSyncResult> {
     const { flags } = await this.parse(ScheduleSync);
-    const rootDir = process.cwd();
-    const [{ resolveStandaloneAppRuntime }, { schedulerStartupModeToken }] =
-      await Promise.all([
-        import('@nocobase/app-server/node'),
-        import('../server/providers/scheduler.js'),
-      ]);
-    const runtimeModule = await import(
-      pathToFileURL(path.join(rootDir, 'server/runtime.js')).href
-    );
-    const appModule = await import(
-      pathToFileURL(path.join(rootDir, 'server/app.js')).href
-    );
-    const runtime = await resolveStandaloneAppRuntime(runtimeModule.default, {
-      rootDir,
-    });
-    const app = appModule.createApp(runtime);
-    app.container.instance(schedulerStartupModeToken, {
-      kind: 'sync-only',
-      finalize: flags.finalize,
-    });
-    try {
+    // Loaded here rather than at the top of the file: the command tree imports this module for `--help` too.
+    const { schedulerStartupModeToken } =
+      await import('../server/providers/scheduler.js');
+    await this.withApp(async ({ app }) => {
+      // Starting in sync-only mode reconciles the manifest without leaving a worker behind.
+      app.container.instance(schedulerStartupModeToken, {
+        kind: 'sync-only',
+        finalize: flags.finalize,
+      });
       await app.start();
-      const message = flags.finalize
+    });
+    this.log(
+      flags.finalize
         ? 'Schedule manifest synchronized and missing definitions deactivated.'
-        : 'Schedule manifest synchronized.';
-      if (flags.json) {
-        this.logJson({ ok: true, status: 'success', finalize: flags.finalize });
-      } else {
-        this.log(message);
-      }
-    } finally {
-      await app.shutdown();
-    }
+        : 'Schedule manifest synchronized.',
+    );
+    return { finalize: flags.finalize };
   }
 }
