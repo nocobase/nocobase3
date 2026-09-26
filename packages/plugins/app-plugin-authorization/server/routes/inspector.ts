@@ -33,24 +33,25 @@ interface InspectRequest {
 /** Every `/inspector` route, gated by `settings:authorization.inspector` `inspect`. */
 export function createInspectorHandler(
   host: AuthorizationExtensionHost & Pick<Authorization, 'for'>,
-  permissionSets: Pick<PermissionSetsApi, 'getEffective' | 'protection'>,
+  permissionSets: Pick<
+    PermissionSetsApi,
+    'getEffective' | 'protection' | 'listAssignments'
+  >,
 ): AuthorizationRouteHandler {
   const routes = createSettingsRouter();
   const require = (authorization: AuthorizationContext) =>
     requireSettings(authorization, INSPECTOR_SETTINGS, 'inspect');
-  // The identity the request middleware builds for this subject.
+  // The subjects the request middleware adds for this principal.
+  const subjectsOf = async (
+    subject: AuthorizationSubject,
+  ): Promise<AuthorizationSubject[]> => [
+    ...(subject.type === 'user' ? [{ type: 'authenticated', id: '*' }] : []),
+    ...(await host.subjects.resolveFor(subject)),
+  ];
   const contextFor = async (
     subject: AuthorizationSubject,
   ): Promise<AuthorizationContext> =>
-    host.for({
-      principal: subject,
-      subjects: [
-        ...(subject.type === 'user'
-          ? [{ type: 'authenticated', id: '*' }]
-          : []),
-        ...(await host.subjects.resolveFor(subject)),
-      ],
-    });
+    host.for({ principal: subject, subjects: await subjectsOf(subject) });
 
   routes.get('/inspector/options', async (context) => {
     await require(context.env.authorization);
@@ -130,15 +131,12 @@ export function createInspectorHandler(
     );
     if (!subject)
       return context.json({ code: 'INVALID_AUTHORIZATION_INPUT' }, 400);
-    const sets = await permissionSets.getEffective({
-      principal: subject,
-      subjects: [
-        ...(subject.type === 'user'
-          ? [{ type: 'authenticated', id: '*' }]
-          : []),
-        ...(await host.subjects.resolveFor(subject)),
-      ],
-    });
+    const subjects = await subjectsOf(subject);
+    const [sets, assignments] = await Promise.all([
+      permissionSets.getEffective({ principal: subject, subjects }),
+      permissionSets.listAssignments(),
+    ]);
+    const holders = [subject, ...subjects];
     const resources = [
       ...new Map(
         sets.flatMap((set) =>
@@ -158,6 +156,25 @@ export function createInspectorHandler(
         ),
         types: [...new Set(resources.map((resource) => resource.type))],
         resources,
+        identity: {
+          subjects: subjects.map(({ type, id }) => ({ type, id })),
+        },
+        // Which assignment of the principal or its subjects brings each set.
+        sets: sets.map((set) => ({
+          key: set.key,
+          ...(set.title === undefined ? {} : { title: set.title }),
+          sources: assignments
+            .filter(
+              (assignment) =>
+                assignment.permissionSet === set.key &&
+                holders.some(
+                  (holder) =>
+                    holder.type === assignment.subject.type &&
+                    holder.id === assignment.subject.id,
+                ),
+            )
+            .map(({ subject: { type, id } }) => ({ type, id })),
+        })),
       },
     });
   });

@@ -304,3 +304,30 @@ describe('the authorization provider', () => {
     }
   });
 });
+
+describe('refreshing clients after an assignment changes', () => {
+  it('refreshes one user for a user, and everyone for any other subject', async () => {
+    const onUserPermissionsChanged = vi.fn();
+    const onAuthenticatedPermissionsChanged = vi.fn();
+    const authz = createAppAuthorization({
+      connection,
+      onUserPermissionsChanged,
+      onAuthenticatedPermissionsChanged,
+    });
+
+    await authz.permissionSets.notifyAssignmentsChanged({
+      type: 'user',
+      id: 'alice',
+    });
+    expect(onUserPermissionsChanged).toHaveBeenCalledWith('alice');
+    expect(onAuthenticatedPermissionsChanged).not.toHaveBeenCalled();
+
+    for (const subject of [
+      { type: 'authenticated', id: '*' },
+      { type: 'department', id: 'sales' },
+    ])
+      await authz.permissionSets.notifyAssignmentsChanged(subject);
+    expect(onAuthenticatedPermissionsChanged).toHaveBeenCalledTimes(2);
+    expect(onUserPermissionsChanged).toHaveBeenCalledTimes(1);
+  });
+});

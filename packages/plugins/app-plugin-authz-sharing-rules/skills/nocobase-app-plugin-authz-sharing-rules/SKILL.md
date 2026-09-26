@@ -9,6 +9,8 @@ A sharing rule adds selected records, or a record access selection, for the subj
 
 Read the installed `nocobase-app-plugin-authorization` Skill first for composite resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-sharing-rules/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
 
+For sharing between departments, read the application development Skill's `references/organization/permission-design.md` first. A rule whose recipient is a department shares specific records with it; a viewer-relative department scope such as 本部门及下属部门 is computed for the viewer and cannot select another department's records. The guide's optional sharing section covers this plugin, and its core section says what remains with permission sets alone.
+
 ## Development workflow
 
 1. Identify the real collaboration exception: who receives which records, for which actions, and why. Use explicit records for one handover; use a record access selection for a maintained region or team rule.
@@ -18,7 +20,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for composite
 5. Verify the handover works, an unshared parent still blocks the workflow, restrictions still exclude confidential records, and sharing alone cannot activate a missing operation.
 6. Revoke the recipient or the team's permission set and verify the next request loses only that source. Independent direct-user sharing and direct assignments must survive.
 
-The sales example's Proposal team handover shares quote edit and submit plus the parent project's submit scope. Do not copy its demo ids into a production rule.
+For example, a quote handover shares quote edit and submit plus the parent project's submit scope with a delegated engineer. Use the real record ids, never sample ones.
 
 ## Install
 
@@ -42,7 +44,7 @@ During setup the factory registers the settings item `authorization.sharing-rule
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite and `sales.team` its own subject type, both defined as the main Skill describes.
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite and `org.team` its own subject type, both defined as the main Skill describes.
 
 ```ts
 import { selection } from '@nocobase/authorization/core';
@@ -61,7 +63,7 @@ const rules = (
 await rules.create(
   defineSharingRule('proposal-handover', quotes.reference())
     .title('Proposal handover')
-    .subjects({ type: 'sales.team', id: 'proposal' })
+    .subjects({ type: 'org.team', id: 'proposal' })
     .scope('edit', 'quotes', selection.records(['quote-7']))
     .scope('submit', 'quotes', selection.records(['quote-7']))
     .scope('submit', 'projects', selection.records(['project-3']))

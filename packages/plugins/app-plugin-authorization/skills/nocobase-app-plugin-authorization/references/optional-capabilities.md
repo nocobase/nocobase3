@@ -8,7 +8,7 @@ Permission sets, page authorization, composite declarations, workspace placement
 | Additional records for selected collaborators who hold the action | `nocobase-app-plugin-authz-sharing-rules`     |
 | Narrow granted records for selected subjects                      | `nocobase-app-plugin-authz-restriction-rules` |
 
-Before designing with one of these capabilities, locate and read its Skill in the current App's `.agents/skills/`. If the corresponding Skill cannot be found, treat the capability as unsupported in this App and tell the user it requires separate development. Do not assume the example's plugin composition is present, invent an API, write its tables, or silently add a dependency/config factory. Continue independent work on supported capabilities; do not silently omit a required access boundary.
+Before designing with one of these capabilities, locate and read its Skill in the current App's `.agents/skills/`. If the corresponding Skill cannot be found, treat the capability as unsupported in this App and tell the user it requires separate development. Do not assume a rule plugin is present, invent an API, write its tables, or silently add a dependency/config factory. Continue independent work on supported capabilities; do not silently omit a required access boundary.
 
 Finding the Skill is the development entry point, not proof of runtime activation. Follow that Skill to verify the package, client/server registrations, authorization configuration and migrations. A present but unconfigured plugin must be integrated according to its instructions before use.
 
