@@ -433,13 +433,22 @@ describe('app plugin register command', () => {
   });
 
   it('suggests commands that target the same workspace application the inspection did', async () => {
-    // The form the repository's own Skills use. Inspection only reads, so the real templates serve as the workspace.
-    const repositoryRoot = path.resolve(
-      import.meta.dirname,
-      '..',
-      '..',
-      '..',
-      '..',
+    // The form the repository's own Skills use, against a workspace of its own: the real repository's `packages/` holds
+    // other tests' temporary applications while they run, and the workspace scan would read them mid-write.
+    const repositoryRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'nb3-inspect-workspace-'),
+    );
+    created.push(repositoryRoot);
+    const hub = path.join(
+      repositoryRoot,
+      'packages',
+      'templates',
+      'app-template-hub',
+    );
+    await mkdir(hub, { recursive: true });
+    await writeFile(
+      path.join(hub, 'package.json'),
+      `${JSON.stringify({ name: '@nocobase/app-template-hub', private: true })}\n`,
     );
     const inspected = await runCommand(config, 'plugin:inspect', [
       'not-installed',
