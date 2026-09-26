@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { EXIT_INVALID, InstallerError } from './errors.ts';
+import { EXIT_INVALID, InstallerError, isInstallerError } from './errors.ts';
 import {
   APP_NAME,
   HUB_BASE_PATH,
@@ -13,7 +13,12 @@ import {
 import type { Reporter } from './output.ts';
 import { currentNodeMajor } from './prechecks.ts';
 import { normalizeRegistry } from './registry.ts';
-import { CommandFailedError, runCommand, tail } from './run-command.ts';
+import {
+  CommandFailedError,
+  runCommand,
+  tail,
+  type RunCommand,
+} from './run-command.ts';
 import type { BuildTarget } from './state.ts';
 
 /** Every official database dialect; each has its driver in `@nocobase/db-<dialect>`. */
@@ -120,7 +125,7 @@ export interface PrepareReleaseOptions {
   drivers: readonly string[];
   keepSource: boolean;
   reporter: Reporter;
-  run?: typeof runCommand;
+  run?: RunCommand;
 }
 
 export interface PreparedRelease {
@@ -133,6 +138,8 @@ function stepFailure(
   step: string,
   error: unknown,
 ): InstallerError {
+  // An interrupt, or a failure that already says what went wrong, passes through as it is.
+  if (isInstallerError(error)) return error;
   const output =
     error instanceof CommandFailedError
       ? tail(`${error.stdout}\n${error.stderr}`)
@@ -194,6 +201,7 @@ export async function prepareRelease(
         { cwd: build, env, timeoutMs: 20 * 60_000 },
       ));
     } catch (error) {
+      if (isInstallerError(error)) throw error;
       const result =
         error instanceof CommandFailedError
           ? parseCreateResult(error.stdout)

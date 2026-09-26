@@ -19,6 +19,7 @@ import {
   type UpgradeInput,
 } from './commands/upgrade.ts';
 import { EXIT_INVALID, EXIT_OK, InstallerError } from './lib/errors.ts';
+import { installInterruptHandlers } from './lib/interrupt.ts';
 import {
   createReporter,
   errorEnvelope,
@@ -28,6 +29,7 @@ import {
 } from './lib/output.ts';
 import { createPm2, type Pm2 } from './lib/pm2.ts';
 import type { FetchLike } from './lib/registry.ts';
+import type { RunCommand } from './lib/run-command.ts';
 
 export interface RunInstallerOptions {
   argv: string[];
@@ -38,6 +40,7 @@ export interface RunInstallerOptions {
   cwd?: string;
   pm2?: Pm2;
   fetchImpl?: FetchLike;
+  run?: RunCommand;
 }
 
 interface FlagHelp {
@@ -153,13 +156,21 @@ export async function runInstaller(
     return EXIT_OK;
   }
 
+  // `install --help` asks for help, not for a flag the command does not define.
+  if (rest.includes('--help') || rest.includes('-h')) {
+    stdout.write(`${formatHelp(options.binary)}\n`);
+    return EXIT_OK;
+  }
+
   const deps: CommandDeps = {
     reporter,
-    pm2: options.pm2 ?? createPm2(),
+    pm2: options.pm2 ?? createPm2('pm2', options.run),
     fetchImpl: options.fetchImpl,
     cwd: options.cwd,
+    run: options.run,
   };
 
+  const removeInterruptHandlers = installInterruptHandlers(stderr);
   try {
     let outcome: CommandOutcome;
     if (command === 'install') {
@@ -212,5 +223,7 @@ export async function runInstaller(
       stderr.write(`${formatError(error)}\n`);
     }
     return exitCodeOf(error);
+  } finally {
+    removeInterruptHandlers();
   }
 }

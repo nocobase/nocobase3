@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { InstallerError, type Suggestion } from './errors.ts';
-import { CommandFailedError, runCommand, tail } from './run-command.ts';
+import {
+  CommandFailedError,
+  runCommand,
+  tail,
+  type RunCommand,
+} from './run-command.ts';
 
 /** The application CLI's `--json` envelope, as far as the installer reads it. */
 export interface AppCliEnvelope {
@@ -39,6 +44,23 @@ export interface AppCliOptions {
   cwd: string;
   /** `hub.env` values, applied over the installer's own environment. */
   env: Record<string, string>;
+  run?: RunCommand;
+}
+
+/**
+ * The command as it may appear in a message: `config set` values are masked, since a `--set` may carry a secret that
+ * would otherwise end up in the JSON result and the terminal. `--from-env` pairs name a variable, not a value, and stay.
+ */
+export function describeAppCommand(args: readonly string[]): string {
+  const setting = args[0] === 'config' && args[1] === 'set';
+  let fromEnv = false;
+  const shown = args.map((arg) => {
+    if (arg === '--from-env') fromEnv = true;
+    if (!setting || fromEnv || arg.startsWith('-')) return arg;
+    const index = arg.indexOf('=');
+    return index > 0 ? `${arg.slice(0, index + 1)}***` : arg;
+  });
+  return `nocobase ${shown.join(' ')}`;
 }
 
 /**
@@ -50,11 +72,12 @@ export async function runAppCli(
   options: AppCliOptions,
 ): Promise<AppCliEnvelope> {
   const entry = path.join(options.releaseDir, 'dist/cli/index.js');
-  const label = `nocobase ${args.join(' ')}`;
+  const label = describeAppCommand(args);
+  const run = options.run ?? runCommand;
   let stdout: string;
   let stderr: string;
   try {
-    ({ stdout, stderr } = await runCommand(
+    ({ stdout, stderr } = await run(
       process.execPath,
       [entry, ...args, '--json'],
       {
