@@ -1,8 +1,24 @@
-import { Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
-import path from 'node:path';
+import { AppCommand, CommandError, appPath } from '@nocobase/app-cli';
+import type { Command, Interfaces } from '@oclif/core';
 
-export default class WorkflowBuild extends Command {
+import type { WorkflowSourceIssue } from '../build/index.js';
+
+/** What `workflow build` returns, and the `result` of its `--json` document. */
+export interface WorkflowBuildResult {
+  /** How many workflow packages were built. */
+  readonly packages: number;
+  /** The absolute directory the Artifacts were written to. */
+  readonly distRoot: string;
+}
+
+/** The `error.details` of a failed build. */
+export interface WorkflowBuildFailureDetails {
+  readonly sourceRoot: string;
+  /** The source issues of the package that failed, when validation is what failed. */
+  readonly issues?: readonly WorkflowSourceIssue[];
+}
+
+export default class WorkflowBuild extends AppCommand {
   static override summary = 'Build application workflow artifacts.';
   static override description =
     'Validates every workflow package in the source root and writes its deployable Artifact to the distribution root.';
@@ -14,58 +30,54 @@ export default class WorkflowBuild extends Command {
   ];
 
   static override flags: {
-    'source-root': Interfaces.OptionFlag<string, Interfaces.CustomOptions>;
-    'dist-root': Interfaces.OptionFlag<string, Interfaces.CustomOptions>;
-    'resource-root': Interfaces.OptionFlag<
-      string | undefined,
-      Interfaces.CustomOptions
-    >;
-    json: Interfaces.BooleanFlag<boolean>;
+    'source-root': Interfaces.OptionFlag<string>;
+    'dist-root': Interfaces.OptionFlag<string>;
+    'resource-root': Interfaces.OptionFlag<string | undefined>;
   } = {
-    'source-root': Flags.string({
+    'source-root': appPath({
       default: 'server/workflows',
-      description: 'Workflow source directory, relative to the app root.',
+      description: 'Workflow source directory.',
     }),
-    'dist-root': Flags.string({
+    'dist-root': appPath({
       default: 'dist/server/workflows',
-      description: 'Artifact output directory, relative to the app root.',
+      description: 'Artifact output directory.',
     }),
-    'resource-root': Flags.string({
+    'resource-root': appPath({
       description:
-        'Compiled workflow resource directory, relative to the app root.',
-    }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
+        'Compiled workflow resource directory. Defaults to the source root.',
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<WorkflowBuildResult> {
     const { flags } = await this.parse(WorkflowBuild);
-    const cwd = process.cwd();
-    const sourceRoot = path.resolve(cwd, flags['source-root']);
-    const distRoot = path.resolve(cwd, flags['dist-root']);
-    const { buildApplicationWorkflows } = await import('../build/index.js');
-    const result = await buildApplicationWorkflows({
-      sourceRoot,
-      distRoot,
-      ...(flags['resource-root'] === undefined
-        ? {}
-        : { resourceRoot: path.resolve(cwd, flags['resource-root']) }),
-    });
-    const output = {
-      ok: true,
-      status: 'success',
-      packages: result.packages,
-      distRoot,
-    };
-
-    if (flags.json) {
-      this.logJson(output);
-      return;
+    const sourceRoot = flags['source-root'];
+    const distRoot = flags['dist-root'];
+    const { buildApplicationWorkflows, WorkflowSourceCheckError } =
+      await import('../build/index.js');
+    let packages: number;
+    try {
+      ({ packages } = await buildApplicationWorkflows({
+        sourceRoot,
+        distRoot,
+        ...(flags['resource-root'] === undefined
+          ? {}
+          : { resourceRoot: flags['resource-root'] }),
+      }));
+    } catch (error) {
+      const cause = error instanceof Error ? error.cause : undefined;
+      const details: WorkflowBuildFailureDetails = {
+        sourceRoot,
+        ...(cause instanceof WorkflowSourceCheckError
+          ? { issues: cause.issues }
+          : {}),
+      };
+      throw new CommandError(
+        error instanceof Error ? error.message : String(error),
+        { code: 'WORKFLOW_BUILD_FAILED', details, cause: error },
+      );
     }
-    this.log(
-      `Workflow build generated ${output.packages} Artifact(s) in ${output.distRoot}`,
-    );
+
+    this.log(`Workflow build generated ${packages} Artifact(s) in ${distRoot}`);
+    return { packages, distRoot };
   }
 }

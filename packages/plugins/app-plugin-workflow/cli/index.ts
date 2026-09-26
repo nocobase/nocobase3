@@ -1,4 +1,4 @@
-import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli/plugins';
+import { defineCliPlugin, type AppCliPlugin } from '@nocobase/app-cli';
 
 import WorkflowBuild from './build.ts';
 import WorkflowCheck from './check.ts';

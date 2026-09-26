@@ -51,7 +51,7 @@ pnpm --version
 pnpm nocobase config init --dialect sqlite --json
 ```
 
-其他数据库需要先安装驱动，例如 `pnpm add @nocobase/db-postgres`，再用同样的命令指定该方言。`pnpm nocobase config init` 不安装任何东西，驱动缺失时它不写入任何文件，只在结果里给出 `suggestedCommand`，也就是对应的 `pnpm add`；执行它之后重新运行 `config init` 即可。配置文件中的方言名称不能代替驱动。结果里的 `requiredSettings` 列出还是占位值的连接字段，接着用 `config set` 设置：
+其他数据库需要先安装驱动，例如 `pnpm add @nocobase/db-postgres`，再用同样的命令指定该方言。`pnpm nocobase config init` 不安装任何东西，驱动缺失时它不写入任何文件，返回 `error.code` 为 `DRIVER_MISSING` 的失败结果，`error.suggestions[0].run` 就是对应的 `pnpm add`；执行它之后重新运行 `config init` 即可。配置文件中的方言名称不能代替驱动。`result.requiredSettings` 列出还是占位值的连接字段，接着用 `config set` 设置：
 
 ```bash
 pnpm nocobase config set database.connections.main.host=db.internal database.connections.main.username=crm --json
@@ -64,7 +64,7 @@ pnpm nocobase config set --from-env database.connections.main.password=CRM_DB_PA
 pnpm nocobase config check --json
 ```
 
-检查失败时，每个问题都附带可以直接执行的 `fix`。保留已有业务数据，不要通过删除数据库或配置文件来触发重新配置：对已配置的应用运行 `config init` 会报告 `unchanged`，只有用户明确要求替换配置时才使用 `--force`。生成的应用没有安装页面，配置完成之前 `pnpm dev` 会拒绝启动。
+检查失败时，每个问题都附带可以直接执行的 `fix`。保留已有业务数据，不要通过删除数据库或配置文件来触发重新配置：对已配置的应用运行 `config init` 会报告 `status: "success-noop"`，只有用户明确要求替换配置时才使用 `--force`。生成的应用没有安装页面，配置完成之前 `pnpm dev` 会拒绝启动。
 
 ## 五、启动并给出登录方式
 

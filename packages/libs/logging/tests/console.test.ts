@@ -168,3 +168,36 @@ it('colors level labels only for a terminal, and lets the environment and the co
     stdout.mockRestore();
   }
 });
+
+it('writes console records to stderr when asked, leaving stdout to the caller', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'stderr-logging-'));
+  const stdout = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation(() => true);
+  const stderr = vi
+    .spyOn(process.stderr, 'write')
+    .mockImplementation(() => true);
+  const logging = createLogging({
+    file: { directory },
+    console: { enabled: true, pretty: false, stream: 'stderr' },
+  });
+  try {
+    logging.getLogger('database').warn('Took over a stale task lock');
+    await logging.close();
+    expect(stdout).not.toHaveBeenCalled();
+    expect(JSON.parse(String(stderr.mock.calls[0]?.[0]))).toMatchObject({
+      msg: 'Took over a stale task lock',
+      logger: 'database',
+    });
+    // The file journal is unaffected by where the console goes.
+    const journal = await readJournal(directory, { fromStart: true });
+    expect(journal.entries[0]).toMatchObject({
+      msg: 'Took over a stale task lock',
+    });
+  } finally {
+    await logging.close();
+    stdout.mockRestore();
+    stderr.mockRestore();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

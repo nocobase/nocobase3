@@ -162,6 +162,13 @@ export interface DatabaseDriverDefinition<
       ensureDirectory: (directory: string) => Promise<void>;
     },
   ): void | Promise<void>;
+  /**
+   * Whether the local storage a connection opens exists already. Opening a
+   * connection to missing storage creates it, so a caller that must change
+   * nothing, such as a dry run, asks first and treats missing storage as an
+   * empty database. Drivers without local storage omit it.
+   */
+  hasStorage?(config: TConfig): boolean | Promise<boolean>;
   configurePool?(config: TConfig, pool: Knex.PoolConfig): Knex.PoolConfig;
 }
 

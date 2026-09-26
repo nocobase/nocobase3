@@ -38,7 +38,12 @@ const MAX_ATTEMPTS_WITHOUT_HOLDER = 3;
 /** Expired rows taken over before the contention is reported instead. */
 const MAX_TAKEOVERS = 3;
 
-const inProcessLocks = new Set<string>();
+/** Locks this process holds, by connection and table, with the owner holding each. */
+const inProcessLocks = new Map<string, string>();
+
+const TASK_LOCK_BUSY: unique symbol = Symbol.for(
+  '@nocobase/db.TaskLockBusyError',
+);
 
 /** A lock as it stands in the database, as reported to an operator. */
 export interface TaskLockState {
@@ -56,6 +61,73 @@ export interface StaleTaskLockTakeover {
   readonly lockedBy: string;
   readonly heartbeatAt: Date | undefined;
   readonly staleForMs: number;
+}
+
+/** Who holds a lock that could not be taken, and how long acquiring waited for it. */
+export interface TaskLockBusyDetails extends TaskLockState {
+  /** Whose lock it is, as messages name it: `Migration` or `Seed`. */
+  readonly label: string;
+  /** The connection the lock guards. */
+  readonly connection: string;
+  /** How long acquiring waited for the holder to release it before giving up. */
+  readonly waitedMs: number;
+  /**
+   * Held by another task in this same process rather than by another run.
+   * Releasing the row cannot help then: the holder is still running here.
+   */
+  readonly inProcess: boolean;
+}
+
+/**
+ * A task lock is held by another run, so the task did not start.
+ *
+ * Contention is ordinary: two starts race, or a deploy overlaps a manual run.
+ * The holder is named so a caller can decide whether to wait or, once someone
+ * has confirmed the holder is gone, release the lock: an expired one (see
+ * {@link TaskLockState.expired}) needs no force to release, a live one does.
+ */
+export class TaskLockBusyError extends Error implements TaskLockBusyDetails {
+  readonly code = 'TASK_LOCK_BUSY' as const;
+  readonly label: string;
+  readonly connection: string;
+  readonly tableName: string;
+  readonly lockedBy: string;
+  readonly lockedAt: Date | undefined;
+  readonly heartbeatAt: Date | undefined;
+  readonly expired: boolean;
+  readonly waitedMs: number;
+  readonly inProcess: boolean;
+
+  constructor(details: TaskLockBusyDetails, options?: ErrorOptions) {
+    super(describeBusyLock(details), options);
+    this.name = 'TaskLockBusyError';
+    this.label = details.label;
+    this.connection = details.connection;
+    this.tableName = details.tableName;
+    this.lockedBy = details.lockedBy;
+    this.lockedAt = details.lockedAt;
+    this.heartbeatAt = details.heartbeatAt;
+    this.expired = details.expired;
+    this.waitedMs = details.waitedMs;
+    this.inProcess = details.inProcess;
+    Object.defineProperty(this, TASK_LOCK_BUSY, { value: true });
+  }
+}
+
+/**
+ * Whether `error` is a {@link TaskLockBusyError}, including one created by
+ * another copy of this package. The brand is a registered symbol rather than
+ * `instanceof`, which a duplicated installation would defeat.
+ */
+export function isTaskLockBusyError(
+  error: unknown,
+): error is TaskLockBusyError {
+  return (
+    error instanceof TaskLockBusyError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (error as Record<symbol, unknown>)[TASK_LOCK_BUSY] === true)
+  );
 }
 
 export interface TaskLockReleaseResult {
@@ -109,14 +181,23 @@ export async function withTaskLock<T>(
 ): Promise<T> {
   const { label, tableName } = options;
   const lockKey = `${connection.name}:${tableName}`;
-  if (inProcessLocks.has(lockKey)) {
-    throw new Error(
-      `${label} lock "${tableName}" is already held for connection "${connection.name}".`,
-    );
+  const holder = inProcessLocks.get(lockKey);
+  if (holder !== undefined) {
+    throw new TaskLockBusyError({
+      label,
+      connection: connection.name,
+      tableName,
+      lockedBy: holder,
+      lockedAt: undefined,
+      heartbeatAt: undefined,
+      expired: false,
+      waitedMs: 0,
+      inProcess: true,
+    });
   }
 
-  inProcessLocks.add(lockKey);
   const owner = createLockOwner();
+  inProcessLocks.set(lockKey, owner);
   let acquired = false;
   let heartbeat: NodeJS.Timeout | undefined;
 
@@ -254,9 +335,16 @@ async function acquireDatabaseLock(
       }
 
       if (elapsedMs >= timeoutMs || takeovers >= MAX_TAKEOVERS) {
-        throw new Error(lockHeldMessage(label, tableName, state, elapsedMs), {
-          cause: lastError,
-        });
+        throw new TaskLockBusyError(
+          {
+            ...state,
+            label,
+            connection: connection.name,
+            waitedMs: elapsedMs,
+            inProcess: false,
+          },
+          { cause: lastError },
+        );
       }
     } else {
       attemptsWithoutHolder += 1;
@@ -372,17 +460,16 @@ function describeLock(
   };
 }
 
-function lockHeldMessage(
-  label: string,
-  tableName: string,
-  lock: TaskLockState,
-  elapsedMs: number,
-): string {
+function describeBusyLock(lock: TaskLockBusyDetails): string {
+  const { label, tableName } = lock;
+  if (lock.inProcess) {
+    return `${label} lock "${tableName}" is already held for connection "${lock.connection}".`;
+  }
   const since = lock.lockedAt ? ` since ${lock.lockedAt.toISOString()}` : '';
   const beat = lock.heartbeatAt
     ? ` Last heartbeat ${lock.heartbeatAt.toISOString()}.`
     : '';
-  return `${label} lock "${tableName}" is already held by "${lock.lockedBy}"${since}. Waited ${(elapsedMs / 1000).toFixed(1)}s for it to be released.${beat} Another ${label.toLowerCase()} run holds it; a run that stops beating is taken over automatically after ${TASK_LOCK_EXPIRY_MS / 1000}s, or release it now with "nocobase db unlock".`;
+  return `${label} lock "${tableName}" is already held by "${lock.lockedBy}"${since}. Waited ${(lock.waitedMs / 1000).toFixed(1)}s for it to be released.${beat} Another ${label.toLowerCase()} run holds it; a run that stops beating is taken over automatically after ${TASK_LOCK_EXPIRY_MS / 1000}s, or release it now with "nocobase db unlock".`;
 }
 
 /** Dialects return the timestamp as a Date, an epoch number, or a string. */

@@ -1,12 +1,33 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
 import {
   generateAppCollectionsArtifact,
+  type AppCollectionsArtifactConnectionResult,
   type AppCollectionsArtifactResult,
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
+
+import { nocobaseCommand } from '../../command/invocation.ts';
+import { CommandError } from '../../command/errors.ts';
+import { withAppRuntime } from '../../command/lifecycle.ts';
+import {
+  connectionFailureMessage,
+  quoteConnections,
+  selectionArgs,
+  toDatabaseCommandError,
+} from '../../database-command.ts';
+
+/** What `collections generate` returns, which is `result` under `--json`. */
+export interface CollectionsGenerateResult {
+  /** `not-configured` when no database is configured, so nothing was generated; absent otherwise. */
+  readonly state?: 'not-configured';
+  /** Whether this was a --check run, which compares and writes nothing. */
+  readonly check: boolean;
+  /** One entry per connection generated or checked. */
+  readonly results: readonly AppCollectionsArtifactConnectionResult[];
+}
 
 export default class AppCollectionsGenerate extends AppCommand {
   static override summary = 'Write Collection artifacts from the database.';
@@ -20,15 +41,10 @@ export default class AppCollectionsGenerate extends AppCommand {
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     check: Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -45,32 +61,77 @@ export default class AppCollectionsGenerate extends AppCommand {
     }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<CollectionsGenerateResult> {
     const { flags } = await this.parse(AppCollectionsGenerate);
     let result: AppCollectionsArtifactResult;
     try {
-      const runtime = await this.appContext.loadRuntime();
-      result = await generateAppCollectionsArtifact(
-        runtime.config.get<AppDatabaseConfig>('database')!,
-        {
-          paths: runtime.paths,
-          connection: flags.connection,
-          all: flags.all,
-          check: flags.check,
-        },
+      result = await withAppRuntime(
+        appContextOf(this),
+        (runtime) =>
+          generateAppCollectionsArtifact(
+            runtime.config.get<AppDatabaseConfig>('database')!,
+            {
+              paths: runtime.paths,
+              connection: flags.connection,
+              all: flags.all,
+              check: flags.check,
+            },
+          ),
+        { onCleanupFailure: (error) => this.warn(error.message) },
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (flags.json)
-        this.logJson({ ok: false, status: 'failed', error: message });
-      else this.log(message);
-      this.exit(1);
-      return;
+      throw toDatabaseCommandError(error, flags.connection);
     }
 
-    if (flags.json) this.logJson(result);
-    else this.report(result);
-    if (!result.ok) this.exit(1);
+    this.report(result);
+
+    const failed = result.results.filter((entry) => entry.status === 'failed');
+    if (failed.length) {
+      throw new CommandError(
+        connectionFailureMessage(
+          'Could not generate the Collection artifacts of',
+          failed,
+        ),
+        {
+          code: 'COLLECTIONS_CONNECTION_FAILED',
+          details: {
+            connections: failed.map((entry) => entry.connection),
+            check: result.check,
+            results: result.results,
+          },
+        },
+      );
+    }
+    const stale = result.results.filter((entry) => entry.status === 'stale');
+    if (stale.length) {
+      throw new CommandError(
+        `The Collection artifacts of ${quoteConnections(stale.map((entry) => entry.connection))} differ from the database.`,
+        {
+          code: 'COLLECTIONS_STALE',
+          suggestions: [
+            {
+              message: 'Run without --check to write them:',
+              run: nocobaseCommand([
+                'collections',
+                'generate',
+                ...selectionArgs(flags),
+              ]),
+            },
+          ],
+          details: {
+            connections: stale.map((entry) => entry.connection),
+            check: result.check,
+            results: result.results,
+          },
+        },
+      );
+    }
+
+    if (result.status === 'not-configured') {
+      this.setStatus('success-noop');
+      return { state: 'not-configured', check: result.check, results: [] };
+    }
+    return { check: result.check, results: result.results };
   }
 
   private report(result: AppCollectionsArtifactResult): void {

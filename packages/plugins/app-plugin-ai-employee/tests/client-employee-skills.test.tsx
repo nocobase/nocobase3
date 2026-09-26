@@ -98,7 +98,9 @@ afterEach(cleanup);
 
 async function renderSkills() {
   render(<AIEmployeePage />);
-  await screen.findByRole('heading', { name: 'Ellis' });
+  // The first render in this file transforms the page's whole import graph, which can outlast findBy's default 1 s
+  // when a runner executes every package's tests at once.
+  await screen.findByRole('heading', { name: 'Ellis' }, { timeout: 10_000 });
   fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
 }
 function skillSwitch(name: string) {

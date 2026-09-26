@@ -1,9 +1,9 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import type { AppRuntimeDefinition } from '@nocobase/app-server/runtime';
 import type { AppCommandContext } from './context.ts';
+import { trackOpenRuntime } from './runtime/command-store.ts';
 
 export interface AppCommandContextOptions {
   readonly rootDir: string;
@@ -30,7 +30,29 @@ export function createDefaultCommandContext(
             `Application runtime module "${url}" must have a default runtime export.`,
           );
         }
-        return resolveStandaloneAppRuntime(module.default, { rootDir });
+        // Imported here, not at module top level: every AppCommand reaches this file, and a command that only needs
+        // `rootDir` should not load the server runtime to get it.
+        const { resolveStandaloneAppRuntime } =
+          await import('@nocobase/app-server/node');
+        const runtime = await resolveStandaloneAppRuntime(module.default, {
+          rootDir,
+          // The command's result owns stdout; what the application logs while it runs goes to stderr.
+          consoleLogStream: 'stderr',
+        });
+        const release = trackOpenRuntime({
+          // The scope is destroyed even when shutdown fails: it holds what keeps the process from exiting.
+          close: async () => {
+            try {
+              await runtime.app?.shutdown();
+            } finally {
+              await runtime.scope.destroy();
+            }
+          },
+        });
+        runtime.scope.onBeforeDestroy(async () => {
+          release();
+        });
+        return runtime;
       }),
     createApp:
       options.createApp ??

@@ -1,34 +1,32 @@
-import { AppCommand } from '../../context.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
 import {
+  databaseRunChangedNothing,
   collectionsRefreshAllowed,
   runDatabaseRollbackCommand,
+  type DatabaseCommandResult,
 } from '../../database-command.ts';
 
 export default class AppDbRollback extends AppCommand {
   static override summary = 'Roll back the latest migration batch.';
   static override description =
-    'Runs down() for every migration in the batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one; the confirmation names every migration and its package first. Destructive: data in anything those migrations drop is lost, and seeds are not re-run. Requires --force in CI or a non-interactive terminal. Fails if any migration in the batch is irreversible or has no down(). Use "db redo" to roll back and apply again.';
+    'Runs down() for every migration in the batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one; the confirmation names every migration and its package first. Destructive: data in anything those migrations drop is lost, and seeds are not re-run. Requires --force in CI or a non-interactive terminal; --dry-run shows the plan without rolling anything back. Fails if any migration in the batch is irreversible or has no down(). Use "db redo" to roll back and apply again.';
 
   static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %> --dry-run --json',
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --connection analytics',
-    '<%= config.bin %> <%= command.id %> --force --json',
   ];
 
   static override flags: {
-    json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
     collections: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
+    'dry-run': Interfaces.BooleanFlag<boolean>;
   } = {
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
@@ -49,24 +47,25 @@ export default class AppDbRollback extends AppCommand {
       default: false,
       description: 'Skip the confirmation prompt.',
     }),
+    'dry-run': Flags.boolean({
+      default: false,
+      description:
+        'Report what would run, as a plan, without changing anything.',
+    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<DatabaseCommandResult> {
     const { flags } = await this.parse(AppDbRollback);
-    await runDatabaseRollbackCommand(
-      {
-        log: (message) => this.log(message),
-        logJson: (value) => this.logJson(value),
-        exit: (code) => this.exit(code),
-        warn: (message) => {
-          this.warn(message);
-        },
-      },
+    const result = await runDatabaseRollbackCommand(
+      this,
       {
         ...flags,
+        dryRun: flags['dry-run'],
         collections: flags.collections && collectionsRefreshAllowed(),
       },
-      this.appContext,
+      appContextOf(this),
     );
+    if (databaseRunChangedNothing(result)) this.setStatus('success-noop');
+    return result;
   }
 }

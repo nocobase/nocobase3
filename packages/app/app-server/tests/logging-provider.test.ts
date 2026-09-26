@@ -273,3 +273,57 @@ it.each([true, false])(
     }
   },
 );
+
+it('sends console records to the stream the scope names, keeping the configured console settings', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'app-log-stream-'));
+  const config = new AppConfig();
+  await config.loadAll();
+  config.mergeDefaults({
+    app: { name: 'customer' },
+    logging: {
+      level: 'info',
+      file: { enabled: false },
+      console: { enabled: true, pretty: false },
+    },
+  });
+  await writeFile(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'logging-fixture' }),
+  );
+  const runtime = await resolveAppRuntime(
+    defineAppRuntime({
+      createAppConfig: () => config,
+      plugins: defineServerPlugins([]),
+      serviceProviders: [],
+      routes: [],
+    }),
+    {
+      id: 'customer',
+      basePath: '/customer',
+      mode: 'standalone',
+      paths: { rootDir: root },
+      registerDisposer() {},
+      consoleLogStream: 'stderr',
+    },
+  );
+  const app = createAppFromRuntime(runtime);
+  app.addServiceProvider(LoggingProvider);
+  const stdout = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation(() => true);
+  const stderr = vi
+    .spyOn(process.stderr, 'write')
+    .mockImplementation(() => true);
+  try {
+    expect(app.consoleLogStream).toBe('stderr');
+    await app.start();
+    app.container.resolve(loggingToken).getLogger('database').warn('stale');
+    await app.shutdown();
+    expect(stdout).not.toHaveBeenCalled();
+    expect(String(stderr.mock.calls[0]?.[0])).toContain('"msg":"stale"');
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  }
+});

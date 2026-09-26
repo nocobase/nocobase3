@@ -152,7 +152,7 @@ pnpm create @nocobase/app crm --json
 
 JSON mode never prompts. It writes one final JSON object to stdout and progress to stderr. The result includes `status`, `stage`, `directory`, `projectCreated`, `dependenciesInstalled`, `configured`, `nextCommands`, `message`, and `warnings` where available. `--help --json` and `--version --json` return the requested information as JSON.
 
-`nextCommands` is the whole remaining procedure in order, so an agent can run it as written rather than reconstructing it from prose. It always begins with `pnpm nocobase config init` and `pnpm nocobase config check`, preceded by `pnpm install` after `--no-install`, and a Hub ends with `pnpm build` and `pnpm start` instead of `pnpm dev`. `config init --json` returns the rest the same way: its own `nextCommands`, and `requiredSettings` for a database whose connection still has to be filled in.
+`nextCommands` is the whole remaining procedure in order, so an agent can run it as written rather than reconstructing it from prose. It always begins with `pnpm nocobase config init` and `pnpm nocobase config check`, preceded by `pnpm install` after `--no-install`, and a Hub ends with `pnpm build` and `pnpm start` instead of `pnpm dev`. `config init --json` returns the rest the same way: `result.nextCommands`, and `result.requiredSettings` for a database whose connection still has to be filled in.
 
 Success exits with 0, invalid input with 2, and operational failures with 1. An install failure reports `stage: "install"`, preserves generated files, and directs the agent to retry `pnpm install` in the existing directory. `configured` is always `false`: creation writes no configuration, and nothing here verifies a database connection. The CLI never starts the application itself.
 

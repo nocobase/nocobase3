@@ -97,25 +97,27 @@ Unregistering an App does not delete the plugin package, migrate away persistent
 
 ## JSON results and optional diagnostics
 
-Lifecycle commands use a JSON envelope such as:
+Lifecycle commands print the envelope every `nocobase` command uses under `--json`:
 
 ```json
 {
   "schemaVersion": 1,
   "ok": true,
-  "operation": "plugin:inspect",
+  "command": "plugin inspect",
   "status": "success",
-  "result": {}
+  "result": {},
+  "warnings": []
 }
 ```
 
 | Status                  | Meaning                                                                                      |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `success`               | Requested operation completed                                                                |
-| `success-noop`          | State already matched; no changes were needed                                                |
-| `partial-success`       | A phase completed but documented work remains                                                |
-| `requires-installation` | Preview needs an installed package before it can calculate the full plan                     |
-| `failure`               | `ok: false`; handle `error.code` and `error.suggestions`, preserving the nonzero exit status |
+| `success-noop`          | State already matched and no changes were needed, or a `--dry-run` that changed nothing      |
+| `partial-success`       | A phase completed but documented work remains; `result.issues` or `result.state` says what   |
+| `failure`               | `ok: false`; handle `error.code`, `error.suggestions` and `error.details`, preserving the nonzero exit status |
+
+A `register --dry-run` for a plugin that is not installed yet answers `success-noop`, like every dry run, with `result.state: "requires-installation"`: the preview covers the install, but the wiring plan depends on the package's exports and needs the package first. Install it and rerun.
 
 For registration inconsistencies, use `pnpm nocobase plugin inspect audit-log --workspace-root . --app app-template-default --json`. Check `ok` and `status`, then `result.consistent`, `issues`, and `suggestions`. A successful inspection can have `ok: true` while reporting inconsistent state. It observes static facts and does not repair them.
 

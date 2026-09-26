@@ -49,15 +49,15 @@ Never delete the directory to retry.
 
 Work from the application directory from here on. Read its `AGENTS.md` now: it appeared after this session started, so it may not be loaded.
 
-The result's `nextCommands` configure the application for SQLite and then start it. When a retried install left you without them, they are `pnpm nocobase config init`, `pnpm nocobase config check`, then `pnpm dev`. Unless the user has already named a database, ask which one they want before running them, and adapt them as the steps below describe: a database other than SQLite needs its driver, a `--dialect`, and a `config set` between `config init` and `config check`. Pass `--json` to every `pnpm nocobase config` command and act on the result, not on the exit code alone.
+The result's `nextCommands` configure the application for SQLite and then start it. When a retried install left you without them, they are `pnpm nocobase config init`, `pnpm nocobase config check`, then `pnpm dev`. Unless the user has already named a database, ask which one they want before running them, and adapt them as the steps below describe: a database other than SQLite needs its driver, a `--dialect`, and a `config set` between `config init` and `config check`. Pass `--json` to every `pnpm nocobase config` command and act on the document it prints, not on the exit code alone: `ok` says whether it worked, `result` holds what it produced, and a failure's `error.code`, `error.suggestions` and `error.details` say what to do next.
 
 1. **Choose the database.** Use the one the user named, or ask. SQLite needs nothing installed: the template depends on its driver. For any other database, install its driver first, for example `pnpm add @nocobase/db-postgres`.
 2. **`pnpm nocobase config init --dialect <dialect> --json`** writes `config.yml` from the application's `config.example.yml`, with generated secrets.
-   - It installs nothing. When the driver is missing it writes nothing and returns a `suggestedCommand`; run that, then run `config init` again.
-   - An application that is already configured is reported `unchanged`, so re-running the sequence is safe.
-   - Its result lists `requiredSettings`: the connection settings still at a placeholder.
+   - It installs nothing. When the driver is missing it writes nothing and fails with `error.code` `DRIVER_MISSING`; `error.suggestions[0].run` is the `pnpm add` that supplies it. Run that, then run `config init` again.
+   - An application that is already configured is reported with `status: "success-noop"`, so re-running the sequence is safe.
+   - `result.requiredSettings` lists the connection settings still at a placeholder.
 3. **`pnpm nocobase config set key=value … --json`** sets each of the `requiredSettings`, for example `database.connections.main.host=db.internal`. A password is always set from an environment variable; see Secrets below.
-4. **`pnpm nocobase config check --json`** must pass before the application is started. It loads the configuration without starting the application and connects to the database. Each finding names its key and, where there is one, a `fix` to run; apply the fixes and run it again.
+4. **`pnpm nocobase config check --json`** must pass before the application is started. It loads the configuration without starting the application and connects to the database. A failure has `error.code` `CONFIG_INVALID` and its findings in `error.details.findings`; each names its key and, where there is one, a `fix` to run. Apply the fixes and run it again.
 
 For the details of a particular database, read `.agents/skills/nocobase-app-development/references/database-connections.md` in the application.
 

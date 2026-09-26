@@ -24,6 +24,7 @@ export function createAppFromRuntime(runtime: AppRuntimeContext): Application {
     strictStartup: runtime.env.NOCOBASE_STRICT_STARTUP === 'true',
     paths: runtime.paths,
     runtimeLogging: runtime.scope.logging,
+    consoleLogStream: runtime.scope.consoleLogStream,
   });
   runtime.app = app;
   return app;

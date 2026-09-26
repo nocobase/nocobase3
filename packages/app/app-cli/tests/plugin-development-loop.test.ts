@@ -198,7 +198,7 @@ describe('Agent plugin development loop', () => {
           };
         };
       };
-      expect(previewResult.status).toBe('success');
+      expect(previewResult.status).toBe('success-noop');
       expect(previewResult.result.plan.clientPluginsChanged).toBe(
         expectsClient,
       );
@@ -224,7 +224,7 @@ describe('Agent plugin development loop', () => {
       ]);
       expect(JSON.parse(registered.stdout)).toMatchObject({
         ok: true,
-        operation: 'plugin:register',
+        command: 'plugin register',
         status: 'success',
       });
       expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(
@@ -253,7 +253,7 @@ describe('Agent plugin development loop', () => {
       ]);
       expect(JSON.parse(inspected.stdout)).toMatchObject({
         ok: true,
-        operation: 'plugin:inspect',
+        command: 'plugin inspect',
         status: 'success',
         result: {
           plugin: {
@@ -277,7 +277,7 @@ describe('Agent plugin development loop', () => {
       ]);
       expect(JSON.parse(repeated.stdout)).toMatchObject({
         ok: true,
-        operation: 'plugin:register',
+        command: 'plugin register',
         status: 'success-noop',
       });
 

@@ -77,6 +77,7 @@ describe('createPlugin', () => {
     ['client.service-providers', 'client/providers/index.ts', 'server/'],
     ['client.locales', 'client/locales/index.ts', 'server/'],
     ['registry', 'registry.config.json', 'database/'],
+    ['cli', 'cli/info.ts', 'server/'],
     ['skills', 'skills/nocobase-app-plugin-audit-log/SKILL.md', 'client/'],
   ] as const)(
     '%s creates only its owned file surface',
@@ -510,6 +511,33 @@ describe('createPlugin', () => {
       expect.arrayContaining(['skills', 'registry', 'public/r']),
     );
     expect(manifest.scripts?.prepack).toBe('pnpm registry:build');
+  });
+
+  it('generates an AppCommand that returns its result, with a test that binds it', async () => {
+    const result = await createWith(['cli']);
+    const command = await readFile(
+      path.join(result.targetDirectory, 'cli/info.ts'),
+      'utf8',
+    );
+    const test = await readFile(
+      path.join(result.targetDirectory, 'tests/cli.test.ts'),
+      'utf8',
+    );
+
+    expect(command).toContain(
+      "import { AppCommand } from '@nocobase/app-cli';",
+    );
+    expect(command).toContain('extends AppCommand');
+    expect(command).toContain('Promise<PluginInfoResult>');
+    // `--json` belongs to AppCommand; a command that declares or branches on it prints a second document.
+    expect(command).not.toContain('json: Flags.boolean');
+    expect(command).not.toContain('flags.json');
+    expect(command).not.toContain('logJson');
+    expect(test).toContain(
+      "import { bindAppCommand, runAppCommand } from '@nocobase/app-cli/testing';",
+    );
+    expect(test).toContain("describe('@nocobase/app-plugin-audit-log'");
+    expect(test).not.toMatch(/__NOCOBASE_[A-Z0-9_]+__/u);
   });
 
   it('generates a capability-aware App-facing Skill draft', async () => {

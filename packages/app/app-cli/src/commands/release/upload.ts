@@ -1,11 +1,16 @@
 import { type Command, Flags, type Interfaces } from '@oclif/core';
 
+import { appPath } from '../../command/flags.ts';
 import {
-  ReleaseCommand,
-  type ReleaseFlags,
-} from '../../lib/release-command.ts';
+  DEFAULT_ARTIFACT,
+  publishRelease,
+  type PublishedRelease,
+  type PublishingOptions,
+  type ReleaseUploadResult,
+} from '../../hub-publishing.ts';
+import { ReleaseCommand } from '../../lib/release-command.ts';
 
-export default class ReleaseUpload extends ReleaseCommand {
+export default class ReleaseUpload extends ReleaseCommand<ReleaseUploadResult> {
   static override summary = 'Upload an immutable application release to Hub.';
   static override description =
     'Uploads the archive `nocobase build --tar` writes, storage/exports/dist.tar.gz, as a new Release of the App on the Hub. The Release is immutable: uploading the same archive again returns the existing Release instead of creating another. With --deploy, the upload also starts a deployment and waits for it to finish unless --no-wait is given.\n\nThe Hub, App ID and API key come from the flags, then HUB_URL, HUB_APP_ID and HUB_API_KEY in the environment, then the App root .env. Retrying with the same --idempotency-key is safe when a run could not confirm its result.';
@@ -22,14 +27,13 @@ export default class ReleaseUpload extends ReleaseCommand {
     hub: Interfaces.OptionFlag<string | undefined>;
     'app-id': Interfaces.OptionFlag<string | undefined>;
     'api-key': Interfaces.OptionFlag<string | undefined>;
-    file: Interfaces.OptionFlag<string | undefined>;
+    file: Interfaces.OptionFlag<string>;
     'idempotency-key': Interfaces.OptionFlag<string | undefined>;
     deploy: Interfaces.BooleanFlag<boolean>;
     wait: Interfaces.BooleanFlag<boolean | undefined>;
     timeout: Interfaces.OptionFlag<number>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
-    config: Flags.string({
+    config: appPath({
       description:
         'Runtime YAML configuration to deploy with, relative to the current directory. Requires --deploy. Omit to reuse the current Hub configuration.',
     }),
@@ -45,9 +49,9 @@ export default class ReleaseUpload extends ReleaseCommand {
       description:
         'Publishing API key. Defaults to HUB_API_KEY in the environment or App root .env.',
     }),
-    file: Flags.string({
-      description:
-        'Archive to upload, relative to the current directory. Defaults to storage/exports/dist.tar.gz in the App root.',
+    file: appPath({
+      default: DEFAULT_ARTIFACT,
+      description: 'Archive to upload, relative to the current directory.',
     }),
     'idempotency-key': Flags.string({
       description: 'Retry identity. Defaults to the archive SHA-256.',
@@ -65,25 +69,24 @@ export default class ReleaseUpload extends ReleaseCommand {
       default: 600,
       description: 'Request and wait deadline in seconds.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print a single JSON result.',
-    }),
   };
 
-  protected readonly operation = 'upload' as const;
   protected readonly failureCode = 'PUBLISH_FAILED';
   protected readonly failureMessage = 'Publishing failed.';
 
-  protected async parseFlags(): Promise<ReleaseFlags> {
+  protected async parseFlags(): Promise<PublishingOptions> {
     return (await this.parse(ReleaseUpload)).flags;
   }
 
-  protected describe(result: Record<string, unknown>): string {
-    const deployment =
-      typeof result.operationId === 'string'
-        ? result.operationId
-        : 'not requested';
-    return `Release ${String(result.releaseId)} uploaded${result.reused ? ' (reused)' : ''}. Deployment: ${deployment}.`;
+  protected publish(
+    flags: PublishingOptions,
+    root: string,
+  ): Promise<PublishedRelease<ReleaseUploadResult>> {
+    return publishRelease('upload', flags, root);
+  }
+
+  protected describe(result: ReleaseUploadResult): string {
+    const deployment = result.operationId ?? 'not requested';
+    return `Release ${result.releaseId} uploaded${result.reused ? ' (reused)' : ''}. Deployment: ${deployment}.`;
   }
 }

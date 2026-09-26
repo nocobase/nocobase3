@@ -91,7 +91,7 @@ Run from the target application root:
 pnpm nocobase scheduler sync --json
 ```
 
-Success returns `{ ok: true, status: 'success', finalize: false }`; also inspect the exit code for failures. The command starts the application for synchronization and then shuts it down, without starting Scheduler's schedule worker. Normal application startup also performs non-destructive synchronization before starting the worker.
+Success returns the command envelope with `ok: true`, `status: "success"` and `result: { finalize: false }`; also inspect the exit code for failures. The command starts the application for synchronization and then shuts it down, without starting Scheduler's schedule worker. Normal application startup also performs non-destructive synchronization before starting the worker.
 
 Normal synchronization validates the complete loaded manifest and upserts definitions without deactivating missing ones. It preserves existing administrator enable/disable settings. During production deployment, once the complete manifest is available, run once per application against the built `dist/`:
 

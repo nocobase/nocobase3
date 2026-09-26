@@ -1,12 +1,29 @@
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { AppCommand } from '../../context.ts';
+import { CommandError } from '../../command/errors.ts';
+import { AppCommand, appContextOf } from '../../context.ts';
+import { ConfigInitError, configErrorCode } from '../../lib/config-init.ts';
 import {
   ConfigSetError,
   runConfigSet,
+  type ConfigSetErrorReason,
   type ConfigSetResult,
 } from '../../lib/config-set.ts';
+
+/**
+ * What `config set` reports. What the write left unconfirmed — a key an environment variable overrides, a
+ * configuration that does not load yet, a secret given on the command line — is reported as warnings, which `--json`
+ * carries in the envelope's `warnings`.
+ */
+export type AppConfigSetResult = Omit<ConfigSetResult, 'warnings'>;
+
+/** Refusals caused by what was typed, which exit 2 like any other invalid usage. */
+const INPUT_REASONS: ReadonlySet<ConfigSetErrorReason> = new Set([
+  'invalid-assignment',
+  'unknown-key',
+  'environment-variable-missing',
+]);
 
 export default class AppConfigSet extends AppCommand {
   static override summary =
@@ -24,74 +41,58 @@ export default class AppConfigSet extends AppCommand {
 
   static override flags: {
     'from-env': Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     'from-env': Flags.boolean({
       default: false,
       description:
         'Read each value as the name of an environment variable, so it never appears on the command line.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<AppConfigSetResult> {
     const { argv, flags } = await this.parse(AppConfigSet);
-    let result: ConfigSetResult;
+    let outcome: ConfigSetResult;
 
     try {
-      result = await runConfigSet({
-        rootDir: this.appContext.rootDir,
+      outcome = await runConfigSet({
+        rootDir: this.rootDir,
         assignments: argv.map(String),
         fromEnv: flags['from-env'],
-        loadRuntime: () => this.appContext.loadRuntime(),
+        loadRuntime: () => appContextOf(this).loadRuntime(),
       });
     } catch (error) {
-      this.reportFailure(error, flags.json);
-      return;
+      throw toCommandError(error);
     }
 
-    if (flags.json) {
-      this.logJson({
-        ok: true,
-        status: 'updated',
-        configFile: result.configFile,
-        changed: result.changed,
-        warnings: result.warnings,
-      });
-      return;
-    }
+    const { warnings, ...result } = outcome;
     this.log(`Updated ${result.configFile}: ${result.changed.join(', ')}.`);
-    for (const warning of result.warnings) this.log(`! ${warning}`);
+    for (const warning of warnings) this.warn(warning);
+    return result;
   }
+}
 
-  /** Input problems exit 2 and operational ones exit 1, matching the other configuration commands. */
-  private reportFailure(error: unknown, json: boolean): void {
-    const setError = error instanceof ConfigSetError ? error : undefined;
-    const message = error instanceof Error ? error.message : String(error);
-    const input =
-      setError?.reason === 'invalid-assignment' ||
-      setError?.reason === 'unknown-key' ||
-      setError?.reason === 'environment-variable-missing';
-
-    if (json) {
-      this.logJson({
-        ok: false,
-        status: 'failed',
-        reason: setError?.reason ?? 'failed',
-        error: message,
-        ...(setError?.suggestedCommand
-          ? { suggestedCommand: setError.suggestedCommand }
-          : {}),
-        ...(setError?.details ?? {}),
-      });
-    } else {
-      this.log(message);
-      if (setError?.suggestedCommand)
-        this.log(`  ${setError.suggestedCommand}`);
-    }
-    this.exit(input ? 2 : 1);
+/**
+ * A refusal becomes a `CommandError` named after its reason, such as `UNKNOWN_KEY`. Input problems exit 2 and
+ * operational ones exit 1, matching the other configuration commands.
+ */
+function toCommandError(error: unknown): CommandError {
+  if (error instanceof ConfigSetError) {
+    return new CommandError(error.message, {
+      code: configErrorCode(error.reason),
+      exit: INPUT_REASONS.has(error.reason) ? 2 : 1,
+      suggestions: error.suggestion ? [error.suggestion] : [],
+      details: error.details,
+      cause: error,
+    });
   }
+  if (error instanceof ConfigInitError) {
+    return new CommandError(error.message, {
+      code: configErrorCode(error.reason),
+      cause: error,
+    });
+  }
+  return new CommandError(
+    error instanceof Error ? error.message : String(error),
+    { code: 'CONFIG_SET_FAILED', cause: error },
+  );
 }

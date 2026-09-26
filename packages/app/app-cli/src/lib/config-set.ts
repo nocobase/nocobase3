@@ -5,6 +5,8 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { isMap, isSeq, parse, parseDocument } from 'yaml';
 
+import type { CommandSuggestion } from '../command/errors.ts';
+import { nocobaseCommand } from '../command/invocation.ts';
 import type { AppCommandRuntime } from '../context.ts';
 import {
   detectConfigInitMode,
@@ -26,21 +28,22 @@ export type ConfigSetErrorReason =
 
 export class ConfigSetError extends Error {
   public readonly reason: ConfigSetErrorReason;
-  public readonly suggestedCommand?: string;
+  /** The command that gets past this, as the executable and its arguments, when one exists. */
+  public readonly suggestion?: CommandSuggestion;
   public readonly details?: Readonly<Record<string, unknown>>;
 
   public constructor(
     reason: ConfigSetErrorReason,
     message: string,
     options: {
-      readonly suggestedCommand?: string;
+      readonly suggestion?: CommandSuggestion;
       readonly details?: Readonly<Record<string, unknown>>;
     } = {},
   ) {
     super(message);
     this.name = 'ConfigSetError';
     this.reason = reason;
-    this.suggestedCommand = options.suggestedCommand;
+    this.suggestion = options.suggestion;
     this.details = options.details;
   }
 }
@@ -158,7 +161,12 @@ export async function runConfigSet(
     throw new ConfigSetError(
       'not-configured',
       'This application has no configuration file to set values in.',
-      { suggestedCommand: 'pnpm nocobase config init' },
+      {
+        suggestion: {
+          message: 'Write one first:',
+          run: nocobaseCommand(['config', 'init']),
+        },
+      },
     );
   }
   if (!/\.ya?ml$/u.test(configFile)) {

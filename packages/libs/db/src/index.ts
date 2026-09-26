@@ -106,8 +106,10 @@ export { defineMigration } from './migration/define.js';
 export { loadMigrations, validateMigrations } from './migration/loader.js';
 export { createMigrator } from './migration/migrator.js';
 export {
+  isTaskLockBusyError,
   TASK_LOCK_EXPIRY_MS,
   TASK_LOCK_HEARTBEAT_INTERVAL_MS,
+  TaskLockBusyError,
 } from './migration/internal/lock.js';
 export type { Migrator } from './migration/migrator.js';
 export type {
@@ -125,6 +127,7 @@ export type {
   MigrationRollbackOptions,
   MigrationRollbackResult,
   StaleTaskLockTakeover,
+  TaskLockBusyDetails,
   TaskLockReleaseOptions,
   TaskLockReleaseResult,
   TaskLockState,
@@ -142,6 +145,7 @@ export type {
   DatabaseSeederOptions,
   SeedContext,
   SeedDefinition,
+  SeedHistoryRecord,
   SeedRepairOptions,
   SeedRepairResult,
   SeedRunResult,

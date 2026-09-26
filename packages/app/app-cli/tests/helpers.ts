@@ -4,10 +4,11 @@ import { Config } from '@oclif/core';
 
 import { assembleCli } from '../src/runtime/assemble.ts';
 import {
+  DEVELOPMENT_TOPICS,
   builtinTopicsFor,
   loadBuiltinCommands,
 } from '../src/runtime/builtin.ts';
-import { setResolvedCommands } from '../src/runtime/command-store.ts';
+import { setResolvedCli } from '../src/runtime/command-store.ts';
 
 export const packageRoot: string = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,11 +25,12 @@ export async function loadTestConfig(): Promise<Config> {
     kind: 'source',
     publishing: true,
   });
-  const { commands, topics } = assembleCli({
+  const assembled = assembleCli({
     builtinCommands,
     builtinTopics: builtinTopicsFor(Object.keys(builtinCommands)),
+    developmentTopics: DEVELOPMENT_TOPICS,
   });
-  setResolvedCommands(commands);
+  setResolvedCli(assembled);
 
   return Config.load({
     pjson: {
@@ -39,7 +41,7 @@ export async function loadTestConfig(): Promise<Config> {
         dirname: 'nocobase',
         topicSeparator: ' ',
         helpClass: './src/help/runtime-help.ts',
-        topics,
+        topics: assembled.topics,
         commands: {
           strategy: 'explicit',
           identifier: 'default',

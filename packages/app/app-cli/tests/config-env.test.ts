@@ -8,8 +8,11 @@ import {
   envString,
 } from '@nocobase/app-server/config';
 
+import AppConfigEnv from '../src/commands/config/env.ts';
 import type { AppCommandRuntime } from '../src/context.ts';
 import { runConfigEnv } from '../src/lib/config-env.ts';
+import { bindAppCommand } from './app-command.ts';
+import { runAppCommand } from './command-output.ts';
 
 async function createRuntime(env: Record<string, string>): Promise<{
   readonly runtime: AppCommandRuntime;
@@ -62,6 +65,37 @@ describe('runConfigEnv', () => {
       expect.objectContaining({ name: 'APP_BASE_PATH', set: true }),
     );
     expect(JSON.stringify(variables)).not.toContain('a-real-secret');
+    expect(destroyed()).toBe(true);
+  });
+});
+
+describe('config env --json', () => {
+  it('returns the variables under result and destroys the runtime', async () => {
+    const { runtime, destroyed } = await createRuntime({
+      AUTH_SECRET: 'a-real-secret',
+    });
+    const rootDir = process.cwd();
+
+    const output = await runAppCommand(
+      bindAppCommand(AppConfigEnv, {
+        rootDir,
+        loadRuntime: async () => runtime,
+      }),
+      ['--json'],
+      rootDir,
+    );
+
+    expect(output.json()).toMatchObject({
+      ok: true,
+      status: 'success',
+      result: {
+        variables: expect.arrayContaining([
+          { name: 'AUTH_SECRET', path: 'auth.secret', set: true },
+        ]),
+      },
+    });
+    expect(Object.keys(output.json().result as object)).toEqual(['variables']);
+    expect(output.stdout).not.toContain('a-real-secret');
     expect(destroyed()).toBe(true);
   });
 });

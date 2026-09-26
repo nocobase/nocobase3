@@ -29,6 +29,12 @@ export interface ConsoleLogOptions {
    * captured output stays plain; `NO_COLOR` disables it and `FORCE_COLOR` requests it.
    */
   color?: boolean;
+  /**
+   * Where console records go. Defaults to `stdout`, where a server's supervisor collects them. A command-line run sets
+   * `stderr`, so that records an application logs while a command runs never mix with the command's own result on
+   * stdout — a `--json` document in particular.
+   */
+  stream?: 'stdout' | 'stderr';
 }
 export interface LogOutputOptions {
   file?: FileLogOptions;
@@ -86,13 +92,16 @@ const levelColors: Readonly<Record<string, readonly [string, string]>> = {
   FATAL: ['\u001b[41m\u001b[37m', '\u001b[39m\u001b[49m'],
 };
 /** An escape only helps a terminal, and the environment can override that guess. */
-function resolveConsoleColor(configured: boolean | undefined): boolean {
+function resolveConsoleColor(
+  configured: boolean | undefined,
+  stream: NodeJS.WriteStream,
+): boolean {
   if (configured !== undefined) return configured;
   const forced = process.env.FORCE_COLOR;
   // Node itself lets FORCE_COLOR override NO_COLOR, and warns that it does.
   if (forced !== undefined) return forced !== '0' && forced !== 'false';
   if (process.env.NO_COLOR) return false;
-  return process.stdout.isTTY === true;
+  return stream.isTTY === true;
 }
 function prettyEntry(entry: JournalEntry, color: boolean): string {
   const {
@@ -155,9 +164,11 @@ const directories = new Map<string, DirectoryWriter>();
 /** Shared across named loggers and hosted lifecycle writers in the same process. */
 export function createLogOutput(options: LogOutputOptions): Writable {
   const file = normalizeFileOptions(options.file);
+  const consoleStream =
+    options.console?.stream === 'stderr' ? process.stderr : process.stdout;
   const color =
     options.console?.pretty === true &&
-    resolveConsoleColor(options.console.color);
+    resolveConsoleColor(options.console.color, consoleStream);
   const directory =
     file.enabled !== false && file.directory
       ? path.resolve(file.directory)
@@ -278,7 +289,7 @@ export function createLogOutput(options: LogOutputOptions): Writable {
           }
         }
         if (options.console?.enabled) {
-          process.stdout.write(
+          consoleStream.write(
             options.console.pretty
               ? prettyEntry(entry, color)
               : JSON.stringify(entry) + '\n',

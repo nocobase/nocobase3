@@ -26,7 +26,7 @@ const CLI_SOURCE_DEFINITION: PluginSourceDefinition = {
 const EMPTY_FILE = `import {
   defineCliPlugins,
   type AppCliPlugins,
-} from '@nocobase/app-cli/plugins';
+} from '@nocobase/app-cli';
 
 // Array order is command registration order. A plugin contributes its commands
 // by appearing in this list; removing its entry and import removes them.

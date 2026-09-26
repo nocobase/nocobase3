@@ -156,7 +156,9 @@ function includeTemplateFile(
   ) {
     return capabilities.registry;
   }
-  if (relativePath.startsWith('cli/')) return capabilities.cli;
+  if (relativePath.startsWith('cli/') || relativePath === 'tests/cli.test.ts') {
+    return capabilities.cli;
+  }
   if (relativePath.startsWith('skills/')) return capabilities.skills;
   return true;
 }

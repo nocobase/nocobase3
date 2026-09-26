@@ -69,12 +69,13 @@ describe('built-in commands by location', () => {
     }
   });
 
-  it('registers only flag-targeted commands outside an application', async () => {
+  it('registers only flag-targeted commands and the catalog outside an application', async () => {
     const none = Object.keys(
       await builtinCommandFiles({ kind: 'none', publishing: true }),
     ).sort();
 
     expect(none).toEqual([
+      'commands',
       'package:remove',
       'plugin:inspect',
       'plugin:register',
@@ -201,7 +202,15 @@ describe('assembly', () => {
 
 describe('topic collisions', () => {
   it('rejects a plugin taking a built-in topic or top-level command', () => {
-    for (const name of ['plugin', 'package', 'skills', 'db', 'build', 'info']) {
+    for (const name of [
+      'plugin',
+      'package',
+      'skills',
+      'db',
+      'build',
+      'info',
+      'commands',
+    ]) {
       expect(() => assemble(plugin(name))).toThrow(/built-in/);
     }
   });

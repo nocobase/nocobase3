@@ -1,17 +1,20 @@
-import { Args, type Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { Args, Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import PluginUnregister from '../plugin/unregister.ts';
+import { CommandError, isCommandError } from '../../command/errors.ts';
+import {
+  PluginUnregistrationCommand,
+  type PluginUnregisterResult,
+} from '../plugin/unregister.ts';
 import {
   appPackageManager,
   removeDependencyCommand,
 } from '../../lib/plugin-install.ts';
 import {
   classifyPluginError,
-  pluginJsonFailure,
-  pluginJsonSuccess,
+  type PluginCommandInvocation,
 } from '../../lib/plugin-json.ts';
 import {
   CommandFailedError,
@@ -35,24 +38,54 @@ const DEPENDENCY_SECTIONS = [
 
 type DependencySection = (typeof DEPENDENCY_SECTIONS)[number];
 
-class PackageManagerRemovalError extends Error {
-  public constructor(
-    packageManager: string,
-    packageName: string,
-    cause?: unknown,
-  ) {
-    const detail =
-      cause instanceof CommandFailedError && cause.stderr.length > 0
-        ? ` ${cause.stderr}`
-        : '';
-    super(`${packageManager} could not remove ${packageName}.${detail}`, {
-      cause,
-    });
-    this.name = 'PackageManagerRemovalError';
-  }
+/** What removing a package that is not a plugin would do; status `success-noop` when there is nothing to remove. */
+export interface PackageRemoveDryRunResult {
+  readonly mode: 'dry-run';
+  readonly appRoot: string;
+  readonly packageName: string;
+  readonly dependencySections: readonly DependencySection[];
+  readonly skillRemovals: readonly string[];
+  readonly commands: readonly PluginCommandInvocation[];
 }
 
-export default class PackageRemove extends PluginUnregister {
+/** What removing a package that is not a plugin did; status `success-noop` when there was nothing to remove. */
+export interface PackageRemoveRemovedResult {
+  readonly mode: 'remove';
+  readonly appRoot: string;
+  readonly packageName: string;
+  readonly removedFrom: readonly DependencySection[];
+  readonly removedSkills: readonly string[];
+  readonly commands: readonly PluginCommandInvocation[];
+}
+
+/** A plugin package is unregistered, so it answers with `plugin unregister`'s result. */
+export type PackageRemoveResult =
+  | PackageRemoveDryRunResult
+  | PackageRemoveRemovedResult
+  | PluginUnregisterResult;
+
+function packageManagerRemovalError(
+  packageManager: string,
+  packageName: string,
+  cause?: unknown,
+): CommandError {
+  const detail =
+    cause instanceof CommandFailedError && cause.stderr.length > 0
+      ? ` ${cause.stderr}`
+      : '';
+  return new CommandError(
+    `${packageManager} could not remove ${packageName}.${detail}`,
+    {
+      code: 'PACKAGE_MANAGER_FAILED',
+      suggestions: [
+        'Fix the package manager error, then run nocobase package remove again.',
+      ],
+      cause,
+    },
+  );
+}
+
+export default class PackageRemove extends PluginUnregistrationCommand {
   static override summary =
     'Remove a direct NocoBase package dependency and its synchronized Skills.';
   static override description =
@@ -79,7 +112,6 @@ export default class PackageRemove extends PluginUnregister {
     app: Interfaces.OptionFlag<string | undefined>;
     'workspace-root': Interfaces.OptionFlag<string | undefined>;
     'dry-run': Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
@@ -96,37 +128,27 @@ export default class PackageRemove extends PluginUnregister {
       default: false,
       description: 'Print what would change without writing anything.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  protected override readonly operation = 'package:remove';
-
-  public override async run(): Promise<void> {
+  public async run(): Promise<PackageRemoveResult> {
+    const { args, flags } = await this.parse(PackageRemove);
     try {
-      await this.runPackageRemove();
+      return await this.remove(args.name, flags);
     } catch (error) {
-      if (!this.argv.includes('--json')) throw error;
-      const classified =
-        error instanceof PackageManagerRemovalError
-          ? {
-              code: 'PACKAGE_MANAGER_FAILED',
-              message: error.message,
-              suggestions: [
-                'Fix the package manager error, then run nocobase package remove again.',
-              ],
-            }
-          : classifyPluginError(error);
-      this.logJson(pluginJsonFailure(this.operation, classified));
-      process.exitCode = 1;
+      throw classifyPluginError(error);
     }
   }
 
-  private async runPackageRemove(): Promise<void> {
-    const { args, flags } = await this.parse(PackageRemove);
-    const packageName = normalizePackageName(args.name);
+  private async remove(
+    name: string,
+    flags: {
+      readonly dir?: string;
+      readonly app?: string;
+      readonly 'workspace-root'?: string;
+      readonly 'dry-run': boolean;
+    },
+  ): Promise<PackageRemoveResult> {
+    const packageName = normalizePackageName(name);
     const appRoot = await resolveAppRoot({
       app: flags.app,
       dir: flags.dir,
@@ -138,16 +160,14 @@ export default class PackageRemove extends PluginUnregister {
     );
 
     if (packageName.startsWith(PLUGIN_PACKAGE_PREFIX)) {
-      await this.unregisterPlugin(packageName, {
+      return this.unregisterPlugin(packageName, {
         app: flags.app,
         dependencySections,
         dir: flags.dir,
         dryRun: flags['dry-run'],
-        json: flags.json,
         noInstall: dependencySections.length === 0,
         workspaceRoot: flags['workspace-root'],
       });
-      return;
     }
 
     const skillRemovals = await planPackageSkillRemovals(appRoot, packageName);
@@ -159,7 +179,7 @@ export default class PackageRemove extends PluginUnregister {
       packageManager === undefined
         ? undefined
         : removeDependencyCommand(packageManager, packageName);
-    const commands =
+    const commands: PluginCommandInvocation[] =
       invocation === undefined
         ? []
         : [
@@ -171,27 +191,9 @@ export default class PackageRemove extends PluginUnregister {
           ];
 
     if (flags['dry-run']) {
-      if (flags.json) {
-        this.logJson(
-          pluginJsonSuccess(
-            this.operation,
-            dependencySections.length === 0 && skillRemovals.length === 0
-              ? 'success-noop'
-              : 'success',
-            {
-              mode: 'dry-run',
-              appRoot,
-              packageName,
-              dependencySections,
-              skillRemovals,
-              commands,
-            },
-          ),
-        );
-      } else if (
-        dependencySections.length === 0 &&
-        skillRemovals.length === 0
-      ) {
+      // A dry run changes nothing, whatever it would do.
+      this.setStatus('success-noop');
+      if (dependencySections.length === 0 && skillRemovals.length === 0) {
         this.log(
           `${packageName} is not declared in this app and has no synchronized skills.`,
         );
@@ -204,15 +206,22 @@ export default class PackageRemove extends PluginUnregister {
           this.log(`  would remove skill ${skill}`);
         }
       }
-      return;
+      return {
+        mode: 'dry-run',
+        appRoot,
+        packageName,
+        dependencySections,
+        skillRemovals,
+        commands,
+      };
     }
 
     if (invocation !== undefined) {
-      if (!flags.json) {
-        this.log(`${invocation.packageManager} ${invocation.args.join(' ')}`);
-      }
+      this.log(`${invocation.packageManager} ${invocation.args.join(' ')}`);
+      // Under --json the package manager's output is collected rather than shown: it would corrupt the one document
+      // on stdout.
       try {
-        if (flags.json) {
+        if (this.jsonEnabled()) {
           await runCommand(invocation.packageManager, [...invocation.args], {
             cwd: appRoot,
           });
@@ -223,15 +232,15 @@ export default class PackageRemove extends PluginUnregister {
             { cwd: appRoot },
           );
           if (exitCode !== 0) {
-            throw new PackageManagerRemovalError(
+            throw packageManagerRemovalError(
               invocation.packageManager,
               packageName,
             );
           }
         }
       } catch (error) {
-        if (error instanceof PackageManagerRemovalError) throw error;
-        throw new PackageManagerRemovalError(
+        if (isCommandError(error)) throw error;
+        throw packageManagerRemovalError(
           invocation.packageManager,
           packageName,
           error,
@@ -243,7 +252,7 @@ export default class PackageRemove extends PluginUnregister {
         packageName,
       );
       if (remainingSections.length > 0) {
-        throw new PackageManagerRemovalError(
+        throw packageManagerRemovalError(
           invocation.packageManager,
           packageName,
         );
@@ -251,33 +260,25 @@ export default class PackageRemove extends PluginUnregister {
     }
 
     const removedSkills = await removePackageSkills(appRoot, packageName);
-    const status =
-      dependencySections.length === 0 && removedSkills.length === 0
-        ? 'success-noop'
-        : 'success';
-    if (flags.json) {
-      this.logJson(
-        pluginJsonSuccess(this.operation, status, {
-          mode: 'remove',
-          appRoot,
-          packageName,
-          removedFrom: dependencySections,
-          removedSkills,
-          commands,
-        }),
-      );
-      return;
-    }
-    if (status === 'success-noop') {
+    if (dependencySections.length === 0 && removedSkills.length === 0) {
+      this.setStatus('success-noop');
       this.log(
         `${packageName} is not declared in this app and has no synchronized skills.`,
       );
-      return;
+    } else {
+      this.log(`Removed ${packageName}.`);
+      for (const skill of removedSkills) {
+        this.log(`  removed skill ${skill}`);
+      }
     }
-    this.log(`Removed ${packageName}.`);
-    for (const skill of removedSkills) {
-      this.log(`  removed skill ${skill}`);
-    }
+    return {
+      mode: 'remove',
+      appRoot,
+      packageName,
+      removedFrom: dependencySections,
+      removedSkills,
+      commands,
+    };
   }
 }
 
