@@ -227,6 +227,7 @@ test('hub-smoke takes its own Hub port and a workdir, not the registry port', ()
   for (const args of [
     ['hub-smoke', '--port', '4874'],
     ['hub-smoke', '--hub-port', '70000'],
+    ['hub-smoke', '--hub-port', '13010'],
     ['hub-smoke', '--template', 'hub'],
     ['smoke', '--hub-port', '13300'],
   ])
