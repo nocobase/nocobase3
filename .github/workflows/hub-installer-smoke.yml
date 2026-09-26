@@ -1,6 +1,7 @@
 name: Hub installer smoke test
 
-# Installs the published Hub template with the hub-installer from this checkout, on the platform the Hub image uses.
+# Installs, upgrades and rolls back the published Hub template with the hub-installer from this checkout, on the
+# platform the Hub image uses.
 # It also runs daily: the template ships no lockfile, so a newly published dependency can break an install with no
 # change in this repository.
 
@@ -8,6 +9,7 @@ on:
   pull_request:
     paths:
       - 'packages/tools/hub-installer/**'
+      - 'scripts/smoke-hub-installer.mjs'
       - '.github/workflows/hub-installer-smoke.yml'
   schedule:
     - cron: '0 3 * * *'
@@ -43,63 +45,10 @@ jobs:
       - name: Install hub-installer dependencies
         run: pnpm install --frozen-lockfile --filter @nocobase/hub-installer
 
-      - name: Install the Hub
-        run: |
-          node packages/tools/hub-installer/bin/run.js install "$HUB_ROOT" \
-            --origin http://127.0.0.1:13000 --json | tee install.json
-          node -e 'const r=require("./install.json"); if (!r.ok || !r.result.started) process.exit(1)'
-
-      - name: Check the Hub
-        run: |
-          node packages/tools/hub-installer/bin/run.js status --dir "$HUB_ROOT" --json | tee status.json
-          node -e '
-            const r = require("./status.json");
-            const problems = [];
-            if (!r.ok) problems.push("status failed");
-            if (!r.result.health.ok) problems.push("health check failed");
-            if (r.result.process?.status !== "online") problems.push("pm2 process is not online");
-            if (!r.result.node.matches) problems.push("Node major mismatch");
-            if (problems.length) { console.log(`::error::${problems.join("; ")}`); process.exit(1); }
-          '
-          test ! -e "$HUB_ROOT/releases/$(node -p 'require("./status.json").result.current')/hub/storage"
-          test -f "$HUB_ROOT/storage/hub/database/main.sqlite"
-
-      # Only one template version is guaranteed to build (the template ships no lockfile), so the upgrade starts from a
-      # copy of the installed release registered as an older version. That exercises the whole downtime path: stop,
-      # backup, switch, migrate, start, and rollback, without a second build.
-      - name: Upgrade and roll back
-        run: |
-          installed=$(node -p 'require("./status.json").result.current')
-          cp -R "$HUB_ROOT/releases/$installed" "$HUB_ROOT/releases/0.0.0-smoke"
-          node -e '
-            const fs = require("fs");
-            const root = process.env.HUB_ROOT;
-            const file = `${root}/installer.json`;
-            const state = JSON.parse(fs.readFileSync(file, "utf8"));
-            state.releases.unshift({ ...state.releases[0], version: "0.0.0-smoke", installedAt: "2000-01-01T00:00:00.000Z" });
-            state.current = "0.0.0-smoke";
-            fs.writeFileSync(file, JSON.stringify(state, null, 2));
-            fs.symlinkSync("releases/0.0.0-smoke/hub", `${root}/current.tmp`);
-            fs.renameSync(`${root}/current.tmp`, `${root}/current`);
-          '
-          pm2 delete nocobase-hub
-          pm2 start "$HUB_ROOT/ecosystem.config.cjs"
-
-          node packages/tools/hub-installer/bin/run.js upgrade --dir "$HUB_ROOT" --yes --json | tee upgrade.json
-          node -e '
-            const r = require("./upgrade.json");
-            if (!r.ok || !r.result.upgraded || !r.result.reused || r.result.from !== "0.0.0-smoke") process.exit(1);
-          '
-          test -f "$HUB_ROOT/$(node -p 'require("./upgrade.json").result.backup')/main.sqlite"
-
-          node packages/tools/hub-installer/bin/run.js rollback --dir "$HUB_ROOT" --yes --json | tee rollback.json
-          node -e 'const r = require("./rollback.json"); if (!r.ok || r.result.to !== "0.0.0-smoke") process.exit(1)'
-
-          node packages/tools/hub-installer/bin/run.js status --dir "$HUB_ROOT" --offline --json | tee status.json
-          node -e '
-            const r = require("./status.json");
-            if (!r.result.health.ok || r.result.current !== "0.0.0-smoke" || r.result.pending) process.exit(1);
-          '
+      # The same script backs `pnpm unreleased:hub-smoke`: install, check, upgrade from a copy registered as an older
+      # release, roll back, check again.
+      - name: Install, upgrade and roll back a Hub
+        run: node scripts/smoke-hub-installer.mjs --root "$HUB_ROOT" --port 13000 -- node packages/tools/hub-installer/bin/run.js
 
       - name: Show Hub logs
         if: failure()
