@@ -114,6 +114,8 @@ export default class PluginUpdate extends AppCommand {
     }
 
     if (dryRun) {
+      // A dry run changes nothing, whatever it would do.
+      this.setStatus('success-noop');
       this.log(
         `Would run: ${plan.packageManager} ${plan.args.join(' ')}\nThen synchronize the skills of: ${plan.packageNames.join(', ')}`,
       );

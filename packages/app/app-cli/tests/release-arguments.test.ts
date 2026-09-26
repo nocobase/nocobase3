@@ -58,31 +58,11 @@ const uploaded: ReleaseUploadResult = {
 };
 
 const argumentErrors = [
-  [
-    'deploy',
-    ['--api-key', secret],
-    'Missing required flag --release-id. Run this command with --help.',
-  ],
-  [
-    'upload',
-    ['--timeout', secret],
-    'Invalid value for --timeout. Run this command with --help.',
-  ],
-  [
-    'upload',
-    ['--apikey', secret],
-    'Unknown flag --apikey. Run this command with --help.',
-  ],
-  [
-    'upload',
-    [`--apikey=${secret}`],
-    'Unknown flag --apikey. Run this command with --help.',
-  ],
-  [
-    'upload',
-    [secret],
-    'This command takes no positional arguments. Run this command with --help.',
-  ],
+  ['deploy', ['--api-key', secret], 'Missing required flag --release-id.'],
+  ['upload', ['--timeout', secret], 'Invalid value for --timeout.'],
+  ['upload', ['--apikey', secret], 'Unknown flag --apikey.'],
+  ['upload', [`--apikey=${secret}`], 'Unknown flag --apikey.'],
+  ['upload', [secret], 'This command takes no positional arguments.'],
 ] as const;
 
 describe('release argument errors', () => {
@@ -92,12 +72,25 @@ describe('release argument errors', () => {
       const result = await run(operation, ['--json', ...argv]);
 
       expect(result.exitCode).toBe(2);
-      expect(result.json()).toEqual({
+      // The same code and handling as every other command's usage errors, suggestions included.
+      expect(result.json()).toMatchObject({
         schemaVersion: 1,
         ok: false,
         command: `release ${operation}`,
         status: 'failure',
-        error: { code: 'INVALID_ARGUMENTS', message, suggestions: [] },
+        error: {
+          code: 'INVALID_USAGE',
+          message,
+          suggestions: expect.arrayContaining([
+            {
+              message: expect.stringMatching(/^See the command's/u),
+              run: {
+                command: 'pnpm',
+                args: ['nocobase', 'release', operation, '--help'],
+              },
+            },
+          ]),
+        },
         warnings: [],
       });
       expect(result.stdout + result.stderr).not.toContain(secret);
@@ -113,7 +106,7 @@ describe('release argument errors', () => {
       expect(result.error).toBeInstanceOf(CommandError);
       expect(result.error).toMatchObject({
         message,
-        errorCode: 'INVALID_ARGUMENTS',
+        errorCode: 'INVALID_USAGE',
         oclif: { exit: 2 },
       });
       expect(JSON.stringify(result.error)).not.toContain(secret);

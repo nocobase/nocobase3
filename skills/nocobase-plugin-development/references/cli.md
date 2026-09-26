@@ -34,7 +34,7 @@ Choose what the command reaches for:
 | Configuration, paths, the environment, or services | `await this.withApp(async ({ app, env }) => { … })`                        |
 | The full application lifecycle                     | `await app.start()` inside the `withApp()` callback                        |
 
-`withApp()` creates the application from `server/app`, runs the callback, then shuts the application down and destroys its runtime, whether the callback returns or throws. It registers and starts nothing: call `app.registerProviders()` to resolve services, and `app.start()` only when the command needs every provider running, because starting also starts workers and schedules. `app.config` and `app.paths` (`root()`, `storage()`, `database()`) need neither. `app` is valid only inside the callback; return what the command needs from it.
+`withApp()` creates the application from `server/app`, runs the callback, then shuts the application down and destroys its runtime, whether the callback returns or throws. A failure to shut down is a warning: it never turns work that succeeded into a failure, which would invite a rerun that repeats it. It registers and starts nothing: call `app.registerProviders()` to resolve services, and `app.start()` only when the command needs every provider running, because starting also starts workers and schedules. `app.config` and `app.paths` (`root()`, `storage()`, `database()`) need neither. `app` is valid only inside the callback; return what the command needs from it.
 
 ### Output
 
@@ -44,7 +44,7 @@ Choose what the command reaches for:
 {
   "schemaVersion": 1,
   "ok": true,
-  "command": "orders export",
+  "command": "app orders export",
   "status": "success",
   "result": { "exported": 42 },
   "warnings": []
@@ -55,7 +55,7 @@ Choose what the command reaches for:
 {
   "schemaVersion": 1,
   "ok": false,
-  "command": "orders export",
+  "command": "app orders export",
   "status": "failure",
   "error": {
     "code": "NO_ORDERS",
@@ -75,10 +75,10 @@ Choose what the command reaches for:
 | Warn                      | `this.warn(text)`                                                       | stderr                             | `warnings`                   |
 | Fail                      | `throw new CommandError(message, { code, suggestions, details, exit })` | message and suggestions, on stderr | `error`, and a non-zero exit |
 
-- `code` is a stable UPPER_SNAKE name a caller branches on. `suggestions` are strings or `{ message, run: { command, args } }`; give `run` when the next step is a command. `details` is plain data the caller needs to act on. `exit` defaults to `1`; use `2` for invalid usage.
-- `status` is `success` unless the command calls `this.setStatus('success-noop')` or `this.setStatus('partial-success')`; a failure is always `failure`.
+- `code` is a stable UPPER_SNAKE name a caller branches on. `suggestions` are strings or `{ message, run: { command, args } }`; give `run` when the next step is a command. For a command of this CLI, `run: this.cliCommand(['db', 'apply'])` names it the way it runs where the command runs: `pnpm nocobase` in a source checkout, `node <dist>/cli/index.js` in a built `dist/`, which has no pnpm. `details` is plain data the caller needs to act on. `exit` defaults to `1`; use `2` for invalid usage.
+- `status` is `success` unless the command calls `this.setStatus('success-noop')` — for a dry run, or a run that found nothing to do — or `this.setStatus('partial-success')`; a failure is always `failure`.
 - The result is a public contract that callers and scripts come to rely on: declare its type, keep it to plain data, and never include a secret or a large text.
-- Do not call `this.exit()`, `this.logJson()` or `console.log`. Each puts something on stdout the document does not account for; `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`.
+- Do not call `this.exit()`, `this.logJson()` or `console.log`. Each puts something on stdout the document does not account for; `AppCommand` refuses the first two, and the shared ESLint preset refuses all three in `cli/`. Do not use `this.error()` either: it reports `COMMAND_FAILED` with oclif's default exit `2`, which reads as invalid usage.
 
 Records the application logs while a command runs go to stderr, so stdout carries only the command's own output. Progress stays on stderr under `--json` too, so a long command does not go quiet for the agent that asked for JSON.
 
@@ -114,8 +114,8 @@ const run = await runAppCommand(Bound, ['--dry-run', '--json']);
 
 expect(run.json()).toMatchObject({
   ok: true,
+  command: 'app orders export',
   status: 'success-noop',
-  result: { exported: 0 },
 });
 ```
 
@@ -313,7 +313,7 @@ Use the App's CLI for normal lifecycle work:
 | `pnpm nocobase skills sync`                  | Synchronizes Skills from direct NocoBase dependencies and explicitly registered plugins without upgrading packages                                                 |
 | `pnpm nocobase package remove <package>`     | Removes a direct NocoBase package and its synchronized Skills; plugin packages reuse full unregistration                                                           |
 
-Prefer `--dry-run --json` when an Agent needs a plan. If an uninstalled plugin is requested, register dry-run returns `partial-success` with `result.state: "requires-installation"`, because it cannot inspect exports until the package exists; install it and rerun to compute the wiring plan. Read the JSON `ok` and `status` fields, preserve nonzero failure exits, and treat `success-noop` and `partial-success` as distinct outcomes.
+Prefer `--dry-run --json` when an Agent needs a plan. Every dry run answers `success-noop`, because it changes nothing. If an uninstalled plugin is requested, register dry-run returns `result.state: "requires-installation"`, because it cannot inspect exports until the package exists; install it and rerun to compute the wiring plan. A plan that needs a manual edit says so in `result.plan`. Read the JSON `ok` and `status` fields, preserve nonzero failure exits, and treat `success-noop` and `partial-success` as distinct outcomes.
 
 `plugin inspect` proves only that readable static registration surfaces agree. It does not execute commands or hooks, start Runtime contributions, evaluate permissions, test behavior, or replace package and App validation.
 

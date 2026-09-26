@@ -16,8 +16,9 @@ import {
 
 export interface BindAppCommandOptions extends AppCommandContextOptions {
   /**
-   * The id the command answers to, such as `orders:export` for `app orders export`. The runner assigns it when it
-   * assembles the tree; a bound command run on its own has none, so `--json` would name it by its class instead.
+   * The id the runner would register the command under, colon-separated: `app:orders:export` for an application's
+   * `cli/commands/orders/export.ts`, `cli-example:greet` for a plugin's `greet`. The `--json` document names the
+   * command by it. Without it, oclif names a command run on its own after its class, lower-cased.
    */
   readonly id?: string;
 }
@@ -34,6 +35,8 @@ export function bindAppCommand<T extends typeof AppCommand>(
 ): T {
   const Base = command as typeof AppCommand;
   const bound = class extends Base {};
+  // An anonymous subclass would otherwise be named after this variable, and oclif names an id-less command after it.
+  Object.defineProperty(bound, 'name', { value: command.name });
   Object.defineProperty(bound, PINNED_APP_CONTEXT, {
     value: createDefaultCommandContext(options) satisfies AppCommandContext,
   });

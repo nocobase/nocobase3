@@ -191,8 +191,9 @@ export default class PackageRemove extends PluginUnregistrationCommand {
           ];
 
     if (flags['dry-run']) {
+      // A dry run changes nothing, whatever it would do.
+      this.setStatus('success-noop');
       if (dependencySections.length === 0 && skillRemovals.length === 0) {
-        this.setStatus('success-noop');
         this.log(
           `${packageName} is not declared in this app and has no synchronized skills.`,
         );

@@ -39,6 +39,12 @@ export interface AppMigrator {
 export interface AppPendingTasksOptions {
   /** Plan a fresh run: the schema is emptied first, so every task is pending. */
   readonly fresh?: boolean;
+  /**
+   * The database does not exist yet, so nothing has run and every task is
+   * pending. No connection is opened to find out, because opening one to
+   * missing storage creates it.
+   */
+  readonly withoutHistory?: boolean;
 }
 
 /**
@@ -144,7 +150,7 @@ export function createAppMigrator(
       );
       return pendingTasksResult(
         migrations,
-        pendingOptions.fresh
+        pendingOptions.fresh || pendingOptions.withoutHistory
           ? []
           : await createDatabaseMigrator(options).history(),
       );

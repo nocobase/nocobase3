@@ -40,9 +40,13 @@ export function createDefaultCommandContext(
           consoleLogStream: 'stderr',
         });
         const release = trackOpenRuntime({
+          // The scope is destroyed even when shutdown fails: it holds what keeps the process from exiting.
           close: async () => {
-            await runtime.app?.shutdown();
-            await runtime.scope.destroy();
+            try {
+              await runtime.app?.shutdown();
+            } finally {
+              await runtime.scope.destroy();
+            }
           },
         });
         runtime.scope.onBeforeDestroy(async () => {

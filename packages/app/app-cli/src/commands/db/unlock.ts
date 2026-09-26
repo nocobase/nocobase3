@@ -3,6 +3,7 @@ import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
 import {
+  databaseRunChangedNothing,
   runDatabaseUnlockCommand,
   type DatabaseCommandResult,
 } from '../../database-command.ts';
@@ -47,7 +48,7 @@ export default class AppDbUnlock extends AppCommand {
       flags,
       appContextOf(this),
     );
-    if (result.state === 'not-configured') this.setStatus('success-noop');
+    if (databaseRunChangedNothing(result)) this.setStatus('success-noop');
     return result;
   }
 }

@@ -27,6 +27,7 @@ import {
   isCommandError,
   type CommandSuggestion,
 } from './command/errors.ts';
+import { nocobaseCommand } from './command/invocation.ts';
 import { withAppInstance } from './command/lifecycle.ts';
 import { applicationState } from './runtime/command-store.ts';
 
@@ -144,6 +145,7 @@ export async function runDatabaseApplyCommand(
     // Read without running anything or taking a lock, so previewing a reset
     // is safe while another run is going.
     const preview = await executeWithApplication(
+      command,
       { ...flags, collections: false },
       context,
       (app) =>
@@ -169,7 +171,7 @@ export async function runDatabaseApplyCommand(
       },
     );
   }
-  const result = await executeWithApplication(flags, context, (app) =>
+  const result = await executeWithApplication(command, flags, context, (app) =>
     runAppDatabaseTasks(app.config.get<AppDatabaseConfig>('database')!, {
       ...planOptions(app, flags),
       kind: ['migrations', 'seeds'],
@@ -231,6 +233,7 @@ export async function runDatabaseRollbackCommand(
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
 ): Promise<DatabaseCommandResult> {
   const result = await executeWithApplication(
+    command,
     flags.dryRun ? { ...flags, collections: false } : flags,
     context,
     async (app) => {
@@ -283,6 +286,7 @@ export async function runDatabaseRedoCommand(
 ): Promise<DatabaseCommandResult> {
   let plan: DatabasePlanEntry[] = [];
   const result = await executeWithApplication(
+    command,
     flags.dryRun ? { ...flags, collections: false } : flags,
     context,
     async (app): Promise<AppDatabaseTasksResult> => {
@@ -353,7 +357,7 @@ export async function runDatabaseUnlockCommand(
   flags: DatabaseSelectionFlags & { force?: boolean },
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
 ): Promise<DatabaseCommandResult> {
-  const result = await executeWithApplication(flags, context, (app) =>
+  const result = await executeWithApplication(command, flags, context, (app) =>
     runAppDatabaseTasks(app.config.get<AppDatabaseConfig>('database')!, {
       ...planOptions(app, flags),
       kind: ['migrations', 'seeds'],
@@ -414,59 +418,64 @@ export async function runDatabaseRepairCommand(
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
 ): Promise<DatabaseCommandResult> {
   const kinds: readonly AppDatabaseTaskKind[] = ['migrations', 'seeds'];
-  const result = await executeWithApplication(flags, context, async (app) => {
-    const execute = async (
-      dryRun: boolean,
-    ): Promise<AppDatabaseTasksResult> => {
-      const results: AppDatabaseTaskResult[] = [];
-      let ok = true;
-      for (const kind of kinds) {
-        const outcome = await runAppDatabaseTasks(
-          app.config.get<AppDatabaseConfig>('database')!,
-          {
-            ...planOptions(app, flags),
-            kind,
-            operation: 'repair',
-            dryRun,
-          },
-        );
-        results.push(...outcome.results);
-        ok &&= outcome.ok;
-      }
-      return {
-        ok,
-        status: !results.length
-          ? 'not-configured'
-          : ok
-            ? 'completed'
-            : 'failed',
-        results,
+  const result = await executeWithApplication(
+    command,
+    flags,
+    context,
+    async (app) => {
+      const execute = async (
+        dryRun: boolean,
+      ): Promise<AppDatabaseTasksResult> => {
+        const results: AppDatabaseTaskResult[] = [];
+        let ok = true;
+        for (const kind of kinds) {
+          const outcome = await runAppDatabaseTasks(
+            app.config.get<AppDatabaseConfig>('database')!,
+            {
+              ...planOptions(app, flags),
+              kind,
+              operation: 'repair',
+              dryRun,
+            },
+          );
+          results.push(...outcome.results);
+          ok &&= outcome.ok;
+        }
+        return {
+          ok,
+          status: !results.length
+            ? 'not-configured'
+            : ok
+              ? 'completed'
+              : 'failed',
+          results,
+        };
       };
-    };
 
-    // Preview first, so the operator sees every rewrite before one is
-    // written. Each write is still conditioned on the checksum read here, so
-    // a history that changes in between fails rather than repairing
-    // something the preview never showed.
-    const preview = await execute(true);
-    if (flags.dryRun || !repairedRecords(preview).length) return preview;
-    if (!flags.force) {
-      if (!canPrompt()) {
-        throw forceRequired(
-          'Checksum repair requires --force in CI or a non-interactive terminal.',
-          {
-            command: 'repair',
-            flags,
-            plan: planEntries(preview.results, 'repair'),
-          },
-        );
+      // Preview first, so the operator sees every rewrite before one is
+      // written. Each write is still conditioned on the checksum read here, so
+      // a history that changes in between fails rather than repairing
+      // something the preview never showed.
+      const preview = await execute(true);
+      if (flags.dryRun || !repairedRecords(preview).length) return preview;
+      if (!flags.force) {
+        if (!canPrompt()) {
+          throw forceRequired(
+            'Checksum repair requires --force in CI or a non-interactive terminal.',
+            {
+              command: 'repair',
+              flags,
+              plan: planEntries(preview.results, 'repair'),
+            },
+          );
+        }
+        if (!(await confirmRepair(command, preview))) {
+          throw cancelled('Checksum repair cancelled.');
+        }
       }
-      if (!(await confirmRepair(command, preview))) {
-        throw cancelled('Checksum repair cancelled.');
-      }
-    }
-    return execute(false);
-  });
+      return execute(false);
+    },
+  );
 
   if (!result.results.length) command.log('No database is configured.');
   for (const entry of result.results) {
@@ -516,27 +525,35 @@ function planOptions(
  * anything else is thrown as the command's failure.
  */
 async function executeWithApplication(
+  command: DatabaseCommandOutput,
   flags: DatabaseSelectionFlags,
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
   run: (app: Application) => Promise<AppDatabaseTasksResult>,
 ): Promise<DatabaseRun> {
   try {
-    return await withAppInstance(context, async (app): Promise<DatabaseRun> => {
-      app.registerProviders();
-      const result = await run(app);
-      if (!flags.collections) return result;
-      // Before shutdown, on the manager the migrations just used: the cache
-      // is read from the database state this run left behind.
-      const collections = await refreshAppCollectionsArtifact(
-        app.config.get<AppDatabaseConfig>('database')!,
-        result,
-        {
-          paths: app.paths,
-          database: app.container.resolve(databaseManagerToken),
-        },
-      );
-      return collections ? { ...result, collections } : result;
-    });
+    return await withAppInstance(
+      context,
+      async (app): Promise<DatabaseRun> => {
+        app.registerProviders();
+        const result = await run(app);
+        if (!flags.collections) return result;
+        // Before shutdown, on the manager the migrations just used: the cache
+        // is read from the database state this run left behind.
+        const collections = await refreshAppCollectionsArtifact(
+          app.config.get<AppDatabaseConfig>('database')!,
+          result,
+          {
+            paths: app.paths,
+            database: app.container.resolve(databaseManagerToken),
+          },
+        );
+        return collections ? { ...result, collections } : result;
+      },
+      // The tasks have run, or failed, by now: a failure to shut down reports
+      // neither, and failing the command for it would invite a rerun that
+      // rolls back a second batch.
+      { onCleanupFailure: (error) => command.warn(error.message) },
+    );
   } catch (error) {
     if (error instanceof AppDatabaseTaskError) {
       return isTaskLockBusyError(error.cause)
@@ -636,6 +653,25 @@ function settle(result: DatabaseRun): DatabaseCommandResult {
     results: result.results,
     ...collections,
   };
+}
+
+/**
+ * Whether a run that succeeded changed nothing: no task executed, rolled back, reset, repaired or released anything.
+ * The commands answer `success-noop` for it, as they do for a dry run, so a caller rerunning one to confirm the database
+ * is current can tell that it was.
+ */
+export function databaseRunChangedNothing(
+  result: DatabaseCommandResult,
+): boolean {
+  if (result.dryRun === true || result.state === 'not-configured') return true;
+  return result.results.every(
+    (entry) =>
+      entry.fresh !== true &&
+      entry.released !== true &&
+      !entry.executed?.length &&
+      !entry.rolledBack?.length &&
+      (entry.dryRun === true || !entry.repaired?.length),
+  );
 }
 
 function reportCollectionsRefresh(
@@ -741,12 +777,7 @@ function forceRequired(
     readonly plan: readonly DatabasePlanEntry[];
   },
 ): CommandError {
-  const args = [
-    'nocobase',
-    'db',
-    refusal.command,
-    ...selectionArgs(refusal.flags),
-  ];
+  const args = ['db', refusal.command, ...selectionArgs(refusal.flags)];
   return new CommandError(message, {
     code: 'FORCE_REQUIRED',
     exit: 2,
@@ -754,11 +785,11 @@ function forceRequired(
       {
         message:
           'Show the user this plan and rerun with --force only if they confirm.',
-        run: { command: 'pnpm', args: [...args, '--force'] },
+        run: nocobaseCommand([...args, '--force']),
       },
       {
         message: 'Preview the plan without changing anything:',
-        run: { command: 'pnpm', args: [...args, '--dry-run', '--json'] },
+        run: nocobaseCommand([...args, '--dry-run', '--json']),
       },
     ],
     details: { plan: refusal.plan },
@@ -789,17 +820,13 @@ function databaseLocked(
       message: lock.expired
         ? 'If the user confirms the other run is gone, release its lock:'
         : 'If the user confirms the other run is gone, release its lock. It was still sending heartbeats, so this needs --force:',
-      run: {
-        command: 'pnpm',
-        args: [
-          'nocobase',
-          'db',
-          'unlock',
-          '--connection',
-          connection,
-          ...(lock.expired ? [] : ['--force']),
-        ],
-      },
+      run: nocobaseCommand([
+        'db',
+        'unlock',
+        '--connection',
+        connection,
+        ...(lock.expired ? [] : ['--force']),
+      ]),
     });
   }
   return new CommandError(

@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { isMap, isSeq, parse, parseDocument } from 'yaml';
 
 import type { CommandSuggestion } from '../command/errors.ts';
+import { nocobaseCommand } from '../command/invocation.ts';
 import type { AppCommandRuntime } from '../context.ts';
 import {
   detectConfigInitMode,
@@ -163,7 +164,7 @@ export async function runConfigSet(
       {
         suggestion: {
           message: 'Write one first:',
-          run: { command: 'pnpm', args: ['nocobase', 'config', 'init'] },
+          run: nocobaseCommand(['config', 'init']),
         },
       },
     );

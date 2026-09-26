@@ -107,7 +107,7 @@ describe('package remove command', () => {
       expect(JSON.parse(result.stdout)).toMatchObject({
         ok: true,
         command: 'package remove',
-        status: 'success',
+        status: 'success-noop',
         result: {
           mode: 'dry-run',
           packageName,

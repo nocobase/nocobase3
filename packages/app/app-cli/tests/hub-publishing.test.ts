@@ -730,7 +730,7 @@ describe('CLI command output', () => {
       ok: false,
       command: 'release deploy',
       status: 'failure',
-      error: { code: 'INVALID_ARGUMENTS' },
+      error: { code: 'INVALID_USAGE' },
     });
     expect(run.stdout + run.stderr).not.toContain(env.HUB_API_KEY);
   });

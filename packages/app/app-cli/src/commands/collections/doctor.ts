@@ -9,6 +9,7 @@ import {
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
 
+import { nocobaseCommand } from '../../command/invocation.ts';
 import { CommandError, type CommandSuggestion } from '../../command/errors.ts';
 import { withAppRuntime } from '../../command/lifecycle.ts';
 import {
@@ -64,16 +65,19 @@ export default class CollectionsDoctor extends AppCommand {
     const { flags } = await this.parse(CollectionsDoctor);
     let result: AppCollectionsDoctorResult;
     try {
-      result = await withAppRuntime(appContextOf(this), (runtime) =>
-        runAppCollectionsDoctor(
-          runtime.config.get<AppDatabaseConfig>('database')!,
-          {
-            paths: runtime.paths,
-            connection: flags.connection,
-            all: flags.all,
-            fix: flags.fix,
-          },
-        ),
+      result = await withAppRuntime(
+        appContextOf(this),
+        (runtime) =>
+          runAppCollectionsDoctor(
+            runtime.config.get<AppDatabaseConfig>('database')!,
+            {
+              paths: runtime.paths,
+              connection: flags.connection,
+              all: flags.all,
+              fix: flags.fix,
+            },
+          ),
+        { onCleanupFailure: (error) => this.warn(error.message) },
       );
     } catch (error) {
       throw toDatabaseCommandError(error, flags.connection);
@@ -109,16 +113,12 @@ export default class CollectionsDoctor extends AppCommand {
       if (remaining.some((issue) => issue.orphaned)) {
         suggestions.push({
           message: 'Delete the records whose table is gone:',
-          run: {
-            command: 'pnpm',
-            args: [
-              'nocobase',
-              'collections',
-              'doctor',
-              '--fix',
-              ...selectionArgs(flags),
-            ],
-          },
+          run: nocobaseCommand([
+            'collections',
+            'doctor',
+            '--fix',
+            ...selectionArgs(flags),
+          ]),
         });
       }
       if (remaining.some((issue) => !issue.orphaned)) {

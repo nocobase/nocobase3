@@ -103,16 +103,11 @@ export abstract class PluginUnregistrationCommand extends AppCommand {
       return { appRoot, packageName, removedFrom: [], skillRemovals };
     }
     if (dryRun) {
+      // A dry run changes nothing, whatever it would do; a plan that needs manual edits says so in `plan`.
+      this.setStatus('success-noop');
       const invocation = shouldRemoveDependency
         ? removeDependencyCommand(await appPackageManager(appRoot), packageName)
         : undefined;
-      if (
-        plan.manualClientEdit ||
-        plan.manualServerEdit ||
-        plan.manualCliEdit
-      ) {
-        this.setStatus('partial-success');
-      }
       this.log(
         `Would unregister ${packageName} (${plan.removedFrom.join(', ')})`,
       );

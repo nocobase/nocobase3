@@ -1,7 +1,13 @@
 import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import type { Knex } from 'knex';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createAppPaths } from '../src/config/index.js';
@@ -128,7 +134,23 @@ describe('a dry run of the database tasks', () => {
         },
       ],
     });
-    // Nothing ran and nothing was recorded: not even the history tables exist.
+    // The database did not exist, and a dry run does not create it: it answers for an empty one without connecting.
+    const file = paths.storage('main/data.sqlite');
+    expect(existsSync(file)).toBe(false);
+    expect(existsSync(path.dirname(file))).toBe(false);
+
+    // An existing database is read, and nothing is recorded: not even the history tables appear.
+    mkdirSync(path.dirname(file), { recursive: true });
+    await inspect(async (client) => client.raw('select 1'));
+    expect(
+      await runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: both,
+        all: true,
+        dryRun: true,
+      }),
+    ).toEqual(plan);
     expect(
       await inspect(async (client) => [
         await client.schema.hasTable('rows'),

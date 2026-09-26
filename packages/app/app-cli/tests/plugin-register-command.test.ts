@@ -149,7 +149,7 @@ describe('app plugin register command', () => {
     expect(registerResponse).toMatchObject({
       ok: true,
       command: 'plugin register',
-      status: 'success',
+      status: 'success-noop',
     });
     expect(registerResponse.result.plan).toMatchObject({
       clientPluginsChanged: true,
@@ -176,7 +176,7 @@ describe('app plugin register command', () => {
     expect(unregisterResponse).toMatchObject({
       ok: true,
       command: 'plugin unregister',
-      status: 'success',
+      status: 'success-noop',
     });
     expect(unregisterResponse.result.skillRemovals).toEqual([
       'nocobase-app-plugin-audit-log',
@@ -219,7 +219,7 @@ describe('app plugin register command', () => {
         ok: true,
         command: 'plugin register',
         // The preview stops at the install: the plugin's exports decide the rest of the plan.
-        status: 'partial-success',
+        status: 'success-noop',
         result: {
           state: 'requires-installation',
           commands: [
@@ -321,7 +321,7 @@ describe('app plugin register command', () => {
     expect(JSON.parse(planned.stdout)).toMatchObject({
       ok: true,
       command: 'plugin update',
-      status: 'success',
+      status: 'success-noop',
       result: {
         mode: 'dry-run',
         packageNames: ['@nocobase/app-plugin-audit-log'],
@@ -855,7 +855,7 @@ describe('app plugin register command', () => {
       schemaVersion: 1,
       ok: true,
       command: 'skills sync',
-      status: 'success',
+      status: 'success-noop',
     });
     expect(response.result.dryRun).toBe(true);
     expect(response.result.copies).toEqual([
@@ -904,7 +904,7 @@ describe('app plugin register command', () => {
       schemaVersion: 1,
       ok: true,
       command: 'skills sync',
-      status: 'success',
+      status: 'success-noop',
       result: {
         dryRun: true,
         copies: [

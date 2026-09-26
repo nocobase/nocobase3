@@ -1,6 +1,7 @@
 // @vitest-environment node
-// What an invalid command line answers with: oclif's message without its trailing hint, the flag or command that was
-// probably meant, and where to look next — under --json as `error.suggestions`, and for people under "Try this:".
+// What an invalid command line answers with: a message naming only what the command declares, never a value that was
+// typed, the flag or command that was probably meant, and where to look next — under --json as `error.suggestions`,
+// and for people under "Try this:".
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,7 @@ import {
   closestCommandIds,
   describeUnknownCommand,
 } from '../src/command/usage.ts';
+import { setApplicationState } from '../src/runtime/command-store.ts';
 import { bindAppCommand, runAppCommand } from '../src/testing.ts';
 
 let root: string;
@@ -39,6 +41,12 @@ class Apply extends AppCommand {
     }),
     port: Flags.integer({ description: 'A port.' }),
     name: Flags.string({ description: 'A name.', required: true }),
+    dialect: Flags.string({
+      description: 'A dialect.',
+      options: ['sqlite', 'postgres'],
+    }),
+    only: Flags.string({ description: 'One.', exclusive: ['every'] }),
+    every: Flags.boolean({ description: 'All.', exclusive: ['only'] }),
   };
   public async run(): Promise<{ ok: true }> {
     await this.parse(Apply);
@@ -82,7 +90,7 @@ describe('a flag that does not exist', () => {
       status: 'failure',
       error: {
         code: 'INVALID_USAGE',
-        message: 'Nonexistent flag: --conection',
+        message: 'Unknown flag --conection.',
         suggestions: [
           { message: 'Did you mean --connection?' },
           helpSuggestion(['db', 'apply']),
@@ -135,7 +143,7 @@ describe('a flag that does not exist', () => {
     ]);
     expect(run.error).toBeInstanceOf(CommandError);
     expect(run.error).toMatchObject({
-      message: 'Nonexistent flag: --conection',
+      message: 'Unknown flag --conection.',
       oclif: { exit: 2 },
       suggestions: [
         'Did you mean --connection?',
@@ -155,7 +163,7 @@ describe('other invalid usage', () => {
       ok: false,
       error: {
         code: 'INVALID_USAGE',
-        message: expect.stringContaining('Missing required flag name'),
+        message: 'Missing required flag --name.',
         suggestions: [helpSuggestion(['db', 'apply'])],
       },
     });
@@ -170,7 +178,7 @@ describe('other invalid usage', () => {
     expect(run.json()).toMatchObject({
       error: {
         code: 'INVALID_USAGE',
-        message: expect.stringMatching(/^Missing 1 required arg/u),
+        message: 'Missing required argument <name>.',
         suggestions: [helpSuggestion(['plugin', 'register'], 'arguments')],
       },
     });
@@ -186,23 +194,128 @@ describe('other invalid usage', () => {
     ]);
     expect(run.exitCode).toBe(2);
     expect(run.json()).toMatchObject({
+      error: { code: 'INVALID_USAGE', message: 'Invalid value for --port.' },
+    });
+    expect(run.stdout).not.toContain('eighty');
+  });
+
+  it('never repeats a value that was typed, wherever it landed', async () => {
+    const secret = 'typed-secret-value';
+    for (const argv of [
+      [`--tokn=${secret}`],
+      ['--tokn', secret],
+      ['--port', secret],
+      ['--dialect', secret],
+      ['--only', secret, '--every'],
+    ]) {
+      const run = await runAppCommand(bound(Apply, 'db:apply'), [
+        '--json',
+        '--name',
+        'x',
+        ...argv,
+      ]);
+      expect(run.exitCode).toBe(2);
+      expect(run.json()).toMatchObject({ error: { code: 'INVALID_USAGE' } });
+      expect(run.stdout + run.stderr).not.toContain(secret);
+    }
+    const unexpected = await runAppCommand(bound(Register, 'plugin:register'), [
+      '--json',
+      'audit-log',
+      secret,
+    ]);
+    expect(unexpected.json()).toMatchObject({
       error: {
         code: 'INVALID_USAGE',
-        message: expect.stringMatching(/^Parsing --port: /u),
+        message: 'Too many arguments; this command takes <name>.',
+      },
+    });
+    expect(unexpected.stdout).not.toContain(secret);
+  });
+
+  it('lists the values an option flag accepts', async () => {
+    const run = await runAppCommand(bound(Apply, 'db:apply'), [
+      '--json',
+      '--name',
+      'x',
+      '--dialect',
+      'oracle',
+    ]);
+    expect(run.json()).toMatchObject({
+      error: {
+        message:
+          'Invalid value for --dialect; expected one of: sqlite, postgres.',
       },
     });
   });
 
-  it('leaves a failure inside run() alone', async () => {
+  it('names both sides of flags that exclude each other, once', async () => {
+    const run = await runAppCommand(bound(Apply, 'db:apply'), [
+      '--json',
+      '--name',
+      'x',
+      '--only',
+      'a',
+      '--every',
+    ]);
+    expect(run.json()).toMatchObject({
+      error: { message: '--every cannot be combined with --only.' },
+    });
+  });
+
+  it('points help at node and the built entry in a deployment', async () => {
+    setApplicationState({
+      location: {
+        kind: 'deployment',
+        root: '/srv/app/dist',
+        publishing: false,
+      },
+      loadPlugins: async () => undefined,
+    });
+    try {
+      const run = await runAppCommand(bound(Apply, 'db:apply'), [
+        '--json',
+        '--nme',
+        'x',
+      ]);
+      expect(run.json()).toMatchObject({
+        error: {
+          suggestions: [
+            { message: 'Did you mean --name?' },
+            {
+              message: "See the command's flags:",
+              run: {
+                command: 'node',
+                args: [
+                  path.join('/srv/app/dist', 'cli', 'index.js'),
+                  'db',
+                  'apply',
+                  '--help',
+                ],
+              },
+            },
+          ],
+        },
+      });
+    } finally {
+      setApplicationState(undefined);
+    }
+  });
+
+  it('leaves a failure inside run() alone, and does not call it invalid usage', async () => {
     class Fails extends AppCommand {
       public async run(): Promise<never> {
         await this.parse(Fails);
-        throw new Errors.CLIError('Something else went wrong.');
+        throw new Errors.CLIError('Something else went wrong.', { exit: 1 });
       }
     }
     const run = await runAppCommand(bound(Fails, 'fixture:fails'), ['--json']);
+    expect(run.exitCode).toBe(1);
     expect(run.json()).toMatchObject({
-      error: { message: 'Something else went wrong.', suggestions: [] },
+      error: {
+        code: 'COMMAND_FAILED',
+        message: 'Something else went wrong.',
+        suggestions: [],
+      },
     });
   });
 });

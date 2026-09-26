@@ -22,14 +22,23 @@ import {
   type CommandSuccessJson,
   type CommandSuccessStatus,
 } from './command/envelope.ts';
-import { debugEnabled, describeForDebugging } from './command/diagnostics.ts';
-import { CommandError, describeCommandError } from './command/errors.ts';
-import { isAppPathFlag } from './command/flags.ts';
+import {
+  debugEnabled,
+  describeForDebugging,
+  markDiagnosed,
+} from './command/diagnostics.ts';
+import {
+  CommandError,
+  describeCommandError,
+  isCommandError,
+} from './command/errors.ts';
+import { declaredFlags, isAppPathFlag } from './command/flags.ts';
+import { nocobaseCommand } from './command/invocation.ts';
 import { withAppInstance } from './command/lifecycle.ts';
 import {
   INVALID_USAGE,
-  acceptedFlagNames,
   describeUsageError,
+  usageContextFor,
 } from './command/usage.ts';
 import { createDefaultCommandContext } from './default-context.ts';
 import { applicationState } from './runtime/command-store.ts';
@@ -121,12 +130,27 @@ export class AppCommand extends Command {
    * Creates the application, runs `fn`, then shuts the application down and destroys its runtime — whether `fn`
    * returns or throws. The application is created, not started: call `app.registerProviders()` to resolve services, or
    * `app.start()` only when the command needs the full lifecycle. `app` is valid only inside `fn`; return what the
-   * command needs from it.
+   * command needs from it. A failure to put the application away is a warning: it never turns work that succeeded into
+   * a failure, or replaces the failure the work ended in.
    */
   protected withApp<T>(fn: (context: AppCommandApp) => Promise<T>): Promise<T> {
-    return withAppInstance(appContextOf(this), (app, runtime) =>
-      fn({ app, env: runtime.env }),
+    return withAppInstance(
+      appContextOf(this),
+      (app, runtime) => fn({ app, env: runtime.env }),
+      { onCleanupFailure: (error) => this.warn(error.message) },
     );
+  }
+
+  /**
+   * The command line that runs this CLI with `args`, the way it runs where this command runs: `pnpm nocobase` in a
+   * source checkout, and `node <dist>/cli/index.js` in a built `dist/`, which has no pnpm. Use it for a suggestion's
+   * `run`, such as `{ message: 'Rebuild it:', run: this.cliCommand(['app', 'reindex']) }`.
+   */
+  protected cliCommand(args: readonly string[]): {
+    command: string;
+    args: string[];
+  } {
+    return nocobaseCommand(args);
   }
 
   /** Marks a successful run as having changed nothing, or only part of what it set out to. */
@@ -148,9 +172,8 @@ export class AppCommand extends Command {
     argv?: string[],
   ): Promise<Interfaces.ParserOutput<F, B, A>> {
     const output = await super.parse(options, argv);
-    const definitions =
-      (options ?? (this.ctor as unknown as Interfaces.Input<F, B, A>)).flags ??
-      {};
+    // Base flags included: a shared base class is where a path flag common to several commands is declared.
+    const definitions = declaredFlags(options ?? this.ctor);
     const flags = output.flags as Record<string, unknown>;
     for (const [name, definition] of Object.entries(definitions)) {
       if (!isAppPathFlag(definition)) continue;
@@ -221,12 +244,29 @@ export class AppCommand extends Command {
   ): Promise<unknown> {
     const reported = this.#withUsageSuggestions(error);
     process.exitCode = describeCommandError(reported).exit;
-    if (debugEnabled()) this.logToStderr(await describeForDebugging(error));
+    const debug = debugEnabled();
+    if (debug) this.logToStderr(await describeForDebugging(error));
     if (this.jsonEnabled()) {
       this.logJson(this.toErrorJson(reported));
       return undefined;
     }
-    throw reported;
+    const thrown = this.#forPeople(reported);
+    // The runner sees this error next and would print the same diagnostics again.
+    if (debug) markDiagnosed(thrown);
+    throw thrown;
+  }
+
+  /**
+   * The error oclif prints without `--json`. A failure wrapped together with a cleanup failure is printed as the
+   * failure itself, so its suggestions show and the run exits with its code, as `describeCommandError` reports it
+   * under `--json`; the wrapper's message, which names the cleanup failure too, goes first as a warning.
+   */
+  #forPeople(error: Error): Error {
+    if (error instanceof AggregateError && isCommandError(error.cause)) {
+      super.warn(error.message);
+      return error.cause;
+    }
+    return error;
   }
 
   /**
@@ -234,10 +274,10 @@ export class AppCommand extends Command {
    * meant, and where the command's flags are listed. Any other error is returned as it is.
    */
   #withUsageSuggestions(error: Error): Error {
-    const usage = describeUsageError(error, {
-      words: this.commandName.split(' ').filter(Boolean),
-      flags: acceptedFlagNames(this.ctor),
-    });
+    const usage = describeUsageError(
+      error,
+      usageContextFor(this.ctor, this.commandName.split(' ').filter(Boolean)),
+    );
     if (usage === undefined) return error;
     return new CommandError(usage.message, {
       code: INVALID_USAGE,

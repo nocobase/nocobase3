@@ -193,7 +193,8 @@ export default class PluginRegister extends AppCommand {
         (flags['workspace-root'] === undefined ? undefined : 'workspace:^'),
     });
     if (typeof installed !== 'string') {
-      this.setStatus('partial-success');
+      // Only a dry run stops here, and a dry run changes nothing.
+      this.setStatus('success-noop');
       return installed;
     }
 
@@ -235,6 +236,8 @@ export default class PluginRegister extends AppCommand {
       reason: '--no-skills',
     };
     if (dryRun) {
+      // A dry run changes nothing, whatever it would do; a plan that needs manual edits says so in `plan`.
+      this.setStatus('success-noop');
       this.log(this.describe(plan, appRoot, true));
       return {
         mode: 'dry-run',

@@ -3,6 +3,7 @@ import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
 import {
+  databaseRunChangedNothing,
   collectionsRefreshAllowed,
   runDatabaseApplyCommand,
   type DatabaseCommandResult,
@@ -67,8 +68,7 @@ export default class AppDbReset extends AppCommand {
       },
       appContextOf(this),
     );
-    if (result.dryRun || result.state === 'not-configured')
-      this.setStatus('success-noop');
+    if (databaseRunChangedNothing(result)) this.setStatus('success-noop');
     return result;
   }
 }

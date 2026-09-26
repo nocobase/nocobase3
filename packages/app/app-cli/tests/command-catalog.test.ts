@@ -1,7 +1,14 @@
 // @vitest-environment node
 // `nocobase commands`: the assembled command tree as data, so an agent reads one document instead of every `--help`.
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -342,6 +349,22 @@ export default class SyncOrders extends AppCommand {
   }
 }
 `;
+  const failingCommandSource = (
+    index: string,
+  ): string => `import { AppCommand, CommandError } from ${index};
+
+export default class Fail extends AppCommand {
+  static summary = 'Fail on purpose.';
+  async run() {
+    await this.parse(Fail);
+    throw new CommandError('It failed.', {
+      code: 'FIXTURE_FAILED',
+      suggestions: ['Try again later.'],
+      cause: new Error('the reason behind it'),
+    });
+  }
+}
+`;
   const pluginsSource = (
     index: string,
   ): string => `import { AppCommand, defineCliPlugin, defineCliPlugins } from ${index};
@@ -396,6 +419,10 @@ export default defineCliPlugins([
       commandSource(index),
     );
     await writeFile(
+      path.join(app, 'cli', 'commands', `fail.${extension}`),
+      failingCommandSource(index),
+    );
+    await writeFile(
       path.join(app, 'cli', `plugins.${extension}`),
       pluginsSource(index),
     );
@@ -405,6 +432,7 @@ export default defineCliPlugins([
   async function nocobase(
     app: string,
     argv: string[],
+    env: NodeJS.ProcessEnv = {},
   ): Promise<{ stdout: string; stderr: string; code: number }> {
     // A real deployment runs compiled packages. This one borrows the workspace sources, whose `.js` specifiers name
     // `.ts` files, and a deployment registers no loader for them, so the fixture preloads tsx itself.
@@ -419,6 +447,7 @@ export default defineCliPlugins([
             ...process.env,
             NOCOBASE_CONTENT_TYPE: '',
             NOCOBASE_CLI_DEBUG: '',
+            ...env,
           },
         },
       );
@@ -521,7 +550,7 @@ export default defineCliPlugins([
       command: 'app sync-orders',
       error: {
         code: 'INVALID_USAGE',
-        message: 'Nonexistent flag: --forse',
+        message: 'Unknown flag --forse.',
         suggestions: [
           { message: 'Did you mean --force?' },
           {
@@ -535,6 +564,39 @@ export default defineCliPlugins([
       },
     });
     expect(result.stdout).not.toContain('See more help with --help');
+  }, 60_000);
+
+  it('suggests node and the built entry in a deployment, which has no pnpm', async () => {
+    const result = await nocobase(deployment, ['app', 'sync-order', '--json']);
+    expect(result.code).toBe(2);
+    // The runner reports the root it located, which is the working directory with symbolic links resolved.
+    const entry = path.join(await realpath(deployment), 'cli', 'index.js');
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      error: {
+        code: 'INVALID_USAGE',
+        suggestions: [
+          {
+            message: 'Did you mean app sync-orders?',
+            run: { command: 'node', args: [entry, 'app', 'sync-orders'] },
+          },
+          {
+            message: 'List every command:',
+            run: { command: 'node', args: [entry, 'commands', '--json'] },
+          },
+        ],
+      },
+    });
+  }, 60_000);
+
+  it('prints the diagnostics behind a failure once, and still the suggestions', async () => {
+    const result = await nocobase(source, ['app', 'fail'], {
+      NOCOBASE_CLI_DEBUG: '1',
+    });
+    expect(result.code).toBe(1);
+    expect(result.stderr.split('NOCOBASE_CLI_DEBUG:').length - 1).toBe(1);
+    expect(result.stderr).toContain('the reason behind it');
+    expect(result.stderr).toContain('It failed.');
+    expect(result.stderr).toContain('Try again later.');
   }, 60_000);
 
   it('prints the suggestions for people', async () => {

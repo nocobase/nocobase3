@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type {
@@ -165,6 +166,11 @@ export const sqliteDriver: DatabaseDriverDefinition<
     if (!config.filename || config.filename === ':memory:') return;
     await context.ensureDirectory(path.dirname(config.filename));
   },
+  // SQLite creates the file on first open; an in-memory database never touches disk.
+  hasStorage: (config) =>
+    !config.filename ||
+    config.filename === ':memory:' ||
+    existsSync(config.filename),
   resetManagedSchema: async (context) => {
     const client = await context.resolveClient();
     const rows = rawRows<{ name: string; type: 'table' | 'view' }>(

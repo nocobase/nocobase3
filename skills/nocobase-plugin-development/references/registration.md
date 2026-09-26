@@ -113,11 +113,11 @@ Lifecycle commands print the envelope every `nocobase` command uses under `--jso
 | Status                  | Meaning                                                                                      |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `success`               | Requested operation completed                                                                |
-| `success-noop`          | State already matched; no changes were needed                                                |
+| `success-noop`          | State already matched and no changes were needed, or a `--dry-run` that changed nothing      |
 | `partial-success`       | A phase completed but documented work remains; `result.issues` or `result.state` says what   |
 | `failure`               | `ok: false`; handle `error.code`, `error.suggestions` and `error.details`, preserving the nonzero exit status |
 
-A `register --dry-run` for a plugin that is not installed yet is `partial-success` with `result.state: "requires-installation"`: the preview covers the install, but the wiring plan depends on the package's exports and needs the package first. Install it and rerun.
+A `register --dry-run` for a plugin that is not installed yet answers `success-noop`, like every dry run, with `result.state: "requires-installation"`: the preview covers the install, but the wiring plan depends on the package's exports and needs the package first. Install it and rerun.
 
 For registration inconsistencies, use `pnpm nocobase plugin inspect audit-log --workspace-root . --app app-template-default --json`. Check `ok` and `status`, then `result.consistent`, `issues`, and `suggestions`. A successful inspection can have `ok: true` while reporting inconsistent state. It observes static facts and does not repair them.
 

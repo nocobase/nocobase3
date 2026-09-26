@@ -95,6 +95,30 @@ export function isCommandError(error: unknown): error is CommandError {
 interface OclifErrorShape {
   readonly code?: string;
   readonly oclif?: { readonly exit?: number | false };
+  /** What oclif's parse errors carry, and nothing else it raises does. */
+  readonly parse?: unknown;
+}
+
+/** What oclif appends to every parse error, and to a flag's own parse failure whatever class that has. */
+export const OCLIF_HELP_HINT = '\nSee more help with --help';
+
+/** The code of a command line that was not understood: an unknown flag or command, a missing or invalid value. */
+export const INVALID_USAGE = 'INVALID_USAGE';
+
+/** The code of an oclif error a command raised itself, such as `this.error()`, which says nothing more specific. */
+export const COMMAND_FAILED = 'COMMAND_FAILED';
+
+/**
+ * Whether oclif raised `error` while parsing the command line. A command's own `this.error()` is a `CLIError` too, so
+ * the class alone cannot tell a usage error from a runtime failure.
+ */
+export function isOclifParseError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const { parse } = error as OclifErrorShape;
+  return (
+    (typeof parse === 'object' && parse !== null) ||
+    error.message.endsWith(OCLIF_HELP_HINT)
+  );
 }
 
 /** The `error` of a `--json` document for any thrown value, and the exit code the process ends with. */
@@ -102,7 +126,8 @@ export function describeCommandError(error: unknown): {
   readonly json: CommandErrorJson;
   readonly exit: number;
 } {
-  // `withApp` wraps a failure whose cleanup also failed; the failure is what the caller acts on, so its code survives.
+  // A failure wrapped with a cleanup failure, which the lifecycle does when nothing reports cleanup failures separately:
+  // the failure is what the caller acts on, so its code survives.
   if (error instanceof AggregateError && error.cause !== undefined) {
     const cause = describeCommandError(error.cause);
     return {
@@ -122,13 +147,16 @@ export function describeCommandError(error: unknown): {
     };
   }
   if (error instanceof Errors.CLIError || isOclifError(error)) {
-    // oclif's own errors: invalid flags and arguments, an unknown command, `exit()`. Their default exit code is 2,
-    // which is the invalid-usage code the rest of this command line uses.
+    // oclif's own errors keep the exit code oclif gave them, which is also what its handler exits with when it prints
+    // one, so a run ends the same way with and without --json. Only a parse error is invalid usage: `this.error()` in a
+    // command is a `CLIError` as well, and a runtime failure reported that way is not the caller's arguments.
     const shape = error as OclifErrorShape & Error;
     const exit = shape.oclif?.exit;
     return {
       json: {
-        code: shape.code ?? 'INVALID_USAGE',
+        code:
+          shape.code ??
+          (isOclifParseError(error) ? INVALID_USAGE : COMMAND_FAILED),
         message: shape.message,
         suggestions: [],
       },
@@ -168,7 +196,7 @@ function renderSuggestion(suggestion: CommandSuggestion): string {
 }
 
 /** Quotes an argument for a POSIX shell when it would otherwise split or be interpreted, so the line can be pasted. */
-function quoteForShell(argument: string): string {
+export function quoteForShell(argument: string): string {
   if (/^[\w@%+=:,./-]+$/u.test(argument)) return argument;
   return `'${argument.replaceAll("'", `'\\''`)}'`;
 }

@@ -3,6 +3,7 @@ import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
 import {
+  databaseRunChangedNothing,
   runDatabaseRepairCommand,
   type DatabaseCommandResult,
 } from '../../database-command.ts';
@@ -52,8 +53,7 @@ export default class AppDbRepair extends AppCommand {
       { ...flags, dryRun: flags['dry-run'] },
       appContextOf(this),
     );
-    if (result.dryRun || result.state === 'not-configured')
-      this.setStatus('success-noop');
+    if (databaseRunChangedNothing(result)) this.setStatus('success-noop');
     return result;
   }
 }

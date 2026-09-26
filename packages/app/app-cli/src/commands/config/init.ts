@@ -127,15 +127,19 @@ export default class AppConfigInit extends AppCommand {
    * that only its code defaults set is seen too. Unknown when the configuration does not load.
    */
   private async readConfiguredDialect(): Promise<string | undefined> {
-    return withAppRuntime(appContextOf(this), async (runtime) => {
-      const database = runtime.config.get<{
-        default?: string;
-        connections?: Record<string, { dialect?: unknown }>;
-      }>('database');
-      const name = database?.default ?? 'main';
-      const dialect = database?.connections?.[name]?.dialect;
-      return typeof dialect === 'string' ? dialect : undefined;
-    });
+    return withAppRuntime(
+      appContextOf(this),
+      async (runtime) => {
+        const database = runtime.config.get<{
+          default?: string;
+          connections?: Record<string, { dialect?: unknown }>;
+        }>('database');
+        const name = database?.default ?? 'main';
+        const dialect = database?.connections?.[name]?.dialect;
+        return typeof dialect === 'string' ? dialect : undefined;
+      },
+      { onCleanupFailure: (error) => this.warn(error.message) },
+    );
   }
 }
 

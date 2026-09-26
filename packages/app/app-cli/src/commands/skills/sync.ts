@@ -94,6 +94,10 @@ export default class SkillsSync extends AppCommand {
       const dryRun = flags['dry-run'];
       const plan = dryRun ? planned : await applySkillsSync(planned);
       result = { ...plan, dryRun };
+      // A dry run changes nothing, and neither does a sync with nothing to copy or remove.
+      if (dryRun || (plan.copies.length === 0 && plan.removals.length === 0)) {
+        this.setStatus('success-noop');
+      }
     } catch (error) {
       throw skillsSyncError(error);
     }

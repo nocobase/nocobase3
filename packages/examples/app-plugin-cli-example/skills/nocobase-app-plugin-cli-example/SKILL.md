@@ -100,7 +100,7 @@ Both are peers, so the application supplies them. `@nocobase/app-cli` is the run
 `--help`. A class declaration costs nothing; load anything expensive inside `run()` with `await import()`, as
 `cli/artifact-build.ts` does.
 
-**Follow the output conventions.** Return the result from `run()` and throw `CommandError` on failure; `AppCommand` turns either into the one `--json` document on stdout, and a failure also exits non-zero. Never call `this.exit()`, `this.logJson()` or `console.log`. Exit codes are `0` success, `1` runtime error, `2` argument error.
+**Follow the output conventions.** Return the result from `run()` and throw `CommandError` on failure; `AppCommand` turns either into the one `--json` document on stdout, and a failure also exits non-zero. Never call `this.exit()`, `this.logJson()` or `console.log`, and do not report a failure with `this.error()`. Exit codes are `0` success, `1` runtime error, `2` argument error.
 
 ## Verify
 

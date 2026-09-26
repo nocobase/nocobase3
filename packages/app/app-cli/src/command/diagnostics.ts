@@ -15,6 +15,24 @@ export function debugEnabled(
   );
 }
 
+const DIAGNOSED = Symbol.for('@nocobase/app-cli.diagnosedErrors');
+
+/** The errors whose diagnostics have been printed, kept on a global symbol because the runner may reach another copy. */
+function diagnosed(): WeakSet<object> {
+  const host = globalThis as { [DIAGNOSED]?: WeakSet<object> };
+  return (host[DIAGNOSED] ??= new WeakSet());
+}
+
+/** Records that the diagnostics behind `error` are on stderr already, so whatever rethrows it does not print them again. */
+export function markDiagnosed(error: unknown): void {
+  if (typeof error === 'object' && error !== null) diagnosed().add(error);
+}
+
+/** Whether `markDiagnosed()` recorded `error`. */
+export function wasDiagnosed(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && diagnosed().has(error);
+}
+
 /** The failure and everything behind it, redacted, as lines for stderr. */
 export async function describeForDebugging(error: unknown): Promise<string> {
   // Loaded only here, so the command line pays for the logging library only when someone is debugging.

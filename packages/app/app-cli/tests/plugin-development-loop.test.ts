@@ -198,7 +198,7 @@ describe('Agent plugin development loop', () => {
           };
         };
       };
-      expect(previewResult.status).toBe('success');
+      expect(previewResult.status).toBe('success-noop');
       expect(previewResult.result.plan.clientPluginsChanged).toBe(
         expectsClient,
       );

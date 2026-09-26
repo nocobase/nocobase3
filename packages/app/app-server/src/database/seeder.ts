@@ -89,7 +89,7 @@ export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
       // A fresh run drops the seed history with the rest of the schema.
       return pendingTasksResult(
         seeds,
-        pendingOptions.fresh
+        pendingOptions.fresh || pendingOptions.withoutHistory
           ? []
           : await createDatabaseSeeder(options).history(),
       );

@@ -24,7 +24,10 @@ import type { AppPaths } from '../config/index.js';
 import { createAppDatabaseManager } from './manager.js';
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
-import { prepareAppDatabaseStorage } from './storage.js';
+import {
+  appDatabaseStorageExists,
+  prepareAppDatabaseStorage,
+} from './storage.js';
 import type { AppDatabaseConfig } from './types.js';
 
 /**
@@ -148,12 +151,25 @@ export async function executeAppDatabasePlan(
       continue;
     }
     try {
-      await prepareAppDatabaseStorage(
-        config,
-        paths,
-        [task.connection],
-        drivers,
-      );
+      // A dry run changes nothing, and opening a connection to storage that
+      // does not exist yet would create it: it answers for an empty database
+      // instead, without preparing storage or connecting.
+      const storageMissing =
+        dryRun &&
+        !(await appDatabaseStorageExists(
+          config,
+          paths,
+          task.connection,
+          drivers,
+        ));
+      if (!storageMissing) {
+        await prepareAppDatabaseStorage(
+          config,
+          paths,
+          [task.connection],
+          drivers,
+        );
+      }
       const options = {
         runtimeConfig: taskConfig,
         container: taskContainer,
@@ -167,21 +183,23 @@ export async function executeAppDatabasePlan(
       const completed =
         operation === 'unlock'
           ? await unlockTask(task, options, force)
-          : operation === 'repair'
-            ? task.kind === 'migrations'
-              ? await createAppMigrator(options).repair({ dryRun })
-              : await createAppSeeder(options).repair({ dryRun })
-            : operation === 'rollback'
-              ? await createAppMigrator(options).rollback({ dryRun })
-              : dryRun
-                ? task.kind === 'migrations'
-                  ? await createAppMigrator(options).pending({ fresh })
-                  : await createAppSeeder(options).pending({ fresh })
-                : task.kind === 'migrations'
-                  ? await (fresh
-                      ? createAppMigrator(options).fresh()
-                      : createAppMigrator(options).latest())
-                  : await createAppSeeder(options).run();
+          : storageMissing
+            ? await emptyDatabasePreview(operation, task, options, fresh)
+            : operation === 'repair'
+              ? task.kind === 'migrations'
+                ? await createAppMigrator(options).repair({ dryRun })
+                : await createAppSeeder(options).repair({ dryRun })
+              : operation === 'rollback'
+                ? await createAppMigrator(options).rollback({ dryRun })
+                : dryRun
+                  ? task.kind === 'migrations'
+                    ? await createAppMigrator(options).pending({ fresh })
+                    : await createAppSeeder(options).pending({ fresh })
+                  : task.kind === 'migrations'
+                    ? await (fresh
+                        ? createAppMigrator(options).fresh()
+                        : createAppMigrator(options).latest())
+                    : await createAppSeeder(options).run();
       result.results.push({
         ...identity,
         ...completed,
@@ -207,6 +225,33 @@ export async function executeAppDatabasePlan(
     }
   }
   return result;
+}
+
+/**
+ * What a dry run reports for a database that does not exist yet: every task
+ * pending, nothing to roll back, nothing to repair.
+ */
+async function emptyDatabasePreview(
+  operation: Exclude<AppDatabaseTaskOperation, 'unlock'>,
+  task: AppDatabaseTask,
+  options: Parameters<typeof createAppMigrator>[0],
+  fresh: boolean,
+): Promise<Omit<AppDatabaseTaskResult, 'connection' | 'kind'>> {
+  if (operation === 'rollback') {
+    return {
+      status: 'completed',
+      batch: 0,
+      rolledBack: [],
+      records: [],
+      dryRun: true,
+    };
+  }
+  if (operation === 'repair') {
+    return { status: 'completed', repaired: [], dryRun: true };
+  }
+  return task.kind === 'migrations'
+    ? createAppMigrator(options).pending({ fresh, withoutHistory: true })
+    : createAppSeeder(options).pending({ fresh, withoutHistory: true });
 }
 
 /** Releases whichever lock belongs to the task's kind. */

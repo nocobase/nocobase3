@@ -9,6 +9,7 @@ import {
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
 
+import { nocobaseCommand } from '../../command/invocation.ts';
 import { CommandError } from '../../command/errors.ts';
 import { withAppRuntime } from '../../command/lifecycle.ts';
 import {
@@ -64,16 +65,19 @@ export default class AppCollectionsGenerate extends AppCommand {
     const { flags } = await this.parse(AppCollectionsGenerate);
     let result: AppCollectionsArtifactResult;
     try {
-      result = await withAppRuntime(appContextOf(this), (runtime) =>
-        generateAppCollectionsArtifact(
-          runtime.config.get<AppDatabaseConfig>('database')!,
-          {
-            paths: runtime.paths,
-            connection: flags.connection,
-            all: flags.all,
-            check: flags.check,
-          },
-        ),
+      result = await withAppRuntime(
+        appContextOf(this),
+        (runtime) =>
+          generateAppCollectionsArtifact(
+            runtime.config.get<AppDatabaseConfig>('database')!,
+            {
+              paths: runtime.paths,
+              connection: flags.connection,
+              all: flags.all,
+              check: flags.check,
+            },
+          ),
+        { onCleanupFailure: (error) => this.warn(error.message) },
       );
     } catch (error) {
       throw toDatabaseCommandError(error, flags.connection);
@@ -107,15 +111,11 @@ export default class AppCollectionsGenerate extends AppCommand {
           suggestions: [
             {
               message: 'Run without --check to write them:',
-              run: {
-                command: 'pnpm',
-                args: [
-                  'nocobase',
-                  'collections',
-                  'generate',
-                  ...selectionArgs(flags),
-                ],
-              },
+              run: nocobaseCommand([
+                'collections',
+                'generate',
+                ...selectionArgs(flags),
+              ]),
             },
           ],
           details: {

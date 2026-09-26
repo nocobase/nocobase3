@@ -274,14 +274,45 @@ describe('appPath()', () => {
   it('describes the default as relative to the application root in --help', () => {
     expect(Paths.flags.source.defaultHelp).toBeTypeOf('function');
   });
+
+  it('resolves a default declared in baseFlags too', async () => {
+    class SharedBase extends AppCommand {
+      static override baseFlags = {
+        config: appPath({ default: 'config.yml', description: 'Config.' }),
+      };
+    }
+    class UsesBase extends SharedBase {
+      static override id = 'fixture:uses-base';
+      public async run(): Promise<{ config: string }> {
+        const { flags } = await this.parse(UsesBase);
+        return { config: flags.config };
+      }
+    }
+    const elsewhere = await mkdtemp(path.join(os.tmpdir(), 'app-path-cwd-'));
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(elsewhere);
+    try {
+      const run = await runAppCommand(
+        bindAppCommand(UsesBase, { rootDir: root }),
+        [],
+        root,
+      );
+      expect(run.result).toEqual({ config: path.join(root, 'config.yml') });
+    } finally {
+      cwd.mockRestore();
+      await rm(elsewhere, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('withApp()', () => {
-  function stubContext(options: { createFails?: boolean } = {}) {
+  function stubContext(
+    options: { createFails?: boolean; shutdownFails?: boolean } = {},
+  ) {
     const events: string[] = [];
     const app = {
       shutdown: vi.fn(async () => {
         events.push('app shutdown');
+        if (options.shutdownFails) throw new Error('pool close timed out');
       }),
     } as unknown as Application;
     const runtime = {
@@ -349,6 +380,45 @@ describe('withApp()', () => {
     expect(stub.events).toEqual(['app shutdown', 'scope destroyed']);
   });
 
+  it('keeps the result of work that succeeded when cleanup fails, and warns', async () => {
+    const stub = stubContext({ shutdownFails: true });
+    const run = await runAppCommand(
+      bindAppCommand(UsesApp, stub.options),
+      ['--json'],
+      root,
+    );
+    expect(run.exitCode).toBeUndefined();
+    expect(run.json()).toMatchObject({
+      ok: true,
+      result: { env: 'yes' },
+      warnings: ['Application cleanup failed: pool close timed out'],
+    });
+    expect(stub.events).toEqual(['app shutdown', 'scope destroyed']);
+  });
+
+  it('reports the failure the work ended in, not the cleanup failure behind it', async () => {
+    const stub = stubContext({ shutdownFails: true });
+    const run = await runAppCommand(
+      bindAppCommand(UsesApp, stub.options),
+      ['--json', '--fail'],
+      root,
+    );
+    expect(run.exitCode).toBe(1);
+    expect(run.json()).toMatchObject({
+      ok: false,
+      error: { code: 'CALLBACK_FAILED', message: 'Callback failed' },
+      warnings: ['Application cleanup failed: pool close timed out'],
+    });
+
+    const forPeople = await runAppCommand(
+      bindAppCommand(UsesApp, stub.options),
+      ['--fail'],
+      root,
+    );
+    expect(forPeople.error).toBeInstanceOf(CommandError);
+    expect(forPeople.error).toMatchObject({ errorCode: 'CALLBACK_FAILED' });
+  });
+
   it('shuts down the half-built app a failing createApp left on the runtime', async () => {
     const stub = stubContext({ createFails: true });
     const run = await runAppCommand(
@@ -361,6 +431,23 @@ describe('withApp()', () => {
       error: { message: 'createApp failed' },
     });
     expect(stub.events).toEqual(['app shutdown', 'scope destroyed']);
+  });
+});
+
+describe('bindAppCommand()', () => {
+  it('names a command bound without an id after its class', async () => {
+    class OrdersExport extends AppCommand {
+      public async run(): Promise<{ ok: true }> {
+        await this.parse(OrdersExport);
+        return { ok: true };
+      }
+    }
+    const run = await runAppCommand(
+      bindAppCommand(OrdersExport, { rootDir: root }),
+      ['--json'],
+      root,
+    );
+    expect(run.json()).toMatchObject({ ok: true, command: 'ordersexport' });
   });
 });
 

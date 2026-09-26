@@ -13,7 +13,7 @@ import {
 } from '@nocobase/app-server/database';
 import { parseDocument } from 'yaml';
 
-import type { CommandSuggestion } from '../command/errors.ts';
+import { quoteForShell, type CommandSuggestion } from '../command/errors.ts';
 import { buildConfigFile } from './config-file.ts';
 import { configureDatabase } from './database-config.ts';
 
@@ -325,16 +325,25 @@ export async function runConfigInit(
         : Object.keys(pickConnectionFields(generated))
             .filter((field) => !(field in answers))
             .map((field) => `database.connections.main.${field}`),
-    nextCommands: nextCommands(mode),
+    nextCommands: nextCommands(mode, rootDir),
     ...(connectionTest ? { connectionTest } : {}),
   };
 }
 
-/** What follows configuration: check it, then start. A deployment starts from its own `dist` script. */
-function nextCommands(mode: ConfigInitMode): readonly string[] {
+/**
+ * What follows configuration: check it, then start. A deployment has no pnpm — a built `dist/` has no `.bin` and its
+ * runtime image leaves the package manager out — so there both run through `node`, by absolute path.
+ */
+function nextCommands(
+  mode: ConfigInitMode,
+  rootDir: string,
+): readonly string[] {
+  if (mode === 'source') return ['pnpm nocobase config check', 'pnpm dev'];
+  const node = (file: string, ...args: string[]): string =>
+    ['node', path.join(rootDir, file), ...args].map(quoteForShell).join(' ');
   return [
-    'pnpm nocobase config check',
-    mode === 'source' ? 'pnpm dev' : 'pnpm start',
+    node(path.join('cli', 'index.js'), 'config', 'check'),
+    node(path.join('server', 'standalone.js')),
   ];
 }
 
@@ -389,7 +398,7 @@ async function alreadyConfigured(
     configKey: 'database.connections.main',
     overriddenByEnvironment: [],
     requiredSettings: [],
-    nextCommands: nextCommands(mode),
+    nextCommands: nextCommands(mode, path.resolve(options.rootDir)),
   };
 }
 

@@ -4,7 +4,7 @@
 // synthesized here rather than read from a manifest: the command map is merged in memory, and the `pjson` handed to
 // `Config.load` points its `explicit` discovery target at this package's registry module, which reads that map back
 // out.
-import { Config, handle, run, settings } from '@oclif/core';
+import { Config, handle, run } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -28,8 +28,13 @@ import {
   takeOpenRuntimes,
 } from './command-store.ts';
 import { commandFailureJson } from '../command/envelope.ts';
-import { debugEnabled, describeForDebugging } from '../command/diagnostics.ts';
+import {
+  debugEnabled,
+  describeForDebugging,
+  wasDiagnosed,
+} from '../command/diagnostics.ts';
 import { CommandError, describeCommandError } from '../command/errors.ts';
+import { cliInvocation } from '../command/invocation.ts';
 import { INVALID_USAGE, describeUnknownCommand } from '../command/usage.ts';
 import { loadCommandFiles } from './discover.ts';
 import { appAt, locateApp, type AppLocation } from './location.ts';
@@ -52,21 +57,24 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
   tolerateClosedStdout();
   const argv = [...(options.argv ?? process.argv.slice(2))];
   let assembled: AssembledCli | undefined;
+  // Kept for the failure path too, whose suggestions name the command line the way it runs here.
+  let location: AppLocation | undefined;
   try {
     const root = options.root ?? process.env.NOCOBASE_APP_ROOT;
-    const location =
+    const located =
       root === undefined || root === ''
         ? locateApp(process.cwd())
         : appAt(root);
+    location = located;
     // Before anything imports application code or, in this repository, workspace sources that only a loader can run.
-    await registerTypeScriptLoader(location);
+    await registerTypeScriptLoader(located);
 
     let plugins: ReturnType<typeof loadAppPlugins> | undefined;
     const loadPlugins = (): ReturnType<typeof loadAppPlugins> =>
-      (plugins ??= loadAppPlugins(location));
-    setApplicationState({ location, loadPlugins });
+      (plugins ??= loadAppPlugins(located));
+    setApplicationState({ location: located, loadPlugins });
 
-    assembled = await assembleForArguments(argv, location, loadPlugins);
+    assembled = await assembleForArguments(argv, located, loadPlugins);
     setResolvedCli(assembled);
 
     // Package root, resolved from this file: src/runtime/run.ts and dist/runtime/run.js are both two levels deep.
@@ -76,8 +84,6 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
       pjson: cliPjson(packageRoot, runningFromSource, assembled.topics),
       root: packageRoot,
     });
-    // Stack traces for failures oclif reports itself; an AppCommand's own failures print theirs from `catch`.
-    settings.debug = debugEnabled();
     try {
       await run(argv, config);
     } finally {
@@ -86,11 +92,14 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
     await flushStdout();
   } catch (error) {
     // A command reports its own failures. What arrives here failed before or around one — an unknown command, a
-    // broken plugin entry — and under --json it still has to answer with the one document a caller parses.
-    if (debugEnabled()) {
+    // broken plugin entry — and under --json it still has to answer with the one document a caller parses. Without
+    // --json a command's failure passes through here on its way to oclif's handler, having printed its diagnostics
+    // already. oclif's own debug mode is left off: it would print the raw stack in place of the message and its
+    // suggestions, unredacted.
+    if (debugEnabled() && !wasDiagnosed(error)) {
       process.stderr.write(`${await describeForDebugging(error)}\n`);
     }
-    const reported = withCommandSuggestions(error, assembled);
+    const reported = withCommandSuggestions(error, assembled, location);
     if (jsonRequested(argv)) {
       const { json, exit } = describeCommandError(reported);
       process.stdout.write(
@@ -107,6 +116,7 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
 function withCommandSuggestions(
   error: unknown,
   assembled: AssembledCli | undefined,
+  location: AppLocation | undefined,
 ): unknown {
   const commands = assembled?.commands ?? {};
   const unknown = describeUnknownCommand(error, {
@@ -114,6 +124,7 @@ function withCommandSuggestions(
       (id) => commands[id]?.hidden !== true,
     ),
     topics: Object.keys(assembled?.topics ?? {}),
+    invocation: cliInvocation(location),
   });
   if (unknown === undefined) return error;
   return new CommandError(unknown.message, {

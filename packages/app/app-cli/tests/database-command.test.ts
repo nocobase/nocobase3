@@ -1102,6 +1102,43 @@ describe('the db commands', () => {
     });
   });
 
+  it('answer success-noop for a run that changed nothing, as for a dry run', async () => {
+    const { root, bind, migration } = fixture();
+    migration('main');
+    const first = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(first.json()).toMatchObject({ ok: true, status: 'success' });
+
+    const again = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(again.json()).toMatchObject({ ok: true, status: 'success-noop' });
+
+    const unlock = await runAppCommand(bind(AppDbUnlock), ['--json'], root);
+    expect(unlock.json()).toMatchObject({ ok: true, status: 'success-noop' });
+
+    const rolledBack = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--force', '--no-collections'],
+      root,
+    );
+    expect(rolledBack.json()).toMatchObject({ ok: true, status: 'success' });
+    const nothingLeft = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--force', '--no-collections'],
+      root,
+    );
+    expect(nothingLeft.json()).toMatchObject({
+      ok: true,
+      status: 'success-noop',
+    });
+  });
+
   it('report a missing database as a no-op', async () => {
     const { root, bind } = fixture({ configured: false });
     const run = await runAppCommand(bind(AppDbApply), ['--json'], root);
@@ -1114,6 +1151,43 @@ describe('the db commands', () => {
 });
 
 describe('previewing a database command with --dry-run', () => {
+  it('creates no storage for a database that does not exist yet', async () => {
+    const { root, bind, migration, seed, paths } = fixture();
+    migration('main');
+    seed('main');
+    const file = paths.storage('main.sqlite');
+    expect(existsSync(file)).toBe(false);
+    for (const [command, argv] of [
+      [AppDbApply, []],
+      [AppDbReset, []],
+      [AppDbRollback, []],
+      [AppDbRedo, []],
+      [AppDbRepair, []],
+    ] as const) {
+      const run = await runAppCommand(
+        bind(command),
+        ['--json', '--dry-run', ...argv],
+        root,
+      );
+      expect(run.json()).toMatchObject({ ok: true, status: 'success-noop' });
+    }
+    const apply = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--dry-run'],
+      root,
+    );
+    expect(apply.json()).toMatchObject({
+      result: {
+        plan: [
+          { kind: 'migrations', action: 'apply', tasks: ['001_create'] },
+          { kind: 'seeds', action: 'apply', tasks: ['001_defaults'] },
+        ],
+      },
+    });
+    expect(existsSync(file)).toBe(false);
+    expect(existsSync(path.dirname(file))).toBe(false);
+  });
+
   it('lists what apply would run, per connection and kind, and runs none of it', async () => {
     const { root, bind, migration, seed } = fixture();
     migration('main');
@@ -1881,6 +1955,43 @@ describe('the collections commands', () => {
         message: 'Unknown database connection "unknown".',
         details: { connection: 'unknown' },
       },
+    });
+  });
+
+  it('answer success-noop for a run that changed nothing, as for a dry run', async () => {
+    const { root, bind, migration } = fixture();
+    migration('main');
+    const first = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(first.json()).toMatchObject({ ok: true, status: 'success' });
+
+    const again = await runAppCommand(
+      bind(AppDbApply),
+      ['--json', '--no-collections'],
+      root,
+    );
+    expect(again.json()).toMatchObject({ ok: true, status: 'success-noop' });
+
+    const unlock = await runAppCommand(bind(AppDbUnlock), ['--json'], root);
+    expect(unlock.json()).toMatchObject({ ok: true, status: 'success-noop' });
+
+    const rolledBack = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--force', '--no-collections'],
+      root,
+    );
+    expect(rolledBack.json()).toMatchObject({ ok: true, status: 'success' });
+    const nothingLeft = await runAppCommand(
+      bind(AppDbRollback),
+      ['--json', '--force', '--no-collections'],
+      root,
+    );
+    expect(nothingLeft.json()).toMatchObject({
+      ok: true,
+      status: 'success-noop',
     });
   });
 
