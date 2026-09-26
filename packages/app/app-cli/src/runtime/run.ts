@@ -54,7 +54,6 @@ export interface RunAppCliOptions {
 }
 
 export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
-  tolerateClosedStdout();
   const argv = [...(options.argv ?? process.argv.slice(2))];
   let assembled: AssembledCli | undefined;
   // Kept for the failure path too, whose suggestions name the command line the way it runs here.
@@ -276,22 +275,13 @@ function cliPjson(
 }
 
 /**
- * A reader that stops early, such as `| head`, closes stdout. That is not the command failing: without this, the write
- * error is left unhandled, the run never settles, and Node exits 13 with an "unsettled top-level await" warning that
- * reads like a crash to whoever piped the output.
- */
-function tolerateClosedStdout(): void {
-  if (process.stdout.listenerCount('error') > 0) return;
-  process.stdout.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code === 'EPIPE') process.exit(process.exitCode ?? 0);
-    throw error;
-  });
-}
-
-/**
  * Waits for stdout to take what is buffered. oclif's `flush()` waits for `drain` behind an unref'd timeout, so once a
  * reader has closed the pipe the wait never ends, nothing else keeps the process alive, and the run is left unsettled.
  * This returns at once when nothing is buffered, and otherwise also stops at `close` or `error`.
+ *
+ * A reader that stops early, such as `| head`, is otherwise already handled: `@oclif/core` swallows `EPIPE` on stdout
+ * from the moment it is imported, so a command that keeps printing finishes, `withApp()` puts its application away,
+ * and the runner closes whatever was left open. Nothing here may exit the process on `EPIPE`, which would skip both.
  */
 async function flushStdout(): Promise<void> {
   const stdout = process.stdout;

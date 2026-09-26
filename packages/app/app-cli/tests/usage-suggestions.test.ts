@@ -47,6 +47,8 @@ class Apply extends AppCommand {
     }),
     only: Flags.string({ description: 'One.', exclusive: ['every'] }),
     every: Flags.boolean({ description: 'All.', exclusive: ['only'] }),
+    solo: Flags.boolean({ description: 'Alone.', combinable: ['name'] }),
+    needs: Flags.string({ description: 'Needs.', dependsOn: ['port'] }),
   };
   public async run(): Promise<{ ok: true }> {
     await this.parse(Apply);
@@ -262,6 +264,40 @@ describe('other invalid usage', () => {
     });
   });
 
+  it('repeats the reasons oclif gives for dependsOn and combinable, which name only flags', async () => {
+    const depends = await runAppCommand(bound(Apply, 'db:apply'), [
+      '--json',
+      '--name',
+      'x',
+      '--needs',
+      'typed-value',
+    ]);
+    expect(depends.json()).toMatchObject({
+      error: {
+        code: 'INVALID_USAGE',
+        message:
+          'All of the following must be provided when using --needs: --port.',
+      },
+    });
+    expect(depends.stdout).not.toContain('typed-value');
+
+    const combinable = await runAppCommand(bound(Apply, 'db:apply'), [
+      '--json',
+      '--name',
+      'x',
+      '--solo',
+      '--all',
+    ]);
+    expect(combinable.json()).toMatchObject({
+      error: {
+        code: 'INVALID_USAGE',
+        message: expect.stringMatching(
+          /^Only the following can be provided when using --solo: .*--name/u,
+        ),
+      },
+    });
+  });
+
   it('points help at node and the built entry in a deployment', async () => {
     setApplicationState({
       location: {
@@ -365,6 +401,20 @@ describe('an unknown command', () => {
       {
         message: 'See the db commands:',
         run: { command: 'pnpm', args: ['nocobase', 'db', '--help'] },
+      },
+      listEverything,
+    ]);
+  });
+
+  it('suggests the topic a single misspelled word was meant to be', () => {
+    const failure = describeUnknownCommand(
+      new Errors.CLIError('command plugn not found'),
+      tree,
+    );
+    expect(failure?.suggestions).toEqual([
+      {
+        message: 'Did you mean plugin? See its commands:',
+        run: { command: 'pnpm', args: ['nocobase', 'plugin', '--help'] },
       },
       listEverything,
     ]);

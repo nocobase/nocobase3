@@ -17,7 +17,7 @@ import { Args, Flags } from '@oclif/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import Commands from '../src/commands/commands.ts';
-import { AppCommand } from '../src/index.ts';
+import { AppCommand, appPath } from '../src/index.ts';
 import { defineCliPlugin, defineCliPlugins } from '../src/plugins/index.ts';
 import type { AppCliCommand } from '../src/plugins/types.ts';
 import { assembleCli } from '../src/runtime/assemble.ts';
@@ -133,6 +133,44 @@ describe('the catalog', () => {
   beforeAll(async () => {
     source = await catalogFor('source');
     deployment = await catalogFor('deployment');
+  });
+
+  it('marks an appPath() default as relative to the application root, as --help does', () => {
+    class Build extends AppCommand {
+      static override flags = {
+        output: appPath({ default: 'dist/out', description: 'Where.' }),
+        extra: appPath({ description: 'Typed only.' }),
+      };
+      public async run(): Promise<void> {
+        await this.parse(Build);
+      }
+    }
+    const catalog = describeCommandTree(
+      assembleCli({
+        builtinCommands: {},
+        builtinTopics: {},
+        commands: { build: Build },
+      }),
+      { bin: 'nocobase' },
+    );
+    expect(find(catalog, 'app build')?.flags).toEqual([
+      {
+        name: 'output',
+        type: 'option',
+        description: 'Where.',
+        required: false,
+        multiple: false,
+        default: 'dist/out',
+        defaultRelativeTo: 'application-root',
+      },
+      {
+        name: 'extra',
+        type: 'option',
+        description: 'Typed only.',
+        required: false,
+        multiple: false,
+      },
+    ]);
   });
 
   it('lists built-in, app and plugin commands with their source, sorted by id', () => {

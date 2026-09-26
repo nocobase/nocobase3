@@ -53,6 +53,30 @@ export default class Leak extends AppCommand {
 }
 `,
   );
+  // Keeps printing after its reader has gone, the way a command reporting progress on stdout would.
+  await writeFile(
+    path.join(app, 'cli', 'commands', 'chatty.ts'),
+    `import { AppCommand } from ${source('index.ts')};
+import { trackOpenRuntime } from ${source('runtime/command-store.ts')};
+
+export default class Chatty extends AppCommand {
+  static override summary = 'Prints more than a reader wants.';
+  public async run(): Promise<void> {
+    await this.parse(Chatty);
+    trackOpenRuntime({ close: async () => { process.stderr.write('runtime closed\\n'); } });
+    try {
+      // Paced so the writes outlast the reader: a burst would fit in the pipe's buffer before it closed.
+      for (let line = 0; line < 200; line += 1) {
+        this.log(\`line \${line}\`);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    } finally {
+      process.stderr.write('command unwound\\n');
+    }
+  }
+}
+`,
+  );
 }, 60_000);
 
 afterAll(async () => {
@@ -107,6 +131,26 @@ describe('the runner', () => {
     );
     expect(code).toBe(0);
     expect(stderr).not.toContain('unsettled top-level await');
+  }, 60_000);
+
+  it('lets a command still printing when the reader leaves unwind, and closes what it left open', async () => {
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, [bin, 'app', 'chatty'], {
+      cwd: app,
+      env: { ...process.env, NOCOBASE_CONTENT_TYPE: '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += String(chunk);
+    });
+    child.stdout.once('data', () => child.stdout.destroy());
+    const code = await new Promise<number | null>((resolve) =>
+      child.once('close', resolve),
+    );
+    expect(code).toBe(0);
+    expect(stderr).toContain('command unwound');
+    expect(stderr).toContain('runtime closed');
   }, 60_000);
 
   it('answers --json with one failure document for a command that does not exist', async () => {

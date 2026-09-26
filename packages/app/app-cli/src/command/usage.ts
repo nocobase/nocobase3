@@ -142,16 +142,23 @@ export function describeUnknownCommand(
     };
   });
   const [topic] = typed;
-  if (
-    suggestions.length === 0 &&
-    typed.length > 1 &&
-    topic !== undefined &&
-    tree.topics.includes(topic)
-  ) {
-    suggestions.push({
-      message: `See the ${topic} commands:`,
-      run: run(topic, '--help'),
-    });
+  if (suggestions.length === 0 && topic !== undefined) {
+    if (tree.topics.includes(topic)) {
+      if (typed.length > 1) {
+        suggestions.push({
+          message: `See the ${topic} commands:`,
+          run: run(topic, '--help'),
+        });
+      }
+    } else {
+      // A misspelled topic: its commands are too long to be close to one word, but the topic itself may be.
+      for (const meant of closestMatches(topic, tree.topics)) {
+        suggestions.push({
+          message: `Did you mean ${meant}? See its commands:`,
+          run: run(meant, '--help'),
+        });
+      }
+    }
   }
   suggestions.push({
     message: 'List every command:',
@@ -319,7 +326,7 @@ function describeFlagReason(
   }
   // `dependsOn`, `exactlyOne` and `combinable` list flag names only.
   if (
-    /^(?:All|One|Only) of the following (?:must|can) be provided when using --/u.test(
+    /^(?:All of|One of|Only) the following (?:must|can) be provided when using --/u.test(
       reason,
     ) &&
     !reason.includes('=') &&

@@ -5,7 +5,11 @@
 // dynamic default and drops a boolean flag's default altogether; the catalog reports a default only when it is static.
 import type { Command } from '@oclif/core';
 
-import { declaredFlags, type DeclaredFlag } from '../command/flags.ts';
+import {
+  declaredFlags,
+  isAppPathFlag,
+  type DeclaredFlag,
+} from '../command/flags.ts';
 import type { AppCliCommand } from '../plugins/types.ts';
 import type { AssembledCli, CommandSource } from './assemble.ts';
 
@@ -30,6 +34,11 @@ export interface CommandFlagInfo {
   readonly allowNo?: true;
   /** The default when it is a fixed value; left out when there is none or it is computed at run time. */
   readonly default?: unknown;
+  /**
+   * `application-root` for a path flag declared with `appPath()`: its `default` is relative to the application root,
+   * wherever the command runs, while a typed value resolves from the current directory.
+   */
+  readonly defaultRelativeTo?: 'application-root';
   /** The only values the flag accepts, when it restricts them. */
   readonly options?: readonly string[];
 }
@@ -180,6 +189,9 @@ function describeFlag(name: string, flag: DeclaredFlag): CommandFlagInfo {
       ? { allowNo: true as const }
       : {}),
     ...(fixedDefault ? { default: flag.default } : {}),
+    ...(fixedDefault && isAppPathFlag(flag)
+      ? { defaultRelativeTo: 'application-root' as const }
+      : {}),
     ...(options === undefined ? {} : { options: [...options] }),
   };
 }
