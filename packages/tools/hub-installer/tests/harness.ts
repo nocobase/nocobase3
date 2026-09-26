@@ -46,6 +46,14 @@ export interface FakeWorld {
   startQueue: string[];
 }
 
+/** The part of the template's `config.example.yml` the installer reads, which `config init` copies. */
+const EXAMPLE_CONFIG = `users:
+  initialAdmin:
+    username: nocobase # stored lowercase
+    email: admin@nocobase.com
+    password: admin123
+`;
+
 const buildTarget = () => ({
   platform: process.platform,
   arch: process.arch,
@@ -132,7 +140,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
       const version = readFileSync(args[1], 'utf8');
       mkdirSync(path.join(target, 'dist/cli'), { recursive: true });
       mkdirSync(path.join(target, 'dist/server'), { recursive: true });
-      writeFileSync(path.join(target, 'config.example.yml'), '# example\n');
+      writeFileSync(path.join(target, 'config.example.yml'), EXAMPLE_CONFIG);
       writeFileSync(path.join(target, 'dist/cli/index.js'), '');
       writeFileSync(
         path.join(target, 'dist/server/standalone.js'),
@@ -162,7 +170,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
       if (key === 'config init') {
         writeFileSync(
           cli[cli.indexOf('--config') + 1],
-          'auth:\n  secret: generated\n',
+          `${readFileSync(path.join(release, 'config.example.yml'), 'utf8')}auth:\n  secret: generated\n`,
           { mode: 0o600 },
         );
       }
@@ -295,7 +303,6 @@ export async function hub(
   const stderr = capture();
   const code = await runInstaller({
     argv: [...argv, '--json'],
-    binary: 'hub-installer',
     version: '0.0.0-test',
     stdout: stdout.stream,
     stderr: stderr.stream,

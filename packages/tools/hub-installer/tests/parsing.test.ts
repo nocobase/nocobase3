@@ -2,7 +2,14 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { pendingTaskCount } from '../src/lib/app-cli.ts';
+import packageMetadata from '../package.json' with { type: 'json' };
+// @ts-expect-error -- plain JavaScript that runs before the version check, with no declarations of its own
+import {
+  unsupportedNodeVersionEnvelope,
+  unsupportedNodeVersionOutput,
+} from '../bin/node-version.js';
+import { pendingTaskCount, toSuggestion } from '../src/lib/app-cli.ts';
+import { installerCommand, shellQuote } from '../src/lib/invocation.ts';
 import { waitForHealthy } from '../src/lib/health.ts';
 import { parseJlist } from '../src/lib/pm2.ts';
 import { resolveTemplateVersion, type FetchLike } from '../src/lib/registry.ts';
@@ -229,5 +236,96 @@ describe('waitForHealthy', () => {
         },
       }),
     ).resolves.toBe(false);
+  });
+});
+
+describe('suggested commands', () => {
+  it('runs hub-installer through npx with the registry named', () => {
+    expect(
+      installerCommand('rollback --dir /srv/hub', {
+        registry: 'http://127.0.0.1:4873/',
+      }),
+    ).toBe(
+      `npx --yes --registry=http://127.0.0.1:4873 @nocobase/hub-installer@${packageMetadata.version} rollback --dir /srv/hub`,
+    );
+    expect(
+      installerCommand('status', {
+        registry: 'https://npm.nocobase.ai',
+        version: 'latest',
+      }),
+    ).toBe(
+      'npx --yes --registry=https://npm.nocobase.ai @nocobase/hub-installer@latest status',
+    );
+  });
+
+  it('quotes a path only when a shell would split or expand it', () => {
+    expect(shellQuote('/srv/nocobase/hub')).toBe('/srv/nocobase/hub');
+    expect(shellQuote('/srv/my hub')).toBe("'/srv/my hub'");
+    expect(shellQuote("/srv/it's")).toBe("'/srv/it'\\''s'");
+    expect(shellQuote('/srv/$HOME')).toBe("'/srv/$HOME'");
+  });
+
+  it("folds the release CLI's commands into the message, since none of them runs as-is from a Hub root", () => {
+    expect(
+      toSuggestion({
+        message: 'See the flags:',
+        run: {
+          command: 'node',
+          args: [
+            '/srv/hub/releases/1.1.0/hub/dist/cli/index.js',
+            'config',
+            'set',
+            '--help',
+          ],
+        },
+      }),
+    ).toEqual({
+      message:
+        "See the flags: (the application CLI's command: node /srv/hub/releases/1.1.0/hub/dist/cli/index.js config set --help)",
+    });
+    expect(
+      toSuggestion({ message: 'Install the driver:', run: 'pnpm add pg' }),
+    ).toEqual({
+      message:
+        "Install the driver: (the application CLI's command: pnpm add pg)",
+    });
+    expect(toSuggestion({ message: 'Check the host.' })).toEqual({
+      message: 'Check the host.',
+    });
+  });
+});
+
+describe('unsupported Node.js', () => {
+  it('prints the envelope on stdout under --json, and text on stderr otherwise', () => {
+    const json = unsupportedNodeVersionOutput(
+      ['upgrade', '--dir', '/srv/hub', '--json'],
+      'v22.1.0',
+    ) as { stream: string; text: string };
+    expect(json.stream).toBe('stdout');
+    expect(JSON.parse(json.text)).toMatchObject({
+      command: 'upgrade',
+      error: { code: 'NODE_UNSUPPORTED' },
+    });
+    const text = unsupportedNodeVersionOutput(['upgrade'], 'v22.1.0') as {
+      stream: string;
+      text: string;
+    };
+    expect(text.stream).toBe('stderr');
+    expect(text.text).toContain('Node.js 24 or later is required');
+  });
+
+  it('answers --json with the same envelope as any other failure', () => {
+    expect(unsupportedNodeVersionEnvelope('install', 'v20.11.0')).toMatchObject(
+      {
+        schemaVersion: 1,
+        ok: false,
+        command: 'install',
+        status: 'error',
+        error: {
+          code: 'NODE_UNSUPPORTED',
+          message: expect.stringContaining('v20.11.0') as unknown,
+        },
+      },
+    );
   });
 });

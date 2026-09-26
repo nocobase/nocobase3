@@ -4,12 +4,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  formatUnsupportedNodeVersionMessage,
   isSupportedNodeVersion,
+  unsupportedNodeVersionOutput,
 } from './node-version.js';
 
 if (!isSupportedNodeVersion()) {
-  console.error(formatUnsupportedNodeVersionMessage(process.version));
+  const { stream, text } = unsupportedNodeVersionOutput(process.argv.slice(2));
+  process[stream].write(`${text}\n`);
   process.exit(2);
 }
 
@@ -31,7 +32,6 @@ const { runInstaller } = await import(entry);
 
 const exitCode = await runInstaller({
   argv: process.argv.slice(2),
-  binary: 'hub-installer',
   version: pjson.version,
 });
 

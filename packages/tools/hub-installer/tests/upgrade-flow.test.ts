@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import packageMetadata from '../package.json' with { type: 'json' };
 import {
   createWorld,
   freePort,
@@ -105,6 +106,12 @@ describe('upgrade', () => {
     const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
 
     expect(result.code).toBe(4);
+    const runs = (
+      result.json.error as unknown as { suggestions: { run?: string }[] }
+    ).suggestions.map((suggestion) => suggestion.run);
+    expect(runs).toContain(
+      `npx --yes --registry=${state().registry} @nocobase/hub-installer@${packageMetadata.version} rollback --dir ${root}`,
+    );
     expect(existsSync(path.join(root, 'releases', '1.1.0', 'hub'))).toBe(true);
     expect(state().releases.map((record) => record.version)).toContain('1.1.0');
     expect(state().pending).toMatchObject({

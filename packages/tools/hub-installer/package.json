@@ -29,7 +29,8 @@
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub-installer.tgz\" && pnpm exec publint ."
   },
   "dependencies": {
-    "@oclif/core": "catalog:"
+    "@oclif/core": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
