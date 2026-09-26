@@ -66,8 +66,9 @@ export async function resolveTemplateVersion(
     );
   }
 
-  const tagged = packument['dist-tags']?.[requested];
-  if (tagged) return tagged;
+  // `hasOwn`, not a plain lookup: `constructor` and friends are on every parsed object's prototype.
+  const tags = packument['dist-tags'] ?? {};
+  if (Object.hasOwn(tags, requested)) return tags[requested];
   if (packument.versions && Object.hasOwn(packument.versions, requested)) {
     return requested;
   }
