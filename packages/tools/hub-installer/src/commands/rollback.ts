@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Flags } from '@oclif/core';
-import { restoreDatabase } from '../lib/backup.ts';
+import { backupHasDatabase, restoreDatabase } from '../lib/backup.ts';
 import { confirm } from '../lib/confirm.ts';
 import { switchCurrent } from '../lib/current-link.ts';
 import { healthUrl, readHubEnv } from '../lib/env-file.ts';
 import {
+  EXIT_FAILED,
   EXIT_INVALID,
   EXIT_ROLLBACK_FAILED,
   InstallerError,
@@ -14,6 +15,7 @@ import { layoutOf, releaseDir, releaseLinkTarget } from '../lib/layout.ts';
 import { acquireLock } from '../lib/lock.ts';
 import { checkPlatform, checkPm2, currentNodeMajor } from '../lib/prechecks.ts';
 import {
+  checkPm2Ownership,
   errorLogTail,
   startHub,
   stopHub,
@@ -44,6 +46,7 @@ export const ROLLBACK_FLAGS = {
   }),
   'health-timeout': Flags.integer({
     default: 180,
+    min: 1,
     description: 'Seconds to wait for the release to answer its health check.',
   }),
   yes: Flags.boolean({
@@ -100,14 +103,24 @@ export function defaultRollbackTarget(
 
 /**
  * The backup that holds the database as it was on `target`, and whether it needs restoring: only when the upgrade away
- * from `target` applied migrations. An interrupted upgrade is treated as having migrated, since how far it got is unknown.
+ * from `target` applied migrations.
+ *
+ * An interrupted upgrade may have migrated once it moved `current`, and how far it got is unknown, so it counts as
+ * migrated from then on; before that it had only stopped the Hub. An interrupted rollback restores what it set out to.
  */
 export function backupFor(
   state: InstallerState,
   target: string,
 ): { backup?: string; migrated: boolean } {
-  if (state.pending?.action === 'upgrade' && state.pending.from === target) {
-    return { backup: state.pending.backup, migrated: true };
+  const pending = state.pending;
+  if (pending?.action === 'upgrade' && pending.from === target) {
+    return { backup: pending.backup, migrated: pending.switched === true };
+  }
+  if (pending?.action === 'rollback' && pending.to === target) {
+    return {
+      backup: pending.restoreFrom,
+      migrated: pending.restoreFrom !== undefined,
+    };
   }
   const upgrade = lastUpgrade(
     state.history,
@@ -127,9 +140,10 @@ export async function rollback(
   const { reporter, pm2 } = deps;
   const root = path.resolve(deps.cwd ?? process.cwd(), flags.dir ?? '.');
   const layout = layoutOf(root);
-  const state = await readState(layout);
   const releaseLock = await acquireLock(layout.lockFile);
   try {
+    // Read under the lock: a run that waited on it must see what the previous one wrote.
+    const state = await readState(layout);
     checkPlatform();
     const from = state.current;
     const interrupted = state.pending;
@@ -146,7 +160,7 @@ export async function rollback(
         },
       );
     }
-    if (target === from && !state.pending) {
+    if (target === from && !interrupted) {
       return {
         status: 'success-noop',
         result: { directory: root, current: from, rolledBack: false },
@@ -172,26 +186,6 @@ export async function rollback(
         { exitCode: EXIT_INVALID },
       );
     }
-    await checkPm2(pm2);
-
-    const { backup, migrated } = backupFor(state, target);
-    const restore = flags.restore && migrated && backup !== undefined;
-    if (flags.restore && migrated && backup === undefined) {
-      reporter.warn(
-        `The upgrade from ${target} migrated a database hub-installer did not back up; restore it from your own backup if ${target} misbehaves.`,
-      );
-    }
-    await confirm(
-      [
-        `Roll the Hub at ${root} back from ${from} to ${target}.`,
-        'The Hub and every application it hosts stop while the release switches.',
-        restore
-          ? `The Hub database is restored from ${backup}: whatever was written to the Hub since that upgrade — uploaded releases, deployments, settings — is lost.`
-          : 'The database is left as it is; rolling back does not undo migrations.',
-      ],
-      { yes: flags.yes, json: flags.json },
-    );
-
     const env = await readHubEnv(layout);
     const service: ServiceOptions = {
       layout,
@@ -200,24 +194,74 @@ export async function rollback(
       healthUrl: healthUrl(env),
       fetchImpl: deps.fetchImpl,
     };
+    await checkPm2(pm2);
+    await checkPm2Ownership(service);
+
+    // Restore only from a backup that actually holds the database: an external database is never in one, and an
+    // upgrade interrupted before its copy finished never records one.
+    const { backup, migrated } = backupFor(state, target);
+    const restoreFrom =
+      flags.restore &&
+      migrated &&
+      backup !== undefined &&
+      backupHasDatabase(layout, backup)
+        ? backup
+        : undefined;
+    if (flags.restore && migrated && restoreFrom === undefined) {
+      reporter.warn(
+        `The database may have been migrated past ${target}, and hub-installer holds no copy of it from before (an external database, or a backup that was cut short). Restore it from your own backup if ${target} misbehaves.`,
+      );
+    }
+    await confirm(
+      [
+        `Roll the Hub at ${root} back from ${from} to ${target}.`,
+        'The Hub and every application it hosts stop while the release switches.',
+        restoreFrom
+          ? `The Hub database is restored from ${restoreFrom}: whatever was written to the Hub since that upgrade — uploaded releases, deployments, settings — is lost.`
+          : 'The database is left as it is; rolling back does not undo migrations.',
+      ],
+      { yes: flags.yes, json: flags.json },
+    );
+
     state.pending = {
       action: 'rollback',
       from,
       to: target,
       startedAt: new Date().toISOString(),
+      ...(restoreFrom ? { restoreFrom } : {}),
     };
     await writeState(layout, state);
 
     reporter.progress(`Stopping ${from}`);
+    try {
+      await stopHub(service);
+    } catch (error) {
+      // Nothing was restored or switched: put back what was pending before this run, if anything.
+      if (interrupted) state.pending = interrupted;
+      else delete state.pending;
+      await writeState(layout, state);
+      throw new InstallerError(
+        'ROLLBACK_ABORTED',
+        `Stopping ${from} failed: ${error instanceof Error ? error.message : String(error)}. Nothing was restored or switched.`,
+        { exitCode: EXIT_FAILED, cause: error },
+      );
+    }
+
+    let restored = false;
+    let switched = false;
     let healthy = false;
     let failure: unknown;
     try {
-      await stopHub(service);
-      if (restore && backup) {
-        reporter.progress(`Restoring the database from ${backup}`);
-        await restoreDatabase(layout, backup);
+      if (restoreFrom) {
+        reporter.progress(`Restoring the database from ${restoreFrom}`);
+        await restoreDatabase(layout, restoreFrom);
+        restored = true;
       }
       await switchCurrent(layout, releaseLinkTarget(target));
+      switched = true;
+      // The link and installer.json agree from here, whatever happens next.
+      state.current = target;
+      await writeState(layout, state);
       reporter.progress(`Starting ${target}`);
       healthy = await startHub({
         ...service,
@@ -227,37 +271,52 @@ export async function rollback(
       failure = error;
     }
 
-    state.current = target;
-    delete state.pending;
-    state.history.push({
-      action: 'rollback',
-      from,
-      to: target,
-      at: new Date().toISOString(),
-      databaseRestored: restore && failure === undefined,
-    });
-    await writeState(layout, state);
-
     if (!healthy) {
+      // The rollback stays pending, so running it again retries it — restore included — once the cause is fixed.
+      await writeState(layout, state);
+      const reason = failure instanceof Error ? ` (${failure.message})` : '';
       throw new InstallerError(
         'ROLLBACK_FAILED',
-        `${target} did not come back${failure instanceof Error ? ` (${failure.message})` : ''}. The Hub is down.`,
+        switched
+          ? `${target} did not come back${reason}. The Hub is down.`
+          : `${restoreFrom && !restored ? 'Restoring the database' : 'Switching to ' + target} failed${reason}; the Hub is stopped and still on ${from}.`,
         {
           exitCode: EXIT_ROLLBACK_FAILED,
-          details: { log: await errorLogTail(layout) },
+          details: {
+            log: await errorLogTail(layout),
+            databaseRestored: restored,
+          },
           suggestions: [
             {
               message: 'Read the error log:',
               run: `tail -n 100 ${path.join(layout.logsDir, 'hub.err.log')}`,
             },
             {
-              message: `Or switch back to ${from}:`,
-              run: `hub-installer rollback --dir ${root} --to ${from} --no-restore`,
+              message: 'Once the cause is fixed, run the rollback again:',
+              run: `hub-installer rollback --dir ${root}`,
             },
+            ...(switched
+              ? [
+                  {
+                    message: `Or go back to ${from}:`,
+                    run: `hub-installer rollback --dir ${root} --to ${from} --no-restore`,
+                  },
+                ]
+              : []),
           ],
         },
       );
     }
+
+    delete state.pending;
+    state.history.push({
+      action: 'rollback',
+      from,
+      to: target,
+      at: new Date().toISOString(),
+      databaseRestored: restored,
+    });
+    await writeState(layout, state);
     return {
       status: 'success',
       result: {
@@ -266,15 +325,15 @@ export async function rollback(
         to: target,
         rolledBack: true,
         recovered: interrupted ? interrupted.action : null,
-        databaseRestored: restore,
-        backup: restore ? backup : null,
+        databaseRestored: restored,
+        backup: restoreFrom ?? null,
       },
       summary: [
         interrupted
           ? `Recovered from the interrupted ${interrupted.action} (${interrupted.from} to ${interrupted.to}); the Hub runs ${target}.`
           : `Rolled the Hub back from ${from} to ${target}.`,
-        restore
-          ? `  Database restored from ${backup}`
+        restored
+          ? `  Database restored from ${restoreFrom}`
           : '  Database left as it was',
       ],
     };

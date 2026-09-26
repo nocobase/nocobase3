@@ -1,9 +1,13 @@
+import { interruptError, takeInterrupt } from './interrupt.ts';
+import type { Pm2 } from './pm2.ts';
 import type { FetchLike } from './registry.ts';
 
 export interface HealthOptions {
   timeoutMs: number;
   intervalMs?: number;
   fetchImpl?: FetchLike;
+  /** Checked between requests; returning true gives up before the timeout, such as for a process that crashed. */
+  failed?: () => Promise<boolean>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -26,8 +30,8 @@ export async function checkHealth(
 }
 
 /**
- * Polls the health route until it answers or the timeout passes. The server listens only once startup, migrations
- * included, has finished, so a healthy answer means the Hub is ready.
+ * Polls the health route until it answers, the timeout passes, or `failed` says there is no point waiting. The server
+ * listens only once startup, migrations included, has finished, so a healthy answer means the Hub is ready.
  */
 export async function waitForHealthy(
   url: string,
@@ -39,8 +43,29 @@ export async function waitForHealthy(
     ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const deadline = now() + options.timeoutMs;
   for (;;) {
+    if (takeInterrupt()) throw interruptError();
     if (await checkHealth(url, options.fetchImpl)) return true;
     if (now() >= deadline) return false;
+    if (options.failed && (await options.failed())) return false;
     await sleep(options.intervalMs ?? 1_000);
   }
+}
+
+/**
+ * Restarts pm2 has made before the Hub answered, beyond which a start counts as failed. `NOCOBASE_STRICT_STARTUP` makes a
+ * failed start exit, so a crash during startup is a real failure rather than a slow start.
+ */
+const MAX_STARTUP_RESTARTS = 2;
+
+/** A `failed` probe for `waitForHealthy`: the pm2 process has crashed repeatedly, or pm2 has given up on it. */
+export function pm2StartFailed(pm2: Pm2, name: string): () => Promise<boolean> {
+  return async () => {
+    const process = await pm2.describe(name).catch(() => undefined);
+    if (!process) return false;
+    return (
+      process.status === 'errored' ||
+      process.status === 'stopped' ||
+      process.restarts > MAX_STARTUP_RESTARTS
+    );
+  };
 }

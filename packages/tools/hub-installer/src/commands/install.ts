@@ -6,7 +6,7 @@ import { switchCurrent } from '../lib/current-link.ts';
 import { buildEcosystemConfig } from '../lib/ecosystem.ts';
 import { buildHubEnv, healthUrl, readHubEnv } from '../lib/env-file.ts';
 import { EXIT_INVALID, InstallerError } from '../lib/errors.ts';
-import { waitForHealthy } from '../lib/health.ts';
+import { pm2StartFailed, waitForHealthy } from '../lib/health.ts';
 import {
   HUB_BASE_PATH,
   layoutOf,
@@ -16,9 +16,12 @@ import {
 import { acquireLock } from '../lib/lock.ts';
 import type { Reporter } from '../lib/output.ts';
 import {
+  checkEnvVariables,
   checkPlatform,
   checkPm2,
+  checkPm2NameFree,
   checkPnpm,
+  checkPortFree,
   checkTar,
   checkTargetEmpty,
 } from '../lib/prechecks.ts';
@@ -35,7 +38,7 @@ import {
   prepareRelease,
   type Dialect,
 } from '../lib/release.ts';
-import { tail } from '../lib/run-command.ts';
+import { runCommand, tail, type RunCommand } from '../lib/run-command.ts';
 import { writeState, type InstallerState } from '../lib/state.ts';
 
 export const INSTALL_ARGS = {
@@ -61,7 +64,9 @@ export const INSTALL_FLAGS = {
   }),
   port: Flags.integer({
     default: 13000,
-    description: 'Port the Hub listens on.',
+    min: 1,
+    max: 65535,
+    description: 'Port the Hub listens on. It must be free.',
   }),
   dialect: Flags.string({
     default: 'sqlite',
@@ -72,7 +77,7 @@ export const INSTALL_FLAGS = {
   set: Flags.string({
     multiple: true,
     description:
-      'A config.yml setting as key=value, applied with `nocobase config set`, e.g. database.connections.main.host=db.internal.',
+      'A config.yml setting as key=value, applied with `nocobase config set`, e.g. database.connections.main.host=db.internal. Values are YAML scalars: quote text that looks like a number or boolean, as in key=\'"0123"\'.',
   }),
   'set-from-env': Flags.string({
     multiple: true,
@@ -93,12 +98,13 @@ export const INSTALL_FLAGS = {
   }),
   'health-timeout': Flags.integer({
     default: 180,
+    min: 1,
     description: 'Seconds to wait for the Hub to answer its health check.',
   }),
   'keep-source': Flags.boolean({
     default: false,
     description:
-      'Keep the build directory with the sources and development dependencies.',
+      'Keep the build directory with the sources and development dependencies, also when the install fails.',
   }),
   json: Flags.boolean({
     default: false,
@@ -130,6 +136,8 @@ export interface CommandDeps {
   pm2: Pm2;
   fetchImpl?: FetchLike;
   cwd?: string;
+  /** Runs every child process the command starts; replaced in tests. */
+  run?: RunCommand;
 }
 
 export interface CommandOutcome {
@@ -166,14 +174,20 @@ async function logTail(layout: Layout): Promise<string> {
 
 /**
  * Removes what a failed install wrote. The target was new or empty when the install began, so everything in it now
- * came from this run.
+ * came from this run. `created` is the topmost directory the install created, which may be a parent of the root;
+ * `keep` names entries to leave, such as the build directory under `--keep-source`.
  */
-async function cleanUp(root: string, rootExisted: boolean): Promise<void> {
-  if (!rootExisted) {
-    await rm(root, { recursive: true, force: true });
+async function cleanUp(
+  root: string,
+  created: string | undefined,
+  keep: readonly string[],
+): Promise<void> {
+  if (created && keep.length === 0) {
+    await rm(created, { recursive: true, force: true });
     return;
   }
   for (const entry of await readdir(root).catch(() => [] as string[])) {
+    if (keep.includes(entry)) continue;
     await rm(path.join(root, entry), { recursive: true, force: true });
   }
 }
@@ -184,6 +198,7 @@ export async function install(
 ): Promise<CommandOutcome> {
   const { flags } = input;
   const { reporter, pm2 } = deps;
+  const run = deps.run ?? runCommand;
   const root = path.resolve(deps.cwd ?? process.cwd(), input.directory);
   const layout = layoutOf(root);
   const dialect = flags.dialect as Dialect;
@@ -203,11 +218,17 @@ export async function install(
     );
   }
 
+  // Everything that can be checked is checked before the first write, so a failed precheck leaves nothing behind.
   checkPlatform();
-  const rootExisted = await checkTargetEmpty(root);
-  await checkPnpm();
-  await checkTar();
-  if (flags.start) await checkPm2(pm2);
+  await checkTargetEmpty(root);
+  checkEnvVariables(setsFromEnv.map(([, variable]) => variable));
+  await checkPnpm(run);
+  await checkTar(run);
+  if (flags.start) {
+    await checkPm2(pm2);
+    await checkPm2NameFree(pm2, flags.name);
+  }
+  await checkPortFree(flags.host, flags.port);
   const version = await resolveTemplateVersion(
     registry,
     flags['hub-version'],
@@ -219,8 +240,15 @@ export async function install(
     );
   }
 
-  await mkdir(root, { recursive: true });
-  const releaseLock = await acquireLock(layout.lockFile);
+  // `mkdir` returns the first directory it created, so a failure can remove parents the install made as well.
+  const created = await mkdir(root, { recursive: true });
+  let releaseLock: () => Promise<void>;
+  try {
+    releaseLock = await acquireLock(layout.lockFile);
+  } catch (error) {
+    if (created) await rm(created, { recursive: true, force: true });
+    throw error;
+  }
   let switched = false;
   try {
     reporter.progress(`Installing the Hub ${version} into ${root}`);
@@ -232,6 +260,7 @@ export async function install(
       drivers,
       keepSource: flags['keep-source'],
       reporter,
+      run,
     });
 
     await writeFile(
@@ -239,7 +268,7 @@ export async function install(
       buildHubEnv(layout, { origin, host: flags.host, port: flags.port }),
     );
     const env = await readHubEnv(layout);
-    const cli = { releaseDir: prepared.dir, cwd: root, env };
+    const cli = { releaseDir: prepared.dir, cwd: root, env, run };
 
     reporter.progress('Writing config.yml');
     await runAppCli(
@@ -263,8 +292,8 @@ export async function install(
     reporter.progress('Applying database migrations');
     await runAppCli(['db', 'apply'], cli);
 
-    await switchCurrent(layout, releaseLinkTarget(version));
-    switched = true;
+    // Everything else the root needs is written first: the switch is the last write before starting, so a failure
+    // anywhere up to it leaves nothing half-installed for status and install to disagree about.
     await mkdir(layout.logsDir, { recursive: true });
     await writeFile(
       layout.ecosystemFile,
@@ -284,6 +313,8 @@ export async function install(
       history: [{ action: 'install', to: version, at }],
     };
     await writeState(layout, state);
+    await switchCurrent(layout, releaseLinkTarget(version));
+    switched = true;
 
     const url = healthUrl(env);
     const startCommand = `pm2 start ${layout.ecosystemFile} && pm2 save`;
@@ -293,12 +324,14 @@ export async function install(
       const healthy = await waitForHealthy(url, {
         timeoutMs: flags['health-timeout'] * 1000,
         fetchImpl: deps.fetchImpl,
+        failed: pm2StartFailed(pm2, flags.name),
       });
       if (!healthy) {
+        // The name was free before this install, so the process under it is the one just started.
         await pm2.remove(flags.name).catch(() => undefined);
         throw new InstallerError(
           'START_FAILED',
-          `The Hub did not answer ${url} within ${flags['health-timeout']}s. It is installed but not running.`,
+          `The Hub did not become healthy at ${url} (waited up to ${flags['health-timeout']}s). It is installed but not running.`,
           {
             details: { log: await logTail(layout) },
             suggestions: [
@@ -350,7 +383,13 @@ export async function install(
     // After it, the release, configuration and data are real and stay.
     if (!switched) {
       await releaseLock();
-      await cleanUp(root, rootExisted);
+      const keep = flags['keep-source'] ? ['.build'] : [];
+      await cleanUp(root, created, keep);
+      if (keep.length > 0) {
+        reporter.warn(
+          `The build directory was kept for inspection: ${path.join(layout.buildDir)}. Remove it before installing into ${root} again.`,
+        );
+      }
     }
     throw error;
   } finally {

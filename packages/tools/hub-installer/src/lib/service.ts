@@ -1,6 +1,9 @@
+import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { checkHealth, waitForHealthy } from './health.ts';
+import { EXIT_INVALID, InstallerError } from './errors.ts';
+import { checkHealth, pm2StartFailed, waitForHealthy } from './health.ts';
+import { interruptError, takeInterrupt } from './interrupt.ts';
 import type { Layout } from './layout.ts';
 import type { Pm2 } from './pm2.ts';
 import type { FetchLike } from './registry.ts';
@@ -14,6 +17,41 @@ export interface ServiceOptions {
   fetchImpl?: FetchLike;
 }
 
+function sameDirectory(a: string, b: string): boolean {
+  const real = (dir: string) => {
+    try {
+      return realpathSync(dir);
+    } catch {
+      return path.resolve(dir);
+    }
+  };
+  return real(a) === real(b);
+}
+
+/**
+ * The pm2 process under the Hub's name must be this Hub's. Otherwise stopping it would stop another Hub, and `pm2 start`
+ * on the taken name would restart that process with this Hub's configuration.
+ */
+export async function checkPm2Ownership(
+  options: ServiceOptions,
+): Promise<void> {
+  const known = await options.pm2.describe(options.name);
+  if (known?.cwd && !sameDirectory(known.cwd, options.layout.root)) {
+    throw new InstallerError(
+      'PM2_NAME_IN_USE',
+      `The pm2 process ${options.name} runs from ${known.cwd}, not from ${options.layout.root}.`,
+      {
+        exitCode: EXIT_INVALID,
+        suggestions: [
+          {
+            message: `Stop that process or rename it; installer.json names ${options.name} for this Hub.`,
+          },
+        ],
+      },
+    );
+  }
+}
+
 /**
  * Stops the Hub and waits until its health route stops answering. pm2 sends SIGINT and allows `kill_timeout` for the
  * Hub to stop its App Host first. A Hub pm2 does not know, such as one installed with `--no-start`, is simply not running.
@@ -22,6 +60,7 @@ export async function stopHub(options: ServiceOptions): Promise<void> {
   const known = await options.pm2.describe(options.name);
   if (known) await options.pm2.stop(options.name);
   for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (takeInterrupt()) throw interruptError();
     if (!(await checkHealth(options.healthUrl, options.fetchImpl))) return;
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
@@ -32,7 +71,8 @@ export async function stopHub(options: ServiceOptions): Promise<void> {
 
 /**
  * Starts whatever `current` points at and waits for it to be healthy. The process entry is deleted first: pm2 keeps the
- * release path it resolved at `pm2 start`, so a restart after a switch would run the previous release.
+ * release path it resolved at `pm2 start`, so a restart after a switch would run the previous release. A process pm2
+ * reports as crashed ends the wait early.
  */
 export async function startHub(
   options: ServiceOptions & { timeoutMs: number },
@@ -42,6 +82,7 @@ export async function startHub(
   const healthy = await waitForHealthy(options.healthUrl, {
     timeoutMs: options.timeoutMs,
     fetchImpl: options.fetchImpl,
+    failed: pm2StartFailed(options.pm2, options.name),
   });
   if (healthy) {
     await options.pm2.save();
