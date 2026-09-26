@@ -1,5 +1,31 @@
 # @nocobase/app-plugin-authorization
 
+## 0.2.0-beta.20
+
+### Patch Changes
+
+- 757eedf: Check unrestricted access from the client, and never offer unrestricted-only pages as grants
+
+  `AuthorizationClient.can` and `useCan` accept `'unrestricted'` in addition to a `{ resource, action }` check, typed as the new exported `AuthorizationRequirement`. It passes only when the session's permission snapshot is unrestricted, as root's is, and nothing can grant it. Route guards and menus use it for pages whose `authz` is `'unrestricted'`, which is what a protected App or settings page without a declared `authz` now defaults to.
+
+  The permission workspace and inspector list only routes whose `authz` checks `page` `access`, so an unrestricted-only page is never offered as a page grant. The client development guidance in the plugin's Skill now describes `authz` inheritance, the defaults for a page that omits it, and the unrestricted requirement.
+
+- 1b139b6: List Permission Sets first and the Permission Inspector last in the authorization settings subsection, with the rule plugins between them. `authz.ui.place` accepts an optional `order` within a subsection; unordered resources follow in registration order. The permission workspace now shows a resource's key under its name, and its sidebar leads with subsections, keeping section headers as muted labels.
+- Updated dependencies [02d5402]
+- Updated dependencies [dbf5631]
+- Updated dependencies [05af1d4]
+- Updated dependencies [4adcf24]
+- Updated dependencies [ec92b20]
+- Updated dependencies [ec92b20]
+- Updated dependencies [757eedf]
+  - @nocobase/app-server@1.0.0-beta.27
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+  - @nocobase/app-client@1.0.0-beta.21
+  - @nocobase/authorization@0.1.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.2.0-beta.19
 
 ### Minor Changes

@@ -1,5 +1,30 @@
 # @nocobase/app-plugin-database-explorer
 
+## 0.1.0-beta.6
+
+### Patch Changes
+
+- ec92b20: Plugin commands are `AppCommand`s and print the command envelope under `--json`. `scheduler sync` creates the application through `withApp()`, so it acts on the application the runner located rather than the current directory and always destroys the runtime. `workflow build` path flags are `appPath()` flags, so their defaults resolve against the application root from any directory. The CLI example's `artifact build` is a development command, and `pnpm plugin:create --with cli` generates an `AppCommand` with a test that uses `@nocobase/app-cli/testing`.
+
+  The application Skill gains a reference on adding an application command, and the application templates and plugin `AGENTS.md` files describe commands in those terms: a command returns its result, throws `CommandError`, and creates the application with `withApp()` when it needs it. The templates import the CLI authoring API from `@nocobase/app-cli`.
+
+- dbf5631: Replace guidance that named removed commands and layouts. The Hub's development page names the archive `nocobase build --tar` actually writes, `storage/exports/dist.tar.gz`. The scheduler Skill synchronizes with `pnpm nocobase scheduler sync` instead of `nb3 schedule:sync` and gives the deployed form, `node dist/cli/index.js scheduler sync --finalize`. The repository example applies its migrations and seeds with `nocobase db apply`, the CLI example's Skill matches its manifest and the stdout-only `--json` contract, and the i18n Skill no longer presents `pnpm i18n:check` as the monorepo form of `locales check`. Plugin `AGENTS.md` files carry the current dependency rules from the plugin template.
+- Updated dependencies [757eedf]
+- Updated dependencies [1b139b6]
+- Updated dependencies [02d5402]
+- Updated dependencies [dbf5631]
+- Updated dependencies [05af1d4]
+- Updated dependencies [4adcf24]
+- Updated dependencies [ec92b20]
+- Updated dependencies [ec92b20]
+- Updated dependencies [757eedf]
+  - @nocobase/app-plugin-authorization@0.2.0-beta.20
+  - @nocobase/app-server@1.0.0-beta.27
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+  - @nocobase/app-client@1.0.0-beta.21
+  - @nocobase/i18n@1.0.0-beta.4
+
 ## 0.1.0-beta.5
 
 ### Patch Changes
