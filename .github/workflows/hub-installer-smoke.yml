@@ -1,0 +1,71 @@
+name: Hub installer smoke test
+
+# Installs the published Hub template with the hub-installer from this checkout, on the platform the Hub image uses.
+# It also runs daily: the template ships no lockfile, so a newly published dependency can break an install with no
+# change in this repository.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/tools/hub-installer/**'
+      - '.github/workflows/hub-installer-smoke.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hub-installer-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Install a Hub on Debian bookworm
+    runs-on: ubuntu-24.04
+    container: node:24-bookworm
+    timeout-minutes: 30
+    env:
+      HUB_ROOT: /tmp/hub
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install pm2
+        run: npm install -g pm2
+
+      - name: Install hub-installer dependencies
+        run: pnpm install --frozen-lockfile --filter @nocobase/hub-installer
+
+      - name: Install the Hub
+        run: |
+          node packages/tools/hub-installer/bin/run.js install "$HUB_ROOT" \
+            --origin http://127.0.0.1:13000 --json | tee install.json
+          node -e 'const r=require("./install.json"); if (!r.ok || !r.result.started) process.exit(1)'
+
+      - name: Check the Hub
+        run: |
+          node packages/tools/hub-installer/bin/run.js status --dir "$HUB_ROOT" --json | tee status.json
+          node -e '
+            const r = require("./status.json");
+            const problems = [];
+            if (!r.ok) problems.push("status failed");
+            if (!r.result.health.ok) problems.push("health check failed");
+            if (r.result.process?.status !== "online") problems.push("pm2 process is not online");
+            if (!r.result.node.matches) problems.push("Node major mismatch");
+            if (problems.length) { console.log(`::error::${problems.join("; ")}`); process.exit(1); }
+          '
+          test ! -e "$HUB_ROOT/releases/$(node -p 'require("./status.json").result.current')/hub/storage"
+          test -f "$HUB_ROOT/storage/hub/database/main.sqlite"
+
+      - name: Show Hub logs
+        if: failure()
+        run: |
+          tail -n 200 "$HUB_ROOT"/logs/*.log || true
+          pm2 logs --nostream --lines 100 || true
