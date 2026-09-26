@@ -7,6 +7,7 @@ import {
   backupForUpgrade,
   backupName,
   HUB_DATABASE,
+  removeBackup,
   restoreDatabase,
   type BackupResult,
 } from '../lib/backup.ts';
@@ -31,12 +32,15 @@ import {
   checkPlatform,
   checkPm2,
   checkPnpm,
+  checkPortFree,
   checkTar,
   currentNodeMajor,
 } from '../lib/prechecks.ts';
 import { resolveTemplateVersion } from '../lib/registry.ts';
 import { prepareRelease, verifyBuildTarget } from '../lib/release.ts';
+import { runCommand } from '../lib/run-command.ts';
 import {
+  checkPm2Ownership,
   errorLogTail,
   startHub,
   stopHub,
@@ -48,6 +52,7 @@ import {
   type InstallerState,
   type ReleaseRecord,
 } from '../lib/state.ts';
+import { compareVersions } from '../lib/version.ts';
 import type { CommandDeps, CommandOutcome } from './install.ts';
 
 /** A build needs room for the sources and development dependencies (about 900 MB) plus the release and a backup. */
@@ -70,13 +75,15 @@ export const UPGRADE_FLAGS = {
   }),
   'health-timeout': Flags.integer({
     default: 180,
+    min: 1,
     description:
       'Seconds to wait for the new release to answer its health check.',
   }),
   keep: Flags.integer({
     default: 3,
-    min: 1,
-    description: 'Releases to keep on disk, the current one included.',
+    min: 2,
+    description:
+      'Releases to keep on disk, counting the new one; the one upgraded from is always kept so rollback stays possible.',
   }),
   'keep-source': Flags.boolean({
     default: false,
@@ -137,21 +144,41 @@ async function resolveTarget(
   return resolveTemplateVersion(state.registry, requested, deps.fetchImpl);
 }
 
-/** Keeps the newest `keep` releases by install time, never removing the current one. */
+/**
+ * Keeps the newest `keep` releases by install time. `protect` — the current release and the one it was upgraded from,
+ * which `rollback` returns to — is never pruned, whatever its install time.
+ */
 export function releasesToPrune(
   releases: readonly ReleaseRecord[],
-  current: string,
+  protect: readonly string[],
   keep: number,
 ): ReleaseRecord[] {
   const newestFirst = [...releases].sort((a, b) =>
     b.installedAt.localeCompare(a.installedAt),
   );
-  const kept = new Set([current]);
+  const kept = new Set(protect);
   for (const record of newestFirst) {
     if (kept.size >= keep) break;
     kept.add(record.version);
   }
   return releases.filter((record) => !kept.has(record.version));
+}
+
+/** Whether a recorded release can run here: built for this platform, architecture and Node major. */
+function fitsMachine(record: ReleaseRecord): boolean {
+  try {
+    verifyBuildTarget(record.buildTarget);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function replaceRecord(state: InstallerState, record: ReleaseRecord): void {
+  state.releases = [
+    ...state.releases.filter((entry) => entry.version !== record.version),
+    record,
+  ];
 }
 
 async function checkFreeSpace(root: string): Promise<void> {
@@ -182,7 +209,8 @@ interface RollbackContext {
   to: string;
   pending: number;
   backup: BackupResult;
-  newRelease: string | undefined;
+  /** Set when this upgrade built the release rather than reusing one already recorded. */
+  newRecord: ReleaseRecord | undefined;
   timeoutMs: number;
   cause: unknown;
 }
@@ -191,6 +219,10 @@ interface RollbackContext {
  * Undoes an upgrade that failed after the switch: the new release is stopped, `current` goes back, the database is
  * restored when the new release may have migrated it, and the previous release is started again. Always throws: exit 3
  * when the previous release is healthy again, exit 4 when it is not.
+ *
+ * When the previous release does not come back, the operation stays pending and the new release stays on disk and on
+ * record: it may be the only one that can run, as when the machine's Node major changed, and `rollback` recovers from
+ * the pending state.
  */
 async function rollBackUpgrade(context: RollbackContext): Promise<never> {
   const { layout, state, service, from, to, backup } = context;
@@ -215,13 +247,17 @@ async function rollBackUpgrade(context: RollbackContext): Promise<never> {
     rollbackError = error;
   }
 
-  if (context.newRelease) {
-    await rm(path.dirname(context.newRelease), {
-      recursive: true,
-      force: true,
-    });
+  if (healthy) {
+    if (context.newRecord) {
+      await rm(path.dirname(releaseDir(layout, to)), {
+        recursive: true,
+        force: true,
+      });
+    }
+    delete state.pending;
+  } else if (context.newRecord) {
+    replaceRecord(state, context.newRecord);
   }
-  delete state.pending;
   state.history.push({
     action: 'upgrade',
     from,
@@ -274,9 +310,18 @@ async function rollBackUpgrade(context: RollbackContext): Promise<never> {
             ]
           : []),
         {
-          message: `Start ${from} again once fixed:`,
-          run: `pm2 start ${layout.ecosystemFile} && pm2 save`,
+          message:
+            'Once the cause is fixed, finish the rollback; it restores the database from the backup if needed:',
+          run: `hub-installer rollback --dir ${layout.root}`,
         },
+        ...(context.newRecord
+          ? [
+              {
+                message: `Or return to ${to}, which was kept:`,
+                run: `hub-installer rollback --dir ${layout.root} --to ${to} --no-restore`,
+              },
+            ]
+          : []),
       ],
     },
   );
@@ -290,9 +335,11 @@ export async function upgrade(
   const { reporter, pm2 } = deps;
   const root = path.resolve(deps.cwd ?? process.cwd(), flags.dir ?? '.');
   const layout = layoutOf(root);
-  const state = await readState(layout);
+  const run = deps.run ?? runCommand;
   const releaseLock = await acquireLock(layout.lockFile);
   try {
+    // Read under the lock: a run that waited on it must see what the previous one wrote.
+    const state = await readState(layout);
     assertNoPending(state);
     const env = await readHubEnv(layout);
     const from = state.current;
@@ -304,14 +351,40 @@ export async function upgrade(
         summary: [`The Hub is already on ${from}.`],
       };
     }
+    if ((compareVersions(to, from) ?? 0) < 0) {
+      throw new InstallerError(
+        'DOWNGRADE',
+        `${to} is older than the running ${from}. An older release does not know the newer migrations and would run on a schema it does not understand.`,
+        {
+          exitCode: EXIT_INVALID,
+          suggestions: [
+            {
+              message:
+                'Go back with rollback, which restores the database backed up before the upgrade:',
+              run: `hub-installer rollback --dir ${root} --to ${to}`,
+            },
+          ],
+        },
+      );
+    }
 
+    const url = healthUrl(env);
+    const service: ServiceOptions = {
+      layout,
+      pm2,
+      name: state.name,
+      healthUrl: url,
+      fetchImpl: deps.fetchImpl,
+    };
     checkPlatform();
     await checkPm2(pm2);
+    await checkPm2Ownership(service);
     const known = state.releases.find((record) => record.version === to);
-    const reuse = known !== undefined && existsSync(releaseDir(layout, to));
+    const onDisk = existsSync(releaseDir(layout, to));
+    const reuse = known !== undefined && onDisk && fitsMachine(known);
     if (!reuse) {
-      await checkPnpm();
-      await checkTar();
+      await checkPnpm(run);
+      await checkTar(run);
       await checkFreeSpace(root);
     }
     const sqlite = state.dialect === 'sqlite';
@@ -345,31 +418,48 @@ export async function upgrade(
     );
 
     // Everything up to the stop happens while the current release keeps serving.
-    let newRelease: string | undefined;
+    let newRecord: ReleaseRecord | undefined;
     let dir: string;
-    let buildTarget: ReleaseRecord['buildTarget'];
-    if (reuse && known) {
+    if (reuse) {
       reporter.progress(`Reusing the ${to} release already on disk`);
       dir = releaseDir(layout, to);
-      buildTarget = verifyBuildTarget(known.buildTarget);
     } else {
-      // A directory for this version that installer.json does not know is a leftover of an interrupted build.
+      if (known && onDisk) {
+        reporter.progress(
+          `The ${to} release on disk was built for another platform or Node major; building it again`,
+        );
+      }
+      // A directory the build would reuse is either a leftover of an interrupted build or one that cannot run here.
       await rm(path.dirname(releaseDir(layout, to)), {
         recursive: true,
         force: true,
       });
-      ({ dir, buildTarget } = await prepareRelease({
+      const prepared = await prepareRelease({
         layout,
         version: to,
         registry: state.registry,
         drivers: state.drivers,
         keepSource: flags['keep-source'],
         reporter,
-      }));
-      newRelease = dir;
+        run,
+      });
+      dir = prepared.dir;
+      newRecord = {
+        version: to,
+        installedAt: new Date().toISOString(),
+        buildTarget: prepared.buildTarget,
+      };
     }
+    const removeNewRelease = async () => {
+      if (newRecord) {
+        await rm(path.dirname(releaseDir(layout, to)), {
+          recursive: true,
+          force: true,
+        });
+      }
+    };
 
-    const cli = { releaseDir: dir, cwd: root, env };
+    const cli = { releaseDir: dir, cwd: root, env, run };
     let pending: number;
     try {
       reporter.progress(
@@ -380,9 +470,7 @@ export async function upgrade(
         await runAppCli(['db', 'apply', '--dry-run'], cli),
       );
     } catch (error) {
-      if (newRelease) {
-        await rm(path.dirname(newRelease), { recursive: true, force: true });
-      }
+      await removeNewRelease();
       throw error;
     }
     reporter.progress(
@@ -391,21 +479,13 @@ export async function upgrade(
         : `${to} has no pending migrations`,
     );
 
-    const url = healthUrl(env);
-    const service: ServiceOptions = {
-      layout,
-      pm2,
-      name: state.name,
-      healthUrl: url,
-      fetchImpl: deps.fetchImpl,
-    };
     const name = backupName(from, to, new Date());
+    const backupRelative = path.join('backups', name);
     state.pending = {
       action: 'upgrade',
       from,
       to,
       startedAt: new Date().toISOString(),
-      backup: path.join('backups', name),
     };
     await writeState(layout, state);
 
@@ -414,6 +494,11 @@ export async function upgrade(
     let backup: BackupResult;
     try {
       await stopHub(service);
+      // Health stopped answering; make sure nothing else holds the port the new release has to bind.
+      await checkPortFree(
+        env.APP_SERVER_HOST ?? '127.0.0.1',
+        Number(env.APP_SERVER_PORT ?? 13000),
+      );
       reporter.progress('Backing up the Hub database and configuration');
       backup = await backupForUpgrade(layout, name, sqlite);
       if (
@@ -424,17 +509,19 @@ export async function upgrade(
           `the SQLite database was not found at ${path.join(layout.storageDir, HUB_DATABASE)}`,
         );
       }
+      // Recorded only now that it is complete: a recovery must never restore from a backup that was cut short.
+      state.pending.backup = backup.relative;
+      await writeState(layout, state);
     } catch (error) {
       // Nothing was switched: bring the current release back and report the upgrade as not done.
+      await removeBackup(layout, backupRelative);
       const healthy = await startHub({
         ...service,
         timeoutMs: flags['health-timeout'] * 1000,
       }).catch(() => false);
       delete state.pending;
       await writeState(layout, state);
-      if (newRelease) {
-        await rm(path.dirname(newRelease), { recursive: true, force: true });
-      }
+      await removeNewRelease();
       throw new InstallerError(
         'UPGRADE_ABORTED',
         `Upgrading to ${to} stopped before switching: ${error instanceof Error ? error.message : String(error)}. ${healthy ? `${from} is running again.` : `${from} did not start again; start it with pm2 start ${layout.ecosystemFile}.`}`,
@@ -445,8 +532,11 @@ export async function upgrade(
       );
     }
 
-    await switchCurrent(layout, releaseLinkTarget(to));
     try {
+      // Marked before the link moves, so an interruption from here on is undone with a database restore.
+      state.pending.switched = true;
+      await writeState(layout, state);
+      await switchCurrent(layout, releaseLinkTarget(to));
       reporter.progress('Applying database migrations');
       await runAppCli(['db', 'apply'], cli);
       reporter.progress(`Starting ${to}`);
@@ -456,7 +546,7 @@ export async function upgrade(
       });
       if (!healthy) {
         throw new Error(
-          `${url} did not answer within ${flags['health-timeout']}s`,
+          `${url} did not become healthy (waited up to ${flags['health-timeout']}s)`,
         );
       }
     } catch (error) {
@@ -469,18 +559,16 @@ export async function upgrade(
         to,
         pending,
         backup,
-        newRelease,
+        newRecord,
         timeoutMs: flags['health-timeout'] * 1000,
         cause: error,
       });
     }
 
-    // Downtime is over; record the result and prune old releases.
+    // The new release is serving: record that first, so nothing after this can make it look unfinished.
     const at = new Date().toISOString();
     state.current = to;
-    if (!known) {
-      state.releases.push({ version: to, installedAt: at, buildTarget });
-    }
+    if (newRecord) replaceRecord(state, newRecord);
     delete state.pending;
     state.history.push({
       action: 'upgrade',
@@ -491,17 +579,21 @@ export async function upgrade(
       migrations: pending,
       backup: backup.relative,
     });
-    const pruned = releasesToPrune(state.releases, to, flags.keep);
+    await writeState(layout, state);
+
+    const pruned = releasesToPrune(state.releases, [to, from], flags.keep);
     for (const record of pruned) {
       await rm(path.dirname(releaseDir(layout, record.version)), {
         recursive: true,
         force: true,
       });
     }
-    state.releases = state.releases.filter(
-      (record) => !pruned.some((gone) => gone.version === record.version),
-    );
-    await writeState(layout, state);
+    if (pruned.length > 0) {
+      state.releases = state.releases.filter(
+        (record) => !pruned.some((gone) => gone.version === record.version),
+      );
+      await writeState(layout, state);
+    }
 
     const notes = [
       'Deployments that were in progress are marked failed; start them again in the Hub.',

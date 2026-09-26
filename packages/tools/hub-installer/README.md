@@ -55,19 +55,21 @@ npx @nocobase/hub-installer upgrade --dir /srv/nocobase/hub
 
 Upgrades to `latest`, or to the version or dist-tag given with `--to`. Everything that takes time happens while the current release keeps serving: the new release is built beside it (or reused, when that version is already on disk), then checked with its own CLI — `config check`, and `db apply --dry-run` to count the pending migrations. Only then does the downtime start: the Hub is stopped, its SQLite database, `config.yml` and `hub.env` are copied to `backups/<time>_<from>_to_<to>/`, `current` is switched, the migrations are applied, and the new release is started and must pass its health check. Stopping the Hub stops every application it hosts, and deployments in progress are marked failed.
 
-If migrating or starting the new release fails, the upgrade rolls itself back: `current` returns to the previous release, the database is restored from the backup when the new release may have migrated it, and the previous release is started again. The command then exits with code `3`, or `4` if the previous release did not come back either, with the steps to take.
+If migrating or starting the new release fails, the upgrade rolls itself back: `current` returns to the previous release, the database is restored from the backup when the new release may have migrated it, and the previous release is started again. The command then exits with code `3`. If the previous release does not come back either, it exits with `4`, keeps the new release on disk, and leaves the operation pending, so `rollback` finishes the job once the cause is fixed.
 
-| Flag               | Default  | Purpose                                                                                        |
-| ------------------ | -------- | ---------------------------------------------------------------------------------------------- |
-| `--to`             | `latest` | Version or dist-tag. A version already recorded on disk is reused without building.            |
-| `--backup-done`    |          | Required for any database but SQLite, which the installer cannot back up: back it up yourself. |
-| `--keep`           | `3`      | Releases to keep on disk, the current one included; older ones are pruned after an upgrade.    |
-| `--health-timeout` | `180`    | Seconds to wait for the new release's health check.                                            |
-| `--keep-source`    |          | Keep the build directory.                                                                      |
-| `--yes`            |          | Proceed without the confirmation prompt; required with `--json` or without a terminal.         |
-| `--json`           |          | Print one JSON result on stdout.                                                               |
+A version older than the running one is refused: the older release knows nothing of the newer migrations. Going back is what `rollback` is for. A release already on disk is reused only when it was built for this platform and Node major; otherwise it is built again. The pm2 process named in `installer.json` must belong to this Hub root, and once the Hub is stopped its port must be free, so the health check cannot be answered by anything but the new release.
 
-The backup covers what rolling back needs: upgrading the Hub migrates only the Hub's own database, not those of the applications it hosts. It is not a replacement for regular backups of `storage/`. When the machine's Node major differs from the one the current release was built for, the confirmation says so: the current release could not be rolled back to, and hosted applications have to be rebuilt with the new `--node-version`.
+| Flag               | Default  | Purpose                                                                                           |
+| ------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `--to`             | `latest` | Version or dist-tag, not older than the running one. A matching release on disk is reused.        |
+| `--backup-done`    |          | Required for any database but SQLite, which the installer cannot back up: back it up yourself.    |
+| `--keep`           | `3`      | Releases to keep on disk (at least 2). The new release and the one upgraded from are always kept. |
+| `--health-timeout` | `180`    | Seconds to wait for the new release's health check.                                               |
+| `--keep-source`    |          | Keep the build directory.                                                                         |
+| `--yes`            |          | Proceed without the confirmation prompt; required with `--json` or without a terminal.            |
+| `--json`           |          | Print one JSON result on stdout.                                                                  |
+
+The backup covers what rolling back needs: upgrading the Hub migrates only the Hub's own database, not those of the applications it hosts. It is not a replacement for regular backups of `storage/`, and backups are not pruned: remove old ones from `backups/` yourself. When the machine's Node major differs from the one the current release was built for, the confirmation says so: the current release could not be rolled back to, and hosted applications have to be rebuilt with the new `--node-version`.
 
 ## Rollback
 
@@ -75,9 +77,11 @@ The backup covers what rolling back needs: upgrading the Hub migrates only the H
 npx @nocobase/hub-installer rollback --dir /srv/nocobase/hub
 ```
 
-Returns to the release the last upgrade came from, or to `--to <version>` among the releases on disk. When the upgrade being undone applied migrations, the database is restored from the backup taken before it, which discards whatever was written to the Hub since; `--no-restore` keeps the current database instead. Rolling back never runs migrations backwards. A release built for another Node major is refused, since its native modules would not load.
+Returns to the release the last upgrade came from, or to `--to <version>` among the releases on disk. When the upgrade being undone applied migrations, the database is restored from the backup taken before it, which discards whatever was written to the Hub since; `--no-restore` keeps the current database instead. A Hub on an external database has no database in its backups, so nothing is restored and the command says so: restore that database from your own backup. Rolling back never runs migrations backwards. A release built for another Node major is refused, since its native modules would not load.
 
-If an upgrade or rollback is interrupted while the Hub is down, `installer.json` records it: `status` warns, `upgrade` refuses to start, and `rollback` recovers — it undoes an interrupted upgrade, restoring the database, and finishes an interrupted rollback.
+If the release it returns to does not start, the rollback stays pending, and running `rollback` again retries it — restore included — once the cause is fixed.
+
+If an upgrade or rollback is interrupted while the Hub is down, `installer.json` records it: `status` warns, `upgrade` refuses to start, and `rollback` recovers. It undoes an interrupted upgrade — restoring the database only when the upgrade had already switched releases, since before that nothing was migrated — and finishes an interrupted rollback.
 
 ## Status
 

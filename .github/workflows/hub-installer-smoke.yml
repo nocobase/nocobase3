@@ -97,7 +97,7 @@ jobs:
           pm2 delete nocobase-hub
           pm2 start "$HUB_ROOT/ecosystem.config.cjs"
 
-          node packages/tools/hub-installer/bin/run.js upgrade --dir "$HUB_ROOT" --yes --json | tee upgrade.json
+          node packages/tools/hub-installer/bin/run.js upgrade --dir "$HUB_ROOT" --to "$installed" --yes --json | tee upgrade.json
           node -e '
             const r = require("./upgrade.json");
             if (!r.ok || !r.result.upgraded || !r.result.reused || r.result.from !== "0.0.0-smoke") process.exit(1);
