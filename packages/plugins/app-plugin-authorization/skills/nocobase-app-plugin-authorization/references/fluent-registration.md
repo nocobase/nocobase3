@@ -24,7 +24,7 @@ interface Order {
   id: string;
   title: string;
 }
-const activeTeams = {
+const activeCarriers = {
   key: 'customFilter',
   params: { filter: buildFilter((f) => f.boolean('active').isTrue()) },
 };
@@ -34,8 +34,8 @@ const deliveryPermission = defineDatabasePermission((permission) =>
     .read((read) => read.fields('id', 'title'))
     .update((write) =>
       write
-        .relation('deliveryTeam', (team) =>
-          team.recordAccess(activeTeams).connect().disconnect(),
+        .relation('carrier', (carrier) =>
+          carrier.recordAccess(activeCarriers).connect().disconnect(),
         )
         .relation('checks', (checks) =>
           checks
@@ -48,9 +48,9 @@ const deliveryPermission = defineDatabasePermission((permission) =>
             )
             .delete(),
         )
-        .relation('collaborators', (teams) =>
-          teams
-            .recordAccess(activeTeams)
+        .relation('collaborators', (carriers) =>
+          carriers
+            .recordAccess(activeCarriers)
             .set((edge) => edge.through((through) => through.fields('note'))),
         ),
     ),

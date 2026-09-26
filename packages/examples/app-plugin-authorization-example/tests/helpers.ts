@@ -50,7 +50,11 @@ export async function createFixture() {
     })
     .latest();
   const connection = database.connection();
-  await setupSeed.run({ query: connection.query, connection });
+  await setupSeed.run({
+    query: connection.query,
+    connection,
+    repository: (name: string) => connection.repository(name),
+  });
   const users = Object.fromEntries(
     (
       await connection.query

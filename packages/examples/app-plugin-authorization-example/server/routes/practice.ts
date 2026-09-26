@@ -65,7 +65,7 @@ export function createPracticeRoutes(
       const orderIds = records.orders.map((row) => row.id);
 
       await connection.query
-        .deleteFrom('authorizationExampleOrderTeams')
+        .deleteFrom('authorizationExampleOrderCarriers')
         .where('orderId', 'in', orderIds)
         .execute();
 
@@ -76,7 +76,7 @@ export function createPracticeRoutes(
 
       await connection.query
         .updateTable(ORDERS)
-        .set({ deliveryTeamId: null })
+        .set({ carrierId: null })
         .where('id', 'in', orderIds)
         .execute();
 

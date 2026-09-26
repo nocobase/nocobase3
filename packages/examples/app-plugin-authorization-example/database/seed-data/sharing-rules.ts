@@ -30,7 +30,7 @@ export const sharingRules = [
     )
     .build(),
   defineSharingRule('example-proposal-handover', quoteResource.reference())
-    .title(label('teams.handover'))
+    .title(label('rules.handover'))
     .scope('edit', 'quotes', selection.records(['quote-7']))
     .scope('submit', 'quotes', selection.records(['quote-7']))
     .scope('submit', 'projects', selection.records(['project-3']))

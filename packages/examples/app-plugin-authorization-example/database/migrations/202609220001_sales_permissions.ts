@@ -2,19 +2,11 @@ import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 const migration: MigrationDefinition = defineMigration({
   name: '202609220001_sales_permissions',
   async up({ builder }) {
-    await builder.createCollection('authorizationExampleTeams', (c) => {
+    await builder.createCollection('authorizationExampleCarriers', (c) => {
       c.string('id').notNull();
       c.primary('id');
       c.string('title').notNull();
       c.boolean('active').notNull().defaultTo(true);
-    });
-    await builder.createCollection('authorizationExampleTeamMembers', (c) => {
-      c.string('id').notNull();
-      c.primary('id');
-      c.string('teamId').notNull();
-      c.string('userId').notNull();
-      c.index('userId');
-      c.unique(['teamId', 'userId']);
     });
     await builder.createCollection('authorizationExampleSalesMembers', (c) => {
       c.string('id').notNull();
@@ -50,12 +42,12 @@ const migration: MigrationDefinition = defineMigration({
       c.string('title').notNull();
       c.boolean('done').notNull().defaultTo(false);
     });
-    await builder.createCollection('authorizationExampleOrderTeams', (c) => {
+    await builder.createCollection('authorizationExampleOrderCarriers', (c) => {
       c.string('orderId').notNull();
-      c.string('teamId').notNull();
+      c.string('carrierId').notNull();
       c.string('note').nullable();
       c.string('internalNote').nullable();
-      c.unique(['orderId', 'teamId']);
+      c.unique(['orderId', 'carrierId']);
     });
     await builder.createCollection('authorizationExampleOrders', (c) => {
       c.string('id').notNull();
@@ -66,19 +58,19 @@ const migration: MigrationDefinition = defineMigration({
       c.string('status').notNull();
       c.string('deliveryReference').notNull();
       c.index('projectId');
-      c.string('deliveryTeamId').nullable();
-      c.belongsTo('deliveryTeam', 'authorizationExampleTeams')
-        .foreignKey('deliveryTeamId')
+      c.string('carrierId').nullable();
+      c.belongsTo('carrier', 'authorizationExampleCarriers')
+        .foreignKey('carrierId')
         .targetKey('id')
         .constraints(false);
       c.hasMany('checks', 'authorizationExampleOrderChecks')
         .foreignKey('orderId')
         .sourceKey('id')
         .constraints(false);
-      c.belongsToMany('collaborators', 'authorizationExampleTeams')
-        .through('authorizationExampleOrderTeams')
+      c.belongsToMany('collaborators', 'authorizationExampleCarriers')
+        .through('authorizationExampleOrderCarriers')
         .foreignKey('orderId')
-        .otherKey('teamId')
+        .otherKey('carrierId')
         .sourceKey('id')
         .targetKey('id')
         .constraints(false);
@@ -86,10 +78,9 @@ const migration: MigrationDefinition = defineMigration({
   },
   async down({ builder }) {
     await builder.dropCollection('authorizationExampleOrders');
-    await builder.dropCollection('authorizationExampleOrderTeams');
+    await builder.dropCollection('authorizationExampleOrderCarriers');
     await builder.dropCollection('authorizationExampleOrderChecks');
-    await builder.dropCollection('authorizationExampleTeamMembers');
-    await builder.dropCollection('authorizationExampleTeams');
+    await builder.dropCollection('authorizationExampleCarriers');
     await builder.dropCollection('authorizationExampleQuotes');
     await builder.dropCollection('authorizationExampleProjects');
     await builder.dropCollection('authorizationExampleSalesMembers');

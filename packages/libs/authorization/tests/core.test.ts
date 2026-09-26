@@ -304,6 +304,41 @@ describe('Authorization Core', () => {
     });
   });
 
+  it('answers a denied require with 403 through the default error handler', async () => {
+    const authorization = createAuthorization({
+      plugins: [plugin('orders', { effect: 'deny' })],
+    });
+    const routes = new Hono<AuthorizationEnv>();
+    routes.use('*', async (context, next) => {
+      context.set('authz', authorization.for(alice));
+      await next();
+    });
+    routes.get('/orders', async (context) => {
+      await context.get('authz').require(check('orders'));
+      return context.json({ ok: true });
+    });
+    // A router with its own handler that rethrows what it does not know.
+    const rethrowing = new Hono<AuthorizationEnv>();
+    rethrowing.onError((error) => {
+      throw error;
+    });
+    rethrowing.route('/', routes);
+    const app = new Hono();
+    app.route('/api', routes);
+    app.route('/other', rethrowing);
+
+    for (const path of ['/api/orders', '/other/orders']) {
+      const response = await app.request(path);
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({
+        code: 'FORBIDDEN',
+        message: 'Authorization denied',
+      });
+    }
+    const error = new AuthorizationDeniedError({ effect: 'deny', reasons: [] });
+    expect(error.status).toBe(403);
+  });
+
   it('hands route handlers the request context', async () => {
     const authorization = createAuthorization({
       plugins: [plugin('reports')],

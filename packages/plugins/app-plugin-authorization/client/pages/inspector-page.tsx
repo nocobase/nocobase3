@@ -32,6 +32,7 @@ import type {
   AuthorizationInspection,
   AuthorizationOptions,
   AuthorizationSubject,
+  ConfiguredAccess,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
 import { useAuthorizationTranslation } from '../i18n.js';
@@ -86,11 +87,6 @@ function Inspector({
         : undefined,
     [subjectType, subjectId],
   );
-  const names = useSubjectNames(
-    'inspector',
-    options.subjectTypes,
-    subject ? [subject] : [],
-  );
   const entries = useMemo(() => workspaceEntries(options), [options]);
   const entry = selectedEntry(entries, params.get('section'));
   const emptySection = entry?.empty ? entry.section : undefined;
@@ -109,13 +105,48 @@ function Inspector({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [configured, setConfigured] = useState<{
-    key: string;
-    unrestricted: boolean;
-    types: readonly string[];
-    resources: readonly { type: string; id: string }[];
-  }>();
+  const [configured, setConfigured] = useState<
+    ConfiguredAccess & { key: string }
+  >();
   const configurationKey = JSON.stringify([subject, revision]);
+  const loadedConfiguration =
+    configured?.key === configurationKey ? configured : undefined;
+  const inherited = useMemo(
+    () => loadedConfiguration?.identity?.subjects ?? [],
+    [loadedConfiguration],
+  );
+  const names = useSubjectNames('inspector', options.subjectTypes, [
+    ...(subject ? [subject] : []),
+    ...inherited,
+    ...(loadedConfiguration?.sets ?? []).flatMap((set) => set.sources),
+  ]);
+  const subjectName = (item: AuthorizationSubject): string =>
+    names[subjectKey(item)] ?? item.id;
+  // Per permission set, how the inspected subject holds it.
+  const grantSources = useMemo<Readonly<Record<string, string>>>(
+    () =>
+      Object.fromEntries(
+        (loadedConfiguration?.sets ?? []).flatMap((set) =>
+          set.sources.length && subject
+            ? [
+                [
+                  set.key,
+                  set.sources
+                    .map((source) =>
+                      source.type === subject.type && source.id === subject.id
+                        ? t('inspector.grantedDirectly')
+                        : t('inspector.grantedVia', {
+                            label: names[subjectKey(source)] ?? source.id,
+                          }),
+                    )
+                    .join(t('inspector.listSeparator')),
+                ],
+              ]
+            : [],
+        ),
+      ),
+    [loadedConfiguration, subject, names, t],
+  );
   useEffect(() => {
     if (!subject) return;
     let active = true;
@@ -135,23 +166,23 @@ function Inspector({
   const [detailKey, setDetailKey] = useState('');
   const configuredGrants = useMemo(
     () =>
-      configured?.key === configurationKey
+      loadedConfiguration
         ? {
-            unrestricted: configured.unrestricted,
+            unrestricted: loadedConfiguration.unrestricted,
             // `configured.types` lists every granted type, not wildcards.
             types: new Set(
-              configured.resources
+              loadedConfiguration.resources
                 .filter((resource) => resource.id === '*')
                 .map((resource) => resource.type),
             ),
             resources: new Set(
-              configured.resources.map((resource) =>
+              loadedConfiguration.resources.map((resource) =>
                 configuredKey(resource.type, resource.id),
               ),
             ),
           }
         : undefined,
-    [configured, configurationKey],
+    [loadedConfiguration],
   );
   const configurationLoading =
     !!subject && configured?.key !== configurationKey && !error;
@@ -289,6 +320,25 @@ function Inspector({
           <RefreshCw className='size-4' />
           {t('inspector.refresh')}
         </Button>
+        {inherited.length ? (
+          <p className='w-full text-sm text-muted-foreground'>
+            {t('inspector.inheritsFrom')}{' '}
+            {inherited
+              .map((item) => {
+                const type = options.subjectTypes.find(
+                  (entry) => entry.value === item.type,
+                );
+                // A fixed audience is named by its type already.
+                return type?.selection?.type === 'fixed'
+                  ? subjectName(item)
+                  : t('inspector.inheritedSubject', {
+                      name: subjectName(item),
+                      type: type?.label ?? item.type,
+                    });
+              })
+              .join(t('inspector.listSeparator'))}
+          </p>
+        ) : null}
       </div>
       {!subject ? (
         <p className='p-8 text-center text-muted-foreground'>
@@ -549,6 +599,7 @@ function Inspector({
           <div className='overflow-y-auto p-6'>
             <Decision
               value={detail.decision}
+              sources={grantSources}
               options={options}
               resource={selectedResource}
               action={detail.action}
