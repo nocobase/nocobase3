@@ -235,6 +235,45 @@ describe('the options and subject routes', () => {
     ).toBe(404);
   });
 
+  it('passes translation descriptors in subject titles and descriptions through unchanged', async () => {
+    const authz = authorization();
+    const title = { key: 'seed.sales', ns: '@example/departments' };
+    const description = { key: 'seed.company', ns: '@example/departments' };
+    authz.subjects.add('department', {
+      filterActive: async (ids) => ids,
+      administration: {
+        title: 'Departments',
+        selection: {
+          type: 'collection',
+          list: async () => ({
+            items: [{ id: 'sales', title, description }],
+            total: 1,
+          }),
+          resolve: async (ids) => ids.map((id) => ({ id, title })),
+        },
+      },
+    });
+    const router = await localizedRouter(authz);
+    const listed = await router.request(
+      '/api/authz/sharing-rules/subjects/department',
+      { headers: { 'accept-language': 'zh-CN' } },
+    );
+    expect(await listed.json()).toEqual({
+      data: { items: [{ id: 'sales', title, description }], total: 1 },
+    });
+    const resolved = await router.request(
+      '/api/authz/sharing-rules/subjects/department/resolve',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: ['sales'] }),
+      },
+    );
+    expect(await resolved.json()).toEqual({
+      data: [{ id: 'sales', title }],
+    });
+  });
+
   it.each(['permission-sets', 'sharing-rules'])(
     'gates %s subject searches and resolution before callbacks run',
     async (settings) => {

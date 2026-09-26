@@ -174,8 +174,80 @@ describe('the permission inspector endpoint', () => {
         unrestricted: false,
         types: ['database.collection'],
         resources: [{ type: 'database.collection', id: '*' }],
+        identity: { subjects: [] },
+        sets: [
+          {
+            key: 'sales',
+            sources: [{ type: 'department', id: 'sales' }],
+          },
+        ],
       },
     });
+  });
+
+  it('explains which inherited subject or direct assignment brings each set', async () => {
+    const authz = await authorization({ settings: true });
+    authz.subjects.add('department', {
+      resolveFor: async (principal) =>
+        principal.type === 'user' && principal.id === 'alice'
+          ? ['east', 'sales']
+          : [],
+      filterActive: async (ids) => ids,
+    });
+    const grant = (id: string) => [
+      {
+        resource: { type: 'database.collection', id },
+        actions: [{ action: 'read', policy: { type: 'database' } }],
+      },
+    ];
+    await authz.permissionSets.create({
+      key: 'sales',
+      title: 'Sales',
+      grants: grant('orders'),
+    });
+    await authz.permissionSets.create({ key: 'audit', grants: grant('logs') });
+    await authz.permissionSets.create({ key: 'hr', grants: grant('people') });
+    for (const [permissionSet, subject] of [
+      ['sales', { type: 'department', id: 'sales' }],
+      ['sales', { type: 'user', id: 'alice' }],
+      ['audit', { type: 'department', id: 'east' }],
+      ['hr', { type: 'department', id: 'people' }],
+    ] as const)
+      await authz.permissionSets.assign({ permissionSet, subject });
+    const response = await (
+      await mountedRouter(authz)
+    ).request('/api/authz/inspector/configured', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subject: { type: 'user', id: 'alice' } }),
+    });
+    expect(response.status).toBe(200);
+    const { data } = (await response.json()) as {
+      data: {
+        identity: unknown;
+        sets: { key: string; title?: string; sources: unknown[] }[];
+      };
+    };
+    expect(data.identity).toEqual({
+      subjects: [
+        { type: 'authenticated', id: '*' },
+        { type: 'department', id: 'east' },
+        { type: 'department', id: 'sales' },
+      ],
+    });
+    expect(
+      [...data.sets].sort((left, right) => left.key.localeCompare(right.key)),
+    ).toEqual([
+      { key: 'audit', sources: [{ type: 'department', id: 'east' }] },
+      {
+        key: 'sales',
+        title: 'Sales',
+        sources: expect.arrayContaining([
+          { type: 'department', id: 'sales' },
+          { type: 'user', id: 'alice' },
+        ]) as unknown,
+      },
+    ]);
   });
 
   it('returns the effect, the reasons and their plugin, untouched, and requires the settings permission', async () => {

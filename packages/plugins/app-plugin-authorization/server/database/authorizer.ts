@@ -9,6 +9,7 @@ import type {
   AuthorizationDecision,
   AuthorizationGrant,
   AuthorizationGrantService,
+  AuthorizationReason,
   AuthorizationRequest,
   Principal,
 } from '@nocobase/authorization/core';
@@ -33,6 +34,7 @@ import {
   anyScope,
   assertDatabaseScope,
   idsScope,
+  noRowsScope,
   scopeAst,
   type DatabaseScope,
 } from './scope.js';
@@ -142,9 +144,9 @@ export class DatabaseResourceAuthorizer {
               resource: { type: 'database.collection', id: resourceId },
               action: request.action,
             });
-      let scope =
+      const effective =
         request.action === 'create'
-          ? true
+          ? { scope: true, configured: true }
           : await this.resolveEffectiveScope(
               request.principal,
               resource,
@@ -153,6 +155,7 @@ export class DatabaseResourceAuthorizer {
               constraints,
               params?.fields,
             );
+      let scope: DatabaseScope = effective.scope;
       const resolver = new RelationPermissionResolver({
         resolveCollection: this.resolveCollection!,
         resolveScope: async (collection, rules) =>
@@ -179,14 +182,16 @@ export class DatabaseResourceAuthorizer {
                 ? true
                 : configs.length === 1
                   ? scope
-                  : await this.resolveEffectiveScope(
-                      request.principal,
-                      resource,
-                      request.action,
-                      [config],
-                      constraints,
-                      params?.fields,
-                    ),
+                  : (
+                      await this.resolveEffectiveScope(
+                        request.principal,
+                        resource,
+                        request.action,
+                        [config],
+                        constraints,
+                        params?.fields,
+                      )
+                    ).scope,
           };
         }),
       );
@@ -209,7 +214,7 @@ export class DatabaseResourceAuthorizer {
         relationBranches.map((branch) => branch.relations),
         request.action,
       );
-      const explanation = [
+      const explanation: AuthorizationReason[] = [
         ...reasons,
         ...[
           ...constraints,
@@ -227,12 +232,23 @@ export class DatabaseResourceAuthorizer {
           },
         })),
       ];
-      if (scope === false) {
+      // Nothing configured a positive scope: the grant opens no records at all.
+      if (scope === false && !effective.configured) {
         const denied = this.deny(
           'NO_RECORD_ACCESS',
           'No Record Access allows this action',
         );
         return { ...denied, reasons: [...denied.reasons, ...explanation] };
+      }
+      // A configured scope resolved to nothing, such as a user in no
+      // department: permitted, and the query matches no rows.
+      if (scope === false) {
+        scope = noRowsScope(resource.primaryKey);
+        explanation.push({
+          code: 'EMPTY_RECORD_ACCESS',
+          message: 'Record Access matches no records',
+          plugin: 'database',
+        });
       }
       const conditions: DatabaseAuthorizationConditions = {
         type: 'database',
@@ -322,7 +338,7 @@ export class DatabaseResourceAuthorizer {
     configs: readonly DatabaseGrantConfig[],
     constraints: readonly AccessConstraint[],
     requestedFields?: import('./model.js').DatabaseAuthorizationFieldRequest,
-  ): Promise<DatabaseScope> {
+  ): Promise<{ scope: DatabaseScope; configured: boolean }> {
     // Each grant keeps its own fields and role filters through scope evaluation.
     const branches = await Promise.all(
       configs.map(async (config) => {
@@ -352,6 +368,7 @@ export class DatabaseResourceAuthorizer {
         );
         return {
           config,
+          configured: positive.length > 0,
           scope: allScopes([anyScope(positive), ...branchRestrictions]),
         };
       }),
@@ -403,7 +420,10 @@ export class DatabaseResourceAuthorizer {
         );
       }
     }
-    return allScopes([...required, ...restrictions]);
+    return {
+      scope: allScopes([...required, ...restrictions]),
+      configured: branches.some((branch) => branch.configured),
+    };
   }
 
   private async compileConstraints(

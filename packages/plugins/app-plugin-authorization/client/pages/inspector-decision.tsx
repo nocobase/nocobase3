@@ -42,12 +42,15 @@ export function Decision({
   options,
   resource,
   action,
+  sources,
 }: {
   fields: readonly string[];
   value: AuthorizationDecision;
   options?: AuthorizationOptions;
   resource?: ResourceOption;
   action?: string;
+  /** Per permission set key, how the inspected subject holds it. */
+  sources?: Readonly<Record<string, string>>;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const status = inspectionStatus(value, fields);
@@ -83,9 +86,14 @@ export function Decision({
         <h3 className='text-sm font-medium'>{t('inspector.reasons')}</h3>
         {reasons.length ? (
           reasons.map((reason, index) => (
-            // Reasons have no stable identity beyond their deduplicated position.
-            // eslint-disable-next-line @eslint-react/no-array-index-key
-            <Reason key={index} value={reason} options={options} />
+            <Reason
+              // Reasons have no stable identity beyond their deduplicated position.
+              // eslint-disable-next-line @eslint-react/no-array-index-key
+              key={index}
+              value={reason}
+              options={options}
+              sources={sources}
+            />
           ))
         ) : (
           <p className='text-sm text-muted-foreground'>
@@ -129,9 +137,14 @@ export function Decision({
                   </p>
                 )}
                 {scopeReasons.map((reason, index) => (
-                  // Each check replaces the whole ordered reason list.
-                  // eslint-disable-next-line @eslint-react/no-array-index-key
-                  <Reason key={index} value={reason} options={options} />
+                  <Reason
+                    // Each check replaces the whole ordered reason list.
+                    // eslint-disable-next-line @eslint-react/no-array-index-key
+                    key={index}
+                    value={reason}
+                    options={options}
+                    sources={sources}
+                  />
                 ))}
                 {check.decision.conditions && (
                   <details className='text-sm'>
@@ -167,12 +180,20 @@ export function Decision({
 function Reason({
   value,
   options,
+  sources,
 }: {
   value: AuthorizationReason;
   options?: AuthorizationOptions;
+  sources?: Readonly<Record<string, string>>;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const source = object(value.details?.source);
+  const held =
+    value.code === 'GRANT_MATCHED' &&
+    source?.plugin === 'permission-sets' &&
+    typeof source.id === 'string'
+      ? sources?.[source.id]
+      : undefined;
   const selection = object(value.details?.selection);
   const label =
     selection?.type === 'recordAccess'
@@ -210,6 +231,7 @@ function Reason({
             · <span className='font-medium'>{sourceTitle}</span>
           </>
         )}
+        {held ? <span className='text-muted-foreground'> · {held}</span> : null}
       </p>
       {scopeLabel ? (
         <p className='text-muted-foreground'>{scopeLabel}</p>

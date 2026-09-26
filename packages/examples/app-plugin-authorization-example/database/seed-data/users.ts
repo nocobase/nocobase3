@@ -5,7 +5,6 @@ export const userProfiles = {
   manager: { name: 'Robin Lin', region: 'South' },
   delivery: { name: 'Casey Wu', region: 'North' },
   proposal: { name: 'Jamie Park', region: 'North' },
-  dispatch: { name: 'Taylor Reed', region: 'North' },
   coordinator: { name: 'Jordan Kim', region: 'North' },
 } as const;
 export type UserKey = keyof typeof userProfiles;

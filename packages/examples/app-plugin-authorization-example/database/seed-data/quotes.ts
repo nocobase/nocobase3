@@ -69,8 +69,8 @@ export function quoteRows(
     projectId: 'project-3',
     preparedById: users.manager,
     preparedByName: 'Robin Lin',
-    title: 'Hill team handover quote',
-    notes: 'Cross-region handover to the proposal team',
+    title: 'Hill handover quote',
+    notes: 'Cross-region handover to the proposal engineer',
     amount: 21000,
     status: 'draft',
   });

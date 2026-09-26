@@ -685,19 +685,19 @@ describe('data input and output safety', () => {
       ],
       subjects: [{ type: 'user', id: 'alice' }],
     });
-    // The public authorizer turns an empty effective record scope into a deny.
-    await expect(
-      alice.dataSourceCounting({ collection: 'orders' }),
-    ).rejects.toThrow();
-    await expect(
-      alice.dataSourceQuery({ collection: 'orders', fields: ['id'] }),
-    ).rejects.toThrow();
-    await expect(
-      alice.dataQuery({
+    // An empty effective record scope returns nothing and never widens.
+    expect(
+      await alice.dataSourceCounting({ collection: 'orders' }),
+    ).toMatchObject({ count: 0 });
+    expect(
+      await alice.dataSourceQuery({ collection: 'orders', fields: ['id'] }),
+    ).toMatchObject({ items: [] });
+    expect(
+      await alice.dataQuery({
         collection: 'orders',
         aggregates: [{ function: 'count', alias: 'count' }],
       }),
-    ).rejects.toThrow();
+    ).toMatchObject({ items: [{ count: 0 }] });
     const { alice: second, authorization: secondAuthz } = await fixture();
     await secondAuthz.restrictionRules.create({
       key: 'null-membership',

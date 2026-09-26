@@ -3,8 +3,9 @@ import type { OptionText } from './i18n.js';
 
 export interface SubjectOption {
   id: string;
-  title: string;
-  description?: string;
+  /** Plain text, or a `{ key, ns }` descriptor the client renders in the viewer's language. */
+  title: OptionText;
+  description?: OptionText;
 }
 
 export interface SubjectSelectionContext {

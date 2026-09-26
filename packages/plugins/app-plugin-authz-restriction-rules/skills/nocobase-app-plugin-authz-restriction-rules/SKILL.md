@@ -9,6 +9,8 @@ A restriction rule intersects the records an action reaches with the rule's sele
 
 Read the installed `nocobase-app-plugin-authorization` Skill first for composite resources, data scopes, fields, server policy enforcement and inherited subjects. The package README at `node_modules/@nocobase/app-plugin-authz-restriction-rules/README.md` is the complete reference for the service, the HTTP routes and the exports; this Skill covers how to use them.
 
+For a restriction assigned to a department, or to the root department for the whole company, read the application development Skill's `references/organization/permission-design.md` first. Its core works with permission sets alone and says how to keep excluded records out without this plugin; its optional restriction section covers this one.
+
 ## Development workflow
 
 1. State the invariant positively, for example "this team may access only non-confidential projects". Define who it applies to and whether it covers one operation or every path to a collection.
@@ -17,7 +19,7 @@ Read the installed `nocobase-app-plugin-authorization` Skill first for composite
 4. Bind policies on all protected reads and writes. For relation targets, declare relation record access explicitly; a standalone collection restriction is not inherited by nested relation writes.
 5. Verify the excluded row stays inaccessible after adding broad sharing and another permission set, across each protected operation, and that unrelated actors keep their intended access.
 
-In the sales example the coordinator's direct confidentiality restriction persists when its team's permission set is removed. Test with ordinary users: unrestricted identities skip every rule.
+For example, a confidentiality restriction assigned directly to each account holds whichever permission set grants the action. Test with ordinary users: unrestricted identities skip every rule.
 
 ## Install
 
@@ -41,7 +43,7 @@ During setup the factory registers the settings item `authorization.restriction-
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite, `sales.public` its own record access and `sales.team` its own subject type, all defined as the main Skill describes.
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` in the owning provider or route factory. The rule API exists only when the factory is configured, so narrow the service before using it. `quotes` is the application's own composite, `sales.public` its own record access and `org.team` its own subject type, all defined as the main Skill describes.
 
 ```ts
 import { selection } from '@nocobase/authorization/core';
@@ -60,7 +62,7 @@ const rules = (
 await rules.create(
   defineRestrictionRule('public-proposals', quotes.reference())
     .title('Exclude confidential proposals')
-    .subjects({ type: 'sales.team', id: 'proposal' })
+    .subjects({ type: 'org.team', id: 'proposal' })
     .scope('submit', 'quotes', selection.recordAccess('sales.public'))
     .reason('Proposal collaboration excludes confidential work')
     .build(),
