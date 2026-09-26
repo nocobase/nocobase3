@@ -1,5 +1,6 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { EXIT_INVALID, InstallerError } from './errors.ts';
+import { installerCommand, shellQuote } from './invocation.ts';
 import type { Layout } from './layout.ts';
 
 export interface BuildTarget {
@@ -97,7 +98,12 @@ export async function readState(layout: Layout): Promise<InstallerState> {
         suggestions: [
           {
             message: 'Use a newer hub-installer:',
-            run: 'npx @nocobase/hub-installer@latest status',
+            run: installerCommand(`status --dir ${shellQuote(layout.root)}`, {
+              version: 'latest',
+              ...(typeof state.registry === 'string'
+                ? { registry: state.registry }
+                : {}),
+            }),
           },
         ],
       },

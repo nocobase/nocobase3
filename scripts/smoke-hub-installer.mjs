@@ -172,6 +172,21 @@ export function hasMarker(root, release) {
   }
 }
 
+/** A running process's command line: from /proc on Linux, from ps elsewhere. */
+export function processCommandLine(pid) {
+  try {
+    return fs
+      .readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+      .split('\0')
+      .filter(Boolean)
+      .join(' ');
+  } catch {
+    return spawnSync('ps', ['-o', 'args=', '-p', String(pid)], {
+      encoding: 'utf8',
+    }).stdout.trim();
+  }
+}
+
 function fail(message) {
   throw new Error(message);
 }
@@ -234,6 +249,20 @@ export function runHubSmoke({
       status.process?.status === 'online',
       'The pm2 process is not online.',
     );
+    // What installer.json says is not proof: the process pm2 watches must be running that release's server.
+    const entry = path.join(
+      'releases',
+      expectedCurrent,
+      'hub',
+      'dist',
+      'server',
+      'standalone.js',
+    );
+    const commandLine = processCommandLine(status.process.pid);
+    assert(
+      commandLine.includes(entry),
+      `The pm2 process runs "${commandLine}", not ${entry}.`,
+    );
     assert(
       status.node.matches,
       'The release was built for another Node major.',
@@ -244,6 +273,17 @@ export function runHubSmoke({
       `The Hub runs ${status.current}, expected ${expectedCurrent}.`,
     );
     return status;
+  };
+
+  const waitUntilHealthy = (timeoutMs = 180_000) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const status = hub(['status', '--dir', root, '--offline']);
+      if (status.health.ok) return;
+      if (Date.now() > deadline)
+        fail(`The Hub did not answer ${status.health.url} after restarting.`);
+      spawnSync('sleep', ['2']);
+    }
   };
 
   log('== Install');
@@ -270,10 +310,14 @@ export function runHubSmoke({
     'The Hub database is not in the shared storage/ directory.',
   );
 
-  log(`== Upgrade from a copy registered as ${OLDER_VERSION}`);
+  log(`== Restart onto a copy registered as ${OLDER_VERSION}`);
   const { name, upgradeTarget } = registerOlderRelease(root);
-  pm2(['delete', name]);
-  pm2(['start', path.join(root, 'ecosystem.config.cjs')]);
+  // launcher.mjs resolves `current` on every start, so a plain restart runs the release just switched to.
+  pm2(['restart', name]);
+  waitUntilHealthy();
+  checkStatus(OLDER_VERSION);
+
+  log(`== Upgrade from ${OLDER_VERSION}`);
   const upgraded = hub([
     'upgrade',
     '--dir',

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import {
   OLDER_VERSION,
   markLastUpgradeMigrated,
   parseArgs,
+  processCommandLine,
   registerBrokenRelease,
   registerOlderRelease,
 } from '../../scripts/smoke-hub-installer.mjs';
@@ -196,4 +198,15 @@ test('marking the last upgrade as migrated touches only that entry', () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('a running process is identified by its command line', async (t) => {
+  const child = spawn(
+    process.execPath,
+    ['-e', 'setTimeout(() => {}, 30000)', 'smoke-marker-argument'],
+    { stdio: 'ignore' },
+  );
+  t.after(() => child.kill());
+  await new Promise((resolve) => child.once('spawn', resolve));
+  assert.match(processCommandLine(child.pid), /smoke-marker-argument/);
 });

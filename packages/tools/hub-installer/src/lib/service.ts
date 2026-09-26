@@ -70,9 +70,9 @@ export async function stopHub(options: ServiceOptions): Promise<void> {
 }
 
 /**
- * Starts whatever `current` points at and waits for it to be healthy. The process entry is deleted first: pm2 keeps the
- * release path it resolved at `pm2 start`, so a restart after a switch would run the previous release. A process pm2
- * reports as crashed ends the wait early.
+ * Starts whatever `current` points at and waits for it to be healthy. The process entry is deleted and registered again
+ * rather than restarted, so pm2's restart count starts from zero — the crash detection reads it — and a changed
+ * `ecosystem.config.cjs` is read again. A process pm2 reports as crashed ends the wait early.
  */
 export async function startHub(
   options: ServiceOptions & { timeoutMs: number },

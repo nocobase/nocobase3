@@ -12,6 +12,7 @@ import {
   InstallerError,
 } from '../lib/errors.ts';
 import { layoutOf, releaseDir, releaseLinkTarget } from '../lib/layout.ts';
+import { installerCommand, shellQuote } from '../lib/invocation.ts';
 import { acquireLock } from '../lib/lock.ts';
 import { checkPlatform, checkPm2, currentNodeMajor } from '../lib/prechecks.ts';
 import {
@@ -289,17 +290,22 @@ export async function rollback(
           suggestions: [
             {
               message: 'Read the error log:',
-              run: `tail -n 100 ${path.join(layout.logsDir, 'hub.err.log')}`,
+              run: `tail -n 100 ${shellQuote(path.join(layout.logsDir, 'hub.err.log'))}`,
             },
             {
               message: 'Once the cause is fixed, run the rollback again:',
-              run: `hub-installer rollback --dir ${root}`,
+              run: installerCommand(`rollback --dir ${shellQuote(root)}`, {
+                registry: state.registry,
+              }),
             },
             ...(switched
               ? [
                   {
                     message: `Or go back to ${from}:`,
-                    run: `hub-installer rollback --dir ${root} --to ${from} --no-restore`,
+                    run: installerCommand(
+                      `rollback --dir ${shellQuote(root)} --to ${from} --no-restore`,
+                      { registry: state.registry },
+                    ),
                   },
                 ]
               : []),

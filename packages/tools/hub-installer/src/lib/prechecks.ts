@@ -3,9 +3,15 @@ import { createServer } from 'node:net';
 import { EXIT_INVALID, InstallerError } from './errors.ts';
 import type { Pm2 } from './pm2.ts';
 import { runCommand, type RunCommand } from './run-command.ts';
+import { compareVersions } from './version.ts';
 
 export const MINIMUM_NODE_MAJOR = 24;
 export const MINIMUM_PNPM_MAJOR = 11;
+/**
+ * pm2 recognises `ecosystem.config.cjs` as a configuration from 4.3 on; an older one runs the file as the application
+ * instead, which exits at once and looks like a Hub that cannot start.
+ */
+export const MINIMUM_PM2_VERSION = '4.3.0';
 
 export function majorOf(version: string): number {
   const match = version.trim().match(/^v?(\d+)/u);
@@ -82,8 +88,9 @@ export async function checkTar(run: RunCommand = runCommand): Promise<void> {
  * through `npx` into a cache would vanish from under it.
  */
 export async function checkPm2(pm2: Pm2): Promise<string> {
+  let version: string;
   try {
-    return await pm2.version();
+    version = await pm2.version();
   } catch {
     throw new InstallerError('PM2_MISSING', 'pm2 was not found on PATH.', {
       exitCode: EXIT_INVALID,
@@ -93,6 +100,23 @@ export async function checkPm2(pm2: Pm2): Promise<string> {
       ],
     });
   }
+  if (!((compareVersions(version, MINIMUM_PM2_VERSION) ?? -1) >= 0)) {
+    throw new InstallerError(
+      'PM2_UNSUPPORTED',
+      `pm2 ${MINIMUM_PM2_VERSION} or later is required; found ${version || 'an unknown version'}.`,
+      {
+        exitCode: EXIT_INVALID,
+        suggestions: [
+          {
+            message:
+              'Update pm2 globally; `pm2 update` then swaps the running daemon for the new version:',
+            run: 'npm install -g pm2@latest && pm2 update',
+          },
+        ],
+      },
+    );
+  }
+  return version;
 }
 
 /**
@@ -110,8 +134,7 @@ export async function checkPm2NameFree(pm2: Pm2, name: string): Promise<void> {
         exitCode: EXIT_INVALID,
         suggestions: [
           {
-            message: 'Give this Hub its own process name:',
-            run: `--name ${name}-2`,
+            message: `Give this Hub its own process name with --name, such as --name ${name}-2.`,
           },
         ],
       },
