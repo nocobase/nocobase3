@@ -17,7 +17,7 @@ npx --yes --registry="${NOCOBASE_REGISTRY:-https://npm.nocobase.ai}" @nocobase/h
 
 NocoBase 3 publishes to `https://npm.nocobase.ai`, not to the public npm, so a bare `npx @nocobase/hub-installer` answers 404. `NOCOBASE_REGISTRY` is set only when someone points the shell at another registry, such as an unreleased snapshot; the installer reads the same variable for the Hub template, records the registry it installed from in `installer.json`, and upgrades from it. The `--yes` before the package is npx's own: it downloads the installer without asking. The installer's `--yes`, after the command, is a separate answer that only the user gives.
 
-`--json` prints one document on stdout and progress on stderr. Read the document, not the exit code alone: `ok`, `status` (`success`, `success-noop` or `error`), `result`, and on failure `error.code`, `error.message`, `error.suggestions` (each a `message` and, where there is one, a `run` command) and `error.details`.
+`--json` prints one document on stdout and progress on stderr. Read the document, not the exit code alone: `ok`, `status` (`success`, `success-noop` or `error`), `result`, and on failure `error.code`, `error.message`, `error.suggestions` (each a `message` and, where there is one, a `run` command that runs as printed) and `error.details`.
 
 | Exit | Meaning                                                                                 |
 | ---- | --------------------------------------------------------------------------------------- |
@@ -39,11 +39,11 @@ When the working directory already holds `installer.json`, the Hub exists: start
 
 ## Install
 
-1. Check the server: `node --version` (24 or later), `pnpm --version` (11 or later), `tar --version`, and `command -v pm2`, which finds pm2 without starting its daemon. pm2 has to be installed globally, `npm install -g pm2`; a copy fetched through `npx` breaks `pm2 startup`. Report what is missing with the command that installs it, and install nothing globally unless the user asks. On Windows, work in WSL.
+1. Check the server: `node --version` (24 or later), `pnpm --version` (11 or later), `tar --version`, and `command -v pm2`, which finds pm2 without starting its daemon. pm2 4.3 or later has to be installed globally, `npm install -g pm2`; a copy fetched through `npx` breaks `pm2 startup`. Report what is missing with the command that installs it, and install nothing globally unless the user asks. On Windows, work in WSL.
 2. Settle with the user: the target directory, new or empty, such as `/srv/nocobase/hub`; the public origin without `/hub`, such as `https://apps.example.com`; whether a reverse proxy will sit in front; the port, 13000 by default; and the database, SQLite by default.
-3. Run `install <dir> --origin <origin> --json`, adding `--port` when it is not 13000. The Hub listens on `127.0.0.1`, which suits a reverse proxy on the same server; when people reach it directly at `http://<address>:<port>`, add `--host 0.0.0.0` and use that address as the origin. The health check always probes loopback, so it passes either way. For another database add `--dialect <dialect>`, the connection as `--set database.connections.main.host=…` and friends, and the password as `--set-from-env database.connections.main.password=<VARIABLE>` after the user has exported it. It builds on the server and takes a few minutes.
+3. Run `install <dir> --origin <origin> --json`, adding `--port` when it is not 13000. The Hub listens on `127.0.0.1`, which suits a reverse proxy on the same server; when people reach it directly at `http://<address>:<port>`, add `--host 0.0.0.0` and use that address as the origin. The health check always probes loopback, so it passes either way. For another database add `--dialect <dialect>`, the connection as `--set database.connections.main.host=…` and friends, and the password as `--set-from-env database.connections.main.password=<VARIABLE>` after the user has exported it. It builds on the server and takes several minutes: give the command a timeout of 30 minutes or more, since a shorter one interrupts the build and the installer then removes what it wrote.
 4. When `result.started` is true, the Hub answered its health check. Tell the user:
-   - `result.url`, and that the first sign-in is the account under `users.initialAdmin` in `config.yml`, `nocobase` / `admin123` unless they changed it, to be changed after signing in. Name the key and the template default without reading the file;
+   - `result.url`, and the first sign-in: `result.initialAdmin.username` or its `email`, with the password under `users.initialAdmin` in `config.yml`. When `result.initialAdmin.defaultPassword` is true, that password is still the template's `admin123` and has to be changed after signing in; otherwise it is the one they set. The result never carries the password, and `config.yml` stays unread;
    - each command in `result.nextCommands`: `pm2 startup` prints a command they run once with sudo, after which pm2 restores the process list the installer saved, so the Hub comes back after a reboot;
    - with a reverse proxy: it forwards the whole origin with `location /` to the Hub's port, with `client_max_body_size 260m` and the WebSocket upgrade headers;
    - anything in `warnings`.
@@ -52,13 +52,13 @@ A failed install before the switch leaves the target as it found it; `error.deta
 
 ## Status
 
-`status --dir <root> --json` changes nothing; `--offline` also skips asking the registry for a newer version. Report `current`, `health.ok`, `process`, `updateAvailable`, and anything in `warnings`. `node.matches: false` means the machine's Node major changed since the release was built, and the release will not load its native modules until an upgrade rebuilds it. A non-null `pending` means an operation was interrupted; see below.
+`status --dir <root> --json` changes nothing; `--offline` also skips asking the registry for a newer version. Report `current`, `endpoints.url`, `health.ok`, `process`, `updateAvailable`, and anything in `warnings`. `node.matches: false` means the machine's Node major changed since the release was built, and the release will not load its native modules until an upgrade rebuilds it. A non-null `pending` means an operation was interrupted; see below.
 
 ## Upgrade and roll back
 
 Both stop the Hub and every application it hosts, so the user decides:
 
-1. Run `upgrade --dir <root> --json` without `--yes`. It answers `CONFIRMATION_REQUIRED` with `error.details.notes`: what will stop, what is backed up, and any Node major change. Relay those notes and wait for a clear yes before running it again with `--yes`. `success-noop` means the Hub is already on that version.
+1. Run `upgrade --dir <root> --json` without `--yes`; an upgrade that builds a release needs the same long timeout as an install. It answers `CONFIRMATION_REQUIRED` with `error.details.notes`: what will stop, what is backed up, and any Node major change. Relay those notes and wait for a clear yes before running it again with `--yes`. `success-noop` means the Hub is already on that version.
 2. On any database but SQLite, the installer backs up nothing: have the user back the database up first, then add `--backup-done`.
    An upgrade keeps three releases, always including the new one and the one it came from, and prunes older ones once it succeeds; pass `--keep <n>` when the user wants more of them to stay available for rollback.
 3. Read the outcome:
@@ -80,7 +80,7 @@ hub-installer has no command for it. The origin, address and port live in `hub.e
 - the Hub and its applications stop briefly while it restarts;
 - with a reverse proxy, the same proxy rules as for an install apply, and `APP_SERVER_HOST` stays `127.0.0.1` only when the proxy runs on the same server.
 
-With their agreement, edit those three lines and nothing else, then start the Hub again with `pm2 delete <name> && pm2 start <root>/ecosystem.config.cjs && pm2 save`, `<name>` being `process.name` in `status`. A plain `pm2 restart` keeps the old values. `status` afterwards confirms that the Hub restarted and is healthy, not which origin it uses.
+With their agreement, edit those three lines and nothing else, then run `pm2 restart <name>`, `<name>` being `name` in `status`. pm2 starts the Hub through `launcher.mjs`, which reads `hub.env` on every start, so nothing has to be registered again. `status` afterwards reports the new `endpoints` and checks health at the address in `hub.env`, which confirms a new host or port took effect; for a new origin, have the user open `endpoints.url`.
 
 ## Keep the Hub's data intact
 

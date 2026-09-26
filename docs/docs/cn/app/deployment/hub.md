@@ -205,7 +205,7 @@ docker compose logs --tail=100 hub
 
 - Linux 或 macOS；Windows 请使用 WSL。
 - Node.js 24 及以上、pnpm 11 及以上，以及 `tar`。
-- 全局安装的 pm2：`npm install -g pm2`。不要使用 `npx` 临时下载的 pm2，因为 `pm2 startup` 生成的开机服务会写死 pm2 的路径。
+- 全局安装的 pm2，版本 4.3 及以上：`npm install -g pm2`。不要使用 `npx` 临时下载的 pm2，因为 `pm2 startup` 生成的开机服务会写死 pm2 的路径。
 
 ### 1. 安装 Hub
 
@@ -242,7 +242,9 @@ npx --registry=https://npm.nocobase.ai @nocobase/hub-installer upgrade --dir /sr
 
 升级默认升到最新版本，也可以用 `--to` 指定版本。新版本在旧版本继续服务的同时构建，并用新版本检查现有配置和待执行的迁移；之后才开始停机：停止 Hub，备份 SQLite 数据库和配置，切换版本，执行迁移，启动新版本并做健康检查。迁移或启动失败时，安装器会自动回退到旧版本，必要时恢复数据库。停机期间 Hub 托管的应用都不可用，进行中的部署会被标记为失败。使用外部数据库时，安装器无法备份，需要先自行备份，再加 `--backup-done`。
 
-`rollback --dir /srv/nocobase/hub` 回到上一次升级前的版本；如果那次升级执行过迁移，会用升级前的备份恢复数据库，升级之后写入 Hub 的数据会丢失。`status --dir /srv/nocobase/hub` 只读，显示当前版本、健康状态、pm2 进程和是否有可用更新。
+`rollback --dir /srv/nocobase/hub` 回到上一次升级前的版本；如果那次升级执行过迁移，会用升级前的备份恢复数据库，升级之后写入 Hub 的数据会丢失。`status --dir /srv/nocobase/hub` 只读，显示当前版本、访问地址和监听地址、健康状态、pm2 进程和是否有可用更新。
+
+要更换访问域名或端口，修改 `hub.env` 中的 `APP_PUBLIC_ORIGIN`、`APP_SERVER_HOST` 和 `APP_SERVER_PORT`，再执行 `pm2 restart nocobase-hub`；安装时用 `--name` 指定过进程名的，换成那个名字。
 
 ## 通过应用模板部署
 
