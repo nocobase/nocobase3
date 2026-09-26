@@ -150,6 +150,8 @@ Worth covering when the Skill changes:
 
 `pnpm unreleased:create my-app` creates an application from the snapshot under `../nocobase-local-apps/`, and `pnpm unreleased:smoke` runs the create-app smoke test against it. Both set up the environment themselves.
 
+`pnpm unreleased:hub-smoke` installs a Hub with the snapshot's `@nocobase/hub-installer`, then upgrades and rolls it back, through `scripts/smoke-hub-installer.mjs`, the script the Hub installer CI job runs against the published template. It covers changes to the Hub template, `app-cli`, `app-host` and `create-app` that the CI job cannot see before a release. It needs pm2 on `PATH` and the App Host port 13010 free, runs pm2 under its own `PM2_HOME` and stops it afterwards, and keeps the Hub and its logs under the temporary directory it prints.
+
 ### 5. Clean up
 
 ```bash

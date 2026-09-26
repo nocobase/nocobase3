@@ -215,6 +215,25 @@ test('create accepts a name and creation options without requiring database cred
     assert.throws(() => parseArgs(args));
 });
 
+test('hub-smoke takes its own Hub port and a workdir, not the registry port', () => {
+  const options = parseArgs(['hub-smoke']);
+  assert.equal(options['hub-port'], 13200);
+  assert.equal(
+    parseArgs(['hub-smoke', '--hub-port', '13300', '--workdir', '/tmp/hub'])[
+      'hub-port'
+    ],
+    13300,
+  );
+  for (const args of [
+    ['hub-smoke', '--port', '4874'],
+    ['hub-smoke', '--hub-port', '70000'],
+    ['hub-smoke', '--hub-port', '13010'],
+    ['hub-smoke', '--template', 'hub'],
+    ['smoke', '--hub-port', '13300'],
+  ])
+    assert.throws(() => parseArgs(args));
+});
+
 test('reset is a boolean option exclusive to prepare', () => {
   assert.equal(parseArgs(['prepare']).reset, undefined);
   assert.equal(parseArgs(['prepare', '--reset', '--port', '4874']).reset, true);
@@ -260,6 +279,13 @@ for (const scenario of [
         "'./smoke-database-config.mjs'",
         JSON.stringify(
           new URL('../../scripts/smoke-database-config.mjs', import.meta.url)
+            .href,
+        ),
+      )
+      .replace(
+        "'./smoke-hub-installer.mjs'",
+        JSON.stringify(
+          new URL('../../scripts/smoke-hub-installer.mjs', import.meta.url)
             .href,
         ),
       );
