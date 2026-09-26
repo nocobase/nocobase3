@@ -74,6 +74,48 @@ describe('install', () => {
     ]);
   });
 
+  it('installs through --dir the same way as through the argument, and reports the endpoints', async () => {
+    const world = createWorld();
+    const result = await hub(world, [
+      'install',
+      '--dir',
+      root,
+      '--port',
+      PORT,
+      '--origin',
+      'https://apps.example.com',
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result).toMatchObject({
+      directory: root,
+      endpoints: {
+        url: 'https://apps.example.com/hub/',
+        origin: 'https://apps.example.com',
+        host: '127.0.0.1',
+        port: Number(PORT),
+      },
+    });
+    expect(readlinkSync(path.join(root, 'current'))).toBe(
+      path.join('releases', '1.1.0', 'hub'),
+    );
+  });
+
+  it('accepts an argument and a --dir that name the same directory', async () => {
+    const world = createWorld();
+    const result = await hub(world, [
+      'install',
+      root,
+      '--dir',
+      `${root}/`,
+      '--port',
+      PORT,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result?.directory).toBe(root);
+  });
+
   it('removes everything it wrote, parents included, when the build fails', async () => {
     const nested = path.join(temp.dir, 'new-parent', 'hub');
     const world = createWorld({ failOn: 'build --tar' });

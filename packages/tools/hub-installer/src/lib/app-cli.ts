@@ -43,7 +43,9 @@ export function toSuggestion(
   const message = entry.message ?? '';
   return {
     message: run
-      ? `${message} (the application CLI's command: ${run})`
+      ? [message, `(the application CLI's command: ${run})`]
+          .filter(Boolean)
+          .join(' ')
       : message,
   };
 }

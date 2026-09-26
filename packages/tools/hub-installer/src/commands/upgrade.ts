@@ -304,6 +304,13 @@ async function rollBackUpgrade(context: RollbackContext): Promise<never> {
           message: 'Read the error log:',
           run: `tail -n 100 ${shellQuote(path.join(layout.logsDir, 'hub.err.log'))}`,
         },
+        ...(backup.databaseFiles.length > 0 && !databaseRestored
+          ? [
+              {
+                message: `The database from before the upgrade is in ${path.join(layout.root, backup.relative)}; it belongs in ${path.dirname(path.join(layout.storageDir, HUB_DATABASE))}, and the rollback below restores it from there.`,
+              },
+            ]
+          : []),
         {
           message:
             'Once the cause is fixed, finish the rollback; it restores the database from the backup if needed:',

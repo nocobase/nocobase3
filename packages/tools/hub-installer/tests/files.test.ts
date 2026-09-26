@@ -88,6 +88,28 @@ describe('hub.env', () => {
     ).toBe('http://10.0.0.5:80/hub/api/healthz');
   });
 
+  it('reads a hand-edited origin and port the way install writes them', () => {
+    expect(
+      endpointsOf({
+        APP_PUBLIC_ORIGIN: 'https://apps.example.com//',
+        APP_SERVER_HOST: '127.0.0.1',
+        APP_SERVER_PORT: ' 13002 ',
+      }),
+    ).toEqual({
+      url: 'https://apps.example.com/hub/',
+      origin: 'https://apps.example.com',
+      host: '127.0.0.1',
+      port: 13002,
+    });
+    for (const port of ['', 'abc', '0', '70000', '13000.5']) {
+      expect(endpointsOf({ APP_SERVER_PORT: port }).port).toBeNull();
+    }
+    // Health is still checked at what the file says, so an unreadable port fails the check rather than hiding.
+    expect(healthUrl({ APP_SERVER_PORT: 'abc' })).toBe(
+      'http://127.0.0.1:abc/hub/api/healthz',
+    );
+  });
+
   it('reports the public URL and the listening address as endpoints', async () => {
     const layout = layoutOf(root);
     await writeFile(

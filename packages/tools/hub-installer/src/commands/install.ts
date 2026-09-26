@@ -5,7 +5,12 @@ import { runAppCli } from '../lib/app-cli.ts';
 import { switchCurrent } from '../lib/current-link.ts';
 import { buildEcosystemConfig, buildLauncher } from '../lib/ecosystem.ts';
 import { shellQuote } from '../lib/invocation.ts';
-import { buildHubEnv, healthUrl, readHubEnv } from '../lib/env-file.ts';
+import {
+  buildHubEnv,
+  endpointsOf,
+  healthUrl,
+  readHubEnv,
+} from '../lib/env-file.ts';
 import { EXIT_INVALID, InstallerError } from '../lib/errors.ts';
 import { pm2StartFailed, waitForHealthy } from '../lib/health.ts';
 import { readInitialAdmin, type InitialAdmin } from '../lib/initial-admin.ts';
@@ -405,6 +410,7 @@ export async function install(
         release: prepared.dir,
         dialect,
         url: hubUrl,
+        endpoints: endpointsOf(env),
         healthUrl: url,
         name: flags.name,
         started: flags.start,

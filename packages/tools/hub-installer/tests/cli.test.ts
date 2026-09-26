@@ -78,8 +78,12 @@ describe('runInstaller', () => {
   it('prints its version', async () => {
     const result = await run(['--version', '--json']);
     expect(JSON.parse(result.stdout)).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      command: '--version',
       status: 'success',
-      version: packageMetadata.version,
+      result: { version: packageMetadata.version },
+      warnings: [],
     });
   });
 

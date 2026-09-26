@@ -130,6 +130,26 @@ describe('upgrade', () => {
     expect(state().pending).toBeUndefined();
   });
 
+  it('says where the pre-upgrade database is when the failed rollback did not restore it (exit 4)', async () => {
+    // Nothing to migrate, so the automatic rollback leaves the database alone before failing to start.
+    world.pendingTasks = {};
+    await installOld();
+    world.startQueue = ['errored', 'errored'];
+    const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
+
+    expect(result.code).toBe(4);
+    const error = result.json.error as unknown as {
+      details: { backup: string; databaseRestored: boolean };
+      suggestions: { message: string; run?: string }[];
+    };
+    expect(error.details.databaseRestored).toBe(false);
+    const note = error.suggestions.find((suggestion) =>
+      suggestion.message.includes(path.join(root, error.details.backup)),
+    );
+    expect(note?.message).toContain(path.join(root, 'storage/hub/database'));
+    expect(note?.run).toBeUndefined();
+  });
+
   it('removes a half-written backup and restarts the old release when the backup fails', async () => {
     await installOld();
     rmSync(path.join(root, 'storage/hub/database/main.sqlite'));
