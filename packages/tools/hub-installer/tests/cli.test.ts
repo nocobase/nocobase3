@@ -59,6 +59,14 @@ describe('runInstaller', () => {
     expect(result.stdout).toContain('hub-installer install DIRECTORY');
   });
 
+  it('prints help for a command given --help instead of rejecting the flag', async () => {
+    for (const command of ['install', 'status']) {
+      const result = await run([command, '--help']);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('hub-installer install DIRECTORY');
+    }
+  });
+
   it('prints its version', async () => {
     const result = await run(['--version', '--json']);
     expect(JSON.parse(result.stdout)).toEqual({

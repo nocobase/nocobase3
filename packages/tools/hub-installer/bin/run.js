@@ -10,7 +10,7 @@ import {
 
 if (!isSupportedNodeVersion()) {
   console.error(formatUnsupportedNodeVersionMessage(process.version));
-  process.exit(1);
+  process.exit(2);
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

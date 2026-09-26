@@ -39,7 +39,15 @@ export interface PendingOperation {
   from: string;
   to: string;
   startedAt: string;
+  /** Upgrade: the backup, recorded only once it is complete. */
   backup?: string;
+  /**
+   * Upgrade: set just before `current` moves to the new release. From then on the new release may have migrated the
+   * database, so undoing the upgrade has to restore it; before, nothing but the stop has happened.
+   */
+  switched?: boolean;
+  /** Rollback: the backup it restores, so an interrupted rollback restores it again when it is finished. */
+  restoreFrom?: string;
 }
 
 /** `installer.json`: what the installer knows about the Hub it manages. */

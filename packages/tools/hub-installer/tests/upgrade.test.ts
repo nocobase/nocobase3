@@ -50,20 +50,25 @@ describe('releasesToPrune', () => {
     release('4.0.0', '2026-04-01T00:00:00.000Z'),
   ];
 
-  it('keeps the newest releases and the current one', () => {
-    expect(releasesToPrune(releases, '4.0.0', 3).map((r) => r.version)).toEqual(
-      ['1.0.0'],
-    );
+  const versions = (records: { version: string }[]) =>
+    records.map((record) => record.version);
+
+  it('keeps the newest releases and the protected ones', () => {
+    expect(versions(releasesToPrune(releases, ['4.0.0', '3.0.0'], 3))).toEqual([
+      '1.0.0',
+    ]);
   });
 
-  it('never prunes the current release, even when it is the oldest', () => {
-    expect(releasesToPrune(releases, '1.0.0', 2).map((r) => r.version)).toEqual(
-      ['2.0.0', '3.0.0'],
-    );
+  it('never prunes the release upgraded from, whatever its install time', () => {
+    // Current is 3.0.0, reached from 1.0.0 after rollbacks; 1.0.0 is what rollback returns to.
+    expect(versions(releasesToPrune(releases, ['3.0.0', '1.0.0'], 2))).toEqual([
+      '2.0.0',
+      '4.0.0',
+    ]);
   });
 
   it('prunes nothing while there is room', () => {
-    expect(releasesToPrune(releases, '4.0.0', 10)).toEqual([]);
+    expect(releasesToPrune(releases, ['4.0.0'], 10)).toEqual([]);
   });
 });
 
@@ -125,18 +130,30 @@ describe('rollback target', () => {
   });
 
   it('undoes an interrupted upgrade and finishes an interrupted rollback', () => {
-    const upgrading = state({
+    const stopped = state({
+      pending: {
+        action: 'upgrade',
+        from: '3.0.0',
+        to: '4.0.0',
+        startedAt: 'x',
+      },
+    });
+    expect(defaultRollbackTarget(stopped)).toBe('3.0.0');
+    // Interrupted before `current` moved: nothing can have been migrated.
+    expect(backupFor(stopped, '3.0.0')).toEqual({ migrated: false });
+
+    const switched = state({
       pending: {
         action: 'upgrade',
         from: '3.0.0',
         to: '4.0.0',
         startedAt: 'x',
         backup: 'backups/y',
+        switched: true,
       },
     });
-    expect(defaultRollbackTarget(upgrading)).toBe('3.0.0');
-    // How far it got is unknown, so the database is treated as migrated.
-    expect(backupFor(upgrading, '3.0.0')).toEqual({
+    // After the switch, how far it got is unknown, so the database is treated as migrated.
+    expect(backupFor(switched, '3.0.0')).toEqual({
       backup: 'backups/y',
       migrated: true,
     });
@@ -150,6 +167,21 @@ describe('rollback target', () => {
       },
     });
     expect(defaultRollbackTarget(rollingBack)).toBe('2.0.0');
+
+    // A rollback that set out to restore restores again when it is finished.
+    const restoring = state({
+      pending: {
+        action: 'rollback',
+        from: '3.0.0',
+        to: '2.0.0',
+        startedAt: 'x',
+        restoreFrom: 'backups/z',
+      },
+    });
+    expect(backupFor(restoring, '2.0.0')).toEqual({
+      backup: 'backups/z',
+      migrated: true,
+    });
   });
 
   it('has nothing to return to on a fresh install', () => {
@@ -189,9 +221,9 @@ describe('backup and restore', () => {
   });
 
   it('names a backup after the time and both versions', () => {
-    expect(backupName('1.0.0', '1.1.0', new Date(2026, 8, 26, 3, 4, 5))).toBe(
-      '20260926-030405_1.0.0_to_1.1.0',
-    );
+    expect(
+      backupName('1.0.0', '1.1.0', new Date(Date.UTC(2026, 8, 26, 3, 4, 5))),
+    ).toBe('20260926-030405Z_1.0.0_to_1.1.0');
   });
 
   it('copies the database with its journal and restores it, dropping a newer journal', async () => {
