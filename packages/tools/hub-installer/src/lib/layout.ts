@@ -29,6 +29,7 @@ export interface Layout {
   stateFile: string;
   lockFile: string;
   ecosystemFile: string;
+  launcherFile: string;
 }
 
 export function layoutOf(root: string): Layout {
@@ -45,6 +46,7 @@ export function layoutOf(root: string): Layout {
     stateFile: path.join(root, 'installer.json'),
     lockFile: path.join(root, '.installer.lock'),
     ecosystemFile: path.join(root, 'ecosystem.config.cjs'),
+    launcherFile: path.join(root, 'launcher.mjs'),
   };
 }
 

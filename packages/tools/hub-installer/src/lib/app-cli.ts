@@ -23,7 +23,13 @@ export interface AppCliEnvelope {
   };
 }
 
-function toSuggestion(
+/**
+ * Carries a suggestion of the release's CLI over into the installer's error, with its command folded into the message.
+ * None of them runs as-is from a Hub root: they name the release's own `dist/cli/index.js`, which a failed install or
+ * upgrade has already removed and which reads the wrong configuration without `hub.env`, or `pnpm add`, which would
+ * turn the Hub root into a project.
+ */
+export function toSuggestion(
   entry: NonNullable<
     NonNullable<AppCliEnvelope['error']>['suggestions']
   >[number],
@@ -34,7 +40,14 @@ function toSuggestion(
       : entry.run
         ? [entry.run.command, ...entry.run.args].join(' ')
         : undefined;
-  return { message: entry.message ?? '', ...(run ? { run } : {}) };
+  const message = entry.message ?? '';
+  return {
+    message: run
+      ? [message, `(the application CLI's command: ${run})`]
+          .filter(Boolean)
+          .join(' ')
+      : message,
+  };
 }
 
 export interface AppCliOptions {

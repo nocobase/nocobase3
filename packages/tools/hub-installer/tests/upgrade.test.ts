@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import packageMetadata from '../package.json' with { type: 'json' };
 import { backupFor, defaultRollbackTarget } from '../src/commands/rollback.ts';
 import { assertNoPending, releasesToPrune } from '../src/commands/upgrade.ts';
 import {
@@ -19,6 +20,7 @@ import {
   restoreDatabase,
 } from '../src/lib/backup.ts';
 import { confirm } from '../src/lib/confirm.ts';
+import { InstallerError } from '../src/lib/errors.ts';
 import { layoutOf } from '../src/lib/layout.ts';
 import type { InstallerState, ReleaseRecord } from '../src/lib/state.ts';
 
@@ -192,20 +194,28 @@ describe('rollback target', () => {
     ).toBeUndefined();
   });
 
-  it('refuses to stack an operation on an interrupted one', () => {
-    expect(() =>
-      assertNoPending(
-        state({
-          pending: {
-            action: 'upgrade',
-            from: '3.0.0',
-            to: '4.0.0',
-            startedAt: 'x',
-          },
-        }),
-      ),
-    ).toThrow(/did not finish/);
-    expect(() => assertNoPending(state())).not.toThrow();
+  it('refuses to stack an operation on an interrupted one, naming the rollback that recovers', () => {
+    const interrupted = state({
+      registry: 'http://127.0.0.1:4873',
+      pending: {
+        action: 'upgrade',
+        from: '3.0.0',
+        to: '4.0.0',
+        startedAt: 'x',
+      },
+    });
+    let error: unknown;
+    try {
+      assertNoPending(interrupted, '/srv/my hub');
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(InstallerError);
+    expect((error as InstallerError).message).toMatch(/did not finish/);
+    expect((error as InstallerError).suggestions[0].run).toBe(
+      `npx --yes --registry=http://127.0.0.1:4873 @nocobase/hub-installer@${packageMetadata.version} rollback --dir '/srv/my hub'`,
+    );
+    expect(() => assertNoPending(state(), '/srv/hub')).not.toThrow();
   });
 });
 

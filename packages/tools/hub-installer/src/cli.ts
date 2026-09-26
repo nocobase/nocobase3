@@ -20,6 +20,8 @@ import {
 } from './commands/upgrade.ts';
 import { EXIT_INVALID, EXIT_OK, InstallerError } from './lib/errors.ts';
 import { installInterruptHandlers } from './lib/interrupt.ts';
+import { installerCommand } from './lib/invocation.ts';
+import { MINIMUM_PM2_VERSION } from './lib/prechecks.ts';
 import {
   createReporter,
   errorEnvelope,
@@ -33,7 +35,6 @@ import type { RunCommand } from './lib/run-command.ts';
 
 export interface RunInstallerOptions {
   argv: string[];
-  binary: string;
   version: string;
   stdout?: NodeJS.WritableStream;
   stderr?: NodeJS.WritableStream;
@@ -61,15 +62,19 @@ function describeFlags(flags: Record<string, FlagHelp>): string[] {
   });
 }
 
-export function formatHelp(binary: string): string {
+/** Every usage line and example is a command that runs as-is, the same way error suggestions are. */
+export function formatHelp(): string {
   return [
     'Install and manage a NocoBase 3 Hub on a server without changing its source.',
     '',
     'USAGE',
-    `  $ ${binary} install DIRECTORY [FLAGS]`,
-    `  $ ${binary} upgrade [--dir DIRECTORY] [--to VERSION] [FLAGS]`,
-    `  $ ${binary} rollback [--dir DIRECTORY] [--to VERSION] [FLAGS]`,
-    `  $ ${binary} status [--dir DIRECTORY] [FLAGS]`,
+    `  $ ${installerCommand('COMMAND [FLAGS]')}`,
+    '',
+    'COMMANDS',
+    '  install DIRECTORY  Build a new Hub into DIRECTORY (or --dir DIRECTORY) and start it with pm2.',
+    '  upgrade            Upgrade the Hub in --dir, the current directory by default, to --to (latest).',
+    '  rollback           Return to the release the last upgrade came from, or to --to.',
+    '  status             Report the version, endpoints, health, pm2 process and releases.',
     '',
     'INSTALL FLAGS',
     ...describeFlags(INSTALL_FLAGS),
@@ -84,15 +89,17 @@ export function formatHelp(binary: string): string {
     ...describeFlags(STATUS_FLAGS),
     '',
     'EXAMPLES',
-    `  $ ${binary} install /srv/nocobase/hub --origin https://apps.example.com`,
-    `  $ ${binary} install /srv/nocobase/hub --dialect postgres --set database.connections.main.host=db.internal --set-from-env database.connections.main.password=HUB_DB_PASSWORD`,
-    `  $ ${binary} upgrade --dir /srv/nocobase/hub --yes`,
-    `  $ ${binary} rollback --dir /srv/nocobase/hub`,
-    `  $ ${binary} status --dir /srv/nocobase/hub --json`,
+    `  $ ${installerCommand('install /srv/nocobase/hub --origin https://apps.example.com')}`,
+    `  $ ${installerCommand('install /srv/nocobase/hub --dialect postgres --set database.connections.main.host=db.internal --set-from-env database.connections.main.password=HUB_DB_PASSWORD')}`,
+    `  $ ${installerCommand('upgrade --dir /srv/nocobase/hub --yes')}`,
+    `  $ ${installerCommand('rollback --dir /srv/nocobase/hub')}`,
+    `  $ ${installerCommand('status --dir /srv/nocobase/hub --json')}`,
     '',
     'NOTES',
-    '  Requires Node.js 24+, pnpm 11+ and, to start the Hub, pm2 installed globally.',
+    `  Requires Node.js 24+, pnpm 11+ and, to start the Hub, pm2 ${MINIMUM_PM2_VERSION}+ installed globally.`,
     '  Packages come from https://npm.nocobase.ai by default; override with --registry or NOCOBASE_REGISTRY.',
+    '  install and upgrade build the Hub on this machine and take several minutes.',
+    '  To change the origin or port, edit hub.env in the Hub root, then run pm2 restart with the process name.',
   ].join('\n');
 }
 
@@ -124,7 +131,9 @@ async function parseCommand<T>(
     throw new InstallerError('INVALID_USAGE', message, {
       exitCode: EXIT_INVALID,
       cause: error,
-      suggestions: [{ message: 'See the usage:', run: 'hub-installer --help' }],
+      suggestions: [
+        { message: 'See the usage:', run: installerCommand('--help') },
+      ],
     });
   }
 }
@@ -144,13 +153,13 @@ export async function runInstaller(
     command === '-h' ||
     command === 'help'
   ) {
-    stdout.write(`${formatHelp(options.binary)}\n`);
+    stdout.write(`${formatHelp()}\n`);
     return EXIT_OK;
   }
   if (command === '--version') {
     stdout.write(
       json
-        ? `${JSON.stringify({ status: 'success', version: options.version })}\n`
+        ? `${JSON.stringify(successEnvelope(command, { version: options.version }, []))}\n`
         : `${options.version}\n`,
     );
     return EXIT_OK;
@@ -158,7 +167,7 @@ export async function runInstaller(
 
   // `install --help` asks for help, not for a flag the command does not define.
   if (rest.includes('--help') || rest.includes('-h')) {
-    stdout.write(`${formatHelp(options.binary)}\n`);
+    stdout.write(`${formatHelp()}\n`);
     return EXIT_OK;
   }
 
@@ -203,7 +212,7 @@ export async function runInstaller(
         {
           exitCode: EXIT_INVALID,
           suggestions: [
-            { message: 'See the usage:', run: 'hub-installer --help' },
+            { message: 'See the usage:', run: installerCommand('--help') },
           ],
         },
       );

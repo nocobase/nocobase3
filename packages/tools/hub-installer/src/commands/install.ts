@@ -3,10 +3,17 @@ import path from 'node:path';
 import { Args, Flags } from '@oclif/core';
 import { runAppCli } from '../lib/app-cli.ts';
 import { switchCurrent } from '../lib/current-link.ts';
-import { buildEcosystemConfig } from '../lib/ecosystem.ts';
-import { buildHubEnv, healthUrl, readHubEnv } from '../lib/env-file.ts';
+import { buildEcosystemConfig, buildLauncher } from '../lib/ecosystem.ts';
+import { shellQuote } from '../lib/invocation.ts';
+import {
+  buildHubEnv,
+  endpointsOf,
+  healthUrl,
+  readHubEnv,
+} from '../lib/env-file.ts';
 import { EXIT_INVALID, InstallerError } from '../lib/errors.ts';
 import { pm2StartFailed, waitForHealthy } from '../lib/health.ts';
+import { readInitialAdmin, type InitialAdmin } from '../lib/initial-admin.ts';
 import {
   HUB_BASE_PATH,
   layoutOf,
@@ -43,12 +50,16 @@ import { writeState, type InstallerState } from '../lib/state.ts';
 
 export const INSTALL_ARGS = {
   directory: Args.string({
-    description: 'Directory to install the Hub into. Must be new or empty.',
-    required: true,
+    description:
+      'Directory to install the Hub into. Must be new or empty. --dir names it too.',
   }),
 };
 
 export const INSTALL_FLAGS = {
+  dir: Flags.string({
+    description:
+      'Directory to install the Hub into, as the other commands name it; the same as the DIRECTORY argument.',
+  }),
   'hub-version': Flags.string({
     default: 'latest',
     description: 'Hub template version or dist-tag to install.',
@@ -113,8 +124,9 @@ export const INSTALL_FLAGS = {
 };
 
 export interface InstallInput {
-  directory: string;
+  directory?: string;
   flags: {
+    dir?: string;
     'hub-version': string;
     origin?: string;
     host: string;
@@ -164,6 +176,19 @@ function parsePairs(
   });
 }
 
+/** The sign-in line of the summary: who, and where the password is, never the password itself. */
+function describeInitialAdmin(admin: InitialAdmin): string {
+  const who =
+    [admin.username, admin.email && `(${admin.email})`]
+      .filter(Boolean)
+      .join(' ') || 'the account';
+  const password =
+    admin.defaultPassword === true
+      ? `the template's default password; change it after signing in`
+      : 'the password set there';
+  return `${who} under ${admin.key} in config.yml, with ${password}`;
+}
+
 async function logTail(layout: Layout): Promise<string> {
   const text = await readFile(
     path.join(layout.logsDir, 'hub.err.log'),
@@ -199,7 +224,27 @@ export async function install(
   const { flags } = input;
   const { reporter, pm2 } = deps;
   const run = deps.run ?? runCommand;
-  const root = path.resolve(deps.cwd ?? process.cwd(), input.directory);
+  const cwd = deps.cwd ?? process.cwd();
+  const directory = input.directory ?? flags.dir;
+  if (directory === undefined) {
+    throw new InstallerError(
+      'INVALID_USAGE',
+      'Name the directory to install the Hub into, as an argument or with --dir.',
+      { exitCode: EXIT_INVALID },
+    );
+  }
+  if (
+    input.directory !== undefined &&
+    flags.dir !== undefined &&
+    path.resolve(cwd, input.directory) !== path.resolve(cwd, flags.dir)
+  ) {
+    throw new InstallerError(
+      'INVALID_USAGE',
+      `The DIRECTORY argument (${input.directory}) and --dir (${flags.dir}) name different directories; give one of them.`,
+      { exitCode: EXIT_INVALID },
+    );
+  }
+  const root = path.resolve(cwd, directory);
   const layout = layoutOf(root);
   const dialect = flags.dialect as Dialect;
   const registry = normalizeRegistry(flags.registry ?? defaultRegistry());
@@ -299,6 +344,7 @@ export async function install(
       layout.ecosystemFile,
       buildEcosystemConfig({ name: flags.name, nodePath: process.execPath }),
     );
+    await writeFile(layout.launcherFile, buildLauncher());
     const at = new Date().toISOString();
     const state: InstallerState = {
       schemaVersion: 1,
@@ -317,7 +363,7 @@ export async function install(
     switched = true;
 
     const url = healthUrl(env);
-    const startCommand = `pm2 start ${layout.ecosystemFile} && pm2 save`;
+    const startCommand = `pm2 start ${shellQuote(layout.ecosystemFile)} && pm2 save`;
     if (flags.start) {
       reporter.progress('Starting the Hub with pm2');
       await pm2.start(layout.ecosystemFile, root);
@@ -337,7 +383,7 @@ export async function install(
             suggestions: [
               {
                 message: 'Read the error log:',
-                run: `tail -n 100 ${path.join(layout.logsDir, 'hub.err.log')}`,
+                run: `tail -n 100 ${shellQuote(path.join(layout.logsDir, 'hub.err.log'))}`,
               },
               { message: 'Start it again once fixed:', run: startCommand },
             ],
@@ -348,6 +394,10 @@ export async function install(
     }
 
     const hubUrl = `${origin}${HUB_BASE_PATH}/`;
+    const initialAdmin = await readInitialAdmin(
+      layout.configFile,
+      path.join(prepared.dir, 'config.example.yml'),
+    );
     const nextCommands = [
       ...(flags.start ? [] : [startCommand]),
       'pm2 startup',
@@ -360,17 +410,19 @@ export async function install(
         release: prepared.dir,
         dialect,
         url: hubUrl,
+        endpoints: endpointsOf(env),
         healthUrl: url,
         name: flags.name,
         started: flags.start,
         configFile: layout.configFile,
         storageDir: layout.storageDir,
+        initialAdmin,
         nextCommands,
       },
       summary: [
         `Hub ${version} is installed at ${root}${flags.start ? ' and running' : ''}.`,
         `  URL       ${hubUrl}`,
-        '  Sign in   users.initialAdmin in config.yml (template default nocobase / admin123); change the password after signing in',
+        `  Sign in   ${describeInitialAdmin(initialAdmin)}`,
         `  Logs      pm2 logs ${flags.name}`,
         'Next steps',
         ...(flags.start ? [] : [`  Start it: ${startCommand}`]),

@@ -34,7 +34,16 @@ describe('install', () => {
     expect(result.json.result).toMatchObject({
       version: '1.1.0',
       started: true,
+      initialAdmin: {
+        key: 'users.initialAdmin',
+        username: 'nocobase',
+        email: 'admin@nocobase.com',
+        defaultPassword: true,
+      },
     });
+    // The password itself never leaves config.yml.
+    expect(JSON.stringify(result.json)).not.toContain('admin123');
+    expect(result.stderr).not.toContain('admin123');
     expect(readlinkSync(path.join(root, 'current'))).toBe(
       path.join('releases', '1.1.0', 'hub'),
     );
@@ -44,6 +53,7 @@ describe('install', () => {
       'ecosystem.config.cjs',
       'hub.env',
       'installer.json',
+      'launcher.mjs',
       'logs',
       'releases',
       'storage',
@@ -62,6 +72,48 @@ describe('install', () => {
       `start ${path.join(root, 'ecosystem.config.cjs')}`,
       'save',
     ]);
+  });
+
+  it('installs through --dir the same way as through the argument, and reports the endpoints', async () => {
+    const world = createWorld();
+    const result = await hub(world, [
+      'install',
+      '--dir',
+      root,
+      '--port',
+      PORT,
+      '--origin',
+      'https://apps.example.com',
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result).toMatchObject({
+      directory: root,
+      endpoints: {
+        url: 'https://apps.example.com/hub/',
+        origin: 'https://apps.example.com',
+        host: '127.0.0.1',
+        port: Number(PORT),
+      },
+    });
+    expect(readlinkSync(path.join(root, 'current'))).toBe(
+      path.join('releases', '1.1.0', 'hub'),
+    );
+  });
+
+  it('accepts an argument and a --dir that name the same directory', async () => {
+    const world = createWorld();
+    const result = await hub(world, [
+      'install',
+      root,
+      '--dir',
+      `${root}/`,
+      '--port',
+      PORT,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result?.directory).toBe(root);
   });
 
   it('removes everything it wrote, parents included, when the build fails', async () => {
@@ -107,6 +159,38 @@ describe('install', () => {
     expect(result.json.error?.message).toContain('/srv/other-hub');
     expect(existsSync(root)).toBe(false);
     expect(world.pm2.processes.get('nocobase-hub')?.cwd).toBe('/srv/other-hub');
+  });
+
+  it('refuses a pm2 older than the floor, before writing anything', async () => {
+    const world = createWorld();
+    // 4.2 is the last pm2 that runs ecosystem.config.cjs as an application.
+    world.pm2.version = async () => '4.2.3';
+    const result = await hub(world, ['install', root, '--port', PORT]);
+
+    expect(result.code).toBe(2);
+    expect(result.json.error?.code).toBe('PM2_UNSUPPORTED');
+    expect(existsSync(root)).toBe(false);
+  });
+
+  it('reports where the installed Hub is reached and where it listens', async () => {
+    const world = createWorld();
+    await hub(world, [
+      'install',
+      root,
+      '--port',
+      PORT,
+      '--origin',
+      'https://apps.example.com',
+    ]);
+    const result = await hub(world, ['status', '--dir', root, '--offline']);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result?.endpoints).toEqual({
+      url: 'https://apps.example.com/hub/',
+      origin: 'https://apps.example.com',
+      host: '127.0.0.1',
+      port: Number(PORT),
+    });
   });
 
   it('checks --set-from-env variables before the build', async () => {

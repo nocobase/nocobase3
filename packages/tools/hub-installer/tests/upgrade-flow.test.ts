@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import packageMetadata from '../package.json' with { type: 'json' };
 import {
   createWorld,
   freePort,
@@ -105,6 +106,12 @@ describe('upgrade', () => {
     const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
 
     expect(result.code).toBe(4);
+    const runs = (
+      result.json.error as unknown as { suggestions: { run?: string }[] }
+    ).suggestions.map((suggestion) => suggestion.run);
+    expect(runs).toContain(
+      `npx --yes --registry=${state().registry} @nocobase/hub-installer@${packageMetadata.version} rollback --dir ${root}`,
+    );
     expect(existsSync(path.join(root, 'releases', '1.1.0', 'hub'))).toBe(true);
     expect(state().releases.map((record) => record.version)).toContain('1.1.0');
     expect(state().pending).toMatchObject({
@@ -121,6 +128,26 @@ describe('upgrade', () => {
     });
     expect(database()).toBe('schema of 1.0.0');
     expect(state().pending).toBeUndefined();
+  });
+
+  it('says where the pre-upgrade database is when the failed rollback did not restore it (exit 4)', async () => {
+    // Nothing to migrate, so the automatic rollback leaves the database alone before failing to start.
+    world.pendingTasks = {};
+    await installOld();
+    world.startQueue = ['errored', 'errored'];
+    const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
+
+    expect(result.code).toBe(4);
+    const error = result.json.error as unknown as {
+      details: { backup: string; databaseRestored: boolean };
+      suggestions: { message: string; run?: string }[];
+    };
+    expect(error.details.databaseRestored).toBe(false);
+    const note = error.suggestions.find((suggestion) =>
+      suggestion.message.includes(path.join(root, error.details.backup)),
+    );
+    expect(note?.message).toContain(path.join(root, 'storage/hub/database'));
+    expect(note?.run).toBeUndefined();
   });
 
   it('removes a half-written backup and restarts the old release when the backup fails', async () => {

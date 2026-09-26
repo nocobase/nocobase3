@@ -21,6 +21,7 @@ import {
   EXIT_ROLLED_BACK,
   InstallerError,
 } from '../lib/errors.ts';
+import { installerCommand, shellQuote } from '../lib/invocation.ts';
 import {
   layoutOf,
   releaseDir,
@@ -114,7 +115,7 @@ export interface UpgradeInput {
 }
 
 /** The running Hub was interrupted by a previous operation that never finished; refuse to stack another on top. */
-export function assertNoPending(state: InstallerState): void {
+export function assertNoPending(state: InstallerState, root: string): void {
   if (!state.pending) return;
   const { action, from, to, startedAt } = state.pending;
   throw new InstallerError(
@@ -126,7 +127,9 @@ export function assertNoPending(state: InstallerState): void {
         {
           message:
             'Recover first; an interrupted upgrade is undone and an interrupted rollback is finished:',
-          run: 'hub-installer rollback',
+          run: installerCommand(`rollback --dir ${shellQuote(root)}`, {
+            registry: state.registry,
+          }),
         },
       ],
     },
@@ -284,7 +287,7 @@ async function rollBackUpgrade(context: RollbackContext): Promise<never> {
         suggestions: [
           {
             message: 'The failed release logged:',
-            run: `tail -n 100 ${path.join(layout.logsDir, 'hub.err.log')}`,
+            run: `tail -n 100 ${shellQuote(path.join(layout.logsDir, 'hub.err.log'))}`,
           },
         ],
       },
@@ -299,26 +302,30 @@ async function rollBackUpgrade(context: RollbackContext): Promise<never> {
       suggestions: [
         {
           message: 'Read the error log:',
-          run: `tail -n 100 ${path.join(layout.logsDir, 'hub.err.log')}`,
+          run: `tail -n 100 ${shellQuote(path.join(layout.logsDir, 'hub.err.log'))}`,
         },
         ...(backup.databaseFiles.length > 0 && !databaseRestored
           ? [
               {
-                message: `Put the database from before the upgrade back, from ${backup.relative}, into:`,
-                run: path.dirname(path.join(layout.storageDir, HUB_DATABASE)),
+                message: `The database from before the upgrade is in ${path.join(layout.root, backup.relative)}; it belongs in ${path.dirname(path.join(layout.storageDir, HUB_DATABASE))}, and the rollback below restores it from there.`,
               },
             ]
           : []),
         {
           message:
             'Once the cause is fixed, finish the rollback; it restores the database from the backup if needed:',
-          run: `hub-installer rollback --dir ${layout.root}`,
+          run: installerCommand(`rollback --dir ${shellQuote(layout.root)}`, {
+            registry: state.registry,
+          }),
         },
         ...(context.newRecord
           ? [
               {
                 message: `Or return to ${to}, which was kept:`,
-                run: `hub-installer rollback --dir ${layout.root} --to ${to} --no-restore`,
+                run: installerCommand(
+                  `rollback --dir ${shellQuote(layout.root)} --to ${to} --no-restore`,
+                  { registry: state.registry },
+                ),
               },
             ]
           : []),
@@ -340,7 +347,7 @@ export async function upgrade(
   try {
     // Read under the lock: a run that waited on it must see what the previous one wrote.
     const state = await readState(layout);
-    assertNoPending(state);
+    assertNoPending(state, root);
     const env = await readHubEnv(layout);
     const from = state.current;
     const to = await resolveTarget(state, flags.to, deps);
@@ -361,7 +368,12 @@ export async function upgrade(
             {
               message:
                 'Go back with rollback, which restores the database backed up before the upgrade:',
-              run: `hub-installer rollback --dir ${root} --to ${to}`,
+              run: installerCommand(
+                `rollback --dir ${shellQuote(root)} --to ${to}`,
+                {
+                  registry: state.registry,
+                },
+              ),
             },
           ],
         },
@@ -524,10 +536,18 @@ export async function upgrade(
       await removeNewRelease();
       throw new InstallerError(
         'UPGRADE_ABORTED',
-        `Upgrading to ${to} stopped before switching: ${error instanceof Error ? error.message : String(error)}. ${healthy ? `${from} is running again.` : `${from} did not start again; start it with pm2 start ${layout.ecosystemFile}.`}`,
+        `Upgrading to ${to} stopped before switching: ${error instanceof Error ? error.message : String(error)}. ${healthy ? `${from} is running again.` : `${from} did not start again.`}`,
         {
           exitCode: healthy ? EXIT_FAILED : EXIT_ROLLBACK_FAILED,
           cause: error,
+          suggestions: healthy
+            ? []
+            : [
+                {
+                  message: `Start ${from} again once the cause is fixed:`,
+                  run: `pm2 start ${shellQuote(layout.ecosystemFile)} && pm2 save`,
+                },
+              ],
         },
       );
     }

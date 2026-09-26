@@ -32,7 +32,6 @@ async function run(argv: string[], cwd?: string) {
   const stderr = capture();
   const code = await runInstaller({
     argv,
-    binary: 'hub-installer',
     version: packageMetadata.version,
     stdout: stdout.stream,
     stderr: stderr.stream,
@@ -53,25 +52,38 @@ afterEach(async () => {
 });
 
 describe('runInstaller', () => {
-  it('prints help without a command', async () => {
+  it('prints help without a command, every example a command that runs as-is', async () => {
     const result = await run([]);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain('hub-installer install DIRECTORY');
+    expect(result.stdout).toContain('install DIRECTORY');
+    const examples = result.stdout
+      .split('\n')
+      .filter((line) => line.trim().startsWith('$ '));
+    expect(examples.length).toBeGreaterThan(1);
+    for (const line of examples) {
+      expect(line).toMatch(
+        /\$ npx --yes --registry=\S+ @nocobase\/hub-installer@\S+ /u,
+      );
+    }
   });
 
   it('prints help for a command given --help instead of rejecting the flag', async () => {
     for (const command of ['install', 'status']) {
       const result = await run([command, '--help']);
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain('hub-installer install DIRECTORY');
+      expect(result.stdout).toContain('install DIRECTORY');
     }
   });
 
   it('prints its version', async () => {
     const result = await run(['--version', '--json']);
     expect(JSON.parse(result.stdout)).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      command: '--version',
       status: 'success',
-      version: packageMetadata.version,
+      result: { version: packageMetadata.version },
+      warnings: [],
     });
   });
 
@@ -108,6 +120,38 @@ describe('runInstaller', () => {
     const result = await run(['install', dir, '--json']);
     expect(result.code).toBe(2);
     expect(JSON.parse(result.stdout).error.code).toBe('TARGET_NOT_EMPTY');
+  });
+
+  it('takes the install directory from --dir, as the other commands do', async () => {
+    await writeFile(path.join(dir, 'keep.txt'), 'mine');
+    const result = await run(['install', '--dir', dir, '--json']);
+    expect(result.code).toBe(2);
+    expect(JSON.parse(result.stdout).error.code).toBe('TARGET_NOT_EMPTY');
+  });
+
+  it('refuses a directory argument and a --dir that disagree', async () => {
+    const result = await run([
+      'install',
+      path.join(dir, 'a'),
+      '--dir',
+      path.join(dir, 'b'),
+      '--json',
+    ]);
+    expect(result.code).toBe(2);
+    expect(JSON.parse(result.stdout).error.code).toBe('INVALID_USAGE');
+  });
+
+  it('suggests commands that run as-is, through npx with the registry named', async () => {
+    const result = await run(['frobnicate', '--json']);
+    const [suggestion] = JSON.parse(result.stdout).error.suggestions as {
+      run: string;
+    }[];
+    expect(suggestion.run).toMatch(
+      new RegExp(
+        `^npx --yes --registry=\\S+ @nocobase/hub-installer@${packageMetadata.version} --help$`,
+        'u',
+      ),
+    );
   });
 
   it('rejects a malformed --set before touching anything', async () => {

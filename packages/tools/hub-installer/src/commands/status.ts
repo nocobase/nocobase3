@@ -2,8 +2,9 @@ import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Flags } from '@oclif/core';
 import { readCurrent } from '../lib/current-link.ts';
-import { healthUrl, readHubEnv } from '../lib/env-file.ts';
+import { endpointsOf, healthUrl, readHubEnv } from '../lib/env-file.ts';
 import { checkHealth } from '../lib/health.ts';
+import { installerCommand, shellQuote } from '../lib/invocation.ts';
 import { layoutOf, releaseDir } from '../lib/layout.ts';
 import { currentNodeMajor } from '../lib/prechecks.ts';
 import { resolveTemplateVersion } from '../lib/registry.ts';
@@ -75,6 +76,12 @@ export async function status(
     await readdir(layout.backupsDir).catch(() => [] as string[])
   ).sort();
 
+  const endpoints = endpointsOf(env);
+  if (endpoints.port === null) {
+    deps.reporter.warn(
+      `APP_SERVER_PORT in hub.env is "${env.APP_SERVER_PORT ?? ''}", which is not a port number; the Hub cannot listen on it.`,
+    );
+  }
   const url = healthUrl(env);
   const healthy = await checkHealth(url, deps.fetchImpl);
 
@@ -87,7 +94,7 @@ export async function status(
 
   if (state.pending) {
     deps.reporter.warn(
-      `${state.pending.action === 'upgrade' ? 'An' : 'A'} ${state.pending.action} from ${state.pending.from} to ${state.pending.to}, started ${state.pending.startedAt}, did not finish. Run \`hub-installer rollback\` to recover: it undoes an interrupted upgrade and finishes an interrupted rollback.`,
+      `${state.pending.action === 'upgrade' ? 'An' : 'A'} ${state.pending.action} from ${state.pending.from} to ${state.pending.to}, started ${state.pending.startedAt}, did not finish. Recover with \`${installerCommand(`rollback --dir ${shellQuote(root)}`, { registry: state.registry })}\`: it undoes an interrupted upgrade and finishes an interrupted rollback.`,
     );
   }
 
@@ -126,6 +133,7 @@ export async function status(
       currentLink: link ?? null,
       dialect: state.dialect,
       registry: state.registry,
+      endpoints,
       releases,
       backups,
       health: { url, ok: healthy },
@@ -141,6 +149,7 @@ export async function status(
     },
     summary: [
       `Hub ${state.current} at ${root}`,
+      `  URL       ${endpoints.url} (listening on ${endpoints.host}:${endpoints.port ?? `invalid port "${env.APP_SERVER_PORT ?? ''}"`})`,
       `  Health    ${healthy ? 'ok' : 'not answering'} (${url})`,
       `  Process   ${processInfo ? `${processInfo.status}, pid ${processInfo.pid}, ${processInfo.restarts} restarts` : 'not registered with pm2'} (${state.name})`,
       `  Node      machine ${nodeMajor}, release ${currentRelease?.buildTarget.nodeMajor ?? '?'}${nodeMatches ? '' : ' — mismatch'}`,
