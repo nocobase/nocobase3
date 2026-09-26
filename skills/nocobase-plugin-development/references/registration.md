@@ -78,7 +78,7 @@ pnpm nocobase skills sync
 pnpm nocobase skills sync --package @nocobase/app-plugin-audit-log
 ```
 
-The plugin's top-level `skills/` is the maintained source. The App's `.agents/skills/` is generated, replaced on synchronization, and excluded from Git with the entire App `/.agents/` directory. Do not edit or commit those synchronized copies. `skills sync` remains a compatibility alias; use `skills sync` for new instructions. See [Plugin Skills](plugin-skills.md) for discovery, ownership prefixes, conflict handling, and semantic validation.
+The plugin's top-level `skills/` is the maintained source. The App's `.agents/skills/` is generated, replaced on synchronization, and excluded from Git with the entire App `/.agents/` directory. Do not edit or commit those synchronized copies. See [Plugin Skills](plugin-skills.md) for discovery, ownership prefixes, conflict handling, and semantic validation.
 
 ## Unregister and remove
 
@@ -118,8 +118,6 @@ Lifecycle commands use a JSON envelope such as:
 | `failure`               | `ok: false`; handle `error.code` and `error.suggestions`, preserving the nonzero exit status |
 
 For registration inconsistencies, use `pnpm nocobase plugin inspect audit-log --workspace-root . --app app-template-default --json`. Check `ok` and `status`, then `result.consistent`, `issues`, and `suggestions`. A successful inspection can have `ok: true` while reporting inconsistent state. It observes static facts and does not repair them.
-
-Use `pnpm --filter <target-app> client:inspect --json` or `server:inspect --json` only for the corresponding changed composition or diagnostic question. Client inspection does not instantiate Providers, run lifecycle, render React, or load page/locale messages. Server inspection does not execute Providers, Route factories, Jobs, or database operations. Their success cannot prove security, translations, or behavior.
 
 | Symptom                                       | Check and correction                                                        |
 | --------------------------------------------- | --------------------------------------------------------------------------- |

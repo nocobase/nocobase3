@@ -117,6 +117,8 @@ CLI 配置优先级为显式参数、进程环境、App 根目录 `.env`；此�
 
 ### 上传与部署
 
+`release upload` 和 `release deploy` 只在 `package.json` 设置了 `nocobase.cli.publishing: true` 的应用源码项目中注册，构建产物 `dist/` 中始终没有这两个命令。默认模板已设置该项，Examples 模板和 Hub 模板没有；要通过 CLI 发布这类应用，在其 `package.json` 的 `nocobase` 字段中加入 `"cli": { "publishing": true }`。
+
 以下两组流程二选一。
 
 **上传后单独部署：**

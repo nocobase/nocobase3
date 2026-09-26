@@ -30,7 +30,8 @@ In a source application the bin registers the application's own `tsx` before it 
 | `release upload`, `release deploy`                                         | no              | Only when `package.json` sets `nocobase.cli.publishing: true`        |
 | `dev`, `build`, `start`                                                    | no              | `build` passes `--target`, `--node-version` and `--tar` to the build |
 | `dist retarget`, `dist check`                                              | no              |                                                                      |
-| `plugin register`, `plugin unregister`, `plugin update`, `plugin inspect`  | no              | Take `--dir`, or `--workspace-root` with `--app` in this repository  |
+| `plugin register`, `plugin unregister`, `plugin inspect`                   | no              | Take `--dir`, or `--workspace-root` with `--app` in this repository  |
+| `plugin update`                                                            | no              | Takes `--dir`; no `--workspace-root` or `--app`                      |
 | `package remove`, `skills sync`                                            | no              |                                                                      |
 | `app <name>`                                                               | yes             | The application's own commands, from `cli/commands/`                 |
 | `<plugin> <name>`                                                          | plugin decides  | A plugin's commands under the topic its package name gives           |
@@ -118,6 +119,8 @@ These are optional peers: a deployment does not need them, and every template de
 | `typescript`           | `build` through `pnpm exec tsc`, and parsing `server/plugins.ts` without running it |
 | `prettier`             | formatting the composition roots `plugin register` edits                            |
 | `tar`                  | `build --tar`                                                                       |
+| `@refinedev/cli`       | `build`, which runs `refine build` for the client                                   |
+| `tsc-alias`            | `build`, which rewrites server path aliases                                         |
 | `@nocobase/dev-config` | `build`, for the database manifests                                                 |
 
 `typescript` is shared on purpose: a split lets the application compile syntax the plugin-watch parser then fails on, and the failure is silent — plugin sources simply stop triggering a restart. `pnpm` and `npm` come from the environment.

@@ -47,6 +47,6 @@ describe('resolveAuthSecret', () => {
     expect(() => resolveAuthSecret(undefined)).toThrow(
       ApplicationNotConfiguredError,
     );
-    expect(() => resolveAuthSecret(undefined)).not.toThrow('config:init');
+    expect(() => resolveAuthSecret(undefined)).not.toThrow('config init');
   });
 });

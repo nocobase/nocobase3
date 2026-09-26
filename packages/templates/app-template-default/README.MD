@@ -106,6 +106,10 @@ server/                  API server
 ├── standalone.ts        Node entry point
 └── embedded.ts          Entry point when a host process mounts it
 
+cli/                     Command line
+├── plugins.ts           Which plugins contribute commands and build and dev hooks
+└── commands/            Your own commands, under the app topic (created when needed)
+
 database/
 └── main/
     ├── migrations/      Your schema history (initially empty)

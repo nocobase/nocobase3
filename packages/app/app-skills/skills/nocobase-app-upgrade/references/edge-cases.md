@@ -137,7 +137,7 @@ Rarely touched by the template — a change landing here deserves a careful read
 Template structure — where most of the delta lands
   client/routing/  client/layouts/  client/theme/
   client/app.ts  client/runtime.ts  client/startup.tsx  server/*.ts
-  scripts/  vite.config.ts  vitest.config.ts  eslint.config.js
+  vite.config.ts  vitest.config.ts  eslint.config.js
   tsconfig*.json  index.html  components.json
 
 Both sides edit these — the hardest decisions
@@ -152,14 +152,15 @@ Legacy application-owned guidance, when present
 
 An application from before `@nocobase/app-cli` took over the whole command line depends on `@nocobase/nb3-cli` and, usually, `@nocobase/app-tools`. Neither is published any more, so the upgrade has to move to the new layout in one step; there is no compatibility period.
 
-1. In `package.json`, remove `@nocobase/nb3-cli` and `@nocobase/app-tools`, keep `@nocobase/app-cli` in `dependencies` at the target template's range, and add the development tools it expects the application to provide to `devDependencies` — `typescript`, `tsx`, `vite`, `prettier`, `tar` and `@nocobase/dev-config`, taking the target template's ranges.
-2. Replace `scripts` with the target template's: `postinstall`, `dev`, `build` and `start` run `nocobase …`, and the quality scripts stay. Delete the command aliases (`config:*`, `db:*`, `collections:generate`, `plugin:*`, `package:remove`, `skills:sync`, `upload`, `deploy`, `server:deps:*`, `nocobase`); each is now `pnpm nocobase <topic> <command>`. Keep scripts the user added that are not aliases, and ask before dropping one they redefined.
+1. In `package.json`, remove `@nocobase/nb3-cli` and `@nocobase/app-tools`, keep `@nocobase/app-cli` in `dependencies` at the target template's range, and add the development tools it expects the application to provide to `devDependencies` — `typescript`, `tsx`, `vite`, `prettier`, `tar`, `@refinedev/cli`, `tsc-alias` and `@nocobase/dev-config`, taking the target template's ranges.
+2. Replace `scripts` with the target template's: `postinstall`, `dev`, `build` and `start` run `nocobase …`, and the quality scripts stay. Delete the command aliases (`config:*`, `db:*`, `migrate`, `seed`, `collections:generate`, `plugin:*`, `package:remove`, `skills:sync`, `upload`, `deploy`, `server:deps:*`, `nocobase`); each is now `pnpm nocobase <topic> <command>`. Keep scripts the user added that are not aliases, and ask before dropping one they redefined.
 3. If the application publishes to a Hub (it had `upload` and `deploy`), set `"nocobase": { "cli": { "publishing": true } }` in `package.json`. The commands are now `release upload` and `release deploy`.
 4. Delete `scripts/dev.mjs`, `scripts/build.mjs`, `scripts/start.mjs` and `scripts/server-deps.mjs`, and `cli/index.ts`. Compare any locally modified script first and move application-specific behavior into a plugin build or dev hook.
 5. Delete `cli/commands/index.ts`, `cli/standard-commands.ts` and any `cli/database-command.ts`, `cli/hub-publishing.ts` or `cli/commands/i18n-check.ts` forwarding files. Keep every command file the application wrote under `cli/commands/`: it is now registered by its path, so `cli/commands/sync-orders.ts` answers to `nocobase app sync-orders`. Its name comes from the file, not from the key it had in the old `cli/commands/index.ts`, so rename a file whose key differed; a file must default-export its command class.
 6. In `cli/plugins.ts` and `vite.config.ts`, import from `@nocobase/app-cli/plugins` and `@nocobase/app-cli/dev/proxy`.
 7. Remove `scripts/*.ts` from `tsconfig.node.json`'s `include` and `scripts` from `files`, as the target template does.
-8. Replace every `app` command id in the application's own documentation, CI and scripts: `nocobase app db apply` is `nocobase db apply`, `app db doctor` is `collections doctor`, `app i18n:check` is `locales check`, `app upload` is `release upload`, `server:deps:retarget` and `server:deps:verify` are `dist retarget` and `dist check`, and a plugin topic follows its package name, so the scheduler's `schedule sync` is `scheduler sync`.
+8. Replace every `app` command id in the application's own documentation, CI and scripts: `nocobase app db apply` is `nocobase db apply`, `app db doctor` is `collections doctor`, `app i18n:check` is `locales check`, `app upload` is `release upload`, `app deploy` is `release deploy`, `plugin skills sync` is `skills sync`, `server:deps:retarget` and `server:deps:verify` are `dist retarget` and `dist check`, and `plugin cli-hooks` is gone because plugins declare `buildHooks` and `devHooks` in `defineCliPlugin`, which `nocobase build` and `nocobase dev` read themselves. A plugin topic follows its package name, so the scheduler's `schedule sync` is `scheduler sync` and the CLI example's `demo` topic is `cli-example`.
+9. Update deployment runbooks. A `dist/` built by the earlier release had `migrate`, `seed`, `config:init`, `config:check`, `config:set` and `config:env` scripts in its `dist/package.json`; a new build writes only `start` and `nocobase`. Inside `dist/`, run `pnpm nocobase db apply` where a runbook ran `pnpm migrate` or `pnpm seed`, and `pnpm nocobase config init` (or `check`, `set`, `env`) where it ran `pnpm config:*`; from anywhere else, `node dist/cli/index.js db apply` and `node dist/cli/index.js config …` do the same.
 
 Run `pnpm install`, then `pnpm nocobase --help`, `pnpm build`, and `node dist/cli/index.js --help` to confirm the source and deployment command sets.
 

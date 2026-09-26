@@ -90,7 +90,11 @@ export default class PluginInspect extends Command {
         workspaceRoot: flags['workspace-root'],
       });
       const packageName = pluginPackageName(args.name);
-      const result = await inspectPlugin(appRoot, packageName);
+      const result = await inspectPlugin(
+        appRoot,
+        packageName,
+        targetArgs(flags),
+      );
       const response = pluginJsonSuccess('plugin:inspect', 'success', result);
       if (flags.json) {
         this.logJson(response);
@@ -115,6 +119,7 @@ export default class PluginInspect extends Command {
 async function inspectPlugin(
   appRoot: string,
   packageName: string,
+  target: readonly string[],
 ): Promise<Record<string, unknown> & { issues: InspectIssue[] }> {
   const manifest = JSON.parse(
     await readFile(path.join(appRoot, 'package.json'), 'utf8'),
@@ -223,7 +228,7 @@ async function inspectPlugin(
     skills,
     consistent: issues.length === 0,
     issues,
-    suggestions: suggestionsFor(issues, packageName),
+    suggestions: suggestionsFor(issues, packageName, target),
   };
 }
 
@@ -328,34 +333,68 @@ async function hashDirectory(directory: string): Promise<string> {
   return hash.digest('hex');
 }
 
-function suggestionFor(code: string, packageName: string): InspectSuggestion {
+/**
+ * The flags that located the application, repeated on every suggestion so it acts on the same App from the same
+ * working directory.
+ */
+function targetArgs(flags: {
+  readonly dir?: string;
+  readonly app?: string;
+  readonly 'workspace-root'?: string;
+}): string[] {
+  if (flags['workspace-root'] !== undefined) {
+    return [
+      '--workspace-root',
+      flags['workspace-root'],
+      ...(flags.app === undefined ? [] : ['--app', flags.app]),
+    ];
+  }
+  return flags.dir === undefined ? [] : ['--dir', flags.dir];
+}
+
+function suggestionFor(
+  code: string,
+  packageName: string,
+  target: readonly string[],
+): InspectSuggestion {
   const shortName = packageName.replace('@nocobase/app-plugin-', '');
   if (code === 'PLUGIN_NOT_INSTALLED')
     return {
       command: 'pnpm',
-      args: ['plugin:register', shortName],
+      args: ['nocobase', 'plugin', 'register', shortName, ...target],
     };
   if (code === 'SKILLS_OUT_OF_DATE')
     return {
       command: 'pnpm',
-      args: ['skills:sync', '--plugin', shortName],
+      // `--package` with the full name, not the compatibility `--plugin`: agents copy suggested commands as they are.
+      args: ['nocobase', 'skills', 'sync', '--package', packageName, ...target],
     };
   return {
     command: 'pnpm',
-    args: ['plugin:register', shortName, '--no-install'],
+    args: [
+      'nocobase',
+      'plugin',
+      'register',
+      shortName,
+      '--no-install',
+      ...target,
+    ],
   };
 }
 
 function suggestionsFor(
   issues: readonly InspectIssue[],
   packageName: string,
+  target: readonly string[],
 ): InspectSuggestion[] {
   const notInstalled = issues.find(
     ({ code }) => code === 'PLUGIN_NOT_INSTALLED',
   );
   const actionableIssues = notInstalled ? [notInstalled] : issues;
   return uniqueSuggestions(
-    actionableIssues.map((issue) => suggestionFor(issue.code, packageName)),
+    actionableIssues.map((issue) =>
+      suggestionFor(issue.code, packageName, target),
+    ),
   );
 }
 

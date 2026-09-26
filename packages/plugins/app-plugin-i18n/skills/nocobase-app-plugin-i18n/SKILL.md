@@ -183,7 +183,7 @@ pnpm nocobase locales check      # a language declared on only one side
 pnpm test                         # if application text changed
 ```
 
-Run these from the application. Inside this monorepo the equivalents are `pnpm --filter <package> typecheck` and `pnpm i18n:check`, which reads every `locales/` directory under `packages/`.
+Run these from the application. Inside this monorepo the equivalents are `pnpm --filter <package> typecheck` and `pnpm --filter <app> exec nocobase locales check`. The root `pnpm i18n:check` is a different check: it reads every `locales/` directory under `packages/` and reports keys missing from a locale, without comparing the languages each side declares.
 
 Then switch language in the running application and confirm the new text follows. A string that does not change is still a literal somewhere.
 

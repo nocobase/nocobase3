@@ -88,8 +88,8 @@ export function findViolations(manifest) {
   return violations;
 }
 
-// Only plugins are checked. A plugin is loaded into an application that already provides the runtime, so it must
-// never install its own copy.
+// Guests are checked: a plugin, or a tool loaded into an application, arrives in an application that already provides
+// the runtime, so it must never install its own copy.
 //
 // The other groups are hosts rather than guests. `packages/app` and `packages/libs` compose the runtime — `app-server`
 // depending on `@nocobase/db` is what puts the single copy in place for everyone else — and `packages/templates` are
@@ -100,14 +100,38 @@ export function findViolations(manifest) {
 // added here.
 const CHECKED_GROUPS = ['plugins', 'examples', 'tools'];
 
+// Guests that live in a host group. `@nocobase/app-cli` sits in `packages/app` but is installed into an application
+// and runs against the `@nocobase/app-server` and `@nocobase/db` the application provides, so it is held to the same
+// rule as a plugin. It came from `packages/tools` (as `nb3-cli` and `app-tools`), where the group rule covered it.
+const CHECKED_PACKAGES = ['app/app-cli'];
+
 export async function collectPackages(repositoryRoot) {
   const packages = [];
+  for (const relative of CHECKED_PACKAGES) {
+    const manifestPath = path.join(
+      repositoryRoot,
+      'packages',
+      relative,
+      'package.json',
+    );
+    try {
+      packages.push({
+        manifest: JSON.parse(await readFile(manifestPath, 'utf8')),
+        manifestPath,
+      });
+    } catch (error) {
+      // Absent in a fixture repository; the group scan below still runs. Anything else — a manifest that does not
+      // parse, or cannot be read — fails the check rather than dropping the package from it.
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
   for (const group of CHECKED_GROUPS) {
     const groupDirectory = path.join(repositoryRoot, 'packages', group);
     let entries;
     try {
       entries = await readdir(groupDirectory, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
       continue;
     }
     for (const entry of entries) {
@@ -120,7 +144,10 @@ export async function collectPackages(repositoryRoot) {
       let manifest;
       try {
         manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-      } catch {
+      } catch (error) {
+        // A directory without a manifest is not a package. One whose manifest does not parse is a package the check
+        // would otherwise pass over in silence.
+        if (error.code !== 'ENOENT') throw error;
         continue;
       }
       packages.push({ manifest, manifestPath });

@@ -198,8 +198,7 @@ describe('scaffoldFromTemplate', () => {
 
   /**
    * The client reads its i18n namespace from `client/runtime.ts` while the server reads the same namespace from
-   * `package.json`, so a name left behind in the source splits `APP_NS` in half. It also fails `client:inspect`,
-   * which compares the two and refuses to run when they disagree.
+   * `package.json`, so a name left behind in the source splits `APP_NS` in half.
    */
   it('rewrites the template package name in the sources that embed it', async () => {
     const templateDirectory = await createTemplate({

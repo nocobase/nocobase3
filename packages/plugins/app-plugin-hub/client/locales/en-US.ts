@@ -539,12 +539,12 @@ const enUS = {
       'Open your NocoBase 3 project directory and continue with the build step. No new project is needed.',
     publishTitle: 'Upload, then deploy',
     buildDescription:
-      'Run in your project directory. The archive is saved to storage/dist.tar.gz.',
+      'Run in your project directory. The archive is saved to storage/exports/dist.tar.gz.',
     copyBuild: 'Copy build command',
     buildTarget:
       'Building for another machine? Match the Hub host with --target and --node-version. See pnpm build --help for options.',
     uploadDescription:
-      'Upload storage/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
+      'Upload storage/exports/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
     openReleases: 'Go to Releases',
     deployDescription:
       'Uploading does not start the application. Visit it after deployment succeeds.',

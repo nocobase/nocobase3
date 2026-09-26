@@ -140,12 +140,12 @@ async function restoreGitignore(directory: string): Promise<void> {
  * The name is not decoration in any of these: `client/runtime.ts` declares the `packageName` that becomes the
  * application's i18n namespace on the browser side, while the server derives the same namespace from `package.json`.
  * Left unrewritten the two disagree, so `APP_NS` resolves to a different namespace in each half of the application.
- * It also fails `pnpm client:inspect`, which compares the two and refuses to run when they differ.
  *
  * `server/providers/app-example.ts` names a service token, and a token's identity is its name.
  *
- * Documentation is deliberately absent. `MIGRATION.md` refers to `@nocobase/app-template-default` as the upstream
- * template a derived application merges from, which stays correct and would be made wrong by rewriting it.
+ * Documentation is deliberately absent. Where it names a template package, as the Examples `README.MD` names
+ * `@nocobase/app-template-default`, it refers to the upstream template, which stays correct and would be made wrong
+ * by rewriting it.
  */
 const PACKAGE_NAME_SOURCES = [
   'client/runtime.ts',
@@ -156,8 +156,8 @@ const PACKAGE_NAME_SOURCES = [
 /**
  * Replaces the template's package name with the application's in the few sources that embed it.
  *
- * A missing file is skipped rather than treated as an error: the list covers both templates, and neither is required
- * to keep a file the other has.
+ * A missing file is skipped rather than treated as an error: the list covers all three templates, and none is
+ * required to keep a file another has.
  */
 async function rewritePackageName(
   directory: string,

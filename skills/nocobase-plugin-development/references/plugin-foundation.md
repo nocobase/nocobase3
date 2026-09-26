@@ -135,7 +135,7 @@ export default auditLog;
 
 Every Server plugin needs `baseDir`, even without database resources. Server ServiceProviders and Routes are direct static contributions. Import `serviceProviders` from its aggregation module and use property shorthand; do not inline constructor arrays in declarations. Resource paths start with `./` and resolve relative to `baseDir`. See [database resources](database.md) for compiled locations and checksums.
 
-Importing a declaration must not connect to a service, register listeners, start timers, render React, or execute a Job. Service registration happens during Provider lifecycle; the browser host renders `AppClientRoot` after startup; page components and locale messages load at leaf boundaries. Inspectors import these declarations, so top-level effects would execute during a read-only diagnostic.
+Importing a declaration must not connect to a service, register listeners, start timers, render React, or execute a Job. Service registration happens during Provider lifecycle; the browser host renders `AppClientRoot` after startup; page components and locale messages load at leaf boundaries. App composition imports these declarations statically, so top-level effects would execute as soon as a composition root loads, outside any Provider lifecycle.
 
 ## Public exports and compatibility
 

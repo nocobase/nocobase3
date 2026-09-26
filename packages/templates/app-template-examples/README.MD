@@ -41,7 +41,7 @@ The regional comparison formats the same number, USD amount and fixed UTC timest
 
 ## Maintain this template
 
-Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
+Keep framework files aligned with Default and Hub: the `package.json` scripts that call `nocobase`, runtime composition mechanisms, the `cli/plugins.ts` composition root, shell, theme and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
 
 ## Getting started
 
@@ -138,6 +138,10 @@ server/                  API server
 ├── runtime.ts           Composition root
 ├── standalone.ts        Node entry point
 └── embedded.ts          Entry point when a host process mounts it
+
+cli/                     Command line
+├── plugins.ts           Which plugins contribute commands and build and dev hooks
+└── commands/            Your own commands, under the app topic (created when needed)
 
 database/
 ├── main/

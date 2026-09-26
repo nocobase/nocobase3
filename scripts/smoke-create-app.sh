@@ -127,7 +127,7 @@ fi
 
 # Creation deliberately leaves the application unconfigured; `config init` is what writes this file.
 if [ -e "$APP_DIR/config.yml" ]; then
-  echo "::error::create-app wrote config.yml, which config:init owns"
+  echo "::error::create-app wrote config.yml, which config init owns"
   exit 1
 fi
 

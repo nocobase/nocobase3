@@ -46,7 +46,7 @@ Every published package lives under `packages/`, grouped into six directories by
 
 ## Repository Skills
 
-This repository's Skills are committed under the root `skills/` directory, and nowhere else. Agents do not read that path on their own — most look in `.agents/skills/`, and Claude Code discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/sync-skills.mjs`, which links each Skill in `skills/` into both `.agents/skills/` and `.claude/skills/` as a relative symbolic link. Both directories are therefore generated and ignored, and editing a Skill through any of the three paths edits the same committed file. This is the same arrangement `nocobase skills sync` sets up inside a generated application, except that an application's Skills come from its installed packages while this repository's are written by hand.
+This repository's Skills are committed under the root `skills/` directory, and nowhere else. Agents do not read that path on their own — most look in `.agents/skills/`, and Claude Code discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/sync-skills.mjs`, which links each Skill in `skills/` into both `.agents/skills/` and `.claude/skills/` as a relative symbolic link. Both directories are therefore generated and ignored, and editing a Skill through any of the three paths edits the same committed file. `nocobase skills sync` sets up a similar arrangement inside a generated application, with two differences: an application's Skills come from its installed packages rather than being written by hand, and they are copied into `.agents/skills/`, which the next sync replaces wholesale, while only `.claude/skills/` holds links to those copies.
 
 Because a Skill is read through links one directory deeper than where it is committed, a relative Markdown link from a Skill into the rest of the repository resolves differently depending on the path it was opened through. Refer to repository files by their path from the repository root in a code span, such as `packages/app/app-cli/src/lib/skills-sync.ts`, and keep relative links for files inside the Skill itself.
 
@@ -145,9 +145,9 @@ changing `packages/tools/dev-config`, run
 
 ## Keeping the Application Templates in Sync
 
-`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, and the nested `client/AGENTS.md` and `server/AGENTS.md`. Shared application Skills live in `packages/app/app-skills` and synchronize into each application from the `@nocobase/app-skills` dependency.
+`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/plugins.ts` composition root, the `package.json` scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, and `README.MD`. Shared application Skills live in `packages/app/app-skills` and synchronize into each application from the `@nocobase/app-skills` dependency.
 
-They drift otherwise, and the drift is invisible until someone hits it. Both templates carried a `tsconfig.migrations.base.json` that nothing referenced, and both omitted `database/**/*.ts` from `tsconfig.server.json`, so an application-owned migration ran under `pnpm migrate` but was silently dropped by `pnpm build` — the same defect, twice, because a fix to one was never carried across.
+They drift otherwise, and the drift is invisible until someone hits it. Both templates carried a `tsconfig.migrations.base.json` that nothing referenced, and both omitted `database/**/*.ts` from `tsconfig.server.json`, so an application-owned migration ran under `pnpm nocobase db apply` but was silently dropped by `pnpm build` — the same defect, twice, because a fix to one was never carried across.
 
 Not everything transfers. Examples owns its demonstration homepage, article module, and example plugin composition. Each template keeps its own identity and the parts that follow from what it is: `package.json` name, `displayName`, and version; `nocobase.templateKind` and its plugin list; the pages, locales, and branding that make it that product. When a documentation change mentions the other template by name, reword it rather than copying the sentence — the Hub's own `server/embedded.ts` is not "the entry point when a Hub hosts the application".
 
@@ -217,7 +217,7 @@ A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's
 
 ### Declaring dependencies so they reach the right side
 
-`pnpm build` emits a `dist/` that a server installs from its own `package.json`. What reaches that server is decided entirely by declarations — the build scans no code and prunes nothing.
+`pnpm build` emits a `dist/` that a server installs from its own `package.json`. What reaches that server is decided entirely by declarations — the build scans no code to choose packages and prunes no packages. `prune-dist-artifacts.mjs` removes only type declarations, third-party source maps and third-party documentation from the installed tree.
 
 A plugin has three answers:
 
@@ -231,7 +231,7 @@ The client row is the one worth understanding. A plugin's `client/` is not bundl
 
 `optional` on a peer means the consumer may legitimately not need it, not "skip this at deploy time". An optional peer is not auto-installed anywhere, including in the application that needs it — which is the failure this arrangement exists to prevent. `@nocobase/i18n`'s `hono` is the legitimate case: a browser-only consumer has no use for it.
 
-`@nocobase/app-cli` is the one package that uses optional peers for tooling, and the reason is the same one read the other way. It is a production dependency, because a deployment runs `node dist/cli/index.js db apply`, yet its `dev`, `build` and plugin-management commands need `typescript`, `tsx`, `vite`, `prettier`, `tar` and `@nocobase/dev-config`, which a deployment legitimately does not have. Those are optional peers, every template declares them in `devDependencies`, and nothing a runtime command loads may import one at module top level: development commands are not registered in a built `dist/` and load their tooling only when they run. When app-cli gains another development-only import, add it to all three places.
+`@nocobase/app-cli` is the one package that uses optional peers for tooling, and the reason is the same one read the other way. It is a production dependency, because a deployment runs `node dist/cli/index.js db apply`, yet its `dev`, `build` and plugin-management commands need `typescript`, `tsx`, `vite`, `prettier`, `tar`, `@refinedev/cli`, `tsc-alias` and `@nocobase/dev-config`, which a deployment legitimately does not have. Those are optional peers, every template declares them in `devDependencies`, and nothing a runtime command loads may import one at module top level: development commands are not registered in a built `dist/` and load their tooling only when they run. When app-cli gains another development-only import, add it to all three places.
 
 An application has two, and the question is which half imports it: `server/`, `database/`, and `cli/` imports go in `dependencies`, because `dist/package.json` is generated from there; `client/` imports and build tooling stay in `devDependencies`, because Vite inlines them at build time and nothing resolves them again.
 
@@ -247,7 +247,7 @@ An earlier version of this pruned `dist/node_modules` with a `@vercel/nft` file 
 
 The build targets the machine it runs on so `pnpm build && pnpm start` works, and `--target` plus `--node-version` select another. A forgotten `--target` produces a `dist/` that fails only on the server, so every build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
 
-`verify-server-deps.mjs` runs last and fails the build when a package the application's own `server/`, `database/`, or `cli/` code imports is not in `dist/package.json`. It reads literal specifiers, so `await import(`${name}/index.js`)` is invisible to it — that case has to be declared deliberately, and no static check can cover it.
+`verify-server-deps.mjs` runs once the deployment tree is installed, retargeted and pruned, before the `afterBuild` hooks and `--tar`, and fails the build when a package the application's own `server/`, `database/`, or `cli/` code imports is not in `dist/package.json`. It reads literal specifiers, so `await import(`${name}/index.js`)` is invisible to it — that case has to be declared deliberately, and no static check can cover it.
 
 The `parseTarget` mapping from Node major to ABI is written out rather than taken from `node-abi`, which given a bare major returns the major itself: `getAbi('24')` is 24, not 137. A wrong ABI downloads a binary that will not load.
 

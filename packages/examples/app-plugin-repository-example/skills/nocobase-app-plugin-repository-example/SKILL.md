@@ -9,13 +9,14 @@ This plugin owns thirteen isolated example collections, five authenticated list 
 
 ## Prerequisites and registration
 
-The application must register `@nocobase/app-plugin-authentication` and this plugin on the Server, and this plugin's Client factory. It needs the normal `apiClientToken` and a working database. Apply application migrations before opening the pages.
+The application must register `@nocobase/app-plugin-authentication` and this plugin on the Server, and this plugin's Client factory. It needs the normal `apiClientToken` and a working database. Apply application migrations and seeds before opening the pages. In this repository:
 
 ```bash
 pnpm nocobase plugin register repository-example --workspace-root . --app app-template-default
-pnpm --filter @nocobase/app-template-default migrate
-pnpm --filter @nocobase/app-template-default seed
+pnpm --filter @nocobase/app-template-default exec nocobase db apply
 ```
+
+`db apply` runs pending migrations and then seeds. Inside an installed application, run `pnpm nocobase db apply` from the application root.
 
 ## Public surfaces
 
