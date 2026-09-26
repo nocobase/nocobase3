@@ -4,8 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  BROKEN_VERSION,
   OLDER_VERSION,
+  markLastUpgradeMigrated,
   parseArgs,
+  registerBrokenRelease,
   registerOlderRelease,
 } from '../../scripts/smoke-hub-installer.mjs';
 
@@ -97,6 +100,98 @@ test('an older release is registered as a copy of the installed one and made cur
     assert.equal(
       fs.readFileSync(path.join(root, 'current', 'dist', 'marker'), 'utf8'),
       installed,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the smoke script refuses the App Host port for the Hub', () => {
+  assert.throws(
+    () => parseArgs(['--root', '/tmp/hub', '--port', '13010']),
+    /App Host/,
+  );
+});
+
+function fakeHub(root, installed) {
+  const release = path.join(root, 'releases', installed, 'hub');
+  fs.mkdirSync(path.join(release, 'dist', 'server'), { recursive: true });
+  fs.writeFileSync(
+    path.join(release, 'dist', 'server', 'standalone.js'),
+    'export function startServer() {}\n',
+  );
+  const buildTarget = { platform: 'linux', arch: 'x64', nodeMajor: 24 };
+  fs.writeFileSync(
+    path.join(root, 'installer.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      name: 'nocobase-hub',
+      current: installed,
+      releases: [
+        {
+          version: installed,
+          installedAt: '2026-09-26T00:00:00.000Z',
+          buildTarget,
+        },
+      ],
+      history: [
+        { action: 'install', to: installed, at: 'a' },
+        {
+          action: 'upgrade',
+          from: '0.0.0',
+          to: installed,
+          at: 'b',
+          migrations: 0,
+        },
+        { action: 'rollback', from: installed, to: '0.0.0', at: 'c' },
+      ],
+    }),
+  );
+}
+
+test('a broken release is a newer copy whose server entry throws, not made current', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-smoke-broken-'));
+  try {
+    fakeHub(root, '1.0.0');
+    assert.equal(registerBrokenRelease(root, '1.0.0'), BROKEN_VERSION);
+    const state = JSON.parse(
+      fs.readFileSync(path.join(root, 'installer.json'), 'utf8'),
+    );
+    assert.equal(state.current, '1.0.0');
+    assert.deepEqual(
+      state.releases.map((entry) => entry.version),
+      ['1.0.0', BROKEN_VERSION],
+    );
+    const entry = fs.readFileSync(
+      path.join(
+        root,
+        'releases',
+        BROKEN_VERSION,
+        'hub',
+        'dist',
+        'server',
+        'standalone.js',
+      ),
+      'utf8',
+    );
+    assert.match(entry, /^throw new Error/);
+    assert.match(entry, /startServer/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('marking the last upgrade as migrated touches only that entry', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-smoke-migrated-'));
+  try {
+    fakeHub(root, '1.0.0');
+    markLastUpgradeMigrated(root);
+    const { history } = JSON.parse(
+      fs.readFileSync(path.join(root, 'installer.json'), 'utf8'),
+    );
+    assert.deepEqual(
+      history.map((entry) => entry.migrations),
+      [undefined, 1, undefined],
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

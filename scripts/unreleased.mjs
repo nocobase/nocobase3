@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { runHubSmoke } from './smoke-hub-installer.mjs';
+import { APP_HOST_PORT, runHubSmoke } from './smoke-hub-installer.mjs';
 import { isolateWorkspacePackages } from './smoke-registry-config.mjs';
 import { dialects, readMainConfig } from './smoke-database-config.mjs';
 
@@ -108,6 +108,10 @@ export function parseArgs(argv) {
     )
       throw new Error(`Invalid ${key}.`);
   }
+  if (options['hub-port'] === APP_HOST_PORT)
+    throw new Error(
+      `--hub-port ${APP_HOST_PORT} is where the Hub's App Host listens; choose another port.`,
+    );
   if (!['default', 'examples', 'hub'].includes(options.template))
     throw new Error('Unknown template.');
   if (!dialects.includes(options.dialect)) throw new Error('Unknown dialect.');

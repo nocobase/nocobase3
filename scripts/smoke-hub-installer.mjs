@@ -5,9 +5,16 @@
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 export const OLDER_VERSION = '0.0.0-smoke';
+
+/** The App Host the Hub starts listens here, so the Hub itself cannot. */
+export const APP_HOST_PORT = 13010;
+
+/** Above OLDER_VERSION, so `upgrade` does not refuse it as a downgrade. */
+export const BROKEN_VERSION = '0.0.1-broken';
 
 const usage = `Usage: node scripts/smoke-hub-installer.mjs --root DIR [--port 13000] [-- INSTALLER...]
 
@@ -40,6 +47,10 @@ export function parseArgs(argv) {
     options.port > 65535
   )
     throw new Error('Invalid --port.');
+  if (options.port === APP_HOST_PORT)
+    throw new Error(
+      `--port ${APP_HOST_PORT} is where the Hub's App Host listens; choose another port.`,
+    );
   if (installer.length === 0)
     throw new Error('The installer command is empty.');
   return options;
@@ -81,6 +92,86 @@ export function registerOlderRelease(root, version = OLDER_VERSION) {
   return { name: state.name, upgradeTarget };
 }
 
+/**
+ * Registers a copy of `source` whose server entry throws, as a newer release on disk. Its CLI still works, so the
+ * upgrade's own checks pass and it fails only once it starts — the path that ends in an automatic rollback.
+ */
+export function registerBrokenRelease(root, source, version = BROKEN_VERSION) {
+  const stateFile = path.join(root, 'installer.json');
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  const record = state.releases.find((release) => release.version === source);
+  const target = path.join(root, 'releases', version);
+  fs.cpSync(path.join(root, 'releases', source), target, {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
+  const entry = path.join(target, 'hub', 'dist', 'server', 'standalone.js');
+  fs.writeFileSync(
+    entry,
+    `throw new Error('smoke test: this release fails to start');\n${fs.readFileSync(entry, 'utf8')}`,
+  );
+  state.releases.push({
+    ...record,
+    version,
+    installedAt: new Date().toISOString(),
+  });
+  fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+  return version;
+}
+
+/**
+ * Records the last upgrade as having migrated, so the rollback after it restores the database. Upgrading to a copy of
+ * the same release applies nothing, and without this the restore path would never run.
+ */
+export function markLastUpgradeMigrated(root) {
+  const stateFile = path.join(root, 'installer.json');
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  const last = state.history.findLast((entry) => entry.action === 'upgrade');
+  if (!last) throw new Error('installer.json records no upgrade.');
+  last.migrations = 1;
+  fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+}
+
+/** Opens the Hub's SQLite database with the better-sqlite3 a release ships. */
+function openDatabase(root, release, options = {}) {
+  const require = createRequire(
+    path.join(root, 'releases', release, 'hub', 'dist', 'package.json'),
+  );
+  const Database = require('better-sqlite3');
+  const database = new Database(
+    path.join(root, 'storage', 'hub', 'database', 'main.sqlite'),
+    options,
+  );
+  database.pragma('busy_timeout = 5000');
+  return database;
+}
+
+const MARKER_TABLE = 'hub_installer_smoke_marker';
+
+export function writeMarker(root, release) {
+  const database = openDatabase(root, release);
+  try {
+    database.exec(`CREATE TABLE IF NOT EXISTS ${MARKER_TABLE} (id INTEGER)`);
+  } finally {
+    database.close();
+  }
+}
+
+export function hasMarker(root, release) {
+  const database = openDatabase(root, release, { readonly: true });
+  try {
+    return Boolean(
+      database
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(MARKER_TABLE),
+    );
+  } finally {
+    database.close();
+  }
+}
+
 function fail(message) {
   throw new Error(message);
 }
@@ -100,7 +191,7 @@ export function runHubSmoke({
   env = process.env,
   log = console.error,
 }) {
-  const hub = (args) => {
+  const run = (args) => {
     const result = spawnSync(
       installer[0],
       [...installer.slice(1), ...args, '--json'],
@@ -121,6 +212,10 @@ export function runHubSmoke({
         `hub-installer ${args[0]} printed no JSON result (exit ${result.status}).`,
       );
     }
+    return { exitCode: result.status, envelope };
+  };
+  const hub = (args) => {
+    const { envelope } = run(args);
     if (!envelope.ok)
       fail(
         `hub-installer ${args[0]} failed with ${envelope.error.code}: ${envelope.error.message}`,
@@ -206,6 +301,41 @@ export function runHubSmoke({
   assert(
     rolledBack.to === OLDER_VERSION,
     `rollback returned to ${rolledBack.to}.`,
+  );
+  checkStatus(OLDER_VERSION);
+
+  log('== Roll back an upgrade that migrated, restoring the database');
+  const again = hub(['upgrade', '--dir', root, '--to', upgradeTarget, '--yes']);
+  assert(again.upgraded, 'the second upgrade did not run.');
+  writeMarker(root, upgradeTarget);
+  markLastUpgradeMigrated(root);
+  const restored = hub(['rollback', '--dir', root, '--yes']);
+  assert(
+    restored.databaseRestored === true,
+    'rollback did not restore the database after an upgrade that migrated.',
+  );
+  assert(
+    !hasMarker(root, OLDER_VERSION),
+    'a table written after the upgrade survived the restore.',
+  );
+  checkStatus(OLDER_VERSION);
+
+  log(`== Upgrade to ${BROKEN_VERSION}, which fails to start`);
+  registerBrokenRelease(root, upgradeTarget);
+  const failed = run([
+    'upgrade',
+    '--dir',
+    root,
+    '--to',
+    BROKEN_VERSION,
+    '--yes',
+    '--health-timeout',
+    '60',
+  ]);
+  assert(
+    failed.exitCode === 3 &&
+      failed.envelope.error?.code === 'UPGRADE_ROLLED_BACK',
+    `a failed start should roll back with exit 3 and UPGRADE_ROLLED_BACK, got exit ${failed.exitCode} and ${failed.envelope.error?.code ?? 'no error'}.`,
   );
   checkStatus(OLDER_VERSION);
 
