@@ -758,3 +758,82 @@ it('removes redundant display conditions without mutating the executable scope',
   expect(screen.queryByText(/project-2/)).not.toBeInTheDocument();
   expect(JSON.stringify(root)).toBe(original);
 });
+it('shows the inherited subjects and which one brings each granting set', async () => {
+  mocks.resolveSubjects.mockImplementation(
+    (_settings: string, type: string, ids: readonly string[]) =>
+      Promise.resolve(
+        ids.map((id) => ({
+          id,
+          title:
+            type === 'department'
+              ? `${id[0]!.toUpperCase()}${id.slice(1)} department`
+              : 'Alice',
+        })),
+      ),
+  );
+  mocks.inspectConfigured.mockResolvedValue({
+    unrestricted: false,
+    types: ['database.collection'],
+    resources: [{ type: 'database.collection', id: 'orders0' }],
+    identity: {
+      subjects: [
+        { type: 'authenticated', id: '*' },
+        { type: 'department', id: 'east' },
+      ],
+    },
+    sets: [
+      {
+        key: 'sales',
+        title: 'Sales',
+        sources: [{ type: 'department', id: 'east' }],
+      },
+      { key: 'own', sources: [{ type: 'user', id: 'alice' }] },
+      { key: 'member', sources: [] },
+    ],
+  });
+  const grant = (id: string, title: string) => ({
+    code: 'GRANT_MATCHED',
+    message: `${id} grants`,
+    details: { source: { plugin: 'permission-sets', id, title } },
+  });
+  mocks.inspectBatch.mockImplementation(
+    (_subject: unknown, checks: Omit<AuthorizationInspection, 'decision'>[]) =>
+      Promise.resolve(
+        checks.map((check) => ({
+          ...check,
+          decision: {
+            effect: 'permit',
+            reasons: [
+              grant('sales', 'Sales'),
+              grant('own', 'Own'),
+              grant('member', 'Member'),
+            ],
+          },
+        })),
+      ),
+  );
+  mount('/?subjectType=user&subjectId=alice');
+  expect(
+    await screen.findByText(
+      `${en.inspector.inheritsFrom} All signed-in users, East department (Departments)`,
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    await screen.findByRole(
+      'button',
+      { name: 'Orders 0: Read' },
+      { timeout: 5000 },
+    ),
+  );
+  const dialog = screen.getByRole('dialog');
+  expect(
+    within(dialog).getByText('· via East department', { exact: false }),
+  ).toBeInTheDocument();
+  expect(
+    within(dialog).getByText(`· ${en.inspector.grantedDirectly}`, {
+      exact: false,
+    }),
+  ).toBeInTheDocument();
+  const member = within(dialog).getByText('Member').closest('p')!;
+  expect(member.textContent).not.toMatch(/via|directly/);
+});

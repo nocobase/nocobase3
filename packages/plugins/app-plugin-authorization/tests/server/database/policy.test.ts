@@ -1,4 +1,7 @@
-import { defineCompositeResource } from '@nocobase/authorization/core';
+import {
+  defineCompositeResource,
+  defineRecordAccess,
+} from '@nocobase/authorization/core';
 import { permissionSetsPlugin } from '@nocobase/authorization';
 import {
   databaseManagerToken,
@@ -206,6 +209,104 @@ describe('policyFor', () => {
       create: true,
       update: true,
       delete: true,
+    });
+  });
+});
+
+describe('a data scope that reaches no records', () => {
+  function setup() {
+    const policy = (action: string) => ({
+      action,
+      policy: {
+        type: 'database',
+        fields: action === 'update' ? ['ownerId', 'amount'] : '*',
+        recordAccess: ['noRecords'],
+      },
+    });
+    const store = new MockPermissionSetStore({
+      permissionSets: [
+        {
+          key: 'scoped-editor',
+          grants: [
+            {
+              resource,
+              actions: [
+                policy('read'),
+                policy('update'),
+                policy('delete'),
+                {
+                  action: 'create',
+                  policy: { type: 'database', fields: ['ownerId', 'amount'] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      assignments: [
+        {
+          id: 'scoped-assignment',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'scoped-editor',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      connection,
+      plugins: [permissionSetsPlugin({ store }), databasePlugin()],
+    });
+    // Such as a user in no department: the scope is configured and selects nothing.
+    authorization.recordAccess.define(
+      defineRecordAccess('noRecords', (access) =>
+        access.collections('orders').resolver(() => false),
+      ),
+    );
+    return authorization;
+  }
+
+  it('reads, updates and deletes nothing instead of refusing', async () => {
+    const authorization = setup();
+    const orders = database.repository('orders');
+    await orders.createOne({ values: { ownerId: 'alice', amount: 10 } });
+    const policy = await authorization.database.policyFor(
+      'orders',
+      authorization.for({ principal: { type: 'user', id: 'alice' } }),
+    );
+    expect(policy.read).not.toBe(false);
+    expect(policy.update).not.toBe(false);
+    expect(policy.delete).not.toBe(false);
+
+    const scoped = orders.withPolicy(policy);
+    await expect(scoped.findMany()).resolves.toEqual([]);
+    await expect(scoped.count()).resolves.toBe(0);
+    await expect(
+      scoped.updateMany({
+        filter: { ownerId: 'alice' },
+        values: { amount: 20 },
+      }),
+    ).resolves.toMatchObject({ updatedCount: 0 });
+    await expect(
+      scoped.deleteMany({ filter: { ownerId: 'alice' } }),
+    ).resolves.toMatchObject({
+      deletedCount: 0,
+    });
+    // Create reads no record scope, so the grant alone allows it.
+    await scoped.createOne({ values: { ownerId: 'alice', amount: 30 } });
+    await expect(orders.count()).resolves.toBe(2);
+  });
+
+  it('keeps a principal without a grant denied', async () => {
+    const authorization = setup();
+    await expect(
+      authorization.database.policyFor(
+        'orders',
+        authorization.for({ principal: { type: 'user', id: 'bob' } }),
+      ),
+    ).resolves.toEqual({
+      read: false,
+      create: false,
+      update: false,
+      delete: false,
     });
   });
 });

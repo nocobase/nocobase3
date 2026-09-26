@@ -105,8 +105,9 @@ export function createAppAuthorization(
   authz.onGrantsChanged(async (subject) => {
     if (subject.type === 'user')
       await options.onUserPermissionsChanged?.(subject.id);
-    else if (subject.type === 'authenticated')
-      await options.onAuthenticatedPermissionsChanged?.();
+    // Any other subject reaches users through membership, which only its
+    // owner can enumerate, so every client refreshes.
+    else await options.onAuthenticatedPermissionsChanged?.();
   });
   installAuthorizationAdministration(authz);
   return authz;

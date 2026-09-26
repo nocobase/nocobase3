@@ -59,13 +59,13 @@ const orderPermission = defineDatabasePermission((permission) =>
     .read((read) =>
       read
         .fields(...orderFields)
-        .relation('deliveryTeam', (team) => team.fields('id', 'title'))
+        .relation('carrier', (carrier) => carrier.fields('id', 'title'))
         .relation('checks', (checks) => checks.fields('id', 'title', 'done'))
-        .relation('collaborators', (team) => team.fields('id', 'title')),
+        .relation('collaborators', (carrier) => carrier.fields('id', 'title')),
     ),
 );
 
-const activeTeams = {
+const activeCarriers = {
   key: 'customFilter',
   params: {
     filter: buildFilter((filter) => filter.boolean('active').isTrue()),
@@ -73,8 +73,8 @@ const activeTeams = {
 };
 const deliveryRelations = orderPermission.update((update) =>
   update
-    .relation('deliveryTeam', (team) =>
-      team.recordAccess(activeTeams).connect().disconnect(),
+    .relation('carrier', (carrier) =>
+      carrier.recordAccess(activeCarriers).connect().disconnect(),
     )
     .relation('checks', (checks) =>
       checks
@@ -87,9 +87,9 @@ const deliveryRelations = orderPermission.update((update) =>
         )
         .delete(),
     )
-    .relation('collaborators', (team) =>
-      team
-        .recordAccess(activeTeams)
+    .relation('collaborators', (carrier) =>
+      carrier
+        .recordAccess(activeCarriers)
         .connect((edge) => edge.through((through) => through.fields('note')))
         .set((edge) => edge.through((through) => through.fields('note')))
         .disconnect(),

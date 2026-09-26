@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import type {
   AuthorizationSubject,
+  LocalizedText,
   SubjectTypeOption,
 } from '../authorization-client.js';
+import { titleText, useAuthorizationTranslation } from '../i18n.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
 
 export function subjectKey(subject: AuthorizationSubject): string {
@@ -15,6 +17,7 @@ export function useSubjectNames(
   subjects: readonly AuthorizationSubject[],
 ): Readonly<Record<string, string>> {
   const authz = useAuthorizationClient();
+  const t = useAuthorizationTranslation();
   const identity = JSON.stringify([
     settings,
     types
@@ -28,7 +31,7 @@ export function useSubjectNames(
   ]);
   const [state, setState] = useState<{
     identity: string;
-    names: Record<string, string>;
+    names: Record<string, LocalizedText>;
   }>();
   useEffect(() => {
     let active = true;
@@ -37,7 +40,7 @@ export function useSubjectNames(
       Pick<SubjectTypeOption, 'value' | 'selection'>[],
       AuthorizationSubject[],
     ];
-    const names: Record<string, string> = {};
+    const names: Record<string, LocalizedText> = {};
     async function resolve(): Promise<void> {
       await Promise.all(
         types.map(async (type) => {
@@ -69,8 +72,15 @@ export function useSubjectNames(
       active = false;
     };
   }, [authz, identity]);
+  const resolved = state?.identity === identity ? state.names : {};
   return {
-    ...(state?.identity === identity ? state.names : {}),
+    // Titles may be translation descriptors; they render in the current language.
+    ...Object.fromEntries(
+      Object.entries(resolved).map(([name, title]) => [
+        name,
+        titleText(title, t),
+      ]),
+    ),
     ...Object.fromEntries(
       types.flatMap((type) =>
         type.selection?.type === 'fixed'

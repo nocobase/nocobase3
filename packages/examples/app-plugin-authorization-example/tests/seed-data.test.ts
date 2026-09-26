@@ -1,3 +1,9 @@
+import path from 'node:path';
+
+import authenticationPlugin from '@nocobase/app-plugin-authentication/server';
+import authorizationPlugin from '@nocobase/app-plugin-authorization';
+import { createDatabaseManager } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import setupSeed from '../database/seeds/202609220002_sales_permissions.js';
 import { expect, it } from 'vitest';
 import { createFixture } from './helpers.js';
@@ -12,18 +18,17 @@ it('persists the fluent declarations and all per-table fixtures with their relat
   try {
     const query = fixture.database.connection().query;
     const expectedCounts = {
-      user: 7,
-      account: 7,
-      [MEMBERS]: 7,
-      authorizationExampleTeams: 2,
-      authorizationExampleTeamMembers: 3,
+      user: 6,
+      account: 6,
+      [MEMBERS]: 6,
+      authorizationExampleCarriers: 2,
       authorizationPermissionSets: 4,
-      authorizationPermissionSetAssignments: 7,
+      authorizationPermissionSetAssignments: 6,
       authorizationDefaultAccessRules: 3,
       authorizationSharingRules: 3,
-      authorizationSharingRuleAssignments: 5,
+      authorizationSharingRuleAssignments: 4,
       authorizationRestrictionRules: 3,
-      authorizationRestrictionRuleAssignments: 21,
+      authorizationRestrictionRuleAssignments: 18,
       [PROJECTS]: 5,
       [QUOTES]: 13,
       [ORDERS]: 5,
@@ -40,6 +45,8 @@ it('persists the fluent declarations and all per-table fixtures with their relat
     await setupSeed.run({
       query,
       connection: fixture.database.connection(),
+      repository: (name: string) =>
+        fixture.database.connection().repository(name),
     });
     for (const set of permissionSets)
       expect(await fixture.authorization.permissionSets.get(set.key)).toEqual(
@@ -76,7 +83,11 @@ it('seeds once without overwriting edited example records', async () => {
       .set({ notes: 'Keep this edit' })
       .where('id', '=', 'project-1')
       .execute();
-    await setupSeed.run({ query: connection.query, connection });
+    await setupSeed.run({
+      query: connection.query,
+      connection,
+      repository: (name: string) => connection.repository(name),
+    });
     expect(
       await connection.query.selectFrom(PROJECTS).select('id').execute(),
     ).toHaveLength(5);
@@ -91,5 +102,52 @@ it('seeds once without overwriting edited example records', async () => {
     ).toBe('Keep this edit');
   } finally {
     await fixture.database.destroy();
+  }
+});
+
+it('seeds with permission sets alone when the optional rule plugins are absent', async () => {
+  const database = createDatabaseManager({
+    drivers: { sqlite },
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  });
+  try {
+    for (const plugin of [authenticationPlugin, authorizationPlugin])
+      await database
+        .createMigrator({
+          directory: path.resolve(
+            plugin.baseDir!,
+            plugin.database!.migrations!,
+          ),
+          packageName: plugin.packageName,
+          tableName: `${plugin.packageName.replace('@nocobase/app-plugin-', '')}Migrations`,
+        })
+        .latest();
+    await database
+      .createMigrator({
+        directory: path.resolve(import.meta.dirname, '../database/migrations'),
+        packageName: '@nocobase/app-plugin-authorization-example',
+      })
+      .latest();
+    const connection = database.connection();
+    await setupSeed.run({
+      query: connection.query,
+      connection,
+      repository: (name: string) => connection.repository(name),
+    } as unknown as Parameters<typeof setupSeed.run>[0]);
+    const query = connection.query;
+    expect(
+      await query
+        .selectFrom('authorizationPermissionSets')
+        .select('id')
+        .execute(),
+    ).toHaveLength(permissionSets.length);
+    expect(
+      await query.selectFrom(PROJECTS).select('id').execute(),
+    ).toHaveLength(5);
+    expect(
+      await connection.collections.get('authorizationSharingRules'),
+    ).toBeUndefined();
+  } finally {
+    await database.destroy();
   }
 });

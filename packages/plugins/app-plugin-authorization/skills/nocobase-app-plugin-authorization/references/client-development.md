@@ -1,6 +1,6 @@
 # Client routes, action visibility and record eligibility
 
-Use the sales example's three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. Declare `authz` on every entry page; nothing is inferred from the route name. The overview is an authenticated demonstration guide that declares `authz: 'skip'`, which is not a pattern for business pages.
+The sales workflow has three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. Declare `authz` on every entry page; nothing is inferred from the route name. A page that needs only sign-in, such as an overview, declares `authz: 'skip'`; business pages never do.
 
 ## Register the runtime first
 
@@ -104,18 +104,18 @@ export function SubmitQuote({
 }
 ```
 
-This component illustrates a customer-owned endpoint and a `canSubmit` response field that its server must implement. The installed example's paths start with `authorization-example/sales/`; use the actual owning endpoint rather than mixing the two prefixes. Replace the minimal button/status markup with App UI primitives and translation keys in production. `api.request` uses `path`, `method`, `query` and `json`; it returns the parsed response body. Do not repeat `/api` or the deployment mount, construct a second API client, or import server registration modules into the client bundle to obtain a resource name. Share small browser-safe identifiers when needed.
+This component illustrates a customer-owned endpoint and a `canSubmit` response field that its server must implement. Replace the minimal button/status markup with App UI primitives and translation keys in production. `api.request` uses `path`, `method`, `query` and `json`; it returns the parsed response body. Do not repeat `/api` or the deployment mount, construct a second API client, or import server registration modules into the client bundle to obtain a resource name. Share small browser-safe identifiers when needed.
 
 After a write, reload affected records and relationship controls, preserve the current selected order where possible, and recompute eligibility. For stale state, forbidden and validation responses, display the server outcome and refresh relevant data; never force the optimistic state to remain submitted after rejection. No client flag can replace server enforcement.
 
 ## Delivery relation controls
 
-The order relation endpoint returns existing relations, permitted relation operations and target options derived from the `manageRelations` policy. Offer only allowed create/update/upsert/connect/disconnect/set/delete controls. Existing relation reads use the View policy; mutation eligibility also requires an eligible order and business state. Team options come from the relation target scope, for example active teams. They do not use the authorization-management subject picker.
+The order relation endpoint returns existing relations, permitted relation operations and target options derived from the `manageRelations` policy. Offer only allowed create/update/upsert/connect/disconnect/set/delete controls. Existing relation reads use the View policy; mutation eligibility also requires an eligible order and business state. Carrier options come from the relation target scope, for example active carriers. They do not use the authorization-management subject picker.
 
-Example request bodies for the current plugin's `POST authorization-example/sales/orders/:id/relations` are:
+Request bodies for an App-owned `POST sales/orders/:id/relations` endpoint look like:
 
 ```json
-{ "deliveryTeam": { "connect": { "id": "delivery" } } }
+{ "carrier": { "connect": { "id": "express" } } }
 ```
 
 ```json
@@ -130,19 +130,19 @@ Example request bodies for the current plugin's `POST authorization-example/sale
 {
   "collaborators": {
     "connect": [
-      { "where": { "id": "proposal" }, "through": { "note": "Review" } }
+      { "where": { "id": "freight" }, "through": { "note": "Review" } }
     ]
   }
 }
 ```
 
-These are demonstration IDs; fetch actual options in a customer App. Never expose protected foreign keys or internal join fields as a shortcut around a denied relation operation. A rejected nested mutation must leave the whole write rolled back.
+These are sample ids; fetch actual options from the endpoint. Never expose protected foreign keys or internal join fields as a shortcut around a denied relation operation. A rejected nested mutation must leave the whole write rolled back.
 
 ## Settings screens
 
 Use `defineSettingsRoutes` with a lazy page module, navigation keys and `authz: { resource: { type: 'settings', id }, action: 'read' }` naming a settings item registered on the server with `authz.settings.add`. Declare `authz` on every settings entry page: one that omits it defaults to `'unrestricted'`, which only root may open. Do not put `/settings` in its declared path. Check read and each write action separately in the endpoints. Existing permission-set and rule screens already provide assignment and data scope editing; reuse them rather than building another editor.
 
-For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save and error states. Read-only access renders data without writable controls. Options and search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; the example's team picker relies on existing management permissions.
+For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save and error states. Read-only access renders data without writable controls. Options and search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; a subject picker relies on the calling management permission.
 
 Verify menu and direct URL behavior, no-grant, page-only and action-only cases, pending and failed checks, session switching, out-of-scope rows, stale transitions, relation target constraints and post-save refresh. Perform actual API requests as ordinary users in addition to UI checks.
 

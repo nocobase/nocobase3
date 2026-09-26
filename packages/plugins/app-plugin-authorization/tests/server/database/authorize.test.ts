@@ -586,6 +586,35 @@ describe('database resource authorization', () => {
     });
   });
 
+  it('answers a configured scope that selects nothing with a scope matching no rows', async () => {
+    const authorization = setup({
+      type: 'database',
+      fields: ['id'],
+      recordAccess: ['nobody'],
+    });
+    authorization.recordAccess.define(
+      defineRecordAccess('nobody', (access) =>
+        access.collections('orders').resolver(() => false),
+      ),
+    );
+    await expect(
+      authorizeAs(authorization, {
+        ...request,
+        params: { fields: { output: ['id'] } },
+      }),
+    ).resolves.toMatchObject({
+      effect: 'conditional',
+      conditions: {
+        scope: ast(
+          and([condition('id', '$empty'), condition('id', '$notEmpty')]),
+        ),
+      },
+      reasons: expect.arrayContaining([
+        expect.objectContaining({ code: 'EMPTY_RECORD_ACCESS' }),
+      ]),
+    });
+  });
+
   it('lets a generic default access scope open a grant with no Record Access', async () => {
     const defaults = new MockDefaultAccessStore([
       { resource, actions: [{ action: 'read', selection: { type: 'all' } }] },

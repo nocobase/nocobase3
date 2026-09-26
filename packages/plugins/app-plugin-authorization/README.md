@@ -307,7 +307,7 @@ Each rule API exists only when its plugin is configured; see the [default access
 
 ## Check access on the server
 
-Every route installs authentication, then `authz.middleware()`, which sets the `authz` variable to the request's `AuthorizationContext`.
+Every route installs authentication, then `authz.middleware()`, which sets the `authz` variable to the request's `AuthorizationContext`. A denied `require` throws `AuthorizationDeniedError`, which answers `403 { code: 'FORBIDDEN', message }` on its own, so a route needs no `onError` for it.
 
 ```ts
 router.use('*', authentication.required(), authz.middleware());
@@ -344,6 +344,8 @@ router.post('/quotes/:id/submit', async (c) => {
 ```
 
 A composite decision's `conditions` are `CompositeResourceConditions` with `database`: one `RepositoryPolicy` per composed collection, built from that action's grants only. `require` rejects conditional decisions, and `can` counts them as false; neither enforces rows.
+
+A policy is `false` only when nothing grants the action, and a Repository refuses to run under it. When a grant exists but its data scope selects no records, such as a record access that answers `false` for a user in no department, the decision stays conditional with the `EMPTY_RECORD_ACCESS` reason and a scope that matches no rows: reads return an empty result, and updates and deletes affect nothing. A grant whose data scopes configure no selection at all is still denied with `NO_RECORD_ACCESS`. Create reads no record scope, so a create grant is unaffected.
 
 For a collection-oriented endpoint, fold the four CRUD decisions into one policy, optionally restricted to one composite action's branch:
 
@@ -429,7 +431,7 @@ Every path is under `/api/authz` and requires a signed-in user. Settings checks 
 | `POST /inspector/subjects/:type/resolve`       | `settings:authorization.inspector` `inspect`      | `{ ids: string[] }`                           | `SubjectOption[]`                                      |
 | `POST /inspector/decision`                     | `settings:authorization.inspector` `inspect`      | `{ subject, resource, action }`               | `AuthorizationDecision`, with `checks` for a composite |
 | `POST /inspector/batch`                        | `settings:authorization.inspector` `inspect`      | `{ subject, checks: [{ resource, action }] }` | `[{ resource, action, decision }]`                     |
-| `POST /inspector/configured`                   | `settings:authorization.inspector` `inspect`      | `{ subject }`                                 | `{ unrestricted, types, resources }`                   |
+| `POST /inspector/configured`                   | `settings:authorization.inspector` `inspect`      | `{ subject }`                                 | `{ unrestricted, types, resources, identity, sets }`   |
 | `GET /<rule>`                                  | `settings:authorization.<rule>` `read`            |                                               | rules                                                  |
 | `POST /<rule>`                                 | `settings:authorization.<rule>` `create`          | a complete rule                               | the rule                                               |
 | `PUT /<rule>/:key`                             | `settings:authorization.<rule>` `update`          | a complete rule                               | the rule                                               |
@@ -439,7 +441,9 @@ Every path is under `/api/authz` and requires a signed-in user. Settings checks 
 | `POST /<rule>/subjects/:type/resolve`          | `settings:authorization.<rule>` `read`            | `{ ids: string[] }`                           | `SubjectOption[]`                                      |
 | `GET /<rule>/records/:collection`              | `settings:authorization.<rule>` `read`            |                                               | `[{ id, label, description? }]`                        |
 
-`<rule>` is each of `default-access`, `sharing-rules` and `restriction-rules`, present only when that plugin is configured. Options, subjects and records stay per plugin, each gated by that plugin's own settings item. A subject directory may enforce further read checks of its own. The inspector evaluates one subject: a user includes the `authenticated` audience and resolved memberships, while inspecting a team describes that team's grants alone.
+`<rule>` is each of `default-access`, `sharing-rules` and `restriction-rules`, present only when that plugin is configured. Options, subjects and records stay per plugin, each gated by that plugin's own settings item. A subject directory may enforce further read checks of its own. The inspector evaluates one subject: a user includes the `authenticated` audience and resolved memberships, while inspecting a team describes that team's grants alone. `configured` also answers `identity: { subjects }`, the subjects a request for that principal would carry, and `sets: [{ key, title?, sources }]`, where `sources` lists the assignments, to the principal itself or to one of those subjects, that bring each effective set; the default set has none.
+
+Subject pagination accepts `page >= 1` and `1 <= pageSize <= 100` (default 30) and answers `400 { code: 'INVALID_PAGINATION' }` otherwise. A type without a collection selection answers `404 { code: 'UNKNOWN_SUBJECT_TYPE' }`.
 
 `AuthorizationOptions` is `{ sections: [{ name, title, order, subsections: [{ name, title, recordType?, resources: [{ type, id, title, description?, group?, actions: [{ name, title }], dataScopes? }] }] }], resourceGroups?, subjectTypes, recordAccess, collections }`. A subsection with `recordType` (`{ type: 'page', actions }`) lists no resources: the client supplies them. `dataScopes` maps a business action to its data scopes; subsections without resources are omitted, and rule options list only composites with data scopes, with every title as sent by the server, either a string or `{ key, ns }`.
 
@@ -447,7 +451,9 @@ Settings action names are semantic. Permission sets declare `read`, `create`, `u
 
 ## Subjects and transactions
 
-`authz.subjects.add(type, { resolveFor?, filterActive, administration? })` declares an inherited subject type such as teams; it returns a function that removes it. `administration` is `{ title, selection }` where `selection` is `{ type: 'fixed', id }` or `{ type: 'collection', list(query, context), resolve(ids, context) }`, answering `{ items: [{ id, title, description? }], total }` and items respectively. For a user removal, bind `authz.permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` to the same transaction as the mutation and call `notifyAssignmentsChanged(subject)` after commit.
+`authz.subjects.add(type, { resolveFor?, filterActive, administration? })` declares an inherited subject type such as teams; it returns a function that removes it. `administration` is `{ title, selection }` where `selection` is `{ type: 'fixed', id }` or `{ type: 'collection', list(query, context), resolve(ids, context) }`, answering `{ items: [{ id, title, description? }], total }` and items respectively. `title` and `description` may be plain text or a `{ key, ns }` translation descriptor, which the workspace renders in the viewer's language.
+
+A permission-set assignment change to a `user` refreshes that user's clients; a change to any other subject, `authenticated` included, refreshes every client, because only the subject's owner knows which users it reaches. For a user removal, bind `authz.permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` to the same transaction as the mutation and call `notifyAssignmentsChanged(subject)` after commit.
 
 ## `@nocobase/app-plugin-authorization/server`
 
@@ -593,14 +599,15 @@ authz.routes.add('/sharing-rules', createRouteHandler(router));
 | `AuthorizationPermission`      | type     | `{ resource; actions }`                                                                                                 | One entry of a snapshot.                      |
 | `AuthorizationRecordOption`    | type     | `{ id; label; description? }`                                                                                           | One record in a records route.                |
 | `AuthorizationSubject`         | type     | `{ type; id }`                                                                                                          | A subject.                                    |
-| `ConfiguredAccess`             | type     | `{ unrestricted; types; resources }`                                                                                    | What `inspectConfigured` answers.             |
+| `ConfiguredAccess`             | type     | `{ unrestricted; types; resources; identity?; sets? }`                                                                  | What `inspectConfigured` answers.             |
+| `ConfiguredPermissionSet`      | type     | `{ key; title?; sources: AuthorizationSubject[] }`                                                                      | One effective set and what brings it.         |
 | `PermissionGrant`              | type     | `{ resource: { type; id }; actions: PermissionGrantAction[] }`                                                          | One grant of a set.                           |
 | `PermissionGrantAction`        | type     | `{ action; policy? }`                                                                                                   | One action of a grant.                        |
 | `PermissionSetProtection`      | type     | `{ owner; allow: PermissionSetWriteOperation[]; assignableTo? }`                                                        | Who may change a protected set.               |
 | `PermissionSetWriteOperation`  | type     | `'create' \| 'update' \| 'delete' \| 'assign' \| 'revoke'`                                                              | A write a protection allows.                  |
 | `ResourceRef`                  | type     | `{ type; id }`                                                                                                          | The target of a check or grant.               |
 | `SubjectPage`                  | type     | `{ items: SubjectOption[]; total }`                                                                                     | One page of a subject search.                 |
-| `SubjectOption`                | type     | `{ id; title; description? }`                                                                                           | One subject in a picker.                      |
+| `SubjectOption`                | type     | `{ id; title; description?; manage? }`                                                                                  | One subject in a picker.                      |
 | `AuthorizationDecision`        | type     | `{ effect; conditions?; reasons; checks? }`                                                                             | What the inspector answers.                   |
 | `AuthorizationInspectInput`    | type     | `{ subject; resource; action }`                                                                                         | Body of `POST /inspector/decision`.           |
 | `AuthorizationInspection`      | type     | `{ resource; action; decision }`                                                                                        | One batch or composite check.                 |
@@ -679,6 +686,7 @@ Exactly what the rule plugins import to build their settings pages; the workspac
 | `SelectionMark`               | component | Shows one record selection compactly.              |
 | `SubjectsEditor`              | component | Picks subjects.                                    |
 | `useSubjectNames`             | hook      | Resolves subject titles.                           |
+| `useSubjectDetails`           | hook      | Resolves subject titles and `manage` paths.        |
 | `subjectKey`                  | function  | Stable key of a subject.                           |
 | `defaultSelection`            | function  | The initial selection of a rule action.            |
 | `incompleteSelection`         | function  | Whether a selection still needs input.             |

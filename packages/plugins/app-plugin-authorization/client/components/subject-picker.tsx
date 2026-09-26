@@ -5,7 +5,7 @@ import type {
   SubjectTypeOption,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
-import { useAuthorizationTranslation } from '../i18n.js';
+import { titleText, useAuthorizationTranslation } from '../i18n.js';
 import { SearchField } from './filters.js';
 import { SelectField } from './select-field.js';
 import { Button } from './ui/button.js';
@@ -142,7 +142,10 @@ export function SubjectPicker({
             value={value?.type === type.value ? value.id : ''}
             options={[
               { value: '', label: t('inspector.selectSubject') },
-              ...items.map((item) => ({ value: item.id, label: item.title })),
+              ...items.map((item) => ({
+                value: item.id,
+                label: titleText(item.title, t),
+              })),
             ]}
             onValueChange={(id) =>
               onChange(id ? { type: type.value, id } : undefined, type.value)

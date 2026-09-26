@@ -24,15 +24,15 @@ vi.mock('../client/pages/use-example.js', () => ({
           title: 'Harbor order',
           access: 'allowed',
           operations: {
-            deliveryTeam: ['connect', 'disconnect'],
+            carrier: ['connect', 'disconnect'],
             checks: ['create', 'update', 'delete'],
             collaborators: ['connect', 'set', 'disconnect'],
           },
           options: {
-            deliveryTeam: [{ id: 'delivery', title: 'Delivery' }],
-            collaborators: [{ id: 'proposal', title: 'Proposal' }],
+            carrier: [{ id: 'express', title: 'Express' }],
+            collaborators: [{ id: 'freight', title: 'Freight' }],
           },
-          deliveryTeam: null,
+          carrier: null,
           checks: [],
           collaborators: [],
         }
@@ -144,7 +144,7 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
     expect(api.request).toHaveBeenCalledWith({
       method: 'POST',
       path: '/authorization-example/sales/orders/o1/relations',
-      json: { deliveryTeam: { connect: { id: 'delivery' } } },
+      json: { carrier: { connect: { id: 'express' } } },
     }),
   );
   await waitFor(() =>
@@ -166,7 +166,7 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
         collaborators: {
           connect: [
             {
-              where: { id: 'proposal' },
+              where: { id: 'freight' },
               through: { note: 'Review paperwork' },
             },
           ],
