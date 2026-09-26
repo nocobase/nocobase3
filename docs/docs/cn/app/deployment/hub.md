@@ -33,7 +33,7 @@ Hub 提供管理界面，负责记录应用、版本、配置和部署操作。A
 | 安装器         | 不改 Hub 源码、不使用 Docker，在 Node.js 服务器上安装、升级和回退 | [通过安装器部署](#通过安装器部署)     |
 | 应用模板       | 需要修改 Hub 源码                                                 | [通过应用模板部署](#通过应用模板部署) |
 
-Docker 方式需要 Docker 与 Compose；安装器和应用模板方式都需要 Node.js 24 和 pnpm，安装器另外需要全局安装的 pm2。目标版本尚无可用镜像时，可使用应用模板构建部署。官方镜像由 Hub 模板自带的 `Dockerfile` 从源码构建；修改过 Hub 源码时，也可以在项目根目录用同一个 `Dockerfile` 自行构建镜像，用法见[独立部署：Docker](./docker#1-构建镜像)，它默认使用 `APP_BASE_PATH=/hub`。
+Docker 方式需要 Docker 与 Compose；安装器和应用模板方式都需要 Node.js 24 和 pnpm，安装器另外需要全局安装的 pm2。目标版本尚无可用镜像时，可以用安装器或应用模板从源码构建部署。官方镜像由 Hub 模板自带的 `Dockerfile` 从源码构建；修改过 Hub 源码时，也可以在项目根目录用同一个 `Dockerfile` 自行构建镜像，用法见[独立部署：Docker](./docker#1-构建镜像)，它默认使用 `APP_BASE_PATH=/hub`。
 
 ## 平台规划
 
@@ -221,14 +221,17 @@ npx --registry=https://npm.nocobase.ai @nocobase/hub-installer install /srv/noco
 
 安装完成后的目录：
 
-| 路径                    | 内容                                                     |
-| ----------------------- | -------------------------------------------------------- |
-| `config.yml`、`hub.env` | 运行配置和环境变量，所有版本共用，升级时不动             |
-| `storage/`              | Hub 的数据库、上传的部署包和托管应用的数据               |
-| `releases/<版本>/hub/`  | 每个版本的构建产物，只有 `dist/` 和 `config.example.yml` |
-| `current`               | 指向正在运行的版本                                       |
-| `backups/`              | 每次升级前备份的数据库和配置                             |
-| `logs/`                 | pm2 收集的 Hub 输出日志                                  |
+| 路径                    | 内容                                                                    |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `config.yml`、`hub.env` | 运行配置和环境变量，所有版本共用，升级时不动                            |
+| `storage/`              | Hub 的数据库、上传的部署包和托管应用的数据                              |
+| `releases/<版本>/hub/`  | 每个版本的构建产物，只有 `dist/` 和 `config.example.yml`                |
+| `current`               | 指向正在运行的版本                                                      |
+| `backups/`              | 每次升级前备份的数据库和配置                                            |
+| `logs/`                 | pm2 收集的 Hub 输出日志                                                 |
+| `ecosystem.config.cjs`  | pm2 的进程配置，每次启动都经过它                                        |
+| `launcher.mjs`          | pm2 运行的启动脚本，每次启动都读取 `hub.env`，启动 `current` 指向的版本 |
+| `installer.json`        | 安装器的记录：当前版本、数据库方言、驱动和操作历史                      |
 
 ### 2. 设置开机自启
 
@@ -244,7 +247,7 @@ npx --registry=https://npm.nocobase.ai @nocobase/hub-installer upgrade --dir /sr
 
 `rollback --dir /srv/nocobase/hub` 回到上一次升级前的版本；如果那次升级执行过迁移，会用升级前的备份恢复数据库，升级之后写入 Hub 的数据会丢失。`status --dir /srv/nocobase/hub` 只读，显示当前版本、访问地址和监听地址、健康状态、pm2 进程和是否有可用更新。
 
-要更换访问域名或端口，修改 `hub.env` 中的 `APP_PUBLIC_ORIGIN`、`APP_SERVER_HOST` 和 `APP_SERVER_PORT`，再执行 `pm2 restart nocobase-hub`；安装时用 `--name` 指定过进程名的，换成那个名字。
+要更换访问域名或端口，修改 `hub.env` 中的 `APP_PUBLIC_ORIGIN`、`APP_SERVER_HOST` 和 `APP_SERVER_PORT`，再执行 `pm2 restart nocobase-hub`；安装时用 `--name` 指定过进程名的，换成那个名字。新端口必须空闲，反向代理也要改为转发到新端口。
 
 ## 通过应用模板部署
 

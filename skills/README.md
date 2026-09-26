@@ -77,7 +77,7 @@ pnpm nocobase config set --from-env database.connections.main.password=CRM_DB_PA
 On the server that will run the Hub:
 
 - Linux or macOS; on Windows, WSL.
-- Node.js 24 or later, pnpm 11 or later, `tar`, and pm2 installed globally with `npm install -g pm2`.
+- Node.js 24 or later, pnpm 11 or later, `tar`, and pm2 4.3 or later installed globally with `npm install -g pm2`.
 - An agent that loads Skills.
 
 ### Install the Skill
