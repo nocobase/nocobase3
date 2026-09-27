@@ -378,7 +378,7 @@ New installations use `storage/hub` for the Hub database (`database/main.sqlite`
 
 `storage/apps/artifacts/<appId>/<releaseId>.tar.gz` contains release archives, `storage/apps/revisions/<appId>/<sha256>` contains expanded archives, and `storage/apps/volumes/<appId>` contains runtime configurations and application-owned `storage/`. The checksum identifies the archive bytes. Hub desired configurations and Host runtime configurations have different owners; neither is a historical configuration archive. Restart recovery requires the installed revision and does not automatically re-extract a missing one.
 
-Standalone Hub source and compiled entries share the deployment directory's `storage`. `APP_STORAGE_DIR` selects another directory; `HUB_STORAGE_DIR`, the name earlier releases documented, is still read when `APP_STORAGE_DIR` is not set. Explicit storage paths take precedence over both, and relative values resolve from the deployment directory. Embedded Hub instances use the Host-provided volume. Expanded releases use `appRevisionsDir/<appId>/<sha256>`. Directory defaults do not depend on existing files.
+Standalone Hub source and compiled entries share the deployment directory's `storage`. `APP_STORAGE_DIR` selects another directory; explicit storage paths take precedence over it, and relative values resolve from the deployment directory. Embedded Hub instances use the Host-provided volume. Expanded releases use `appRevisionsDir/<appId>/<sha256>`. Directory defaults do not depend on existing files.
 
 ## Runtime paths and application creation
 

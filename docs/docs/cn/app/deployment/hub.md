@@ -233,8 +233,6 @@ npx --registry=https://npm.nocobase.ai @nocobase/app-installer install /srv/noco
 | `launcher.mjs`                    | pm2 运行的启动脚本，每次启动都读取 `app.env`，启动 `current` 指向的版本      |
 | `installer.json`                  | 安装器的记录：应用、挂载路径、来源、已有版本和操作历史                       |
 
-`app.env` 中同时写入 `APP_STORAGE_DIR` 和 `HUB_STORAGE_DIR`，后者供发布时间早于 `APP_STORAGE_DIR` 的 Hub 版本读取。
-
 ### 2. 设置开机自启
 
 执行 `pm2 startup`，再用 sudo 执行它输出的那条命令，服务器重启后 pm2 会自动拉起 Hub。随后按[配置访问与首次登录](#配置访问与首次登录)配置 HTTPS 并登录 Hub。

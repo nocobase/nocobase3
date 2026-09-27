@@ -89,9 +89,8 @@ describe('install', () => {
       name: 'nocobase-hub',
       dialect: 'sqlite',
     });
-    // A Hub published before APP_STORAGE_DIR reads only the older name, so a template install writes both.
     expect(readFileSync(path.join(root, 'app.env'), 'utf8')).toContain(
-      `HUB_STORAGE_DIR=${path.join(root, 'storage')}`,
+      `APP_STORAGE_DIR=${path.join(root, 'storage')}`,
     );
     expect(world.pm2.calls).toEqual([
       'version',

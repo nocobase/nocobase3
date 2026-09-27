@@ -85,24 +85,6 @@ describe('application config', () => {
     );
   });
 
-  it('still reads HUB_STORAGE_DIR, which APP_STORAGE_DIR takes precedence over', async () => {
-    const legacy = path.join(configRoot, 'legacy-storage');
-    const preferred = path.join(configRoot, 'preferred-storage');
-    const storage = async (env: Record<string, string>): Promise<string> =>
-      (
-        await resolveStandaloneAppRuntime(appRuntime, {
-          rootDir: templateRootDir,
-          configPath,
-          env,
-        })
-      ).paths.storage();
-
-    expect(await storage({ HUB_STORAGE_DIR: legacy })).toBe(legacy);
-    expect(
-      await storage({ HUB_STORAGE_DIR: legacy, APP_STORAGE_DIR: preferred }),
-    ).toBe(preferred);
-  });
-
   it('assembles module defaults in the runtime', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
