@@ -8,6 +8,7 @@ import type {
   FileUiLabels,
 } from '../types';
 import {
+  isActiveMarkupMimeType,
   resolveFilePreviewKind,
   type FilePreviewKind,
 } from '../lib/file-preview';
@@ -15,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { fileUrlCredentials, resolveSafeFileUrl } from '../lib/file-url';
 import { FilePreviewContent } from './previewers/file-preview-content';
+
+const PDF_MIME_TYPE = 'application/pdf';
 
 export function FilePreviewDialog({
   files,
@@ -163,6 +166,14 @@ function reportDownloadError(
   );
 }
 
+// A blob URL is same-origin, so the frame must receive the bytes as a PDF and
+// never as a document the browser would render and run.
+function asPdfBlob(blob: Blob): Blob {
+  return blob.type === PDF_MIME_TYPE
+    ? blob
+    : blob.slice(0, blob.size, PDF_MIME_TYPE);
+}
+
 function PreviewBody({
   file,
   onDownload,
@@ -193,7 +204,9 @@ function PreviewBody({
         if (!response.ok) throw new Error('Unable to load the PDF preview.');
         const blob = await response.blob();
         if (controller.signal.aborted) return;
-        objectUrl = URL.createObjectURL(blob);
+        if (isActiveMarkupMimeType(blob.type))
+          throw new Error('Unable to load the PDF preview.');
+        objectUrl = URL.createObjectURL(asPdfBlob(blob));
         setBlobUrl(objectUrl);
       })
       .catch((cause: unknown) => {
