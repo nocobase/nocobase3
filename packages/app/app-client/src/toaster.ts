@@ -10,7 +10,10 @@ import { ClientApplicationContext } from './application-context.js';
 /** What a toast reports. The application picks its icon and color, and may present each kind differently. */
 export type ToastType = 'success' | 'info' | 'warning' | 'error' | 'loading';
 
-/** A button shown inside a toast. */
+/**
+ * A button shown inside a toast. Clicking it runs `onClick` and leaves the toast open; call `close` with the toast's
+ * id from `onClick` to dismiss it as well.
+ */
 export interface ToastAction {
   readonly label: ReactNode;
   readonly onClick: () => void;
@@ -23,9 +26,10 @@ export interface ToastAction {
 export interface ToastOptions {
   /**
    * Identifies the toast. Showing a toast with the id of one still open replaces that toast's content and restarts
-   * its timer instead of adding a second one.
+   * its timer instead of adding a second one; the replaced content's `onClose` does not run.
    */
   readonly id?: string;
+  /** Omit it for a toast that reports nothing in particular. */
   readonly type?: ToastType;
   readonly title: ReactNode;
   readonly description?: ReactNode;
@@ -60,20 +64,25 @@ export const toasterToken: ServiceToken<Toaster> = createServiceToken<Toaster>(
 );
 
 let unregisteredToastCount = 0;
-let warnedUnregistered = false;
+let explainedUnregistered = false;
 
 /**
  * Stands in when the application registered no toaster. A missing toaster should cost the user a message, never the
- * page that reports it, so nothing throws; the first toast it drops says so in the console.
+ * page that reports it, so nothing throws. Every toast it drops goes to the console instead — an error toast as an
+ * error — and the first one says how to register a toaster.
  */
 const unregisteredToaster: Toaster = Object.freeze({
   show(options: ToastOptions): string {
-    if (!warnedUnregistered) {
-      warnedUnregistered = true;
-      console.warn(
-        "A toast was shown, but the application registers no toaster, so nothing appeared. Register one under toasterToken from '@nocobase/app-client' in a client ServiceProvider's register().",
-      );
-    }
+    const reason = explainedUnregistered
+      ? 'Toast not shown: the application registers no toaster.'
+      : "Toast not shown: the application registers no toaster. Register one under toasterToken from '@nocobase/app-client' in a client ServiceProvider's register().";
+    explainedUnregistered = true;
+    const report: unknown[] =
+      options.description === undefined
+        ? [reason, options.title]
+        : [reason, options.title, options.description];
+    if (options.type === 'error') console.error(...report);
+    else console.warn(...report);
     unregisteredToastCount += 1;
     return options.id ?? `unregistered-toast-${unregisteredToastCount}`;
   },
@@ -81,8 +90,8 @@ const unregisteredToaster: Toaster = Object.freeze({
 });
 
 /**
- * Returns the toaster registered in `services`, or one that shows nothing and warns once when none is. For code
- * outside React, such as a ServiceProvider; components call `useToaster()`.
+ * Returns the toaster registered in `services`, or the stand-in that shows nothing and logs each toast when none is.
+ * For code outside React, such as a ServiceProvider; components call `useToaster()`.
  */
 export function resolveToaster(services: ServiceResolver): Toaster {
   return services.has(toasterToken)
@@ -92,8 +101,8 @@ export function resolveToaster(services: ServiceResolver): Toaster {
 
 /**
  * Returns the application's toaster. The same instance is returned on every render, so it can be listed in hook
- * dependencies. Outside an application, or in one that registers no toaster, toasts show nothing and the first one
- * warns in the console rather than throwing.
+ * dependencies. Outside an application, or in one that registers no toaster, toasts are not shown: each goes to the
+ * console instead, and nothing throws.
  */
 export function useToaster(): Toaster {
   const app = useContext(ClientApplicationContext);

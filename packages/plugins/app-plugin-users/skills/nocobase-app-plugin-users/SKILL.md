@@ -38,7 +38,7 @@ Every HTTP route requires Authentication and Authorization. Routes check the `us
 5. Use `componentLoader` only to replace the page implementation. It does not
    change the route identity, mount, or path.
 
-The page reports results through `useToaster()` from `@nocobase/app-client`, so the App registers its toaster under `toasterToken` in `client/service-provider.ts` and mounts the `Toaster` that renders it in `client/react-providers.ts`, as the templates do. Without the registration the page still works, but its toasts show nothing and the browser console warns that the application registers no toaster; the `nocobase-app-upgrade` Skill's `references/edge-cases.md` ("Notifications and the application toaster") shows how to add it.
+The page reports results through `useToaster()` from `@nocobase/app-client`, so the App needs the `@nocobase/app-client` that exports it and registers a toaster service, as the templates do: `client/lib/toaster.ts` from the template, and `this.app.container.instance(toasterToken, createToaster())` in the `register()` of `client/service-provider.ts`, with the `Toaster` component mounted in `client/react-providers.ts`. Without the registration nothing throws, but its toasts are only logged to the browser console. Update `@nocobase/app-client` together with this plugin; the `nocobase-app-upgrade` Skill's `references/edge-cases.md` ("Notifications and the application toaster") has the full steps.
 
 The default `app` permission-set scope is supplied by Users whenever the Authorization plugin's `authorizationToken` is available. Do not copy a user-roles Provider into an application. Set `users.permissionSets: false` to replace the default with an application-owned scope; Hub uses this setting.
 

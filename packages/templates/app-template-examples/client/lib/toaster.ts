@@ -28,15 +28,19 @@ export function createToaster(manager: typeof toast = toast): Toaster {
           : undefined,
         onClose: options.onClose,
       }),
-    close: (id: string): void => manager.close(id),
+    // Base UI closes every toast when given no id; the contract closes one.
+    close: (id: string): void => {
+      if (id) manager.close(id);
+    },
   };
 }
 
 /**
  * Base UI announces a high-priority toast at once, but hides the toast itself from assistive technology until the
  * toast viewport is focused, and repeats its title and description in a visually hidden alert. That suits an error
- * written as plain text. An error that carries a control — an action, or a description with a toggle such as Hub's
- * technical details — keeps the default priority, so the control is neither hidden nor duplicated.
+ * written as plain text. Every other error keeps the default priority: one with an action, or whose title or
+ * description is an element rather than text, may hold a control — Hub's technical details toggle is one — which a
+ * high priority would hide and duplicate.
  */
 function isUrgent({ type, title, description, action }: ToastOptions): boolean {
   return (

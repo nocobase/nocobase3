@@ -224,9 +224,9 @@ const toaster = useToaster();
 toaster.show({ type: 'success', title: t('orders.saved') });
 ```
 
-`show` takes a `type` (`'success'`, `'info'`, `'warning'`, `'error'` or `'loading'`), a `title`, and optionally a `description`, an `action` button, a `duration` in milliseconds (`0` keeps the toast open), an `id` and an `onClose` callback. Showing a toast with the id of one still open replaces it. `show` returns the id, and `close(id)` closes the toast.
+`show` takes a `title` and, optionally, a `type` (`'success'`, `'info'`, `'warning'`, `'error'` or `'loading'`), a `description`, an `action` button, a `duration` in milliseconds (`0` keeps the toast open), an `id` and an `onClose` callback. Clicking the action runs its `onClick` and leaves the toast open. Showing a toast with the id of one still open replaces it, without running the replaced one's `onClose`. `show` returns the id, and `close(id)` closes the toast.
 
-The contract says what a toast reports, not how it looks: where toasts appear, how long they stay by default and how assistive technology announces them are the application's decisions. The application makes them by registering a `Toaster` under `toasterToken` from a client ServiceProvider's `register()`; the templates register one that forwards to their Base UI toast in `client/service-provider.ts`:
+The contract says what a toast reports, not how it looks: where toasts appear, how long they stay by default and how assistive technology announces them are the application's decisions. The application makes them by registering a toaster service, a `Toaster`, under `toasterToken` from a client ServiceProvider's `register()`; the templates register one in `client/service-provider.ts` that forwards to the Base UI `Toaster` component their `client/react-providers.ts` mounts:
 
 ```ts
 import { ClientApplication, toasterToken } from '@nocobase/app-client';
@@ -243,7 +243,7 @@ export class DefaultClientServiceProvider extends ServiceProvider<ClientApplicat
 }
 ```
 
-`@nocobase/app-client` registers none itself, because rendering toasts belongs to the application's UI. Without one, a toast shows nothing and the first one warns in the console; nothing throws, so a missing toaster never breaks the page that reports a result. `useToaster()` returns the same instance on every render, so it can be listed in hook dependencies. Outside React, `resolveToaster(app.services)` returns the same toaster, with the same fallback.
+`@nocobase/app-client` registers none itself, because rendering toasts belongs to the application's UI. Without one, nothing throws: each toast is logged to the console instead, an error toast with `console.error`, and the first one says how to register a toaster. A page that reports something only through a toast then tells the user nothing, so an application with plugins registers one. `useToaster()` returns the same instance on every render, so it can be listed in hook dependencies. Outside React, `resolveToaster(app.services)` returns the same toaster, with the same fallback.
 
 ## React Providers
 

@@ -581,9 +581,9 @@ Get the toaster with `const toaster = useToaster()` from `@nocobase/app-client` 
 | `'info'`    | Information, for example that the record to delete has already been deleted by someone else |
 | `'error'`   | A single-click action without a dialog, or a background operation, failed                   |
 
-- `description` adds a second line, `action: { label, onClick }` a button, and `duration` how long the toast stays in milliseconds (`0` keeps it open). `show` returns the toast's id, and `toaster.close(id)` closes it.
+- `description` adds a second line, `action: { label, onClick }` a button that leaves the toast open when clicked, and `duration` how long the toast stays in milliseconds (`0` keeps it open). `show` returns the toast's id, and `toaster.close(id)` closes it.
 - The call says what happened, not how it is presented. `client/lib/toaster.ts` decides that for every toast in the application, plugins' included — for example, that a plain-text error is announced to screen readers at once. Call the Base UI `toast` manager in `@/components/ui/toast` directly only for what `show` cannot express, such as `toast.promise`.
-- `client/service-provider.ts` registers the toaster and `client/react-providers.ts` mounts the one `Toaster` that renders it. Do not mount another Toaster yourself.
+- `client/service-provider.ts` registers the toaster service and `client/react-providers.ts` mounts the one `Toaster` component that renders it. Do not mount another `Toaster` yourself.
 - Copy goes through translation; when a specific record is involved, include its name (guideline C6), for example `t('projects.complete.success', { name: project.name })`.
 - Form validation failures and failed requests inside a dialog do not use a toast; show them in the form or dialog (guideline I3).
 

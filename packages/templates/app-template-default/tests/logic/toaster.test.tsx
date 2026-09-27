@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createToastManager, Toaster } from '@/components/ui/toast';
@@ -36,23 +36,35 @@ describe('application toaster', () => {
     expect(toaster.show({ title: 'Saved again' })).toEqual(expect.any(String));
   });
 
-  it('renders an action as the toast button', () => {
+  it('renders an action as a button that leaves the toast open', async () => {
     const manager = createToastManager();
-    const add = vi.spyOn(manager, 'add');
     const onClick = vi.fn();
+    render(<Toaster toastManager={manager} />);
 
-    createToaster(manager).show({
-      type: 'info',
-      title: 'Archived',
-      action: { label: 'Undo', onClick },
+    act(() => {
+      createToaster(manager).show({
+        type: 'info',
+        title: 'Archived',
+        action: { label: 'Undo', onClick },
+      });
     });
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
 
-    expect(add).toHaveBeenCalledWith(
-      expect.objectContaining({ actionProps: { children: 'Undo', onClick } }),
-    );
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
   });
 
-  it('announces a plain-text error at once and keeps one that carries a control at the default priority', () => {
+  it('closes one toast, never all of them', () => {
+    const manager = createToastManager();
+    const close = vi.spyOn(manager, 'close');
+
+    // A JavaScript caller can pass no id, which Base UI would take as "close every toast".
+    createToaster(manager).close(undefined as unknown as string);
+
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('announces a plain-text error at once and keeps every other toast at the default priority', () => {
     const manager = createToastManager();
     const add = vi.spyOn(manager, 'add');
     const toaster = createToaster(manager);
@@ -82,14 +94,15 @@ describe('application toaster', () => {
     ]);
   });
 
-  it('shows the toast in the mounted Toaster', async () => {
-    const manager = createToastManager();
-    render(<Toaster toastManager={manager} />);
+  it('shows what it forwards in the Toaster mounted with its defaults', async () => {
+    // Both defaults are the module's toast manager: that shared manager is what connects the registered toaster to the
+    // Toaster that client/react-providers.ts mounts.
+    render(<Toaster />);
 
     act(() => {
-      createToaster(manager).show({ type: 'success', title: 'Saved' });
+      createToaster().show({ type: 'success', title: 'Connected' });
     });
 
-    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(await screen.findByText('Connected')).toBeInTheDocument();
   });
 });

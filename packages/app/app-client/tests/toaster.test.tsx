@@ -82,9 +82,12 @@ describe('toaster', () => {
     expect(resolveToaster(app.services)).toBe(toaster);
   });
 
-  // The only test here that shows a toast without a registered toaster, so the one warning is its own.
-  it('shows nothing and warns once, rather than throwing, when no toaster is registered', async () => {
+  // The only test here that shows a toast without a registered toaster, so the explanation is its own.
+  it('shows nothing and logs each toast, rather than throwing, when no toaster is registered', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
     const app = await startApplication();
 
     const inApplication = renderHook(() => useToaster(), {
@@ -97,12 +100,32 @@ describe('toaster', () => {
     expect(
       inApplication.show({ id: 'saved', type: 'success', title: 'Saved' }),
     ).toBe('saved');
-    const first = inApplication.show({ title: 'Saved' });
-    const second = outsideApplication.show({ title: 'Saved' });
+    const first = inApplication.show({
+      title: 'Saved',
+      description: 'All changes are stored.',
+    });
+    const second = outsideApplication.show({
+      type: 'error',
+      title: 'Unable to save',
+    });
     expect(first).not.toBe(second);
     expect(() => inApplication.close(first)).not.toThrow();
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
+
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenNthCalledWith(
+      1,
       expect.stringContaining('toasterToken'),
+      'Saved',
+    );
+    expect(warn).toHaveBeenNthCalledWith(
+      2,
+      expect.not.stringContaining('toasterToken'),
+      'Saved',
+      'All changes are stored.',
+    );
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      expect.not.stringContaining('toasterToken'),
+      'Unable to save',
     );
   });
 });
