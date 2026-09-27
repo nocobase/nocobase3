@@ -29,8 +29,8 @@ function sameDirectory(a: string, b: string): boolean {
 }
 
 /**
- * The pm2 process under the Hub's name must be this Hub's. Otherwise stopping it would stop another Hub, and `pm2 start`
- * on the taken name would restart that process with this Hub's configuration.
+ * The pm2 process under the installation's name must be this installation's. Otherwise stopping it would stop another
+ * application, and `pm2 start` on the taken name would restart that process with this one's configuration.
  */
 export async function checkPm2Ownership(
   options: ServiceOptions,
@@ -44,7 +44,7 @@ export async function checkPm2Ownership(
         exitCode: EXIT_INVALID,
         suggestions: [
           {
-            message: `Stop that process or rename it; installer.json names ${options.name} for this Hub.`,
+            message: `Stop that process or rename it; installer.json names ${options.name} for this installation.`,
           },
         ],
       },
@@ -53,10 +53,11 @@ export async function checkPm2Ownership(
 }
 
 /**
- * Stops the Hub and waits until its health route stops answering. pm2 sends SIGINT and allows `kill_timeout` for the
- * Hub to stop its App Host first. A Hub pm2 does not know, such as one installed with `--no-start`, is simply not running.
+ * Stops the application and waits until its health route stops answering. pm2 sends SIGINT and allows `kill_timeout`
+ * for it to finish what it is doing. An application pm2 does not know, such as one installed with `--no-start`, is
+ * simply not running.
  */
-export async function stopHub(options: ServiceOptions): Promise<void> {
+export async function stopApp(options: ServiceOptions): Promise<void> {
   const known = await options.pm2.describe(options.name);
   if (known) await options.pm2.stop(options.name);
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -65,7 +66,7 @@ export async function stopHub(options: ServiceOptions): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   throw new Error(
-    `${options.healthUrl} still answers after stopping ${options.name}; another process may be serving the Hub's port.`,
+    `${options.healthUrl} still answers after stopping ${options.name}; another process may be serving the application's port.`,
   );
 }
 
@@ -74,7 +75,7 @@ export async function stopHub(options: ServiceOptions): Promise<void> {
  * rather than restarted, so pm2's restart count starts from zero — the crash detection reads it — and a changed
  * `ecosystem.config.cjs` is read again. A process pm2 reports as crashed ends the wait early.
  */
-export async function startHub(
+export async function startApp(
   options: ServiceOptions & { timeoutMs: number },
 ): Promise<boolean> {
   await options.pm2.remove(options.name);
@@ -94,9 +95,6 @@ export async function startHub(
 }
 
 export async function errorLogTail(layout: Layout): Promise<string> {
-  const text = await readFile(
-    path.join(layout.logsDir, 'hub.err.log'),
-    'utf8',
-  ).catch(() => '');
+  const text = await readFile(layout.errorLog, 'utf8').catch(() => '');
   return tail(text, 30);
 }

@@ -2,23 +2,25 @@ import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Flags } from '@oclif/core';
 import { readCurrent } from '../lib/current-link.ts';
-import { endpointsOf, healthUrl, readHubEnv } from '../lib/env-file.ts';
+import { endpointsOf, healthUrl, readAppEnv } from '../lib/env-file.ts';
 import { checkHealth } from '../lib/health.ts';
 import { installerCommand, shellQuote } from '../lib/invocation.ts';
 import { layoutOf, releaseDir } from '../lib/layout.ts';
 import { currentNodeMajor } from '../lib/prechecks.ts';
 import { resolveTemplateVersion } from '../lib/registry.ts';
-import { readState } from '../lib/state.ts';
+import { capitalize, subjectOf, templateOf } from '../lib/source.ts';
+import { findRelease, readState } from '../lib/state.ts';
 import type { CommandDeps, CommandOutcome } from './install.ts';
 
 export const STATUS_FLAGS = {
   dir: Flags.string({
     description:
-      'Hub root managed by app-installer. Defaults to the current directory.',
+      'Installation root managed by app-installer. Defaults to the current directory.',
   }),
   offline: Flags.boolean({
     default: false,
-    description: 'Skip asking the registry for a newer version.',
+    description:
+      'Skip asking the registry for a newer version of a template installation.',
   }),
   json: Flags.boolean({
     default: false,
@@ -58,15 +60,19 @@ export async function status(
   const root = path.resolve(deps.cwd ?? process.cwd(), input.flags.dir ?? '.');
   const layout = layoutOf(root);
   const state = await readState(layout);
-  const env = await readHubEnv(layout);
+  const subject = subjectOf(state);
+  const template = templateOf(state);
+  const env = await readAppEnv(layout);
   const link = await readCurrent(layout);
 
   const releases = [];
   for (const record of state.releases) {
-    const dir = releaseDir(layout, record.version);
+    const dir = releaseDir(layout, record.id);
     releases.push({
+      id: record.id,
       version: record.version,
-      current: record.version === state.current,
+      current: record.id === state.current,
+      builtAt: record.builtAt,
       installedAt: record.installedAt,
       nodeMajor: record.buildTarget.nodeMajor,
       sizeBytes: await directorySize(dir),
@@ -79,7 +85,7 @@ export async function status(
   const endpoints = endpointsOf(env);
   if (endpoints.port === null) {
     deps.reporter.warn(
-      `APP_SERVER_PORT in hub.env is "${env.APP_SERVER_PORT ?? ''}", which is not a port number; the Hub cannot listen on it.`,
+      `APP_SERVER_PORT in app.env is "${env.APP_SERVER_PORT ?? ''}", which is not a port number; ${subject} cannot listen on it.`,
     );
   }
   const url = healthUrl(env);
@@ -98,9 +104,7 @@ export async function status(
     );
   }
 
-  const currentRelease = state.releases.find(
-    (record) => record.version === state.current,
-  );
+  const currentRelease = findRelease(state, state.current);
   const nodeMajor = currentNodeMajor();
   const nodeMatches = currentRelease?.buildTarget.nodeMajor === nodeMajor;
   if (!nodeMatches) {
@@ -110,10 +114,11 @@ export async function status(
   }
 
   let latest: string | null = null;
-  if (!input.flags.offline) {
+  if (template && !input.flags.offline) {
     try {
       latest = await resolveTemplateVersion(
         state.registry,
+        template.package,
         'latest',
         deps.fetchImpl,
       );
@@ -129,7 +134,12 @@ export async function status(
     result: {
       directory: root,
       name: state.name,
+      appName: state.appName,
+      basePath: state.basePath,
+      source: state.source,
       current: state.current,
+      version: currentRelease?.version ?? null,
+      builtAt: currentRelease?.builtAt ?? null,
       currentLink: link ?? null,
       dialect: state.dialect,
       registry: state.registry,
@@ -145,10 +155,12 @@ export async function status(
       },
       pending: state.pending ?? null,
       latest,
-      updateAvailable: latest === null ? null : latest !== state.current,
+      updateAvailable:
+        latest === null ? null : latest !== currentRelease?.version,
     },
     summary: [
-      `Hub ${state.current} at ${root}`,
+      `${capitalize(subject)} ${state.appName} ${currentRelease?.version ?? '?'} at ${root}`,
+      `  Release   ${state.current}${currentRelease ? `, built ${currentRelease.builtAt}` : ''}`,
       `  URL       ${endpoints.url} (listening on ${endpoints.host}:${endpoints.port ?? `invalid port "${env.APP_SERVER_PORT ?? ''}"`})`,
       `  Health    ${healthy ? 'ok' : 'not answering'} (${url})`,
       `  Process   ${processInfo ? `${processInfo.status}, pid ${processInfo.pid}, ${processInfo.restarts} restarts` : 'not registered with pm2'} (${state.name})`,
@@ -156,12 +168,12 @@ export async function status(
       ...(latest === null
         ? []
         : [
-            `  Latest    ${latest}${latest === state.current ? ' (installed)' : ' (update available)'}`,
+            `  Latest    ${latest}${latest === currentRelease?.version ? ' (installed)' : ' (update available)'}`,
           ]),
       '  Releases',
       ...releases.map(
         (release) =>
-          `    ${release.current ? '*' : ' '} ${release.version}  ${formatSize(release.sizeBytes)}  ${release.installedAt}`,
+          `    ${release.current ? '*' : ' '} ${release.id}  ${formatSize(release.sizeBytes)}  installed ${release.installedAt}`,
       ),
       ...(backups.length > 0
         ? ['  Backups', ...backups.map((backup) => `    ${backup}`)]

@@ -16,14 +16,14 @@ export function shellQuote(value: string): string {
 }
 
 export interface InstallerCommandOptions {
-  /** Registry to fetch the installer from; the Hub's own registry where one is known. */
+  /** Registry to fetch the installer from; the installation's own registry where one is known. */
   registry?: string;
   /** A version or dist-tag to run; this installer's own version by default. */
   version?: string;
 }
 
 /**
- * A app-installer command as a suggestion prints it, so it runs as-is: through npx, because nothing installs a
+ * An app-installer command as a suggestion prints it, so it runs as-is: through npx, because nothing installs an
  * `app-installer` binary on PATH, and with the registry named, because NocoBase 3 packages are not on the public npm
  * registry. `--yes` answers npx's own install prompt, which would otherwise block an agent. The version is pinned to
  * this installer's, so a recovery runs the same code that wrote the state it recovers from.

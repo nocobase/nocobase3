@@ -12,7 +12,7 @@ export interface Pm2Process {
   pid: number;
   status: string;
   restarts: number;
-  /** The directory pm2 started the process in; for a Hub this installer started, the Hub root. */
+  /** The directory pm2 started the process in; for an application this installer started, the installation root. */
   cwd?: string;
 }
 

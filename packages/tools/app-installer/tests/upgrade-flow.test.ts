@@ -2,8 +2,8 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
+  mkdirSync,
   readlinkSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -24,15 +24,19 @@ let world: FakeWorld;
 
 const database = () =>
   readFileSync(path.join(root, 'storage/hub/database/main.sqlite'), 'utf8');
+interface Recorded {
+  id: string;
+  version: string;
+  builtAt: string;
+  installedAt: string;
+  buildTarget: { nodeMajor: number };
+}
 const state = () =>
   JSON.parse(readFileSync(path.join(root, 'installer.json'), 'utf8')) as {
     current: string;
+    registry: string;
     pending?: Record<string, unknown>;
-    releases: {
-      version: string;
-      installedAt: string;
-      buildTarget: { nodeMajor: number };
-    }[];
+    releases: Recorded[];
     history: Record<string, unknown>[];
   };
 const writeState = (next: ReturnType<typeof state>) =>
@@ -40,7 +44,18 @@ const writeState = (next: ReturnType<typeof state>) =>
     path.join(root, 'installer.json'),
     JSON.stringify(next, null, 2),
   );
-const link = () => readlinkSync(path.join(root, 'current'));
+/** The newest build of a version on record. */
+const releaseOf = (version: string): Recorded =>
+  state()
+    .releases.filter((record) => record.version === version)
+    .sort((a, b) => b.builtAt.localeCompare(a.builtAt))[0];
+const idOf = (version: string) => releaseOf(version).id;
+const releasePath = (id: string) => path.join(root, 'releases', id, 'app');
+/** The release `current` points at, as an id. */
+const linked = () =>
+  readlinkSync(path.join(root, 'current')).split(path.sep)[1];
+const linkedVersion = () => linked().split('_')[0];
+const currentVersion = () => state().current.split('_')[0];
 
 async function installOld(extra: string[] = []) {
   const result = await hub(world, [
@@ -68,41 +83,46 @@ afterEach(() => {
 describe('upgrade', () => {
   it('backs up, switches, migrates and starts the new release', async () => {
     await installOld();
+    const from = state().current;
     const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
 
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({
-      from: '1.0.0',
-      to: '1.1.0',
+      from,
+      to: idOf('1.1.0'),
+      fromVersion: '1.0.0',
+      toVersion: '1.1.0',
       migrations: 2,
     });
-    expect(link()).toBe(path.join('releases', '1.1.0', 'hub'));
+    expect(linked()).toBe(idOf('1.1.0'));
     expect(database()).toBe('schema of 1.1.0');
     const backup = String(result.json.result?.backup);
-    expect(readFileSync(path.join(root, backup, 'main.sqlite'), 'utf8')).toBe(
-      'schema of 1.0.0',
-    );
-    expect(state()).toMatchObject({ current: '1.1.0' });
+    expect(
+      readFileSync(path.join(root, backup, 'sqlite/main/main.sqlite'), 'utf8'),
+    ).toBe('schema of 1.0.0');
+    expect(state().current).toBe(idOf('1.1.0'));
     expect(state().pending).toBeUndefined();
   });
 
   it('rolls itself back, restoring the database, when the new release does not start (exit 3)', async () => {
     await installOld();
+    const from = state().current;
     world.startQueue = ['errored'];
     const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
 
     expect(result.code).toBe(3);
     expect(result.json.error?.code).toBe('UPGRADE_ROLLED_BACK');
-    expect(link()).toBe(path.join('releases', '1.0.0', 'hub'));
+    expect(linked()).toBe(from);
     expect(database()).toBe('schema of 1.0.0');
-    expect(state().current).toBe('1.0.0');
+    expect(state().current).toBe(from);
     expect(state().pending).toBeUndefined();
     // Built by this upgrade and rolled back cleanly: nothing to keep.
-    expect(existsSync(path.join(root, 'releases', '1.1.0'))).toBe(false);
+    expect(readdirSync(path.join(root, 'releases'))).toEqual([from]);
   });
 
   it('keeps the new release and the pending state when the old one does not come back either (exit 4)', async () => {
     await installOld();
+    const from = state().current;
     world.startQueue = ['errored', 'errored'];
     const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
 
@@ -113,8 +133,7 @@ describe('upgrade', () => {
     expect(runs).toContain(
       `npx --yes --registry=${state().registry} @nocobase/app-installer@${packageMetadata.version} rollback --dir ${root}`,
     );
-    expect(existsSync(path.join(root, 'releases', '1.1.0', 'hub'))).toBe(true);
-    expect(state().releases.map((record) => record.version)).toContain('1.1.0');
+    expect(existsSync(releasePath(idOf('1.1.0')))).toBe(true);
     expect(state().pending).toMatchObject({
       action: 'upgrade',
       switched: true,
@@ -124,14 +143,14 @@ describe('upgrade', () => {
     const recovered = await hub(world, ['rollback', '--dir', root, '--yes']);
     expect(recovered.code).toBe(0);
     expect(recovered.json.result).toMatchObject({
-      to: '1.0.0',
+      to: from,
       databaseRestored: true,
     });
     expect(database()).toBe('schema of 1.0.0');
     expect(state().pending).toBeUndefined();
   });
 
-  it('says where the pre-upgrade database is when the failed rollback did not restore it (exit 4)', async () => {
+  it('says where the pre-upgrade databases are when the failed rollback did not restore them (exit 4)', async () => {
     // Nothing to migrate, so the automatic rollback leaves the database alone before failing to start.
     world.pendingTasks = {};
     await installOld();
@@ -147,17 +166,19 @@ describe('upgrade', () => {
     const note = error.suggestions.find((suggestion) =>
       suggestion.message.includes(path.join(root, error.details.backup)),
     );
-    expect(note?.message).toContain(path.join(root, 'storage/hub/database'));
     expect(note?.run).toBeUndefined();
   });
 
-  it('removes a half-written backup and restarts the old release when the backup fails', async () => {
+  it('removes a half-written backup and restarts the old release when the database is missing', async () => {
     await installOld();
     rmSync(path.join(root, 'storage/hub/database/main.sqlite'));
     const result = await hub(world, ['upgrade', '--dir', root, '--yes']);
 
     expect(result.code).toBe(1);
     expect(result.json.error?.code).toBe('UPGRADE_ABORTED');
+    expect(result.json.error?.message).toContain(
+      path.join(root, 'storage/hub/database/main.sqlite'),
+    );
     expect(readdirSync(path.join(root, 'backups'))).toEqual([]);
     expect(state().pending).toBeUndefined();
     expect(world.pm2.processes.get('nocobase-hub')?.status).toBe('online');
@@ -179,14 +200,12 @@ describe('upgrade', () => {
     expect(result.json.error?.code).toBe('DOWNGRADE');
   });
 
-  it('rebuilds a recorded release whose directory is gone, and replaces its record', async () => {
+  it('builds a release again when its directory is gone, and forgets the missing one', async () => {
     await installOld();
     await hub(world, ['upgrade', '--dir', root, '--yes']);
     await hub(world, ['rollback', '--dir', root, '--yes']);
-    const before = state().releases.find(
-      (record) => record.version === '1.1.0',
-    );
-    rmSync(path.join(root, 'releases', '1.1.0'), { recursive: true });
+    const before = idOf('1.1.0');
+    rmSync(path.join(root, 'releases', before), { recursive: true });
     world.calls.length = 0;
 
     const result = await hub(world, [
@@ -203,11 +222,11 @@ describe('upgrade', () => {
     const after = state().releases.filter(
       (record) => record.version === '1.1.0',
     );
-    expect(after).toHaveLength(1);
-    expect(after[0].installedAt).not.toBe(before?.installedAt);
+    expect(after.map((record) => record.id)).toEqual([result.json.result?.to]);
+    expect(after[0].id).not.toBe(before);
   });
 
-  it('rebuilds a release recorded for another Node major instead of failing after the prompt', async () => {
+  it('builds a release recorded for another Node major again instead of failing after the prompt', async () => {
     await installOld();
     await hub(world, ['upgrade', '--dir', root, '--yes']);
     await hub(world, ['rollback', '--dir', root, '--yes']);
@@ -227,10 +246,9 @@ describe('upgrade', () => {
     ]);
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({ reused: false });
-    expect(
-      state().releases.find((record) => record.version === '1.1.0')?.buildTarget
-        .nodeMajor,
-    ).toBe(Number.parseInt(process.versions.node, 10));
+    expect(releaseOf('1.1.0').buildTarget.nodeMajor).toBe(
+      Number.parseInt(process.versions.node, 10),
+    );
   });
 
   it('refuses to touch a pm2 process of the same name that belongs to another directory', async () => {
@@ -249,21 +267,45 @@ describe('upgrade', () => {
 describe('rollback', () => {
   it('restores the database from before a migrating upgrade', async () => {
     await installOld();
+    const from = state().current;
     await hub(world, ['upgrade', '--dir', root, '--yes']);
     const result = await hub(world, ['rollback', '--dir', root, '--yes']);
 
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({
-      to: '1.0.0',
+      to: from,
       databaseRestored: true,
     });
     expect(database()).toBe('schema of 1.0.0');
-    expect(link()).toBe(path.join('releases', '1.0.0', 'hub'));
-    expect(state().current).toBe('1.0.0');
+    expect(linked()).toBe(from);
+    expect(state().current).toBe(from);
+  });
+
+  it('takes a version as well as a release id', async () => {
+    await installOld();
+    const from = state().current;
+    await hub(world, ['upgrade', '--dir', root, '--yes']);
+    const result = await hub(world, [
+      'rollback',
+      '--dir',
+      root,
+      '--to',
+      '1.0.0',
+      '--yes',
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result).toMatchObject({ to: from });
   });
 
   it('on an external database, rolls back without trying to restore a database it never copied', async () => {
     await installOld(['--dialect', 'postgres']);
+    writeFileSync(
+      path.join(root, 'config.yml'),
+      'database:\n  connections:\n    main: { dialect: postgres, host: db }\n',
+    );
+    const refused = await hub(world, ['upgrade', '--dir', root, '--yes']);
+    expect(refused.json.error?.code).toBe('BACKUP_REQUIRED');
     const upgraded = await hub(world, [
       'upgrade',
       '--dir',
@@ -276,11 +318,11 @@ describe('rollback', () => {
     const result = await hub(world, ['rollback', '--dir', root, '--yes']);
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({
-      to: '1.0.0',
+      to: idOf('1.0.0'),
       databaseRestored: false,
     });
     expect(result.json.warnings.join('\n')).toContain(
-      'Restore it from your own backup',
+      'Restore them from your own backup',
     );
   });
 
@@ -294,23 +336,24 @@ describe('rollback', () => {
 
     expect(result.code).toBe(1);
     expect(result.json.error?.code).toBe('ROLLBACK_ABORTED');
-    expect(state().current).toBe('1.1.0');
-    expect(link()).toBe(path.join('releases', '1.1.0', 'hub'));
+    expect(currentVersion()).toBe('1.1.0');
+    expect(linkedVersion()).toBe('1.1.0');
     expect(state().pending).toBeUndefined();
     expect(database()).toBe('schema of 1.1.0');
   });
 
   it('stays pending when the target does not start, and finishes when run again', async () => {
     await installOld();
+    const from = state().current;
     await hub(world, ['upgrade', '--dir', root, '--yes']);
     world.startQueue = ['errored'];
     const failed = await hub(world, ['rollback', '--dir', root, '--yes']);
 
     expect(failed.code).toBe(4);
-    // Switched, so the link and installer.json both say 1.0.0.
-    expect(state().current).toBe('1.0.0');
-    expect(link()).toBe(path.join('releases', '1.0.0', 'hub'));
-    expect(state().pending).toMatchObject({ action: 'rollback', to: '1.0.0' });
+    // Switched, so the link and installer.json both name the release returned to.
+    expect(state().current).toBe(from);
+    expect(linked()).toBe(from);
+    expect(state().pending).toMatchObject({ action: 'rollback', to: from });
 
     const finished = await hub(world, ['rollback', '--dir', root, '--yes']);
     expect(finished.code).toBe(0);
@@ -323,12 +366,13 @@ describe('rollback', () => {
 
   it('recovers an upgrade interrupted before the switch by starting the old release, without a restore', async () => {
     await installOld();
-    // As left by an upgrade killed while stopping the Hub: pending recorded, no backup, not switched.
+    const from = state().current;
+    // As left by an upgrade killed while stopping the application: pending recorded, no backup, not switched.
     const interrupted = state();
     interrupted.pending = {
       action: 'upgrade',
-      from: '1.0.0',
-      to: '1.1.0',
+      from,
+      to: '1.1.0_20260101T010000Z',
       startedAt: new Date().toISOString(),
     };
     writeState(interrupted);
@@ -337,7 +381,7 @@ describe('rollback', () => {
     const result = await hub(world, ['rollback', '--dir', root, '--yes']);
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({
-      to: '1.0.0',
+      to: from,
       databaseRestored: false,
       recovered: 'upgrade',
     });
@@ -350,7 +394,9 @@ describe('rollback', () => {
     world.published = ['1.0.0', '1.1.0', '1.2.0'];
     world.pendingTasks = {};
     await installOld();
+    const first = state().current;
     await hub(world, ['upgrade', '--dir', root, '--to', '1.1.0', '--yes']);
+    const middle = idOf('1.1.0');
     await hub(world, ['upgrade', '--dir', root, '--to', '1.2.0', '--yes']);
     // Back to 1.0.0 over two rollbacks, then straight to 1.2.0, which is reused with its old install time.
     await hub(world, ['rollback', '--dir', root, '--yes']);
@@ -367,10 +413,13 @@ describe('rollback', () => {
     ]);
 
     expect(result.code).toBe(0);
-    expect(result.json.result).toMatchObject({ pruned: ['1.1.0'] });
-    expect(existsSync(path.join(root, 'releases', '1.0.0', 'hub'))).toBe(true);
+    expect(result.json.result).toMatchObject({
+      reused: true,
+      pruned: [middle],
+    });
+    expect(existsSync(releasePath(first))).toBe(true);
     const back = await hub(world, ['rollback', '--dir', root, '--yes']);
-    expect(back.json.result).toMatchObject({ to: '1.0.0' });
+    expect(back.json.result).toMatchObject({ to: first });
   });
 });
 
@@ -378,14 +427,11 @@ describe('upgrade --rebuild', () => {
   const builds = () =>
     world.calls.filter((call) => call[0] === 'pnpm' && call[1] === 'build')
       .length;
-  const marker = () =>
-    path.join(root, 'releases', '1.0.0', 'hub', 'old-build.marker');
 
-  it('builds the running version again and swaps it in during the downtime', async () => {
+  it('builds the running version again as a release of its own and switches to it', async () => {
     await installOld();
-    writeFileSync(marker(), '');
+    const original = state().current;
     const before = builds();
-    const recorded = state().releases[0];
     const result = await hub(world, [
       'upgrade',
       '--dir',
@@ -395,40 +441,37 @@ describe('upgrade --rebuild', () => {
     ]);
 
     expect(result.code).toBe(0);
+    const rebuilt = String(result.json.result?.to);
     expect(result.json.result).toMatchObject({
-      from: '1.0.0',
-      to: '1.0.0',
+      from: original,
+      fromVersion: '1.0.0',
+      toVersion: '1.0.0',
       upgraded: true,
       rebuilt: true,
       reused: false,
       migrations: 0,
     });
+    expect(rebuilt).not.toBe(original);
     expect(builds()).toBe(before + 1);
-    // A fresh unpack replaced the directory; nothing of the old build, and no staging directory, is left.
-    expect(existsSync(marker())).toBe(false);
-    expect(
-      existsSync(
-        path.join(root, 'releases/1.0.0/hub/dist/server/standalone.js'),
-      ),
-    ).toBe(true);
-    expect(readdirSync(path.join(root, 'releases'))).toEqual(['1.0.0']);
-    expect(link()).toBe(path.join('releases', '1.0.0', 'hub'));
-    expect(state().current).toBe('1.0.0');
-    expect(state().releases.map((record) => record.version)).toEqual(['1.0.0']);
-    expect(state().releases[0].installedAt).not.toBe(recorded.installedAt);
+    // The build it replaced stays on disk, as the release a rollback returns to.
+    expect(readdirSync(path.join(root, 'releases')).sort()).toEqual(
+      [original, rebuilt].sort(),
+    );
+    expect(linked()).toBe(rebuilt);
+    expect(state().current).toBe(rebuilt);
     expect(state().history.at(-1)).toMatchObject({
       action: 'upgrade',
-      from: '1.0.0',
-      to: '1.0.0',
+      from: original,
+      to: rebuilt,
       outcome: 'completed',
       rebuild: true,
     });
     expect(state().pending).toBeUndefined();
   });
 
-  it('puts the replaced release back when the rebuilt one does not start (exit 3)', async () => {
+  it('goes back to the build it replaced when the rebuilt one does not start (exit 3)', async () => {
     await installOld();
-    writeFileSync(marker(), '');
+    const original = state().current;
     const recorded = state().releases[0];
     world.startQueue = ['errored'];
     const result = await hub(world, [
@@ -441,10 +484,10 @@ describe('upgrade --rebuild', () => {
 
     expect(result.code).toBe(3);
     expect(result.json.error?.code).toBe('UPGRADE_ROLLED_BACK');
-    expect(result.json.error?.message).toContain('as it was before');
-    expect(existsSync(marker())).toBe(true);
-    expect(readdirSync(path.join(root, 'releases'))).toEqual(['1.0.0']);
-    expect(state().releases[0]).toEqual(recorded);
+    expect(result.json.error?.message).toContain('Rebuilding 1.0.0');
+    expect(linked()).toBe(original);
+    expect(readdirSync(path.join(root, 'releases'))).toEqual([original]);
+    expect(state().releases).toEqual([recorded]);
     expect(state().pending).toBeUndefined();
     expect(state().history.at(-1)).toMatchObject({
       outcome: 'rolled-back',
@@ -452,19 +495,16 @@ describe('upgrade --rebuild', () => {
     });
   });
 
-  it('finishes a rebuild that was interrupted between the two renames of the swap', async () => {
+  it('starts a fresh rebuild after one was interrupted, dropping what the interrupted one left', async () => {
     await installOld();
-    // The swap had moved the running version aside and not yet put the rebuilt one in its place.
-    const releases = path.join(root, 'releases');
-    renameSync(
-      path.join(releases, '1.0.0'),
-      path.join(releases, '1.0.0.replaced'),
-    );
+    const original = state().current;
+    const orphan = '1.0.0_20990101T000000Z';
+    mkdirSync(releasePath(orphan), { recursive: true });
     const current = state();
     current.pending = {
       action: 'upgrade',
-      from: '1.0.0',
-      to: '1.0.0',
+      from: original,
+      to: orphan,
       startedAt: '2026-01-01T00:00:00.000Z',
       rebuild: true,
       switched: true,
@@ -487,8 +527,11 @@ describe('upgrade --rebuild', () => {
       '--yes',
     ]);
     expect(result.code).toBe(0);
-    expect(result.json.result).toMatchObject({ rebuilt: true, to: '1.0.0' });
-    expect(readdirSync(releases)).toEqual(['1.0.0']);
+    expect(result.json.result).toMatchObject({
+      rebuilt: true,
+      toVersion: '1.0.0',
+    });
+    expect(existsSync(path.join(root, 'releases', orphan))).toBe(false);
     expect(state().pending).toBeUndefined();
   });
 
@@ -550,7 +593,7 @@ describe('upgrade --rebuild', () => {
     ]);
     expect(rebuilt.code).toBe(0);
     expect(rebuilt.json.result).toMatchObject({
-      to: '1.1.0',
+      toVersion: '1.1.0',
       reused: false,
       rebuilt: false,
     });

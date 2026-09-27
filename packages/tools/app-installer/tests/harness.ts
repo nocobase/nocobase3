@@ -44,6 +44,10 @@ export interface FakeWorld {
   startStatus: string;
   /** Statuses for the next starts, in order, before `startStatus` applies again. */
   startQueue: string[];
+  /** Unpacked manifests omit `nocobase.builtAt` and `nocobase.basePath`, as builds before they were recorded did. */
+  legacyManifest?: boolean;
+  /** Build times handed to unpacked manifests, one minute apart so every build is a release of its own. */
+  builds: number;
 }
 
 /** The part of the template's `config.example.yml` the installer reads, which `config init` copies. */
@@ -52,6 +56,12 @@ const EXAMPLE_CONFIG = `users:
     username: nocobase # stored lowercase
     email: admin@nocobase.com
     password: admin123
+database:
+  default: main
+  connections:
+    main:
+      dialect: sqlite
+      database: hub/database/main.sqlite
 `;
 
 const buildTarget = () => ({
@@ -61,14 +71,14 @@ const buildTarget = () => ({
   nodeMajor: Number.parseInt(process.versions.node, 10),
 });
 
+/** `.build/<version>/hub/...` names a version; `releases/<version>_<time>/app` names a release of one. */
 function versionFromPath(file: string): string {
-  // .build/<version>/hub/... or releases/<version>/hub
   const parts = file.split(path.sep);
   const index = Math.max(
     parts.lastIndexOf('.build'),
     parts.lastIndexOf('releases'),
   );
-  return parts[index + 1];
+  return parts[index + 1].split('_')[0];
 }
 
 export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
@@ -81,6 +91,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
     published: ['1.0.0', '1.1.0'],
     startStatus: 'online',
     startQueue: [],
+    builds: 0,
     ...overrides,
   } as FakeWorld;
 
@@ -146,9 +157,19 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
         path.join(target, 'dist/server/standalone.js'),
         `// ${version}\n`,
       );
+      const builtAt = new Date(
+        Date.UTC(2026, 0, 1) + world.builds++ * 60_000,
+      ).toISOString();
       writeFileSync(
         path.join(target, 'dist/package.json'),
-        JSON.stringify({ nocobase: { buildTarget: buildTarget() } }),
+        JSON.stringify({
+          name: 'hub',
+          version,
+          nocobase: {
+            buildTarget: buildTarget(),
+            ...(world.legacyManifest ? {} : { builtAt, basePath: '/hub' }),
+          },
+        }),
       );
       return { stdout: '', stderr: '' };
     }
@@ -176,7 +197,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
       }
       if (key === 'db apply') {
         const database = path.join(
-          env.HUB_STORAGE_DIR ?? '',
+          env.APP_STORAGE_DIR ?? '',
           'hub/database/main.sqlite',
         );
         mkdirSync(path.dirname(database), { recursive: true });

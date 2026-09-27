@@ -1,14 +1,22 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { EXIT_INVALID, InstallerError, isInstallerError } from './errors.ts';
 import {
-  APP_NAME,
-  HUB_BASE_PATH,
-  TEMPLATE_PACKAGE,
+  RELEASE_APP_DIR,
   buildRoot,
   releaseDir,
+  releaseId,
+  stagingDir,
   type Layout,
+  type TemplateDefinition,
 } from './layout.ts';
 import type { Reporter } from './output.ts';
 import { currentNodeMajor } from './prechecks.ts';
@@ -35,14 +43,14 @@ export const DIALECTS = [
 
 export type Dialect = (typeof DIALECTS)[number];
 
-/** SQLite ships with the template; any other dialect's driver has to be added before the build. */
+/** SQLite ships with every template; any other dialect's driver has to be added before the build. */
 export function driversFor(dialect: Dialect): string[] {
   return dialect === 'sqlite' ? [] : [`@nocobase/db-${dialect}`];
 }
 
 /**
  * The environment every install step runs with. pnpm 11 holds back versions younger than a day by default, which would
- * make a Hub released today uninstallable until tomorrow; the NocoBase documentation clears it the same way.
+ * make a template released today uninstallable until tomorrow; the NocoBase documentation clears it the same way.
  */
 export function installEnv(
   base: NodeJS.ProcessEnv = process.env,
@@ -118,21 +126,48 @@ export function verifyBuildTarget(
   return target;
 }
 
-export interface PrepareReleaseOptions {
-  layout: Layout;
-  version: string;
-  registry: string;
-  drivers: readonly string[];
-  keepSource: boolean;
-  reporter: Reporter;
-  run?: RunCommand;
-  /** Where to unpack the release; `releases/<version>/hub` unless a rebuild of the running version is staged beside it. */
-  targetDir?: string;
+/** What a release's `dist/package.json` says about it. */
+export interface ReleaseManifest {
+  name?: string;
+  version?: string;
+  nocobase?: {
+    buildTarget?: BuildTarget;
+    basePath?: string;
+    builtAt?: string;
+  };
 }
 
+export async function readReleaseManifest(
+  dir: string,
+): Promise<ReleaseManifest> {
+  return JSON.parse(
+    await readFile(path.join(dir, 'dist/package.json'), 'utf8'),
+  ) as ReleaseManifest;
+}
+
+/** A release on disk, named and checked. */
 export interface PreparedRelease {
+  id: string;
   dir: string;
+  appName: string;
+  version: string;
+  builtAt: string;
+  basePath: string;
   buildTarget: BuildTarget;
+  /** The release was already on disk under this id, so nothing was unpacked. */
+  reused: boolean;
+}
+
+export interface UnpackOptions {
+  layout: Layout;
+  archive: string;
+  run?: RunCommand;
+  /**
+   * What to assume when the manifest predates `nocobase.builtAt` and `nocobase.basePath`. Only a template build passes
+   * this, since the installer knows its template's base path and has just built it; an archive from elsewhere that
+   * lacks them is refused before this is called.
+   */
+  fallback?: { builtAt: string; basePath: string };
 }
 
 function stepFailure(
@@ -154,29 +189,90 @@ function stepFailure(
 }
 
 /**
- * Builds one release: the Hub template is generated and built in `.build/<version>/`, and only the deployment archive
- * it produces is unpacked into `releases/<version>/hub/`. The build directory, with the sources and development
- * dependencies, is removed afterwards unless `keepSource` is set. Nothing here touches the running Hub.
- *
- * On failure every directory this call created is removed again, so a retry starts clean.
+ * Unpacks a deployment archive into a staging directory, reads which release it is from its manifest, checks that it
+ * was built for this machine, and moves it to `releases/<id>/app`. A release already on disk under the same id is the
+ * same build, so the staged copy is dropped and the existing one is used. Nothing here touches the running application,
+ * and on failure the staging directory is removed.
  */
-export async function prepareRelease(
-  options: PrepareReleaseOptions,
+export async function unpackRelease(
+  options: UnpackOptions,
 ): Promise<PreparedRelease> {
-  const { layout, version, reporter } = options;
+  const run = options.run ?? runCommand;
+  const staging = stagingDir(options.layout);
+  const stagedApp = path.join(staging, RELEASE_APP_DIR);
+  await rm(staging, { recursive: true, force: true });
+  try {
+    await mkdir(stagedApp, { recursive: true });
+    try {
+      await run('tar', ['-xzf', options.archive, '-C', stagedApp]);
+    } catch (error) {
+      throw stepFailure(
+        'UNPACK_FAILED',
+        'Unpacking the deployment archive',
+        error,
+      );
+    }
+    const manifest = await readReleaseManifest(stagedApp);
+    const buildTarget = verifyBuildTarget(manifest.nocobase?.buildTarget);
+    const version = manifest.version ?? '0.0.0';
+    const builtAt = manifest.nocobase?.builtAt ?? options.fallback?.builtAt;
+    const basePath = manifest.nocobase?.basePath ?? options.fallback?.basePath;
+    if (!builtAt || !basePath || !manifest.name) {
+      throw new InstallerError(
+        'ARCHIVE_TOO_OLD',
+        'The archive does not record its name, base path and build time.',
+        { exitCode: EXIT_INVALID },
+      );
+    }
+    const id = releaseId(version, builtAt);
+    const dir = releaseDir(options.layout, id);
+    const reused = existsSync(dir);
+    if (!reused) {
+      await mkdir(options.layout.releasesDir, { recursive: true });
+      await rename(staging, path.dirname(dir));
+    }
+    return {
+      id,
+      dir,
+      appName: manifest.name,
+      version,
+      builtAt,
+      basePath,
+      buildTarget,
+      reused,
+    };
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
+export interface BuildFromTemplateOptions {
+  layout: Layout;
+  template: TemplateDefinition;
+  version: string;
+  registry: string;
+  drivers: readonly string[];
+  keepSource: boolean;
+  reporter: Reporter;
+  run?: RunCommand;
+}
+
+/**
+ * Builds one release from a published template: the project is generated and built in `.build/<version>/`, and only
+ * the deployment archive it produces is unpacked into `releases/<id>/app`. The build directory, with the sources and
+ * development dependencies, is removed afterwards unless `keepSource` is set. Nothing here touches the running
+ * application; on failure every directory this call created is removed again, so a retry starts clean.
+ */
+export async function buildFromTemplate(
+  options: BuildFromTemplateOptions,
+): Promise<PreparedRelease> {
+  const { layout, template, version, reporter } = options;
   const run = options.run ?? runCommand;
   const build = buildRoot(layout, version);
-  const projectDir = path.join(build, APP_NAME);
-  const target = options.targetDir ?? releaseDir(layout, version);
+  const projectDir = path.join(build, template.projectName);
   const env = installEnv();
+  const startedAt = new Date().toISOString();
 
-  if (existsSync(target)) {
-    throw new InstallerError('RELEASE_EXISTS', `${target} already exists.`, {
-      exitCode: EXIT_INVALID,
-    });
-  }
-
-  let releaseCreated = false;
   try {
     await rm(build, { recursive: true, force: true });
     await mkdir(build, { recursive: true });
@@ -187,7 +283,7 @@ export async function prepareRelease(
       `@nocobase:registry=${normalizeRegistry(options.registry)}/\n`,
     );
 
-    reporter.progress(`Generating the Hub ${version} project`);
+    reporter.progress(`Generating the ${template.title} ${version} project`);
     let createStdout: string;
     try {
       ({ stdout: createStdout } = await run(
@@ -195,8 +291,8 @@ export async function prepareRelease(
         [
           'create',
           '@nocobase/app',
-          APP_NAME,
-          `--template=${TEMPLATE_PACKAGE}@${version}`,
+          template.projectName,
+          `--template=${template.package}@${version}`,
           `--registry=${normalizeRegistry(options.registry)}`,
           '--json',
         ],
@@ -245,48 +341,36 @@ export async function prepareRelease(
       }
     }
 
-    reporter.progress(`Building the Hub ${version}`);
+    reporter.progress(`Building the ${template.title} ${version}`);
     try {
       // The base path is compiled into the client; an APP_BASE_PATH left in the caller's shell must not leak in.
       await run('pnpm', ['build', '--tar'], {
         cwd: projectDir,
-        env: { ...env, APP_BASE_PATH: HUB_BASE_PATH },
+        env: { ...env, APP_BASE_PATH: template.basePath },
         timeoutMs: 30 * 60_000,
       });
     } catch (error) {
       throw stepFailure('BUILD_FAILED', 'pnpm build', error);
     }
 
-    const archive = path.join(projectDir, 'storage/exports/dist.tar.gz');
-    await mkdir(target, { recursive: true });
-    releaseCreated = true;
-    try {
-      await run('tar', ['-xzf', archive, '-C', target]);
-    } catch (error) {
-      throw stepFailure(
-        'UNPACK_FAILED',
-        'Unpacking the deployment archive',
-        error,
-      );
-    }
-
-    const manifest = JSON.parse(
-      await readFile(path.join(target, 'dist/package.json'), 'utf8'),
-    ) as { nocobase?: { buildTarget?: BuildTarget } };
-    const buildTarget = verifyBuildTarget(manifest.nocobase?.buildTarget);
+    const prepared = await unpackRelease({
+      layout,
+      archive: path.join(projectDir, 'storage/exports/dist.tar.gz'),
+      run,
+      // Published templates built before `pnpm build` recorded these have neither; the installer knows both.
+      fallback: { builtAt: startedAt, basePath: template.basePath },
+    });
 
     if (!options.keepSource) {
       await rm(build, { recursive: true, force: true });
       // Only removes `.build/` once it is empty; another version's kept build stays.
       await rmdir(layout.buildDir).catch(() => undefined);
     }
-    return { dir: target, buildTarget };
+    return prepared;
   } catch (error) {
-    if (releaseCreated) {
-      await rm(path.dirname(target), { recursive: true, force: true });
-    }
     if (!options.keepSource) {
       await rm(build, { recursive: true, force: true });
+      await rmdir(layout.buildDir).catch(() => undefined);
     }
     throw error;
   }

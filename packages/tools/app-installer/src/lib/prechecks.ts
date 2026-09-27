@@ -9,7 +9,7 @@ export const MINIMUM_NODE_MAJOR = 24;
 export const MINIMUM_PNPM_MAJOR = 11;
 /**
  * pm2 recognises `ecosystem.config.cjs` as a configuration from 4.3 on; an older one runs the file as the application
- * instead, which exits at once and looks like a Hub that cannot start.
+ * instead, which exits at once and looks like an application that cannot start.
  */
 export const MINIMUM_PM2_VERSION = '4.3.0';
 
@@ -96,7 +96,10 @@ export async function checkPm2(pm2: Pm2): Promise<string> {
       exitCode: EXIT_INVALID,
       suggestions: [
         { message: 'Install pm2 globally:', run: 'npm install -g pm2' },
-        { message: 'Or install without starting the Hub, with --no-start.' },
+        {
+          message:
+            'Or install without starting the application, with --no-start.',
+        },
       ],
     });
   }
@@ -124,7 +127,7 @@ export async function checkPm2(pm2: Pm2): Promise<string> {
 
 /**
  * The pm2 process name must be free. `pm2 start` on a name that is already registered does not start a second process:
- * it restarts the existing one — its own script and arguments — with the new environment, so another Hub on this
+ * it restarts the existing one — its own script and arguments — with the new environment, so another application on this
  * machine would come back serving this one's configuration and database.
  */
 export async function checkPm2NameFree(pm2: Pm2, name: string): Promise<void> {
@@ -137,7 +140,7 @@ export async function checkPm2NameFree(pm2: Pm2, name: string): Promise<void> {
         exitCode: EXIT_INVALID,
         suggestions: [
           {
-            message: `Give this Hub its own process name with --name, such as --name ${name}-2.`,
+            message: `Give this installation its own process name with --name, such as --name ${name}-2.`,
           },
         ],
       },
@@ -146,7 +149,7 @@ export async function checkPm2NameFree(pm2: Pm2, name: string): Promise<void> {
 }
 
 /**
- * The Hub's port must be free. Otherwise whatever already listens there answers the health check, and the install
+ * The application's port must be free. Otherwise whatever already listens there answers the health check, and the install
  * reports success while its own process crash-loops on EADDRINUSE.
  */
 export function checkPortFree(host: string, port: number): Promise<void> {
@@ -208,7 +211,7 @@ export async function checkTargetEmpty(root: string): Promise<boolean> {
         { message: 'Install into a new or empty directory.' },
         {
           message:
-            'To manage a Hub this installer already set up there, use status, upgrade or rollback instead.',
+            'To manage an application this installer already set up there, use status, upgrade or rollback instead.',
         },
       ],
     });

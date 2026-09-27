@@ -25,9 +25,9 @@ export interface AppCliEnvelope {
 
 /**
  * Carries a suggestion of the release's CLI over into the installer's error, with its command folded into the message.
- * None of them runs as-is from a Hub root: they name the release's own `dist/cli/index.js`, which a failed install or
- * upgrade has already removed and which reads the wrong configuration without `hub.env`, or `pnpm add`, which would
- * turn the Hub root into a project.
+ * None of them runs as-is from an installation root: they name the release's own `dist/cli/index.js`, which a failed
+ * install or upgrade has already removed and which reads the wrong configuration without `app.env`, or `pnpm add`,
+ * which would turn the installation root into a project.
  */
 export function toSuggestion(
   entry: NonNullable<
@@ -55,7 +55,7 @@ export interface AppCliOptions {
   releaseDir: string;
   /** Working directory for the command; the installer root. */
   cwd: string;
-  /** `hub.env` values, applied over the installer's own environment. */
+  /** `app.env` values, applied over the installer's own environment. */
   env: Record<string, string>;
   run?: RunCommand;
 }

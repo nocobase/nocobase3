@@ -1,5 +1,4 @@
 import { EXIT_INVALID, InstallerError } from './errors.ts';
-import { TEMPLATE_PACKAGE } from './layout.ts';
 
 /**
  * While NocoBase 3 publishes only to its own registry, that is the default; `--registry` and `NOCOBASE_REGISTRY`
@@ -35,10 +34,11 @@ interface Packument {
  */
 export async function resolveTemplateVersion(
   registry: string,
+  packageName: string,
   requested: string,
   fetchImpl: FetchLike = fetch,
 ): Promise<string> {
-  const url = `${normalizeRegistry(registry)}/${TEMPLATE_PACKAGE.replace('/', '%2f')}`;
+  const url = `${normalizeRegistry(registry)}/${packageName.replace('/', '%2f')}`;
   let packument: Packument;
   try {
     const response = await fetchImpl(url, {
@@ -52,7 +52,7 @@ export async function resolveTemplateVersion(
   } catch (error) {
     throw new InstallerError(
       'REGISTRY_UNREACHABLE',
-      `Could not read ${TEMPLATE_PACKAGE} from ${normalizeRegistry(registry)}: ${error instanceof Error ? error.message : String(error)}.`,
+      `Could not read ${packageName} from ${normalizeRegistry(registry)}: ${error instanceof Error ? error.message : String(error)}.`,
       {
         exitCode: EXIT_INVALID,
         cause: error,
@@ -75,7 +75,7 @@ export async function resolveTemplateVersion(
   const recent = Object.keys(packument.versions ?? {}).slice(-5);
   throw new InstallerError(
     'VERSION_NOT_FOUND',
-    `${TEMPLATE_PACKAGE} has no version or tag "${requested}".`,
+    `${packageName} has no version or tag "${requested}".`,
     {
       exitCode: EXIT_INVALID,
       details: {

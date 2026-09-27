@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Args, Flags } from '@oclif/core';
 import { runAppCli } from '../lib/app-cli.ts';
@@ -6,20 +6,15 @@ import { switchCurrent } from '../lib/current-link.ts';
 import { buildEcosystemConfig, buildLauncher } from '../lib/ecosystem.ts';
 import { shellQuote } from '../lib/invocation.ts';
 import {
-  buildHubEnv,
+  buildAppEnv,
   endpointsOf,
   healthUrl,
-  readHubEnv,
+  readAppEnv,
 } from '../lib/env-file.ts';
 import { EXIT_INVALID, InstallerError } from '../lib/errors.ts';
 import { pm2StartFailed, waitForHealthy } from '../lib/health.ts';
 import { readInitialAdmin, type InitialAdmin } from '../lib/initial-admin.ts';
-import {
-  HUB_BASE_PATH,
-  layoutOf,
-  releaseLinkTarget,
-  type Layout,
-} from '../lib/layout.ts';
+import { HUB_TEMPLATE, layoutOf, releaseLinkTarget } from '../lib/layout.ts';
 import { acquireLock } from '../lib/lock.ts';
 import type { Reporter } from '../lib/output.ts';
 import {
@@ -41,11 +36,12 @@ import {
 } from '../lib/registry.ts';
 import {
   DIALECTS,
+  buildFromTemplate,
   driversFor,
-  prepareRelease,
   type Dialect,
 } from '../lib/release.ts';
-import { runCommand, tail, type RunCommand } from '../lib/run-command.ts';
+import { runCommand, type RunCommand } from '../lib/run-command.ts';
+import { errorLogTail } from '../lib/service.ts';
 import { writeState, type InstallerState } from '../lib/state.ts';
 
 export const INSTALL_ARGS = {
@@ -99,8 +95,8 @@ export const INSTALL_FLAGS = {
     description: 'npm registry for the Hub template and NocoBase packages.',
   }),
   name: Flags.string({
-    default: 'nocobase-hub',
-    description: 'pm2 process name.',
+    description:
+      'pm2 process name. Defaults to nocobase- followed by the directory name, so each installation on a machine has its own.',
   }),
   start: Flags.boolean({
     allowNo: true,
@@ -135,7 +131,7 @@ export interface InstallInput {
     set?: string[];
     'set-from-env'?: string[];
     registry?: string;
-    name: string;
+    name?: string;
     start: boolean;
     'health-timeout': number;
     'keep-source': boolean;
@@ -189,14 +185,6 @@ function describeInitialAdmin(admin: InitialAdmin): string {
   return `${who} under ${admin.key} in config.yml, with ${password}`;
 }
 
-async function logTail(layout: Layout): Promise<string> {
-  const text = await readFile(
-    path.join(layout.logsDir, 'hub.err.log'),
-    'utf8',
-  ).catch(() => '');
-  return tail(text, 30);
-}
-
 /**
  * Removes what a failed install wrote. The target was new or empty when the install began, so everything in it now
  * came from this run. `created` is the topmost directory the install created, which may be a parent of the root;
@@ -246,6 +234,8 @@ export async function install(
   }
   const root = path.resolve(cwd, directory);
   const layout = layoutOf(root);
+  const template = HUB_TEMPLATE;
+  const name = flags.name ?? `nocobase-${path.basename(root)}`;
   const dialect = flags.dialect as Dialect;
   const registry = normalizeRegistry(flags.registry ?? defaultRegistry());
   const origin = (flags.origin ?? `http://${flags.host}:${flags.port}`).replace(
@@ -271,17 +261,18 @@ export async function install(
   await checkTar(run);
   if (flags.start) {
     await checkPm2(pm2);
-    await checkPm2NameFree(pm2, flags.name);
+    await checkPm2NameFree(pm2, name);
   }
   await checkPortFree(flags.host, flags.port);
   const version = await resolveTemplateVersion(
     registry,
+    template.package,
     flags['hub-version'],
     deps.fetchImpl,
   );
   if (!flags.origin) {
     reporter.warn(
-      `No --origin given; the Hub will build links for ${origin}. Pass --origin with the public address before exposing it.`,
+      `No --origin given; the ${template.title} will build links for ${origin}. Pass --origin with the public address before exposing it.`,
     );
   }
 
@@ -296,10 +287,13 @@ export async function install(
   }
   let switched = false;
   try {
-    reporter.progress(`Installing the Hub ${version} into ${root}`);
+    reporter.progress(
+      `Installing the ${template.title} ${version} into ${root}`,
+    );
     const drivers = driversFor(dialect);
-    const prepared = await prepareRelease({
+    const prepared = await buildFromTemplate({
       layout,
+      template,
       version,
       registry,
       drivers,
@@ -309,10 +303,16 @@ export async function install(
     });
 
     await writeFile(
-      layout.hubEnv,
-      buildHubEnv(layout, { origin, host: flags.host, port: flags.port }),
+      layout.appEnv,
+      buildAppEnv(layout, {
+        origin,
+        host: flags.host,
+        port: flags.port,
+        basePath: prepared.basePath,
+        legacyHubStorage: true,
+      }),
     );
-    const env = await readHubEnv(layout);
+    const env = await readAppEnv(layout);
     const cli = { releaseDir: prepared.dir, cwd: root, env, run };
 
     reporter.progress('Writing config.yml');
@@ -342,48 +342,65 @@ export async function install(
     await mkdir(layout.logsDir, { recursive: true });
     await writeFile(
       layout.ecosystemFile,
-      buildEcosystemConfig({ name: flags.name, nodePath: process.execPath }),
+      buildEcosystemConfig({
+        name,
+        nodePath: process.execPath,
+        keepChildren: template === HUB_TEMPLATE,
+      }),
     );
     await writeFile(layout.launcherFile, buildLauncher());
     const at = new Date().toISOString();
     const state: InstallerState = {
       schemaVersion: 1,
-      name: flags.name,
+      appName: prepared.appName,
+      basePath: prepared.basePath,
+      source: {
+        kind: 'template',
+        template: template.name,
+        package: template.package,
+      },
+      name,
       registry,
       dialect,
       drivers,
-      current: version,
+      current: prepared.id,
       releases: [
-        { version, installedAt: at, buildTarget: prepared.buildTarget },
+        {
+          id: prepared.id,
+          version: prepared.version,
+          builtAt: prepared.builtAt,
+          installedAt: at,
+          buildTarget: prepared.buildTarget,
+        },
       ],
-      history: [{ action: 'install', to: version, at }],
+      history: [{ action: 'install', to: prepared.id, at }],
     };
     await writeState(layout, state);
-    await switchCurrent(layout, releaseLinkTarget(version));
+    await switchCurrent(layout, releaseLinkTarget(prepared.id));
     switched = true;
 
     const url = healthUrl(env);
     const startCommand = `pm2 start ${shellQuote(layout.ecosystemFile)} && pm2 save`;
     if (flags.start) {
-      reporter.progress('Starting the Hub with pm2');
+      reporter.progress(`Starting the ${template.title} with pm2`);
       await pm2.start(layout.ecosystemFile, root);
       const healthy = await waitForHealthy(url, {
         timeoutMs: flags['health-timeout'] * 1000,
         fetchImpl: deps.fetchImpl,
-        failed: pm2StartFailed(pm2, flags.name),
+        failed: pm2StartFailed(pm2, name),
       });
       if (!healthy) {
         // The name was free before this install, so the process under it is the one just started.
-        await pm2.remove(flags.name).catch(() => undefined);
+        await pm2.remove(name).catch(() => undefined);
         throw new InstallerError(
           'START_FAILED',
-          `The Hub did not become healthy at ${url} (waited up to ${flags['health-timeout']}s). It is installed but not running.`,
+          `The ${template.title} did not become healthy at ${url} (waited up to ${flags['health-timeout']}s). It is installed but not running.`,
           {
-            details: { log: await logTail(layout) },
+            details: { log: await errorLogTail(layout) },
             suggestions: [
               {
                 message: 'Read the error log:',
-                run: `tail -n 100 ${shellQuote(path.join(layout.logsDir, 'hub.err.log'))}`,
+                run: `tail -n 100 ${shellQuote(layout.errorLog)}`,
               },
               { message: 'Start it again once fixed:', run: startCommand },
             ],
@@ -393,7 +410,7 @@ export async function install(
       await pm2.save();
     }
 
-    const hubUrl = `${origin}${HUB_BASE_PATH}/`;
+    const endpoints = endpointsOf(env);
     const initialAdmin = await readInitialAdmin(
       layout.configFile,
       path.join(prepared.dir, 'config.example.yml'),
@@ -406,13 +423,16 @@ export async function install(
       status: 'success',
       result: {
         directory: root,
-        version,
+        version: prepared.version,
+        releaseId: prepared.id,
         release: prepared.dir,
+        appName: prepared.appName,
+        basePath: prepared.basePath,
         dialect,
-        url: hubUrl,
-        endpoints: endpointsOf(env),
+        url: endpoints.url,
+        endpoints,
         healthUrl: url,
-        name: flags.name,
+        name,
         started: flags.start,
         configFile: layout.configFile,
         storageDir: layout.storageDir,
@@ -420,10 +440,11 @@ export async function install(
         nextCommands,
       },
       summary: [
-        `Hub ${version} is installed at ${root}${flags.start ? ' and running' : ''}.`,
-        `  URL       ${hubUrl}`,
+        `${template.title} ${prepared.version} is installed at ${root}${flags.start ? ' and running' : ''}.`,
+        `  URL       ${endpoints.url}`,
+        `  Release   ${prepared.id}`,
         `  Sign in   ${describeInitialAdmin(initialAdmin)}`,
-        `  Logs      pm2 logs ${flags.name}`,
+        `  Logs      pm2 logs ${name}`,
         'Next steps',
         ...(flags.start ? [] : [`  Start it: ${startCommand}`]),
         '  Start pm2 at boot: run `pm2 startup` and execute the command it prints (needs sudo).',

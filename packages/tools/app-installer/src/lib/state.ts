@@ -2,6 +2,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import { EXIT_INVALID, InstallerError } from './errors.ts';
 import { installerCommand, shellQuote } from './invocation.ts';
 import type { Layout } from './layout.ts';
+import { compareVersions } from './version.ts';
 
 export interface BuildTarget {
   platform: string;
@@ -11,14 +12,25 @@ export interface BuildTarget {
   nodeMajor: number;
 }
 
+/**
+ * Where an installation's releases come from, fixed at install time: a published template built on the server, or a
+ * deployment archive built elsewhere. An upgrade takes the same kind of source the install did.
+ */
+export type ReleaseSource =
+  { kind: 'template'; template: string; package: string } | { kind: 'archive' };
+
 export interface ReleaseRecord {
+  /** `<version>_<build time>`, also the directory under `releases/`. */
+  id: string;
   version: string;
+  builtAt: string;
   installedAt: string;
   buildTarget: BuildTarget;
 }
 
 export interface HistoryEntry {
   action: 'install' | 'upgrade' | 'rollback';
+  /** Release ids. */
   from?: string;
   to: string;
   at: string;
@@ -34,11 +46,12 @@ export interface HistoryEntry {
 }
 
 /**
- * An operation that stopped the Hub and has not finished. It is written before the Hub is stopped and cleared once the
- * operation ends either way, so finding one means the installer was interrupted during the downtime.
+ * An operation that stopped the application and has not finished. It is written before the application is stopped and
+ * cleared once the operation ends either way, so finding one means the installer was interrupted during the downtime.
  */
 export interface PendingOperation {
   action: 'upgrade' | 'rollback';
+  /** Release ids. */
   from: string;
   to: string;
   startedAt: string;
@@ -51,19 +64,26 @@ export interface PendingOperation {
   switched?: boolean;
   /** Rollback: the backup it restores, so an interrupted rollback restores it again when it is finished. */
   restoreFrom?: string;
-  /** Upgrade: `from` and `to` are the same version, built again for this machine. */
+  /** Upgrade: `to` is the running version built again for this machine. */
   rebuild?: boolean;
 }
 
-/** `installer.json`: what the installer knows about the Hub it manages. */
+/** `installer.json`: what the installer knows about the application it manages. */
 export interface InstallerState {
   schemaVersion: 1;
+  /** The application's `package.json` name, which owns its migration history; every release must carry the same. */
+  appName: string;
+  /** Compiled into the client and mounted by the server; every release must carry the same. */
+  basePath: string;
+  source: ReleaseSource;
   /** pm2 process name. */
   name: string;
+  /** Where the installer, and a template, are fetched from. */
   registry: string;
   dialect: string;
-  /** Driver packages added before each build, so an upgrade adds them again. */
+  /** Template source: driver packages added before each build, so an upgrade adds them again. */
   drivers: string[];
+  /** Id of the running release. */
   current: string;
   releases: ReleaseRecord[];
   history: HistoryEntry[];
@@ -78,13 +98,13 @@ export async function readState(layout: Layout): Promise<InstallerState> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new InstallerError(
         'NOT_INSTALLED',
-        `${layout.root} holds no Hub installed by app-installer (installer.json is missing).`,
+        `${layout.root} holds no application installed by app-installer (installer.json is missing).`,
         {
           exitCode: EXIT_INVALID,
           suggestions: [
             {
               message:
-                'Run the command from the Hub root, or name it with --dir.',
+                'Run the command from the installation root, or name it with --dir.',
             },
           ],
         },
@@ -124,4 +144,35 @@ export async function writeState(
   const temporary = `${layout.stateFile}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
   await rename(temporary, layout.stateFile);
+}
+
+export function findRelease(
+  state: InstallerState,
+  id: string,
+): ReleaseRecord | undefined {
+  return state.releases.find((record) => record.id === id);
+}
+
+/**
+ * The release a `--to` names: an id exactly, or a version, meaning the newest build of it on record. A version is
+ * what a person remembers; the id is what `status` prints when two builds of one version are on disk.
+ */
+export function resolveReleaseRef(
+  state: InstallerState,
+  ref: string,
+): ReleaseRecord | undefined {
+  return (
+    findRelease(state, ref) ??
+    [...state.releases]
+      .filter((record) => record.version === ref)
+      .sort((a, b) => b.builtAt.localeCompare(a.builtAt))[0]
+  );
+}
+
+/** Semantic-version order of two releases' versions; builds of one version compare equal. */
+export function compareReleaseVersions(
+  a: ReleaseRecord,
+  b: ReleaseRecord,
+): number {
+  return compareVersions(a.version, b.version) ?? 0;
 }

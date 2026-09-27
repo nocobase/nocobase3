@@ -9,7 +9,7 @@ export interface ConfirmOptions {
 }
 
 /**
- * Asks before an operation that takes the Hub down or discards data. `--yes` answers for scripts; without it, a run that
+ * Asks before an operation that takes the application down or discards data. `--yes` answers for scripts; without it, a run that
  * cannot ask — `--json`, or no terminal — stops instead of guessing.
  */
 export async function confirm(

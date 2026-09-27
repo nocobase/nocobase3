@@ -14,7 +14,7 @@ function isAlive(pid: number): boolean {
 }
 
 /**
- * Takes the root's lock so two installers never run against the same Hub. The file holds the owner's pid; a lock whose
+ * Takes the root's lock so two installers never run against the same installation. The file holds the owner's pid; a lock whose
  * owner is gone is stale and is taken over rather than blocking every later run.
  *
  * The pid is written to a private file first and linked into place, so the lock never exists without its owner in it:
@@ -44,7 +44,7 @@ export async function acquireLock(file: string): Promise<ReleaseLock> {
         ) {
           throw new InstallerError(
             'LOCKED',
-            `Another app-installer (pid ${owner}) is working on this Hub.`,
+            `Another app-installer (pid ${owner}) is working on this installation.`,
             {
               exitCode: EXIT_INVALID,
               suggestions: [

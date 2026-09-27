@@ -41,6 +41,7 @@ describe('resolveTemplateVersion', () => {
     await expect(
       resolveTemplateVersion(
         'https://registry.test/',
+        '@nocobase/app-template-hub',
         'latest',
         jsonFetch(packument),
       ),
@@ -51,6 +52,7 @@ describe('resolveTemplateVersion', () => {
     await expect(
       resolveTemplateVersion(
         'https://registry.test',
+        '@nocobase/app-template-hub',
         '1.0.0-beta.36',
         jsonFetch(packument),
       ),
@@ -61,6 +63,7 @@ describe('resolveTemplateVersion', () => {
     await expect(
       resolveTemplateVersion(
         'https://registry.test',
+        '@nocobase/app-template-hub',
         '9.9.9',
         jsonFetch(packument),
       ),
@@ -71,6 +74,7 @@ describe('resolveTemplateVersion', () => {
     await expect(
       resolveTemplateVersion(
         'https://registry.test',
+        '@nocobase/app-template-hub',
         'latest',
         jsonFetch({}, 503),
       ),
@@ -83,7 +87,12 @@ describe('resolveTemplateVersion', () => {
       requested = url;
       return { ok: true, status: 200, json: async () => packument };
     };
-    await resolveTemplateVersion('https://registry.test/', 'latest', fetchImpl);
+    await resolveTemplateVersion(
+      'https://registry.test/',
+      '@nocobase/app-template-hub',
+      'latest',
+      fetchImpl,
+    );
     expect(requested).toBe(
       'https://registry.test/@nocobase%2fapp-template-hub',
     );

@@ -12,7 +12,7 @@ export interface HealthOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-/** One request to the Hub's health route; true only for a response whose body says `ok: true`. */
+/** One request to the application's health route; true only for a response whose body says `ok: true`. */
 export async function checkHealth(
   url: string,
   fetchImpl: FetchLike = fetch,
@@ -31,7 +31,7 @@ export async function checkHealth(
 
 /**
  * Polls the health route until it answers, the timeout passes, or `failed` says there is no point waiting. The server
- * listens only once startup, migrations included, has finished, so a healthy answer means the Hub is ready.
+ * listens only once startup, migrations included, has finished, so a healthy answer means the application is ready.
  */
 export async function waitForHealthy(
   url: string,
@@ -52,8 +52,9 @@ export async function waitForHealthy(
 }
 
 /**
- * Restarts pm2 has made before the Hub answered, beyond which a start counts as failed. `NOCOBASE_STRICT_STARTUP` makes a
- * failed start exit, so a crash during startup is a real failure rather than a slow start.
+ * Restarts pm2 has made before the application answered, beyond which a start counts as failed.
+ * `NOCOBASE_STRICT_STARTUP` makes a failed start exit, so a crash during startup is a real failure rather than a slow
+ * start.
  */
 const MAX_STARTUP_RESTARTS = 2;
 

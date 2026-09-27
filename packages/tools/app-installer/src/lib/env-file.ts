@@ -1,28 +1,38 @@
 import { readFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
-import { HUB_BASE_PATH, type Layout } from './layout.ts';
+import type { Layout } from './layout.ts';
 
-export interface HubEnvOptions {
+export interface AppEnvOptions {
   origin: string;
   host: string;
   port: number;
+  /** The base path the release's client was compiled for. */
+  basePath: string;
+  /**
+   * Also write `HUB_STORAGE_DIR`, the name Hub releases published before `APP_STORAGE_DIR` existed read. A template
+   * build of such a release would otherwise keep its data inside the release directory.
+   */
+  legacyHubStorage?: boolean;
 }
 
 /**
- * Builds `hub.env`, the one set of runtime variables both the Hub and the installer's own CLI calls read. `launcher.mjs`
- * reads it on every start, so an edit takes effect with `pm2 restart`.
+ * Builds `app.env`, the one set of runtime variables both the application and the installer's own CLI calls read.
+ * `launcher.mjs` reads it on every start, so an edit takes effect with `pm2 restart`.
  *
- * `APP_CONFIG_FILE` and `HUB_STORAGE_DIR` are absolute on purpose. A built server treats the directory above `dist/` as
+ * `APP_CONFIG_FILE` and `APP_STORAGE_DIR` are absolute on purpose. A built server treats the directory above `dist/` as
  * its deployment root and keeps `config.yml` and `storage/` there by default, which here is the release directory an
- * upgrade replaces. `dist/.env` carries neither variable, so leaving one out silently moves the Hub's data into the
- * release.
+ * upgrade replaces. `dist/.env` carries neither variable, so leaving one out silently moves the application's data into
+ * the release.
  */
-export function buildHubEnv(layout: Layout, options: HubEnvOptions): string {
+export function buildAppEnv(layout: Layout, options: AppEnvOptions): string {
   const entries: [string, string][] = [
     ['NODE_ENV', 'production'],
-    ['APP_BASE_PATH', HUB_BASE_PATH],
+    ['APP_BASE_PATH', options.basePath],
     ['APP_CONFIG_FILE', layout.configFile],
-    ['HUB_STORAGE_DIR', layout.storageDir],
+    ['APP_STORAGE_DIR', layout.storageDir],
+    ...(options.legacyHubStorage
+      ? [['HUB_STORAGE_DIR', layout.storageDir] as [string, string]]
+      : []),
     ['APP_PUBLIC_ORIGIN', options.origin],
     ['APP_SERVER_HOST', options.host],
     ['APP_SERVER_PORT', String(options.port)],
@@ -40,28 +50,29 @@ function quote(value: string): string {
   return /^[\w@%+=:,./-]*$/u.test(value) ? value : JSON.stringify(value);
 }
 
-export async function readHubEnv(
+export async function readAppEnv(
   layout: Layout,
 ): Promise<Record<string, string>> {
-  return parseEnv(await readFile(layout.hubEnv, 'utf8')) as Record<
+  return parseEnv(await readFile(layout.appEnv, 'utf8')) as Record<
     string,
     string
   >;
 }
 
-export interface HubEndpoints {
-  /** Where people open the Hub: the public origin followed by the Hub's base path. */
+export interface AppEndpoints {
+  /** Where people open the application: the public origin followed by its base path. */
   url: string;
-  /** `APP_PUBLIC_ORIGIN`, which the Hub builds its links from, without a trailing slash. */
+  /** `APP_PUBLIC_ORIGIN`, which the application builds its links from, without a trailing slash. */
   origin: string;
-  /** `APP_SERVER_HOST` and `APP_SERVER_PORT`, where the Hub listens and a reverse proxy forwards to. */
+  /** `APP_SERVER_HOST` and `APP_SERVER_PORT`, where the application listens and a reverse proxy forwards to. */
   host: string;
-  /** `null` when `APP_SERVER_PORT` is not a port number, which the Hub cannot listen on either. */
+  /** `null` when `APP_SERVER_PORT` is not a port number, which the application cannot listen on either. */
   port: number | null;
 }
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = '13000';
+const DEFAULT_BASE_PATH = '/main';
 
 function parsePort(value: string): number | null {
   const port = Number(value.trim());
@@ -73,12 +84,20 @@ function parsePort(value: string): number | null {
     : null;
 }
 
+/** The base path as a URL prefix: `/crm` stays, and the root `/` contributes nothing. */
+function basePrefix(env: Record<string, string>): string {
+  const trimmed = (env.APP_BASE_PATH ?? DEFAULT_BASE_PATH)
+    .trim()
+    .replace(/^\/+|\/+$/gu, '');
+  return trimmed ? `/${trimmed}` : '';
+}
+
 /**
- * Where the Hub is reached and where it listens, as `hub.env` says. The file is edited by hand to change either, so a
- * trailing slash on the origin is dropped, as `install` drops it from `--origin`, and a port that is not one reads as
- * `null` rather than as a number the Hub is not using.
+ * Where the application is reached and where it listens, as `app.env` says. The file is edited by hand to change
+ * either, so a trailing slash on the origin is dropped, as `install` drops it from `--origin`, and a port that is not
+ * one reads as `null` rather than as a number the application is not using.
  */
-export function endpointsOf(env: Record<string, string>): HubEndpoints {
+export function endpointsOf(env: Record<string, string>): AppEndpoints {
   const host = env.APP_SERVER_HOST ?? DEFAULT_HOST;
   const rawPort = env.APP_SERVER_PORT ?? DEFAULT_PORT;
   const origin = (env.APP_PUBLIC_ORIGIN ?? `http://${host}:${rawPort}`).replace(
@@ -86,7 +105,7 @@ export function endpointsOf(env: Record<string, string>): HubEndpoints {
     '',
   );
   return {
-    url: `${origin}${HUB_BASE_PATH}/`,
+    url: `${origin}${basePrefix(env)}/`,
     origin,
     host,
     port: parsePort(rawPort),
@@ -99,5 +118,5 @@ export function healthUrl(env: Record<string, string>): string {
   const reachable =
     host === '0.0.0.0' || host === '::' || host === '' ? '127.0.0.1' : host;
   const hostPart = reachable.includes(':') ? `[${reachable}]` : reachable;
-  return `http://${hostPart}:${port ?? env.APP_SERVER_PORT}${HUB_BASE_PATH}/api/healthz`;
+  return `http://${hostPart}:${port ?? env.APP_SERVER_PORT}${basePrefix(env)}/api/healthz`;
 }

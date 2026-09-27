@@ -15,6 +15,9 @@ let root: string;
 
 let PORT: string;
 
+/** The first build a fresh fake world makes: 1.1.0, the latest published, built at its first build time. */
+const RELEASE = path.join('releases', '1.1.0_20260101T000000Z', 'app');
+
 beforeEach(async () => {
   temp = tempDir('app-installer-install-');
   root = path.join(temp.dir, 'hub');
@@ -44,14 +47,12 @@ describe('install', () => {
     // The password itself never leaves config.yml.
     expect(JSON.stringify(result.json)).not.toContain('admin123');
     expect(result.stderr).not.toContain('admin123');
-    expect(readlinkSync(path.join(root, 'current'))).toBe(
-      path.join('releases', '1.1.0', 'hub'),
-    );
+    expect(readlinkSync(path.join(root, 'current'))).toBe(RELEASE);
     expect(readdirSync(root).sort()).toEqual([
+      'app.env',
       'config.yml',
       'current',
       'ecosystem.config.cjs',
-      'hub.env',
       'installer.json',
       'launcher.mjs',
       'logs',
@@ -63,10 +64,28 @@ describe('install', () => {
       readFileSync(path.join(root, 'installer.json'), 'utf8'),
     );
     expect(state).toMatchObject({
-      current: '1.1.0',
+      appName: 'hub',
+      basePath: '/hub',
+      source: {
+        kind: 'template',
+        template: 'hub',
+        package: '@nocobase/app-template-hub',
+      },
+      current: '1.1.0_20260101T000000Z',
+      releases: [
+        {
+          id: '1.1.0_20260101T000000Z',
+          version: '1.1.0',
+          builtAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
       name: 'nocobase-hub',
       dialect: 'sqlite',
     });
+    // A Hub published before APP_STORAGE_DIR reads only the older name, so a template install writes both.
+    expect(readFileSync(path.join(root, 'app.env'), 'utf8')).toContain(
+      `HUB_STORAGE_DIR=${path.join(root, 'storage')}`,
+    );
     expect(world.pm2.calls).toEqual([
       'version',
       `start ${path.join(root, 'ecosystem.config.cjs')}`,
@@ -96,9 +115,31 @@ describe('install', () => {
         port: Number(PORT),
       },
     });
-    expect(readlinkSync(path.join(root, 'current'))).toBe(
-      path.join('releases', '1.1.0', 'hub'),
+    expect(readlinkSync(path.join(root, 'current'))).toBe(RELEASE);
+  });
+
+  it('names a template build that predates the recorded build time by when it was built, at the template base path', async () => {
+    const world = createWorld({ legacyManifest: true });
+    const result = await hub(world, ['install', root, '--port', PORT]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result).toMatchObject({
+      version: '1.1.0',
+      basePath: '/hub',
+    });
+    expect(String(result.json.result?.releaseId)).toMatch(
+      /^1\.1\.0_\d{8}T\d{6}Z$/u,
     );
+  });
+
+  it('names the pm2 process after the installation directory', async () => {
+    const world = createWorld();
+    const crm = path.join(temp.dir, 'crm');
+    const result = await hub(world, ['install', crm, '--port', PORT]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.result?.name).toBe('nocobase-crm');
+    expect(world.pm2.processes.has('nocobase-crm')).toBe(true);
   });
 
   it('accepts an argument and a --dir that name the same directory', async () => {
@@ -256,9 +297,7 @@ describe('install', () => {
     // It was this install's own process: the name was checked free beforehand.
     expect(world.pm2.calls).toContain('delete nocobase-hub');
     expect(existsSync(path.join(root, 'installer.json'))).toBe(true);
-    expect(readlinkSync(path.join(root, 'current'))).toBe(
-      path.join('releases', '1.1.0', 'hub'),
-    );
+    expect(readlinkSync(path.join(root, 'current'))).toBe(RELEASE);
   });
 
   it('masks --set values in errors', async () => {

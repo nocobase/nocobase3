@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 
-/** The `config.yml` section the Hub creates its first administrator from. */
+/** The `config.yml` section the application creates its first administrator from. */
 export const INITIAL_ADMIN_KEY = 'users.initialAdmin';
 
 /** Who signs in first, as far as it can be said without handing out the password. */

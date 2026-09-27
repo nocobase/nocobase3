@@ -15,8 +15,9 @@ import { backupFor, defaultRollbackTarget } from '../src/commands/rollback.ts';
 import { assertNoPending, releasesToPrune } from '../src/commands/upgrade.ts';
 import {
   backupForUpgrade,
+  backupHasDatabase,
   backupName,
-  HUB_DATABASE,
+  readDatabaseInventory,
   restoreDatabase,
 } from '../src/lib/backup.ts';
 import { confirm } from '../src/lib/confirm.ts';
@@ -26,13 +27,27 @@ import type { InstallerState, ReleaseRecord } from '../src/lib/state.ts';
 
 const target = { platform: 'linux', arch: 'x64', nodeMajor: 24 };
 
+/** A release whose id is its version, which is all these functions compare. */
 function release(version: string, installedAt: string): ReleaseRecord {
-  return { version, installedAt, buildTarget: target };
+  return {
+    id: version,
+    version,
+    builtAt: installedAt,
+    installedAt,
+    buildTarget: target,
+  };
 }
 
 function state(overrides: Partial<InstallerState> = {}): InstallerState {
   return {
     schemaVersion: 1,
+    appName: 'hub',
+    basePath: '/hub',
+    source: {
+      kind: 'template',
+      template: 'hub',
+      package: '@nocobase/app-template-hub',
+    },
     name: 'nocobase-hub',
     registry: 'https://npm.nocobase.ai',
     dialect: 'sqlite',
@@ -52,8 +67,8 @@ describe('releasesToPrune', () => {
     release('4.0.0', '2026-04-01T00:00:00.000Z'),
   ];
 
-  const versions = (records: { version: string }[]) =>
-    records.map((record) => record.version);
+  const versions = (records: { id: string }[]) =>
+    records.map((record) => record.id);
 
   it('keeps the newest releases and the protected ones', () => {
     expect(versions(releasesToPrune(releases, ['4.0.0', '3.0.0'], 3))).toEqual([
@@ -236,45 +251,112 @@ describe('backup and restore', () => {
     ).toBe('20260926-030405Z_1.0.0_to_1.1.0');
   });
 
-  it('copies the database with its journal and restores it, dropping a newer journal', async () => {
+  async function writeConfig(
+    layout: ReturnType<typeof layoutOf>,
+    yaml: string,
+  ) {
+    await writeFile(layout.configFile, yaml);
+    await writeFile(layout.appEnv, 'NODE_ENV=production\n');
+  }
+
+  it('finds every SQLite database config.yml declares, resolved against the storage directory', async () => {
     const layout = layoutOf(root);
-    const database = path.join(layout.storageDir, HUB_DATABASE);
-    await mkdir(path.dirname(database), { recursive: true });
-    await writeFile(layout.configFile, 'config');
-    await writeFile(layout.hubEnv, 'env');
-    await writeFile(database, 'before');
+    await writeConfig(
+      layout,
+      [
+        'database:',
+        '  default: primary',
+        '  connections:',
+        '    primary: { dialect: sqlite, database: data/main.sqlite }',
+        '    analytics: { dialect: sqlite, filename: /var/analytics.sqlite }',
+        '    scratch: { dialect: sqlite, database: ":memory:" }',
+        '    crm: { dialect: postgres, host: db }',
+        '    reports: { dialect: sqlite, database: "${REPORTS_DB}" }',
+        '    legacy: { dialect: sqlite, database: "${UNSET_DB}" }',
+        '',
+      ].join('\n'),
+    );
+    expect(
+      readDatabaseInventory(layout, { REPORTS_DB: 'reports.sqlite' }),
+    ).toEqual({
+      defaultConnection: 'primary',
+      sqlite: [
+        {
+          connection: 'primary',
+          file: path.join(layout.storageDir, 'data/main.sqlite'),
+        },
+        { connection: 'analytics', file: '/var/analytics.sqlite' },
+        {
+          connection: 'reports',
+          file: path.join(layout.storageDir, 'reports.sqlite'),
+        },
+      ],
+      external: ['crm'],
+      unresolved: ['legacy'],
+    });
+  });
 
-    const backup = await backupForUpgrade(layout, 'b1', true);
+  it('copies each database with its journal and restores it, dropping a newer journal', async () => {
+    const layout = layoutOf(root);
+    const main = path.join(layout.storageDir, 'hub/database/main.sqlite');
+    const extra = path.join(layout.storageDir, 'extra/main.sqlite');
+    await mkdir(path.dirname(main), { recursive: true });
+    await mkdir(path.dirname(extra), { recursive: true });
+    await writeConfig(layout, 'config');
+    await writeFile(main, 'before');
+    await writeFile(extra, 'extra before');
+
+    const backup = await backupForUpgrade(layout, 'b1', [
+      { connection: 'main', file: main },
+      { connection: 'extra', file: extra },
+      { connection: 'unopened', file: path.join(root, 'never.sqlite') },
+    ]);
     expect(backup.relative).toBe(path.join('backups', 'b1'));
-    expect(backup.databaseFiles).toEqual(['main.sqlite']);
+    expect(backup.databases.map((database) => database.files)).toEqual([
+      ['main.sqlite'],
+      ['main.sqlite'],
+      [],
+    ]);
     expect((await readdir(path.join(root, backup.relative))).sort()).toEqual([
+      'app.env',
+      'backup.json',
       'config.yml',
-      'hub.env',
-      'main.sqlite',
+      'sqlite',
     ]);
+    expect(backupHasDatabase(layout, backup.relative)).toBe(true);
 
-    // The failed upgrade migrated and left a write-ahead log behind.
-    await writeFile(database, 'after');
-    await writeFile(`${database}-wal`, 'newer writes');
+    // The failed upgrade migrated, left a write-ahead log behind, and opened a database for the first time.
+    await writeFile(main, 'after');
+    await writeFile(`${main}-wal`, 'newer writes');
+    await writeFile(extra, 'extra after');
+    await writeFile(path.join(root, 'never.sqlite'), 'created');
 
-    expect(await restoreDatabase(layout, backup.relative)).toEqual([
-      'main.sqlite',
-    ]);
-    expect(await readFile(database, 'utf8')).toBe('before');
-    await expect(readFile(`${database}-wal`, 'utf8')).rejects.toMatchObject({
+    await restoreDatabase(layout, backup.relative);
+    expect(await readFile(main, 'utf8')).toBe('before');
+    expect(await readFile(extra, 'utf8')).toBe('extra before');
+    await expect(readFile(`${main}-wal`, 'utf8')).rejects.toMatchObject({
       code: 'ENOENT',
     });
+    await expect(
+      readFile(path.join(root, 'never.sqlite'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('backs up only the configuration for an external database', async () => {
     const layout = layoutOf(root);
-    await writeFile(layout.configFile, 'config');
-    await writeFile(layout.hubEnv, 'env');
-    const backup = await backupForUpgrade(layout, 'b2', false);
-    expect(backup.databaseFiles).toEqual([]);
+    await writeConfig(layout, 'config');
+    const backup = await backupForUpgrade(layout, 'b2', []);
+    expect(backup.databases).toEqual([]);
+    expect(backupHasDatabase(layout, backup.relative)).toBe(false);
     await expect(restoreDatabase(layout, backup.relative)).rejects.toThrow(
-      /main\.sqlite/,
+      /no SQLite database/,
     );
+  });
+
+  it('never restores from a backup cut short before its manifest was written', async () => {
+    const layout = layoutOf(root);
+    await mkdir(path.join(layout.backupsDir, 'b3'), { recursive: true });
+    expect(backupHasDatabase(layout, path.join('backups', 'b3'))).toBe(false);
   });
 });
 
@@ -288,7 +370,7 @@ describe('confirm', () => {
   it('refuses to guess under --json or without a terminal', async () => {
     const input = Object.assign(new PassThrough(), { isTTY: false });
     await expect(
-      confirm(['Upgrade?', 'The Hub stops.'], {
+      confirm(['Upgrade?', 'The application stops.'], {
         yes: false,
         json: false,
         input,
