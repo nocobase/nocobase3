@@ -6,7 +6,7 @@ import type { SpaClientConfigMap } from './types.js';
 export interface ServeSpaIndexOptions {
   readonly clientConfig?: SpaClientConfigMap;
   readonly publicConfig?: SpaClientConfigMap;
-  /** The path the application is mounted at, which the page's relative asset URLs are resolved against. */
+  /** The path the application is mounted at, which the page's relative URLs are resolved against. */
   readonly publicBasePath?: string;
 }
 

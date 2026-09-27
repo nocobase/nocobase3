@@ -524,6 +524,52 @@ describe('relocatable archives', () => {
     expect(state().releases[0]).toMatchObject({ relocatable: true });
   });
 
+  it('keeps the Hub default for a Hub archive', async () => {
+    const result = await install(
+      archive({
+        name: 'my-hub',
+        version: '0.1.0',
+        relocatable: true,
+        templateKind: 'hub',
+      }),
+    );
+
+    expect(result.code).toBe(0);
+    expect(appEnv()).toContain('APP_BASE_PATH=/hub');
+    expect(result.json.result).toMatchObject({
+      basePath: '/hub',
+      url: 'https://apps.example.com/hub/',
+    });
+  });
+
+  it('mounts at the origin root with --base-path /', async () => {
+    const fetched: string[] = [];
+    const fetchImpl = world.fetchImpl;
+    world.fetchImpl = (url, ...rest) => {
+      fetched.push(url);
+      return fetchImpl(url, ...rest);
+    };
+    const result = await install(
+      archive({ version: '0.1.0', relocatable: true }),
+      ['--base-path', '/'],
+    );
+
+    expect(result.code).toBe(0);
+    // Written as an empty value: the server reads `APP_BASE_PATH=` as the root, and an absent key as its default.
+    expect(appEnv()).toMatch(/^APP_BASE_PATH=$/mu);
+    expect(result.json.result).toMatchObject({
+      basePath: '/',
+      url: 'https://apps.example.com/',
+    });
+    expect(state()).toMatchObject({ basePath: '/' });
+    expect(fetched.filter((url) => url.endsWith('/api/healthz'))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/:\d+\/api\/healthz$/u)]),
+    );
+
+    const status = await hub(world, ['status', '--dir', root]);
+    expect(status.json.result).toMatchObject({ basePath: '/' });
+  });
+
   it('mounts at the path --base-path names', async () => {
     const result = await install(
       archive({ version: '0.1.0', relocatable: true }),

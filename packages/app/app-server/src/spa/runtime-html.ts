@@ -5,8 +5,8 @@ const defaultHtmlLocale = 'en-US';
 const defaultHtmlLocaleMarker = `<html lang="${defaultHtmlLocale}">`;
 
 /**
- * Renders what the browser needs into the page: the `lang` attribute, asset URLs pointed at the mount path, and the
- * client configuration data block, ahead of the entry module so that module-level code can already read it. Nothing
+ * Renders what the browser needs into the page: the `lang` attribute, the page's relative URLs pointed at the mount
+ * path, and the client configuration data block, ahead of the entry module so that module-level code can already read it. Nothing
  * is put on `window`: the configuration block is the client's only source of runtime values.
  */
 export function injectSpaRuntimeHtml(
@@ -18,12 +18,12 @@ export function injectSpaRuntimeHtml(
     readonly publicBasePath?: string;
   } = {},
 ): string {
-  const withAssets =
+  const withUrls =
     options.publicBasePath === undefined
       ? html
-      : resolveRelativeAssetUrls(html, options.publicBasePath);
+      : resolveRelativeUrls(html, options.publicBasePath);
   // SPA templates provide this stable pre-runtime marker. The client keeps `lang` synchronized after it starts.
-  const withLocale = withAssets.replace(
+  const withLocale = withUrls.replace(
     defaultHtmlLocaleMarker,
     `<html lang="${escapeHtmlAttribute(readHtmlLocale(options.publicConfig ?? options.clientConfig))}">`,
   );
@@ -41,20 +41,19 @@ export function injectSpaRuntimeHtml(
 }
 
 /**
- * A build uses a relative base, so `index.html` names its entry chunk, stylesheet and public files as `./assets/…`.
- * Against a deep route such as `/crm/admin/users` that resolves to `/crm/admin/assets/…`, so those URLs are pointed at
- * the mount path here — including `meta` content such as `og:image`, which Vite writes the same way. JavaScript chunks
- * and CSS resolve against their own URLs and need nothing.
+ * A build uses a relative base, so `index.html` names everything it references as `./…`: its entry chunk and
+ * stylesheet under `./assets/`, and every file from `public/` at the path it has there, such as `./favicon.svg`. The
+ * page is served for every route under the mount path, and against a deep route such as `/crm/admin/users` a
+ * relative URL resolves to `/crm/admin/…`, so every `./` URL is pointed at the mount path here — `meta` content such
+ * as `og:image` included, which Vite writes the same way. JavaScript chunks and CSS resolve against their own URLs and
+ * need nothing.
  */
-function resolveRelativeAssetUrls(
-  html: string,
-  publicBasePath: string,
-): string {
+function resolveRelativeUrls(html: string, publicBasePath: string): string {
   const trimmed = publicBasePath.trim().replace(/^\/+|\/+$/g, '');
-  const assetsPrefix = trimmed ? `/${trimmed}/assets/` : '/assets/';
+  const prefix = trimmed ? `/${trimmed}/` : '/';
   return html.replace(
-    /(\s(?:src|href|content)\s*=\s*["'])\.\/assets\//giu,
-    (_match, attribute: string) => `${attribute}${assetsPrefix}`,
+    /(\s(?:src|href|content)\s*=\s*["'])\.\//giu,
+    (_match, attribute: string) => `${attribute}${prefix}`,
   );
 }
 

@@ -36,32 +36,42 @@ describe('SPA runtime HTML', () => {
     );
   });
 
-  it('points relative asset URLs at the mount path', () => {
+  it('points relative URLs at the mount path', () => {
     const html = [
       '<link rel="icon" href="./assets/favicon.ico" />',
+      // A file at the root of `public/`, which a relative base writes as `./favicon.svg`.
+      '<link rel="icon" type="image/svg+xml" href="./favicon.svg" />',
+      '<link rel="manifest" href="./manifest.webmanifest" />',
       '<meta property="og:image" content="./assets/logo.png" />',
       '<link rel="stylesheet" crossorigin href="./assets/index.css">',
       "<script type='module' src='./assets/index.js'></script>",
       '<a href="./settings">Settings</a>',
+      '<a href="../outside">Outside</a>',
       '<img src="https://cdn.example.com/assets/a.png">',
+      '<img src="/absolute/assets/b.png">',
     ].join('');
 
     const mounted = injectSpaRuntimeHtml(html, { publicBasePath: '/crm/' });
 
     expect(mounted).toContain('href="/crm/assets/favicon.ico"');
+    expect(mounted).toContain('href="/crm/favicon.svg"');
+    expect(mounted).toContain('href="/crm/manifest.webmanifest"');
     expect(mounted).toContain('content="/crm/assets/logo.png"');
     expect(mounted).toContain('href="/crm/assets/index.css"');
     expect(mounted).toContain("src='/crm/assets/index.js'");
-    // Only the build's own asset directory is rewritten.
-    expect(mounted).toContain('href="./settings"');
+    // The page is served for every route under the mount path, so a relative link in it means the mount path too.
+    expect(mounted).toContain('href="/crm/settings"');
+    // Only `./` is the build's spelling; anything else is left as written.
+    expect(mounted).toContain('href="../outside"');
     expect(mounted).toContain('src="https://cdn.example.com/assets/a.png"');
+    expect(mounted).toContain('src="/absolute/assets/b.png"');
 
-    expect(injectSpaRuntimeHtml(html, { publicBasePath: '' })).toContain(
-      'href="/assets/favicon.ico"',
-    );
+    const atRoot = injectSpaRuntimeHtml(html, { publicBasePath: '' });
+    expect(atRoot).toContain('href="/assets/favicon.ico"');
+    expect(atRoot).toContain('href="/favicon.svg"');
   });
 
-  it('leaves asset URLs alone without a mount path', () => {
+  it('leaves relative URLs alone without a mount path', () => {
     const html = '<script type="module" src="./assets/index.js"></script>';
 
     expect(injectSpaRuntimeHtml(html)).toContain('src="./assets/index.js"');

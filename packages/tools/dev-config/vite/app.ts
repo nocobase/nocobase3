@@ -56,9 +56,10 @@ const resolveChunkFileName = (chunk: Rollup.PreRenderedChunk): string => {
 
 // The build is path-free: with a relative `base`, Vite resolves every chunk, preload dependency and asset against the
 // URL of the module that references it, and CSS against its own file, so one build can be mounted at any path. The
-// application server rewrites the few `./assets/` references in `index.html` to the mount path when it serves the
-// page, since a relative URL there would resolve against the current route. The development server cannot use a
-// relative base, so it takes the mount path `pnpm dev` passes in `APP_BASE_PATH`.
+// application server rewrites the relative references in `index.html` — its `./assets/` chunks and the `public/` files
+// it names — to the mount path when it serves the page, since a relative URL there would resolve against the current
+// route. The development server cannot use a relative base, so it takes the mount path `pnpm dev` passes in
+// `APP_BASE_PATH`.
 const BUILD_BASE = './';
 
 const resolveDevelopmentBase = (): string => {

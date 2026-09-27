@@ -76,7 +76,7 @@ export const INSTALL_FLAGS = {
   }),
   'base-path': Flags.string({
     description:
-      "Path the application is mounted at, e.g. /crm, or / for the origin root. Written to app.env as APP_BASE_PATH; without it the server's default applies (/hub for the Hub template). An archive from before relocatable builds runs only at the path it was built for.",
+      "Path the application is mounted at, e.g. /crm, or / for the origin root. Written to app.env as APP_BASE_PATH; without it the server's default applies, /hub for a Hub whether from the template or an archive. An archive from before relocatable builds runs only at the path it was built for.",
   }),
   host: Flags.string({
     default: '127.0.0.1',
@@ -355,11 +355,14 @@ export async function install(
     const templateKind =
       prepared.templateKind ?? (template === HUB_TEMPLATE ? 'hub' : 'app');
     const hub = templateKind === 'hub';
-    // A relocatable release is mounted where the installation says; the Hub template keeps its own default. An earlier
-    // release runs only at the path its client was compiled for.
+    // A relocatable release is mounted where the installation says. A Hub keeps its own default whether it was built
+    // from the template or arrived as an archive: a build records no path and ships no `.env`, so nothing else carries
+    // the `/hub` its checkout served at, and the server's `/main` would move it. An earlier release runs only at the
+    // path its client was compiled for.
     let mountPath: string | undefined;
     if (prepared.relocatable) {
-      mountPath = requestedBasePath ?? template?.basePath;
+      mountPath =
+        requestedBasePath ?? (hub ? HUB_TEMPLATE.basePath : template?.basePath);
     } else {
       mountPath = prepared.basePath!;
       if (requestedBasePath !== undefined) {

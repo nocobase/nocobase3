@@ -39,23 +39,23 @@ The target must be new or empty. Before writing anything, the command also check
 
 Ctrl-C (or SIGTERM) stops the step that is running and lets that cleanup happen; a second one exits at once.
 
-| Flag               | Default                     | Purpose                                                                                                                          |
-| ------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `--dir`            |                             | The target, as the other commands name it; the same as the directory argument.                                                   |
-| `--archive`        |                             | The deployment archive to install, by local path. Give this or `--template`.                                                     |
-| `--template`       |                             | `hub`, or `hub@<version or dist-tag>` (`latest` by default), to build the published Hub here. Give this or `--archive`.          |
-| `--origin`         | `http://HOST:PORT`          | Public origin without the base path. Set it before exposing the application.                                                     |
-| `--base-path`      | the server's, `/main`       | Where the application is mounted, such as `/crm`, or `/` for the origin root; `/hub` for the Hub template. Written to `app.env`. |
-| `--host`, `--port` | `127.0.0.1`, `13000`        | Where the application listens. Keep the loopback default behind a reverse proxy; give each installation its own port.            |
-| `--dialect`        | `sqlite`                    | Database. Anything else needs `--set`; an archive must carry `@nocobase/db-<dialect>`, a template build adds it.                 |
-| `--set`            |                             | `key=value` passed to `nocobase config set`, repeatable. Values are YAML scalars.                                                |
-| `--set-from-env`   |                             | `key=VARIABLE` read from the environment, repeatable. Use it for passwords.                                                      |
-| `--registry`       | `https://npm.nocobase.ai`   | Registry for the template, NocoBase packages and suggested commands; `NOCOBASE_REGISTRY` also sets it.                           |
-| `--name`           | `nocobase-<directory name>` | pm2 process name.                                                                                                                |
-| `--no-start`       |                             | Install without starting; the result names the command that starts it.                                                           |
-| `--health-timeout` | `180`                       | Seconds to wait for the health check.                                                                                            |
-| `--keep-source`    |                             | With `--template`, keep the build directory, with the sources and development dependencies, even on failure.                     |
-| `--json`           |                             | Print one JSON result on stdout. Progress always goes to stderr.                                                                 |
+| Flag               | Default                     | Purpose                                                                                                                                                |
+| ------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--dir`            |                             | The target, as the other commands name it; the same as the directory argument.                                                                         |
+| `--archive`        |                             | The deployment archive to install, by local path. Give this or `--template`.                                                                           |
+| `--template`       |                             | `hub`, or `hub@<version or dist-tag>` (`latest` by default), to build the published Hub here. Give this or `--archive`.                                |
+| `--origin`         | `http://HOST:PORT`          | Public origin without the base path. Set it before exposing the application.                                                                           |
+| `--base-path`      | the server's, `/main`       | Where the application is mounted, such as `/crm`, or `/` for the origin root; `/hub` for a Hub, from the template or an archive. Written to `app.env`. |
+| `--host`, `--port` | `127.0.0.1`, `13000`        | Where the application listens. Keep the loopback default behind a reverse proxy; give each installation its own port.                                  |
+| `--dialect`        | `sqlite`                    | Database. Anything else needs `--set`; an archive must carry `@nocobase/db-<dialect>`, a template build adds it.                                       |
+| `--set`            |                             | `key=value` passed to `nocobase config set`, repeatable. Values are YAML scalars.                                                                      |
+| `--set-from-env`   |                             | `key=VARIABLE` read from the environment, repeatable. Use it for passwords.                                                                            |
+| `--registry`       | `https://npm.nocobase.ai`   | Registry for the template, NocoBase packages and suggested commands; `NOCOBASE_REGISTRY` also sets it.                                                 |
+| `--name`           | `nocobase-<directory name>` | pm2 process name.                                                                                                                                      |
+| `--no-start`       |                             | Install without starting; the result names the command that starts it.                                                                                 |
+| `--health-timeout` | `180`                       | Seconds to wait for the health check.                                                                                                                  |
+| `--keep-source`    |                             | With `--template`, keep the build directory, with the sources and development dependencies, even on failure.                                           |
+| `--json`           |                             | Print one JSON result on stdout. Progress always goes to stderr.                                                                                       |
 
 A PostgreSQL Hub, with the password taken from the environment:
 

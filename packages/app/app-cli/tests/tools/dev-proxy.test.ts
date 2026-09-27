@@ -776,6 +776,42 @@ describe('the proxy-mode client configuration', () => {
     });
   });
 
+  it('names the status when the proxy target does not answer with its page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('<html>maintenance</html>', {
+          status: 502,
+          statusText: 'Bad Gateway',
+        }),
+      ),
+    );
+    const plugin = createDevClientConfigPlugin(
+      '/main',
+      'https://remote.example.com/crm',
+    );
+
+    await expect(
+      (plugin?.transformIndexHtml as () => Promise<unknown>)(),
+    ).rejects.toThrow('answered 502 Bad Gateway');
+  });
+
+  it('names where a redirect to another origin landed', async () => {
+    const response = new Response('<html>sign in</html>');
+    Object.defineProperty(response, 'url', {
+      value: 'https://login.example.com/?return=%2Fcrm',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+    const plugin = createDevClientConfigPlugin(
+      '/main',
+      'https://remote.example.com/crm',
+    );
+
+    await expect(
+      (plugin?.transformIndexHtml as () => Promise<unknown>)(),
+    ).rejects.toThrow('redirected to https://login.example.com/?return=%2Fcrm');
+  });
+
   it('refuses a proxy target that serves no client configuration', async () => {
     vi.stubGlobal(
       'fetch',
