@@ -89,9 +89,10 @@ describe('install', () => {
       name: 'nocobase-hub',
       dialect: 'sqlite',
     });
-    expect(readFileSync(path.join(root, 'app.env'), 'utf8')).toContain(
-      `APP_STORAGE_DIR=${path.join(root, 'storage')}`,
-    );
+    const env = readFileSync(path.join(root, 'app.env'), 'utf8');
+    expect(env).toContain(`APP_STORAGE_DIR=${path.join(root, 'storage')}`);
+    // Until a Hub release reads APP_STORAGE_DIR, a template install also writes the name published Hubs read.
+    expect(env).toContain(`HUB_STORAGE_DIR=${path.join(root, 'storage')}`);
     expect(world.pm2.calls).toEqual([
       'version',
       `start ${path.join(root, 'ecosystem.config.cjs')}`,

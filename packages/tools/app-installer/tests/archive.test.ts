@@ -88,6 +88,7 @@ describe('install --archive', () => {
     expect(linked()).toBe(result.json.result?.releaseId);
     const env = readFileSync(path.join(root, 'app.env'), 'utf8');
     expect(env).toContain('APP_BASE_PATH=/crm');
+    expect(env).not.toContain('HUB_STORAGE_DIR');
     // Nothing is built here, so pnpm is neither needed nor asked for.
     expect(world.calls.some((call) => call[0] === 'pnpm')).toBe(false);
     expect(
