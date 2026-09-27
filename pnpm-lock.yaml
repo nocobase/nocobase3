@@ -5186,6 +5186,9 @@ importers:
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      tar:
+        specifier: 'catalog:'
+        version: 7.5.22
       yaml:
         specifier: 'catalog:'
         version: 2.9.0

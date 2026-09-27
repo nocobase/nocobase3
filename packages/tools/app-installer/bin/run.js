@@ -37,7 +37,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  */
 const srcEntry = path.join(root, 'src/cli.ts');
 const useDist =
-  process.env.NOCOBASE_HUB_INSTALLER_USE_DIST === '1' || !existsSync(srcEntry);
+  process.env.NOCOBASE_APP_INSTALLER_USE_DIST === '1' || !existsSync(srcEntry);
 const entry = useDist ? '../dist/cli.js' : '../src/cli.ts';
 
 const pjson = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

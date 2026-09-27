@@ -31,7 +31,14 @@ afterEach(() => {
 describe('install', () => {
   it('builds, configures, migrates and starts the Hub, writing only the release under releases/', async () => {
     const world = createWorld();
-    const result = await hub(world, ['install', root, '--port', PORT]);
+    const result = await hub(world, [
+      'install',
+      '--template',
+      'hub',
+      root,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({
@@ -97,6 +104,8 @@ describe('install', () => {
     const world = createWorld();
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       '--dir',
       root,
       '--port',
@@ -120,7 +129,14 @@ describe('install', () => {
 
   it('names a template build that predates the recorded build time by when it was built, at the template base path', async () => {
     const world = createWorld({ legacyManifest: true });
-    const result = await hub(world, ['install', root, '--port', PORT]);
+    const result = await hub(world, [
+      'install',
+      '--template',
+      'hub',
+      root,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(0);
     expect(result.json.result).toMatchObject({
@@ -135,7 +151,14 @@ describe('install', () => {
   it('names the pm2 process after the installation directory', async () => {
     const world = createWorld();
     const crm = path.join(temp.dir, 'crm');
-    const result = await hub(world, ['install', crm, '--port', PORT]);
+    const result = await hub(world, [
+      'install',
+      '--template',
+      'hub',
+      crm,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(0);
     expect(result.json.result?.name).toBe('nocobase-crm');
@@ -146,6 +169,8 @@ describe('install', () => {
     const world = createWorld();
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--dir',
       `${root}/`,
@@ -160,7 +185,14 @@ describe('install', () => {
   it('removes everything it wrote, parents included, when the build fails', async () => {
     const nested = path.join(temp.dir, 'new-parent', 'hub');
     const world = createWorld({ failOn: 'build --tar' });
-    const result = await hub(world, ['install', nested, '--port', PORT]);
+    const result = await hub(world, [
+      'install',
+      '--template',
+      'hub',
+      nested,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(1);
     expect(result.json.error?.code).toBe('BUILD_FAILED');
@@ -171,6 +203,8 @@ describe('install', () => {
     const world = createWorld({ failOn: 'build --tar' });
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--port',
       PORT,
@@ -193,7 +227,14 @@ describe('install', () => {
       restarts: 0,
       cwd: '/srv/other-hub',
     });
-    const result = await hub(world, ['install', root, '--port', PORT]);
+    const result = await hub(world, [
+      'install',
+      '--template',
+      'hub',
+      root,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(2);
     expect(result.json.error?.code).toBe('PM2_NAME_IN_USE');
@@ -206,7 +247,14 @@ describe('install', () => {
     const world = createWorld();
     // 4.2 is the last pm2 that runs ecosystem.config.cjs as an application.
     world.pm2.version = async () => '4.2.3';
-    const result = await hub(world, ['install', root, '--port', PORT]);
+    const result = await hub(world, [
+      'install',
+      '--template',
+      'hub',
+      root,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(2);
     expect(result.json.error?.code).toBe('PM2_UNSUPPORTED');
@@ -217,6 +265,8 @@ describe('install', () => {
     const world = createWorld();
     await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--port',
       PORT,
@@ -238,6 +288,8 @@ describe('install', () => {
     const world = createWorld();
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--port',
       PORT,
@@ -270,6 +322,8 @@ describe('install', () => {
       const world = createWorld();
       const result = await hub(world, [
         'install',
+        '--template',
+        'hub',
         root,
         '--port',
         String(port),
@@ -285,6 +339,8 @@ describe('install', () => {
     const world = createWorld({ startStatus: 'errored', healthy: () => false });
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--port',
       PORT,
@@ -311,6 +367,8 @@ describe('install', () => {
     });
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--port',
       PORT,
@@ -329,6 +387,8 @@ describe('install', () => {
     const world = createWorld();
     const result = await hub(world, [
       'install',
+      '--template',
+      'hub',
       root,
       '--port',
       PORT,
@@ -351,7 +411,14 @@ describe('install', () => {
 
   it('cleans up after an interrupt during the build', async () => {
     const world = createWorld({ hangOn: 'build --tar' });
-    const pending = hub(world, ['install', root, '--port', PORT]);
+    const pending = hub(world, [
+      'install',
+      '--template',
+      'hub',
+      root,
+      '--port',
+      PORT,
+    ]);
     await new Promise((resolve) => setTimeout(resolve, 200));
     process.emit('SIGINT', 'SIGINT');
     const result = await pending;
@@ -363,7 +430,14 @@ describe('install', () => {
 
   it('treats a regular file at the target as a precheck failure', async () => {
     writeFileSync(root, 'not a directory');
-    const result = await hub(createWorld(), ['install', root, '--port', PORT]);
+    const result = await hub(createWorld(), [
+      'install',
+      '--template',
+      'hub',
+      root,
+      '--port',
+      PORT,
+    ]);
 
     expect(result.code).toBe(2);
     expect(result.json.error?.code).toBe('TARGET_NOT_EMPTY');
@@ -375,8 +449,8 @@ describe('install', () => {
       root,
       '--port',
       PORT,
-      '--hub-version',
-      'constructor',
+      '--template',
+      'hub@constructor',
     ]);
 
     expect(result.code).toBe(2);

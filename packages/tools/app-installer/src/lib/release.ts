@@ -8,6 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { extract } from 'tar';
 import { EXIT_INVALID, InstallerError, isInstallerError } from './errors.ts';
 import {
   RELEASE_APP_DIR,
@@ -19,7 +20,7 @@ import {
   type TemplateDefinition,
 } from './layout.ts';
 import type { Reporter } from './output.ts';
-import { currentNodeMajor } from './prechecks.ts';
+import { currentNodeMajor, rebuildCommand } from './prechecks.ts';
 import { normalizeRegistry } from './registry.ts';
 import {
   CommandFailedError,
@@ -161,7 +162,6 @@ export interface PreparedRelease {
 export interface UnpackOptions {
   layout: Layout;
   archive: string;
-  run?: RunCommand;
   /**
    * What to assume when the manifest predates `nocobase.builtAt` and `nocobase.basePath`. Only a template build passes
    * this, since the installer knows its template's base path and has just built it; an archive from elsewhere that
@@ -197,14 +197,21 @@ function stepFailure(
 export async function unpackRelease(
   options: UnpackOptions,
 ): Promise<PreparedRelease> {
-  const run = options.run ?? runCommand;
   const staging = stagingDir(options.layout);
   const stagedApp = path.join(staging, RELEASE_APP_DIR);
+  const fromArchive = options.fallback === undefined;
   await rm(staging, { recursive: true, force: true });
   try {
     await mkdir(stagedApp, { recursive: true });
     try {
-      await run('tar', ['-xzf', options.archive, '-C', stagedApp]);
+      // The library `pnpm build --tar` packs with, so a deployment needs no `tar` of its own. Synchronous for the same
+      // reason the packing is: on a tree this size the promise form can leave the event loop with nothing pending.
+      extract({
+        file: options.archive,
+        cwd: stagedApp,
+        strict: true,
+        sync: true,
+      });
     } catch (error) {
       throw stepFailure(
         'UNPACK_FAILED',
@@ -212,16 +219,49 @@ export async function unpackRelease(
         error,
       );
     }
-    const manifest = await readReleaseManifest(stagedApp);
-    const buildTarget = verifyBuildTarget(manifest.nocobase?.buildTarget);
+    let manifest: ReleaseManifest;
+    try {
+      manifest = await readReleaseManifest(stagedApp);
+    } catch (error) {
+      throw new InstallerError(
+        'ARCHIVE_INVALID',
+        `${options.archive} holds no dist/package.json; it is not a deployment archive from \`pnpm build --tar\`.`,
+        { exitCode: EXIT_INVALID, cause: error },
+      );
+    }
+    let buildTarget: BuildTarget;
+    try {
+      buildTarget = verifyBuildTarget(manifest.nocobase?.buildTarget);
+    } catch (error) {
+      if (!fromArchive || !isInstallerError(error)) throw error;
+      throw new InstallerError(error.code, error.message, {
+        exitCode: EXIT_INVALID,
+        suggestions: [
+          {
+            message:
+              'Build the archive for this machine in the application project, then run this again:',
+            run: rebuildCommand(),
+          },
+        ],
+      });
+    }
     const version = manifest.version ?? '0.0.0';
     const builtAt = manifest.nocobase?.builtAt ?? options.fallback?.builtAt;
     const basePath = manifest.nocobase?.basePath ?? options.fallback?.basePath;
     if (!builtAt || !basePath || !manifest.name) {
       throw new InstallerError(
         'ARCHIVE_TOO_OLD',
-        'The archive does not record its name, base path and build time.',
-        { exitCode: EXIT_INVALID },
+        `${options.archive} does not record the base path its client was built for and when it was built; it comes from a \`pnpm build\` older than app-installer needs.`,
+        {
+          exitCode: EXIT_INVALID,
+          suggestions: [
+            {
+              message:
+                'Upgrade @nocobase/app-cli in the application project, build the archive again, then run this again:',
+              run: rebuildCommand(),
+            },
+          ],
+        },
       );
     }
     const id = releaseId(version, builtAt);
@@ -356,7 +396,6 @@ export async function buildFromTemplate(
     const prepared = await unpackRelease({
       layout,
       archive: path.join(projectDir, 'storage/exports/dist.tar.gz'),
-      run,
       // Published templates built before `pnpm build` recorded these have neither; the installer knows both.
       fallback: { builtAt: startedAt, basePath: template.basePath },
     });
@@ -374,4 +413,51 @@ export async function buildFromTemplate(
     }
     throw error;
   }
+}
+
+/**
+ * A deployment archive carries its database drivers in `dist/node_modules`, installed when it was built; nothing adds
+ * one afterwards. A dialect whose driver is absent would fail only when the application first connects.
+ */
+export function checkArchiveDriver(dir: string, dialect: string): void {
+  if (dialect === 'sqlite') return;
+  const driver = `@nocobase/db-${dialect}`;
+  if (existsSync(path.join(dir, 'dist/node_modules', driver, 'package.json'))) {
+    return;
+  }
+  throw new InstallerError(
+    'DRIVER_MISSING',
+    `The archive holds no ${driver}, which the ${dialect} dialect needs; a deployment archive carries the drivers it was built with.`,
+    {
+      exitCode: EXIT_INVALID,
+      suggestions: [
+        {
+          message: 'Add the driver in the application project:',
+          run: `pnpm add ${driver}`,
+        },
+        { message: 'Then build the archive again:', run: rebuildCommand() },
+      ],
+    },
+  );
+}
+
+/**
+ * A release older than `APP_STORAGE_DIR` ignores it and keeps its data in `storage/` beside `dist/`, inside the release
+ * directory, where the next upgrade would leave it behind. Its first database write shows it.
+ */
+export function assertStorageOutsideRelease(dir: string): void {
+  if (!existsSync(path.join(dir, 'storage'))) return;
+  throw new InstallerError(
+    'STORAGE_IN_RELEASE',
+    `The release wrote its data into ${path.join(dir, 'storage')} instead of the installation's storage directory: its @nocobase/app-server predates APP_STORAGE_DIR.`,
+    {
+      suggestions: [
+        {
+          message:
+            'Upgrade @nocobase/app-server and @nocobase/app-cli in the application project, then build the archive again:',
+          run: rebuildCommand(),
+        },
+      ],
+    },
+  );
 }

@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-installer",
   "version": "0.0.1",
-  "description": "Install and upgrade a NocoBase 3 Hub on a server without changing its source.",
+  "description": "Install, upgrade and roll back a NocoBase 3 application on a server, from a deployment archive or the published Hub template.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@oclif/core": "catalog:",
+    "tar": "catalog:",
     "yaml": "catalog:"
   },
   "devDependencies": {

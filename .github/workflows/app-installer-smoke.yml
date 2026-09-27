@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 30
     env:
       HUB_ROOT: /tmp/hub
-      NOCOBASE_HUB_INSTALLER_USE_DIST: '1'
+      NOCOBASE_APP_INSTALLER_USE_DIST: '1'
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4

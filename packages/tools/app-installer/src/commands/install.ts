@@ -24,7 +24,6 @@ import {
   checkPm2NameFree,
   checkPnpm,
   checkPortFree,
-  checkTar,
   checkTargetEmpty,
 } from '../lib/prechecks.ts';
 import type { Pm2 } from '../lib/pm2.ts';
@@ -36,50 +35,60 @@ import {
 } from '../lib/registry.ts';
 import {
   DIALECTS,
+  assertStorageOutsideRelease,
   buildFromTemplate,
+  checkArchiveDriver,
   driversFor,
+  unpackRelease,
   type Dialect,
+  type PreparedRelease,
 } from '../lib/release.ts';
 import { runCommand, type RunCommand } from '../lib/run-command.ts';
 import { errorLogTail } from '../lib/service.ts';
+import { parseTemplateSpec, resolveArchivePath } from '../lib/source.ts';
 import { writeState, type InstallerState } from '../lib/state.ts';
 
 export const INSTALL_ARGS = {
   directory: Args.string({
     description:
-      'Directory to install the Hub into. Must be new or empty. --dir names it too.',
+      'Directory to install into. Must be new or empty. --dir names it too.',
   }),
 };
 
 export const INSTALL_FLAGS = {
   dir: Flags.string({
     description:
-      'Directory to install the Hub into, as the other commands name it; the same as the DIRECTORY argument.',
+      'Directory to install into, as the other commands name it; the same as the DIRECTORY argument.',
   }),
-  'hub-version': Flags.string({
-    default: 'latest',
-    description: 'Hub template version or dist-tag to install.',
+  archive: Flags.string({
+    description:
+      'Deployment archive to install, as `pnpm build --tar` writes it to storage/exports/dist.tar.gz. Build it for this machine with --target and --node-version.',
+  }),
+  template: Flags.string({
+    description:
+      'Published template to build on this machine instead: hub, or hub@<version or dist-tag> (latest by default).',
   }),
   origin: Flags.string({
     description:
-      'Public origin the Hub is reached at, without /hub, e.g. https://apps.example.com. Defaults to http://HOST:PORT.',
+      'Public origin the application is reached at, without its base path, e.g. https://apps.example.com. Defaults to http://HOST:PORT.',
   }),
   host: Flags.string({
     default: '127.0.0.1',
     description:
-      'Address the Hub listens on. Keep the loopback default behind a reverse proxy.',
+      'Address the application listens on. Keep the loopback default behind a reverse proxy.',
   }),
   port: Flags.integer({
     default: 13000,
     min: 1,
     max: 65535,
-    description: 'Port the Hub listens on. It must be free.',
+    description:
+      'Port the application listens on. It must be free; give each installation on a machine its own.',
   }),
   dialect: Flags.string({
     default: 'sqlite',
     options: [...DIALECTS],
     description:
-      'Database for the Hub. Anything but SQLite needs --set for its connection.',
+      'Database. Anything but SQLite needs --set for its connection; an archive must carry its driver.',
   }),
   set: Flags.string({
     multiple: true,
@@ -89,10 +98,11 @@ export const INSTALL_FLAGS = {
   'set-from-env': Flags.string({
     multiple: true,
     description:
-      'A setting read from an environment variable, as key=VARIABLE, e.g. database.connections.main.password=HUB_DB_PASSWORD.',
+      'A setting read from an environment variable, as key=VARIABLE, e.g. database.connections.main.password=DB_PASSWORD.',
   }),
   registry: Flags.string({
-    description: 'npm registry for the Hub template and NocoBase packages.',
+    description:
+      'npm registry for the template, NocoBase packages and the installer commands suggested later.',
   }),
   name: Flags.string({
     description:
@@ -101,17 +111,18 @@ export const INSTALL_FLAGS = {
   start: Flags.boolean({
     allowNo: true,
     default: true,
-    description: 'Start the Hub with pm2 once it is installed.',
+    description: 'Start the application with pm2 once it is installed.',
   }),
   'health-timeout': Flags.integer({
     default: 180,
     min: 1,
-    description: 'Seconds to wait for the Hub to answer its health check.',
+    description:
+      'Seconds to wait for the application to answer its health check.',
   }),
   'keep-source': Flags.boolean({
     default: false,
     description:
-      'Keep the build directory with the sources and development dependencies, also when the install fails.',
+      'With --template, keep the build directory with the sources and development dependencies, also when the install fails.',
   }),
   json: Flags.boolean({
     default: false,
@@ -123,7 +134,8 @@ export interface InstallInput {
   directory?: string;
   flags: {
     dir?: string;
-    'hub-version': string;
+    archive?: string;
+    template?: string;
     origin?: string;
     host: string;
     port: number;
@@ -217,7 +229,7 @@ export async function install(
   if (directory === undefined) {
     throw new InstallerError(
       'INVALID_USAGE',
-      'Name the directory to install the Hub into, as an argument or with --dir.',
+      'Name the directory to install into, as an argument or with --dir.',
       { exitCode: EXIT_INVALID },
     );
   }
@@ -232,9 +244,27 @@ export async function install(
       { exitCode: EXIT_INVALID },
     );
   }
+  if ((flags.archive === undefined) === (flags.template === undefined)) {
+    throw new InstallerError(
+      'INVALID_USAGE',
+      flags.archive === undefined
+        ? 'Name what to install: --archive with a deployment archive built by `pnpm build --tar`, or --template hub to build the published Hub here.'
+        : '--archive and --template name two different things to install; give one of them.',
+      { exitCode: EXIT_INVALID },
+    );
+  }
   const root = path.resolve(cwd, directory);
   const layout = layoutOf(root);
-  const template = HUB_TEMPLATE;
+  const spec =
+    flags.template === undefined
+      ? undefined
+      : parseTemplateSpec(flags.template);
+  const template = spec?.template;
+  const archive =
+    flags.archive === undefined
+      ? undefined
+      : resolveArchivePath(cwd, flags.archive);
+  const title = template?.title ?? 'application';
   const name = flags.name ?? `nocobase-${path.basename(root)}`;
   const dialect = flags.dialect as Dialect;
   const registry = normalizeRegistry(flags.registry ?? defaultRegistry());
@@ -257,22 +287,24 @@ export async function install(
   checkPlatform();
   await checkTargetEmpty(root);
   checkEnvVariables(setsFromEnv.map(([, variable]) => variable));
-  await checkPnpm(run);
-  await checkTar(run);
+  if (template) await checkPnpm(run);
   if (flags.start) {
     await checkPm2(pm2);
     await checkPm2NameFree(pm2, name);
   }
   await checkPortFree(flags.host, flags.port);
-  const version = await resolveTemplateVersion(
-    registry,
-    template.package,
-    flags['hub-version'],
-    deps.fetchImpl,
-  );
+  const version =
+    spec && template
+      ? await resolveTemplateVersion(
+          registry,
+          template.package,
+          spec.version,
+          deps.fetchImpl,
+        )
+      : undefined;
   if (!flags.origin) {
     reporter.warn(
-      `No --origin given; the ${template.title} will build links for ${origin}. Pass --origin with the public address before exposing it.`,
+      `No --origin given; the ${title} will build links for ${origin}. Pass --origin with the public address before exposing it.`,
     );
   }
 
@@ -287,20 +319,28 @@ export async function install(
   }
   let switched = false;
   try {
-    reporter.progress(
-      `Installing the ${template.title} ${version} into ${root}`,
-    );
-    const drivers = driversFor(dialect);
-    const prepared = await buildFromTemplate({
-      layout,
-      template,
-      version,
-      registry,
-      drivers,
-      keepSource: flags['keep-source'],
-      reporter,
-      run,
-    });
+    const drivers = template ? driversFor(dialect) : [];
+    let prepared: PreparedRelease;
+    if (template && version) {
+      reporter.progress(`Installing the ${title} ${version} into ${root}`);
+      prepared = await buildFromTemplate({
+        layout,
+        template,
+        version,
+        registry,
+        drivers,
+        keepSource: flags['keep-source'],
+        reporter,
+        run,
+      });
+    } else {
+      reporter.progress(`Unpacking ${archive} into ${root}`);
+      prepared = await unpackRelease({ layout, archive: archive! });
+      checkArchiveDriver(prepared.dir, dialect);
+      reporter.progress(
+        `Installing ${prepared.appName} ${prepared.version} (${prepared.id})`,
+      );
+    }
 
     await writeFile(
       layout.appEnv,
@@ -309,7 +349,7 @@ export async function install(
         host: flags.host,
         port: flags.port,
         basePath: prepared.basePath,
-        legacyHubStorage: true,
+        legacyHubStorage: template === HUB_TEMPLATE,
       }),
     );
     const env = await readAppEnv(layout);
@@ -336,6 +376,7 @@ export async function install(
 
     reporter.progress('Applying database migrations');
     await runAppCli(['db', 'apply'], cli);
+    assertStorageOutsideRelease(prepared.dir);
 
     // Everything else the root needs is written first: the switch is the last write before starting, so a failure
     // anywhere up to it leaves nothing half-installed for status and install to disagree about.
@@ -354,11 +395,13 @@ export async function install(
       schemaVersion: 1,
       appName: prepared.appName,
       basePath: prepared.basePath,
-      source: {
-        kind: 'template',
-        template: template.name,
-        package: template.package,
-      },
+      source: template
+        ? {
+            kind: 'template',
+            template: template.name,
+            package: template.package,
+          }
+        : { kind: 'archive' },
       name,
       registry,
       dialect,
@@ -382,7 +425,7 @@ export async function install(
     const url = healthUrl(env);
     const startCommand = `pm2 start ${shellQuote(layout.ecosystemFile)} && pm2 save`;
     if (flags.start) {
-      reporter.progress(`Starting the ${template.title} with pm2`);
+      reporter.progress(`Starting the ${title} with pm2`);
       await pm2.start(layout.ecosystemFile, root);
       const healthy = await waitForHealthy(url, {
         timeoutMs: flags['health-timeout'] * 1000,
@@ -394,7 +437,7 @@ export async function install(
         await pm2.remove(name).catch(() => undefined);
         throw new InstallerError(
           'START_FAILED',
-          `The ${template.title} did not become healthy at ${url} (waited up to ${flags['health-timeout']}s). It is installed but not running.`,
+          `The ${title} did not become healthy at ${url} (waited up to ${flags['health-timeout']}s). It is installed but not running.`,
           {
             details: { log: await errorLogTail(layout) },
             suggestions: [
@@ -440,7 +483,7 @@ export async function install(
         nextCommands,
       },
       summary: [
-        `${template.title} ${prepared.version} is installed at ${root}${flags.start ? ' and running' : ''}.`,
+        `${template ? title : prepared.appName} ${prepared.version} is installed at ${root}${flags.start ? ' and running' : ''}.`,
         `  URL       ${endpoints.url}`,
         `  Release   ${prepared.id}`,
         `  Sign in   ${describeInitialAdmin(initialAdmin)}`,

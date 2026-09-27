@@ -61,8 +61,8 @@ async function installOld(extra: string[] = []) {
   const result = await hub(world, [
     'install',
     root,
-    '--hub-version',
-    '1.0.0',
+    '--template',
+    'hub@1.0.0',
     '--port',
     String(await freePort()),
     ...extra,

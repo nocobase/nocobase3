@@ -117,14 +117,21 @@ describe('runInstaller', () => {
 
   it('refuses a target that already holds files', async () => {
     await writeFile(path.join(dir, 'keep.txt'), 'mine');
-    const result = await run(['install', dir, '--json']);
+    const result = await run(['install', dir, '--template', 'hub', '--json']);
     expect(result.code).toBe(2);
     expect(JSON.parse(result.stdout).error.code).toBe('TARGET_NOT_EMPTY');
   });
 
   it('takes the install directory from --dir, as the other commands do', async () => {
     await writeFile(path.join(dir, 'keep.txt'), 'mine');
-    const result = await run(['install', '--dir', dir, '--json']);
+    const result = await run([
+      'install',
+      '--dir',
+      dir,
+      '--template',
+      'hub',
+      '--json',
+    ]);
     expect(result.code).toBe(2);
     expect(JSON.parse(result.stdout).error.code).toBe('TARGET_NOT_EMPTY');
   });
@@ -158,6 +165,8 @@ describe('runInstaller', () => {
     const result = await run([
       'install',
       path.join(dir, 'hub'),
+      '--template',
+      'hub',
       '--set',
       'novalue',
       '--json',
@@ -166,6 +175,60 @@ describe('runInstaller', () => {
     expect(JSON.parse(result.stdout).error.message).toContain(
       '--set expects key=value',
     );
+  });
+
+  it('asks for exactly one thing to install', async () => {
+    const target = path.join(dir, 'crm');
+    const none = await run(['install', target, '--json']);
+    expect(none.code).toBe(2);
+    expect(JSON.parse(none.stdout).error.message).toContain('--archive');
+    const both = await run([
+      'install',
+      target,
+      '--template',
+      'hub',
+      '--archive',
+      'crm.tar.gz',
+      '--json',
+    ]);
+    expect(both.code).toBe(2);
+    expect(JSON.parse(both.stdout).error.code).toBe('INVALID_USAGE');
+  });
+
+  it('builds only the Hub template, and says how to install an application of its own', async () => {
+    const result = await run([
+      'install',
+      path.join(dir, 'app'),
+      '--template',
+      'default',
+      '--json',
+    ]);
+    expect(result.code).toBe(2);
+    const { error } = JSON.parse(result.stdout);
+    expect(error.code).toBe('INVALID_USAGE');
+    expect(error.suggestions[0].message).toContain('--archive');
+  });
+
+  it('takes an archive by local path only, and names one that is not there', async () => {
+    const remote = await run([
+      'install',
+      path.join(dir, 'crm'),
+      '--archive',
+      'https://example.com/crm.tar.gz',
+      '--json',
+    ]);
+    expect(JSON.parse(remote.stdout).error).toMatchObject({
+      code: 'INVALID_USAGE',
+    });
+    const missing = await run([
+      'install',
+      path.join(dir, 'crm'),
+      '--archive',
+      path.join(dir, 'missing.tar.gz'),
+      '--json',
+    ]);
+    expect(missing.code).toBe(2);
+    expect(JSON.parse(missing.stdout).error.code).toBe('ARCHIVE_NOT_FOUND');
   });
 
   it('reports status for a root it does not manage as not installed', async () => {

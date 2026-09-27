@@ -8,6 +8,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
+import { create } from 'tar';
 import { runInstaller } from '../src/cli.ts';
 import {
   interruptError,
@@ -19,7 +20,7 @@ import type { FetchLike } from '../src/lib/registry.ts';
 import { CommandFailedError, type RunCommand } from '../src/lib/run-command.ts';
 
 /**
- * A stand-in for everything the installer starts: `pnpm create`, `pnpm add`, `pnpm build --tar`, `tar`, the release's
+ * A stand-in for everything the installer starts: `pnpm create`, `pnpm add`, `pnpm build --tar`, the release's
  * own CLI, pm2 and the Hub's health route. It writes the files each real command would leave behind, so the commands
  * under test see a realistic root, and it records what was run.
  */
@@ -46,8 +47,10 @@ export interface FakeWorld {
   startQueue: string[];
   /** Unpacked manifests omit `nocobase.builtAt` and `nocobase.basePath`, as builds before they were recorded did. */
   legacyManifest?: boolean;
-  /** Build times handed to unpacked manifests, one minute apart so every build is a release of its own. */
+  /** Build times handed to built manifests, one minute apart so every build is a release of its own. */
   builds: number;
+  /** The release CLI writes its database inside the release, as one older than `APP_STORAGE_DIR` does. */
+  ignoresStorageDir?: boolean;
 }
 
 /** The part of the template's `config.example.yml` the installer reads, which `config init` copies. */
@@ -70,6 +73,68 @@ const buildTarget = () => ({
   libc: 'glibc',
   nodeMajor: Number.parseInt(process.versions.node, 10),
 });
+
+export interface ArchiveOptions {
+  name?: string;
+  version: string;
+  builtAt?: string;
+  basePath?: string;
+  /** Leave `nocobase.builtAt` and `nocobase.basePath` out, as a build before they were recorded did. */
+  legacy?: boolean;
+  buildTarget?: Record<string, unknown>;
+  /** Driver packages the archive carries in `dist/node_modules`. */
+  drivers?: string[];
+}
+
+/**
+ * Writes a deployment archive the way `pnpm build --tar` packs one: `config.example.yml` and `dist/`, with the
+ * manifest in `dist/package.json`. The server entry names the version, so a test can tell releases apart.
+ */
+export function makeArchive(file: string, options: ArchiveOptions): string {
+  const tree = mkdtempSync(path.join(os.tmpdir(), 'app-installer-archive-'));
+  try {
+    mkdirSync(path.join(tree, 'dist/cli'), { recursive: true });
+    mkdirSync(path.join(tree, 'dist/server'), { recursive: true });
+    writeFileSync(path.join(tree, 'config.example.yml'), EXAMPLE_CONFIG);
+    writeFileSync(path.join(tree, 'dist/cli/index.js'), '');
+    writeFileSync(
+      path.join(tree, 'dist/server/standalone.js'),
+      `// ${options.version}\n`,
+    );
+    for (const driver of options.drivers ?? []) {
+      const directory = path.join(tree, 'dist/node_modules', driver);
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(
+        path.join(directory, 'package.json'),
+        JSON.stringify({ name: driver }),
+      );
+    }
+    writeFileSync(
+      path.join(tree, 'dist/package.json'),
+      JSON.stringify({
+        name: options.name ?? 'hub',
+        version: options.version,
+        nocobase: {
+          buildTarget: options.buildTarget ?? buildTarget(),
+          ...(options.legacy
+            ? {}
+            : {
+                builtAt: options.builtAt ?? new Date().toISOString(),
+                basePath: options.basePath ?? '/hub',
+              }),
+        },
+      }),
+    );
+    mkdirSync(path.dirname(file), { recursive: true });
+    create({ cwd: tree, file, gzip: true, sync: true }, [
+      'config.example.yml',
+      'dist',
+    ]);
+    return file;
+  } finally {
+    rmSync(tree, { recursive: true, force: true });
+  }
+}
 
 /** `.build/<version>/hub/...` names a version; `releases/<version>_<time>/app` names a release of one. */
 function versionFromPath(file: string): string {
@@ -120,8 +185,6 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
     }
     if (command === 'pnpm' && args[0] === '--version')
       return { stdout: '11.7.0\n', stderr: '' };
-    if (command === 'tar' && args[0] === '--version')
-      return { stdout: 'tar 1\n', stderr: '' };
     if (command === 'pnpm' && args[0] === 'create') {
       const project = path.join(cwd, 'hub');
       mkdirSync(path.join(project, 'node_modules/@nocobase/app-server'), {
@@ -141,36 +204,14 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
     if (command === 'pnpm' && args[0] === 'add')
       return { stdout: '', stderr: '' };
     if (command === 'pnpm' && args[0] === 'build') {
-      const archive = path.join(cwd, 'storage/exports/dist.tar.gz');
-      mkdirSync(path.dirname(archive), { recursive: true });
-      writeFileSync(archive, versionFromPath(cwd));
-      return { stdout: '', stderr: '' };
-    }
-    if (command === 'tar' && args[0] === '-xzf') {
-      const target = args[3];
-      const version = readFileSync(args[1], 'utf8');
-      mkdirSync(path.join(target, 'dist/cli'), { recursive: true });
-      mkdirSync(path.join(target, 'dist/server'), { recursive: true });
-      writeFileSync(path.join(target, 'config.example.yml'), EXAMPLE_CONFIG);
-      writeFileSync(path.join(target, 'dist/cli/index.js'), '');
-      writeFileSync(
-        path.join(target, 'dist/server/standalone.js'),
-        `// ${version}\n`,
-      );
-      const builtAt = new Date(
-        Date.UTC(2026, 0, 1) + world.builds++ * 60_000,
-      ).toISOString();
-      writeFileSync(
-        path.join(target, 'dist/package.json'),
-        JSON.stringify({
-          name: 'hub',
-          version,
-          nocobase: {
-            buildTarget: buildTarget(),
-            ...(world.legacyManifest ? {} : { builtAt, basePath: '/hub' }),
-          },
-        }),
-      );
+      makeArchive(path.join(cwd, 'storage/exports/dist.tar.gz'), {
+        version: versionFromPath(cwd),
+        builtAt: new Date(
+          Date.UTC(2026, 0, 1) + world.builds++ * 60_000,
+        ).toISOString(),
+        basePath: '/hub',
+        legacy: world.legacyManifest,
+      });
       return { stdout: '', stderr: '' };
     }
     if (
@@ -197,7 +238,9 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
       }
       if (key === 'db apply') {
         const database = path.join(
-          env.APP_STORAGE_DIR ?? '',
+          world.ignoresStorageDir
+            ? path.join(release, 'storage')
+            : (env.APP_STORAGE_DIR ?? ''),
           'hub/database/main.sqlite',
         );
         mkdirSync(path.dirname(database), { recursive: true });

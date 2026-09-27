@@ -70,17 +70,26 @@ export async function checkPnpm(run: RunCommand = runCommand): Promise<string> {
   return version;
 }
 
-export async function checkTar(run: RunCommand = runCommand): Promise<void> {
-  try {
-    await run('tar', ['--version']);
-  } catch {
-    throw new InstallerError('TAR_MISSING', 'tar was not found on PATH.', {
-      exitCode: EXIT_INVALID,
-      suggestions: [
-        { message: 'Install tar with the system package manager.' },
-      ],
-    });
-  }
+/** The C library Node runs on, which a Linux build's native modules are compiled against. */
+export function currentLibc(): 'glibc' | 'musl' | undefined {
+  if (process.platform !== 'linux') return undefined;
+  const report = process.report.getReport() as {
+    header?: { glibcVersionRuntime?: string };
+  };
+  return report.header?.glibcVersionRuntime ? 'glibc' : 'musl';
+}
+
+/**
+ * This machine as `pnpm build --target` names a platform, such as `linux-x64` or `linux-arm64-musl`, so a suggestion
+ * to rebuild for it runs as printed.
+ */
+export function machineBuildTarget(): string {
+  return `${process.platform}-${process.arch}${currentLibc() === 'musl' ? '-musl' : ''}`;
+}
+
+/** The build command that produces an archive this machine runs, run in the application project. */
+export function rebuildCommand(): string {
+  return `pnpm build --target ${machineBuildTarget()} --node-version ${currentNodeMajor()} --tar`;
 }
 
 /**

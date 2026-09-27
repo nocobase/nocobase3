@@ -34,12 +34,15 @@ import {
   checkPm2,
   checkPnpm,
   checkPortFree,
-  checkTar,
   currentNodeMajor,
+  rebuildCommand,
 } from '../lib/prechecks.ts';
 import { resolveTemplateVersion } from '../lib/registry.ts';
 import {
+  assertStorageOutsideRelease,
   buildFromTemplate,
+  checkArchiveDriver,
+  unpackRelease,
   verifyBuildTarget,
   type PreparedRelease,
 } from '../lib/release.ts';
@@ -47,6 +50,7 @@ import { runCommand } from '../lib/run-command.ts';
 import {
   capitalize,
   hostsApplications,
+  resolveArchivePath,
   subjectOf,
   templateOf,
 } from '../lib/source.ts';
@@ -75,9 +79,13 @@ export const UPGRADE_FLAGS = {
     description:
       'Installation root managed by app-installer. Defaults to the current directory.',
   }),
+  archive: Flags.string({
+    description:
+      'For an installation from a deployment archive: the new archive, built by `pnpm build --tar` for this machine.',
+  }),
   to: Flags.string({
     description:
-      'Version or dist-tag to upgrade to: latest by default, or the installed version with --rebuild. A build of that version already on disk is reused.',
+      'For a template installation: the version or dist-tag to upgrade to, latest by default, or the installed version with --rebuild. A build of that version already on disk is reused.',
   }),
   'backup-done': Flags.boolean({
     default: false,
@@ -99,12 +107,12 @@ export const UPGRADE_FLAGS = {
   'keep-source': Flags.boolean({
     default: false,
     description:
-      'Keep the build directory with the sources and development dependencies.',
+      'For a template installation: keep the build directory with the sources and development dependencies.',
   }),
   rebuild: Flags.boolean({
     default: false,
     description:
-      'Build the target again even when a build of it is on disk, the running version included: for a machine whose Node major changed and has no newer version to upgrade to.',
+      'For a template installation: build the target again even when a build of it is on disk, the running version included: for a machine whose Node major changed and has no newer version to upgrade to.',
   }),
   yes: Flags.boolean({
     default: false,
@@ -119,6 +127,7 @@ export const UPGRADE_FLAGS = {
 export interface UpgradeInput {
   flags: {
     dir?: string;
+    archive?: string;
     to?: string;
     'backup-done': boolean;
     'health-timeout': number;
@@ -246,6 +255,98 @@ async function checkFreeSpace(root: string): Promise<void> {
           {
             message:
               'Free some space, or lower --keep to prune old releases on the next upgrade.',
+          },
+        ],
+      },
+    );
+  }
+}
+
+/**
+ * An upgrade takes the kind of source the install did: a template installation moves between template versions, and
+ * one installed from an archive moves to another archive.
+ */
+function checkUpgradeSource(
+  state: InstallerState,
+  root: string,
+  flags: UpgradeInput['flags'],
+): void {
+  const template = templateOf(state);
+  if (template && flags.archive !== undefined) {
+    throw new InstallerError(
+      'INVALID_USAGE',
+      `${root} was installed from the ${template.name} template, which upgrades to a template version with --to, not to an archive.`,
+      { exitCode: EXIT_INVALID },
+    );
+  }
+  if (!template) {
+    if (flags.archive === undefined) {
+      throw new InstallerError(
+        'INVALID_USAGE',
+        `${root} was installed from a deployment archive; pass the new one with --archive.`,
+        {
+          exitCode: EXIT_INVALID,
+          suggestions: [
+            {
+              message:
+                'Build it for this machine in the application project, copy it to the server, then run:',
+              run: installerCommand(
+                `upgrade --dir ${shellQuote(root)} --archive <archive>`,
+                { registry: state.registry },
+              ),
+            },
+          ],
+        },
+      );
+    }
+    const templateOnly = [
+      flags.to !== undefined && '--to',
+      flags.rebuild && '--rebuild',
+      flags['keep-source'] && '--keep-source',
+    ].filter(Boolean);
+    if (templateOnly.length > 0) {
+      throw new InstallerError(
+        'INVALID_USAGE',
+        `${templateOnly.join(', ')} apply to a template installation; ${root} upgrades from the archive given with --archive.`,
+        { exitCode: EXIT_INVALID },
+      );
+    }
+  }
+}
+
+/**
+ * The archive must be a later build of the same application: its package name owns the migration history in the
+ * database, and its base path is compiled into the client the reverse proxy and the configured origin point at.
+ */
+function checkArchiveMatches(
+  state: InstallerState,
+  prepared: PreparedRelease,
+): void {
+  if (prepared.appName !== state.appName) {
+    throw new InstallerError(
+      'APP_MISMATCH',
+      `The archive holds ${prepared.appName}, but this installation runs ${state.appName}; a different application has a migration history of its own.`,
+      {
+        exitCode: EXIT_INVALID,
+        suggestions: [
+          {
+            message:
+              'Install a different application into a directory of its own with install --archive.',
+          },
+        ],
+      },
+    );
+  }
+  if (prepared.basePath !== state.basePath) {
+    throw new InstallerError(
+      'BASE_PATH_MISMATCH',
+      `The archive was built for the base path ${prepared.basePath}, but this installation serves ${state.basePath}.`,
+      {
+        exitCode: EXIT_INVALID,
+        suggestions: [
+          {
+            message: `Build it again with APP_BASE_PATH=${state.basePath}:`,
+            run: `APP_BASE_PATH=${state.basePath} ${rebuildCommand()}`,
           },
         ],
       },
@@ -409,13 +510,7 @@ export async function upgrade(
     assertNoPending(state, root, flags.rebuild);
     const subject = subjectOf(state);
     const template = templateOf(state);
-    if (!template) {
-      throw new InstallerError(
-        'INVALID_USAGE',
-        `${root} was installed from a deployment archive; this app-installer upgrades only template installations.`,
-        { exitCode: EXIT_INVALID },
-      );
-    }
+    checkUpgradeSource(state, root, flags);
     const env = await readAppEnv(layout);
     const from = findRelease(state, state.current);
     if (!from) {
@@ -439,30 +534,10 @@ export async function upgrade(
       delete state.pending;
     }
 
-    // `--rebuild` alone means the installed version: a newer one would be an upgrade, which builds for this machine anyway.
-    const requested = flags.to ?? (flags.rebuild ? from.version : 'latest');
-    const targetVersion = state.releases.some(
-      (record) => record.version === requested,
-    )
-      ? requested
-      : await resolveTemplateVersion(
-          state.registry,
-          template.package,
-          requested,
-          deps.fetchImpl,
-        );
     const machineMajor = currentNodeMajor();
     const nodeChanged = from.buildTarget.nodeMajor !== machineMajor;
-    const rebuildCommand = installerCommand(
-      `upgrade --dir ${shellQuote(root)} --rebuild`,
-      { registry: state.registry },
-    );
-    if (targetVersion === from.version && !flags.rebuild) {
-      if (nodeChanged) {
-        reporter.warn(
-          `${from.id} was built for Node ${from.buildTarget.nodeMajor}, but this machine runs Node ${machineMajor}; build it again for this machine with \`${rebuildCommand}\`.`,
-        );
-      }
+    const noop = (warning?: string): CommandOutcome => {
+      if (warning) reporter.warn(warning);
       return {
         status: 'success-noop',
         result: {
@@ -474,16 +549,14 @@ export async function upgrade(
         },
         summary: [
           `${capitalize(subject)} is already on ${from.version} (${from.id}).`,
-          ...(nodeChanged
-            ? [`  Rebuild it for Node ${machineMajor}: ${rebuildCommand}`]
-            : []),
+          ...(warning ? [`  ${warning}`] : []),
         ],
       };
-    }
-    if ((compareVersions(targetVersion, from.version) ?? 0) < 0) {
+    };
+    const refuseDowngrade = (version: string): never => {
       throw new InstallerError(
         'DOWNGRADE',
-        `${targetVersion} is older than the running ${from.version}. An older release does not know the newer migrations and would run on a schema it does not understand.`,
+        `${version} is older than the running ${from.version}. An older release does not know the newer migrations and would run on a schema it does not understand.`,
         {
           exitCode: EXIT_INVALID,
           suggestions: [
@@ -491,16 +564,14 @@ export async function upgrade(
               message:
                 'Go back with rollback, which restores the databases backed up before the upgrade:',
               run: installerCommand(
-                `rollback --dir ${shellQuote(root)} --to ${targetVersion}`,
+                `rollback --dir ${shellQuote(root)} --to ${version}`,
                 { registry: state.registry },
               ),
             },
           ],
         },
       );
-    }
-    // Building the running version again, for this machine: it becomes a release of its own, switched to like any other.
-    const rebuildCurrent = flags.rebuild && targetVersion === from.version;
+    };
 
     const url = healthUrl(env);
     const service: ServiceOptions = {
@@ -510,51 +581,128 @@ export async function upgrade(
       healthUrl: url,
       fetchImpl: deps.fetchImpl,
     };
-    checkPlatform();
-    await checkPm2(pm2);
-    await checkPm2Ownership(service);
-    const reuse = flags.rebuild
-      ? undefined
-      : reusableBuild(state, layout, targetVersion);
-    if (!reuse) {
-      await checkPnpm(run);
-      await checkTar(run);
-      await checkFreeSpace(root);
+
+    // What to switch to. A template installation names a version and builds it after the prompt, since that takes
+    // minutes; an archive has to be unpacked first, because only its manifest says which release it is.
+    let targetVersion: string;
+    let reuse: ReleaseRecord | undefined;
+    let prepared: PreparedRelease | undefined;
+    let rebuildCurrent = false;
+    if (template) {
+      // `--rebuild` alone means the installed version: a newer one would be an upgrade, which builds for this machine anyway.
+      const requested = flags.to ?? (flags.rebuild ? from.version : 'latest');
+      targetVersion = state.releases.some(
+        (record) => record.version === requested,
+      )
+        ? requested
+        : await resolveTemplateVersion(
+            state.registry,
+            template.package,
+            requested,
+            deps.fetchImpl,
+          );
+      if (targetVersion === from.version && !flags.rebuild) {
+        return noop(
+          nodeChanged
+            ? `${from.id} was built for Node ${from.buildTarget.nodeMajor}, but this machine runs Node ${machineMajor}; build it again for this machine with \`${installerCommand(`upgrade --dir ${shellQuote(root)} --rebuild`, { registry: state.registry })}\`.`
+            : undefined,
+        );
+      }
+      if ((compareVersions(targetVersion, from.version) ?? 0) < 0) {
+        refuseDowngrade(targetVersion);
+      }
+      // Building the running version again, for this machine: it becomes a release of its own, switched to like any other.
+      rebuildCurrent = flags.rebuild && targetVersion === from.version;
+      checkPlatform();
+      await checkPm2(pm2);
+      await checkPm2Ownership(service);
+      reuse = flags.rebuild
+        ? undefined
+        : reusableBuild(state, layout, targetVersion);
+      if (!reuse) {
+        await checkPnpm(run);
+        await checkFreeSpace(root);
+      }
+    } else {
+      const archive = resolveArchivePath(
+        deps.cwd ?? process.cwd(),
+        flags.archive!,
+      );
+      checkPlatform();
+      await checkPm2(pm2);
+      await checkPm2Ownership(service);
+      reporter.progress(`Unpacking ${archive}`);
+      const unpacked = await unpackRelease({ layout, archive });
+      const discard = async () => {
+        if (!unpacked.reused) {
+          await rm(path.dirname(unpacked.dir), {
+            recursive: true,
+            force: true,
+          });
+        }
+      };
+      try {
+        checkArchiveMatches(state, unpacked);
+        checkArchiveDriver(unpacked.dir, state.dialect);
+        if (unpacked.id === from.id) {
+          return noop();
+        }
+        if ((compareVersions(unpacked.version, from.version) ?? 0) < 0) {
+          refuseDowngrade(unpacked.version);
+        }
+      } catch (error) {
+        await discard();
+        throw error;
+      }
+      targetVersion = unpacked.version;
+      reuse = unpacked.reused ? findRelease(state, unpacked.id) : undefined;
+      prepared = reuse ? undefined : unpacked;
     }
+
     const inventory = readDatabaseInventory(layout, env);
     const unprotected = [...inventory.external, ...inventory.unresolved];
-    if (unprotected.length > 0 && !flags['backup-done']) {
-      throw new InstallerError(
-        'BACKUP_REQUIRED',
-        `app-installer cannot back up the database connection${unprotected.length === 1 ? '' : 's'} ${unprotected.join(', ')}. Back ${unprotected.length === 1 ? 'it' : 'them'} up, then pass --backup-done.`,
-        { exitCode: EXIT_INVALID },
-      );
-    }
     const hosts = hostsApplications(state);
-    await confirm(
-      [
-        rebuildCurrent
-          ? `Build ${from.version} again for this machine (Node ${machineMajor}) and switch ${subject} at ${root} to the new build.`
-          : `Upgrade ${subject} at ${root} from ${from.version} to ${targetVersion}.`,
-        hosts
-          ? `${capitalize(subject)} and every application it hosts stop while the release switches; deployments in progress are marked failed.`
-          : `${capitalize(subject)} stops while the release switches.`,
-        inventory.sqlite.length > 0
-          ? 'The SQLite databases and the configuration are copied to backups/ before anything is migrated.'
-          : 'The configuration is copied to backups/ before anything is migrated.',
-        ...(unprotected.length > 0
-          ? [
-              `You confirmed with --backup-done that ${unprotected.join(', ')} ${unprotected.length === 1 ? 'is' : 'are'} backed up.`,
-            ]
-          : []),
-        ...(nodeChanged
-          ? [
-              `This machine runs Node ${machineMajor}, but ${from.id} was built for Node ${from.buildTarget.nodeMajor}: it cannot be rolled back to${hosts ? `, and hosted applications must be rebuilt with --node-version ${machineMajor}` : ''}.`,
-            ]
-          : []),
-      ],
-      { yes: flags.yes, json: flags.json },
-    );
+    const discardPrepared = async () => {
+      if (prepared) {
+        await rm(path.dirname(prepared.dir), { recursive: true, force: true });
+      }
+    };
+    try {
+      if (unprotected.length > 0 && !flags['backup-done']) {
+        throw new InstallerError(
+          'BACKUP_REQUIRED',
+          `app-installer cannot back up the database connection${unprotected.length === 1 ? '' : 's'} ${unprotected.join(', ')}. Back ${unprotected.length === 1 ? 'it' : 'them'} up, then pass --backup-done.`,
+          { exitCode: EXIT_INVALID },
+        );
+      }
+      await confirm(
+        [
+          template && rebuildCurrent
+            ? `Build ${from.version} again for this machine (Node ${machineMajor}) and switch ${subject} at ${root} to the new build.`
+            : `Upgrade ${subject} at ${root} from ${from.id} to ${prepared?.id ?? reuse?.id ?? targetVersion}.`,
+          hosts
+            ? `${capitalize(subject)} and every application it hosts stop while the release switches; deployments in progress are marked failed.`
+            : `${capitalize(subject)} stops while the release switches.`,
+          inventory.sqlite.length > 0
+            ? 'The SQLite databases and the configuration are copied to backups/ before anything is migrated.'
+            : 'The configuration is copied to backups/ before anything is migrated.',
+          ...(unprotected.length > 0
+            ? [
+                `You confirmed with --backup-done that ${unprotected.join(', ')} ${unprotected.length === 1 ? 'is' : 'are'} backed up.`,
+              ]
+            : []),
+          ...(nodeChanged
+            ? [
+                `This machine runs Node ${machineMajor}, but ${from.id} was built for Node ${from.buildTarget.nodeMajor}: it cannot be rolled back to${hosts ? `, and hosted applications must be rebuilt with --node-version ${machineMajor}` : ''}.`,
+              ]
+            : []),
+        ],
+        { yes: flags.yes, json: flags.json },
+      );
+    } catch (error) {
+      await discardPrepared();
+      throw error;
+    }
 
     // Everything up to the stop happens while the current release keeps serving.
     let to: ReleaseRecord;
@@ -563,9 +711,9 @@ export async function upgrade(
       reporter.progress(`Reusing the ${reuse.id} release already on disk`);
       to = reuse;
     } else {
-      const prepared = await buildFromTemplate({
+      prepared ??= await buildFromTemplate({
         layout,
-        template,
+        template: template!,
         version: targetVersion,
         registry: state.registry,
         drivers: state.drivers,
@@ -670,6 +818,7 @@ export async function upgrade(
       await switchCurrent(layout, releaseLinkTarget(to.id));
       reporter.progress('Applying database migrations');
       await runAppCli(['db', 'apply'], cli);
+      assertStorageOutsideRelease(dir);
       reporter.progress(`Starting ${to.id}`);
       const healthy = await startApp({
         ...service,
