@@ -215,9 +215,15 @@ test('create accepts a name and creation options without requiring database cred
     assert.throws(() => parseArgs(args));
 });
 
-test('installer-smoke takes its own Hub port and a workdir, not the registry port', () => {
+test('installer-smoke takes a source, its own ports and a workdir, not the registry port', () => {
   const options = parseArgs(['installer-smoke']);
   assert.equal(options['hub-port'], 13200);
+  assert.equal(options['app-port'], 13100);
+  assert.equal(options.source, undefined);
+  assert.equal(
+    parseArgs(['installer-smoke', '--source', 'archive']).source,
+    'archive',
+  );
   assert.equal(
     parseArgs([
       'installer-smoke',
@@ -233,6 +239,8 @@ test('installer-smoke takes its own Hub port and a workdir, not the registry por
     ['installer-smoke', '--hub-port', '70000'],
     ['installer-smoke', '--hub-port', '13010'],
     ['installer-smoke', '--template', 'hub'],
+    ['installer-smoke', '--source', 'docker'],
+    ['installer-smoke', '--app-port', '13200'],
     ['smoke', '--hub-port', '13300'],
   ])
     assert.throws(() => parseArgs(args));

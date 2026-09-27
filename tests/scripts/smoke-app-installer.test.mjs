@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,15 +7,19 @@ import test from 'node:test';
 import {
   BROKEN_VERSION,
   OLDER_VERSION,
+  databaseFile,
   markLastUpgradeMigrated,
   parseArgs,
   processCommandLine,
   registerBrokenRelease,
   registerOlderRelease,
+  releaseIdOf,
+  repackArchive,
 } from '../../scripts/smoke-app-installer.mjs';
 
-test('the smoke script takes a root, a port and the installer command after --', () => {
-  const defaults = parseArgs(['--root', '/tmp/hub']);
+test('the smoke script takes a source, a root, a port and the installer command after --', () => {
+  const defaults = parseArgs(['--source', 'template', '--root', '/tmp/hub']);
+  assert.equal(defaults.source, 'template');
   assert.equal(defaults.root, path.resolve('/tmp/hub'));
   assert.equal(defaults.port, 13000);
   assert.deepEqual(defaults.installer, [
@@ -24,8 +28,12 @@ test('the smoke script takes a root, a port and the installer command after --',
   ]);
 
   const custom = parseArgs([
+    '--source',
+    'archive',
     '--root',
-    '/tmp/hub',
+    '/tmp/crm',
+    '--archive',
+    'crm.tar.gz',
     '--port',
     '13200',
     '--',
@@ -34,6 +42,7 @@ test('the smoke script takes a root, a port and the installer command after --',
     '@nocobase/app-installer@0.1.0',
   ]);
   assert.equal(custom.port, 13200);
+  assert.equal(custom.archive, path.resolve('crm.tar.gz'));
   assert.deepEqual(custom.installer, [
     'npx',
     '--yes',
@@ -42,126 +51,143 @@ test('the smoke script takes a root, a port and the installer command after --',
 
   for (const args of [
     [],
-    ['--port', '13000'],
-    ['--root', '/tmp/hub', '--port', 'x'],
-    ['--root', '/tmp/hub', '--other', 'y'],
-    ['--root', '/tmp/hub', '--'],
+    ['--root', '/tmp/hub'],
+    ['--source', 'template', '--port', '13000'],
+    ['--source', 'other', '--root', '/tmp/hub'],
+    ['--source', 'archive', '--root', '/tmp/crm'],
+    ['--source', 'template', '--root', '/tmp/hub', '--archive', 'x.tar.gz'],
+    ['--source', 'template', '--root', '/tmp/hub', '--port', 'x'],
+    ['--source', 'template', '--root', '/tmp/hub', '--other', 'y'],
+    ['--source', 'template', '--root', '/tmp/hub', '--'],
   ])
     assert.throws(() => parseArgs(args));
 });
 
+test('the smoke script refuses the App Host port for the Hub, not for an archive', () => {
+  assert.throws(
+    () =>
+      parseArgs([
+        '--source',
+        'template',
+        '--root',
+        '/tmp/hub',
+        '--port',
+        '13010',
+      ]),
+    /App Host/,
+  );
+  assert.equal(
+    parseArgs([
+      '--source',
+      'archive',
+      '--root',
+      '/tmp/crm',
+      '--archive',
+      'crm.tar.gz',
+      '--port',
+      '13010',
+    ]).port,
+    13010,
+  );
+});
+
+test('release ids are formed the way app-installer forms them', () => {
+  assert.equal(
+    releaseIdOf('1.0.0', '2026-09-27T00:55:00.123Z'),
+    '1.0.0_20260927T005500Z',
+  );
+});
+
+const buildTarget = { platform: 'linux', arch: 'x64', nodeMajor: 24 };
+
+/** An installation with one release, `installed`, current, whose server entry names it. */
+function fakeInstallation(root, installed) {
+  const id = releaseIdOf(installed, '2026-09-26T00:00:00.000Z');
+  const release = path.join(root, 'releases', id, 'app');
+  fs.mkdirSync(path.join(release, 'dist', 'server'), { recursive: true });
+  fs.writeFileSync(
+    path.join(release, 'dist', 'server', 'standalone.js'),
+    `export function startServer() {} // ${installed}\n`,
+  );
+  fs.symlinkSync(path.join('releases', id, 'app'), path.join(root, 'current'));
+  fs.writeFileSync(
+    path.join(root, 'installer.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      name: 'nocobase-hub',
+      current: id,
+      releases: [
+        {
+          id,
+          version: installed,
+          builtAt: '2026-09-26T00:00:00.000Z',
+          installedAt: '2026-09-26T00:00:00.000Z',
+          buildTarget,
+        },
+      ],
+      history: [
+        { action: 'install', to: id, at: 'a' },
+        { action: 'upgrade', from: 'x', to: id, at: 'b', migrations: 0 },
+        { action: 'rollback', from: id, to: 'x', at: 'c' },
+      ],
+    }),
+  );
+  return id;
+}
+
+const readState = (root) =>
+  JSON.parse(fs.readFileSync(path.join(root, 'installer.json'), 'utf8'));
+
 test('an older release is registered as a copy of the installed one and made current', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-smoke-'));
   try {
-    const installed = '1.0.0-beta.37';
-    const release = path.join(root, 'releases', installed, 'hub');
-    fs.mkdirSync(path.join(release, 'dist'), { recursive: true });
-    fs.writeFileSync(path.join(release, 'dist', 'marker'), installed);
-    fs.symlinkSync(
-      path.join('releases', installed, 'hub'),
-      path.join(root, 'current'),
-    );
-    const buildTarget = { platform: 'linux', arch: 'x64', nodeMajor: 24 };
-    fs.writeFileSync(
-      path.join(root, 'installer.json'),
-      JSON.stringify({
-        schemaVersion: 1,
-        name: 'nocobase-hub',
-        current: installed,
-        releases: [
-          {
-            version: installed,
-            installedAt: '2026-09-26T00:00:00.000Z',
-            buildTarget,
-          },
-        ],
-        history: [],
-      }),
-    );
+    const installedId = fakeInstallation(root, '1.0.0-beta.37');
+    const older = releaseIdOf(OLDER_VERSION, '2000-01-01T00:00:00.000Z');
 
     assert.deepEqual(registerOlderRelease(root), {
       name: 'nocobase-hub',
-      upgradeTarget: installed,
+      id: older,
+      upgradeTarget: '1.0.0-beta.37',
     });
 
-    const state = JSON.parse(
-      fs.readFileSync(path.join(root, 'installer.json'), 'utf8'),
-    );
-    assert.equal(state.current, OLDER_VERSION);
+    const state = readState(root);
+    assert.equal(state.current, older);
     assert.deepEqual(
-      state.releases.map((entry) => entry.version),
-      [OLDER_VERSION, installed],
+      state.releases.map((entry) => entry.id),
+      [older, installedId],
     );
     // Older than the installed release, so pruning after the upgrade keeps the right one.
     assert.ok(state.releases[0].installedAt < state.releases[1].installedAt);
     assert.deepEqual(state.releases[0].buildTarget, buildTarget);
     assert.equal(
       fs.readlinkSync(path.join(root, 'current')),
-      path.join('releases', OLDER_VERSION, 'hub'),
+      path.join('releases', older, 'app'),
     );
-    assert.equal(
-      fs.readFileSync(path.join(root, 'current', 'dist', 'marker'), 'utf8'),
-      installed,
+    assert.match(
+      fs.readFileSync(
+        path.join(root, 'current', 'dist', 'server', 'standalone.js'),
+        'utf8',
+      ),
+      /1\.0\.0-beta\.37/,
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('the smoke script refuses the App Host port for the Hub', () => {
-  assert.throws(
-    () => parseArgs(['--root', '/tmp/hub', '--port', '13010']),
-    /App Host/,
-  );
-});
-
-function fakeHub(root, installed) {
-  const release = path.join(root, 'releases', installed, 'hub');
-  fs.mkdirSync(path.join(release, 'dist', 'server'), { recursive: true });
-  fs.writeFileSync(
-    path.join(release, 'dist', 'server', 'standalone.js'),
-    'export function startServer() {}\n',
-  );
-  const buildTarget = { platform: 'linux', arch: 'x64', nodeMajor: 24 };
-  fs.writeFileSync(
-    path.join(root, 'installer.json'),
-    JSON.stringify({
-      schemaVersion: 1,
-      name: 'nocobase-hub',
-      current: installed,
-      releases: [
-        {
-          version: installed,
-          installedAt: '2026-09-26T00:00:00.000Z',
-          buildTarget,
-        },
-      ],
-      history: [
-        { action: 'install', to: installed, at: 'a' },
-        {
-          action: 'upgrade',
-          from: '0.0.0',
-          to: installed,
-          at: 'b',
-          migrations: 0,
-        },
-        { action: 'rollback', from: installed, to: '0.0.0', at: 'c' },
-      ],
-    }),
-  );
-}
-
 test('a broken release is a newer copy whose server entry throws, not made current', () => {
   const root = fs.mkdtempSync(
     path.join(os.tmpdir(), 'installer-smoke-broken-'),
   );
   try {
-    fakeHub(root, '1.0.0');
-    assert.equal(registerBrokenRelease(root, '1.0.0'), BROKEN_VERSION);
-    const state = JSON.parse(
-      fs.readFileSync(path.join(root, 'installer.json'), 'utf8'),
+    const installedId = fakeInstallation(root, '1.0.0');
+    const broken = registerBrokenRelease(root, installedId);
+    assert.match(
+      broken,
+      new RegExp(`^${BROKEN_VERSION.replaceAll('.', '\\.')}_`),
     );
-    assert.equal(state.current, '1.0.0');
+    const state = readState(root);
+    assert.equal(state.current, installedId);
     assert.deepEqual(
       state.releases.map((entry) => entry.version),
       ['1.0.0', BROKEN_VERSION],
@@ -170,8 +196,8 @@ test('a broken release is a newer copy whose server entry throws, not made curre
       path.join(
         root,
         'releases',
-        BROKEN_VERSION,
-        'hub',
+        broken,
+        'app',
         'dist',
         'server',
         'standalone.js',
@@ -190,15 +216,92 @@ test('marking the last upgrade as migrated touches only that entry', () => {
     path.join(os.tmpdir(), 'installer-smoke-migrated-'),
   );
   try {
-    fakeHub(root, '1.0.0');
+    fakeInstallation(root, '1.0.0');
     markLastUpgradeMigrated(root);
-    const { history } = JSON.parse(
-      fs.readFileSync(path.join(root, 'installer.json'), 'utf8'),
-    );
     assert.deepEqual(
-      history.map((entry) => entry.migrations),
+      readState(root).history.map((entry) => entry.migrations),
       [undefined, 1, undefined],
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a later build is a repacked archive with a new build time, broken on request', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-smoke-repack-'));
+  try {
+    const tree = path.join(dir, 'tree');
+    fs.mkdirSync(path.join(tree, 'dist', 'server'), { recursive: true });
+    fs.writeFileSync(path.join(tree, 'config.example.yml'), 'users: {}\n');
+    fs.writeFileSync(
+      path.join(tree, 'dist', 'server', 'standalone.js'),
+      'export {};\n',
+    );
+    fs.writeFileSync(
+      path.join(tree, 'dist', 'package.json'),
+      JSON.stringify({
+        name: 'crm',
+        version: '0.1.0',
+        nocobase: { basePath: '/main', builtAt: '2026-01-01T00:00:00.000Z' },
+      }),
+    );
+    const source = path.join(dir, 'source.tar.gz');
+    assert.equal(
+      spawnSync('tar', [
+        '-czf',
+        source,
+        '-C',
+        tree,
+        'config.example.yml',
+        'dist',
+      ]).status,
+      0,
+    );
+
+    const target = path.join(dir, 'broken.tar.gz');
+    const id = repackArchive(source, target, {
+      builtAt: '2026-02-01T00:00:00.000Z',
+      broken: true,
+    });
+    assert.equal(id, '0.1.0_20260201T000000Z');
+
+    const out = path.join(dir, 'out');
+    fs.mkdirSync(out);
+    assert.equal(spawnSync('tar', ['-xzf', target, '-C', out]).status, 0);
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(out, 'dist', 'package.json'), 'utf8'),
+    );
+    assert.deepEqual(manifest.nocobase, {
+      basePath: '/main',
+      builtAt: '2026-02-01T00:00:00.000Z',
+    });
+    assert.match(
+      fs.readFileSync(
+        path.join(out, 'dist', 'server', 'standalone.js'),
+        'utf8',
+      ),
+      /^throw new Error/,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the database is the Hub one at its known path, or the one file an application has', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-smoke-db-'));
+  try {
+    fs.mkdirSync(path.join(root, 'storage', 'logs'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'storage', 'database.sqlite'), '');
+    fs.writeFileSync(path.join(root, 'storage', 'logs', 'app.log'), '');
+    assert.equal(
+      databaseFile(root),
+      path.join(root, 'storage', 'database.sqlite'),
+    );
+
+    const hub = path.join(root, 'storage', 'hub', 'database', 'main.sqlite');
+    fs.mkdirSync(path.dirname(hub), { recursive: true });
+    fs.writeFileSync(hub, '');
+    assert.equal(databaseFile(root), hub);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

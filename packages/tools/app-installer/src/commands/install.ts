@@ -468,6 +468,7 @@ export async function install(
         directory: root,
         version: prepared.version,
         releaseId: prepared.id,
+        builtAt: prepared.builtAt,
         release: prepared.dir,
         appName: prepared.appName,
         basePath: prepared.basePath,
