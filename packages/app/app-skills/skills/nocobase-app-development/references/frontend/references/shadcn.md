@@ -1,8 +1,10 @@
 # Components from shadcn/ui
 
-`client/components/ui/` holds shadcn/ui primitives in their Base UI version (`style` is `base-nova` in `components.json`). The template ships only the ones its shell and its compositions use; every other primitive is added with the CLI when a page first needs it. How to use the primitives — composition rules, the Base UI API, form layout, icons — is in the shadcn/ui skill under [`../shadcn/`](../shadcn/SKILL.md), taken unchanged from shadcn 4.21.0, the CLI version this application installs. This page says which of its files to read and where this application departs from it; where the two disagree, this page and the rest of this handbook win.
+`client/components/ui/` holds shadcn/ui primitives in their Base UI version (`style` is `base-nova` in `components.json`). The template ships only the ones its shell and its compositions use, and Examples also the ones its example pages use; every other primitive is added with the CLI when a page first needs it. How to use the primitives — composition rules, the Base UI API, form layout, icons — is in the shadcn/ui skill under [`../shadcn/`](../shadcn/SKILL.md), taken unchanged from shadcn 4.21.0, the CLI version this application installs. This page says which of its files to read and where this application departs from it; where the two disagree, this page and the rest of this handbook win.
 
 ## 1. What the template ships and how to add the rest
+
+The Default and Hub templates ship these; Examples adds `badge`, `card`, `field`, `separator`, `skeleton`, `textarea`, `toggle` and `toggle-group`.
 
 | Primitive                                                                             | Used by                                                         |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- |

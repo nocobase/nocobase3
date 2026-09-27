@@ -23,7 +23,7 @@ Where shared logic goes: write it in the component first. When the same logic wo
 
 Conventions every page follows, each explained in its home:
 
-- Primitives: the template ships twelve; add any other with `yes n | pnpm exec shadcn add <name>` before a file imports it, format the files it creates, translate the English they carry, and otherwise keep them as the CLI writes them. Their rules come from the shadcn skill, read through [`references/shadcn.md`](references/shadcn.md), which also lists where this application departs from it.
+- Primitives: the template ships only the ones its shell uses; add any other with `yes n | pnpm exec shadcn add <name>` before a file imports it, format the files it creates, translate the English they carry, and otherwise keep them as the CLI writes them. Their rules come from the shadcn skill, read through [`references/shadcn.md`](references/shadcn.md), which also lists where this application departs from it.
 - Base UI composition: `render` instead of `asChild`, `nativeButton={false}` for a Button rendered as a link, `items` on `Select`, every item and label inside its group, `data-icon` on an icon in a button (the skill's rules, and [section 2 of `references/styling.md`](references/styling.md#2-components-are-built-on-base-ui-not-radix) for what they leave out).
 - `PageContainer` from the page that owns it ([section 2 of `references/page.md`](references/page.md#2-the-page-component)).
 - Create, edit and detail as child-route overlays; of the overlays, only a confirmation (`AlertDialog`) and a temporary panel (`Sheet`) use component state ([`references/overlay.md`](references/overlay.md)).

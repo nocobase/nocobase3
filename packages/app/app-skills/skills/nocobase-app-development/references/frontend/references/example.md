@@ -17,7 +17,7 @@ Start from the document for your task, then copy every document its **Depends on
 
 The template ships neither `client/components/session-expired-alert.tsx` nor `client/hooks/use-url-search.ts`: the first feature that needs one copies it from its document here, and later features import it.
 
-The template ships only twelve shadcn/ui primitives. A document whose file imports another one says so on its **Add first** line; run that command before copying the file, then format the files it creates, as [section 1 of `shadcn.md`](shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest) describes. The whole feature needs:
+The template ships only the shadcn/ui primitives its shell uses. A document whose file imports another one says so on its **Add first** line; run that command before copying the file, then format the files it creates, as [section 1 of `shadcn.md`](shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest) describes. The whole feature needs:
 
 ```bash
 yes n | pnpm exec shadcn add alert alert-dialog badge card checkbox combobox empty field input-group radio-group skeleton switch textarea
