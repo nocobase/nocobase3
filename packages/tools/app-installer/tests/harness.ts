@@ -10,6 +10,7 @@ import path from 'node:path';
 import { Writable } from 'node:stream';
 import { create } from 'tar';
 import { runInstaller } from '../src/cli.ts';
+import type { Suggestion } from '../src/lib/errors.ts';
 import {
   interruptError,
   onInterrupt,
@@ -358,6 +359,7 @@ export interface RunResult {
     error?: {
       code: string;
       message: string;
+      suggestions: Suggestion[];
       details?: Record<string, unknown>;
     };
     warnings: string[];
