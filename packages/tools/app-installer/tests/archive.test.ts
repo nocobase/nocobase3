@@ -1,4 +1,10 @@
-import { existsSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -281,6 +287,48 @@ describe('upgrade --archive', () => {
     ]);
     expect(onTemplate.code).toBe(2);
     expect(onTemplate.json.error?.code).toBe('INVALID_USAGE');
+  });
+
+  it('reports an archive installation without asking a registry, and advises a rebuilt archive for another Node', async () => {
+    await install(archive({ version: '0.1.0' }));
+    const status = await hub(world, ['status', '--dir', root]);
+    expect(status.json.result).toMatchObject({
+      appName: 'crm',
+      version: '0.1.0',
+      source: { kind: 'archive' },
+      latest: null,
+      updateAvailable: null,
+    });
+
+    await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      archive({ version: '0.2.0' }),
+      '--yes',
+    ]);
+    const next = JSON.parse(
+      readFileSync(path.join(root, 'installer.json'), 'utf8'),
+    ) as {
+      releases: { version: string; buildTarget: { nodeMajor: number } }[];
+    };
+    for (const record of next.releases) {
+      record.buildTarget.nodeMajor -= 1;
+    }
+    writeFileSync(path.join(root, 'installer.json'), JSON.stringify(next));
+
+    const warned = await hub(world, ['status', '--dir', root]);
+    expect(warned.json.warnings.join('\n')).toContain('pnpm build --target');
+    expect(warned.json.warnings.join('\n')).not.toContain('--rebuild');
+    const refused = await hub(world, ['rollback', '--dir', root, '--yes']);
+    expect(refused.json.error?.code).toBe('NODE_MISMATCH');
+    const runs = (
+      refused.json.error as unknown as { suggestions: { run: string }[] }
+    ).suggestions.map((suggestion) => suggestion.run);
+    expect(runs[0]).toContain('pnpm build --target');
+    expect(runs[1]).toContain('upgrade --dir');
+    expect(runs[1]).toContain('--archive');
   });
 
   it('rolls back to the archive it came from', async () => {

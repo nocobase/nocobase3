@@ -157,29 +157,69 @@ export async function checkPm2NameFree(pm2: Pm2, name: string): Promise<void> {
   }
 }
 
-/**
- * The application's port must be free. Otherwise whatever already listens there answers the health check, and the install
- * reports success while its own process crash-loops on EADDRINUSE.
- */
-export function checkPortFree(host: string, port: number): Promise<void> {
-  return new Promise((resolve, reject) => {
+function tryListen(
+  host: string,
+  port: number,
+): Promise<NodeJS.ErrnoException | undefined> {
+  return new Promise((resolve) => {
     const server = createServer();
-    server.once('error', (error: NodeJS.ErrnoException) => {
-      reject(
-        new InstallerError(
-          'PORT_IN_USE',
-          error.code === 'EADDRINUSE'
-            ? `${host}:${port} is already in use.`
-            : `Cannot listen on ${host}:${port}: ${error.message}`,
-          {
-            exitCode: EXIT_INVALID,
-            suggestions: [{ message: 'Choose another port with --port.' }],
-          },
-        ),
-      );
-    });
-    server.listen(port, host, () => server.close(() => resolve()));
+    server.once('error', (error: NodeJS.ErrnoException) => resolve(error));
+    server.listen(port, host, () => server.close(() => resolve(undefined)));
   });
+}
+
+/** The first port above `after` that can be listened on right now, for a suggestion; `undefined` if none is near. */
+export async function nextFreePort(
+  host: string,
+  after: number,
+  attempts: number = 50,
+): Promise<number | undefined> {
+  for (
+    let port = after + 1;
+    port <= Math.min(after + attempts, 65535);
+    port += 1
+  ) {
+    if (!(await tryListen(host, port))) return port;
+  }
+  return undefined;
+}
+
+/**
+ * The application's port must be free. Otherwise whatever already listens there answers the health check, and the
+ * install reports success while its own process crash-loops on EADDRINUSE. With `suggestPort`, as for an install that
+ * chooses its port, the error names a free one; each installation on a machine needs its own.
+ */
+export async function checkPortFree(
+  host: string,
+  port: number,
+  options: { suggestPort?: boolean } = {},
+): Promise<void> {
+  const error = await tryListen(host, port);
+  if (!error) return;
+  const free =
+    options.suggestPort && error.code === 'EADDRINUSE'
+      ? await nextFreePort(host, port)
+      : undefined;
+  throw new InstallerError(
+    'PORT_IN_USE',
+    error.code === 'EADDRINUSE'
+      ? `${host}:${port} is already in use.`
+      : `Cannot listen on ${host}:${port}: ${error.message}`,
+    {
+      exitCode: EXIT_INVALID,
+      details: free === undefined ? undefined : { freePort: free },
+      suggestions: [
+        options.suggestPort
+          ? {
+              message:
+                free === undefined
+                  ? 'Choose another port with --port.'
+                  : `Port ${free} is free: pass --port ${free}, and point the reverse proxy at it.`,
+            }
+          : { message: 'Stop what holds the port, then run this again.' },
+      ],
+    },
+  );
 }
 
 /** `--set-from-env` names variables; a typo should fail here, not after the build. */

@@ -1,7 +1,9 @@
 import { statSync } from 'node:fs';
 import path from 'node:path';
-import { EXIT_INVALID, InstallerError } from './errors.ts';
+import { EXIT_INVALID, InstallerError, type Suggestion } from './errors.ts';
+import { installerCommand, shellQuote } from './invocation.ts';
 import { HUB_TEMPLATE, TEMPLATES, type TemplateDefinition } from './layout.ts';
+import { currentNodeMajor, rebuildCommand } from './prechecks.ts';
 import type { InstallerState } from './state.ts';
 
 /** The template an installation is built from, or `undefined` for one installed from deployment archives. */
@@ -89,4 +91,38 @@ export function resolveArchivePath(cwd: string, value: string): string {
     );
   }
   return file;
+}
+
+/**
+ * How to get a release that runs on this machine's Node: a template installation builds the installed version again
+ * here; an archive installation has its archive built again, in the application project, and upgrades to it.
+ */
+export function nodeRebuildAdvice(
+  state: Pick<InstallerState, 'source' | 'registry'>,
+  root: string,
+): Suggestion[] {
+  if (templateOf(state)) {
+    return [
+      {
+        message: `Build the installed version again for Node ${currentNodeMajor()}:`,
+        run: installerCommand(`upgrade --dir ${shellQuote(root)} --rebuild`, {
+          registry: state.registry,
+        }),
+      },
+    ];
+  }
+  return [
+    {
+      message:
+        'Build the archive again for this machine, in the application project:',
+      run: rebuildCommand(),
+    },
+    {
+      message: 'Then copy it here and upgrade to it:',
+      run: installerCommand(
+        `upgrade --dir ${shellQuote(root)} --archive <archive>`,
+        { registry: state.registry },
+      ),
+    },
+  ];
 }

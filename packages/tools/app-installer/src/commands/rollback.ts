@@ -25,8 +25,8 @@ import {
 import {
   capitalize,
   hostsApplications,
+  nodeRebuildAdvice,
   subjectOf,
-  templateOf,
 } from '../lib/source.ts';
 import {
   readState,
@@ -199,17 +199,7 @@ export async function rollback(
         `${target} was built for Node ${record.buildTarget.nodeMajor}, but this machine runs Node ${machineMajor}; its native modules would not load.`,
         {
           exitCode: EXIT_INVALID,
-          suggestions: templateOf(state)
-            ? [
-                {
-                  message: `Build the installed version again for Node ${machineMajor} instead:`,
-                  run: installerCommand(
-                    `upgrade --dir ${shellQuote(root)} --rebuild`,
-                    { registry: state.registry },
-                  ),
-                },
-              ]
-            : [],
+          suggestions: nodeRebuildAdvice(state, root),
         },
       );
     }

@@ -8,7 +8,12 @@ import { installerCommand, shellQuote } from '../lib/invocation.ts';
 import { layoutOf, releaseDir } from '../lib/layout.ts';
 import { currentNodeMajor } from '../lib/prechecks.ts';
 import { resolveTemplateVersion } from '../lib/registry.ts';
-import { capitalize, subjectOf, templateOf } from '../lib/source.ts';
+import {
+  capitalize,
+  nodeRebuildAdvice,
+  subjectOf,
+  templateOf,
+} from '../lib/source.ts';
 import { findRelease, readState } from '../lib/state.ts';
 import type { CommandDeps, CommandOutcome } from './install.ts';
 
@@ -108,8 +113,11 @@ export async function status(
   const nodeMajor = currentNodeMajor();
   const nodeMatches = currentRelease?.buildTarget.nodeMajor === nodeMajor;
   if (!nodeMatches) {
+    const advice = nodeRebuildAdvice(state, root)
+      .map((step) => `${step.message} \`${step.run}\``)
+      .join(' ');
     deps.reporter.warn(
-      `The current release was built for Node ${currentRelease?.buildTarget.nodeMajor ?? '?'}, but this machine runs Node ${nodeMajor}; it will not load its native modules until it is built again for this machine with \`${installerCommand(`upgrade --dir ${shellQuote(root)} --rebuild`, { registry: state.registry })}\`.`,
+      `The current release was built for Node ${currentRelease?.buildTarget.nodeMajor ?? '?'}, but this machine runs Node ${nodeMajor}; it will not load its native modules until a release built for this machine replaces it. ${advice}`,
     );
   }
 
@@ -161,6 +169,7 @@ export async function status(
     summary: [
       `${capitalize(subject)} ${state.appName} ${currentRelease?.version ?? '?'} at ${root}`,
       `  Release   ${state.current}${currentRelease ? `, built ${currentRelease.builtAt}` : ''}`,
+      `  Source    ${template ? `the ${template.name} template` : 'deployment archives'}`,
       `  URL       ${endpoints.url} (listening on ${endpoints.host}:${endpoints.port ?? `invalid port "${env.APP_SERVER_PORT ?? ''}"`})`,
       `  Health    ${healthy ? 'ok' : 'not answering'} (${url})`,
       `  Process   ${processInfo ? `${processInfo.status}, pid ${processInfo.pid}, ${processInfo.restarts} restarts` : 'not registered with pm2'} (${state.name})`,

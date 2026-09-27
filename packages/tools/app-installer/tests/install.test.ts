@@ -331,6 +331,10 @@ describe('install', () => {
 
       expect(result.code).toBe(2);
       expect(result.json.error?.code).toBe('PORT_IN_USE');
+      // The suggestion names a port that was free when it was checked.
+      const free = Number(result.json.error?.details?.freePort);
+      expect(free).toBeGreaterThan(port);
+      expect(JSON.stringify(result.json.error)).toContain(`--port ${free}`);
       expect(existsSync(root)).toBe(false);
     });
   });

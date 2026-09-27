@@ -292,7 +292,7 @@ export async function install(
     await checkPm2(pm2);
     await checkPm2NameFree(pm2, name);
   }
-  await checkPortFree(flags.host, flags.port);
+  await checkPortFree(flags.host, flags.port, { suggestPort: true });
   const version =
     spec && template
       ? await resolveTemplateVersion(
