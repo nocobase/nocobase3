@@ -52,7 +52,7 @@ Hub 管理界面和业务应用可以共用一个域名，通过不同路径访�
 
 Hub 需要一个持久目录，保存平台管理数据、上传的应用部署包、各应用的运行配置、文件和日志。使用默认 SQLite 配置时，Hub 和业务应用的数据库文件也保存在该目录下。
 
-通过 `HUB_STORAGE_DIR` 指定目录，例如 `/srv/nocobase/hub/storage`。更新 Hub 时保留该目录；使用 Docker 时，将它挂载到容器外的持久存储。各部署方式的具体设置见下文。之后发布的 Hub 版本也接受通用的 `APP_STORAGE_DIR`，两者都设置时以 `APP_STORAGE_DIR` 为准；已发布的镜像和模板只读取 `HUB_STORAGE_DIR`，所以下文示例仍使用它。
+通过 `APP_STORAGE_DIR` 指定目录，例如 `/srv/nocobase/hub/storage`。更新 Hub 时保留该目录；使用 Docker 时，将它挂载到容器外的持久存储。各部署方式的具体设置见下文。
 
 如果使用外部数据库或对象存储，这些数据保存在对应服务中，需要另外纳入备份，参阅[备份恢复与排障](./operations)。
 
@@ -129,7 +129,7 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 
 首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名、邮箱和密码。
 
-`database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像——驱动要在构建前进入应用的 `dependencies`，镜像构建完成后无法补装。
+`database` 中的相对路径按 `APP_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像——驱动要在构建前进入应用的 `dependencies`，镜像构建完成后无法补装。
 
 镜像以 `node` 用户运行。可用以下命令确认 UID 和 GID，并为该用户设置 `config.yml` 的读取权限及 `storage` 的写入权限：
 
@@ -153,7 +153,7 @@ services:
     environment:
       NODE_ENV: production
       APP_CONFIG_FILE: /app/config.yml
-      HUB_STORAGE_DIR: /data
+      APP_STORAGE_DIR: /data
       APP_BASE_PATH: /hub
       APP_PUBLIC_ORIGIN: https://apps.example.com
       APP_SERVER_HOST: 0.0.0.0
@@ -287,7 +287,7 @@ APP_BASE_PATH=/hub
 APP_PUBLIC_ORIGIN=https://apps.example.com
 APP_SERVER_HOST=127.0.0.1
 APP_SERVER_PORT=13000
-HUB_STORAGE_DIR=/srv/nocobase/hub/storage
+APP_STORAGE_DIR=/srv/nocobase/hub/storage
 ```
 
 | 参数                                  | 说明                                     |
@@ -295,9 +295,9 @@ HUB_STORAGE_DIR=/srv/nocobase/hub/storage
 | `APP_BASE_PATH`                       | Hub 管理平台路径，与业务应用路径分开     |
 | `APP_PUBLIC_ORIGIN`                   | 对外访问的协议和域名，不包含 `/hub`      |
 | `APP_SERVER_HOST` / `APP_SERVER_PORT` | Hub 监听地址；示例由同机反向代理转发请求 |
-| `HUB_STORAGE_DIR`                     | 持久目录的绝对路径，运行账号需具备写权限 |
+| `APP_STORAGE_DIR`                     | 持久目录的绝对路径，运行账号需具备写权限 |
 
-默认 SQLite 数据库位于 `HUB_STORAGE_DIR` 下的 `hub/database/main.sqlite`。同一持久目录还保存 Release、业务应用数据卷和日志，更新项目时应保留。
+默认 SQLite 数据库位于 `APP_STORAGE_DIR` 下的 `hub/database/main.sqlite`。同一持久目录还保存 Release、业务应用数据卷和日志，更新项目时应保留。
 
 ### 3. 构建应用
 

@@ -29,7 +29,7 @@ An application or Hub installed with [app-installer](./app-installer) is backed 
 | Publishing returns 401 or 403                                      | Key scope, expiry, App binding and creator permissions                                                                                                             |
 | Timeout or conflict                                                | Inspect the original deployment before submitting another operation                                                                                                |
 
-Read proxy logs, service/container output, deployment journals, Host logs and App runtime logs in that order. An app-installer installation also keeps pm2's output in `logs/app.out.log` and `logs/app.err.log`, readable with `pm2 logs <name>`. Under the Hub storage root, `APP_STORAGE_DIR` (or `HUB_STORAGE_DIR` on deployments that still set only the old name), defaults include `hub/logs/deployments`, `host/logs/host` and `apps/volumes/<appId>/storage/logs`.
+Read proxy logs, service/container output, deployment journals, Host logs and App runtime logs in that order. An app-installer installation also keeps pm2's output in `logs/app.out.log` and `logs/app.err.log`, readable with `pm2 logs <name>`. Under the Hub storage root, `APP_STORAGE_DIR`, defaults include `hub/logs/deployments`, `host/logs/host` and `apps/volumes/<appId>/storage/logs`.
 
 ## Acceptance
 
