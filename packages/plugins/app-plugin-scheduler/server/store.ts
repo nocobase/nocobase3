@@ -129,6 +129,7 @@ export class ScheduleStore {
   private active = false;
   private readonly awaitingPlan = new Set<string>();
   private readonly awaitingRemoval = new Set<string>();
+  private readonly awaitingStaleRemoval = new Set<string>();
 
   public constructor(
     private readonly database: DatabaseManager,
@@ -156,7 +157,8 @@ export class ScheduleStore {
       const deactivate = finalize
         ? await this.findMissing(connection.query, seen)
         : [];
-      return { materializations, deactivate };
+      const inactive = await this.findInactive(connection.query, seen);
+      return { materializations, deactivate, inactive };
     });
     for (const materialization of plan.materializations) {
       const id = materialization.spec.id;
@@ -177,6 +179,10 @@ export class ScheduleStore {
       await this.deactivate(id);
       await this.removeRule(id);
     }
+    // A removal can be lost — the memory adapter overwrites its state file
+    // with what a running process holds — so every sync removes again the
+    // rules of definitions already deactivated.
+    for (const id of plan.inactive) await this.removeStaleRule(id);
   }
 
   /**
@@ -188,6 +194,10 @@ export class ScheduleStore {
     for (const id of [...this.awaitingRemoval]) {
       this.awaitingRemoval.delete(id);
       await this.executor.removeJob(id);
+    }
+    for (const id of [...this.awaitingStaleRemoval]) {
+      this.awaitingStaleRemoval.delete(id);
+      await this.removeRuleIfOff(id);
     }
     for (const id of [...this.awaitingPlan]) {
       this.awaitingPlan.delete(id);
@@ -536,6 +546,8 @@ export class ScheduleStore {
         this.createJob(spec, positive(appliedLimit)),
         true,
       );
+      // Disabling removed the rule; remove it again in case that was lost.
+      await this.removeStaleRule(spec.id);
       return;
     }
     const nextRunAt = await this.applyRule(spec, appliedLimit, rewrite);
@@ -567,6 +579,28 @@ export class ScheduleStore {
     else this.awaitingRemoval.add(id);
   }
 
+  /** Removes a rule the definition should no longer have, once the executor is set up. */
+  private async removeStaleRule(id: string): Promise<void> {
+    if (this.active) await this.removeRuleIfOff(id);
+    else this.awaitingStaleRemoval.add(id);
+  }
+
+  /**
+   * Reads the definition again first: another instance may have enabled it
+   * after this sync read it as disabled, and written the rule since.
+   */
+  private async removeRuleIfOff(id: string): Promise<void> {
+    const row = await this.database
+      .query()
+      .selectFrom<DefinitionRow>('schedule_definitions')
+      .select(['enabled', 'lifecycleState'])
+      .where('id', '=', id)
+      .where('appName', '=', this.appName)
+      .executeTakeFirst<Pick<DefinitionRow, 'enabled' | 'lifecycleState'>>();
+    if (row && Boolean(row.enabled) && row.lifecycleState === 'active') return;
+    await this.executor.removeJob(id);
+  }
+
   private async updateDefinition(
     id: string,
     values: Partial<DefinitionRow>,
@@ -592,6 +626,20 @@ export class ScheduleStore {
       .where('lifecycleState', '=', 'active')
       .execute<DefinitionRow>();
     return rows.filter((row) => !seen.has(row.id)).map((row) => row.id);
+  }
+
+  /** Definitions `--finalize` already deactivated, other than those the manifest brings back. */
+  private async findInactive(
+    query: QueryAdapter,
+    seen: ReadonlySet<string>,
+  ): Promise<string[]> {
+    const rows = await query
+      .selectFrom<DefinitionRow>('schedule_definitions')
+      .select('id')
+      .where('appName', '=', this.appName)
+      .where('lifecycleState', '=', 'inactive')
+      .execute<Pick<DefinitionRow, 'id'>>();
+    return rows.map((row) => row.id).filter((id) => !seen.has(id));
   }
 
   private async deactivate(id: string): Promise<void> {

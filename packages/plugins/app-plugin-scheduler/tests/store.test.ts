@@ -320,6 +320,80 @@ describe('ScheduleStore', () => {
     });
   });
 
+  it('removes at startup the rule a disabled definition still has', async () => {
+    await start();
+    // Disabled without its rule being removed, as when a removal was lost.
+    await database
+      .query()
+      .updateTable('schedule_definitions')
+      .set({ enabled: false })
+      .where('id', '=', DAILY)
+      .execute();
+    await expect(executor.getJob(DAILY)).resolves.toBeDefined();
+
+    await restart();
+
+    await expect(executor.getJob(DAILY)).resolves.toBeUndefined();
+    expect((await store.list())[0]).toMatchObject({
+      enabled: false,
+      scheduleStatus: 'paused',
+    });
+  });
+
+  it('removes at startup the rule an inactive definition left behind', async () => {
+    await start();
+    await restart([], true);
+    await expect(executor.getJob(DAILY)).resolves.toBeUndefined();
+    // The memory adapter overwrote the removal, putting the rule back.
+    const { createScheduleDispatchJob } = await import('../server/dispatch.js');
+    await executor.addJob(
+      createScheduleDispatchJob(
+        {
+          id: DAILY,
+          cron: '0 0 * * *',
+          timezone: 'UTC',
+          target: { type: 'report', config: {} },
+          definitionHash: 'stale',
+        },
+        undefined,
+        {} as never,
+      ),
+    );
+
+    await restart([]);
+
+    await expect(executor.getJob(DAILY)).resolves.toBeUndefined();
+    expect((await store.list())[0]?.lifecycleState).toBe('inactive');
+  });
+
+  it('keeps the rule of an active definition a partial manifest leaves out', async () => {
+    await start();
+
+    await restart([]);
+
+    await expect(executor.getJob(DAILY)).resolves.toBeDefined();
+  });
+
+  it('keeps a rule whose definition was enabled again before the removal ran', async () => {
+    await start();
+    await store.setEnabled(DAILY, false);
+    // This instance starts and reads the schedule as disabled; its removal
+    // waits for activate().
+    const starting = createStore(
+      database,
+      executor,
+      'main',
+      () => new Date(),
+    ).store;
+    await starting.reconcile([entry(baseDefinition())]);
+
+    // Another instance enables it in the meantime.
+    await store.setEnabled(DAILY, true);
+    await starting.activate();
+
+    await expect(executor.getJob(DAILY)).resolves.toBeDefined();
+  });
+
   it('reuses the app lock and keeps different apps isolated', async () => {
     await start(store, []);
     await store.reconcile([], true);
