@@ -167,11 +167,6 @@ async function createSpaAppConfig(
       : { i18n: { defaultLocale: 'en-US' } }),
     spa: {
       indexPath: path.join(root, 'index.html'),
-      runtime: {
-        storagePrefix: 'NOCOBASE_',
-        storageType: 'localStorage',
-        shareToken: false,
-      },
     },
   });
   return config;

@@ -12,10 +12,6 @@ import {
 import { type SpaConfig } from './config.js';
 import { createMountedOriginProxyHandler } from '../proxy/index.js';
 import { joinBasePath } from '../support/index.js';
-import {
-  createNocoBaseSpaRuntimeGlobals,
-  type NocoBaseSpaRuntimeConfig,
-} from './runtime-globals.js';
 import type { SpaClientConfigMap } from './types.js';
 
 export interface SpaRoutesApplication {
@@ -52,18 +48,13 @@ export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
           // without the i18n config registered. The browser falls back to its own default when nothing is published.
           app.config.get<string>('i18n.defaultLocale'),
         ),
-      runtimeGlobals: createNocoBaseSpaRuntimeGlobals({
-        appBasePath: app.publicBasePath,
-        apiUrl,
-        ...spa.runtime,
-      }),
     });
     return router;
   });
 
 function createClientConfig(
   configured: SpaClientConfigMap,
-  runtime: Pick<NocoBaseSpaRuntimeConfig, 'appBasePath' | 'apiUrl'>,
+  runtime: { readonly appBasePath: string; readonly apiUrl: string },
 ): SpaClientConfigMap {
   return {
     ...configured,

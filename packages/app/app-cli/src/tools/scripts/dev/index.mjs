@@ -163,11 +163,6 @@ const initialEnv = {
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
-  NOCOBASE_API_URL:
-    env.NOCOBASE_API_URL ||
-    `/${[String(env.APP_BASE_PATH || '/main').replace(/^\/+|\/+$/g, ''), 'api']
-      .filter(Boolean)
-      .join('/')}`,
 };
 const appServerHost = initialEnv.APP_SERVER_HOST || '127.0.0.1';
 const configuredAppServerPort = numberFromEnv(

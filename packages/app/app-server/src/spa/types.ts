@@ -1,13 +1,5 @@
 export type SpaHandler = (request: Request) => Response | Promise<Response>;
 
-export type SpaRuntimeGlobalValue =
-  | string
-  | number
-  | boolean
-  | null
-  | SpaRuntimeGlobalValue[]
-  | { [key: string]: SpaRuntimeGlobalValue };
-
 export type SpaClientConfigValue =
   | string
   | number
@@ -20,17 +12,11 @@ export interface SpaClientConfigMap {
   readonly [key: string]: SpaClientConfigValue;
 }
 
-export type SpaRuntimeGlobals = Record<
-  string,
-  SpaRuntimeGlobalValue | undefined
->;
-
 export interface RegisterSpaRoutesOptions {
   basePath: string;
   handler?: SpaHandler;
   indexPath: string;
   assetsPath?: string;
-  runtimeGlobals?: SpaRuntimeGlobals;
   clientConfig?: SpaClientConfigMap;
   /**
    * Values the server publishes, sent beside `clientConfig` rather than merged into it and read in the browser through

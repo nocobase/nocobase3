@@ -5,11 +5,7 @@ import path from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-  injectSpaRuntimeHtml,
-  injectSpaRuntimeGlobals,
-  registerSpaRoutes,
-} from '../src/spa/index.js';
+import { injectSpaRuntimeHtml, registerSpaRoutes } from '../src/spa/index.js';
 
 const tempDirs: string[] = [];
 
@@ -19,26 +15,7 @@ afterEach(() => {
   }
 });
 
-describe('SPA runtime globals', () => {
-  it('injects runtime globals before the first module script', () => {
-    const html =
-      '<main></main><script type="module" src="/assets/index.js"></script>';
-    const result = injectSpaRuntimeGlobals(html, {
-      APP_BASE_PATH: '/main/test/',
-      'api-url': '</script><script>alert(1)</script>',
-      ignored: undefined,
-    });
-
-    expect(result).toContain('window.APP_BASE_PATH = "/main/test/";');
-    expect(result).toContain(
-      'window["api-url"] = "\\u003C/script\\u003E\\u003Cscript\\u003Ealert(1)\\u003C/script\\u003E";',
-    );
-    expect(result).not.toContain('window.ignored');
-    expect(result.indexOf('window.APP_BASE_PATH')).toBeLessThan(
-      result.indexOf('<script type="module"'),
-    );
-  });
-
+describe('SPA runtime HTML', () => {
   it('injects a safe versioned Client config data block', () => {
     const html = '<script type="module" src="/assets/index.js"></script>';
     const result = injectSpaRuntimeHtml(html, {
@@ -82,9 +59,6 @@ describe('SPA routes', () => {
     registerSpaRoutes(router, {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
-      runtimeGlobals: {
-        APP_BASE_PATH: '/main/test/',
-      },
     });
 
     const response = await router.request(
@@ -107,9 +81,6 @@ describe('SPA routes', () => {
     registerSpaRoutes(router, {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
-      runtimeGlobals: {
-        APP_BASE_PATH: '/main/test/',
-      },
       clientConfig: {
         app: { title: 'NocoBase' },
         i18n: { defaultLocale: 'zh-CN' },
@@ -122,7 +93,8 @@ describe('SPA routes', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('window.APP_BASE_PATH = "/main/test/";');
+    // The configuration block is the client's only source of runtime values; nothing is put on `window`.
+    expect(html).not.toContain('window.');
     expect(html).toContain('"app":{"title":"NocoBase"}');
     expect(html).toContain('<html lang="zh-CN">');
     expect(html).toContain(
@@ -139,7 +111,6 @@ describe('SPA routes', () => {
         feature: { enabled: true },
         i18n: { defaultLocale: 'ja-JP' },
       },
-      runtimeGlobals: { APP_BASE_PATH: '/main/test/' },
       handler: (request) =>
         new URL(request.url).pathname.endsWith('.js')
           ? new Response('export default true;', {
