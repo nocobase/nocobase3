@@ -19,7 +19,7 @@ Console errors seen on an existing page (for example, the homepage). They come f
 | --- | ------------------------------------------------ | ------ | ----------- | ----------------------------------- |
 | D1  |                                                  |        | Pass / Fail | Screenshot file name, script output |
 
-Must cover: the core flow, every state, character-by-character typing and Chinese IME input, keyboard operation, the dark theme, narrow screens, the English interface.
+Must cover: the core flow, every state, character-by-character typing and Chinese IME input (the `type` and `ime` steps of the screenshot tool, `.agents/skills/nocobase-app-development/references/frontend/scripts/capture.md`), keyboard operation, the dark theme, narrow screens, the English interface.
 
 ## Console and requests
 

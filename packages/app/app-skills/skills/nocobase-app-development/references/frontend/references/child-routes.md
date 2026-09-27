@@ -2,17 +2,17 @@
 
 Child pages, page tabs and navigation groups are all declared as routes. Routes are the source of navigation in App, Settings and Dev; how child content is presented (inline, covering, dialog, drawer) is decided by page code.
 
-For the basic rules on route fields, `auth`, `authz`, menus and breadcrumbs, see `page.md`. For dialogs and drawers (`RouteDialog`, `RouteDrawer`, `useRouteOverlay`, `beforeClose`), see `overlay.md`.
+For the basic rules on route fields, `auth`, `authz`, menus and breadcrumbs, see [`page.md`](page.md). For dialogs and drawers (`RouteDialog`, `RouteDrawer`, `useRouteOverlay`, `beforeClose`), see [`overlay.md`](overlay.md).
 
 ## 1. Basic rules
 
 - **Child routes go in the parent route's `children`**, declared in `client/routes.ts`, not in page component files.
 - A child route's `path` is relative to its parent and is appended to the parent's path. A leading `/` is stripped before joining, so `new` and `/new` behave the same; this handbook writes the form without `/`.
 - **The parent page must place `<Outlet />` itself**, where the child content should appear. Pages do not insert an Outlet automatically, and neither do `RouteChildPage`, `RouteDialog` or `RouteDrawer`; only a plain navigation group gets its Outlet from the route renderer.
-- Child routes inherit the entry route's `auth` and cannot change it. A child page that omits `authz` inherits its nearest ancestor page's value; write `'skip'` when the parent page's check is enough and the child needs none of its own, or its own request. A child page renders only after the parent page's check passes.
-- Link to a child route with a relative path and keep the current query parameters: `<Link to={{ pathname: String(id), search: location.search }}>`.
-- Route declarations have no `index` field. Do not invent an index route, and do not register a child route at the parent's own path; when "opening the parent URL shows a particular child page" is needed, use the redirect in section 4.
-- Do not change the shell, the route renderer or the ServiceProvider to add a menu entry. Keep the CRUD resources that business code uses, but they produce no menu entries.
+- Child routes inherit the entry route's `auth` and cannot change it, and follow the `authz` inheritance rules in [section 4 of `page.md`](page.md#4-authz-page-authorization): a child page renders only after the parent page's check passes.
+- Link to a child route with a relative path and keep the query string ([section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page)).
+- Route declarations have no `index` field. Do not invent an index route, and do not register a child route at the parent's own path; when "opening the parent URL shows a particular child page" is needed, use the redirect in [section 4](#4-page-tabs).
+- Do not change the shell, the route renderer or the ServiceProvider to add a menu entry; menu entries come only from `navigation` on routes ([section 6 of `page.md`](page.md#6-menus)).
 - Design paths around business needs; there is no fixed naming format. Do not write the deployment base path `/main`.
 
 ## 2. File layout
@@ -21,7 +21,7 @@ A page with child routes becomes a folder: the page itself is `index.tsx`, and e
 
 ```text
 client/pages/projects/
-  index.tsx                  /projects                     List page; <Outlet context={{ reload }} /> at the end
+  index.tsx                  /projects                     List page; <Outlet context={outletContext} /> at the end
   new.tsx                    /projects/new                 RouteDialog: new project
   detail/index.tsx           /projects/:projectId          RouteDrawer: project details; <Outlet context={...} /> inside the drawer
   detail/edit.tsx            /projects/:projectId/edit     RouteDialog: edit project, stacked on the drawer
@@ -33,17 +33,17 @@ client/pages/projects/
 - A fixed path segment uses a file of the same name: `/projects/new` is `projects/new.tsx`.
 - A parameter segment uses a name that describes what the page is for: `:projectId` is `detail/`.
 - Components and types used only by these pages stay in the same folder, not in `client/components/` (which holds components shared across the whole application).
-- Keep components and constants in separate files: when one file exports both a component and a constant, Fast Refresh stops working and ESLint (`react-refresh/only-export-components`) reports an error. Put constants and types in a separate module such as `types.ts`.
+- Keep components and non-primitive constants in separate files: when one file exports both a component and an object or array constant, Fast Refresh stops working and ESLint (`react-refresh/only-export-components`) reports an error; string and number constants are allowed. Put constants and types in a separate module such as `types.ts`.
 
 Adding a set of child routes usually changes these files:
 
-| File               | What to change                                                   |
-| ------------------ | ---------------------------------------------------------------- |
-| `client/routes.ts` | Declare the pages, menu entries and nested `children`            |
-| Parent page        | Place `Outlet`; add links or tabs that point to the child routes |
-| Child pages        | Default-export the page component                                |
-| `client/locales/`  | Menu and page copy (`en-US.ts`, `zh-CN.ts`)                      |
-| `tests/`           | The route test (see section 12 of `page.md`) and behavior tests  |
+| File               | What to change                                                                                      |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `client/routes.ts` | Declare the pages, menu entries and nested `children`                                               |
+| Parent page        | Place `Outlet`; add links or tabs that point to the child routes                                    |
+| Child pages        | Default-export the page component                                                                   |
+| `client/locales/`  | Menu and page copy (`en-US.ts`, `zh-CN.ts`)                                                         |
+| `tests/`           | The route test (see [section 12 of `page.md`](page.md#12-update-the-route-test)) and behavior tests |
 
 ## 3. Four ways to present a child route
 
@@ -58,7 +58,7 @@ A child route renders in the parent page's Outlet. It can be displayed inline, o
 | How to leave    | Switch to another child route            | Breadcrumbs or browser back                  | Close button, Esc, backdrop, `close()` | Same as left     |
 | Use for         | Page tabs                                | Child pages with long forms or many sections | Create and edit forms                  | Record details   |
 
-For how to write `RouteDialog` and `RouteDrawer`, see `overlay.md`. Ordinary page routes can also have `breadcrumb`; it is not limited to `RouteChildPage` (see section 7 of `page.md`).
+For how to write `RouteDialog` and `RouteDrawer`, see [`overlay.md`](overlay.md). Ordinary page routes can also have `breadcrumb`; it is not limited to `RouteChildPage` (see [section 7 of `page.md`](page.md#7-breadcrumbs)).
 
 ## 4. Page tabs
 
@@ -69,7 +69,7 @@ For how to write `RouteDialog` and `RouteDrawer`, see `overlay.md`. Ordinary pag
 - Tab content goes in the parent route's `children`; the parent page places `<Outlet />` in its content area; switching tabs uses route navigation.
 - **Derive the selected tab from the URL**; do not keep a separate `activeTab` state. Every tab can be opened directly, survives a reload, and works with the browser's back and forward.
 - Fixed tabs (Summary, By owner) and parameterized tabs (for example `:year`) both use this pattern. A child page with parameters reads them with `useParams()`.
-- This rule is about tabs on a page. To switch between several panels of the same record inside a dialog or drawer, you can use the `Tabs` component (`@/components/ui/tabs`).
+- This rule is about tabs on a page. A record detail that needs tabs is such a page rather than a drawer (guideline T2.1).
 
 ### Default tab redirect
 
@@ -238,19 +238,7 @@ export default function ProjectReportsSummary(): ReactElement {
 }
 ```
 
-Add the copy to `client/locales/en-US.ts` and `zh-CN.ts`:
-
-| key                            | en-US                               | zh-CN                      |
-| ------------------------------ | ----------------------------------- | -------------------------- |
-| `navigation.projectManagement` | Project management                  | 项目管理                   |
-| `navigation.projectReports`    | Project reports                     | 项目报表                   |
-| `projectReports.title`         | Project reports                     | 项目报表                   |
-| `projectReports.description`   | Track progress by status and owner. | 按状态和负责人查看项目进展 |
-| `projectReports.tabs.label`    | Report views                        | 报表视图                   |
-| `projectReports.tabs.summary`  | Summary                             | 概览                       |
-| `projectReports.tabs.owners`   | By owner                            | 按负责人                   |
-
-Also add `projectReports.summary.title`, `projectReports.summary.description`, `projectReports.owners.title` and `projectReports.owners.description` for the cards of the two tabs.
+The copy is the `projectReports` group and the `navigation` entries in [`example/copy.md`](example/copy.md); add it to both locale files.
 
 Behavior:
 
@@ -259,7 +247,15 @@ Behavior:
 - Clicking a tab adds a history entry, and the content renders where the Outlet is; the sidebar keeps "Project reports" highlighted (tab routes have no menu entry, so the nearest ancestor is highlighted).
 - This example also keeps the query parameters when switching tabs; on other pages, the business decides which query parameters follow the tab.
 
-Tabs are implemented as links because they are page navigation. To borrow the button look, apply `buttonVariants` to `NavLink`; do not use `<Button render={<NavLink />}>`, which adds `role='button'` to the link. If you switch to an ARIA Tabs component, you must implement the keyboard and focus behavior it requires yourself and keep the selected state in sync with the route.
+Tabs are implemented as links because they are page navigation, announced as links with `aria-current` on the selected one. To borrow the button look, apply `buttonVariants` to `NavLink`. `<Button render={<NavLink />}>` would announce each tab as a button, which is right for an action that opens a route ("New project", [section 2 of `styling.md`](styling.md#2-components-are-built-on-base-ui-not-radix)) but not for navigation. The `tabs` primitive is for tabs inside one view that are not routes: it brings the ARIA tab keyboard behavior, and its `TabsTrigger` elements sit inside `TabsList` (the skill's composition rules). Using it for route tabs would mean keeping its selected value in sync with the URL yourself.
+
+### A record detail page with tabs
+
+A detail view with several sections, sub-tables or tabs is a page rather than a drawer (guideline T2.1). It combines the pieces above:
+
+- Route `/customers/:customerId` with `breadcrumb` (a static title such as `customers.detail.title`; the record name goes in `PageHeader`) and tab children such as `overview` and `orders`; no `navigation`, because the path has a parameter. It sits beside the list route, or covers it as a child with `RouteChildPage` ([section 5](#5-covering-child-pages-routechildpage)) when the list must keep its state.
+- The page reads the id with `useParams()`, renders an inner component keyed by it, and loads the record once with the pattern in ["Loading data in a component" of `api.md`](api.md#loading-data-in-a-component), including its 401, 403 and 404 states; the record name is the `PageHeader` title.
+- The tab bar and the default-tab redirect work as in the example above; the page passes the loaded record to the tabs with `<Outlet context={…}>` (memoized, [section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page)), so the tabs do not load it again, and each tab loads only its own data, such as the customer's orders.
 
 ### When tabs have their own permissions
 
@@ -328,7 +324,8 @@ export default function ProjectReportsPage(): ReactElement {
     action: 'access',
   });
 
-  // Tabs without permission are not shown; can is false both while the check is pending and when it fails.
+  // Tabs without permission are not shown. can is false while the check is pending and when it fails, so a failed check
+  // hides the tab like a denial (page.md section 8); the tab route's own check still decides a direct URL.
   const tabs = [
     { path: 'summary', label: t('projectReports.tabs.summary') },
     ...(ownersAccess.can
@@ -341,6 +338,7 @@ export default function ProjectReportsPage(): ReactElement {
     if (ownersAccess.isPending) {
       return (
         <Loading
+          // Fixed on purpose: the page-level loading state in client/routing/client-route.tsx fills the viewport below the header the same way.
           className='min-h-[calc(100svh-4rem)]'
           label={t('status.loadingPage')}
         />
@@ -356,7 +354,34 @@ export default function ProjectReportsPage(): ReactElement {
     );
   }
 
-  // … the return part is the same as in the example above
+  return (
+    <PageContainer>
+      <PageHeader
+        title={t('projectReports.title')}
+        description={t('projectReports.description')}
+      />
+      <nav
+        aria-label={t('projectReports.tabs.label')}
+        className='flex flex-wrap gap-1 border-b pb-2'
+      >
+        {tabs.map((tab) => (
+          // Tabs are page navigation, so use links. NavLink adds aria-current='page' to the current tab, and the selected style is based on it.
+          <NavLink
+            className={cn(
+              buttonVariants({ variant: 'ghost', size: 'sm' }),
+              'text-muted-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground',
+            )}
+            key={tab.path}
+            to={{ pathname: tab.path, search: location.search }}
+          >
+            {tab.label}
+          </NavLink>
+        ))}
+      </nav>
+      {/* Content of the current tab */}
+      <Outlet />
+    </PageContainer>
+  );
 }
 ```
 
@@ -429,30 +454,31 @@ export default function ProjectImportPage(): ReactElement {
 }
 ```
 
-The list page's `<Outlet />` is already at the end of `PageContainer` (see section 2 of `page.md`), so it needs no change; just add a secondary button that links to `import` in the page header: `<Button variant='outline' nativeButton={false} render={<Link to={{ pathname: 'import', search: location.search }} />}>`.
+The list page's `<Outlet />` is already at the end of `PageContainer` (see [section 2 of `page.md`](page.md#2-the-page-component)), so it needs no change; just add a secondary button that links to `import` in the page header: `<Button variant='outline' nativeButton={false} render={<Link to={{ pathname: 'import', search: location.search }} />}>`.
 
 - The breadcrumbs show "Projects > Import projects". "Projects" links back to the list; "Import projects" is the current page and is not a link.
 - Put the deeper `<Outlet />` beside `RouteChildPage`, not inside it: `RouteChildPage` scrolls on its own, so a next level placed inside it would scroll away with it.
 - The covered parent page keeps its own DOM, including half-filled form input and the scroll position. While covering, `RouteChildPage` makes the sibling elements before it `inert` (not focusable, not clickable) and restores them when it leaves.
 - It is not modal: the sidebar and header remain usable. It has no close button and does not respond to Esc; users go back through the breadcrumbs or the browser's back button.
 - Use it only for child pages that cover their parent page, never on a top-level page.
+- A form too long for a dialog uses the same frame; `create.tsx` ([`example/create-page.md`](example/create-page.md)) is the complete page.
 
 ## 6. Navigation groups and clickable parents
 
 - **Group**: only `name`, `navigation` and `children`, with no `componentLoader`. `path` is optional; when present, it becomes the prefix of the child routes' paths; when absent, the group is only a set of entries in the menu.
-- A group renders no business component (the route renderer provides its Outlet), cannot declare `authz`, and carries no page permission of its own. A page inside a group inherits `authz` from the nearest page above the group, if any; the first page below a group with no page above it declares its own.
+- A group renders no business component (the route renderer provides its Outlet), cannot declare `authz`, and carries no page permission of its own: the first page below a group with no page above it declares its own `authz`.
 - Groups can contain groups. A group's `name` must be unique, like a route name; settings group names are unique across the whole settings area.
-- **Clickable parent**: a page can also have `navigation` and child pages with `navigation`. In the menu it is then both a link and expandable: the link and the expand button are two separate controls. Choose how the child pages are presented according to section 3.
+- **Clickable parent**: a page can also have `navigation` and child pages with `navigation`. In the menu it is then both a link and expandable: the link and the expand button are two separate controls. Choose how the child pages are presented according to [section 3](#3-four-ways-to-present-a-child-route).
 - Pages that should not appear in the menu, such as details and tab content, have no `navigation`. A descendant can still declare `navigation` when its ancestor does not.
-- A path with a parameter or a wildcard cannot have `navigation`.
+- A path with a parameter cannot have `navigation`.
 - `navigation.order` sets the order among siblings; lower numbers come first.
 - Navigation groups keep their expanded or collapsed state while the navigation tree stays mounted; opening a new page automatically expands its ancestor groups.
 
 ## 7. Settings pages and dev pages
 
 - Use `defineSettingsRoutes()` and `defineDevRoutes()`; pages, groups and `children` are written the same way as in App routes. Do not write `/settings` or `/dev` in the path.
-- Tabs in settings pages also use child routes (section 4); nested details and tabs usually have no `navigation`.
-- Settings pages and dev pages both require sign-in and, like App pages, declare `authz` on their first page (`'skip'`, `'unrestricted'` or a request); nested pages inherit it. An omitted value defaults to `'unrestricted'` on a settings page and `'skip'` on a dev page. The parent page's check still comes before the child page; a child page that needs a different permission declares its own request.
+- Tabs in settings pages also use child routes ([section 4](#4-page-tabs)); nested details and tabs usually have no `navigation`.
+- Settings pages and dev pages both require sign-in and declare `authz` on their first page, as [section 4 of `page.md`](page.md#4-authz-page-authorization) describes. A settings page checks its settings item (["Settings pages" in `page.md`](page.md#settings-pages)); its child pages and tabs inherit that check or declare another action or item of their own, never a page grant. A dev page usually writes `'skip'`.
 - Dev pages, and modules imported only by them, are left out of the production build.
 - Navigation groups carry no page permission. Access checks in the browser do not replace server authorization.
 
@@ -467,4 +493,4 @@ The list page's `<Outlet />` is already at the end of `PageContainer` (see secti
 7. Settings pages and dev pages: the menu position is as expected; dev pages do not appear in the production build.
 8. Covering child pages: the breadcrumbs are correct; the covered page keeps its input and scroll position; after going back, it works normally.
 
-Write these behaviors as tests in `tests/`, and add the new route names to the page grant list in `tests/logic/client-routes.test.ts` (see section 12 of `page.md`).
+Write these behaviors as tests in `tests/` (see [`testing.md`](testing.md)).

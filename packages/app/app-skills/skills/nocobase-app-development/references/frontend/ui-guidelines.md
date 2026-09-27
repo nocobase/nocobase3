@@ -1,6 +1,6 @@
 # UI guidelines
 
-These are this application's UI design guidelines: foundations, page structure, page templates (list, detail, form, settings), interaction choices, data freshness, states, copy, accessibility and adaptation. They define what the interface should look like, not how to write the code (for that, see `frontend-dev.md`). Every rule has an ID and is marked Must or Should. Use them to design pages, review designs and review implementations. When you design or review a UI in the full workflow, read the whole document; for a quick change, read the items related to the change.
+These are this application's UI design guidelines: foundations, page structure, page templates (list, detail, form, settings), interaction choices, data freshness, states, copy, accessibility and adaptation. They define what the interface should look like, not how to write the code (for that, see [`frontend-dev.md`](frontend-dev.md)). Every rule has an ID and is marked Must or Should. Use them to design pages, review designs and review implementations. When you design or review a UI in the full workflow, read the whole document; for a quick change, read the items related to the change.
 
 ## How to use
 
@@ -12,25 +12,11 @@ These are this application's UI design guidelines: foundations, page structure, 
 
 ## F Foundations
 
-**F1 [Must] Color uses only semantic tokens**; do not write literal color values:
-
-| Purpose                                    | Use                                                     |
-| ------------------------------------------ | ------------------------------------------------------- |
-| Page background                            | `bg-background`                                         |
-| Cards, panels                              | `bg-card`                                               |
-| Muted areas, secondary backgrounds         | `bg-muted`                                              |
-| Overlays (dialogs, menus)                  | `bg-popover` (built into the components)                |
-| Body text                                  | `text-foreground`                                       |
-| Secondary text, descriptions, placeholders | `text-muted-foreground`                                 |
-| Borders, dividers                          | `border-border`                                         |
-| Primary actions                            | The default button style (`bg-primary`)                 |
-| Destructive                                | `text-destructive`; buttons use `variant='destructive'` |
-
-Do not use literal colors such as `bg-white`, `text-gray-500`, `#1677ff` or `rgb(…)`.
+**F1 [Must] Color uses only semantic tokens**: `bg-background` for the page, `bg-card` for cards, `bg-muted` for muted areas, `text-foreground` and `text-muted-foreground` for text, `border-border` for borders, the default button for primary actions and `variant='destructive'` or `text-destructive` for destructive ones. The full mapping, with what each replaces, is in [section 7 of `references/styling.md`](references/styling.md#7-semantic-tokens). Do not use literal colors such as `bg-white`, `text-gray-500`, `#1677ff` or `rgb(…)`.
 
 **F2 [Must] Font sizes come from the scale**: PageHeader provides the page title; section titles use `text-base font-medium`; body text, tables and forms use the components' default size (`text-sm`); helper text uses `text-sm text-muted-foreground` or `text-xs`. Do not use arbitrary values such as `text-[13px]`.
 
-**F3 [Must] Spacing comes from the scale**: `gap-6` between sections (PageContainer already provides it); `p-4` or `p-6` padding inside cards; `gap-2` between related controls; FieldGroup's default spacing between form fields. Do not use arbitrary values such as `mt-[7px]`.
+**F3 [Must] Spacing comes from the scale**: PageContainer spaces the sections of a page, and blocks you stack yourself use `flex flex-col` with `gap-4` or `gap-6` rather than `space-y-*`; cards keep the `Card` component's own padding, and a panel you build yourself uses `p-4` or `p-6`; `gap-2` between related controls; FieldGroup's default spacing between form fields. Do not use arbitrary values such as `mt-[7px]`.
 
 **F4 [Must] Radius and shadow use the component defaults**; when you need a custom one, use only utility classes such as `rounded-lg` and `shadow-sm`.
 
@@ -38,13 +24,13 @@ Do not use literal colors such as `bg-white`, `text-gray-500`, `#1677ff` or `rgb
 
 **F6 [Must] Everything is clearly readable in both the light and dark themes**. Using only semantic tokens satisfies this automatically; you do not need `dark:` prefixes.
 
-**F7 [Must] Explain intentional fixed sizes**: where a fixed value is genuinely needed, such as a control width, a viewport-relative maximum height or an image size, you may use a literal value, but record it in the design file's "Guideline trade-offs" section. This exception does not apply to color, font size or spacing.
+**F7 [Must] Explain intentional fixed sizes**: where a fixed value is genuinely needed, such as a control width, a viewport-relative maximum height or an image size, you may use a literal value, but record it in the design file's "Guideline trade-offs" section. The standard layouts in ["Common layouts" of `references/styling.md`](references/styling.md#common-layouts) (the `grid-cols-[8rem_1fr]` label–value grid, `w-full sm:w-40` filters, `sm:max-w-xs` search) are already approved and need no entry. This exception does not apply to color, font size or spacing.
 
 ## L Page structure
 
 **L1 [Must]** A business page is wrapped in PageContainer, with a PageHeader at the top: a title (required), a one-sentence description (recommended) and page-level actions (on the right).
 
-**L2 [Must]** A view (page, dialog, drawer) has at most one primary button (the default style); other buttons use outline, ghost or destructive, or go into a menu.
+**L2 [Must]** A view (page, dialog, drawer) has at most one primary button (the default style); other buttons use outline, ghost or destructive, or go into a menu. Each Card of a settings page saves on its own (T4.2) and counts as its own view, so each Card's Save may be primary.
 
 **L3 [Should]** The page title matches the navigation menu name and is a noun ("Customers"), not a verb phrase.
 
@@ -78,10 +64,10 @@ Structure, top to bottom: PageHeader (primary action "New X") → toolbar (searc
 
 ### T3 Form: create and edit
 
-- **T3.1 [Must]** Choosing the container: with at most 8 fields and no complex dependencies between them, use a dialog; with more fields, or when the form needs groups or steps, use a separate page or a wider drawer.
+- **T3.1 [Must]** Choosing the container: with at most 8 fields and no complex dependencies between them, use a dialog; with more fields, or when the form needs groups or steps, use a separate page (a covering child page when the user returns to the list afterwards, see I1).
 - **T3.2 [Must]** Labels sit above inputs; a required field gets a `*` after its label, and an optional field gets no mark.
 - **T3.3 [Must]** Validation timing: validate a field when it loses focus, and all fields on submit. Errors appear below the field and say what is wrong and how to fix it ("Enter an email address", "The email format is invalid"); when submission fails, focus moves to the first field with an error.
-- **T3.4 [Must]** Dialog footer buttons are right-aligned: "Cancel" and then the submit button, from left to right; on narrow screens they stack vertically as the component does by default (submit button on top). The submit button names the specific action ("Create", "Save"), not "OK" or "Submit".
+- **T3.4 [Must]** Dialog footer buttons are right-aligned: "Cancel" and then the submit button, from left to right. On narrow screens keep the component's default: the footer of `RouteDialog` and `RouteDrawer` wraps its buttons onto another line, and `AlertDialog` stacks them vertically with the confirm button on top. The submit button names the specific action ("Create", "Save"), not "OK" or "Submit".
 - **T3.5 [Must]** While submitting: the submit button shows a loading state and is disabled, the cancel button is disabled too, and the dialog cannot be closed, to prevent duplicate submissions.
 - **T3.6 [Must]** Field errors returned by the server appear below the corresponding fields; other failures appear in an Alert at the top of the form. On failure, do not close the form or clear the input.
 - **T3.7 [Must]** On success, close the dialog, update the related data (see R2) and state the result in a toast (`Created customer "Zhang San"`).
@@ -102,13 +88,13 @@ Dashboards, kanban boards, calendars and similar pages have no template yet. Whe
 
 **I1 [Must] Choosing an overlay**:
 
-| Scenario                                        | Use                                                            |
-| ----------------------------------------------- | -------------------------------------------------------------- |
-| Confirming an action                            | AlertDialog                                                    |
-| Short form (create, edit, ≤ 8 fields)           | Dialog (child route, can be opened directly by URL)            |
-| Viewing record details                          | Right-side drawer (child route, can be opened directly by URL) |
-| Long form, multiple steps, complex details      | Separate page                                                  |
-| A few options, filter conditions, quick actions | DropdownMenu or Popover                                        |
+| Scenario                                        | Use                                                                     |
+| ----------------------------------------------- | ----------------------------------------------------------------------- |
+| Confirming an action                            | AlertDialog                                                             |
+| Short form (create, edit, ≤ 8 fields)           | Dialog (child route, can be opened directly by URL)                     |
+| Viewing record details                          | Right-side drawer (child route, can be opened directly by URL)          |
+| Long form, multiple steps, complex details      | Separate page (a covering child page when the user returns to the list) |
+| A few options, filter conditions, quick actions | DropdownMenu or Popover                                                 |
 
 Stacking rules: a drawer can open a dialog (for example, to edit from the detail view) and a confirmation dialog; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer.
 
@@ -132,7 +118,7 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 
 **I6 [Must] URL-addressable state**: create and edit dialogs and detail drawers each have their own URL, so a link opens them directly, a refresh restores them, and the browser's back and forward buttons open and close them. Only a confirmation dialog for a single action and a temporary panel stay out of the URL.
 
-**I7 [Must]** Actions the user has no permission for are not shown; actions that are temporarily unavailable are disabled, with a tooltip explaining why.
+**I7 [Must]** Actions the user has no permission for are not shown; actions that are temporarily unavailable are disabled, with a tooltip explaining why. When the reason is visible next to the action, it needs no tooltip: a submission or save in progress, a form with no changes, or a limit the view states ("Up to 10 member emails").
 
 **I8 [Must]** Every action can be completed with the keyboard: when a dialog opens, focus moves into it, Esc closes it, and Enter submits the form. The components have these behaviors built in; do not break them.
 
@@ -149,13 +135,13 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 - **S1 [Must] Loading**: a skeleton shaped like the real content (skeleton rows for a table, "label — value" skeletons for a detail view), with the accessible name "Loading".
 - **S2 [Must] Empty** (no data at all yet): use the Empty component, with an icon, a title ("No customers yet"), a description (what the user can do next) and an action button ("New customer"). When the page header already has the same primary action, the button in the empty state uses the outline style, so the view keeps only one primary button (L2).
 - **S3 [Must] No results** (a search or filter is applied but nothing matches): keep it distinct from S2, say that nothing matches, and offer "Clear filters".
-- **S4 [Must] Load failed**: show a destructive-style Alert in the page that explains the situation according to the error type. For temporary problems such as network errors and server errors, offer "Retry"; for problems a retry cannot fix, such as missing permission or a record that does not exist, explain the situation and the next step without offering "Retry" (for a missing record, see R3).
+- **S4 [Must] Load failed**: show a destructive-style Alert in the page that explains the situation according to the error type. For temporary problems such as network errors and server errors, offer "Retry"; for problems a retry cannot fix, such as missing permission or a record that does not exist, explain the situation and the next step without offering "Retry" (for a missing record, see R3). An ended session (401) says so and offers "Sign in again" instead.
 - **S5 [Must] Submitting, deleting**: see T3.5 and I2; the button shows a loading state and is disabled.
 - **S6 [Must] No access**: the application shell handles a whole page the user cannot access, so the page needs no design of its own for that case; when the user may not view one block of data on a page, show an explanation there instead of leaving it blank.
 
 ## C Copy
 
-- **C1 [Must]** All user-visible text has both a Chinese and an English translation, including aria-labels, placeholders, toasts and validation messages.
+- **C1 [Must]** All user-visible text has a translation in every language the application offers (the loaders in `client/locales/index.ts`; the template offers Chinese and English), including aria-labels, placeholders, toasts, validation messages and the English built into shadcn/ui primitives ([how](references/shadcn.md#english-built-into-primitives)).
 - **C2 [Must]** Use the same word for the same concept across the whole application (do not mix "customer" and "client", or "客户" and "顾客").
 - **C3 [Must] Button copy**:
   - Page-level actions use "verb + object" ("New customer"; 新建客户 in Chinese).
@@ -178,17 +164,20 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 
 ## Review checklist
 
-The design review and the acceptance review both go through this checklist item by item; record each unmet item in the review record and cite its IDs:
+The design review and the acceptance review both go through this checklist item by item; record each unmet item in the review record and cite its IDs. The checklist covers every Must rule; a rule the page cannot trigger (no detail view, no settings page) is marked "Not applicable" rather than skipped silently.
 
 - [ ] The page template and overlay choices are correct, and stacking follows the rules (T1–T4, I1)
 - [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places (L1, L2, L5)
-- [ ] All states are covered: loading, empty, no results, load failed, submitting; whether a failure offers a retry follows S4 (S1–S5)
-- [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, result cap notice (T1.1–T1.6, T1.10)
+- [ ] All states are covered: loading, empty, no results, load failed, submitting, a block the user may not see; whether a failure offers a retry follows S4 (S1–S6)
+- [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, all four states, result cap notice (T1.1–T1.6, T1.9, T1.10)
+- [ ] Detail view: drawer or page, record name and grouped actions, opens by URL, label–value layout with "—" for empty values (T2.1–T2.4)
 - [ ] Form: container, labels and required marks, validation timing, button order and copy, submitting, failure, success, loading the latest data before editing (T3.1–T3.8)
+- [ ] Settings page: one Card per topic, each saved on its own, toggles that apply at once (T4.1–T4.3)
 - [ ] Data freshness: writes are based on the latest data, the UI updates immediately after success, a missing record is handled (R1–R3)
 - [ ] Destructive actions are confirmed, and the confirmation dialog names the object and the consequence (I2)
 - [ ] Feedback and loading indicators are correct, and raw backend errors are not exposed (I3, I4)
-- [ ] Color, font size, spacing and radius use only tokens and scales, and fixed sizes are explained (F1–F4, F7)
-- [ ] Copy exists in Chinese and English, wording is consistent, and button and title copy follows the rules (C1–C4, C6, C7)
-- [ ] Icon buttons are accessible, focus is visible and goes somewhere sensible, and information is not conveyed by color alone (A1–A3, A6)
+- [ ] Overlays and their state have URLs; actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I6–I8)
+- [ ] Color, font size, spacing, radius and icons use only tokens, scales and lucide-react, and fixed sizes are explained (F1–F5, F7)
+- [ ] Copy exists in every language `client/locales/index.ts` offers, wording is consistent, and button and title copy follows the rules (C1–C4, C6, C7)
+- [ ] Icon buttons are accessible, focus is visible and goes somewhere sensible, information is not conveyed by color alone, and custom colors meet AA contrast (A1–A3, A5, A6)
 - [ ] Usable on narrow screens, in the dark theme and with a Chinese input method (A4, F6, A7)

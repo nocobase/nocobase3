@@ -1,8 +1,8 @@
 # Pages, menus and routes
 
-A page is a React component under `client/pages/`; routes and menus are declared in `client/routes.ts`. For child pages, tabs and navigation groups, see `child-routes.md`; for dialogs and drawers, see `overlay.md`.
+A page is a React component under `client/pages/`; routes and menus are declared in `client/routes.ts`. For child pages, tabs and navigation groups, see [`child-routes.md`](child-routes.md); for dialogs and drawers, see [`overlay.md`](overlay.md).
 
-Before writing a new page, use "Read the reference pages first" in `styling.md` to find the closest example: start a list page from `examples/orders`, record editing from `examples/product-form`, and a settings page from `examples/team-settings`. Follow its structure in your own page; do not import files from `client/pages/reference/`, and do not add routes for them (`tests/logic/client-routes.test.ts` checks this).
+Before writing a new page, find the closest file in the worked example: the task table of [`example.md`](example.md) names where a list page, a form too long for a dialog and a settings page start. How to use each component comes from the shadcn skill ([`shadcn.md`](shadcn.md)).
 
 ## 1. Declare the route
 
@@ -57,12 +57,12 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `name`            | Route name. Only letters, digits, `.`, `_` and `-` are allowed; kebab-case is recommended. Unique among the application's App routes. It is the target of route overrides, so do not change it after release |
 | `path`            | A root route starts with `/`; a child route is one segment relative to its parent (`new`, `:projectId`). It cannot contain query parameters, `#`, `*` or `..`                                                |
-| `auth`            | Who can open the page; see section 3. Defaults to `'required'`                                                                                                                                               |
-| `authz`           | Page authorization; declare it on the first page of every path, nested pages inherit it; see section 4                                                                                                       |
-| `navigation`      | Menu entry: `title` (translation key), `icon`, `order`; see section 6. Omit it when the page needs no menu entry                                                                                             |
-| `breadcrumb`      | Breadcrumb title (translation key); see section 7                                                                                                                                                            |
+| `auth`            | Who can open the page; see [section 3](#3-auth-who-can-open-the-page). Defaults to `'required'`                                                                                                              |
+| `authz`           | Page authorization; declare it on the first page of every path, nested pages inherit it; see [section 4](#4-authz-page-authorization)                                                                        |
+| `navigation`      | Menu entry: `title` (translation key), `icon`, `order`; see [section 6](#6-menus). Omit it when the page needs no menu entry                                                                                 |
+| `breadcrumb`      | Breadcrumb title (translation key); see [section 7](#7-breadcrumbs)                                                                                                                                          |
 | `componentLoader` | Lazily loads the page module; the module must `export default` the page component                                                                                                                            |
-| `children`        | Child routes; see `child-routes.md`                                                                                                                                                                          |
+| `children`        | Child routes; see [`child-routes.md`](child-routes.md)                                                                                                                                                       |
 
 Rules:
 
@@ -70,7 +70,7 @@ Rules:
 - **Write import paths with the `.js` extension**, even when the source file is `.tsx`. This is how this project resolves modules, not a typo.
 - **Paths are internal to the application**: do not write the deployment base path `/main`. The application is mounted under a base path (`/main` by default), and the runtime adds it automatically: `/projects` is `/main/projects` in the browser.
 - **Reserved paths**: `/login`, `/register`, `/forgot-password` and `/reset-password` can only use `auth: 'guest'`. They are already declared in `client/routes.ts`, and their pages are in `client/pages/auth/`.
-- App routes share one path space with settings pages and dev pages: do not declare an App route that starts with `/settings` or `/dev`, or it will conflict with them.
+- App routes share one path space with settings pages and dev pages. Registration rejects only an identical path; a signed-in App route whose path starts with `/settings/` or `/dev/` renders inside the Settings or Dev layout (`client/routing/app-router.tsx`). Declare administration pages with `defineSettingsRoutes()` and development pages with `defineDevRoutes()` rather than relying on that.
 
 ## 2. The page component
 
@@ -114,14 +114,14 @@ export default function ProjectsPage(): ReactElement {
 }
 ```
 
-- **`PageContainer`** (`@/components/page-container`) provides the page padding and the spacing between sections (`space-y-6`). Do not add another padded wrapper div.
+- **`PageContainer`** (`@/components/page-container`) renders a `section` that owns the full width, the spacing between blocks and the responsive padding (`w-full space-y-6 p-6 md:p-8`); the title, breadcrumbs, actions, content and the loading, empty and error states all go inside it. Do not hand-write an outer `div`, `main` or `section` with page padding, and do not change its spacing on one page (to change it everywhere, change the component).
 - **`PageContainer` is provided by the component that owns the page, one per page**:
   - An inline child page (including tab content) renders inside the parent page's `PageContainer`; do not add another one.
-  - A covering child page uses its own `PageContainer` inside `RouteChildPage` (see `child-routes.md`).
+  - A covering child page uses its own `PageContainer` inside `RouteChildPage` (see [`child-routes.md`](child-routes.md)).
   - Dialog and drawer content uses the overlay's own container; do not add `PageContainer`.
 - **`PageHeader`** (`@/components/page-header`) props: `title` (required), `description`, `actions` (on the right, for page-level actions). The title matches the menu name (guidelines L1, L3 and L5).
-- A page with child routes must place `<Outlet />` itself, or the child route content does not render; put it at the end of `PageContainer`. For how to write child routes, see `child-routes.md` and `overlay.md`.
-- Navigate to a child route with a relative path and keep the current query parameters: `new` for create, `String(id)` for detail, `` `${id}/edit` `` for edit, for example `<Link to={{ pathname: String(id), search: location.search }}>`.
+- A page with child routes must place `<Outlet />` itself, or the child route content does not render; put it at the end of `PageContainer`. For how to write child routes, see [`child-routes.md`](child-routes.md) and [`overlay.md`](overlay.md).
+- Navigate to a child route with a relative path (`new`, `String(id)`, `` `${id}/edit` ``) and keep the query string, as [section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page) explains.
 
 ## 3. auth: who can open the page
 
@@ -134,7 +134,7 @@ export default function ProjectsPage(): ReactElement {
 - Child routes inherit the entry route's `auth` and cannot change it (a different value raises an error at registration).
 - Settings pages and dev pages always require sign-in; do not write `auth` on them.
 - A signed-out user who visits a `required` page is taken to the sign-in page.
-- **`auth` only governs navigation in the browser; it is not server security**. The endpoints the page calls must do their own authentication.
+- `auth` only governs navigation in the browser, not what the server allows (the rules of [section 4](#4-authz-page-authorization)).
 
 ## 4. authz: page authorization
 
@@ -152,20 +152,22 @@ export default function ProjectsPage(): ReactElement {
 - A navigation group cannot have `authz` (it raises an error at registration) and carries no permission of its own.
 - A child page renders only after the parent page's check passes. Writing `'skip'` on a child page does not bypass the parent page's check.
 - Without permission, the menu entry is hidden, and opening the URL directly shows "Access denied" without loading the page component. While the check is pending, protected content is not shown; a failed check is treated as no permission.
-- Administrators hold every page permission by default, and pages can be assigned to other people through the page grants of a permission set.
+- Only root, which is unrestricted, holds every page permission. Every other identity, including one you think of as an administrator, needs the page grant in a permission set. When the feature is for people who do not have it yet, seed or assign the grant as the `nocobase-app-plugin-authorization` Skill describes, and say in your report who can open the page.
 - **`auth` and `authz` both act only in the browser**. Endpoints must do their own authentication and authorization (`auth.required()`, `authorization.middleware()`) and cannot rely on the page's settings.
+- **A page grant opens the page and authorizes no endpoint.** The endpoints of a restricted App page check a business action instead: an action of a `composite` registered with `authz.compositeResources.define`, which the same permission set grants beside the page. Design the composite, its actions and data scopes with the `nocobase-app-plugin-authorization` Skill; never make an endpoint check `page` `access`.
 
 **How to choose:**
 
-| Situation                                                                                            | What to write                                                         |
-| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Every signed-in user may use it (the home page; its endpoints are also open to every signed-in user) | `authz: 'skip'`                                                       |
-| Only for people who have been granted access                                                         | `authz: { resource: { type: 'page', id: '<id>' }, action: 'access' }` |
-| A child page that needs nothing beyond its parent's check                                            | Omit `authz` to inherit the parent's value, or write `authz: 'skip'`  |
-| Only root, never assignable                                                                          | `authz: 'unrestricted'`                                               |
-| A child page that needs its own authorization                                                        | `authz: { resource: { type: 'page', id: '<id>' }, action: 'access' }` |
+| Situation                                                                                            | What to write                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every signed-in user may use it (the home page; its endpoints are also open to every signed-in user) | `authz: 'skip'`                                                                                                                                |
+| Only for people who have been granted access                                                         | `authz: { resource: { type: 'page', id: '<id>' }, action: 'access' }`; its endpoints check a `composite` action the same permission set grants |
+| A child page that needs nothing beyond its parent's check                                            | Omit `authz` to inherit the parent's value, or write `authz: 'skip'`                                                                           |
+| Only root, never assignable                                                                          | `authz: 'unrestricted'`                                                                                                                        |
+| A child page that needs its own authorization                                                        | `authz: { resource: { type: 'page', id: '<id>' }, action: 'access' }`                                                                          |
+| A settings page                                                                                      | Its settings item: see "Settings pages" in [section 5](#5-three-kinds-of-routes)                                                               |
 
-A page and the endpoints it calls must agree: the example's `/api/projects` is open to every signed-in user, so the projects page uses `authz: 'skip'`.
+A page and the endpoints it calls must agree: the example's `/api/projects` is open to every signed-in user, so the projects page uses `authz: 'skip'`. Had the page a page grant, `/api/projects` would check a business action such as `composite:projects` `read`, granted with the page, not the page grant itself.
 
 **`authz: 'skip'` skips only this page's own check**; the sign-in requirement, the parent page's check and server authorization all still apply.
 
@@ -183,17 +185,17 @@ Do not repeat `/settings` or `/dev` in the path; writing `/projects` mounts it u
 
 ### Settings pages
 
-The template's `settingsRoutes` is an empty array by default. Add an entry to it, and again add the icon to the `lucide-react` import at the top of the file (here `SlidersHorizontal`):
+The template's `settingsRoutes` is an empty array by default. A settings page checks a **settings item**: a named administration capability that the server registers and its endpoints check, so the page and its API follow one grant. Add an entry, and again add the icon to the `lucide-react` import at the top of the file (here `SlidersHorizontal`):
 
 ```ts
 const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
   {
-    // Only administrators and people assigned this page can open it.
+    // Opens for identities granted read on the project-settings item; the endpoints check the same item.
     authz: {
-      resource: { type: 'page', id: 'project-settings' },
-      action: 'access',
+      resource: { type: 'settings', id: 'project-settings' },
+      action: 'read',
     },
-    componentLoader: () => import('./pages/settings/projects.js'),
+    componentLoader: () => import('./pages/settings/projects/index.js'),
     name: 'project-settings',
     navigation: {
       title: 'navigation.projectSettings',
@@ -206,18 +208,56 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
 ]);
 ```
 
-- **Declare a settings page's check**, or `'skip'` for a page every signed-in user who can enter the settings area may open, and have its server endpoints check the same rule. A settings page that omits it defaults to `'unrestricted'`, which only root may open.
-- How to write `authz`:
-  - An ordinary application settings page uses a page permission, `{ resource: { type: 'page', id: '<route-name>' }, action: 'access' }` (as in the example above). Administrators hold it by default, and it can be assigned through the page grants of a permission set.
-  - A feature that must distinguish "view" from "modify", with the server checking the same management resource, uses a resource of type `settings` (for example `{ resource: { type: 'settings', id: '<resource-name>' }, action: 'read' }`) and registers that resource on the server; read the `nocobase-app-plugin-authorization` Skill first. Actions are business actions (`read`, `update`); there is no conversion such as `list`, `show` or `edit`.
+- **Register the item on the server** in the `boot()` of the provider that owns the feature, with the service resolved from `authorizationToken`: `authz.settings.add({ id: 'project-settings', title, actions: [{ name: 'read' }, { name: 'update' }] })`, placed in the permission workspace with `authz.ui.place` (after `authz.ui.sections.add` when it needs a subsection of its own); an unplaced item is listed under "Other" with a startup warning. The server denies an item or action nobody registered, so an unregistered item keeps the page closed. The endpoints check the same item per action, `read` for loading and `update` for saving; see ["Authorization, when identity is not enough" in `../../server-routes.md`](../../server-routes.md#authorization-when-identity-is-not-enough). Actions are business actions (`read`, `update`); there is no conversion such as `list`, `show` or `edit`. Read the `nocobase-app-plugin-authorization` Skill before designing several items or actions.
+- **Gate the write controls on the write action**: `useCan({ resource: { type: 'settings', id: 'project-settings' }, action: 'update' })` ([section 8](#8-show-actions-by-permission-usecan)). Without it, render the values read-only instead of hiding the page.
+- Do not give a settings page a page grant (`type: 'page'`): page grants are for App pages and are listed under Pages in the permission set page. Write `'skip'` only for a settings page every signed-in user who can enter the settings area may open. A settings page that omits `authz` defaults to `'unrestricted'`, which only root may open.
 - `authz` is checked before the page loads; without permission the page disappears from the settings menu, and opening its URL directly does not load the component either.
 - The header shows the "Settings" entry only when the user can open at least one settings page.
 - `navigation.order` sets the position in the menu; lower numbers come first.
-- For tabs and detail child pages in settings pages, see `child-routes.md`.
+- For tabs and detail child pages in settings pages, see [`child-routes.md`](child-routes.md).
+
+The page itself, `client/pages/settings/projects/index.tsx` with its card beside it, is [`example/settings-page.md`](example/settings-page.md) and [`example/members-card.md`](example/members-card.md): it loads the settings with the four states, gates the members card on `update` (waiting for the check before rendering either variant), and falls back to the same values read-only. Assumes the backend provides `GET` and `PATCH /api/project-settings`, checking `read` and `update`.
+
+- Each Card saves on its own (T4.2); add a Card per topic, each with its own load of the values it edits or one load shared as here.
+- The server checks `update` on the `PATCH` endpoint no matter what the page shows; hiding the card only keeps the UI honest.
+- A settings page with sections that different people manage uses one settings item per section, or one item with several actions, as the `nocobase-app-plugin-authorization` Skill describes.
 
 ### Dev pages
 
 Pages declared with `defineDevRoutes()`, and modules imported only by them, are left out of the production build. This is a build boundary, not a permission boundary: a page whose access must also be restricted in production should be a settings page with `authz`, checked on the server.
+
+The template's `client/routes.ts` exports only `appRoutes` and `settingsRoutes`. The first dev page adds `defineDevRoutes` to the import and a third entry to the exported array:
+
+```ts
+// client/routes.ts
+import {
+  defineAppRoutes,
+  defineDevRoutes,
+  defineSettingsRoutes,
+  type AppClientRouteContribution,
+} from '@nocobase/app-client/plugins';
+
+// … appRoutes and settingsRoutes as before
+
+const devRoutes: AppClientRouteContribution = defineDevRoutes([
+  {
+    // Mounted at /dev/project-fixtures, in development builds only.
+    name: 'project-fixtures',
+    path: '/project-fixtures',
+    authz: 'skip',
+    navigation: { title: 'navigation.projectFixtures' },
+    componentLoader: () => import('./pages/dev/project-fixtures.js'),
+  },
+]);
+
+const routes: readonly AppClientRouteContribution[] = [
+  appRoutes,
+  settingsRoutes,
+  devRoutes,
+];
+
+export default routes;
+```
 
 ### Contribute pages to another plugin's settings group
 
@@ -232,7 +272,8 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
     name: 'audit-logs',
     path: '/audit-logs',
     navigation: { title: 'navigation.auditLogs' },
-    authz: { resource: { type: 'page', id: 'audit-logs' }, action: 'access' },
+    // A settings item the application registers on the server, like any settings page.
+    authz: { resource: { type: 'settings', id: 'audit-logs' }, action: 'read' },
     componentLoader: () => import('./pages/settings/audit-logs.js'),
   },
 ]);
@@ -241,10 +282,11 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
 - The target group is referenced by its unique name. It can be a nested group, and it can be declared by a plugin registered later.
 - An appended route's `path` is relative to the target group; its translation namespace remains the contributor's own (the application's).
 - Both pages and groups can be appended this way. Only root entries can declare `parent`; entries inside `children` cannot.
-- A group can declare empty `children` for others to append to. Its own children come first, and appended entries follow in plugin and entry registration order.
+- A group can declare empty `children` for others to append to. Siblings are sorted by `navigation.order` (lower first, default 0), so an appended entry without `order` sorts before a plugin's own child with `order: 100`. Entries with equal `order` keep registration order: the group's own children first, then appended entries in plugin and entry registration order. Set `navigation.order` to place an appended entry.
 - A missing target, a target that is a page rather than a group, a cycle, a duplicate name among siblings, and a path conflict all raise an error; groups are never silently merged.
 - Root entries without `parent` still sit directly under the settings menu.
-- `parent` is not limited to settings pages: root entries of `defineAppRoutes()` and `defineDevRoutes()` also accept `parent`, whose value is a group name in the same package or `package-name:group-name`.
+- **Update the route test when you append to another package's group.** `tests/logic/client-routes.test.ts` registers only the application's own routes, so every test in it fails with "references missing group". Import the target plugin's route contribution (for the authorization group, `import authorizationRoutes from '@nocobase/app-plugin-authorization/client/routes'`) and add `{ packageName: '@nocobase/app-plugin-authorization', routes: [authorizationRoutes], source: 'plugin' }` to the list `resolveRoutes()` passes to `resolveAppClientContributions`, then run the whole file: the page-loading test now also loads that plugin's pages.
+- `parent` is not limited to settings pages: root entries of `defineAppRoutes()` and `defineDevRoutes()` also accept it. For App routes the value is a group name in the same package or `package-name:group-name`. Settings and Dev group names are unique across their whole area, so there you always write the bare group name (`'authorization'`); a qualified name is rejected at registration.
 
 ## 6. Menus
 
@@ -258,44 +300,18 @@ Write `navigation` on the route. The application sidebar, the settings menu and 
 
 - Add the translations to the existing `navigation` group in `client/locales/en-US.ts` and `zh-CN.ts`, for example `projects: 'Projects'` and `projects: '项目'`.
 - Pages that should not appear in the menu (details, tab content and so on) have no `navigation`. When such a page is open, the menu highlights the nearest ancestor that has a menu entry.
-- **A path with a parameter (`:projectId`) or a wildcard cannot have `navigation`**; registration raises an error, because a menu entry must point to a fixed URL.
-- Navigation group: write only `name`, `navigation` and `children`, without `componentLoader`. For groups and clickable parents, see `child-routes.md`.
-- Do not change the shell (`client/layouts/`) or the ServiceProvider to add a menu entry, and do not add a Refine resource for a menu. Refine resources are only for CRUD integration and produce no menu entries; the home page entry is declared in the routes as well.
-- A new page with a menu entry usually touches only three places: `client/routes.ts`, the page component and `client/locales/`.
+- **A path with a parameter (`:projectId`) cannot have `navigation`**; registration raises an error, because a menu entry must point to a fixed URL (wildcards are rejected on every route, [section 1](#1-declare-the-route)).
+- Navigation group: write only `name`, `navigation` and `children`, without `componentLoader`. For groups and clickable parents, see [`child-routes.md`](child-routes.md).
+- Do not change the shell (`client/layouts/`) or the ServiceProvider to add a menu entry, and do not add a Refine resource for a menu. Refine resources produce no menu entries (see ["Loading data in a component" in `api.md`](api.md#loading-data-in-a-component) for what they are for); the home page entry is declared in the routes as well.
+- A new page with a menu entry usually touches four places: `client/routes.ts`, the page component, `client/locales/` and, for an App page that requires sign-in, the page grant list in `tests/logic/client-routes.test.ts` ([section 12](#12-update-the-route-test)).
 
 ## 7. Breadcrumbs
 
 The route tree behind the breadcrumbs is provided by the layout the page is in: `AppLayout` for business pages, `SettingsLayout` for settings pages and `DevLayout` for dev pages. `StandalonePageLayout` does not provide one at present, so breadcrumbs placed there show nothing.
 
-`navigation` defines the menu entry and `breadcrumb` defines the breadcrumb title; neither replaces the other. To get both a menu entry and a breadcrumb, write both. `breadcrumb.title` is a static translation key and can be used on a path with parameters:
+`navigation` defines the menu entry and `breadcrumb` defines the breadcrumb title; neither replaces the other. To get both a menu entry and a breadcrumb, write both on the route: `navigation: { title: 'navigation.projects' }` and `breadcrumb: { title: 'navigation.projects' }`. `breadcrumb.title` is a static translation key and can be used on a path with parameters.
 
-```ts
-const appRoutes: AppClientRouteContribution = defineAppRoutes([
-  {
-    name: 'projects',
-    path: '/projects',
-    auth: 'required',
-    authz: 'skip',
-    navigation: { title: 'navigation.projects', icon: FolderKanban },
-    // navigation and breadcrumb do not replace each other: to get both a menu entry and a breadcrumb, write both.
-    breadcrumb: { title: 'navigation.projects' },
-    componentLoader: () => import('./pages/projects/index.js'),
-    children: [
-      // … dialogs and drawers such as new and :projectId are not destinations; they get no breadcrumb
-      {
-        // A covering child page is a destination, so give it a breadcrumb; the title names the page type, not the record.
-        name: 'project-import',
-        path: 'import',
-        breadcrumb: { title: 'projects.import.title' },
-        authz: 'skip',
-        componentLoader: () => import('./pages/projects/import.js'),
-      },
-    ],
-  },
-]);
-```
-
-The page places `<Breadcrumbs />` (`@/components/breadcrumbs`) itself: inside `PageContainer`, above `PageHeader`. For a complete page, see "Covering child pages" in `child-routes.md`.
+The page places `<Breadcrumbs />` (`@/components/breadcrumbs`) itself: inside `PageContainer`, above `PageHeader`. [Section 5 of `child-routes.md`](child-routes.md#5-covering-child-pages-routechildpage) has the complete example: the projects route with an "Import projects" covering child page, both declaring `breadcrumb`, and the page that renders the trail.
 
 Breadcrumbs are generated from the matched route levels:
 
@@ -324,9 +340,9 @@ export function ExportProjectsButton({
   onExport,
 }: ExportProjectsButtonProps): ReactElement | null {
   const { t } = useTranslation();
-  // resource and action must match exactly what the server registers and the endpoint checks.
+  // A business action: the composite resource the server defines and the export endpoint checks with the same pair.
   const { can } = useCan({
-    resource: { type: 'resource', id: 'projects' },
+    resource: { type: 'composite', id: 'projects' },
     action: 'export',
   });
 
@@ -342,9 +358,22 @@ export function ExportProjectsButton({
 }
 ```
 
+- The resource is one the server knows; an unknown type or id is denied to everyone but root, so a button that shows for root can still be missing for everyone else. The types a page checks:
+
+  | `resource.type` | `action`                                                     | Registered by                                                                                       |
+  | --------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+  | `page`          | `access`                                                     | Nothing on the server: the client routes whose `authz` checks it                                    |
+  | `settings`      | The actions `authz.settings.add` declared (`read`, `update`) | `authz.settings.add` in a server provider ([section 5](#5-three-kinds-of-routes), "Settings pages") |
+  | `composite`     | The business actions of the composite (`export`, `submit`)   | `authz.compositeResources.define` in a server provider                                              |
+
+  Design composites, their actions and data scopes with the `nocobase-app-plugin-authorization` Skill before you add a `useCan` for one; `database.collection` grants belong inside composites, not in page code.
+
 - It returns `{ can, isPending, error, retry }` and follows live updates to the current session and permissions. `can` is `false` both while the check is pending and when it fails.
-- Like any other hook, call it only at the top level of a component, never inside a condition; when no check is needed, pass `{ enabled: false }` as the second argument.
-- When a whole block of content depends on the permission, show a loading state for `isPending` and a retryable error for `error` (calling `retry`); do not show stale actions.
+- Like any other hook, call it only at the top level of a component, never inside a condition; when no check is needed, pass `{ enabled: false }` as the second argument; a disabled check returns `can: false`, so combine it with your own condition (`enabled ? can : true`) instead of hiding on `!can` alone.
+- Handle the three outcomes the same way everywhere:
+  - `isPending`: nothing for a single action or navigation entry; a loading state for a block whose content depends on the answer.
+  - `error` (the check itself failed, not a denial): a single action or tab stays hidden, as when denied; a block whose content depends on the answer shows a retryable error that calls `retry` (the settings page in [`example/settings-page.md`](example/settings-page.md)).
+  - `can` is `false` without an error: hide the action, or render the block read-only when the user may still see it (settings pages).
 - Use it for page permissions too, for example for an entry on the home page that points to a page: `useCan({ resource: { type: 'page', id: 'projects' }, action: 'access' })`. A route's `authz` uses the same `{ resource: { type, id }, action }`.
 - **`useCan` answers "does this user have this feature", not "can this record be acted on"**. For actions that depend on record state or data scope, the server returns the actions available for each record in the list or detail response, and the UI shows them accordingly; the endpoint checks again when it executes.
 - Hide actions the user has no permission for; disable actions that are temporarily unavailable and explain why in a tooltip (guideline I7).
@@ -357,7 +386,9 @@ export function ExportProjectsButton({
 When the user asks to disable or hide a feature, make it reversible by default:
 
 - Keep the page module, components and route definition; do not delete page files, dependencies or business data (unless the user explicitly asks for permanent removal).
-- Control it with a flag the application owns: use the flag to decide whether the route goes into `defineAppRoutes([...])`, or keep the route and have the page show "Unavailable" or redirect. Hide links, buttons and menu entries with the same flag.
+- Control it with a flag the application owns in the `client` section of `config.yml`, such as `client.app.projectsEnabled: false`. Everything in that section reaches the browser, so it holds no secrets.
+  - Pages, links and buttons read it with `useClientApplication().config.get<boolean>('app.projectsEnabled', true)` (`@nocobase/app-client`).
+  - To leave the route and its menu entry out entirely, read it in `client/routes.ts`, which runs before the application exists, the way `client/theme/theme-preferences.ts` reads its defaults: `readAppClientRuntimeConfig()` from `@nocobase/app-client/runtime` (it returns `{}` in tests, so the default applies there). Otherwise keep the route and have the page show "Unavailable" or redirect; its menu entry then stays.
 - Use only route APIs that actually exist: routes have no option such as `hidden` or `enabled`; do not invent one.
 - **If only the menu entry is removed, the URL can still be opened directly.**
 - A flag in the browser only affects what is shown; it enforces nothing. The server must reject disabled operations independently, including direct endpoint calls.
@@ -373,7 +404,54 @@ Do not declare a plugin's own page route a second time: registering another `/in
 
 - An override replaces only `componentLoader`. The route identity, path, `auth` and owning plugin stay the same.
 - Source extensions and route overrides apply only to App routes (those declared with `defineAppRoutes()`); a plugin's settings pages and dev pages are not covered.
-- Keep the replacement page lazy, declare `componentEntry` so tools can find the source file, and default-export the component.
+- Keep the replacement page lazy, declare `componentEntry` so tools can find the source file, and default-export the component. `componentEntry` is the replacement module's path from the application root, without an extension.
+
+A route override replacing the workflow plugin's run detail page (an App route; its id is the package name and the route name):
+
+```ts
+// client/route-overrides.ts
+import {
+  defineClientRouteComponentOverrides,
+  type AppClientRouteComponentOverrideDefinition,
+} from '@nocobase/app-client/plugins';
+
+export const routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[] =
+  defineClientRouteComponentOverrides([
+    {
+      routeId: '@nocobase/app-plugin-workflow:workflow-run-detail',
+      componentEntry: './client/pages/workflow-run-detail/index',
+      componentLoader: () => import('./pages/workflow-run-detail/index.js'),
+    },
+  ]);
+
+export default routeComponentOverrides;
+```
+
+Or, instead of that entry (one override per route), a source extension, which keeps the override together with its own files under one folder; `client/source-extensions.ts` loads every `client/extensions/*/extension.ts`:
+
+```ts
+// client/extensions/workflow-run-ui/extension.ts
+import {
+  defineClientRouteComponentOverrides,
+  defineClientSourceExtension,
+  type AppClientSourceExtension,
+} from '@nocobase/app-client/plugins';
+
+const workflowRunUiExtension: AppClientSourceExtension =
+  defineClientSourceExtension({
+    name: 'workflow-run-ui',
+    routeComponentOverrides: defineClientRouteComponentOverrides([
+      {
+        routeId: '@nocobase/app-plugin-workflow:workflow-run-detail',
+        componentEntry: './client/extensions/workflow-run-ui/pages/run-detail',
+        componentLoader: () => import('./pages/run-detail.js'),
+      },
+    ]),
+  });
+
+export default workflowRunUiExtension;
+```
+
 - **A route can be overridden only once across the three mechanisms**; a second override raises an error that names the route id. Pick one; do not stack them.
 - Sign-in, registration, forgot password and reset password are the application's own routes, not the plugin's: edit the matching page in `client/pages/auth/` directly, and do not add another mechanism.
 
@@ -383,21 +461,15 @@ Do not declare a plugin's own page route a second time: registering another `/in
 - `client/layouts/` holds the three layouts: App, Settings and Dev; `client/layouts/components/` holds the containers, navigation, branding and account controls they share. Each layout owns its own permissions and route rendering.
 - Declare business routes only in `client/routes.ts`, never in the directories above.
 
-When customizing the shell, preserve these existing behaviors:
-
-- The header's "Settings" entry appears only when the user can open at least one settings page; the "Dev tools" entry appears only in development and must not reach the production build.
-- Navigation groups keep their expanded or collapsed state while the navigation tree stays mounted; opening a new page expands its ancestor groups without collapsing the others. Keep App, Settings and Dev consistent.
-- The authorization provider clears the permission snapshot before rendering a new session; route navigation and page guards subscribe to the authorization revision, so account switches and permission changes take effect without a reload.
-- When signing out, the account menu checks the result from Better Auth and shows a localized error message on failure; do not treat navigating away as having signed out.
+When customizing the shell, keep the behaviors listed in [section 1 of `shell.md`](shell.md#1-behaviors-to-keep).
 
 ## 12. Update the route test
 
 `tests/logic/client-routes.test.ts` checks the application's routes:
 
 - `keeps the landing page and the authentication pages`: the home page and the four authentication pages still exist. Adding a page does not require changing it.
-- `loads every page component`: calls every page's `componentLoader` in turn (including child routes at every level, settings pages and dev pages) and confirms that the module default-exports a component. Adding a page does not require changing it; it fails when a page file has no default export.
-- `never imports or routes a reference page`: application code neither imports nor routes files under `client/pages/reference/`. Do not change it.
-- `pins the route names page grants are stored against`: lists, in depth-first order, every page in the app routes that requires sign-in, including child routes (settings pages and dev pages excluded). **When you add a page that requires sign-in, add it here**: `authorizedAs` is `null` for a page whose resolved `authz` is `'skip'`, `'unrestricted'` for an unrestricted-only page, and the resource id for a page that checks page access; a nested page that omits `authz` shows its parent's value. The example's projects routes add `projects`, `project-new`, `project-detail` and `project-edit`, all `null`. Stored page grants reference the resource id, and changing one requires migrating existing grants, so this list is deliberately pinned.
+- `loads every page component`: calls every page's `componentLoader` in turn (including child routes at every level, settings pages and dev pages) and confirms that the module default-exports a component. Adding a page does not require changing it; it fails when a page file has no default export. A settings or App entry with `parent` pointing at another package's group is the exception: register that package's routes in `resolveRoutes()` first (see "Contribute pages to another plugin's settings group" in [section 5](#5-three-kinds-of-routes)).
+- `pins the page authorization of every signed-in page`: lists, in depth-first order, every page in the app routes that requires sign-in, including child routes (settings pages and dev pages excluded). **When you add an App page (`defineAppRoutes`) with `auth: 'required'`, including its child routes, add it here; do not add settings or dev pages, or the comparison fails**: `authorizedAs` is `null` for a page whose resolved `authz` is `'skip'`, `'unrestricted'` for an unrestricted-only page, the resource id for a page that checks page access (`'projects'`), and `type:id` for any other resource (`'composite:project-reports'`); a nested page that omits `authz` shows its parent's value. The example's projects routes add `projects`, `project-new`, `project-detail` and `project-edit`, all `null`. Stored page grants reference the resource id, and changing one requires migrating existing grants, so this list is deliberately pinned.
 
 After the change, run `pnpm exec vitest run tests/logic/client-routes.test.ts`.
 
@@ -410,3 +482,15 @@ After the change, run `pnpm exec vitest run tests/logic/client-routes.test.ts`.
 - Opening a child route URL directly (for example `/projects/1` or `/projects/1/edit`) shows both the parent page and the child route correctly.
 - Page code loads only on navigation and is not in the initial bundle.
 - Call the endpoints the page uses directly as an ordinary user, and confirm that server authorization matches the page settings.
+
+### Checking permission states in the browser
+
+Root holds every grant, so a hidden page, a denied tab or a read-only settings card only appears for another account. On the local development application:
+
+1. As root, create a permission set for the check under Settings → Authorization → Permission sets (`/settings/authorization/permission-sets`) that grants exactly what the state needs: nothing for a hidden page, the page's `access` for a visible one, `read` without `update` on the settings item for a read-only card.
+2. Ask the user to create a test account under Settings → Users (`/settings/users`) with that permission set as its role, or to assign the set to an existing test account from the set's Assignments. Do not choose or enter its password yourself.
+3. Confirm the decision before looking at the page: the Permission Inspector (`/settings/authorization/inspector`) shows, for that account and each action, Allowed or Not allowed with the reason.
+4. Ask the user to sign in as the test account into a second session file, `capture.mjs login --state storage/ui-workflow/auth-limited.json` ([`../scripts/capture.md`](../scripts/capture.md)), and take the permission shots with `"state": "storage/ui-workflow/auth-limited.json"` in their configuration. The same session calls the endpoints "as an ordinary user".
+5. Afterwards delete the permission set and ask the user to remove the account, or list both in the report; delete `auth-limited.json` with the other records.
+
+The pending and failed outcomes of `useCan` cannot be produced this way: cover them in a test, setting `permission.isPending` or `permission.error`, which the `useCan` mock of `tests/components/page-harness.test.tsx` returns.

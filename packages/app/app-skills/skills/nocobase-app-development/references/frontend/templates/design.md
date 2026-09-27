@@ -1,13 +1,13 @@
 # [Feature name] design
 
-| Item          | Details                                                                                |
-| ------------- | -------------------------------------------------------------------------------------- |
-| Status        | Draft / Pending review / Confirmed                                                     |
-| Routes        | `/<path>`; child routes: `/<path>/:id` (detail drawer) …                               |
-| Navigation    | Sidebar menu "[name]", icon `<LucideIcon>`; or: not shown in navigation                |
-| Permissions   | All signed-in users (`authz: 'skip'`) / requires the page grant `page:<id>`            |
-| Page template | `ui-guidelines.md` T1 list page / T2 detail view / T3 form / T4 settings page          |
-| Confirmation  | Confirmed by the user on [date] / the user authorized skipping confirmation in advance |
+| Item          | Details                                                                                                                                                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status        | Draft / Pending review / Confirmed                                                                                                                                                                                                                                                                                                        |
+| Routes        | `/<path>`; child routes: `/<path>/:id` (detail drawer) …                                                                                                                                                                                                                                                                                  |
+| Navigation    | Sidebar menu "[name]", icon `<LucideIcon>`; or: not shown in navigation                                                                                                                                                                                                                                                                   |
+| Permissions   | All signed-in users (`authz: 'skip'`) / App page: the page grant `page:<id>`, and the business action `composite:<id>` `<action>` its endpoints check (a page grant authorizes no endpoint) / settings page: the settings item `settings:<id>` (`read`; writes check `update`), registered on the server and checked by its endpoints too |
+| Page template | [`ui-guidelines.md`](../ui-guidelines.md) T1 list page / T2 detail view / T3 form / T4 settings page                                                                                                                                                                                                                                      |
+| Confirmation  | Confirmed by the user on [date] / the user authorized skipping confirmation in advance                                                                                                                                                                                                                                                    |
 
 ## 1. Goals
 
@@ -76,6 +76,8 @@ Write each one as "trigger → result", with success and failure written separat
 Also state which states are written to the URL, which actions need confirmation, and whether keyboard behavior has any special requirements.
 
 ## 7. Copy
+
+One column per language in `client/locales/index.ts` (the template offers these two):
 
 | key | zh-CN | en-US |
 | --- | ----- | ----- |
