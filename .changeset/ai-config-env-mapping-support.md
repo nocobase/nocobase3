@@ -5,6 +5,8 @@
 '@nocobase/app-template-examples': patch
 ---
 
-Follow `ai.llmServices` becoming a map keyed by service name, with secrets mapped through `env`
+Follow `ai.llmServices` becoming a map keyed by service name, with `${NAME}` no longer expanded
 
-`config check` now reports a `${NAME}` under `ai.llmServices` and `ai.mcpServers` as literal text, as it already did for every other section, since the AI employee plugin no longer expands one. The templates default `ai.llmServices` to an empty map, show the map form in `config.example.yml`, and declare `server/config/ai.ts` in the object form of `defineAppConfig` with an empty `env` for an application's own mappings. The application development Skill no longer names the AI sections as an exception.
+`config check` now reports a `${NAME}` under `ai.llmServices` and `ai.mcpServers` as literal text, as it already did for every other section, since the AI employee plugin no longer expands one. The application development Skill no longer names the AI sections as an exception.
+
+The templates default `ai.llmServices` to an empty map and declare `server/config/ai.ts` in the object form of `defineAppConfig`, with an empty `env` for an application's own mappings. The commented AI example in `config.example.yml` shows the map form without a key, says how to set one with `pnpm nocobase config set --from-env`, and no longer claims that a change applies without a restart: a standalone server reads the file when it starts, and `pnpm dev` restarts on its own.

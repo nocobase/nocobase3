@@ -30,13 +30,13 @@ pnpm nocobase config init
 
 ## 第一步：声明 LLM 服务
 
-打开应用根目录的 `config.yml`，在 `ai.llmServices` 中添加服务。`llmServices` 是以服务名为键的对象，下面添加一个名为 `gpt` 的 OpenAI 服务。密钥不写在这里，第二步再配置。
+打开应用根目录的 `config.yml`，在 `ai.llmServices` 中添加服务。`llmServices` 是以服务名为键的对象，下面添加一个名为 `openai` 的 OpenAI 服务。密钥不写在这里，第二步再配置。
 
 ```yaml
 ai:
   llmServices:
-    gpt:
-      title: GPT
+    openai:
+      title: OpenAI
       provider: openai
       enabledModels:
         - label: GPT-5.6
@@ -44,15 +44,15 @@ ai:
       enabled: true
 ```
 
-键 `gpt` 就是服务名，是 NocoBase 内部引用这个服务的稳定标识，条目里没有 `name` 字段。`provider` 是内置 Provider 的注册名。`enabledModels[].value` 必须使用服务商接受的真实模型 ID；如果当前账号不能使用示例中的 `gpt-5.6`，请替换成实际可用的模型。
+键 `openai` 就是服务名，是 NocoBase 内部引用这个服务的稳定标识，条目里没有 `name` 字段。`provider` 是内置 Provider 的注册名。`enabledModels[].value` 必须使用服务商接受的真实模型 ID；如果当前账号不能使用示例中的 `gpt-5.6`，请替换成实际可用的模型。
 
 你也可以先不写 `enabledModels`：
 
 ```yaml
 ai:
   llmServices:
-    gpt:
-      title: GPT
+    openai:
+      title: OpenAI
       provider: openai
       enabled: true
 ```
@@ -67,16 +67,16 @@ ai:
 git check-ignore -q config.yml && ! git ls-files --error-unmatch config.yml >/dev/null 2>&1 && echo "config.yml ok" || echo "config.yml 未被忽略，停止"
 ```
 
-在你自己的终端里进入应用根目录，运行下面的命令。命令运行后会等待输入，粘贴密钥后回车即可；输入时屏幕上不会显示，密钥也不会出现在命令行和 shell 历史里。变量只对这一条命令生效，由 `pnpm nocobase config set --from-env` 写进 `config.yml` 的 `ai.llmServices.gpt.options.apiKey`。写入时按 YAML 的规则处理引号，保留文件里的注释，输出里只有改动的键名。
+在你自己的终端里进入应用根目录，运行下面的命令。命令运行后会等待输入，粘贴密钥后回车即可；输入时屏幕上不会显示，密钥也不会出现在命令行和 shell 历史里。变量只对这一条命令生效，由 `pnpm nocobase config set --from-env` 写进 `config.yml` 的 `ai.llmServices.openai.options.apiKey`。写入时按 YAML 的规则处理引号，保留文件里的注释，输出里只有改动的键名。
 
 ```bash
 # zsh、bash
-IFS= read -rs OPENAI_API_KEY && OPENAI_API_KEY="$OPENAI_API_KEY" pnpm nocobase config set --from-env ai.llmServices.gpt.options.apiKey=OPENAI_API_KEY; unset OPENAI_API_KEY
+IFS= read -rs OPENAI_API_KEY && OPENAI_API_KEY="$OPENAI_API_KEY" pnpm nocobase config set --from-env ai.llmServices.openai.options.apiKey=OPENAI_API_KEY; unset OPENAI_API_KEY
 ```
 
 ```powershell
 # Windows PowerShell
-$k = Read-Host 'OpenAI API Key' -AsSecureString; $env:OPENAI_API_KEY = [System.Net.NetworkCredential]::new('', $k).Password; pnpm nocobase config set --from-env ai.llmServices.gpt.options.apiKey=OPENAI_API_KEY; Remove-Item Env:OPENAI_API_KEY; Remove-Variable k
+$k = Read-Host 'OpenAI API Key' -AsSecureString; $env:OPENAI_API_KEY = [System.Net.NetworkCredential]::new('', $k).Password; pnpm nocobase config set --from-env ai.llmServices.openai.options.apiKey=OPENAI_API_KEY; Remove-Item Env:OPENAI_API_KEY; Remove-Variable k
 ```
 
 不要把密钥发给 AI 助手，也不要让它代你执行这条命令，否则密钥会留在对话记录里。`config.example.yml` 会入库，不写密钥。
@@ -96,7 +96,7 @@ import {
 import type { AIApplicationConfig } from '@nocobase/app-plugin-ai-employee/server/config';
 
 const ai: AppConfigFactory<AIApplicationConfig> = defineAppConfig({
-  env: { OPENAI_API_KEY: envString('llmServices.gpt.options.apiKey') },
+  env: { OPENAI_API_KEY: envString('llmServices.openai.options.apiKey') },
   defaults: () => ({
     // 保持模板原有的默认值
   }),
@@ -105,17 +105,17 @@ const ai: AppConfigFactory<AIApplicationConfig> = defineAppConfig({
 export default ai;
 ```
 
-映射的变量有值时会覆盖 `config.yml` 里的值。只映射 `config.yml` 里已经声明的服务；映射到不存在的服务名，会得到一个缺少 `provider` 的条目，服务启动时报错 `Invalid ai.llmServices.gpt.provider`。映射是代码，构建后的服务要重新 `pnpm build` 才会读到。在启动服务的环境里运行 `pnpm nocobase config env`，`OPENAI_API_KEY` 前面显示 `●`、后面是 `ai.llmServices.gpt.options.apiKey`，就说明映射和变量都已生效；这个命令不会打印值。
+映射的变量有值时会覆盖 `config.yml` 里的值。只映射 `config.yml` 里已经声明的服务；映射到不存在的服务名，会得到一个缺少 `provider` 的条目，服务启动时报错 `Invalid ai.llmServices.openai.provider`。映射是代码，构建后的服务要重新 `pnpm build` 才会读到。在启动服务的环境里运行 `pnpm nocobase config env`，`OPENAI_API_KEY` 前面显示 `●`、后面是 `ai.llmServices.openai.options.apiKey`，就说明映射和变量都已生效；这个命令不会打印值。
 
 :::warning 部署时单独配置
 
-部署环境在 `dist/` 旁边有自己的 `config.yml`，`pnpm build` 不会带上开发机上的 `config.yml`。首次启动前，在 `dist/` 里用同样的命令写入密钥，或者按上面的方式由运行环境注入。
+部署环境有自己的运行配置，做法见[独立部署](../../app/deployment/standalone.md)和[运行配置](../../app/deployment/configuration.md)。`ai.llmServices` 的服务条目和密钥也属于这份配置，要在部署环境里同样设置。
 
 :::
 
 ## 第三步：在管理页确认模型
 
-打开设置侧栏「AI」分组里的「LLM services」页面（`/settings/ai/llm-services`）。你应该能看到 `gpt` 服务、`OpenAI` Provider 和当前已启用模型。
+打开设置侧栏「AI」分组里的「LLM services」页面（`/settings/ai/llm-services`）。你应该能看到 `openai` 服务、`OpenAI` Provider 和当前已启用模型。
 
 ![编辑 LLM 服务模型](https://static-docs.nocobase.com/20260914111142-ai-employee-llm-services.png)
 
@@ -150,14 +150,14 @@ export default ai;
 
 遇到问题时按下面的顺序检查：
 
-| 现象                            | 优先检查                                                                    |
-| ------------------------------- | --------------------------------------------------------------------------- |
-| 启动报 `Invalid ai.llmServices` | `llmServices` 是否写成以服务名为键的对象，条目里是否多写了 `name`           |
-| 「LLM services」页面没有服务    | `config.yml` 的 YAML 缩进、`ai.llmServices` 和服务重启                      |
-| 服务存在但没有模型              | 编辑模型列表，或检查 `enabledModels` 中的模型 ID                            |
-| 调用返回认证错误                | 密钥是否写进了 `ai.llmServices.gpt.options.apiKey`，Provider 是否与密钥匹配 |
-| 看不到可用员工                  | 员工是否在「AI Employees」页面启用                                          |
-| `/dev/ai-components/*` 不存在   | 当前是否为开发模式；Dev Route 不进入生产构建                                |
+| 现象                            | 优先检查                                                                       |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| 启动报 `Invalid ai.llmServices` | `llmServices` 是否写成以服务名为键的对象，条目里是否多写了 `name`              |
+| 「LLM services」页面没有服务    | `config.yml` 的 YAML 缩进、`ai.llmServices` 和服务重启                         |
+| 服务存在但没有模型              | 编辑模型列表，或检查 `enabledModels` 中的模型 ID                               |
+| 调用返回认证错误                | 密钥是否写进了 `ai.llmServices.openai.options.apiKey`，Provider 是否与密钥匹配 |
+| 看不到可用员工                  | 员工是否在「AI Employees」页面启用                                             |
+| `/dev/ai-components/*` 不存在   | 当前是否为开发模式；Dev Route 不进入生产构建                                   |
 
 ## 相关链接
 

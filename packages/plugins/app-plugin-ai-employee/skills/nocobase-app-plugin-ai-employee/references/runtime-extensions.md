@@ -163,7 +163,7 @@ ai:
   llmServices:
     company-production:
       title: Company Production
-      provider: company # options.apiKey is mapped from the environment
+      provider: company # options.apiKey: see capabilities.md § API keys
       enabledModels:
         - label: Company Chat
           value: company-chat

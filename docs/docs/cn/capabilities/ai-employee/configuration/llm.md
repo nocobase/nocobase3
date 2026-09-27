@@ -13,8 +13,8 @@ keywords: 'LLM Provider,OpenAI,Anthropic,Google Gemini,DeepSeek,Ollama,enabledMo
 ```yaml
 ai:
   llmServices:
-    gpt: # 键就是服务名，也是 ModelRef.llmService 的值
-      title: GPT
+    openai: # 键就是服务名，也是 ModelRef.llmService 的值
+      title: OpenAI
       provider: openai
       # options.apiKey 用 config set --from-env 写入，见快速开始第二步
       # options:
@@ -103,7 +103,7 @@ NocoBase 不维护内置模型目录，`value` 是否可用完全取决于服务
 ```yaml
 ai:
   llmServices:
-    gpt:
+    openai:
       provider: openai
       overrideEnabledModels: true
       enabledModels:

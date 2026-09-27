@@ -23,8 +23,8 @@ ai:
     paths:
       - /srv/nocobase/ai-skills # 部署环境提供的绝对路径
   llmServices:
-    gpt: # 键就是服务名
-      title: GPT
+    openai: # 键就是服务名
+      title: OpenAI
       provider: openai
       enabledModels:
         - label: GPT-5.6

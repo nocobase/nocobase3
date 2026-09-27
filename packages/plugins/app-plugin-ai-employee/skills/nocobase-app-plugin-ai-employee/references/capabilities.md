@@ -416,13 +416,13 @@ On a provider that cannot search, the tool returns `status: 'error'` saying no s
 ```yaml
 ai:
   llmServices:
-    gpt: # the key is the service name, and ModelRef.llmService
-      title: GPT
+    openai: # the key is the service name, and ModelRef.llmService
+      title: OpenAI
       provider: openai # required, a registered provider key
       # options.apiKey: see API keys below
       # options:
       #   baseURL: https://gateway.internal/v1   # optional; overrides the provider default
-      enabledModels: # applied when the service row is created; see below
+      enabledModels: # optional; applied when the service row is created; see below
         - label: GPT-5.6
           value: gpt-5.6
       overrideEnabledModels: false # optional, default false; see below
@@ -436,34 +436,40 @@ The key is the service's name, so an entry has no `name` field.
 
 ### API keys
 
-A service's key is a secret like a database password: it goes into `config.yml` through `pnpm nocobase config set --from-env`, following the `nocobase-app-development` Skill's `references/database-connections.md`. Confirm first that `config.yml` is ignored and untracked, and write the entry without the key. The paths are `ai.llmServices.<name>.options.apiKey` for a service, and `ai.mcpServers.<name>.headers.<Header>` or `ai.mcpServers.<name>.env.<VAR>` for an MCP credential. `config.example.yml` never carries a key.
+A service's key is a secret like a database password: it goes into `config.yml` through `pnpm nocobase config set --from-env`. Confirm first that `config.yml` stays out of the repository: in a git repository, that it is ignored and untracked; in an application that is not one yet, as `create-app` leaves it, that `.gitignore` lists `/config.yml`. Write the entry without the key. The paths are `ai.llmServices.<name>.options.apiKey` for a service, and `ai.mcpServers.<name>.headers.<Header>` or `ai.mcpServers.<name>.env.<VAR>` for an MCP credential.
 
-Have the user run the command in their own terminal, reading the key from a hidden prompt into a variable set for that one command, such as `IFS= read -rs OPENAI_API_KEY && OPENAI_API_KEY="$OPENAI_API_KEY" pnpm nocobase config set --from-env ai.llmServices.gpt.options.apiKey=OPENAI_API_KEY; unset OPENAI_API_KEY` in zsh or bash. A command the agent runs carries the key into its transcript, and a variable the user sets during the session never reaches the agent's shell. Never ask for a key, and never print the environment, `.env` or `config.yml`.
+The user sets the key; tell them the path and the `config set --from-env` form, and leave it to them. Never ask for a key, never build a command that reads one, and never print the environment, `.env` or `config.yml`.
 
-When the key is injected into the process environment instead — by a service manager, a container or CI — map the variable in `env` of `server/config/ai.ts`, such as `OPENAI_API_KEY: envString('llmServices.gpt.options.apiKey')` with `envString` from `@nocobase/app-server/config`, and confirm it with `pnpm nocobase config env`. A mapped variable overrides `config.yml`. Map only a service `config.yml` declares, or the start fails on an entry with no `provider`. A mapping sets the whole value, so a header variable holds `Bearer <token>`. The mapping is code, so a built server picks it up after the next `pnpm build`.
+When the key is injected into the process environment instead — by a service manager, a container or CI — map the variable in `env` of `server/config/ai.ts`, such as `OPENAI_API_KEY: envString('llmServices.openai.options.apiKey')` with `envString` from `@nocobase/app-server/config`, and confirm it with `pnpm nocobase config env`. A mapped variable overrides `config.yml`. Map only a service `config.yml` declares, or the start fails on an entry with no `provider`. A mapping sets the whole value, so a header variable holds `Bearer <token>`. The mapping is code, so a built server picks it up after the next `pnpm build`.
 
-The server reads the key when it starts, so restart it after setting one. A deployment has its own `config.yml`, so set the key again inside `dist/` there.
+The server reads the key when it starts, so restart it after setting one; `pnpm dev` restarts on its own when `config.yml` changes. A deployment has its own configuration, prepared as the `nocobase-deployment` Skill describes; the `ai.llmServices` entry and its key are part of it.
 
 ### Choose models from the provider, never from memory
 
-`enabledModels[].value` is sent to the provider verbatim. NocoBase keeps no model catalog and validates nothing, so a model id recalled from memory fails only when someone tries to chat. At configuration time the application is not running, so there is no NocoBase API to ask — call the provider directly:
+`enabledModels[].value` is sent to the provider verbatim. NocoBase keeps no model catalog and validates nothing, so a model id recalled from memory fails only when someone tries to chat. Pick models where the provider lists them:
 
-| `provider:`                    | Default base URL                                    | Model list request                                                    | Ids come from   |
-| ------------------------------ | --------------------------------------------------- | --------------------------------------------------------------------- | --------------- |
-| `openai`, `openai-completions` | `https://api.openai.com/v1`                         | `GET {base}/models`, `Authorization: Bearer <key>`                    | `data[].id`     |
-| `deepseek`                     | `https://api.deepseek.com`                          | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `kimi`                         | `https://api.moonshot.cn/v1`                        | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `dashscope`                    | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `xai`                          | `https://api.x.ai/v1`                               | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `mimo`                         | `https://api.xiaomimimo.com/v1`                     | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `orcarouter`                   | `https://api.orcarouter.ai/v1`                      | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `shengsuanyun`                 | `https://router.shengsuanyun.com/api/v1`            | `GET {base}/models`, Bearer                                           | `data[].id`     |
-| `mistral`                      | `https://api.mistral.ai`                            | `GET {base}/v1/models`, Bearer                                        | `data[].id`     |
-| `anthropic`                    | `https://api.anthropic.com`                         | `GET {base}/v1/models`, `x-api-key` + `anthropic-version: 2023-06-01` | `data[].id`     |
-| `google-genai`                 | `https://generativelanguage.googleapis.com`         | `GET {base}/v1beta/models?key=<key>` (no auth header)                 | `models[].name` |
-| `ollama`                       | `http://localhost:11434`                            | `GET {base}/api/tags` (no key)                                        | `models[].name` |
+1. Write the entry without `enabledModels`, unless the user names the exact model ids.
+2. Once the user has set the key and the server has started, have the models picked on the LLM services page, `/settings/ai/llm-services`. It fetches the list from the provider with the configured key, so a list that loads also proves the key. Then send one message in a chat, since an account can list a model it has no access to.
+3. To keep the list in `config.yml` as well, copy the chosen ids into `enabledModels` and set `overrideEnabledModels: true`; without it `config.yml` never changes the list of a service that already exists — see below.
 
-`{base}` is `options.baseURL` when set, otherwise the default above; the request path is resolved against it with a trailing slash, so a base ending in `/v1` already contains that segment. Provider keys are case-sensitive, and an unregistered one is dropped in silence: validation only checks that `provider` is a non-empty string, so a typo removes the whole service from the model list with nothing in the logs. `openai` is the Responses API; use `openai-completions` for a gateway that only implements Chat Completions.
+Until models are picked, the service offers none: an omitted list normalizes to an empty provider-mode list, which drops the service out of `ai:listAllEnabledModels`. Say so to the user rather than inventing ids.
+
+| `provider:`                    | Default base URL                                    |
+| ------------------------------ | --------------------------------------------------- |
+| `openai`, `openai-completions` | `https://api.openai.com/v1`                         |
+| `deepseek`                     | `https://api.deepseek.com`                          |
+| `kimi`                         | `https://api.moonshot.cn/v1`                        |
+| `dashscope`                    | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `xai`                          | `https://api.x.ai/v1`                               |
+| `mimo`                         | `https://api.xiaomimimo.com/v1`                     |
+| `orcarouter`                   | `https://api.orcarouter.ai/v1`                      |
+| `shengsuanyun`                 | `https://router.shengsuanyun.com/api/v1`            |
+| `mistral`                      | `https://api.mistral.ai`                            |
+| `anthropic`                    | `https://api.anthropic.com`                         |
+| `google-genai`                 | `https://generativelanguage.googleapis.com`         |
+| `ollama`                       | `http://localhost:11434`                            |
+
+`options.baseURL` replaces the default and keeps its level: request paths are resolved against it with a trailing slash, so a gateway for a provider whose default ends in `/v1` ends in `/v1` too. Provider keys are case-sensitive, and an unregistered one is dropped in silence: validation only checks that `provider` is a non-empty string, so a typo removes the whole service from the model list with nothing in the logs. `openai` is the Responses API; use `openai-completions` for a gateway that only implements Chat Completions.
 
 ### What each provider can actually do
 
@@ -483,14 +489,6 @@ Every provider in the list sends images to the model. The PDF column says what t
 
 Web search is the one to check first, because there is no capability check anywhere else: only the composer's web search toggle reads `AIModel.supportWebSearch` — see [chat-surfaces.md § Web search toggle](chat-surfaces.md#web-search-toggle) — so web search switched on through `AIChatProvider.webSearch`, a task, or the agent state looks identical on a provider that cannot search. The `subAgentWebSearch` tool refuses on those providers rather than answering from memory, which is what makes the gap visible at all.
 
-So, in order:
-
-1. Fetch the list with the row above and pick from what comes back.
-2. If the request fails or the key is not available yet, ask the user which models to enable.
-3. If that is still unresolved, leave `enabledModels` out **and tell the user the service has no usable model until someone picks one in AI settings**. Omitting it is not a soft default: the list normalizes to an empty provider-mode list, an empty list drops the service out of `ai:listAllEnabledModels` altogether, and the application then has a configured service and nothing to chat with. An omitted list is honest; an invented one is a bug that surfaces as a failed chat.
-
-Where the key is available, prove the configuration end to end with one small completion against a chosen model before declaring it done. Both requests reference the key by variable name, as in `-H "Authorization: Bearer $OPENAI_API_KEY"`, and never by value; when the agent's shell does not have the variable, or the key lives in `config.yml`, give the user the request to run instead. A model list can succeed while the account has no access to the model that was picked.
-
 ### `enabledModels` applies once, unless you say otherwise
 
 `enabledModels` scopes what the model selector and `ai:listAllEnabledModels` offer, and which model is used when a caller names none. It is not an access boundary: a caller naming an unlisted model still runs.
@@ -498,7 +496,7 @@ Where the key is available, prove the configuration end to end with one small co
 On every load the name set is authoritative — new names are created, existing names have their provider, title, `options`, `modelOptions` and `sort` rewritten from `config.yml`, removed names are dropped. Rewritten means replaced, not merged: a service whose entry leaves out `options` gets `{}`, and one that leaves out `modelOptions` gets the defaults (`temperature: 1`, `topP: 1`, both penalties `0`), overwriting whatever was tuned in AI settings. So an entry that exists in `config.yml` states those fields in full, or accepts the defaults. **The model list and the enable switch are not updated.** They are treated as an administrator's, so for a service that already exists the values in the database win and `config.yml` is ignored. That is right when the list is curated in AI settings, and surprising in every other case:
 
 - a model id written wrongly the first time cannot be corrected from `config.yml`;
-- a service first created without `enabledModels` stays at zero models no matter what is added later;
+- a service first created without `enabledModels` stays at zero models whatever is added to `config.yml` later, until models are picked in AI settings;
 - neither situation reports anything.
 
 `overrideEnabledModels: true` on a service reapplies its configured list on every load. It is per service, optional, and defaults to `false`, so nothing changes unless it is set. Turning it on means the list lives in `config.yml` and edits made in AI settings are overwritten on the next load — say that to the user rather than letting them find out. The switch governs the model list alone: a service an administrator disabled stays disabled, even when its entry says `enabled: true`.
