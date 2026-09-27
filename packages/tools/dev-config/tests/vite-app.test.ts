@@ -1,14 +1,14 @@
 import type { ConfigEnv, UserConfig, UserConfigFn } from 'vite';
 import { describe, expect, it } from 'vitest';
 
-import { createPortalViteConfig } from '../vite/portal.ts';
+import { createAppViteConfig } from '../vite/app.ts';
 
 const buildEnvironment: ConfigEnv = { command: 'build', mode: 'production' };
 
-const resolvePortalConfig = async (
+const resolveAppConfig = async (
   localConfig: UserConfig = {},
 ): Promise<UserConfig> => {
-  const config = createPortalViteConfig(localConfig) as UserConfigFn;
+  const config = createAppViteConfig(localConfig) as UserConfigFn;
   return (await config(buildEnvironment)) as UserConfig;
 };
 
@@ -26,7 +26,7 @@ const renderJsAssetUrl = async (
   filename: string,
   localConfig: UserConfig = {},
 ): Promise<string> => {
-  const { experimental } = await resolvePortalConfig(localConfig);
+  const { experimental } = await resolveAppConfig(localConfig);
   const rendered = experimental?.renderBuiltUrl?.(filename, {
     hostId: 'assets/index-hash.js',
     hostType: 'js',
@@ -43,9 +43,9 @@ const renderJsAssetUrl = async (
   return rendered.runtime;
 };
 
-describe('createPortalViteConfig asset URLs', () => {
+describe('createAppViteConfig asset URLs', () => {
   // Vite otherwise inlines the build-time base into `__vitePreload`, which 404s every preloaded
-  // stylesheet once a host mounts the build under a different prefix. See the comment in vite/portal.ts.
+  // stylesheet once a host mounts the build under a different prefix. See the comment in vite/app.ts.
   it('resolves a JavaScript asset reference from the runtime base path', async () => {
     const expression = await renderJsAssetUrl('assets/page-hash.css', {
       base: '/main/',
@@ -76,7 +76,7 @@ describe('createPortalViteConfig asset URLs', () => {
   it.each(['css', 'html'] as const)(
     'leaves a %s asset reference to the build-time base',
     async (hostType) => {
-      const { experimental } = await resolvePortalConfig({ base: '/main/' });
+      const { experimental } = await resolveAppConfig({ base: '/main/' });
 
       expect(
         experimental?.renderBuiltUrl?.('assets/page-hash.css', {
@@ -90,7 +90,7 @@ describe('createPortalViteConfig asset URLs', () => {
   );
 
   it('leaves a server-rendered asset reference to the build-time base', async () => {
-    const { experimental } = await resolvePortalConfig({ base: '/main/' });
+    const { experimental } = await resolveAppConfig({ base: '/main/' });
 
     expect(
       experimental?.renderBuiltUrl?.('assets/page-hash.css', {
@@ -103,7 +103,7 @@ describe('createPortalViteConfig asset URLs', () => {
   });
 
   it('keeps a renderBuiltUrl the consumer configured', async () => {
-    const { experimental } = await resolvePortalConfig({
+    const { experimental } = await resolveAppConfig({
       base: '/main/',
       experimental: { renderBuiltUrl: (filename) => `/cdn/${filename}` },
     });
@@ -120,7 +120,7 @@ describe('createPortalViteConfig asset URLs', () => {
 });
 
 it('preserves OOXML WASM URLs and consumer dependency exclusions', async () => {
-  const config = await resolvePortalConfig({
+  const config = await resolveAppConfig({
     optimizeDeps: { exclude: ['custom-viewer'] },
   });
   expect(config.optimizeDeps?.exclude).toEqual(

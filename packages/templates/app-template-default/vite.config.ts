@@ -1,6 +1,5 @@
-import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
+import { createAppViteConfig } from '@nocobase/dev-config/vite/app';
 import agentAnnotations from '@gchust/agent-annotations/vite';
-import fs from 'node:fs';
 import path from 'path';
 import { createDevProxy } from '@nocobase/app-cli/dev/proxy';
 
@@ -10,10 +9,6 @@ function isAgentAnnotationsEnabled(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase();
   return !normalized || !AGENT_ANNOTATIONS_DISABLED_VALUES.has(normalized);
 }
-
-const portalTemplate = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
-) as { displayName: string; version: string };
 
 const normalizeBase = (base?: string) => {
   const normalized = String(base || '/').trim();
@@ -29,7 +24,7 @@ const numberFromEnv = (value: string | undefined): number | undefined => {
 };
 
 // https://vite.dev/config/
-export default createPortalViteConfig(({ command }) => {
+export default createAppViteConfig(({ command }) => {
   // Configuration is loaded by the application runtime. Vite should only
   // consume the environment explicitly supplied by the invoking process;
   // reading .env here would make the client and server use different paths.
@@ -41,18 +36,10 @@ export default createPortalViteConfig(({ command }) => {
   );
   const viteHmrHost = env.APP_VITE_HMR_HOST;
   const viteDevPort = numberFromEnv(env.APP_VITE_DEV_PORT) ?? 5173;
-  const defineEnv: Record<string, string> = {
-    __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
-      command === 'serve' ? path.resolve(__dirname) : '',
-    ),
-    __PORTAL_TEMPLATE_NAME__: JSON.stringify(portalTemplate.displayName),
-    __PORTAL_TEMPLATE_VERSION__: JSON.stringify(portalTemplate.version),
-  };
 
   return {
     root: __dirname,
     base: viteBase,
-    define: defineEnv,
     plugins: [
       ...(annotationsEnabled
         ? [

@@ -1,6 +1,6 @@
-# Portal Vite factory
+# Application Vite factory
 
-`createPortalViteConfig` provides the shared Portal build baseline:
+`createAppViteConfig` provides the shared application build baseline:
 
 - React and Tailwind Vite plugins;
 - `dist/client` build output;
@@ -12,10 +12,10 @@ Pass a Vite config object or config function. It is merged after the shared
 configuration, so local values can extend or override the baseline:
 
 ```js
-import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
+import { createAppViteConfig } from '@nocobase/dev-config/vite/app';
 import path from 'node:path';
 
-export default createPortalViteConfig(({ command, mode }) => ({
+export default createAppViteConfig(({ command, mode }) => ({
   base: '/my-portal/',
   define: {
     __PORTAL_MODE__: JSON.stringify(`${command}:${mode}`),
@@ -35,4 +35,4 @@ config when Vite runs from another directory.
 Keep `base`, API and proxy addresses, environment prefixes, aliases, package
 metadata defines, and package-specific plugins local.
 
-Portal development excludes `@silurus/ooxml` from dependency prebundling to preserve its parser WASM asset URLs.
+Development excludes `@silurus/ooxml` from dependency prebundling to preserve its parser WASM asset URLs.

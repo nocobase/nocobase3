@@ -103,7 +103,7 @@ const resolveLocalConfig = async (
   return (await localConfigValue) ?? {};
 };
 
-export const createPortalViteConfig: (
+export const createAppViteConfig: (
   localConfig?: UserConfigExport,
 ) => UserConfigExport = (localConfig = {}) =>
   defineConfig(async (configEnvironment): Promise<UserConfig> => {
