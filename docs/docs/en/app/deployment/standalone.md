@@ -136,7 +136,7 @@ pm2 start ecosystem.config.js
 pm2 save
 ```
 
-The process name is the `name` field in the file, `nocobase-app-template-default` by default; rename it per application. The file is an ES module: if pm2 reports a syntax error when loading it from a deployment root that has no `package.json`, rename it to `ecosystem.config.mjs`. Use `pm2 restart <name>` to restart, `pm2 logs <name>` to read logs, and `pm2 startup` to print the command that starts pm2 at boot.
+The process name is `nocobase-` followed by the application's package name without its scope, read from `package.json` in the project root or from `dist/package.json` in a deployment root; set `APP_PM2_NAME` to choose another. Two applications on one machine need different names, or the second `pm2 start` restarts the first. The file is an ES module: if pm2 reports a syntax error when loading it from a deployment root that has no `package.json`, rename it to `ecosystem.config.mjs`. Use `pm2 restart <name>` to restart, `pm2 logs <name>` to read logs, and `pm2 startup` to print the command that starts pm2 at boot.
 
 ## Configure HTTPS
 

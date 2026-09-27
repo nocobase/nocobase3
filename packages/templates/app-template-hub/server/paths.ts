@@ -3,7 +3,11 @@ import type {
   ResolvedAppScopeRuntime,
 } from '@nocobase/app-server/runtime';
 
-/** Host paths are authoritative; standalone storage may be selected by environment. */
+/**
+ * Host paths are authoritative. A standalone Hub takes its storage from `APP_STORAGE_DIR`, which the runtime has already
+ * applied by the time this runs; `HUB_STORAGE_DIR` is the name earlier Hub releases documented and is still read when
+ * `APP_STORAGE_DIR` is not set.
+ */
 export function resolveHubPaths(
   runtime: ResolvedAppScopeRuntime,
 ): AppPathOptions {

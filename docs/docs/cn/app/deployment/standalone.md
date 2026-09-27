@@ -136,7 +136,7 @@ pm2 start ecosystem.config.js
 pm2 save
 ```
 
-进程名为文件中的 `name` 字段，模板默认为 `nocobase-app-template-default`，可按应用修改。该文件是 ES 模块，若 pm2 在没有 `package.json` 的部署根目录加载它时报语法错误，将其重命名为 `ecosystem.config.mjs`。使用 `pm2 restart <name>` 重启，`pm2 logs <name>` 查看日志，`pm2 startup` 生成开机自启命令。
+进程名默认是 `nocobase-` 加上应用的包名（去掉 scope），从项目根目录的 `package.json` 读取，在部署根目录则读 `dist/package.json`；设置环境变量 `APP_PM2_NAME` 可以换成别的名字。同一台机器上的两个应用必须用不同的进程名，否则第二个 `pm2 start` 会重启第一个。该文件是 ES 模块，若 pm2 在没有 `package.json` 的部署根目录加载它时报语法错误，将其重命名为 `ecosystem.config.mjs`。使用 `pm2 restart <name>` 重启，`pm2 logs <name>` 查看日志，`pm2 startup` 生成开机自启命令。
 
 ## 配置 HTTPS
 
