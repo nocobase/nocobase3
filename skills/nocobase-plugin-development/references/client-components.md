@@ -162,12 +162,12 @@ Keep a component private unless the App or another package needs a stable import
 
 A public component's contract includes props, render semantics, accessibility, theme integration, namespace behavior, peer dependencies, and export path. Update its types, behavioral tests, user-facing integration guidance, and changeset when that contract changes.
 
-## Report results through the App's toasts
+## Report results through the App's toaster
 
-A plugin neither mounts a toast host nor brings a toast library. The App mounts one Base UI `Toaster` in its `client/react-providers.ts`, and a plugin component reaches it through `Toast.useToastManager()` from `@base-ui/react/toast`, a peer the plugin already declares:
+A plugin neither mounts a toast host nor brings a toast library, and it does not reach into the App's UI library for one either. It reports through `useToaster()` from `@nocobase/app-client`, a peer the plugin already declares. The App registers the implementation under `toasterToken` and decides how every toast looks, where it appears and how assistive technology announces it:
 
 ```tsx
-import { Toast } from '@base-ui/react/toast';
+import { useToaster } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 
@@ -179,18 +179,14 @@ export function SaveButton({
   readonly onSave: () => Promise<void>;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-audit');
-  const { add: addToast } = Toast.useToastManager();
+  const toaster = useToaster();
   return (
     <Button
       onClick={() =>
         void onSave().then(
-          () => addToast({ type: 'success', title: t('records.saved') }),
+          () => toaster.show({ type: 'success', title: t('records.saved') }),
           () =>
-            addToast({
-              type: 'error',
-              priority: 'high',
-              title: t('records.saveFailed'),
-            }),
+            toaster.show({ type: 'error', title: t('records.saveFailed') }),
         )
       }
     >
@@ -200,7 +196,7 @@ export function SaveButton({
 }
 ```
 
-Destructure `add` and `close` rather than keeping the returned object: the object changes whenever a toast appears or leaves, while `add` and `close` are stable, so only they belong in `useCallback` and `useEffect` dependencies. The hook throws outside a `Toast.Provider`, so a component test wraps what it renders, as `render(ui, { wrapper: Toast.Provider })`, or mocks the hook when it asserts what was reported. Do not add sonner or report through Refine's `useNotification()`: the App mounts no sonner host and registers no Refine notification provider, so both report nothing.
+`show` takes a `type`, a `title` and, when needed, a `description`, an `action: { label, onClick }`, a `duration` in milliseconds, an `id` and an `onClose` callback; it returns the id `close` takes. Say what happened and leave the presentation to the App: there is no priority, position or style option, because the App's toaster decides those once for every plugin. `useToaster()` returns the same toaster on every render, so it belongs in `useCallback` and `useEffect` dependencies as it is. It never throws: in an App that registers no toaster, and in a component test rendered outside an App, a toast shows nothing and the console warns once. A test that asserts what was reported mocks `useToaster` in its `@nocobase/app-client` mock with one shared `{ show: vi.fn(), close: vi.fn() }` and checks what `show` received. Do not import `Toast` from `@base-ui/react/toast`, add sonner, or report through Refine's `useNotification()`: each binds the plugin to one App's UI, and the App registers no Refine notification provider.
 
 ## Keep page modules lazy
 
