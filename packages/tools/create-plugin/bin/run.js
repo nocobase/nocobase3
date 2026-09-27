@@ -5,12 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  formatUnsupportedNodeVersionMessage,
   isSupportedNodeVersion,
+  unsupportedNodeVersionOutput,
 } from './node-version.js';
 
 if (!isSupportedNodeVersion()) {
-  console.error(formatUnsupportedNodeVersionMessage(process.version));
+  const { stream, text } = unsupportedNodeVersionOutput(process.argv.slice(2));
+  // `process.exit` alone can drop output still queued for a pipe, which would cut the JSON document short.
+  await new Promise((resolve) => process[stream].write(`${text}\n`, resolve));
   process.exit(1);
 }
 
