@@ -78,7 +78,7 @@ export async function readState(layout: Layout): Promise<InstallerState> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new InstallerError(
         'NOT_INSTALLED',
-        `${layout.root} holds no Hub installed by hub-installer (installer.json is missing).`,
+        `${layout.root} holds no Hub installed by app-installer (installer.json is missing).`,
         {
           exitCode: EXIT_INVALID,
           suggestions: [
@@ -96,12 +96,12 @@ export async function readState(layout: Layout): Promise<InstallerState> {
   if (state.schemaVersion !== 1) {
     throw new InstallerError(
       'STATE_UNSUPPORTED',
-      `installer.json has schemaVersion ${String(state.schemaVersion)}, which this hub-installer does not understand.`,
+      `installer.json has schemaVersion ${String(state.schemaVersion)}, which this app-installer does not understand.`,
       {
         exitCode: EXIT_INVALID,
         suggestions: [
           {
-            message: 'Use a newer hub-installer:',
+            message: 'Use a newer app-installer:',
             run: installerCommand(`status --dir ${shellQuote(layout.root)}`, {
               version: 'latest',
               ...(typeof state.registry === 'string'

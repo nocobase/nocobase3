@@ -44,7 +44,7 @@ export async function acquireLock(file: string): Promise<ReleaseLock> {
         ) {
           throw new InstallerError(
             'LOCKED',
-            `Another hub-installer (pid ${owner}) is working on this Hub.`,
+            `Another app-installer (pid ${owner}) is working on this Hub.`,
             {
               exitCode: EXIT_INVALID,
               suggestions: [

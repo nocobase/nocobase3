@@ -17,7 +17,7 @@ export interface EcosystemOptions {
  * `startServer()` and the Hub silently never starts.
  */
 export function buildEcosystemConfig(options: EcosystemOptions): string {
-  return `// Written by hub-installer. Starting the Hub always goes through this file.
+  return `// Written by app-installer. Starting the Hub always goes through this file.
 const path = require('node:path');
 
 const root = __dirname;
@@ -66,7 +66,7 @@ module.exports = {
  * from even after `current` moves on.
  */
 export function buildLauncher(): string {
-  return `// Written by hub-installer. pm2 runs this file; it starts the release \`current\` points at, with hub.env applied.
+  return `// Written by app-installer. pm2 runs this file; it starts the release \`current\` points at, with hub.env applied.
 import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';

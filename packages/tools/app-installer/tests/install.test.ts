@@ -16,7 +16,7 @@ let root: string;
 let PORT: string;
 
 beforeEach(async () => {
-  temp = tempDir('hub-installer-install-');
+  temp = tempDir('app-installer-install-');
   root = path.join(temp.dir, 'hub');
   PORT = String(await freePort());
 });

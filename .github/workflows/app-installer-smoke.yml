@@ -1,7 +1,7 @@
 name: Hub installer smoke test
 
-# Installs, upgrades and rolls back the published Hub template with the hub-installer built from this checkout, on the
-# platform the Hub image uses. It runs the compiled dist/, which is what `npx @nocobase/hub-installer` runs, not the
+# Installs, upgrades and rolls back the published Hub template with the app-installer built from this checkout, on the
+# platform the Hub image uses. It runs the compiled dist/, which is what `npx @nocobase/app-installer` runs, not the
 # TypeScript sources.
 # It also runs daily: the template ships no lockfile, so a newly published dependency can break an install with no
 # change in this repository.
@@ -9,9 +9,9 @@ name: Hub installer smoke test
 on:
   pull_request:
     paths:
-      - 'packages/tools/hub-installer/**'
-      - 'scripts/smoke-hub-installer.mjs'
-      - '.github/workflows/hub-installer-smoke.yml'
+      - 'packages/tools/app-installer/**'
+      - 'scripts/smoke-app-installer.mjs'
+      - '.github/workflows/app-installer-smoke.yml'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
   schedule:
@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   # The event is part of the group, so a manual run and the daily one on the same branch do not cancel each other.
-  group: hub-installer-smoke-${{ github.event_name }}-${{ github.ref }}
+  group: app-installer-smoke-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,18 +49,18 @@ jobs:
 
       # A filtered install is enough: the build needs only the package's own devDependencies, and the tsconfig preset
       # it extends is a JSON file @nocobase/dev-config exports as it is, with nothing of its own to build.
-      - name: Install hub-installer dependencies
-        run: pnpm install --frozen-lockfile --filter @nocobase/hub-installer
+      - name: Install app-installer dependencies
+        run: pnpm install --frozen-lockfile --filter @nocobase/app-installer
 
-      - name: Build hub-installer
+      - name: Build app-installer
         run: |
-          pnpm --filter @nocobase/hub-installer build
-          test -f packages/tools/hub-installer/dist/cli.js
+          pnpm --filter @nocobase/app-installer build
+          test -f packages/tools/app-installer/dist/cli.js
 
-      # The same script backs `pnpm unreleased:hub-smoke`: install, check, upgrade from a copy registered as an older
+      # The same script backs `pnpm unreleased:installer-smoke`: install, check, upgrade from a copy registered as an older
       # release, roll back, check again.
       - name: Install, upgrade and roll back a Hub
-        run: node scripts/smoke-hub-installer.mjs --root "$HUB_ROOT" --port 13000 -- node packages/tools/hub-installer/bin/run.js
+        run: node scripts/smoke-app-installer.mjs --root "$HUB_ROOT" --port 13000 -- node packages/tools/app-installer/bin/run.js
 
       - name: Show Hub logs
         if: failure()

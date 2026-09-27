@@ -56,7 +56,7 @@ async function installOld(extra: string[] = []) {
 }
 
 beforeEach(() => {
-  temp = tempDir('hub-installer-upgrade-');
+  temp = tempDir('app-installer-upgrade-');
   root = path.join(temp.dir, 'hub');
   world = createWorld({ pendingTasks: { '1.1.0': 2 } });
 });
@@ -111,7 +111,7 @@ describe('upgrade', () => {
       result.json.error as unknown as { suggestions: { run?: string }[] }
     ).suggestions.map((suggestion) => suggestion.run);
     expect(runs).toContain(
-      `npx --yes --registry=${state().registry} @nocobase/hub-installer@${packageMetadata.version} rollback --dir ${root}`,
+      `npx --yes --registry=${state().registry} @nocobase/app-installer@${packageMetadata.version} rollback --dir ${root}`,
     );
     expect(existsSync(path.join(root, 'releases', '1.1.0', 'hub'))).toBe(true);
     expect(state().releases.map((record) => record.version)).toContain('1.1.0');

@@ -32,7 +32,7 @@ import {
 let root: string;
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'hub-installer-'));
+  root = await mkdtemp(path.join(os.tmpdir(), 'app-installer-'));
 });
 
 afterEach(async () => {

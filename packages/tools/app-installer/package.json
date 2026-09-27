@@ -1,5 +1,5 @@
 {
-  "name": "@nocobase/hub-installer",
+  "name": "@nocobase/app-installer",
   "version": "0.0.1",
   "description": "Install and upgrade a NocoBase 3 Hub on a server without changing its source.",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "bin": {
-    "hub-installer": "./bin/run.js"
+    "app-installer": "./bin/run.js"
   },
   "files": [
     "bin",
@@ -26,7 +26,7 @@
     "fix": "pnpm lint:fix && pnpm format",
     "test": "vitest run",
     "prepack": "pnpm build",
-    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub-installer.tgz\" && pnpm exec publint ."
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-installer.tgz\" && pnpm exec publint ."
   },
   "dependencies": {
     "@oclif/core": "catalog:",
@@ -47,7 +47,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nocobase/nocobase3.git",
-    "directory": "packages/tools/hub-installer"
+    "directory": "packages/tools/app-installer"
   },
   "license": "Apache-2.0"
 }

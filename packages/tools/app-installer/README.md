@@ -1,4 +1,4 @@
-# @nocobase/hub-installer
+# @nocobase/app-installer
 
 Installs, upgrades and rolls back a NocoBase 3 Hub on a server, for a Hub whose source you do not change. It generates the Hub from the published `@nocobase/app-template-hub`, builds it on the server, keeps only the deployment archive, and runs it under pm2. A Hub you customise is an application project: create it with `pnpm create @nocobase/app hub --template=hub` and deploy it like any other application. Docker remains the other way to run an unmodified Hub.
 
@@ -15,7 +15,7 @@ NocoBase 3 packages are published to `https://npm.nocobase.ai` rather than the p
 ## Install
 
 ```bash
-npx --registry=https://npm.nocobase.ai @nocobase/hub-installer install /srv/nocobase/hub --origin https://apps.example.com
+npx --registry=https://npm.nocobase.ai @nocobase/app-installer install /srv/nocobase/hub --origin https://apps.example.com
 ```
 
 The target must be new or empty. Before writing anything, the command also checks that the port is free, that no pm2 process already uses the name (`pm2 start` on a taken name would restart that process with this Hub's configuration rather than start a new one), and that every variable named by `--set-from-env` is set. It then resolves the version, generates and builds the Hub in a temporary build directory, unpacks the deployment archive into a release directory, writes the configuration, applies the database migrations, and starts the Hub with pm2, waiting until its health check answers or pm2 reports the process as crashed. Anything it wrote is removed again if it fails before the Hub is switched on, so running it again starts clean — with `--keep-source`, the build directory is kept for inspection and has to be removed before retrying.
@@ -41,7 +41,7 @@ Ctrl-C (or SIGTERM) stops the step that is running and lets that cleanup happen;
 A PostgreSQL Hub, with the password taken from the environment:
 
 ```bash
-HUB_DB_PASSWORD=... npx --registry=https://npm.nocobase.ai @nocobase/hub-installer install /srv/nocobase/hub \
+HUB_DB_PASSWORD=... npx --registry=https://npm.nocobase.ai @nocobase/app-installer install /srv/nocobase/hub \
   --origin https://apps.example.com --dialect postgres \
   --set database.connections.main.host=db.internal \
   --set database.connections.main.username=hub \
@@ -55,7 +55,7 @@ Afterwards, run `pm2 startup` once and execute the command it prints so pm2 rest
 ## Upgrade
 
 ```bash
-npx --registry=https://npm.nocobase.ai @nocobase/hub-installer upgrade --dir /srv/nocobase/hub
+npx --registry=https://npm.nocobase.ai @nocobase/app-installer upgrade --dir /srv/nocobase/hub
 ```
 
 Upgrades to `latest`, or to the version or dist-tag given with `--to`. Everything that takes time happens while the current release keeps serving: the new release is built beside it (or reused, when that version is already on disk), then checked with its own CLI — `config check`, and `db apply --dry-run` to count the pending migrations. Only then does the downtime start: the Hub is stopped, its SQLite database, `config.yml` and `hub.env` are copied to `backups/<time>_<from>_to_<to>/`, `current` is switched, the migrations are applied, and the new release is started and must pass its health check. Stopping the Hub stops every application it hosts, and deployments in progress are marked failed.
@@ -82,7 +82,7 @@ When the machine's Node major changes, the release's native modules no longer lo
 ## Rollback
 
 ```bash
-npx --registry=https://npm.nocobase.ai @nocobase/hub-installer rollback --dir /srv/nocobase/hub
+npx --registry=https://npm.nocobase.ai @nocobase/app-installer rollback --dir /srv/nocobase/hub
 ```
 
 Returns to the release the last upgrade came from, or to `--to <version>` among the releases on disk. When the upgrade being undone applied migrations, the database is restored from the backup taken before it, which discards whatever was written to the Hub since; `--no-restore` keeps the current database instead. A Hub on an external database has no database in its backups, so nothing is restored and the command says so: restore that database from your own backup. Rolling back never runs migrations backwards. A release built for another Node major is refused, since its native modules would not load.
@@ -94,7 +94,7 @@ If an upgrade or rollback is interrupted while the Hub is down, `installer.json`
 ## Status
 
 ```bash
-npx --registry=https://npm.nocobase.ai @nocobase/hub-installer status --dir /srv/nocobase/hub
+npx --registry=https://npm.nocobase.ai @nocobase/app-installer status --dir /srv/nocobase/hub
 ```
 
 Reports the current version, its `endpoints` — the public URL and origin, and the host and port it listens on — whether the Hub answers its health check, the pm2 process, the releases on disk and their size, whether the machine's Node major still matches the one the release was built for, and whether the registry has a newer version (`--offline` skips that). It changes nothing, and does not start the pm2 daemon when it is not running.
@@ -107,13 +107,13 @@ Reports the current version, its `endpoints` — the public URL and origin, and 
 pm2 restart nocobase-hub
 ```
 
-`launcher.mjs` reads `hub.env` every time the process starts, so nothing needs registering again. A new port must be free, and a reverse proxy has to forward to it. Every hub-installer command reads the same file, so `status` and the next `upgrade` check health at the new address.
+`launcher.mjs` reads `hub.env` every time the process starts, so nothing needs registering again. A new port must be free, and a reverse proxy has to forward to it. Every app-installer command reads the same file, so `status` and the next `upgrade` check health at the new address.
 
 ## Layout
 
 ```text
 /srv/nocobase/hub/
-├── hub.env               runtime variables, read by pm2 and by every hub-installer command
+├── hub.env               runtime variables, read by pm2 and by every app-installer command
 ├── config.yml            written by `nocobase config init`, shared by every release
 ├── storage/              HUB_STORAGE_DIR: the Hub's database, uploaded releases and hosted applications
 ├── logs/                 the Hub's stdout and stderr, collected by pm2
@@ -158,8 +158,8 @@ Under `--json`, a failure prints `ok: false` with `error.code`, a message, and `
 | `ENV_MISSING`           | `2`  | A variable named by `--set-from-env` is not set.                                                                                                                                                                                                                                  |
 | `TARGET_NOT_EMPTY`      | `2`  | The install target holds files, or is a file. Install into a new or empty directory; an installed Hub is managed with the other commands.                                                                                                                                         |
 | `NOT_INSTALLED`         | `2`  | The directory holds no `installer.json`. Run from the Hub root, or name it with `--dir`.                                                                                                                                                                                          |
-| `STATE_UNSUPPORTED`     | `2`  | `installer.json` was written by a newer hub-installer. Run the latest one.                                                                                                                                                                                                        |
-| `LOCKED`                | `2`  | Another hub-installer is working on this Hub. Wait for it to finish.                                                                                                                                                                                                              |
+| `STATE_UNSUPPORTED`     | `2`  | `installer.json` was written by a newer app-installer. Run the latest one.                                                                                                                                                                                                        |
+| `LOCKED`                | `2`  | Another app-installer is working on this Hub. Wait for it to finish.                                                                                                                                                                                                              |
 | `REGISTRY_UNREACHABLE`  | `2`  | The registry could not be read. Check the network or `--registry`.                                                                                                                                                                                                                |
 | `VERSION_NOT_FOUND`     | `2`  | No such template version or dist-tag; `details` lists the tags and recent versions.                                                                                                                                                                                               |
 | `CONFIRMATION_REQUIRED` | `2`  | `upgrade` or `rollback` needs consent, and `--json` or the lack of a terminal leaves no prompt to ask on. `details.notes` says what the operation does; pass `--yes` once that is accepted.                                                                                       |

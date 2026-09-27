@@ -64,7 +64,7 @@ const MINIMUM_FREE_BYTES = 2 * 1024 ** 3;
 export const UPGRADE_FLAGS = {
   dir: Flags.string({
     description:
-      'Hub root managed by hub-installer. Defaults to the current directory.',
+      'Hub root managed by app-installer. Defaults to the current directory.',
   }),
   to: Flags.string({
     description:
@@ -495,7 +495,7 @@ export async function upgrade(
     if (!sqlite && !flags['backup-done']) {
       throw new InstallerError(
         'BACKUP_REQUIRED',
-        `The Hub runs on ${state.dialect}, which hub-installer cannot back up. Back the database up, then pass --backup-done.`,
+        `The Hub runs on ${state.dialect}, which app-installer cannot back up. Back the database up, then pass --backup-done.`,
         { exitCode: EXIT_INVALID },
       );
     }

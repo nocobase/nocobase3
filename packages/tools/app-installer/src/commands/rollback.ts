@@ -33,7 +33,7 @@ import type { CommandDeps, CommandOutcome } from './install.ts';
 export const ROLLBACK_FLAGS = {
   dir: Flags.string({
     description:
-      'Hub root managed by hub-installer. Defaults to the current directory.',
+      'Hub root managed by app-installer. Defaults to the current directory.',
   }),
   to: Flags.string({
     description:
@@ -172,7 +172,7 @@ export async function rollback(
     if (!record || !existsSync(releaseDir(layout, target))) {
       throw new InstallerError(
         'RELEASE_MISSING',
-        `${target} is not on disk; only releases hub-installer kept can be returned to.`,
+        `${target} is not on disk; only releases app-installer kept can be returned to.`,
         {
           exitCode: EXIT_INVALID,
           suggestions: [{ message: 'status lists the releases on disk.' }],
@@ -221,7 +221,7 @@ export async function rollback(
         : undefined;
     if (flags.restore && migrated && restoreFrom === undefined) {
       reporter.warn(
-        `The database may have been migrated past ${target}, and hub-installer holds no copy of it from before (an external database, or a backup that was cut short). Restore it from your own backup if ${target} misbehaves.`,
+        `The database may have been migrated past ${target}, and app-installer holds no copy of it from before (an external database, or a backup that was cut short). Restore it from your own backup if ${target} misbehaves.`,
       );
     }
     await confirm(

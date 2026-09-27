@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Installs, checks, upgrades and rolls back a Hub with hub-installer. CI runs it against the published template with
-// the installer from the checkout; `pnpm unreleased:hub-smoke` runs it against the unreleased snapshot. Keeping one
+// Installs, checks, upgrades and rolls back a Hub with app-installer. CI runs it against the published template with
+// the installer from the checkout; `pnpm unreleased:installer-smoke` runs it against the unreleased snapshot. Keeping one
 // script keeps the two from drifting apart.
 
 import { spawnSync } from 'node:child_process';
@@ -16,10 +16,10 @@ export const APP_HOST_PORT = 13010;
 /** Above OLDER_VERSION, so `upgrade` does not refuse it as a downgrade. */
 export const BROKEN_VERSION = '0.0.1-broken';
 
-const usage = `Usage: node scripts/smoke-hub-installer.mjs --root DIR [--port 13000] [-- INSTALLER...]
+const usage = `Usage: node scripts/smoke-app-installer.mjs --root DIR [--port 13000] [-- INSTALLER...]
 
 Runs install, status, upgrade and rollback against a new Hub at DIR. INSTALLER is the
-command that runs hub-installer, "node packages/tools/hub-installer/bin/run.js" by default.
+command that runs app-installer, "node packages/tools/app-installer/bin/run.js" by default.
 pm2 must be on PATH; set PM2_HOME to keep the test away from your own pm2 processes.`;
 
 export function parseArgs(argv) {
@@ -27,7 +27,7 @@ export function parseArgs(argv) {
   const own = separator === -1 ? argv : argv.slice(0, separator);
   const installer =
     separator === -1
-      ? ['node', 'packages/tools/hub-installer/bin/run.js']
+      ? ['node', 'packages/tools/app-installer/bin/run.js']
       : argv.slice(separator + 1);
   const options = { port: 13000, installer };
   for (let i = 0; i < own.length; i++) {
@@ -196,7 +196,7 @@ function assert(condition, message) {
 }
 
 /**
- * Runs the whole check. `installer` is the command that runs hub-installer; `env` must reach pm2 and a registry that
+ * Runs the whole check. `installer` is the command that runs app-installer; `env` must reach pm2 and a registry that
  * serves the Hub template. Throws on the first failed expectation, leaving the Hub root in place for inspection.
  */
 export function runHubSmoke({
@@ -218,13 +218,13 @@ export function runHubSmoke({
       },
     );
     if (result.error)
-      fail(`hub-installer ${args[0]} did not run: ${result.error.message}`);
+      fail(`app-installer ${args[0]} did not run: ${result.error.message}`);
     let envelope;
     try {
       envelope = JSON.parse(result.stdout);
     } catch {
       fail(
-        `hub-installer ${args[0]} printed no JSON result (exit ${result.status}).`,
+        `app-installer ${args[0]} printed no JSON result (exit ${result.status}).`,
       );
     }
     return { exitCode: result.status, envelope };
@@ -233,7 +233,7 @@ export function runHubSmoke({
     const { envelope } = run(args);
     if (!envelope.ok)
       fail(
-        `hub-installer ${args[0]} failed with ${envelope.error.code}: ${envelope.error.message}`,
+        `app-installer ${args[0]} failed with ${envelope.error.code}: ${envelope.error.message}`,
       );
     return envelope.result;
   };

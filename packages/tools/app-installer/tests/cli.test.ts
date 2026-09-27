@@ -44,7 +44,7 @@ async function run(argv: string[], cwd?: string) {
 let dir: string;
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), 'hub-installer-cli-'));
+  dir = await mkdtemp(path.join(os.tmpdir(), 'app-installer-cli-'));
 });
 
 afterEach(async () => {
@@ -62,7 +62,7 @@ describe('runInstaller', () => {
     expect(examples.length).toBeGreaterThan(1);
     for (const line of examples) {
       expect(line).toMatch(
-        /\$ npx --yes --registry=\S+ @nocobase\/hub-installer@\S+ /u,
+        /\$ npx --yes --registry=\S+ @nocobase\/app-installer@\S+ /u,
       );
     }
   });
@@ -148,7 +148,7 @@ describe('runInstaller', () => {
     }[];
     expect(suggestion.run).toMatch(
       new RegExp(
-        `^npx --yes --registry=\\S+ @nocobase/hub-installer@${packageMetadata.version} --help$`,
+        `^npx --yes --registry=\\S+ @nocobase/app-installer@${packageMetadata.version} --help$`,
         'u',
       ),
     );

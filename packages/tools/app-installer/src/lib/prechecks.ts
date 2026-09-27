@@ -28,7 +28,7 @@ export function checkPlatform(
   if (platform === 'win32') {
     throw new InstallerError(
       'PLATFORM_UNSUPPORTED',
-      'hub-installer does not run on Windows: the release switch relies on symbolic links and atomic renames.',
+      'app-installer does not run on Windows: the release switch relies on symbolic links and atomic renames.',
       {
         exitCode: EXIT_INVALID,
         suggestions: [{ message: 'Run it inside WSL instead.' }],

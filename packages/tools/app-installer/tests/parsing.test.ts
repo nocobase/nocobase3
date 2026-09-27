@@ -113,7 +113,7 @@ describe('drivers', () => {
 
   it('pins a driver to the range the installed runtime accepts', async () => {
     const project = await mkdtemp(
-      path.join(os.tmpdir(), 'hub-installer-driver-'),
+      path.join(os.tmpdir(), 'app-installer-driver-'),
     );
     try {
       const server = path.join(project, 'node_modules/@nocobase/app-server');
@@ -242,13 +242,13 @@ describe('waitForHealthy', () => {
 });
 
 describe('suggested commands', () => {
-  it('runs hub-installer through npx with the registry named', () => {
+  it('runs app-installer through npx with the registry named', () => {
     expect(
       installerCommand('rollback --dir /srv/hub', {
         registry: 'http://127.0.0.1:4873/',
       }),
     ).toBe(
-      `npx --yes --registry=http://127.0.0.1:4873 @nocobase/hub-installer@${packageMetadata.version} rollback --dir /srv/hub`,
+      `npx --yes --registry=http://127.0.0.1:4873 @nocobase/app-installer@${packageMetadata.version} rollback --dir /srv/hub`,
     );
     expect(
       installerCommand('status', {
@@ -256,7 +256,7 @@ describe('suggested commands', () => {
         version: 'latest',
       }),
     ).toBe(
-      'npx --yes --registry=https://npm.nocobase.ai @nocobase/hub-installer@latest status',
+      'npx --yes --registry=https://npm.nocobase.ai @nocobase/app-installer@latest status',
     );
   });
 

@@ -30,7 +30,7 @@ export function buildHubEnv(layout: Layout, options: HubEnvOptions): string {
     ['NOCOBASE_STRICT_STARTUP', 'true'],
   ];
   return [
-    '# Written by hub-installer. Read by launcher.mjs on every start and by every hub-installer command.',
+    '# Written by app-installer. Read by launcher.mjs on every start and by every app-installer command.',
     ...entries.map(([key, value]) => `${key}=${quote(value)}`),
     '',
   ].join('\n');

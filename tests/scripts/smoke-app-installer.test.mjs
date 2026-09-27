@@ -12,7 +12,7 @@ import {
   processCommandLine,
   registerBrokenRelease,
   registerOlderRelease,
-} from '../../scripts/smoke-hub-installer.mjs';
+} from '../../scripts/smoke-app-installer.mjs';
 
 test('the smoke script takes a root, a port and the installer command after --', () => {
   const defaults = parseArgs(['--root', '/tmp/hub']);
@@ -20,7 +20,7 @@ test('the smoke script takes a root, a port and the installer command after --',
   assert.equal(defaults.port, 13000);
   assert.deepEqual(defaults.installer, [
     'node',
-    'packages/tools/hub-installer/bin/run.js',
+    'packages/tools/app-installer/bin/run.js',
   ]);
 
   const custom = parseArgs([
@@ -31,13 +31,13 @@ test('the smoke script takes a root, a port and the installer command after --',
     '--',
     'npx',
     '--yes',
-    '@nocobase/hub-installer@0.1.0',
+    '@nocobase/app-installer@0.1.0',
   ]);
   assert.equal(custom.port, 13200);
   assert.deepEqual(custom.installer, [
     'npx',
     '--yes',
-    '@nocobase/hub-installer@0.1.0',
+    '@nocobase/app-installer@0.1.0',
   ]);
 
   for (const args of [
@@ -51,7 +51,7 @@ test('the smoke script takes a root, a port and the installer command after --',
 });
 
 test('an older release is registered as a copy of the installed one and made current', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-smoke-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-smoke-'));
   try {
     const installed = '1.0.0-beta.37';
     const release = path.join(root, 'releases', installed, 'hub');
@@ -152,7 +152,9 @@ function fakeHub(root, installed) {
 }
 
 test('a broken release is a newer copy whose server entry throws, not made current', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-smoke-broken-'));
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'installer-smoke-broken-'),
+  );
   try {
     fakeHub(root, '1.0.0');
     assert.equal(registerBrokenRelease(root, '1.0.0'), BROKEN_VERSION);
@@ -184,7 +186,9 @@ test('a broken release is a newer copy whose server entry throws, not made curre
 });
 
 test('marking the last upgrade as migrated touches only that entry', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-smoke-migrated-'));
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'installer-smoke-migrated-'),
+  );
   try {
     fakeHub(root, '1.0.0');
     markLastUpgradeMigrated(root);

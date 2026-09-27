@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { defaultRegistry, normalizeRegistry } from './registry.ts';
 
-export const INSTALLER_PACKAGE = '@nocobase/hub-installer';
+export const INSTALLER_PACKAGE = '@nocobase/app-installer';
 
 /** This installer's own version; `src/lib` and `dist/lib` both sit two levels below the package root. */
 export const INSTALLER_VERSION: string = (
@@ -23,8 +23,8 @@ export interface InstallerCommandOptions {
 }
 
 /**
- * A hub-installer command as a suggestion prints it, so it runs as-is: through npx, because nothing installs a
- * `hub-installer` binary on PATH, and with the registry named, because NocoBase 3 packages are not on the public npm
+ * A app-installer command as a suggestion prints it, so it runs as-is: through npx, because nothing installs a
+ * `app-installer` binary on PATH, and with the registry named, because NocoBase 3 packages are not on the public npm
  * registry. `--yes` answers npx's own install prompt, which would otherwise block an agent. The version is pinned to
  * this installer's, so a recovery runs the same code that wrote the state it recovers from.
  */

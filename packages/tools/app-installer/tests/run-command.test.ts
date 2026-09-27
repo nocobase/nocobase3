@@ -24,7 +24,7 @@ async function waitFor(file: string): Promise<number> {
 let temp: ReturnType<typeof tempDir>;
 
 beforeEach(() => {
-  temp = tempDir('hub-installer-run-');
+  temp = tempDir('app-installer-run-');
 });
 
 afterEach(() => {

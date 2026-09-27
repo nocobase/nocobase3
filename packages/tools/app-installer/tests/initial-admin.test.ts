@@ -12,7 +12,7 @@ const section = (password: string) =>
   `users:\n  initialAdmin:\n    username: nocobase\n    email: admin@nocobase.com\n    password: ${password}\n`;
 
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(os.tmpdir(), 'hub-installer-admin-'));
+  dir = await mkdtemp(path.join(os.tmpdir(), 'app-installer-admin-'));
   config = path.join(dir, 'config.yml');
   example = path.join(dir, 'config.example.yml');
   await writeFile(example, section('admin123'));

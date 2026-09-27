@@ -23,8 +23,8 @@ export function formatUnsupportedNodeVersionMessage(
   const current = String(version ?? '').trim() || 'unknown';
 
   return [
-    `[hub-installer]: Node.js ${minimum} or later is required.`,
-    `[hub-installer]: Current version is ${current}. Install Node.js ${minimum}+ and try again.`,
+    `[app-installer]: Node.js ${minimum} or later is required.`,
+    `[app-installer]: Current version is ${current}. Install Node.js ${minimum}+ and try again.`,
   ].join('\n');
 }
 

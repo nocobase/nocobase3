@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { APP_HOST_PORT, runHubSmoke } from './smoke-hub-installer.mjs';
+import { APP_HOST_PORT, runHubSmoke } from './smoke-app-installer.mjs';
 import { isolateWorkspacePackages } from './smoke-registry-config.mjs';
 import { dialects, readMainConfig } from './smoke-database-config.mjs';
 
@@ -26,7 +26,7 @@ pnpm unreleased:create NAME [--template default|examples|hub] [--dialect sqlite]
   [--output-dir /parent/directory] [--json] [--no-install]
 pnpm unreleased:smoke [--template default|examples|hub] [--dialect sqlite]
   [--config /absolute/test.yml] [--timeout 420] [--workdir /empty/directory]
-pnpm unreleased:hub-smoke [--hub-port 13200] [--workdir /empty/directory]
+pnpm unreleased:installer-smoke [--hub-port 13200] [--workdir /empty/directory]
 pnpm unreleased:clean
 eval "$(pnpm -s unreleased:env)"
 
@@ -36,7 +36,7 @@ pnpm and npm commands in the current shell — and an agent started from it — 
 the snapshot too, instead of the registry in your own pnpm and npm configuration.
 Use --reset to remove the previous session and clear its snapshot before preparing again.
 Smoke runs test/dev/build/start and retains applications and logs outside the repository.
-Hub-smoke installs a Hub with the snapshot's hub-installer, then upgrades and rolls it back;
+Hub-smoke installs a Hub with the snapshot's app-installer, then upgrades and rolls it back;
 it needs pm2 on PATH and the App Host port 13010 free, runs pm2 with its own PM2_HOME,
 stops it afterwards, and retains the Hub and its logs outside the repository.
 A non-SQLite smoke test requires --config pointing to a dedicated test database;
@@ -47,12 +47,12 @@ caches, not test applications.
 export function parseArgs(argv) {
   const [action, ...args] = argv;
   if (
-    !['prepare', 'create', 'smoke', 'hub-smoke', 'env', 'clean'].includes(
+    !['prepare', 'create', 'smoke', 'installer-smoke', 'env', 'clean'].includes(
       action,
     )
   )
     throw new Error(
-      'Expected prepare, create, smoke, hub-smoke, env, or clean.',
+      'Expected prepare, create, smoke, installer-smoke, env, or clean.',
     );
   const options = {
     action,
@@ -65,7 +65,7 @@ export function parseArgs(argv) {
   const allowed = {
     prepare: ['port'],
     smoke: ['template', 'dialect', 'config', 'timeout', 'workdir'],
-    'hub-smoke': ['hub-port', 'workdir'],
+    'installer-smoke': ['hub-port', 'workdir'],
     create: ['template', 'dialect', 'output-dir'],
     env: [],
     clean: [],
@@ -401,7 +401,7 @@ try { createManually(process.argv.slice(2)); } catch (error) { console.error(err
   console.log(`Ready: ${state.registry}
 For manual development: pnpm unreleased:create my-app
 For an automated check: pnpm unreleased:smoke --template default
-For the Hub installer: pnpm unreleased:hub-smoke
+For the installer: pnpm unreleased:installer-smoke
 For manual testing, run outside the repository:
   node ${JSON.stringify(wrapper)} my-app --json
 The wrapper runs pnpm create with isolated configuration and snapshot versions.
@@ -582,17 +582,17 @@ async function main() {
         ],
         { env },
       );
-    } else if (options.action === 'hub-smoke') {
+    } else if (options.action === 'installer-smoke') {
       const state = readState();
       if (!state.ready)
         throw new Error(
           'Preparation did not complete. Run pnpm unreleased:prepare --reset.',
         );
       await assertRegistryAvailable(state);
-      const installer = state.versions['@nocobase/hub-installer'];
+      const installer = state.versions['@nocobase/app-installer'];
       if (!installer)
         throw new Error(
-          'This snapshot has no @nocobase/hub-installer. Run pnpm unreleased:prepare --reset from a checkout that has it.',
+          'This snapshot has no @nocobase/app-installer. Run pnpm unreleased:prepare --reset from a checkout that has it.',
         );
       if (spawnSync('pm2', ['--version'], { stdio: 'ignore' }).status !== 0)
         throw new Error('pm2 is required on PATH: npm install -g pm2');
@@ -610,7 +610,7 @@ async function main() {
         runHubSmoke({
           root: directory,
           port: options['hub-port'],
-          installer: ['npx', '--yes', `@nocobase/hub-installer@${installer}`],
+          installer: ['npx', '--yes', `@nocobase/app-installer@${installer}`],
           env,
         });
         console.log(

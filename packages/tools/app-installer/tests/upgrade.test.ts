@@ -213,7 +213,7 @@ describe('rollback target', () => {
     expect(error).toBeInstanceOf(InstallerError);
     expect((error as InstallerError).message).toMatch(/did not finish/);
     expect((error as InstallerError).suggestions[0].run).toBe(
-      `npx --yes --registry=http://127.0.0.1:4873 @nocobase/hub-installer@${packageMetadata.version} rollback --dir '/srv/my hub'`,
+      `npx --yes --registry=http://127.0.0.1:4873 @nocobase/app-installer@${packageMetadata.version} rollback --dir '/srv/my hub'`,
     );
     expect(() => assertNoPending(state(), '/srv/hub')).not.toThrow();
   });
@@ -223,7 +223,7 @@ describe('backup and restore', () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(os.tmpdir(), 'hub-installer-backup-'));
+    root = await mkdtemp(path.join(os.tmpdir(), 'app-installer-backup-'));
   });
 
   afterEach(async () => {

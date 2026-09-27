@@ -1,4 +1,4 @@
-# @nocobase/hub-installer
+# @nocobase/app-installer
 
 ## 0.0.1
 

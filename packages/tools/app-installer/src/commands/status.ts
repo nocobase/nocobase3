@@ -14,7 +14,7 @@ import type { CommandDeps, CommandOutcome } from './install.ts';
 export const STATUS_FLAGS = {
   dir: Flags.string({
     description:
-      'Hub root managed by hub-installer. Defaults to the current directory.',
+      'Hub root managed by app-installer. Defaults to the current directory.',
   }),
   offline: Flags.boolean({
     default: false,
