@@ -11,7 +11,7 @@ This Skill gets a new application created, configured and running. It does not d
 
 - If the working directory already holds a NocoBase application — a `package.json` with a `nocobase` field, next to an `AGENTS.md` — do not use this Skill. Read that `AGENTS.md` and continue from it.
 - NocoBase 3 is created with `pnpm create @nocobase/app`. Never fall back to NocoBase 2 instructions or the `nb` CLI, including when a package cannot be found; see Troubleshooting instead.
-- To run a Hub on a server without changing its source, use the `nocobase-hub-installer` Skill instead. This Skill creates a project to develop, including a Hub project with `--template=hub` when the Hub's own code will change.
+- To run a Hub on a server without changing its source, or to install an application's deployment archive on a server, use the `nocobase-app-installer` Skill instead. This Skill creates a project to develop, including a Hub project with `--template=hub` when the Hub's own code will change.
 - On Windows, work in WSL. The commands below assume a POSIX shell such as Bash; the subshell and the inline environment variable do not work in PowerShell or cmd.
 - Check `node --version` (24 or later) and `pnpm --version` (11). If either is missing or does not match, stop before creating anything and tell the user:
   - which tool is missing or which version was found, and which version is required;

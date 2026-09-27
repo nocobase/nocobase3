@@ -7,6 +7,8 @@ description: 不使用 Hub，构建部署包并在服务器独立运行应用。
 
 本页介绍不使用 Hub 的 Node.js 部署流程。容器路线在完成构建后转到[用 Docker 部署](./docker)，平台托管路线见 [Hub](./hub)。
 
+不想手工解压部署包、维护进程和备份时，可以改用 [app-installer](./app-installer)：它把同一个部署包安装到服务器，用 pm2 运行，并负责升级前备份、升级和回退。本页的构建步骤同样适用，服务器上的步骤由安装器完成。
+
 ## 环境与目录准备
 
 构建与运行采用 Node.js 24；构建工具版本参照项目 `packageManager`。本文采用 Linux x64、glibc；ARM64 选 `linux-arm64`，Alpine 等 musl 环境必须选择对应目标并核验原生依赖。

@@ -4,4 +4,4 @@
 
 ### Minor Changes
 
-- Install a NocoBase 3 Hub on a server from the published Hub template, and report its state.
+- Install a NocoBase 3 application on a server from a deployment archive or the published Hub template, and report its state.
