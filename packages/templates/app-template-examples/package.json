@@ -182,6 +182,7 @@
     "@nocobase/app-plugin-notification-providers": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
+    "@nocobase/app-plugin-schedule-example": "workspace:^",
     "@nocobase/app-plugin-repository-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
     "@nocobase/app-plugin-scheduler": "workspace:^",

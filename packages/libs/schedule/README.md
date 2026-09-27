@@ -60,6 +60,8 @@ export default schedule;
 
 `package.json` declares `@nocobase/schedule` in `dependencies`: `@nocobase/app-server` and every plugin that schedules declare it as a peer, and the application is what provides it.
 
+`@nocobase/app-plugin-schedule-example` is a complete plugin doing all of the below: a provider that runs a heartbeat on its own scope, removes its orphan rules, and exposes the runs through a route.
+
 ## Configuring it
 
 The `schedule` section maps configuration keys to configurations, and `default` names the one used when a consumer names none. A deployment selects one in `config.yml`:
@@ -179,7 +181,7 @@ Rules live in the backend; handlers live in the process that registered them.
 
 ## Events
 
-`subscribe(subscriber)` reports the firings this instance runs: `ScheduleStart` on each attempt, then `ScheduleEnd` or `ScheduleError`. `ScheduleError` carries `reason` (`execute-failed` or `handler-not-registered`) and `error`. Each event carries `jobId`, `jobName`, `scheduledAt`, `runAt` and `nextRunAt`. Nothing is broadcast to other instances, so counting `ScheduleStart` per `jobId` counts each firing once. Events are not persisted: a process that stops between running a job and handling its event loses that event. An error thrown by a subscriber is logged and does not affect the firing.
+`subscribe(subscriber)` reports the firings this instance runs: `ScheduleStart` on each attempt, then `ScheduleEnd` or `ScheduleError`. `ScheduleError` carries `reason` (`execute-failed` or `handler-not-registered`) and `error`. Each event carries `jobId`, `jobName`, `scheduledAt`, `runAt` and `nextRunAt`. Nothing is broadcast to other instances, so counting `ScheduleStart` per `jobId` counts each firing once. Events are delivered after the fact and in order, so a handler must not count on its own `ScheduleStart` having been handled when it runs. They are not persisted: a process that stops between running a job and handling its event loses that event. An error thrown by a subscriber is logged and does not affect the firing.
 
 ## The memory adapter
 
