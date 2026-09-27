@@ -6,7 +6,13 @@ import type {
 import { normalizeEnabledModelsConfig } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 
-import type { AIEmployeeLLMServiceConfig } from '../config.js';
+import type {
+  AIApplicationConfig,
+  AIEmployeeLLMServiceConfig,
+} from '../config.js';
+
+/** `ai.llmServices`: each configured service, keyed by its name. */
+export type LLMServiceConfigMap = AIApplicationConfig['llmServices'];
 
 const DEFAULT_MODEL_OPTIONS: Readonly<Record<string, unknown>> = {
   temperature: 1,
@@ -39,7 +45,7 @@ export class LLMServiceConfigSynchronizer {
   ) {}
 
   public enqueue(
-    services: readonly AIEmployeeLLMServiceConfig[] | undefined,
+    services: LLMServiceConfigMap | undefined,
   ): Promise<LLMServiceSyncSummary> {
     const operation = this.queue.then(() => this.synchronize(services));
     this.queue = operation.catch(() => undefined);
@@ -47,7 +53,7 @@ export class LLMServiceConfigSynchronizer {
   }
 
   public async synchronize(
-    services: readonly AIEmployeeLLMServiceConfig[] | undefined,
+    services: LLMServiceConfigMap | undefined,
   ): Promise<LLMServiceSyncSummary> {
     const normalized = normalizeLLMServiceConfig(services);
     const existing = await this.manager.listLLMServices();
@@ -103,55 +109,28 @@ export class LLMServiceConfigSynchronizer {
 }
 
 export function normalizeLLMServiceConfig(
-  services: readonly AIEmployeeLLMServiceConfig[] | undefined,
+  services: LLMServiceConfigMap | undefined,
 ): NormalizedLLMServiceConfig[] {
-  const values = services ?? [];
-  if (!Array.isArray(values)) {
-    throw new Error('Invalid ai.llmServices config: expected an array.');
-  }
-
-  const names = new Set<string>();
-  const normalized: NormalizedLLMServiceConfig[] = [];
-  for (const [index, service] of values.entries()) {
-    assertLLMServiceConfig(service, index);
-    if (names.has(service.name)) {
-      throw new Error(
-        `Invalid ai.llmServices config: duplicate service name "${service.name}".`,
-      );
-    }
-    names.add(service.name);
-    const expanded = expandEnvironmentReferences(service);
-    normalized.push({
-      ...expanded,
-      enabledModels: normalizeConfiguredEnabledModels(expanded.enabledModels),
-    });
-  }
-  return normalized;
-}
-
-export function expandEnvironmentReferences<T>(value: T): T {
-  return expandEnvironmentValue(value) as T;
-}
-
-function expandEnvironmentValue(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return value.replace(
-      /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
-      (_match, name: string) => process.env[name] ?? '',
+  const values: unknown = services ?? {};
+  if (Array.isArray(values)) {
+    throw new Error(
+      'Invalid ai.llmServices config: expected a map keyed by service name, such as `openai: { provider: openai }`. The list form is no longer read; move each entry under its name and drop the `name` field.',
     );
   }
-  if (Array.isArray(value)) {
-    return value.map((item: unknown) => expandEnvironmentValue(item));
-  }
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        expandEnvironmentValue(item),
-      ]),
+  if (!isRecord(values)) {
+    throw new Error(
+      'Invalid ai.llmServices config: expected a map keyed by service name.',
     );
   }
-  return value;
+
+  return Object.entries(values).map(([name, service]) => {
+    assertLLMServiceConfig(service, name);
+    return {
+      ...service,
+      name,
+      enabledModels: normalizeConfiguredEnabledModels(service.enabledModels),
+    };
+  });
 }
 
 function normalizeConfiguredEnabledModels(
@@ -163,37 +142,39 @@ function normalizeConfiguredEnabledModels(
 
 function assertLLMServiceConfig(
   value: unknown,
-  index: number,
+  name: string,
 ): asserts value is AIEmployeeLLMServiceConfig {
-  if (!isRecord(value)) {
-    throw new Error(`Invalid ai.llmServices.${index}: expected an object.`);
-  }
-  assertNonEmptyString(value.name, `ai.llmServices.${index}.name`);
-  assertNonEmptyString(value.provider, `ai.llmServices.${index}.provider`);
-  assertOptionalString(value.title, `ai.llmServices.${index}.title`);
-  assertOptionalRecord(value.options, `ai.llmServices.${index}.options`);
-  assertEnabledModels(
-    value.enabledModels,
-    `ai.llmServices.${index}.enabledModels`,
-  );
-  assertOptionalRecord(
-    value.modelOptions,
-    `ai.llmServices.${index}.modelOptions`,
-  );
-  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
+  const path = `ai.llmServices.${name}`;
+  if (name.trim().length === 0) {
     throw new Error(
-      `Invalid ai.llmServices.${index}.enabled: expected a boolean.`,
+      'Invalid ai.llmServices config: a service name must not be empty.',
     );
   }
+  if (!isRecord(value)) {
+    throw new Error(`Invalid ${path}: expected an object.`);
+  }
+  if (value.name !== undefined) {
+    throw new Error(
+      `Invalid ${path}.name: the service name is its key in ai.llmServices; remove this field.`,
+    );
+  }
+  assertNonEmptyString(value.provider, `${path}.provider`);
+  assertOptionalString(value.title, `${path}.title`);
+  assertOptionalRecord(value.options, `${path}.options`);
+  assertEnabledModels(value.enabledModels, `${path}.enabledModels`);
+  assertOptionalRecord(value.modelOptions, `${path}.modelOptions`);
+  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
+    throw new Error(`Invalid ${path}.enabled: expected a boolean.`);
+  }
   if (value.sort !== undefined && typeof value.sort !== 'number') {
-    throw new Error(`Invalid ai.llmServices.${index}.sort: expected a number.`);
+    throw new Error(`Invalid ${path}.sort: expected a number.`);
   }
   if (
     value.overrideEnabledModels !== undefined &&
     typeof value.overrideEnabledModels !== 'boolean'
   ) {
     throw new Error(
-      `Invalid ai.llmServices.${index}.overrideEnabledModels: expected a boolean.`,
+      `Invalid ${path}.overrideEnabledModels: expected a boolean.`,
     );
   }
 }

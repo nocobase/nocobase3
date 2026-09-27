@@ -11,11 +11,11 @@ export type {
   AIStorageConfig,
 } from './config.js';
 export {
-  expandEnvironmentReferences,
   LLMServiceConfigSynchronizer,
   normalizeLLMServiceConfig,
 } from './manager/llm-service-config.js';
 export type {
+  LLMServiceConfigMap,
   LLMServiceSyncSummary,
   NormalizedLLMServiceConfig,
 } from './manager/llm-service-config.js';

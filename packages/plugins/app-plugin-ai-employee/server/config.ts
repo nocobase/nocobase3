@@ -51,9 +51,13 @@ export interface AIEmployeeEnabledModelConfig {
 export interface AISkillsConfig {
   readonly paths?: readonly string[];
 }
+/**
+ * One entry of `ai.llmServices`. The service's name is its key in that map, so
+ * an entry carries no `name` of its own.
+ */
 export type AIEmployeeLLMServiceConfig = Omit<
   LLMServiceOptions,
-  'enabledModels'
+  'name' | 'enabledModels'
 > & {
   readonly enabledModels?: readonly AIEmployeeEnabledModelConfig[];
   /**
@@ -73,7 +77,7 @@ export interface AIApplicationConfig {
   readonly skills?: AISkillsConfig;
   readonly mcpServers?: Readonly<Record<string, MCPOptions>>;
   readonly aiKnowledgeBase?: AIKnowledgeBaseConfig;
-  readonly llmServices: AIEmployeeLLMServiceConfig[];
+  readonly llmServices: Readonly<Record<string, AIEmployeeLLMServiceConfig>>;
   readonly [key: string]: unknown;
 }
 
