@@ -60,6 +60,21 @@ describe('DataTable', () => {
     expect(screen.queryByText(/Page 1 of/)).not.toBeInTheDocument();
   });
 
+  it('shows the selected-row summary unless the page turns it off', () => {
+    const { rerender } = render(
+      <DataTable columns={columns} data={payments} />,
+    );
+
+    expect(screen.getByText('0 of 12 row(s) selected.')).toBeInTheDocument();
+
+    rerender(
+      <DataTable columns={columns} data={payments} showSelectedCount={false} />,
+    );
+
+    expect(screen.queryByText(/row\(s\) selected/)).not.toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+  });
+
   it('shows the empty message when there is no data', () => {
     render(<DataTable columns={columns} data={[]} />);
 
