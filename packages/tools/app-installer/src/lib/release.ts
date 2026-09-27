@@ -20,7 +20,7 @@ import {
   type TemplateDefinition,
 } from './layout.ts';
 import type { Reporter } from './output.ts';
-import { currentNodeMajor, rebuildCommand } from './prechecks.ts';
+import { currentNodeMajor, rebuildCommandLine } from './prechecks.ts';
 import { normalizeRegistry } from './registry.ts';
 import {
   CommandFailedError,
@@ -249,7 +249,7 @@ export async function unpackRelease(
           {
             message:
               'Build the archive for this machine in the application project, then run this again:',
-            run: rebuildCommand(),
+            run: rebuildCommandLine(),
           },
         ],
       });
@@ -270,7 +270,7 @@ export async function unpackRelease(
             {
               message:
                 'Upgrade @nocobase/app-cli in the application project, build the archive again, then run this again:',
-              run: rebuildCommand(),
+              run: rebuildCommandLine(),
             },
           ],
         },
@@ -448,11 +448,11 @@ export function checkArchiveDriver(dir: string, dialect: string): void {
       suggestions: [
         {
           message: 'Add the driver in the application project:',
-          run: `pnpm add ${driver}`,
+          run: { command: 'pnpm', args: ['add', driver] },
         },
         {
           message: 'Then build the archive again:',
-          run: rebuildCommand(),
+          run: rebuildCommandLine(),
         },
       ],
     },
@@ -473,7 +473,7 @@ export function assertStorageOutsideRelease(dir: string): void {
         {
           message:
             'Upgrade @nocobase/app-server and @nocobase/app-cli in the application project, then build the archive again:',
-          run: rebuildCommand(),
+          run: rebuildCommandLine(),
         },
       ],
     },
