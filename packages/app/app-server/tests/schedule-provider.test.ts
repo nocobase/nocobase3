@@ -100,16 +100,13 @@ describe('ScheduleExecuteServiceProvider', () => {
     await executor.addJob(definition);
     await executor.setup({ consume: false });
 
-    // The state lock is held only while a write runs.
-    expect(await readdir(path.join(rootDir, 'storage', 'schedule'))).toEqual([
-      'crm.%40nocobase%2Fapp-plugin-scheduler.json',
-    ]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
       { scope: SCOPE },
       expect.stringMatching(/built-in memory schedule configuration/u),
     );
 
+    // The memory adapter writes its state when it shuts down.
     await provider.shutdown();
     expect(await readdir(path.join(rootDir, 'storage', 'schedule'))).toEqual([
       'crm.%40nocobase%2Fapp-plugin-scheduler.json',
@@ -148,12 +145,12 @@ describe('ScheduleExecuteServiceProvider', () => {
       .getScheduleExecutor(SCOPE);
     await executor.setup({ consume: false });
     await executor.addJob((await job()).job);
+    await provider.shutdown();
 
     expect(await readdir(path.join(rootDir, 'custom'))).toEqual([
       'crm-legacy.%40nocobase%2Fapp-plugin-scheduler.json',
     ]);
     expect(logger.warn).not.toHaveBeenCalled();
-    await provider.shutdown();
   });
 
   it('starts nothing and shuts down safely when nothing was used', async () => {

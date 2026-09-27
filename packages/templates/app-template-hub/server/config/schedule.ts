@@ -6,9 +6,9 @@ import type { AppScheduleConfig } from '@nocobase/app-server/schedule';
 
 /**
  * Configurations the schedule service can run on. None is the default: until `schedule.default` names one, executors
- * run on the built-in memory adapter under storage/schedule, which the processes of one host share and which is
- * reported at startup outside development. Name `memory` to keep that choice without the report, or `redis` to run on
- * any number of hosts. Either way each firing is executed once.
+ * run on the built-in memory adapter, which serves one process and writes its state under storage/schedule when the
+ * application stops, and which is reported at startup outside development. Name `memory` to keep that choice without
+ * the report, or `redis` to run any number of instances with each firing executed once.
  */
 const schedule: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
   ({ paths }) => ({

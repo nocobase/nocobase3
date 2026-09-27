@@ -39,7 +39,7 @@ Every schedule points at a registered target; `registerTarget()` is the target e
 
 ## Development Loop
 
-1. Establish which tasks and execution records administrators need to see. Check Server/Client/CLI registration, page permissions, the application's `schedule` configuration (a `redis` adapter for more than one host; `memory` is shared by the processes of one host) and `ScheduleExecuteServiceProvider` composition, and target availability, then choose an application-owned target type or `workflow`.
+1. Establish which tasks and execution records administrators need to see. Check Server/Client/CLI registration, page permissions, the application's `schedule` configuration (a `redis` adapter for more than one instance; `memory` serves one process) and `ScheduleExecuteServiceProvider` composition, and target availability, then choose an application-owned target type or `workflow`.
 2. Implement business logic and Providers in application source, and call `schedulerServiceToken.defineSchedule(definition)` with an application-wide stable key from that Provider's `register()`/`boot()`.
 3. Validate payload/input, timezone, idempotency, and the full asynchronous chain: dispatch, actual business worker consumption, terminal notification, and recovery from persisted execution state. Obtain credentials through secure business Service configuration, never `target.config`.
 4. Run application type checks, relevant tests, and build. Synchronize definitions and, in development, use an administrator account to find the task in the UI and track a real execution to its final state. Confirm the business result.

@@ -11,14 +11,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { spawn, type ChildProcess } from 'node:child_process';
-import { createInterface } from 'node:readline';
-import { fileURLToPath } from 'node:url';
-
 import type { ResolvedMemoryScheduleExecutorConfig } from '../../src/config.js';
-import type { InMemoryScheduleBackendOptions } from '../../src/memory/backend.js';
 import { createMemoryScheduleExecutor } from '../../src/memory/index.js';
-import type { MemoryLockEnvironment } from '../../src/memory/lock.js';
 import type {
   ScheduleEvent,
   ScheduleExecutionContext,
@@ -62,16 +56,11 @@ function fakeLogger() {
 
 function create(
   overrides: Partial<ResolvedMemoryScheduleExecutorConfig> = {},
-  options: {
-    logger?: ReturnType<typeof fakeLogger>;
-    backend?: InMemoryScheduleBackendOptions;
-  } = {},
+  options: { logger?: ReturnType<typeof fakeLogger> } = {},
 ): ScheduleExecutor {
-  const executor = createMemoryScheduleExecutor(
-    config(overrides),
-    { logger: options.logger ?? fakeLogger() },
-    { pollInterval: 50, ...options.backend },
-  );
+  const executor = createMemoryScheduleExecutor(config(overrides), {
+    logger: options.logger ?? fakeLogger(),
+  });
   executors.push(executor);
   return executor;
 }
@@ -99,8 +88,6 @@ function record(executor: ScheduleExecutor): ScheduleEvent[] {
 
 const stateFile = () =>
   path.join(directory, 'crm.%40nocobase%2Fapp-plugin-scheduler.json');
-const lockFile = () =>
-  path.join(directory, 'crm.%40nocobase%2Fapp-plugin-scheduler.lock');
 const readState = async () =>
   JSON.parse(await readFile(stateFile(), 'utf8')) as {
     version: number;
@@ -108,21 +95,20 @@ const readState = async () =>
   };
 
 describe('InMemoryScheduler', () => {
-  it('names its state file by namespace and scope and holds no lock between writes', async () => {
+  it('names its state file by namespace and scope and writes it only on shutdown', async () => {
     const executor = create();
     await executor.addJob(everyJob(async () => undefined));
     await executor.setup({ consume: false });
+    await executor.addJob(everyJob(async () => undefined, { name: 'job-2' }));
 
-    expect(await readdir(directory)).toEqual([path.basename(stateFile())]);
-    await expect(readState()).resolves.toMatchObject({
-      version: 1,
-      revision: 1,
-      writer: { hostname: os.hostname(), pid: process.pid },
-      jobs: { 'job-1': { fired: 0 } },
-    });
+    expect(await readdir(directory)).toEqual([]);
 
     await executor.shutdown();
     expect(await readdir(directory)).toEqual([path.basename(stateFile())]);
+    await expect(readState()).resolves.toMatchObject({
+      version: 1,
+      jobs: { 'job-1': { fired: 0 }, 'job-2': { fired: 0 } },
+    });
   });
 
   it('runs a job with its context and reports start and end events', async () => {
@@ -200,7 +186,6 @@ describe('InMemoryScheduler', () => {
     };
 
     const created = await executor.addJob(hourly);
-    const before = await readFile(stateFile(), 'utf8');
     vi.setSystemTime(new Date('2030-01-01T00:30:00Z'));
     const repeated = await executor.addJob({ ...hourly, payload: { a: 1 } });
 
@@ -211,12 +196,16 @@ describe('InMemoryScheduler', () => {
       scheduledAt: new Date('2030-01-01T01:00:00Z'),
     });
     expect(repeated).toEqual(created);
-    expect(await readFile(stateFile(), 'utf8')).toBe(before);
     await expect(executor.getJob('hourly')).resolves.toEqual({
       jobName: 'hourly',
       options: { cron: '0 * * * *', tz: 'Asia/Shanghai' },
       payload: { a: 1 },
       nextRunAt: new Date('2030-01-01T01:00:00Z'),
+    });
+    await executor.shutdown();
+    expect((await readState()).jobs.hourly).toMatchObject({
+      nextRunAt: Date.parse('2030-01-01T01:00:00Z'),
+      fired: 0,
     });
   });
 
@@ -352,6 +341,7 @@ describe('InMemoryScheduler', () => {
 
     expect(runs).toHaveLength(count);
     await expect(executor.getJob('job-1')).resolves.toBeUndefined();
+    await executor.shutdown();
     expect((await readState()).jobs).toEqual({});
   });
 
@@ -572,36 +562,6 @@ describe('InMemoryScheduler', () => {
     expect(runs[0]!.scheduledAt).toEqual(startDate);
   });
 
-  it('does not run a firing whose state cannot be written', async () => {
-    const logger = fakeLogger();
-    const runs: string[] = [];
-    const executor = create({}, { logger });
-    await executor.addJob(
-      everyJob(
-        async (context) => {
-          runs.push(context.jobId);
-        },
-        {
-          options: {
-            every: 3_600_000,
-            startDate: new Date(Date.now() + 150),
-          },
-        },
-      ),
-    );
-    await executor.setup();
-    await chmod(directory, 0o500);
-
-    await vi.waitFor(() =>
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ jobName: 'job-1', statePath: stateFile() }),
-        expect.stringMatching(/Failed to persist a schedule firing/u),
-      ),
-    );
-    expect(runs).toEqual([]);
-    await chmod(directory, 0o755);
-  });
-
   it('keeps rules across shutdown and setup', async () => {
     const first = create();
     await first.addJob(
@@ -621,8 +581,12 @@ describe('InMemoryScheduler', () => {
     const executor = create();
 
     await expect(executor.setup()).rejects.toThrow(/format version 99/u);
-    // A refused setup releases the lock it took.
-    expect(await readdir(directory)).toEqual([path.basename(stateFile())]);
+    // A refused setup leaves the file it could not read alone.
+    await executor.shutdown();
+    expect(JSON.parse(await readFile(stateFile(), 'utf8'))).toEqual({
+      version: 99,
+      jobs: {},
+    });
   });
 
   it('refuses a state file that is not JSON', async () => {
@@ -631,22 +595,29 @@ describe('InMemoryScheduler', () => {
     await expect(create().setup()).rejects.toThrow(/not valid JSON/u);
   });
 
-  it('fails the operation when the state cannot be written', async () => {
+  it('fails shutdown when the state cannot be written, after stopping', async () => {
+    let runs = 0;
     const executor = create();
-    await executor.setup({ consume: false });
+    await executor.addJob(
+      everyJob(
+        async () => {
+          runs += 1;
+        },
+        { options: { every: 3_600_000 } },
+      ),
+    );
+    await executor.setup();
+    await vi.waitFor(() => expect(runs).toBe(1));
     await chmod(directory, 0o500);
 
-    // The lock is created in the same directory, so that is where it fails first.
-    await expect(
-      executor.addJob(everyJob(async () => undefined)),
-    ).rejects.toThrow(
-      /Failed to (?:write schedule state file|create schedule state lock)/u,
+    await expect(executor.shutdown()).rejects.toThrow(
+      /Failed to write schedule state file/u,
     );
     await chmod(directory, 0o755);
-    await expect(executor.countJob()).resolves.toBe(0);
+    expect(await readdir(directory)).toEqual([]);
   });
 
-  it('fails setup when a job added before it cannot be written', async () => {
+  it('fails setup when the persistence path is not a directory', async () => {
     const blocked = path.join(directory, 'not-a-directory');
     await writeFile(blocked, '');
     const executor = create({ persistencePath: blocked });
@@ -655,272 +626,43 @@ describe('InMemoryScheduler', () => {
     await expect(executor.setup()).rejects.toThrow();
   });
 
-  describe('several processes on one host', () => {
-    const host = (
-      hostname: string,
-      alive: boolean,
-      pid = 4242,
-    ): MemoryLockEnvironment => ({
-      hostname: () => hostname,
-      pid,
-      isAlive: () => alive,
-    });
-    const writeLock = (holder: object) =>
-      writeFile(lockFile(), JSON.stringify(holder));
+  describe('the state file', () => {
+    it('loses what changed since startup when the process ends without shutting down', async () => {
+      const first = create();
+      await first.addJob(everyJob(async () => undefined));
+      await first.setup({ consume: false });
+      await first.shutdown();
 
-    it('runs each firing once across executors sharing a state file', async () => {
-      const runs: string[] = [];
-      const executorsSharing = [0, 1, 2].map(() => create());
-      for (const [index, executor] of executorsSharing.entries()) {
-        await executor.addJob(
-          everyJob(
-            async (context) => {
-              runs.push(`${index} ${context.jobId}`);
-            },
-            { options: { every: 60 } },
-          ),
-        );
-      }
-      await Promise.all(executorsSharing.map((each) => each.setup()));
+      // A process that is killed never reaches shutdown().
+      const killed = create();
+      await killed.setup({ consume: false });
+      await killed.addJob(everyJob(async () => undefined, { name: 'job-2' }));
+      await killed.removeJob('job-1');
 
-      await vi.waitFor(() => expect(runs.length).toBeGreaterThanOrEqual(8), {
-        timeout: 5000,
-      });
-      await Promise.all(executorsSharing.map((each) => each.shutdown()));
-
-      const ids = runs.map((run) => run.split(' ')[1]);
-      expect(new Set(ids).size).toBe(ids.length);
-      const state = await readState();
-      expect(state.jobs['job-1']!.fired).toBe(ids.length);
+      const next = create();
+      await next.setup({ consume: false });
+      expect((await next.listJob(0, -1)).map((job) => job.jobName)).toEqual([
+        'job-1',
+      ]);
     });
 
-    it('runs each firing once across operating system processes', async () => {
-      const worker = fileURLToPath(
-        new URL('../fixtures/memory-worker.ts', import.meta.url),
+    it('is overwritten whole by the process that shuts down last', async () => {
+      const seed = create();
+      await seed.addJob(everyJob(async () => undefined));
+      await seed.setup({ consume: false });
+      await seed.shutdown();
+
+      const earlier = create();
+      const later = create();
+      await earlier.setup({ consume: false });
+      await later.setup({ consume: false });
+      await earlier.addJob(
+        everyJob(async () => undefined, { name: 'from-earlier' }),
       );
-      const lines: string[] = [];
-      const children: ChildProcess[] = [];
-      try {
-        for (const label of ['a', 'b', 'c']) {
-          const child = spawn(
-            process.execPath,
-            ['--import', 'tsx', worker, directory, label],
-            { stdio: ['pipe', 'pipe', 'inherit'] },
-          );
-          children.push(child);
-          createInterface({ input: child.stdout! }).on('line', (line) => {
-            lines.push(line);
-          });
-        }
-        await vi.waitFor(
-          () =>
-            expect(lines.filter((line) => line === 'ready')).toHaveLength(3),
-          { timeout: 20_000, interval: 50 },
-        );
-        await vi.waitFor(
-          () =>
-            expect(
-              lines.filter((line) => line !== 'ready').length,
-            ).toBeGreaterThanOrEqual(10),
-          { timeout: 20_000, interval: 50 },
-        );
-      } finally {
-        await Promise.all(
-          children.map(
-            (child) =>
-              new Promise<void>((resolve) => {
-                child.once('exit', () => resolve());
-                child.stdin!.end();
-              }),
-          ),
-        );
-      }
+      await earlier.shutdown();
+      await later.shutdown();
 
-      const firings = lines.filter((line) => line !== 'ready');
-      const ids = firings.map((line) => line.split(' ')[1]);
-      expect(new Set(ids).size).toBe(ids.length);
-      // Every process took part, not only the first one to start.
-      expect(new Set(firings.map((line) => line.split(' ')[0])).size).toBe(3);
-      const state = await readState();
-      expect(state.jobs['shared']!.fired).toBe(ids.length);
-    }, 60_000);
-
-    it('lets another process add, change and remove rules while one consumes', async () => {
-      const runs: string[] = [];
-      const consumer = create();
-      await consumer.addJob(
-        everyJob(
-          async (context) => {
-            runs.push(context.jobId);
-          },
-          { name: 'added-later', options: { every: 3_600_000 } },
-        ),
-        true,
-      );
-      await consumer.setup();
-
-      const writer = create();
-      await writer.setup({ consume: false });
-      await writer.addJob(
-        everyJob(async () => undefined, {
-          name: 'added-later',
-          options: { every: 50 },
-        }),
-      );
-      await vi.waitFor(() => expect(runs.length).toBeGreaterThanOrEqual(2));
-      await expect(consumer.getJob('added-later')).resolves.toMatchObject({
-        options: { every: 50 },
-      });
-
-      await writer.removeJob('added-later');
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      const count = runs.length;
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      expect(runs).toHaveLength(count);
-      await expect(consumer.getJob('added-later')).resolves.toBeUndefined();
-    });
-
-    it('reads without taking the lock', async () => {
-      const executor = create();
-      await executor.addJob(everyJob(async () => undefined));
-      await executor.setup({ consume: false });
-      await writeLock({
-        hostname: os.hostname(),
-        pid: process.pid,
-        acquiredAt: new Date().toISOString(),
-        token: 'held',
-      });
-
-      await expect(executor.getJob('job-1')).resolves.toBeDefined();
-      await expect(executor.countJob()).resolves.toBe(1);
-      await expect(executor.listJob(0, -1)).resolves.toHaveLength(1);
-      // An unchanged write is decided without the lock too.
-      await expect(
-        executor.addJob(everyJob(async () => undefined)),
-      ).resolves.toMatchObject({ code: 1000 });
-    });
-
-    it('waits for a lock held by a running process', async () => {
-      const executor = create({}, { backend: { lockRetryDelay: 5 } });
-      await executor.setup({ consume: false });
-      await writeLock({
-        hostname: os.hostname(),
-        pid: process.pid,
-        acquiredAt: new Date().toISOString(),
-        token: 'held',
-      });
-      setTimeout(() => void rm(lockFile(), { force: true }), 150);
-
-      const started = Date.now();
-      await executor.addJob(everyJob(async () => undefined));
-
-      expect(Date.now() - started).toBeGreaterThanOrEqual(100);
-      await expect(executor.countJob()).resolves.toBe(1);
-    });
-
-    it('gives up on a lock that stays held past the timeout', async () => {
-      const executor = create(
-        {},
-        { backend: { lockTimeout: 150, lockRetryDelay: 5 } },
-      );
-      await executor.setup({ consume: false });
-      await writeLock({
-        hostname: os.hostname(),
-        pid: process.pid,
-        acquiredAt: new Date().toISOString(),
-        token: 'held',
-      });
-
-      await expect(
-        executor.addJob(everyJob(async () => undefined)),
-      ).rejects.toThrow(
-        new RegExp(
-          `${lockFile().replaceAll('.', '\\.')}.*pid ${process.pid}`,
-          'u',
-        ),
-      );
-    });
-
-    it('takes over a lock left by a process that no longer runs', async () => {
-      await writeLock({
-        hostname: 'host-a',
-        pid: 1111,
-        acquiredAt: new Date().toISOString(),
-        token: 'dead',
-      });
-      const logger = fakeLogger();
-      const executor = create(
-        {},
-        { logger, backend: { lockEnvironment: host('host-a', false) } },
-      );
-      await executor.setup({ consume: false });
-
-      await executor.addJob(everyJob(async () => undefined));
-
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ lockPath: lockFile(), pid: 1111 }),
-        expect.stringMatching(/no longer runs/u),
-      );
-      expect(await readdir(directory)).toEqual([path.basename(stateFile())]);
-    });
-
-    it('takes over a lock held for longer than any write takes', async () => {
-      await writeLock({
-        hostname: 'another-host',
-        pid: 1111,
-        acquiredAt: new Date(Date.now() - 60_000).toISOString(),
-        token: 'old',
-      });
-      const logger = fakeLogger();
-      const executor = create(
-        {},
-        { logger, backend: { lockStaleAfter: 30_000 } },
-      );
-      await executor.setup({ consume: false });
-
-      await executor.addJob(everyJob(async () => undefined));
-
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ lockPath: lockFile(), pid: 1111 }),
-        expect.stringMatching(/held for longer/u),
-      );
-    });
-
-    it('refuses to keep writing a state file another host writes too', async () => {
-      const executor = create();
-      await executor.setup({ consume: false });
-      await executor.addJob(everyJob(async () => undefined));
-      const other = create(
-        {},
-        { backend: { lockEnvironment: host('other-host', true, 7) } },
-      );
-      await other.setup({ consume: false });
-      await other.addJob(
-        everyJob(async () => undefined, { name: 'from-other-host' }),
-      );
-
-      await expect(
-        executor.addJob(everyJob(async () => undefined, { name: 'job-2' })),
-      ).rejects.toThrow(/written from host "other-host" as well/u);
-    });
-
-    it('adopts a state file last written by another host, as after moving it', async () => {
-      const previous = create(
-        {},
-        { backend: { lockEnvironment: host('old-host', true, 7) } },
-      );
-      await previous.setup({ consume: false });
-      await previous.addJob(everyJob(async () => undefined));
-      await previous.shutdown();
-
-      const executor = create();
-      await executor.setup({ consume: false });
-
-      await expect(
-        executor.addJob(everyJob(async () => undefined, { name: 'job-2' })),
-      ).resolves.toMatchObject({ code: 1000 });
-      await expect(executor.countJob()).resolves.toBe(2);
+      expect(Object.keys((await readState()).jobs)).toEqual(['job-1']);
     });
   });
 });

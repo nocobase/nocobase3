@@ -70,7 +70,7 @@ export class ScheduleExecuteServiceProvider extends ServiceProvider<AppPluginApp
         ...(logger ? { logger } : {}),
         onFallback: (event: ScheduleFallbackEvent) => {
           if (!reportFallback) return;
-          const message = `Scope "${event.scope}" runs on the built-in memory schedule configuration: its jobs are shared by the processes of this host only, and instances on other hosts would each run their own copy. Set schedule.default to a redis configuration to run on more than one host.`;
+          const message = `Scope "${event.scope}" runs on the built-in memory schedule configuration: its jobs live in this process and reach storage only when it shuts down, and every other process or instance would run its own copy. Set schedule.default to a redis configuration to run more than one.`;
           if (logger) logger.warn({ scope: event.scope }, message);
           else console.warn(message);
         },
