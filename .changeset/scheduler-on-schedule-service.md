@@ -8,7 +8,7 @@ Schedule through `@nocobase/schedule` instead of the queue's schedule projection
 
 - **No migration from the queue.** Rules are not carried over from `queue_schedules`, nor pending jobs from `queue_jobs`. Each schedule's rule is written again on the next start and its run count starts from zero; its definition, enablement and occurrence history are kept.
 - **One run per firing across instances** on the `redis` schedule adapter. On `memory`, the built-in default, schedules serve one process.
-- **Every start repairs the rules.** Synchronization removes again the rule of every disabled definition and of every definition `--finalize` deactivated, so a removal that was lost — on `memory`, a running application overwrites what `nb3 schedule:sync` wrote when it stops — takes effect at the next start.
+- **Every start repairs the rules.** Synchronization removes again the rule of every disabled definition and of every definition `--finalize` deactivated, so a removal that was lost — on `memory`, a running application overwrites what `nocobase scheduler sync` wrote when it stops — takes effect at the next start.
 - **Occurrences.** An occurrence's id is the firing's job id, so a firing delivered twice records and starts its target once. A target that is not ready now records a `skipped` occurrence instead of failing.
 - **Limits.** Disabling and re-enabling a schedule, or changing its definition, continues from the firings already run rather than restarting its limit.
 

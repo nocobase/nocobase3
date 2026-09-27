@@ -1,6 +1,6 @@
 ---
 '@nocobase/create-app': patch
-'@nocobase/app-tools': patch
+'@nocobase/app-cli': patch
 ---
 
 Record `msgpackr-extract` as a deliberate install-script skip in generated applications and in the deployable `dist/`

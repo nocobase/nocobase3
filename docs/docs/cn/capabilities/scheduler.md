@@ -215,7 +215,7 @@ pnpm nocobase scheduler sync --json
 
 普通同步会加载完整应用、校验已注册目标、非破坏性 upsert 定义，并保留管理员在 UI 上做过的启停状态。应用正常启动时也会自动执行一次非破坏性同步，然后 Scheduler 开始按排程执行。
 
-排程在哪里运行由应用的 `schedule` 配置决定。没有设置 `schedule.default` 时使用内置的 memory 适配器：状态保存在进程内存中，启动时从 `storage/schedule` 读取，应用停止时写回，进程被强制结束时会丢失启动以来的变化。这个适配器下，运行中的应用停止时会覆盖 `schedule sync` 写入的内容，但不会因此丢失什么：每次启动都会从代码重新同步，并再次删除已停用和已失效定义的规则。部署多个实例前，在 `config.yml` 中把 `schedule.default` 设为 `redis`，每次触发只会在其中一个实例上执行。
+排程在哪里运行由应用的 `schedule` 配置决定。没有设置 `schedule.default` 时使用内置的 memory 适配器：状态保存在进程内存中，启动时从 `storage/schedule` 读取，应用停止时写回，进程被强制结束时会丢失启动以来的变化。这个适配器下，运行中的应用停止时会覆盖 `scheduler sync` 写入的内容，但不会因此丢失什么：每次启动都会从代码重新同步，并再次删除已停用和已失效定义的规则。部署多个实例前，在 `config.yml` 中把 `schedule.default` 设为 `redis`，每次触发只会在其中一个实例上执行。
 
 生产部署确认所有插件都已加载后，每个应用运行一次：
 
