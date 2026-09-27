@@ -83,6 +83,7 @@ describe('install --archive', () => {
     expect(state()).toMatchObject({
       appName: 'crm',
       basePath: '/crm',
+      templateKind: 'app',
       source: { kind: 'archive' },
     });
     expect(linked()).toBe(result.json.result?.releaseId);
@@ -147,6 +148,30 @@ describe('install --archive', () => {
     expect(result.code).toBe(1);
     expect(result.json.error?.code).toBe('STORAGE_IN_RELEASE');
     expect(existsSync(root)).toBe(false);
+  });
+
+  it('treats a Hub project deployed from an archive as a Hub', async () => {
+    const result = await install(
+      archive({ name: 'my-hub', version: '0.1.0', templateKind: 'hub' }),
+    );
+
+    expect(result.code).toBe(0);
+    expect(state()).toMatchObject({ templateKind: 'hub' });
+    // The Hub stops its App Host child itself, so pm2 must not kill the tree.
+    expect(
+      readFileSync(path.join(root, 'ecosystem.config.cjs'), 'utf8'),
+    ).toContain('treekill: false');
+    const asked = await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      archive({ name: 'my-hub', version: '0.2.0', templateKind: 'hub' }),
+    ]);
+    expect(asked.json.error?.code).toBe('CONFIRMATION_REQUIRED');
+    expect(JSON.stringify(asked.json.error?.details)).toContain(
+      'every application it hosts',
+    );
   });
 });
 
@@ -323,12 +348,139 @@ describe('upgrade --archive', () => {
     expect(warned.json.warnings.join('\n')).not.toContain('--rebuild');
     const refused = await hub(world, ['rollback', '--dir', root, '--yes']);
     expect(refused.json.error?.code).toBe('NODE_MISMATCH');
+    const advice = (
+      refused.json.error as unknown as {
+        suggestions: { message: string; run?: string }[];
+      }
+    ).suggestions;
+    expect(advice[0].run).toMatch(/^APP_BASE_PATH=\/crm pnpm build --target /u);
+    // The archive's path is not known, so the second step is prose rather than a command that would not run.
+    expect(advice[1].run).toBeUndefined();
+    expect(advice[1].message).toContain('--archive');
+  });
+
+  it('rolls back, on an archive that keeps its data inside the release, and reports why', async () => {
+    await install(archive({ version: '0.1.0' }));
+    const before = state().current;
+    world.ignoresStorageDir = true;
+    const result = await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      archive({ version: '0.2.0' }),
+      '--yes',
+    ]);
+
+    expect(result.code).toBe(3);
+    expect(result.json.error?.code).toBe('UPGRADE_ROLLED_BACK');
+    expect(result.json.error?.message).toContain('predates APP_STORAGE_DIR');
+    expect(linked()).toBe(before);
+    expect(state().current).toBe(before);
+  });
+
+  it('adopts a release directory on disk that installer.json does not record', async () => {
+    await install(archive({ version: '0.1.0' }));
+    const next = archive({ version: '0.2.0' });
+    const upgraded = await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      next,
+      '--yes',
+    ]);
+    await hub(world, ['rollback', '--dir', root, '--yes']);
+    // As left by a run interrupted after unpacking and before recording: the directory without its record.
+    const orphan = String(upgraded.json.result?.to);
+    const current = JSON.parse(
+      readFileSync(path.join(root, 'installer.json'), 'utf8'),
+    ) as { releases: { id: string }[]; history: { to: string }[] };
+    current.releases = current.releases.filter(
+      (record) => record.id !== orphan,
+    );
+    current.history = current.history.filter((entry) => entry.to !== orphan);
+    writeFileSync(path.join(root, 'installer.json'), JSON.stringify(current));
+
+    const result = await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      next,
+      '--yes',
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.json.result).toMatchObject({ to: orphan, reused: false });
+    expect(state().releases.map((record) => record.id)).toContain(orphan);
+  });
+
+  it('rolls back to the earlier build of a version deployed twice', async () => {
+    const first = await install(archive({ version: '0.1.0' }));
+    await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      archive({ version: '0.1.0' }),
+      '--yes',
+    ]);
+    const result = await hub(world, [
+      'rollback',
+      '--dir',
+      root,
+      '--to',
+      '0.1.0',
+      '--yes',
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.json.status).toBe('success');
+    expect(result.json.result?.to).toBe(first.json.result?.releaseId);
+  });
+
+  it('never suggests a command with a placeholder, and builds for the installed base path', async () => {
+    await install(archive({ version: '0.1.0' }));
+    const withoutArchive = await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--yes',
+    ]);
+    const suggestions = (
+      withoutArchive.json.error as unknown as {
+        suggestions: { message: string; run?: string }[];
+      }
+    ).suggestions;
+    expect(
+      suggestions.every((suggestion) => suggestion.run === undefined),
+    ).toBe(true);
+    expect(suggestions[0].message).toContain('--archive');
+
+    const missing = await hub(world, [
+      'upgrade',
+      '--dir',
+      root,
+      '--archive',
+      archive({ version: '0.2.0' }),
+      '--yes',
+    ]);
+    expect(missing.code).toBe(0);
+    const driver = await hub(world, [
+      'install',
+      path.join(temp.dir, 'erp'),
+      '--archive',
+      archive({ name: 'erp', version: '0.1.0', basePath: '/erp' }),
+      '--port',
+      String(await freePort()),
+      '--dialect',
+      'postgres',
+    ]);
+    expect(driver.json.error?.code).toBe('DRIVER_MISSING');
     const runs = (
-      refused.json.error as unknown as { suggestions: { run: string }[] }
+      driver.json.error as unknown as { suggestions: { run?: string }[] }
     ).suggestions.map((suggestion) => suggestion.run);
-    expect(runs[0]).toContain('pnpm build --target');
-    expect(runs[1]).toContain('upgrade --dir');
-    expect(runs[1]).toContain('--archive');
+    expect(runs[1]).toMatch(/^APP_BASE_PATH=\/erp pnpm build --target /u);
   });
 
   it('rolls back to the archive it came from', async () => {

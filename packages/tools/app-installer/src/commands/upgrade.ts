@@ -286,14 +286,10 @@ function checkUpgradeSource(
         `${root} was installed from a deployment archive; pass the new one with --archive.`,
         {
           exitCode: EXIT_INVALID,
+          // No `run`: a suggestion's command runs as printed, and the archive's path is not known here.
           suggestions: [
             {
-              message:
-                'Build it for this machine in the application project, copy it to the server, then run:',
-              run: installerCommand(
-                `upgrade --dir ${shellQuote(root)} --archive <archive>`,
-                { registry: state.registry },
-              ),
+              message: `Build it for this machine in the application project, copy it to the server, then run: ${installerCommand(`upgrade --dir ${shellQuote(root)} --archive <the copied archive>`, { registry: state.registry })}`,
             },
           ],
         },
@@ -346,7 +342,7 @@ function checkArchiveMatches(
         suggestions: [
           {
             message: `Build it again with APP_BASE_PATH=${state.basePath}:`,
-            run: `APP_BASE_PATH=${state.basePath} ${rebuildCommand()}`,
+            run: rebuildCommand(state.basePath),
           },
         ],
       },
@@ -581,6 +577,9 @@ export async function upgrade(
       healthUrl: url,
       fetchImpl: deps.fetchImpl,
     };
+    checkPlatform();
+    await checkPm2(pm2);
+    await checkPm2Ownership(service);
 
     // What to switch to. A template installation names a version and builds it after the prompt, since that takes
     // minutes; an archive has to be unpacked first, because only its manifest says which release it is.
@@ -613,9 +612,6 @@ export async function upgrade(
       }
       // Building the running version again, for this machine: it becomes a release of its own, switched to like any other.
       rebuildCurrent = flags.rebuild && targetVersion === from.version;
-      checkPlatform();
-      await checkPm2(pm2);
-      await checkPm2Ownership(service);
       reuse = flags.rebuild
         ? undefined
         : reusableBuild(state, layout, targetVersion);
@@ -628,11 +624,12 @@ export async function upgrade(
         deps.cwd ?? process.cwd(),
         flags.archive!,
       );
-      checkPlatform();
-      await checkPm2(pm2);
-      await checkPm2Ownership(service);
       reporter.progress(`Unpacking ${archive}`);
-      const unpacked = await unpackRelease({ layout, archive });
+      const unpacked = await unpackRelease({
+        layout,
+        archive,
+        basePath: state.basePath,
+      });
       const discard = async () => {
         if (!unpacked.reused) {
           await rm(path.dirname(unpacked.dir), {
@@ -643,7 +640,7 @@ export async function upgrade(
       };
       try {
         checkArchiveMatches(state, unpacked);
-        checkArchiveDriver(unpacked.dir, state.dialect);
+        checkArchiveDriver(unpacked.dir, state.dialect, state.basePath);
         if (unpacked.id === from.id) {
           return noop();
         }
@@ -818,7 +815,7 @@ export async function upgrade(
       await switchCurrent(layout, releaseLinkTarget(to.id));
       reporter.progress('Applying database migrations');
       await runAppCli(['db', 'apply'], cli);
-      assertStorageOutsideRelease(dir);
+      assertStorageOutsideRelease(dir, state.basePath);
       reporter.progress(`Starting ${to.id}`);
       const healthy = await startApp({
         ...service,

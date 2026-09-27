@@ -43,6 +43,7 @@ function state(overrides: Partial<InstallerState> = {}): InstallerState {
     schemaVersion: 1,
     appName: 'hub',
     basePath: '/hub',
+    templateKind: 'hub',
     source: {
       kind: 'template',
       template: 'hub',
@@ -258,6 +259,14 @@ describe('backup and restore', () => {
     await writeFile(layout.configFile, yaml);
     await writeFile(layout.appEnv, 'NODE_ENV=production\n');
   }
+
+  it('refuses to guess when config.yml cannot be parsed', async () => {
+    const layout = layoutOf(root);
+    await writeConfig(layout, 'database: [unterminated');
+    expect(() => readDatabaseInventory(layout, {})).toThrow(
+      expect.objectContaining({ code: 'CONFIG_UNREADABLE', exitCode: 2 }),
+    );
+  });
 
   it('finds every SQLite database config.yml declares, resolved against the storage directory', async () => {
     const layout = layoutOf(root);

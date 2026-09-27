@@ -135,6 +135,7 @@ export interface ReleaseManifest {
     buildTarget?: BuildTarget;
     basePath?: string;
     builtAt?: string;
+    templateKind?: string;
   };
 }
 
@@ -155,6 +156,8 @@ export interface PreparedRelease {
   builtAt: string;
   basePath: string;
   buildTarget: BuildTarget;
+  /** `nocobase.templateKind` from the manifest: `hub` for a Hub, `app` for an application; absent from older builds. */
+  templateKind?: string;
   /** The release was already on disk under this id, so nothing was unpacked. */
   reused: boolean;
 }
@@ -168,6 +171,8 @@ export interface UnpackOptions {
    * lacks them is refused before this is called.
    */
   fallback?: { builtAt: string; basePath: string };
+  /** The base path the installation serves, so a suggested build command builds for it. */
+  basePath?: string;
 }
 
 function stepFailure(
@@ -240,7 +245,7 @@ export async function unpackRelease(
           {
             message:
               'Build the archive for this machine in the application project, then run this again:',
-            run: rebuildCommand(),
+            run: rebuildCommand(options.basePath),
           },
         ],
       });
@@ -258,7 +263,7 @@ export async function unpackRelease(
             {
               message:
                 'Upgrade @nocobase/app-cli in the application project, build the archive again, then run this again:',
-              run: rebuildCommand(),
+              run: rebuildCommand(options.basePath),
             },
           ],
         },
@@ -279,6 +284,7 @@ export async function unpackRelease(
       builtAt,
       basePath,
       buildTarget,
+      templateKind: manifest.nocobase?.templateKind,
       reused,
     };
   } finally {
@@ -419,7 +425,11 @@ export async function buildFromTemplate(
  * A deployment archive carries its database drivers in `dist/node_modules`, installed when it was built; nothing adds
  * one afterwards. A dialect whose driver is absent would fail only when the application first connects.
  */
-export function checkArchiveDriver(dir: string, dialect: string): void {
+export function checkArchiveDriver(
+  dir: string,
+  dialect: string,
+  basePath?: string,
+): void {
   if (dialect === 'sqlite') return;
   const driver = `@nocobase/db-${dialect}`;
   if (existsSync(path.join(dir, 'dist/node_modules', driver, 'package.json'))) {
@@ -435,7 +445,10 @@ export function checkArchiveDriver(dir: string, dialect: string): void {
           message: 'Add the driver in the application project:',
           run: `pnpm add ${driver}`,
         },
-        { message: 'Then build the archive again:', run: rebuildCommand() },
+        {
+          message: 'Then build the archive again:',
+          run: rebuildCommand(basePath),
+        },
       ],
     },
   );
@@ -445,7 +458,10 @@ export function checkArchiveDriver(dir: string, dialect: string): void {
  * A release older than `APP_STORAGE_DIR` ignores it and keeps its data in `storage/` beside `dist/`, inside the release
  * directory, where the next upgrade would leave it behind. Its first database write shows it.
  */
-export function assertStorageOutsideRelease(dir: string): void {
+export function assertStorageOutsideRelease(
+  dir: string,
+  basePath?: string,
+): void {
   if (!existsSync(path.join(dir, 'storage'))) return;
   throw new InstallerError(
     'STORAGE_IN_RELEASE',
@@ -455,7 +471,7 @@ export function assertStorageOutsideRelease(dir: string): void {
         {
           message:
             'Upgrade @nocobase/app-server and @nocobase/app-cli in the application project, then build the archive again:',
-          run: rebuildCommand(),
+          run: rebuildCommand(basePath),
         },
       ],
     },

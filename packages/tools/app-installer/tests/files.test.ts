@@ -345,6 +345,7 @@ describe('installer.json', () => {
     schemaVersion: 1,
     appName: 'crm',
     basePath: '/crm',
+    templateKind: 'app',
     source: { kind: 'archive' },
     name: 'nocobase-crm',
     registry: 'https://npm.nocobase.ai',
