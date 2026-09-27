@@ -4254,9 +4254,6 @@ importers:
       '@refinedev/react-table':
         specifier: ^6.0.0
         version: 6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@shadcn/react':
-        specifier: ^0.3.1
-        version: 0.3.1(@types/react@19.2.18)(react@19.2.8)
       '@silurus/ooxml':
         specifier: 0.85.1
         version: 0.85.1
@@ -4326,9 +4323,9 @@ importers:
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
-      cmdk:
-        specifier: ^1.1.1
-        version: 1.1.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      cn:
+        specifier: ^0.4.0
+        version: 0.4.0
       date-fns:
         specifier: ^4.1.0
         version: 4.4.0
@@ -4344,9 +4341,6 @@ importers:
       echarts-for-react:
         specifier: 3.0.2
         version: 3.0.2(echarts@5.6.0)(react@19.2.8)
-      embla-carousel-react:
-        specifier: ^8.6.0
-        version: 8.6.0(react@19.2.8)
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -4356,9 +4350,6 @@ importers:
       ignore:
         specifier: 'catalog:'
         version: 7.0.6
-      input-otp:
-        specifier: ^1.4.2
-        version: 1.4.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
@@ -4398,15 +4389,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
-      react-resizable-panels:
-        specifier: ^4.12.2
-        version: 4.12.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      recharts:
-        specifier: ^3.8.0
-        version: 3.10.1(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@19.2.8)(react@19.2.8)(redux@5.0.1)
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
@@ -9844,6 +9829,11 @@ packages:
 
   cn@0.2.6:
     resolution: {integrity: sha512-+i4L0zUGgRcEnhsxueVrP7iBGxBx5iD0WOTYg1MwFEu2ZyCmH5Ov2V1cul2Ht5UchRQQgftCf4be/RxspuW6QQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  cn@0.4.0:
+    resolution: {integrity: sha512-qOAeUhPwPzBxx6jaeQdo646XIKliKHc2j1ZF7Ngb1o0pJZKH5gq8FkA0aVdUdPFUDXNXyUCXpCtoJISo6dhizg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -20644,6 +20634,8 @@ snapshots:
       - '@types/react-dom'
 
   cn@0.2.6: {}
+
+  cn@0.4.0: {}
 
   coa@2.0.2:
     dependencies:
