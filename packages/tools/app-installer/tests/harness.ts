@@ -205,7 +205,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
         }),
       );
       return {
-        stdout: '{"status":"success","stage":"complete"}\n',
+        stdout: `${JSON.stringify({ schemaVersion: 1, ok: true, command: 'create-app', status: 'success', result: {}, warnings: [] })}\n`,
         stderr: '',
       };
     }

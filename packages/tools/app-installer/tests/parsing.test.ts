@@ -108,14 +108,51 @@ describe('create-app result', () => {
   it('reads the last JSON line among pnpm notices', () => {
     const stdout = [
       'Progress: resolved 1, reused 0, downloaded 1, added 1, done',
-      '{"status":"success","stage":"complete","nextCommands":[]}',
+      JSON.stringify({
+        schemaVersion: 1,
+        ok: true,
+        command: 'create-app',
+        status: 'success',
+        result: { nextCommands: [] },
+        warnings: [],
+      }),
       '',
     ].join('\n');
-    expect(parseCreateResult(stdout)).toMatchObject({
-      status: 'success',
-      stage: 'complete',
-    });
-    expect(parseCreateResult('no json here')).toEqual({});
+    expect(parseCreateResult(stdout)).toMatchObject({ ok: true });
+    expect(parseCreateResult('no json here')).toEqual({ ok: false });
+  });
+
+  it('reads the stage and message a failure reports', () => {
+    expect(
+      parseCreateResult(
+        JSON.stringify({
+          schemaVersion: 1,
+          ok: false,
+          command: 'create-app',
+          status: 'failure',
+          error: {
+            code: 'INSTALL_FAILED',
+            message: 'installation failed',
+            suggestions: [],
+            details: { stage: 'install', projectCreated: true },
+          },
+          warnings: [],
+        }),
+      ),
+    ).toEqual({ ok: false, stage: 'install', message: 'installation failed' });
+  });
+
+  it('reads the flat result a create-app from before the envelope prints', () => {
+    expect(
+      parseCreateResult(
+        '{"status":"success","stage":"complete","nextCommands":[]}',
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      parseCreateResult(
+        '{"status":"error","stage":"install","message":"installation failed"}',
+      ),
+    ).toEqual({ ok: false, stage: 'install', message: 'installation failed' });
   });
 });
 

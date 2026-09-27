@@ -59,25 +59,46 @@ export function installEnv(
   return { ...base, PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0' };
 }
 
-/** `pnpm create` prints pnpm's own notices around create-app's result; the result is the last line that parses. */
-export function parseCreateResult(stdout: string): {
+/** What the installer reads from create-app's `--json` result. */
+export interface CreateResult {
+  /** Whether a result was printed and says the project was created. */
+  ok: boolean;
+  /** The stage a failure stopped at, such as `install`. */
+  stage?: string;
+  message?: string;
+}
+
+interface CreateJson {
+  ok?: boolean;
   status?: string;
   stage?: string;
   message?: string;
-} {
+  error?: { message?: string; details?: { stage?: unknown } };
+}
+
+/**
+ * `pnpm create` prints pnpm's own notices around create-app's result; the result is the last line that parses. It is
+ * the application CLI's envelope, with the stage under `error.details`. `pnpm create` runs whichever create-app the
+ * registry serves as latest, so the flat `status`, `stage` and `message` a create-app before that envelope printed are
+ * read too.
+ */
+export function parseCreateResult(stdout: string): CreateResult {
   for (const line of stdout.trim().split('\n').reverse()) {
     if (!line.startsWith('{')) continue;
+    let parsed: CreateJson;
     try {
-      return JSON.parse(line) as {
-        status?: string;
-        stage?: string;
-        message?: string;
-      };
+      parsed = JSON.parse(line) as CreateJson;
     } catch {
-      // Not the result line.
+      continue;
     }
+    const stage = parsed.error?.details?.stage;
+    return {
+      ok: parsed.ok ?? parsed.status === 'success',
+      stage: typeof stage === 'string' ? stage : parsed.stage,
+      message: parsed.error?.message ?? parsed.message,
+    };
   }
-  return {};
+  return { ok: false };
 }
 
 /**
@@ -354,10 +375,10 @@ export async function buildFromTemplate(
       ));
     } catch (error) {
       if (isInstallerError(error)) throw error;
-      const result =
+      const result: CreateResult =
         error instanceof CommandFailedError
           ? parseCreateResult(error.stdout)
-          : {};
+          : { ok: false };
       throw new InstallerError(
         'CREATE_FAILED',
         `create-app failed${result.stage ? ` at its ${result.stage} stage` : ''}: ${result.message ?? (error instanceof Error ? error.message : String(error))}`,
@@ -370,7 +391,7 @@ export async function buildFromTemplate(
       );
     }
     const created = parseCreateResult(createStdout);
-    if (created.status !== 'success') {
+    if (!created.ok) {
       throw new InstallerError(
         'CREATE_FAILED',
         `create-app did not succeed: ${created.message ?? 'no result'}`,

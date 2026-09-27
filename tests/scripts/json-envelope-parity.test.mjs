@@ -9,19 +9,22 @@ import {
   CommandError,
   describeCommandError,
 } from '../../packages/app/app-cli/src/command/errors.ts';
-import { unsupportedNodeVersionEnvelope } from '../../packages/tools/app-installer/bin/node-version.js';
+import { unsupportedNodeVersionEnvelope as installerGuard } from '../../packages/tools/app-installer/bin/node-version.js';
 import { InstallerError } from '../../packages/tools/app-installer/src/lib/errors.ts';
-import {
-  errorEnvelope,
-  successEnvelope,
-} from '../../packages/tools/app-installer/src/lib/output.ts';
+import * as installer from '../../packages/tools/app-installer/src/lib/output.ts';
+import { unsupportedNodeVersionEnvelope as createAppGuard } from '../../packages/tools/create-app/bin/node-version.js';
+import * as createApp from '../../packages/tools/create-app/src/lib/output.ts';
+import { unsupportedNodeVersionEnvelope as createPluginGuard } from '../../packages/tools/create-plugin/bin/node-version.js';
+import * as createPlugin from '../../packages/tools/create-plugin/src/lib/output.ts';
 
-// app-installer promises that a script which reads `pnpm nocobase … --json` reads its `--json` the same way. The two
-// packages cannot import each other — app-installer runs on a server before any application exists — so each keeps
-// its own envelope, and they drifted once: app-installer reported a failure as `error` where the application CLI says
-// `failure`, and named a suggestion's command as a shell line where the application CLI gives `{ command, args }`.
-// This builds the same outcome through both and compares what a script actually reads: the serialized document,
-// member order included.
+// Every tool this repository publishes answers `--json` in the application CLI's envelope, so an agent reads
+// `pnpm create @nocobase/app`, `pnpm plugin:create`, app-installer and `pnpm nocobase …` the same way. The standalone
+// tools run before any application exists and cannot depend on `@nocobase/app-cli`, so each keeps its own copy, and
+// the copies drifted: app-installer reported a failure as `error` and a suggestion's command as a shell line,
+// create-plugin printed a failure on stderr and named itself `operation`, and create-app had a flat result of its own.
+// This builds the same outcomes through each tool and through the application CLI, and compares what a caller
+// actually reads: the serialized document, member order included. A new standalone tool that takes `--json` belongs in
+// `tools` below.
 
 const printed = (envelope) => JSON.stringify(envelope);
 
@@ -39,80 +42,114 @@ const failure = {
   details: { freePort: 13001 },
 };
 
-function appCliFailure({ details } = failure) {
-  const error = new CommandError(failure.message, {
-    code: failure.code,
-    suggestions: failure.suggestions,
-    details,
-    exit: 2,
-  });
-  return commandFailureJson('install', describeCommandError(error).json, [
-    'a warning',
-  ]);
-}
-
-function installerFailure({ details } = failure) {
-  const error = new InstallerError(failure.code, failure.message, {
-    exitCode: 2,
-    suggestions: failure.suggestions,
-    details,
-  });
-  return errorEnvelope('install', error, ['a warning']);
-}
-
-test('a success prints the same document from both CLIs', () => {
-  for (const status of ['success', 'success-noop']) {
-    assert.equal(
-      printed(
-        successEnvelope('status', { current: '1.0.0' }, ['a warning'], status),
+const tools = [
+  {
+    name: 'app-installer',
+    command: 'install',
+    statuses: ['success', 'success-noop'],
+    warnings: ['a warning'],
+    success: (result, status, warnings) =>
+      installer.successEnvelope('install', result, warnings, status),
+    failure: ({ code, message, suggestions, details }, warnings) =>
+      installer.errorEnvelope(
+        'install',
+        new InstallerError(code, message, { suggestions, details }),
+        warnings,
       ),
-      printed(
-        commandSuccessJson('status', status, { current: '1.0.0' }, [
-          'a warning',
-        ]),
-      ),
-    );
-  }
-});
+    guard: () => installerGuard('install', 'v22.0.0'),
+  },
+  {
+    name: 'create-app',
+    command: 'create-app',
+    statuses: ['success'],
+    warnings: ['a warning'],
+    success: (result, _status, warnings) =>
+      createApp.successEnvelope(result, warnings),
+    failure: (error, warnings) => createApp.failureEnvelope(error, warnings),
+    guard: () => createAppGuard('v22.0.0'),
+  },
+  {
+    name: 'create-plugin',
+    command: 'create-plugin',
+    statuses: ['success', 'success-noop'],
+    // create-plugin has nothing to warn about, so its envelopes always carry an empty list.
+    warnings: [],
+    success: (result, status) => createPlugin.successEnvelope(result, status),
+    failure: (error) => createPlugin.failureEnvelope(error),
+    guard: () => createPluginGuard('v22.0.0'),
+  },
+];
 
-test('a success with no result prints `result: null` from both CLIs', () => {
-  assert.equal(
-    printed(successEnvelope('status', undefined, [])),
-    printed(commandSuccessJson('status', 'success', undefined, [])),
-  );
-});
-
-test('a failure prints the same document from both CLIs, suggestions and details included', () => {
-  assert.equal(printed(installerFailure()), printed(appCliFailure()));
-  assert.equal(JSON.parse(printed(installerFailure())).status, 'failure');
-});
-
-test('a failure without details leaves `details` out in both CLIs', () => {
-  assert.equal(
-    printed(installerFailure({ details: undefined })),
-    printed(appCliFailure({ details: undefined })),
-  );
-});
-
-test('an unexpected error prints the same document from both CLIs', () => {
-  const error = new Error('Something broke.');
-  assert.equal(
-    printed(errorEnvelope('status', error, [])),
-    printed(commandFailureJson('status', describeCommandError(error).json, [])),
-  );
-});
-
-test("app-installer's Node.js guard answers in the application CLI's failure envelope", () => {
-  const guard = unsupportedNodeVersionEnvelope('install', 'v22.0.0');
-  const reference = commandFailureJson(
-    'install',
+function appCliFailure(command, error, warnings) {
+  return commandFailureJson(
+    command,
     describeCommandError(
-      new CommandError(guard.error.message, {
-        code: guard.error.code,
-        suggestions: guard.error.suggestions,
+      new CommandError(error.message, {
+        code: error.code,
+        suggestions: error.suggestions,
+        details: error.details,
       }),
     ).json,
-    [],
+    warnings,
   );
-  assert.equal(printed(guard), printed(reference));
+}
+
+for (const tool of tools) {
+  test(`${tool.name}: a success prints the application CLI's document`, () => {
+    for (const status of tool.statuses) {
+      assert.equal(
+        printed(tool.success({ current: '1.0.0' }, status, tool.warnings)),
+        printed(
+          commandSuccessJson(
+            tool.command,
+            status,
+            { current: '1.0.0' },
+            tool.warnings,
+          ),
+        ),
+      );
+    }
+  });
+
+  test(`${tool.name}: a success with no result prints \`result: null\``, () => {
+    assert.equal(
+      printed(tool.success(undefined, 'success', tool.warnings)),
+      printed(
+        commandSuccessJson(tool.command, 'success', undefined, tool.warnings),
+      ),
+    );
+  });
+
+  test(`${tool.name}: a failure prints the application CLI's document, suggestions and details included`, () => {
+    const envelope = tool.failure(failure, tool.warnings);
+    assert.equal(
+      printed(envelope),
+      printed(appCliFailure(tool.command, failure, tool.warnings)),
+    );
+    assert.equal(envelope.status, 'failure');
+  });
+
+  test(`${tool.name}: a failure without details leaves \`details\` out`, () => {
+    const withoutDetails = { ...failure, details: undefined };
+    assert.equal(
+      printed(tool.failure(withoutDetails, tool.warnings)),
+      printed(appCliFailure(tool.command, withoutDetails, tool.warnings)),
+    );
+  });
+
+  test(`${tool.name}: its Node.js check answers in the application CLI's failure envelope`, () => {
+    const guard = tool.guard();
+    assert.equal(
+      printed(guard),
+      printed(appCliFailure(tool.command, guard.error, [])),
+    );
+  });
+}
+
+test("app-installer: an unexpected error prints the application CLI's document", () => {
+  const error = new Error('Something broke.');
+  assert.equal(
+    printed(installer.errorEnvelope('status', error, [])),
+    printed(commandFailureJson('status', describeCommandError(error).json, [])),
+  );
 });
