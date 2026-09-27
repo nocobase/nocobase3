@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-installer
-description: Install, upgrade, roll back and check a NocoBase 3 application on a server with `@nocobase/app-installer` — a deployment archive built by `pnpm build --tar`, or an unmodified Hub built from its published template. Use when the user asks to install, deploy, upgrade or roll back a NocoBase application or Hub on a server without Docker, or when the directory holds an `installer.json` written by app-installer. Not for developing an application, and not for publishing an application to a Hub.
+description: Install, upgrade, roll back and check NocoBase 3 with `@nocobase/app-installer` — a NocoBase Hub built from its published template, or an application's deployment archive built by `pnpm build --tar`. Use when the user asks to install a NocoBase Hub, to deploy an application to a server with app-installer or from a deployment archive, to upgrade or roll back such an installation, or when the directory holds an `installer.json` written by app-installer. Not for installing or trying NocoBase to develop an application, which is the `nocobase-create-app` Skill, and not for publishing an application to an existing Hub.
 ---
 
 # Run a NocoBase 3 application with app-installer
@@ -31,9 +31,16 @@ NocoBase 3 publishes to `https://npm.nocobase.ai`, not to the public npm, so a b
 
 Settle this with the user before installing anything:
 
-- The user has an application project and wants it on a server without a Hub or containers: build an archive and install it with `--archive`. This is the usual route.
-- The user wants an unmodified Hub on a server with Node.js: `--template hub`. A Hub whose source will change is an application project: create it with the `nocobase-create-app` Skill (`pnpm create @nocobase/app <name>` takes `--template=hub`) and deploy its archive like any other.
-- Docker is available and preferred, or the user wants a Hub to publish applications to: follow the deployment documentation instead, https://github.com/nocobase/nocobase3/tree/develop/docs/docs/en/app/deployment.
+| The user asks to                                                                   | Route                                                                                    |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Install a NocoBase Hub                                                             | This Skill, `--template hub`                                                             |
+| Deploy an application to a server with app-installer, or from a deployment archive | This Skill, `--archive`                                                                  |
+| Install, create or try NocoBase, to develop or use an application                  | The `nocobase-create-app` Skill                                                          |
+| Change the Hub's own code                                                          | The `nocobase-create-app` Skill with `--template=hub`, then this Skill's `--archive`     |
+| Publish an application to an existing Hub                                          | The application's own `nocobase-deployment` Skill (`release upload`), not this one       |
+| Run it with Docker                                                                 | The deployment documentation, https://github.com/nocobase/nocobase3/tree/develop/docs/docs/en/app/deployment |
+
+A request that names the Hub is this Skill's `--template hub` unless the user says the Hub's own code will change. A plain "install NocoBase" is `nocobase-create-app`; hand over to it rather than installing a Hub or an archive.
 
 When the working directory already holds `installer.json`, the installation exists: start with `status`, whose `source` says which route it took.
 
