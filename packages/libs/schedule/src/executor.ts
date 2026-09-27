@@ -81,8 +81,16 @@ export interface ScheduleBackend {
   readonly settings: ScheduleExecutionSettings;
   open(): Promise<void>;
   read(name: string): Promise<StoredScheduleRule | undefined>;
-  /** Writes a rule, replacing any other of the name, and returns its next planned firing. */
-  write(rule: ScheduleRuleWrite): Promise<Date | undefined>;
+  /**
+   * Writes a rule, replacing any other of the name, and returns its next
+   * planned firing. A backend that can decide atomically checks `unchanged`
+   * again against what it holds at the time of writing, and leaves a rule
+   * that passes as it is, returning its planned firing.
+   */
+  write(
+    rule: ScheduleRuleWrite,
+    unchanged?: (stored: StoredScheduleRule) => boolean,
+  ): Promise<Date | undefined>;
   remove(name: string): Promise<boolean>;
   count(): Promise<number>;
   list(start: number, end: number): Promise<JobScheduler[]>;
@@ -264,13 +272,16 @@ export class BackendScheduleExecutor implements ScheduleExecutor {
       // and waiting), restart `limit` and fire `immediately` again.
       return upserted(job.name, existing.nextRunAt);
     }
-    const scheduledAt = await this.backend.write({
-      name: job.name,
-      options: job.options,
-      payload,
-      settings: this.backend.settings,
-      immediately: job.immediately && !existing,
-    });
+    const scheduledAt = await this.backend.write(
+      {
+        name: job.name,
+        options: job.options,
+        payload,
+        settings: this.backend.settings,
+        immediately: job.immediately && !existing,
+      },
+      (stored) => this.unchanged(stored, job, payload),
+    );
     return upserted(job.name, scheduledAt);
   }
 

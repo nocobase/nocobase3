@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import type { ScheduleExecutionSettings } from '../executor.js';
 import type { ScheduleRule } from '../validation.js';
@@ -19,7 +20,27 @@ export interface MemoryJobState {
   readonly fired: number;
 }
 
-export type MemoryState = ReadonlyMap<string, MemoryJobState>;
+/** The process that wrote a state file last. */
+export interface MemoryStateWriter {
+  readonly hostname: string;
+  readonly pid: number;
+}
+
+export interface MemoryStateSnapshot {
+  /** Incremented by every write, so readers can tell a newer file from one they know. */
+  readonly revision: number;
+  readonly writer?: MemoryStateWriter;
+  readonly jobs: ReadonlyMap<string, MemoryJobState>;
+}
+
+export const EMPTY_MEMORY_STATE: MemoryStateSnapshot = Object.freeze({
+  revision: 0,
+  jobs: new Map<string, MemoryJobState>(),
+});
+
+/** Windows refuses to replace a file another process has open; that passes quickly. */
+const RENAME_RETRIES = 10;
+const RETRYABLE_RENAME_ERRORS = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
 interface SerializedRule {
   cron?: string;
@@ -40,6 +61,8 @@ interface SerializedJob {
 
 interface SerializedState {
   version: number;
+  revision?: number;
+  writer?: MemoryStateWriter;
   namespace: string;
   scope: string;
   jobs: Record<string, SerializedJob>;
@@ -67,12 +90,28 @@ export class MemoryStateFile {
     private readonly scope: string,
   ) {}
 
-  public async read(): Promise<Map<string, MemoryJobState>> {
+  /**
+   * Identifies the file currently at the path without reading it, so a poll
+   * can tell whether anything changed. Every write replaces the file, which
+   * changes its inode as well as its modification time.
+   */
+  public async signature(): Promise<string | undefined> {
+    try {
+      const stats = await stat(this.filePath);
+      return `${stats.ino}:${stats.size}:${stats.mtimeMs}`;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  }
+
+  public async read(): Promise<MemoryStateSnapshot> {
     let text: string;
     try {
       text = await readFile(this.filePath, 'utf8');
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Map();
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        return EMPTY_MEMORY_STATE;
       throw error;
     }
     let parsed: SerializedState;
@@ -89,28 +128,34 @@ export class MemoryStateFile {
         `Schedule state file ${this.filePath} has format version ${JSON.stringify(parsed?.version)}, but this version of @nocobase/schedule reads version ${MEMORY_STATE_VERSION} only.`,
       );
     }
-    return new Map(
-      Object.entries(parsed.jobs ?? {}).map(([name, job]) => [
-        name,
-        {
-          options: deserializeRule(job.options),
-          payload: job.payload,
-          settings: job.settings ?? {},
-          nextRunAt: job.nextRunAt ?? null,
-          fired: job.fired ?? 0,
-        },
-      ]),
-    );
+    return {
+      revision: parsed.revision ?? 0,
+      ...(parsed.writer ? { writer: parsed.writer } : {}),
+      jobs: new Map(
+        Object.entries(parsed.jobs ?? {}).map(([name, job]) => [
+          name,
+          {
+            options: deserializeRule(job.options),
+            payload: job.payload,
+            settings: job.settings ?? {},
+            nextRunAt: job.nextRunAt ?? null,
+            fired: job.fired ?? 0,
+          },
+        ]),
+      ),
+    };
   }
 
   /** Writes a temporary file beside the target and renames it over, so a crash leaves either version whole. */
-  public async write(state: MemoryState): Promise<void> {
+  public async write(state: MemoryStateSnapshot): Promise<void> {
     const serialized: SerializedState = {
       version: MEMORY_STATE_VERSION,
+      revision: state.revision,
+      ...(state.writer ? { writer: state.writer } : {}),
       namespace: this.namespace,
       scope: this.scope,
       jobs: Object.fromEntries(
-        [...state].map(([name, job]) => [
+        [...state.jobs].map(([name, job]) => [
           name,
           {
             options: serializeRule(job.options),
@@ -136,12 +181,26 @@ export class MemoryStateFile {
       } finally {
         await handle.close();
       }
-      await rename(temporary, this.filePath);
+      await replace(temporary, this.filePath);
     } catch (error) {
       await rm(temporary, { force: true }).catch(() => undefined);
       throw new Error(`Failed to write schedule state file ${this.filePath}.`, {
         cause: error,
       });
+    }
+  }
+}
+
+async function replace(source: string, target: string): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await rename(source, target);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (attempt >= RENAME_RETRIES || !RETRYABLE_RENAME_ERRORS.has(code))
+        throw error;
+      await sleep(attempt * 5);
     }
   }
 }

@@ -168,7 +168,7 @@ Keep `execute` thin. It should resolve a service and call one method, so the beh
 
 Two things to decide before shipping one:
 
-- **More than one instance.** `schedule.default` decides. The `redis` adapter runs each firing on exactly one instance, however many there are. The `memory` adapter — also what runs when no default is set — keeps its state under `storage/schedule` and serves one process on one host: several instances would each fire their own copy. Configure `redis` before scaling out.
+- **More than one instance.** `schedule.default` decides. The `redis` adapter runs each firing on exactly one instance, however many hosts there are. The `memory` adapter — also what runs when no default is set — keeps its state under `storage/schedule` and does the same for the processes of one host, but instances on another host would fire their own copy. Configure `redis` before scaling out to several hosts.
 - **Long or heavy work.** A firing that runs for minutes holds one of the executor's slots. Prefer one that dispatches a job and returns, which also gets you the queue's retry behavior.
 
 ## Verify

@@ -100,11 +100,9 @@ describe('ScheduleExecuteServiceProvider', () => {
     await executor.addJob(definition);
     await executor.setup({ consume: false });
 
-    expect(
-      (await readdir(path.join(rootDir, 'storage', 'schedule'))).sort(),
-    ).toEqual([
+    // The state lock is held only while a write runs.
+    expect(await readdir(path.join(rootDir, 'storage', 'schedule'))).toEqual([
       'crm.%40nocobase%2Fapp-plugin-scheduler.json',
-      'crm.%40nocobase%2Fapp-plugin-scheduler.lock',
     ]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
@@ -149,10 +147,11 @@ describe('ScheduleExecuteServiceProvider', () => {
       .resolve(scheduleExecuteServiceToken)
       .getScheduleExecutor(SCOPE);
     await executor.setup({ consume: false });
+    await executor.addJob((await job()).job);
 
-    expect(await readdir(path.join(rootDir, 'custom'))).toContain(
-      'crm-legacy.%40nocobase%2Fapp-plugin-scheduler.lock',
-    );
+    expect(await readdir(path.join(rootDir, 'custom'))).toEqual([
+      'crm-legacy.%40nocobase%2Fapp-plugin-scheduler.json',
+    ]);
     expect(logger.warn).not.toHaveBeenCalled();
     await provider.shutdown();
   });

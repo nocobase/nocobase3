@@ -216,7 +216,7 @@ pnpm nocobase scheduler sync --json
 
 Normal synchronization loads the complete application, validates registered targets, and non-destructively upserts definitions while preserving the enabled or disabled state administrators set in the UI. Normal application startup also performs a non-destructive synchronization before Scheduler starts running its schedules.
 
-Where schedules run is the application's `schedule` configuration. Without `schedule.default` they run on the built-in memory adapter: one process on one host, with state under `storage/schedule`, and `schedule sync` cannot run while the application is running. Set `schedule.default` to `redis` in `config.yml` before running several instances; each firing then runs on exactly one of them.
+Where schedules run is the application's `schedule` configuration. Without `schedule.default` they run on the built-in memory adapter: state under `storage/schedule`, shared by the processes of one host, each firing run once among them, and `schedule sync` may run beside the application on that host. Set `schedule.default` to `redis` in `config.yml` before running on several hosts; each firing then runs on exactly one instance.
 
 During production deployment, once all plugins are loaded, run this once per application:
 

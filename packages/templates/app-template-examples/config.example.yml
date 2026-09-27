@@ -125,9 +125,9 @@ snowflake:
   epoch: 1605024000
 
 # Scheduled jobs, such as the Scheduler plugin's. Without schedule.default they run on the built-in memory adapter:
-# one process on one host, with state under storage/schedule. Set default to memory to keep that without the startup
-# warning, or to redis to run several instances, each firing executed once. Redis must persist its data (AOF or RDB)
-# and use maxmemory-policy noeviction, or schedules can be lost.
+# state under storage/schedule, shared by the processes of this host, each firing executed once among them. Set
+# default to memory to keep that without the startup warning, or to redis to run on several hosts. Redis must persist
+# its data (AOF or RDB) and use maxmemory-policy noeviction, or schedules can be lost.
 # schedule:
 #   default: redis
 #   redis:

@@ -301,6 +301,37 @@ describe('SchedulerProvider on the memory adapter', () => {
     });
   });
 
+  it('synchronizes from another process while the application runs', async () => {
+    const running = await startApplication();
+    await running.provider.start();
+    await vi.waitFor(() => expect(running.started.length).toBeGreaterThan(0), {
+      timeout: 5000,
+      interval: 100,
+    });
+
+    // `nb3 schedule:sync` starts a second application on the same storage.
+    const other = createScheduleExecuteService(undefined, {
+      appName: 'main',
+      storagePath: harness!.directory,
+    });
+    const sync = await startApplication({ syncOnly: true, schedule: other });
+    try {
+      await sync.provider.start();
+    } finally {
+      await sync.provider.shutdown();
+      await other.shutdown();
+    }
+    const before = running.started.length;
+    await vi.waitFor(
+      () => expect(running.started.length).toBeGreaterThan(before),
+      { timeout: 5000, interval: 100 },
+    );
+    await running.provider.shutdown();
+
+    expect(sync.started).toEqual([]);
+    expect(new Set(running.started).size).toBe(running.started.length);
+  });
+
   it('only writes rules in sync-only mode and runs them on the next start', async () => {
     const first = await startApplication({ syncOnly: true });
 
