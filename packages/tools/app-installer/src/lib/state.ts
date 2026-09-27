@@ -75,6 +75,8 @@ export interface InstallerState {
   appName: string;
   /** Compiled into the client and mounted by the server; every release must carry the same. */
   basePath: string;
+  /** `nocobase.templateKind` of the installed application: `hub` hosts applications of its own, `app` does not. */
+  templateKind: string;
   source: ReleaseSource;
   /** pm2 process name. */
   name: string;
@@ -154,19 +156,20 @@ export function findRelease(
 }
 
 /**
- * The release a `--to` names: an id exactly, or a version, meaning the newest build of it on record. A version is
- * what a person remembers; the id is what `status` prints when two builds of one version are on disk.
+ * The release a `--to` names: an id exactly, or a version, meaning the newest build of it on record other than the
+ * running one. A version is what a person remembers; the id is what `status` prints when two builds of one version are
+ * on disk. Rolling back "to 1.0.0" while a rebuild of 1.0.0 runs means the earlier build, not the one already running.
  */
 export function resolveReleaseRef(
   state: InstallerState,
   ref: string,
 ): ReleaseRecord | undefined {
-  return (
-    findRelease(state, ref) ??
-    [...state.releases]
-      .filter((record) => record.version === ref)
-      .sort((a, b) => b.builtAt.localeCompare(a.builtAt))[0]
-  );
+  const exact = findRelease(state, ref);
+  if (exact) return exact;
+  const builds = [...state.releases]
+    .filter((record) => record.version === ref)
+    .sort((a, b) => b.builtAt.localeCompare(a.builtAt));
+  return builds.find((record) => record.id !== state.current) ?? builds[0];
 }
 
 /** Semantic-version order of two releases' versions; builds of one version compare equal. */

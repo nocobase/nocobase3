@@ -2,7 +2,7 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { EXIT_INVALID, InstallerError, type Suggestion } from './errors.ts';
 import { installerCommand, shellQuote } from './invocation.ts';
-import { HUB_TEMPLATE, TEMPLATES, type TemplateDefinition } from './layout.ts';
+import { TEMPLATES, type TemplateDefinition } from './layout.ts';
 import { currentNodeMajor, rebuildCommand } from './prechecks.ts';
 import type { InstallerState } from './state.ts';
 
@@ -16,20 +16,25 @@ export function templateOf(
     : undefined;
 }
 
+/** Whether the installed application is a Hub, by what its release manifest says rather than by how it was installed. */
+export function isHub(state: Pick<InstallerState, 'templateKind'>): boolean {
+  return state.templateKind === 'hub';
+}
+
 /** How messages name what is installed: `the Hub`, or `the application`. */
-export function subjectOf(state: Pick<InstallerState, 'source'>): string {
-  const template = templateOf(state);
-  return template ? `the ${template.title}` : 'the application';
+export function subjectOf(state: Pick<InstallerState, 'templateKind'>): string {
+  return isHub(state) ? 'the Hub' : 'the application';
 }
 
 /**
  * Whether stopping this installation stops other applications too. A Hub hosts applications of its own, which stop
- * with it and have to be rebuilt when its Node major changes.
+ * with it and have to be rebuilt when its Node major changes; a Hub project deployed from an archive hosts them just
+ * as one built from the template does.
  */
 export function hostsApplications(
-  state: Pick<InstallerState, 'source'>,
+  state: Pick<InstallerState, 'templateKind'>,
 ): boolean {
-  return templateOf(state) === HUB_TEMPLATE;
+  return isHub(state);
 }
 
 /** The first letter upper-cased, for a subject at the start of a sentence. */
@@ -98,7 +103,7 @@ export function resolveArchivePath(cwd: string, value: string): string {
  * here; an archive installation has its archive built again, in the application project, and upgrades to it.
  */
 export function nodeRebuildAdvice(
-  state: Pick<InstallerState, 'source' | 'registry'>,
+  state: Pick<InstallerState, 'source' | 'registry' | 'basePath'>,
   root: string,
 ): Suggestion[] {
   if (templateOf(state)) {
@@ -115,14 +120,11 @@ export function nodeRebuildAdvice(
     {
       message:
         'Build the archive again for this machine, in the application project:',
-      run: rebuildCommand(),
+      run: rebuildCommand(state.basePath),
     },
+    // No `run`: a suggestion's command runs as printed, and the archive's path is not known here.
     {
-      message: 'Then copy it here and upgrade to it:',
-      run: installerCommand(
-        `upgrade --dir ${shellQuote(root)} --archive <archive>`,
-        { registry: state.registry },
-      ),
+      message: `Then copy it here and upgrade to it: ${installerCommand(`upgrade --dir ${shellQuote(root)} --archive <the copied archive>`, { registry: state.registry })}`,
     },
   ];
 }

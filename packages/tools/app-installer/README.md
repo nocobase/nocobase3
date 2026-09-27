@@ -5,7 +5,7 @@ Installs, upgrades and rolls back a NocoBase 3 application on a server, and runs
 - **A deployment archive** you build in the application project with `pnpm build --tar`. The server unpacks it and runs it; it needs neither the sources nor pnpm. This is how an application of your own is deployed without a Hub.
 - **The published Hub template**, `--template hub`, for a Hub whose source you do not change. The installer generates the Hub from `@nocobase/app-template-hub`, builds it on the server and keeps only the deployment archive. A Hub you customise is an application project: create it with `pnpm create @nocobase/app hub --template=hub` and deploy its archive like any other.
 
-Each installation lives in a directory of its own, with its own port and pm2 process, so one server can run several. Docker remains the other way to run an application without a Hub.
+Each installation lives in a directory of its own, with its own port and pm2 process, so one server can run several. A Hub deployed from an archive — a Hub project of your own — is recognised as a Hub by its manifest and treated like one built from the template: its hosted applications stop with it, and pm2 leaves its App Host child to it. Docker remains the other way to run an application without a Hub.
 
 ## Requirements
 
@@ -146,7 +146,7 @@ pm2 restart nocobase-crm
 ├── releases/<version>_<time>/app/  dist/ and config.example.yml from the deployment archive
 ├── current -> releases/<version>_<time>/app
 ├── backups/              databases and configuration copied before each upgrade
-└── installer.json        what the installer knows: application, base path, source, releases, history
+└── installer.json        what the installer knows: application, base path, kind, source, releases, history
 ```
 
 `APP_CONFIG_FILE` and `APP_STORAGE_DIR` in `app.env` are absolute. A built server treats the directory above `dist/` as its deployment root and would otherwise keep its configuration and data inside the release directory; a release too old to read `APP_STORAGE_DIR` does exactly that, and the installer refuses it. Until a Hub release that reads `APP_STORAGE_DIR` is published, a Hub installation also gets `HUB_STORAGE_DIR`, the name the published Hub releases read.
@@ -187,6 +187,7 @@ Under `--json`, a failure prints `ok: false` with `error.code`, a message, and `
 | `VERSION_NOT_FOUND`     | `2`        | No such template version or dist-tag; `details` lists the tags and recent versions.                                                                                                                                                                                                                       |
 | `ARCHIVE_NOT_FOUND`     | `2`        | `--archive` names no file.                                                                                                                                                                                                                                                                                |
 | `ARCHIVE_INVALID`       | `2`        | The archive holds no `dist/package.json`: it is not one `pnpm build --tar` wrote.                                                                                                                                                                                                                         |
+| `CONFIG_UNREADABLE`     | `2`        | `config.yml` could not be read as YAML, so the databases an upgrade would have to back up are unknown. Fix the file; nothing was changed.                                                                                                                                                                 |
 | `ARCHIVE_TOO_OLD`       | `2`        | The archive does not record its base path and build time. Upgrade `@nocobase/app-cli` in the project and build it again.                                                                                                                                                                                  |
 | `DRIVER_MISSING`        | `2`        | The archive lacks `@nocobase/db-<dialect>` for the chosen dialect. Add it to the project and build again.                                                                                                                                                                                                 |
 | `APP_MISMATCH`          | `2`        | The archive holds another application than the one installed. Install it into a directory of its own.                                                                                                                                                                                                     |

@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
+import { EXIT_INVALID, InstallerError } from './errors.ts';
 import type { Layout } from './layout.ts';
 
 /** A SQLite database is the main file plus whichever journal files exist beside it. */
@@ -72,8 +73,13 @@ export function readDatabaseInventory(
   try {
     document = (parse(readFileSync(layout.configFile, 'utf8')) ??
       {}) as typeof document;
-  } catch {
-    // An unreadable config.yml fails `config check` before anything reads this.
+  } catch (error) {
+    // Treating this as "no databases" would let an upgrade proceed without a backup and without --backup-done.
+    throw new InstallerError(
+      'CONFIG_UNREADABLE',
+      `${layout.configFile} could not be read as YAML, so the databases to back up are unknown: ${error instanceof Error ? error.message : String(error)}`,
+      { exitCode: EXIT_INVALID, cause: error },
+    );
   }
   const inventory: DatabaseInventory = {
     defaultConnection:

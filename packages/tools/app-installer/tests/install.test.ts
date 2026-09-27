@@ -73,6 +73,7 @@ describe('install', () => {
     expect(state).toMatchObject({
       appName: 'hub',
       basePath: '/hub',
+      templateKind: 'hub',
       source: {
         kind: 'template',
         template: 'hub',

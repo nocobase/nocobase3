@@ -336,12 +336,17 @@ export async function install(
     } else {
       reporter.progress(`Unpacking ${archive} into ${root}`);
       prepared = await unpackRelease({ layout, archive: archive! });
-      checkArchiveDriver(prepared.dir, dialect);
+      checkArchiveDriver(prepared.dir, dialect, prepared.basePath);
       reporter.progress(
         `Installing ${prepared.appName} ${prepared.version} (${prepared.id})`,
       );
     }
 
+    // What the application is, by its own manifest: a Hub deployed from an archive is as much a Hub as one built from
+    // the template. Builds too old to record it are only ever the Hub template's, which the template names.
+    const templateKind =
+      prepared.templateKind ?? (template === HUB_TEMPLATE ? 'hub' : 'app');
+    const hub = templateKind === 'hub';
     await writeFile(
       layout.appEnv,
       buildAppEnv(layout, {
@@ -349,7 +354,7 @@ export async function install(
         host: flags.host,
         port: flags.port,
         basePath: prepared.basePath,
-        legacyHubStorage: template === HUB_TEMPLATE,
+        legacyHubStorage: hub,
       }),
     );
     const env = await readAppEnv(layout);
@@ -376,7 +381,7 @@ export async function install(
 
     reporter.progress('Applying database migrations');
     await runAppCli(['db', 'apply'], cli);
-    assertStorageOutsideRelease(prepared.dir);
+    assertStorageOutsideRelease(prepared.dir, prepared.basePath);
 
     // Everything else the root needs is written first: the switch is the last write before starting, so a failure
     // anywhere up to it leaves nothing half-installed for status and install to disagree about.
@@ -386,7 +391,7 @@ export async function install(
       buildEcosystemConfig({
         name,
         nodePath: process.execPath,
-        keepChildren: template === HUB_TEMPLATE,
+        keepChildren: hub,
       }),
     );
     await writeFile(layout.launcherFile, buildLauncher());
@@ -395,6 +400,7 @@ export async function install(
       schemaVersion: 1,
       appName: prepared.appName,
       basePath: prepared.basePath,
+      templateKind,
       source: template
         ? {
             kind: 'template',

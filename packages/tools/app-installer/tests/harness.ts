@@ -84,6 +84,8 @@ export interface ArchiveOptions {
   buildTarget?: Record<string, unknown>;
   /** Driver packages the archive carries in `dist/node_modules`. */
   drivers?: string[];
+  /** `nocobase.templateKind` in the manifest, `app` unless given. */
+  templateKind?: string;
 }
 
 /**
@@ -115,6 +117,7 @@ export function makeArchive(file: string, options: ArchiveOptions): string {
         name: options.name ?? 'hub',
         version: options.version,
         nocobase: {
+          templateKind: options.templateKind ?? 'app',
           buildTarget: options.buildTarget ?? buildTarget(),
           ...(options.legacy
             ? {}
@@ -210,6 +213,7 @@ export function createWorld(overrides: Partial<FakeWorld> = {}): FakeWorld {
           Date.UTC(2026, 0, 1) + world.builds++ * 60_000,
         ).toISOString(),
         basePath: '/hub',
+        templateKind: 'hub',
         legacy: world.legacyManifest,
       });
       return { stdout: '', stderr: '' };
