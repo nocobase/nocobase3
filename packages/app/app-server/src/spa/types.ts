@@ -14,6 +14,11 @@ export interface SpaClientConfigMap {
 
 export interface RegisterSpaRoutesOptions {
   basePath: string;
+  /**
+   * The path the browser reaches the application at, which can differ from `basePath` when a host mounts it. The
+   * page's relative asset URLs are resolved against it; without it they are left as the build wrote them.
+   */
+  publicBasePath?: string;
   handler?: SpaHandler;
   indexPath: string;
   assetsPath?: string;

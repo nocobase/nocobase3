@@ -43,18 +43,18 @@ export function registerSpaRoutes(
     }),
   );
   router.get(basePath || '/', () =>
-    serveSpaIndex(
-      options.indexPath,
-      options.clientConfig,
-      resolvePublicConfig(options),
-    ),
+    serveSpaIndex(options.indexPath, {
+      clientConfig: options.clientConfig,
+      publicConfig: resolvePublicConfig(options),
+      publicBasePath: options.publicBasePath,
+    }),
   );
   router.get(`${basePath}/*`, () =>
-    serveSpaIndex(
-      options.indexPath,
-      options.clientConfig,
-      resolvePublicConfig(options),
-    ),
+    serveSpaIndex(options.indexPath, {
+      clientConfig: options.clientConfig,
+      publicConfig: resolvePublicConfig(options),
+      publicBasePath: options.publicBasePath,
+    }),
   );
 }
 
@@ -77,6 +77,7 @@ async function serveSpaHandler(
     injectSpaRuntimeHtml(await response.text(), {
       clientConfig: options.clientConfig,
       publicConfig: resolvePublicConfig(options),
+      publicBasePath: options.publicBasePath,
     }),
     { headers, status: response.status, statusText: response.statusText },
   );

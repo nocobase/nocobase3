@@ -1,7 +1,10 @@
 import { createAppViteConfig } from '@nocobase/dev-config/vite/app';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import path from 'path';
-import { createDevProxy } from '@nocobase/app-cli/dev/proxy';
+import {
+  createDevClientConfigPlugin,
+  createDevProxy,
+} from '@nocobase/app-cli/dev/proxy';
 
 const AGENT_ANNOTATIONS_DISABLED_VALUES = new Set(['false', '0', 'no', 'off']);
 
@@ -9,14 +12,6 @@ function isAgentAnnotationsEnabled(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase();
   return !normalized || !AGENT_ANNOTATIONS_DISABLED_VALUES.has(normalized);
 }
-
-const normalizeBase = (base?: string) => {
-  const normalized = String(base || '/').trim();
-  if (!normalized || normalized === '/') {
-    return '/';
-  }
-  return `/${normalized.replace(/^\/+|\/+$/g, '')}/`;
-};
 
 const numberFromEnv = (value: string | undefined): number | undefined => {
   const parsed = Number(value);
@@ -29,8 +24,12 @@ export default createAppViteConfig(({ command }) => {
   // consume the environment explicitly supplied by the invoking process;
   // reading .env here would make the client and server use different paths.
   const env = process.env;
-  const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
-  const viteBase = appBase;
+  // `pnpm dev` passes the mount path it resolved; the preset serves from it, and a build does not depend on one.
+  const appBase = env.APP_BASE_PATH ?? '';
+  const devClientConfig =
+    command === 'serve'
+      ? createDevClientConfigPlugin(appBase, env.PROXY_TARGET_URL)
+      : undefined;
   const annotationsEnabled = isAgentAnnotationsEnabled(
     env.AGENT_ANNOTATIONS_ENABLED,
   );
@@ -39,8 +38,8 @@ export default createAppViteConfig(({ command }) => {
 
   return {
     root: __dirname,
-    base: viteBase,
     plugins: [
+      ...(devClientConfig ? [devClientConfig] : []),
       ...(annotationsEnabled
         ? [
             agentAnnotations({

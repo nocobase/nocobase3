@@ -36,6 +36,37 @@ describe('SPA runtime HTML', () => {
     );
   });
 
+  it('points relative asset URLs at the mount path', () => {
+    const html = [
+      '<link rel="icon" href="./assets/favicon.ico" />',
+      '<meta property="og:image" content="./assets/logo.png" />',
+      '<link rel="stylesheet" crossorigin href="./assets/index.css">',
+      "<script type='module' src='./assets/index.js'></script>",
+      '<a href="./settings">Settings</a>',
+      '<img src="https://cdn.example.com/assets/a.png">',
+    ].join('');
+
+    const mounted = injectSpaRuntimeHtml(html, { publicBasePath: '/crm/' });
+
+    expect(mounted).toContain('href="/crm/assets/favicon.ico"');
+    expect(mounted).toContain('content="/crm/assets/logo.png"');
+    expect(mounted).toContain('href="/crm/assets/index.css"');
+    expect(mounted).toContain("src='/crm/assets/index.js'");
+    // Only the build's own asset directory is rewritten.
+    expect(mounted).toContain('href="./settings"');
+    expect(mounted).toContain('src="https://cdn.example.com/assets/a.png"');
+
+    expect(injectSpaRuntimeHtml(html, { publicBasePath: '' })).toContain(
+      'href="/assets/favicon.ico"',
+    );
+  });
+
+  it('leaves asset URLs alone without a mount path', () => {
+    const html = '<script type="module" src="./assets/index.js"></script>';
+
+    expect(injectSpaRuntimeHtml(html)).toContain('src="./assets/index.js"');
+  });
+
   it('uses en-US when the configured HTML language is invalid', () => {
     const withInvalidLocale = injectSpaRuntimeHtml(
       '<html lang="en-US"><body></body></html>',
@@ -73,6 +104,24 @@ describe('SPA routes', () => {
       'public, max-age=31536000, immutable',
     );
     await expect(response.text()).resolves.toBe('console.log("asset");');
+  });
+
+  it('resolves the built index against the mount path on a deep route', async () => {
+    const root = createSpaFixture(
+      '<html lang="en-US"><script type="module" src="./assets/index.js"></script></html>',
+    );
+    const router = new Hono();
+    registerSpaRoutes(router, {
+      basePath: '/crm',
+      publicBasePath: '/crm',
+      indexPath: path.join(root, 'index.html'),
+    });
+
+    const html = await (
+      await router.request('http://localhost/crm/admin/users/42')
+    ).text();
+
+    expect(html).toContain('<script type="module" src="/crm/assets/index.js">');
   });
 
   it('returns the runtime-injected index for SPA routes', async () => {
@@ -154,14 +203,13 @@ describe('SPA routes', () => {
   });
 });
 
-function createSpaFixture(): string {
+function createSpaFixture(
+  index = '<html lang="en-US"><script type="module" src="/main/test/assets/index.js"></script></html>',
+): string {
   const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-server-spa-'));
   tempDirs.push(root);
   mkdirSync(path.join(root, 'assets'));
-  writeFileSync(
-    rootPath(root, 'index.html'),
-    '<html lang="en-US"><script type="module" src="/main/test/assets/index.js"></script></html>',
-  );
+  writeFileSync(rootPath(root, 'index.html'), index);
   writeFileSync(rootPath(root, 'assets/index.js'), 'console.log("asset");');
   return root;
 }

@@ -34,6 +34,7 @@ export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
     const appPackage = readAppPackage(app.paths.rootDir);
     registerSpaRoutes(router, {
       basePath: identity.internalBasePath,
+      publicBasePath: app.publicBasePath,
       handler:
         app.mode === 'standalone' && spa.viteDevUrl
           ? createMountedOriginProxyHandler(new URL(spa.viteDevUrl), {
