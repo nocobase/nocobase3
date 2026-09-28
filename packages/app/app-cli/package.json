@@ -101,6 +101,7 @@
     "@oclif/core": "catalog:",
     "cross-spawn": "catalog:",
     "execa": "^10.0.1",
+    "semver": "^7.8.5",
     "yaml": "catalog:"
   },
   "peerDependencies": {
@@ -145,6 +146,7 @@
     "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/semver": "^7.8.0",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "publint": "catalog:",

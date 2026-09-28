@@ -468,6 +468,9 @@ importers:
       execa:
         specifier: ^10.0.1
         version: 10.0.1
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
       tsc-alias:
         specifier: ^1.9.2
         version: 1.9.2
@@ -484,6 +487,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/semver':
+        specifier: ^7.8.0
+        version: 7.8.0
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -8945,6 +8951,9 @@ packages:
 
   '@types/seedrandom@3.0.8':
     resolution: {integrity: sha512-TY1eezMU2zH2ozQoAFAQFOPpvP15g+ZgSfTZt31AUUH/Rxtnz3H+A/Sv1Snw2/amp//omibc+AEkTaA8KUeOLQ==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/shimmer@1.2.0':
     resolution: {integrity: sha512-UE7oxhQLLd9gub6JKIAhDq06T0F6FnztwMNRvYgjeQSBeMc1ZG/tA47EwfduvkuQS8apbkM/lpLpWsaCeYsXVg==}
@@ -19501,6 +19510,8 @@ snapshots:
       '@types/node': 22.20.1
 
   '@types/seedrandom@3.0.8': {}
+
+  '@types/semver@7.8.0': {}
 
   '@types/shimmer@1.2.0': {}
 
