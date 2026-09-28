@@ -53,7 +53,6 @@ const tools = [
         new InstallerError(code, message, { suggestions, details }),
         warnings,
       ),
-    guard: () => unsupportedNodeVersionEnvelope('install', 'v22.0.0'),
   },
   {
     name: 'create-app',
@@ -63,7 +62,6 @@ const tools = [
     success: (result, _status, warnings) =>
       createApp.successEnvelope(result, warnings),
     failure: (error, warnings) => createApp.failureEnvelope(error, warnings),
-    guard: () => unsupportedNodeVersionEnvelope('create-app', 'v22.0.0'),
   },
   {
     name: 'create-plugin',
@@ -73,7 +71,6 @@ const tools = [
     warnings: [],
     success: (result, status) => createPlugin.successEnvelope(result, status),
     failure: (error) => createPlugin.failureEnvelope(error),
-    guard: () => unsupportedNodeVersionEnvelope('create-plugin', 'v22.0.0'),
   },
 ];
 
@@ -133,15 +130,18 @@ for (const tool of tools) {
       printed(appCliFailure(tool.command, withoutDetails, tool.warnings)),
     );
   });
-
-  test(`${tool.name}: its Node.js check answers in the application CLI's failure envelope`, () => {
-    const guard = tool.guard();
-    assert.equal(
-      printed(guard),
-      printed(appCliFailure(tool.command, guard.error, [])),
-    );
-  });
 }
+
+// Every tool's `bin/run.js` runs the same guard, which spells its document out because it cannot import the builder;
+// the one comparison that matters is with the application CLI's failure document, and one is enough.
+test("the Node.js guard answers in the application CLI's failure envelope", () => {
+  const guard = unsupportedNodeVersionEnvelope('install', 'v22.0.0');
+  assert.equal(
+    printed(guard),
+    printed(appCliFailure('install', guard.error, [])),
+  );
+  assert.equal(guard.error.code, 'NODE_UNSUPPORTED');
+});
 
 test("app-installer: an unexpected error prints the application CLI's document", () => {
   const error = new Error('Something broke.');

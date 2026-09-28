@@ -10,14 +10,10 @@ import {
 } from '@nocobase/cli-envelope/node-guard';
 
 if (!isSupportedNodeVersion()) {
-  const argv = process.argv.slice(2);
-  // The command as typed, such as `db apply`: the arguments before the first flag.
-  const flagAt = argv.findIndex((arg) => arg.startsWith('-'));
-  const command = argv.slice(0, flagAt === -1 ? argv.length : flagAt).join(' ');
+  // The document names the command as typed, such as `db apply`: the arguments before the first flag.
   const { stream, text } = unsupportedNodeVersionOutput({
     name: 'nocobase',
-    command,
-    argv,
+    argv: process.argv.slice(2),
   });
   process[stream].write(`${text}\n`);
   await exitWhenFlushed(1);

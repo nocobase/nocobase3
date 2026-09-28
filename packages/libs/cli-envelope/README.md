@@ -37,7 +37,9 @@ if (!isSupportedNodeVersion()) {
 }
 ```
 
-Under `--json` that prints the failure document with the code `NODE_UNSUPPORTED` on stdout; otherwise it prints a two-line message on stderr. `exitWhenFlushed` waits for stdout and stderr to drain before `process.exit`, which alone can drop output still queued for a pipe and cut the document short; a tool's final exit goes through it too.
+Under `--json` that prints the failure document with the code `NODE_UNSUPPORTED` on stdout; otherwise it prints a two-line message on stderr. `command` is what the document names; left out, it is `commandFromArgv(argv)`, the arguments before the first flag joined, such as `db apply` from `nocobase db apply --json`. The guard cannot parse what it refuses to load, so a positional argument typed before the first flag is part of that; a tool with one command names it instead, as above. `exitWhenFlushed` waits for stdout and stderr to drain before `process.exit`, which alone can drop output still queued for a pipe and cut the document short; a tool's final exit goes through it too.
+
+The guard's declarations are hand-written in `node-guard.d.ts`. `tsconfig.node-guard.json` checks `node-guard.js` against them, and the tests with them, so `pnpm typecheck` fails here when the two disagree rather than in a consumer.
 
 ## Dependency contract
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MINIMUM_NODE_MAJOR_VERSION,
+  commandFromArgv,
   formatUnsupportedNodeVersionMessage,
   getNodeMajorVersion,
   isSupportedNodeVersion,
@@ -90,7 +91,38 @@ describe('unsupportedNodeVersionEnvelope', () => {
   });
 });
 
+describe('commandFromArgv', () => {
+  it('joins the arguments before the first flag, positionals included', () => {
+    expect(commandFromArgv(['db', 'apply', '--json'])).toBe('db apply');
+    expect(commandFromArgv(['install', '/srv/hub', '--json'])).toBe(
+      'install /srv/hub',
+    );
+    expect(commandFromArgv(['status'])).toBe('status');
+  });
+
+  it('names nothing when a flag comes first, rather than taking its value', () => {
+    expect(commandFromArgv(['--dir', '/srv/hub', 'status', '--json'])).toBe('');
+    expect(commandFromArgv(['--version', '--json'])).toBe('');
+    expect(commandFromArgv([])).toBe('');
+  });
+});
+
 describe('unsupportedNodeVersionOutput', () => {
+  it('names the command from argv unless the tool names one', () => {
+    const output = (argv: readonly string[], command?: string) =>
+      JSON.parse(
+        unsupportedNodeVersionOutput({
+          name: 'nocobase',
+          argv,
+          command,
+          version: 'v22.0.0',
+        }).text,
+      ) as { command: string };
+    expect(output(['db', 'apply', '--json']).command).toBe('db apply');
+    expect(output(['--dir', '/srv/hub', 'status', '--json']).command).toBe('');
+    expect(output(['crm', '--json'], 'create-app').command).toBe('create-app');
+  });
+
   it('prints the document on stdout under --json, one line unless indented', () => {
     const options = {
       name: 'create-app',

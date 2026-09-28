@@ -86,9 +86,9 @@ export function formatError(error: unknown): string {
   const envelope = errorEnvelope('', error, []);
   if (envelope.ok) return '';
   const lines = [`Error: ${envelope.error.message}`];
-  // A failed step's own output is usually the actual reason; show its tail rather than only the step name. The
-  // details are an InstallerError's record, or absent.
-  const details = envelope.error.details as Record<string, unknown> | undefined;
+  // A failed step's own output is usually the actual reason; show its tail rather than only the step name. Only an
+  // InstallerError carries details, and it holds them as the record they were raised with.
+  const details = isInstallerError(error) ? error.details : undefined;
   for (const key of ['output', 'log'] as const) {
     const text = details?.[key];
     if (typeof text === 'string' && text.trim() !== '') {

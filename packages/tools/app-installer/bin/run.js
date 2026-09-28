@@ -10,12 +10,10 @@ import {
 } from '@nocobase/cli-envelope/node-guard';
 
 if (!isSupportedNodeVersion()) {
-  const argv = process.argv.slice(2);
+  // The document names the command as typed: the arguments before the first flag, as the application CLI's does.
   const { stream, text } = unsupportedNodeVersionOutput({
     name: 'app-installer',
-    // The subcommand, where one was named before any flag.
-    command: argv.find((arg) => !arg.startsWith('-')) ?? '',
-    argv,
+    argv: process.argv.slice(2),
   });
   process[stream].write(`${text}\n`);
   await exitWhenFlushed(2);

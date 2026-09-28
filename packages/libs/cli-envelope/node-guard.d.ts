@@ -10,33 +10,44 @@ export function isSupportedNodeVersion(
   minimum?: number,
 ): boolean;
 
+/** The command as typed: the arguments before the first flag, joined. */
+export function commandFromArgv(argv: readonly string[]): string;
+
 export function formatUnsupportedNodeVersionMessage(
   name: string,
   version?: string,
   minimum?: number,
 ): string;
 
+/** The failure document for an unsupported Node.js, with the code `NODE_UNSUPPORTED`. */
+export type UnsupportedNodeVersionEnvelope = CommandFailureJson;
+
 export function unsupportedNodeVersionEnvelope(
   command: string,
   version?: string,
   minimum?: number,
-): CommandFailureJson;
+): UnsupportedNodeVersionEnvelope;
 
 export interface UnsupportedNodeVersionOutputOptions {
   /** The tool's name, as the message on stderr prefixes it. */
   readonly name: string;
-  /** What the document's `command` names. */
-  readonly command: string;
   /** The arguments the tool was run with; `--json` among them selects the document. */
   readonly argv: readonly string[];
+  /** What the document's `command` names; `commandFromArgv(argv)` unless the tool has one command to name. */
+  readonly command?: string;
   readonly version?: string;
   readonly minimum?: number;
   /** Indentation for the document, for a tool that prints its documents indented; one line by default. */
   readonly indent?: number;
 }
 
+export interface UnsupportedNodeVersionOutput {
+  readonly stream: 'stdout' | 'stderr';
+  readonly text: string;
+}
+
 export function unsupportedNodeVersionOutput(
   options: UnsupportedNodeVersionOutputOptions,
-): { readonly stream: 'stdout' | 'stderr'; readonly text: string };
+): UnsupportedNodeVersionOutput;
 
-export function exitWhenFlushed(code: number): Promise<never>;
+export function exitWhenFlushed(code: number): Promise<void>;

@@ -379,11 +379,7 @@ describe('suggested commands', () => {
 
 describe('unsupported Node.js', () => {
   it('prints the envelope on stdout under --json, and text on stderr otherwise', () => {
-    const guard = {
-      name: 'app-installer',
-      command: 'upgrade',
-      version: 'v22.1.0',
-    };
+    const guard = { name: 'app-installer', version: 'v22.1.0' };
     const json = unsupportedNodeVersionOutput({
       ...guard,
       argv: ['upgrade', '--dir', '/srv/hub', '--json'],
@@ -393,6 +389,15 @@ describe('unsupported Node.js', () => {
       command: 'upgrade',
       error: { code: 'NODE_UNSUPPORTED' },
     });
+    // A flag's value is never taken for the command: with a flag first, the document names no command.
+    expect(
+      JSON.parse(
+        unsupportedNodeVersionOutput({
+          ...guard,
+          argv: ['--dir', '/srv/hub', 'status', '--json'],
+        }).text,
+      ),
+    ).toMatchObject({ command: '' });
     const text = unsupportedNodeVersionOutput({ ...guard, argv: ['upgrade'] });
     expect(text.stream).toBe('stderr');
     expect(text.text).toContain('Node.js 24 or later is required');
