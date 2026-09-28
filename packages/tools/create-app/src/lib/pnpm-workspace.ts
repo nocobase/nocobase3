@@ -24,17 +24,14 @@ export interface AllowBuildsEntry {
  * `better-sqlite3`, `esbuild`, and `oracledb` compile native code. Database drivers are written whichever database
  * was chosen: listing them costs nothing and means switching an app's database later just works, instead of failing
  * at runtime because a native addon was not built. `tesseract.js` arrives through `officeparser` in the AI runtime
- * and its `postinstall` only prints an OpenCollective donation notice, so it is skipped. `msgpackr-extract` arrives
- * through BullMQ in `@nocobase/jobs`; skip its install script's native build fallback. Optional platform packages
- * can still supply prebuilt binaries, and `msgpackr` works without the accelerator. The list mirrors the repository's
- * own `pnpm-workspace.yaml`, so an application and the monorepo decide the same packages the same way.
+ * and its `postinstall` only prints an OpenCollective donation notice, so it is skipped. The list mirrors the
+ * repository's own `pnpm-workspace.yaml`, so an application and the monorepo decide the same packages the same way.
  */
 export const ALLOWED_BUILDS: readonly AllowBuildsEntry[] = [
   { name: 'better-sqlite3', allowed: true },
   { name: 'esbuild', allowed: true },
   { name: 'oracledb', allowed: true },
   { name: 'tesseract.js', allowed: false },
-  { name: 'msgpackr-extract', allowed: false },
 ];
 
 /** YAML needs quotes around a scoped name, whose leading `@` would otherwise start a reserved indicator. */
@@ -78,6 +75,13 @@ export const WORKSPACE_SETTINGS: readonly {
   key: string;
   value: string;
 }[] = [
+  {
+    comment: [
+      '# Use msgpackr without its optional native accelerator or platform binary packages.',
+    ],
+    key: 'ignoredOptionalDependencies',
+    value: '[msgpackr-extract]',
+  },
   {
     comment: [
       '# Install dependencies explicitly instead of during dev/build/start.',

@@ -11,17 +11,12 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import semver from 'semver';
-
 import {
   findBinaries,
   findNativeModules,
   formatMegabytes,
-  matchesNativeTarget,
   parseTarget,
-  platformPackageOwners,
   readJson,
-  resolvePlatformPackage,
   sizeOf,
 } from './server-deps.mjs';
 
@@ -79,7 +74,6 @@ console.log(
 );
 
 const natives = findNativeModules(nodeModulesDir);
-const owners = platformPackageOwners(nodeModulesDir);
 if (natives.length === 0) {
   recordBuildTarget();
   console.log('No native modules found. This build is portable as it stands.');
@@ -141,56 +135,17 @@ function retargetFetched(native) {
  */
 function retargetPlatformPackage(native) {
   const currentName = native.manifest.name;
-  // A directly installed platform package needs no owner when it already fits. Never infer a sibling for it.
-  if (
-    !owners.has(currentName) &&
-    matchesNativeTarget(native.manifest, target)
-  ) {
+  const suffix = target.napiSuffix;
+  // The set shares a prefix; the trailing platform segment is what differs.
+  const base = currentName.replace(
+    /-(darwin|linux|win32|android)(-[a-z0-9]+)*(-(gnu|musl|msvc|gnueabihf))?$/u,
+    '',
+  );
+  const wanted = `${base}-${suffix}`;
+
+  if (wanted === currentName) {
     console.log(`  ${currentName}: already the ${target.label} build`);
     return true;
-  }
-  const candidate = resolvePlatformPackage(native, target, owners);
-  if (!candidate) {
-    console.error(
-      `  ${currentName}: no declared platform package with an unambiguous version for ${target.label}.`,
-    );
-    return false;
-  }
-  const { name: wanted, ranges } = candidate;
-  const satisfiesOwners = (version) =>
-    ranges.every((range) => semver.satisfies(version, range));
-  let { version } = candidate;
-
-  if (
-    wanted === currentName &&
-    matchesNativeTarget(native.manifest, target) &&
-    satisfiesOwners(native.manifest.version)
-  ) {
-    console.log(`  ${currentName}: already the ${target.label} build`);
-    return true;
-  }
-
-  if (!version) {
-    // Overlapping ranges need not contain one another. Let npm enumerate actual releases, then use semver
-    // to select one satisfying every owner (including prerelease rules), rather than inventing an intersection.
-    const result = run('npm', ['view', wanted, 'versions', '--json']);
-    try {
-      const published = result.status === 0 ? JSON.parse(result.stdout) : [];
-      const versions = Array.isArray(published) ? published : [published];
-      version = semver.rsort(
-        versions.filter(
-          (entry) => typeof entry === 'string' && satisfiesOwners(entry),
-        ),
-      )[0];
-    } catch {
-      // Invalid registry output is a failed resolution, never a reason to fall back to latest.
-    }
-    if (!version) {
-      console.error(
-        `  ${currentName}: no published version of ${wanted} satisfies every owner for ${target.label}.`,
-      );
-      return false;
-    }
   }
 
   const parent = path.dirname(native.packageDir);
@@ -201,9 +156,7 @@ function retargetPlatformPackage(native) {
   fs.rmSync(staging, { recursive: true, force: true });
   fs.mkdirSync(staging, { recursive: true });
 
-  const packed = run('npm', ['pack', `${wanted}@${version}`, '--silent'], {
-    cwd: staging,
-  });
+  const packed = run('npm', ['pack', wanted, '--silent'], { cwd: staging });
   if (packed.status !== 0) {
     console.error(
       `  ${currentName}: could not fetch ${wanted} for ${target.label}.`,
@@ -221,33 +174,11 @@ function retargetPlatformPackage(native) {
     return false;
   }
 
-  const unpacked = run('tar', ['-xzf', tarball], { cwd: staging });
+  run('tar', ['-xzf', tarball], { cwd: staging });
   const extracted = path.join(staging, 'package');
-  if (unpacked.status !== 0 || !fs.existsSync(extracted)) {
+  if (!fs.existsSync(extracted)) {
     console.error(
-      `  ${currentName}: could not extract ${wanted} into a package directory.`,
-    );
-    fs.rmSync(staging, { recursive: true, force: true });
-    return false;
-  }
-
-  // An unsuffixed name alone does not guarantee libc support. Check the downloaded package before replacing
-  // anything, and reject an unexpected tarball rather than reporting a successful but unusable deployment.
-  let manifest;
-  try {
-    manifest = readJson(path.join(extracted, 'package.json'));
-  } catch {
-    // A missing or malformed manifest is an incompatible artifact, not an optional download failure to ignore.
-  }
-  if (
-    !manifest ||
-    manifest.name !== wanted ||
-    !matchesNativeTarget(manifest, target) ||
-    !satisfiesOwners(manifest.version) ||
-    !semver.satisfies(manifest.version, version)
-  ) {
-    console.error(
-      `  ${currentName}: ${wanted}@${version} returned an incompatible package for ${target.label}.`,
+      `  ${currentName}: ${wanted} tarball had no package directory.`,
     );
     fs.rmSync(staging, { recursive: true, force: true });
     return false;
@@ -260,9 +191,7 @@ function retargetPlatformPackage(native) {
   const installedAs = path.join(parent, wanted.split('/').pop());
   fs.rmSync(installedAs, { recursive: true, force: true });
   fs.renameSync(extracted, installedAs);
-  if (installedAs !== native.packageDir) {
-    fs.rmSync(native.packageDir, { recursive: true, force: true });
-  }
+  fs.rmSync(native.packageDir, { recursive: true, force: true });
   fs.rmSync(staging, { recursive: true, force: true });
 
   console.log(`  ${currentName}: replaced with ${wanted}`);
@@ -315,27 +244,6 @@ function trimBundled(native) {
 
 for (const native of natives) {
   switch (native.kind) {
-    case 'optional-package-loader': {
-      const hasPlatformPackage = natives.some(
-        (member) =>
-          member.kind === 'platform-package' &&
-          Object.hasOwn(
-            native.manifest.optionalDependencies,
-            member.manifest.name,
-          ),
-      );
-      if (hasPlatformPackage) {
-        console.log(
-          `  ${native.manifest.name}: using its declared platform packages`,
-        );
-      } else {
-        console.error(
-          `  ${native.manifest.name}: no installed platform package to retarget for ${target.label}.`,
-        );
-        failures += 1;
-      }
-      break;
-    }
     case 'fetched-at-install':
       if (!retargetFetched(native)) failures += 1;
       break;
