@@ -1,4 +1,5 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
+import { loadAppVitePlugins } from '@nocobase/dev-config/vite/plugins';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import fs from 'node:fs';
 import path from 'path';
@@ -46,7 +47,8 @@ const numberFromEnv = (value: string | undefined): number | undefined => {
 };
 
 // https://vite.dev/config/
-export default createPortalViteConfig(({ command }) => {
+export default createPortalViteConfig(async (environment) => {
+  const command = environment.command;
   // Configuration is loaded by the application runtime. Vite should only
   // consume the environment explicitly supplied by the invoking process;
   // reading .env here would make the client and server use different paths.
@@ -87,6 +89,7 @@ export default createPortalViteConfig(({ command }) => {
     define: defineEnv,
     envPrefix: ['VITE_'],
     plugins: [
+      ...(await loadAppVitePlugins({ appRoot: __dirname, environment })),
       ...(annotationsEnabled
         ? [
             agentAnnotations({

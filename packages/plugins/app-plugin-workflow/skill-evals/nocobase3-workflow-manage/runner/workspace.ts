@@ -73,7 +73,7 @@ export async function prepareCaseWorkspace(
     'dir',
   );
   const sourceFixtures = path.join(options.testsRoot, 'fixtures', 'workflows');
-  await fs.cp(sourceFixtures, path.join(projectRoot, 'server', 'workflows'), {
+  await fs.cp(sourceFixtures, path.join(projectRoot, 'workflows'), {
     recursive: true,
   });
   await fs.writeFile(
@@ -140,11 +140,11 @@ function buildTestContext(
     `Repository: ${options.repoRoot}`,
     `Fixture profile: ${options.case.fixture ?? 'none'}`,
     '',
-    'The files under server/workflows are disposable copies for this case.',
+    'The files under workflows are disposable copies for this case.',
     'Run the real source checker with:',
     '',
     '```bash',
-    `node --import ${path.join(packageRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')} ${path.join(options.repoRoot, 'packages', 'templates', 'app-template-default', 'cli', 'index.ts')} workflow check server/workflows/<workflow-key-or-workflow.ts>`,
+    `node --import ${path.join(packageRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')} ${path.join(options.repoRoot, 'packages', 'templates', 'app-template-default', 'cli', 'index.ts')} workflow check workflows/<workflow-key-or-workflow.ts>`,
     '```',
   ];
   if (fixtureDatabase && options.case.fixture) {

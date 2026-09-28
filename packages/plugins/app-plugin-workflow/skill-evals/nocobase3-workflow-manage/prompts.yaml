@@ -39,7 +39,7 @@ cases:
     preconditions:
       - Run in a disposable worktree containing the default application workflow source root.
     prompt: >-
-      在默认应用的 server/workflows 下创建 quotation-decision。调用上下文必须是
+      在默认应用的 workflows 下创建 quotation-decision。调用上下文必须是
       { quotationId: string, amount: number }，不允许额外字段。管理员可配置 number 类型的
       approvalLimit，默认 100000。先用 run 脚本 calculateRisk 返回 { score: number }，再由
       condition 判断 score 是否大于 approvalLimit；yes 分支调用 requestApproval，no 分支为空；
@@ -62,9 +62,9 @@ cases:
     risk: isolated-mutation
     fixture: source-existing-order-fulfillment
     preconditions:
-      - Run in a disposable workspace containing server/workflows/existing-order-fulfillment.
+      - Run in a disposable workspace containing workflows/existing-order-fulfillment.
     prompt: >-
-      修改现有的 server/workflows/existing-order-fulfillment 工作流。当前流程先由 loadOrder
+      修改现有的 workflows/existing-order-fulfillment 工作流。当前流程先由 loadOrder
       读取订单，再由 hasStock 判断库存；有库存执行 reserveInventory，无库存执行 markBackorder，
       最后统一执行 recordOutcome。必须保留这 5 个已有 node key，不得删除或改名。
       在 loadOrder 后、库存判断前增加 assessFraud，它根据 orderId 返回 { riskScore: number }；
@@ -94,7 +94,7 @@ cases:
     preconditions:
       - The target fixture contains at least one deterministic DSL error.
     prompt: >-
-      验证 ./server/workflows/broken-quotation/workflow.ts 是否是合法工作流定义。
+      验证 ./workflows/broken-quotation/workflow.ts 是否是合法工作流定义。
       我需要代码检查器给出的可靠结论，不要只做文本审查，也不要修改文件。
     expected:
       - Runs pnpm nocobase workflow check on the exact target.
@@ -110,7 +110,7 @@ cases:
     action: validate
     risk: read-only
     prompt: >-
-      server/workflows/quotation-decision 的 workflow check 已通过。请确认这是否足以证明
+      workflows/quotation-decision 的 workflow check 已通过。请确认这是否足以证明
       ./server/missing.ts 存在、能被打包且导出了 run；只做评估，不要构建或修改文件。
     expected:
       - Explains that the five-phase source checker validates workflow.ts AST/IR and does not inspect or load run scripts.
@@ -125,7 +125,7 @@ cases:
     risk: read-only
     fixture: source-unsupported-approval
     prompt: >-
-      请检查 server/workflows/unsupported-approval。里面用了 ApprovalInstruction.create()；如果当前默认应用没有这个节点，
+      请检查 workflows/unsupported-approval。里面用了 ApprovalInstruction.create()；如果当前默认应用没有这个节点，
       帮我换成你认为最接近的内置节点并确保检查通过。
     expected:
       - Discovers exported Instruction classes and the application's registered instruction contracts.
@@ -266,7 +266,7 @@ cases:
       请解释为什么，只读检查即可。
     expected:
       - Uses the run's persisted input and invocation-time parameter snapshot, not current records or current administrator overrides.
-      - Reads the condition node result and exact expression from the executed definition version.
+      - Reads the condition node result and handler module from the executed definition version.
       - Checks exact-template versus interpolated-string typing and upstream result shape when relevant.
       - Reconstructs the branch from definition topology and condition result rather than relying on node-run branchKey.
     forbidden:

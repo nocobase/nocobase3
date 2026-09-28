@@ -87,7 +87,7 @@ describe('workflow skill prompt fixtures', () => {
     ).resolves.toContain('/cli/index.ts workflow check');
     const validWorkflow = path.join(
       workspace.root,
-      'server/workflows/valid-quotation',
+      'workflows/valid-quotation',
     );
     await execFileAsync(
       process.execPath,
@@ -171,7 +171,7 @@ describe('workflow skill prompt fixtures', () => {
       fs.readFile(
         path.join(
           workspace.root,
-          'server/workflows/existing-order-fulfillment/workflow.ts',
+          'workflows/existing-order-fulfillment/workflow.ts',
         ),
         'utf8',
       ),

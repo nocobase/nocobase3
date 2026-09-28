@@ -9,8 +9,8 @@ export default class WorkflowBuild extends Command {
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --source-root server/workflows --dist-root dist/server/workflows',
-    '<%= config.bin %> <%= command.id %> --resource-root dist/server/workflows --json',
+    '<%= config.bin %> <%= command.id %> --source-root workflows --dist-root dist/workflows',
+    '<%= config.bin %> <%= command.id %> --resource-root dist/workflows --json',
   ];
 
   static override flags: {
@@ -23,11 +23,11 @@ export default class WorkflowBuild extends Command {
     json: Interfaces.BooleanFlag<boolean>;
   } = {
     'source-root': Flags.string({
-      default: 'server/workflows',
+      default: 'workflows',
       description: 'Workflow source directory, relative to the app root.',
     }),
     'dist-root': Flags.string({
-      default: 'dist/server/workflows',
+      default: 'dist/workflows',
       description: 'Artifact output directory, relative to the app root.',
     }),
     'resource-root': Flags.string({

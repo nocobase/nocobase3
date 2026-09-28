@@ -6,7 +6,14 @@ import { WorkflowComparisonDialog } from './version-comparison.js';
 import { Button } from './ui/button.js';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNotification } from '@refinedev/core';
 import type { Translator } from '@nocobase/i18n';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -51,6 +58,7 @@ import {
   projectWorkflowGraph,
 } from '@nocobase/app-plugin-workflow/client';
 import { createWorkflowEventKey, workflowApi } from './data.js';
+import { useWorkflowSourceUpdate } from './source-updates.js';
 import { WorkflowInputDialog, WorkflowRunResultDialog } from './inspector.js';
 import type {
   WorkflowDetailRecord,
@@ -72,6 +80,23 @@ import { WORKFLOW_NS } from '../namespace.js';
 import './workflow-canvas.css';
 import { ArrowLeft, Maximize2, Minimize2, Search } from 'lucide-react';
 
+import type {
+  WorkflowParameterFormComponent,
+  WorkflowParameterFormProps,
+} from '../types.js';
+import { loadWorkflowParameterForm } from './parameter-form.js';
+
+function workflowSourcePath(key: string): string {
+  return `${WORKFLOW_SETTING_PATHS.workflows}/source/${encodeURIComponent(key)}`;
+}
+function workflowRecordPath(workflow: {
+  id: string | null;
+  key: string;
+}): string {
+  return workflow.id
+    ? workflowPath(workflow.id)
+    : workflowSourcePath(workflow.key);
+}
 function workflowPath(workflowId: string): string {
   return `${WORKFLOW_SETTING_PATHS.workflows}/${encodeURIComponent(workflowId)}`;
 }
@@ -328,6 +353,47 @@ function contextProperties(
   };
   return candidate.properties ?? {};
 }
+
+type CustomFormSchema = WorkflowParameterFormProps['schema'];
+
+/**
+ * Narrow an input JSON Schema to the declarations a custom form can render.
+ *
+ * The form contract carries the three scalar types the built-in editor
+ * supports. An input schema is an arbitrary JSON Schema, so a property the
+ * contract cannot describe — an object, an array, an absent type — is left out
+ * rather than handed over under a type it does not have.
+ */
+function customFormSchema(
+  properties: Record<
+    string,
+    { type?: string; title?: string; description?: string; default?: unknown }
+  >,
+): CustomFormSchema {
+  const declarations: Record<string, CustomFormSchema[string]> = {};
+  for (const [key, property] of Object.entries(properties)) {
+    if (
+      property.type !== 'string' &&
+      property.type !== 'number' &&
+      property.type !== 'boolean'
+    )
+      continue;
+    const fallback = property.default;
+    declarations[key] = {
+      type: property.type,
+      ...(property.title === undefined ? {} : { title: property.title }),
+      ...(property.description === undefined
+        ? {}
+        : { description: property.description }),
+      ...(typeof fallback === 'string' ||
+      typeof fallback === 'number' ||
+      typeof fallback === 'boolean'
+        ? { default: fallback }
+        : {}),
+    };
+  }
+  return declarations;
+}
 function displayInputValue(value: unknown, fallback: string): string {
   if (value === null) return 'null';
   if (typeof value === 'string') return value;
@@ -393,6 +459,18 @@ export function InputDialog({
   const workflowId = workflow.id ?? workflow.hash;
   if (!workflowId) throw new Error(t('workflows.parametersMissingIdentifier'));
   const [values, setValues] = useState(workflow.parameterValues);
+  const loadForm =
+    useCallback(async (): Promise<WorkflowParameterFormComponent | null> => {
+      if (!workflow.client?.parameterForm) return null;
+      return loadWorkflowParameterForm(workflow.hash, 'workflow.parameterForm');
+    }, [workflow.client, workflow.hash]);
+  const customForm = useAsync(loadForm);
+  const defaults = Object.fromEntries(
+    Object.entries(workflow.parametersSchema).flatMap(([key, item]) =>
+      item.default === undefined ? [] : [[key, item.default]],
+    ),
+  );
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent size='md'>
@@ -406,52 +484,104 @@ export function InputDialog({
             void workflowApi.parameters(workflowId, values).then(onClose);
           }}
         >
-          {Object.entries(workflow.parametersSchema).map(([key, item]) => (
-            <label className='workflow-parameter-field' key={key}>
-              <span>{item.title ?? key}</span>
-              {item.type === 'boolean' ? (
-                <Switch
-                  checked={
-                    Object.hasOwn(values, key)
-                      ? values[key] === true
-                      : item.default === true
-                  }
-                  onCheckedChange={(checked) =>
-                    setValues((current) => ({ ...current, [key]: checked }))
-                  }
-                />
-              ) : (
-                <input
-                  placeholder={
-                    item.default === undefined
-                      ? t('common.notSet')
-                      : displayInputValue(
-                          item.default,
-                          t('inspector.unserializable'),
-                        )
-                  }
-                  value={
-                    Object.hasOwn(values, key)
-                      ? displayInputValue(
-                          values[key],
-                          t('inspector.unserializable'),
-                        )
-                      : ''
-                  }
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [key]:
-                        item.type === 'number'
-                          ? Number(event.target.value)
-                          : event.target.value,
-                    }))
-                  }
-                />
-              )}
-              {item.description ? <small>{item.description}</small> : null}
-            </label>
-          ))}
+          {customForm.error ? (
+            <p role='alert'>{customForm.error}</p>
+          ) : customForm.value ? (
+            createElement(customForm.value, {
+              workflow: {
+                id: workflowId,
+                key: workflow.key,
+                hash: workflow.hash ?? '',
+                version: workflow.version,
+              },
+              schema: workflow.parametersSchema,
+              defaults,
+              value: values,
+              onChange: setValues,
+              disabled: false,
+            })
+          ) : workflow.client?.parameterForm ? null : (
+            Object.entries(workflow.parametersSchema).map(([key, item]) => (
+              <label className='workflow-parameter-field' key={key}>
+                <span>{item.title ?? key}</span>
+                {item.enum?.length ? (
+                  <Select
+                    value={String(
+                      Object.hasOwn(values, key)
+                        ? values[key]
+                        : (item.default ?? ''),
+                    )}
+                    onValueChange={(value) => {
+                      const selected = item.enum?.find(
+                        (option) => String(option.value) === value,
+                      );
+                      setValues((current) => {
+                        const next = { ...current };
+                        if (selected) next[key] = selected.value;
+                        else delete next[key];
+                        return next;
+                      });
+                    }}
+                  >
+                    <SelectTrigger aria-label={item.title ?? key}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value=''>{t('common.notSet')}</SelectItem>
+                      {item.enum.map((option) => (
+                        <SelectItem
+                          key={String(option.value)}
+                          value={String(option.value)}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : item.type === 'boolean' ? (
+                  <Switch
+                    checked={
+                      Object.hasOwn(values, key)
+                        ? values[key] === true
+                        : item.default === true
+                    }
+                    onCheckedChange={(checked) =>
+                      setValues((current) => ({ ...current, [key]: checked }))
+                    }
+                  />
+                ) : (
+                  <input
+                    placeholder={
+                      item.default === undefined
+                        ? t('common.notSet')
+                        : displayInputValue(
+                            item.default,
+                            t('inspector.unserializable'),
+                          )
+                    }
+                    value={
+                      Object.hasOwn(values, key)
+                        ? displayInputValue(
+                            values[key],
+                            t('inspector.unserializable'),
+                          )
+                        : ''
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [key]:
+                          item.type === 'number'
+                            ? Number(event.target.value)
+                            : event.target.value,
+                      }))
+                    }
+                  />
+                )}
+                {item.description ? <small>{item.description}</small> : null}
+              </label>
+            ))
+          )}
           <DialogFooter>
             <button
               className='workflow-button workflow-button-outline'
@@ -484,6 +614,12 @@ export function ManualRunDialog({
   const workflowId = workflow.id ?? workflow.hash;
   if (!workflowId) throw new Error(t('workflows.runMissingIdentifier'));
   const properties = contextProperties(workflow.inputSchema);
+  const loadForm =
+    useCallback(async (): Promise<WorkflowParameterFormComponent | null> => {
+      if (!workflow.client?.inputForm) return null;
+      return loadWorkflowParameterForm(workflow.hash, 'workflow.inputForm');
+    }, [workflow.client, workflow.hash]);
+  const customForm = useAsync(loadForm);
   const [values, setValues] = useState<
     Record<string, string | number | boolean | undefined>
   >(() =>
@@ -530,64 +666,94 @@ export function ManualRunDialog({
             run();
           }}
         >
-          {Object.entries(properties).map(([key, item]) =>
-            item.type === 'boolean' ? (
-              <label className='workflow-checkbox-field' key={key}>
-                <input
-                  type='checkbox'
-                  checked={Boolean(values[key])}
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [key]: event.target.checked,
-                    }))
-                  }
-                />
-                <span className='workflow-checkbox-copy'>
+          {customForm.error ? (
+            <p role='alert'>{customForm.error}</p>
+          ) : customForm.value ? (
+            createElement(customForm.value, {
+              workflow: {
+                id: workflowId,
+                key: workflow.key,
+                hash: workflow.hash ?? '',
+                version: workflow.version,
+              },
+              schema: customFormSchema(properties),
+              defaults: Object.fromEntries(
+                Object.entries(properties).flatMap(([key, item]) =>
+                  item.default === undefined ? [] : [[key, item.default]],
+                ),
+              ) as Record<string, string | number | boolean>,
+              value: values as Record<string, string | number | boolean>,
+              onChange: (next) =>
+                setValues(
+                  next as unknown as Record<
+                    string,
+                    string | number | boolean | undefined
+                  >,
+                ),
+              disabled: running,
+            })
+          ) : workflow.client?.inputForm ? null : (
+            Object.entries(properties).map(([key, item]) =>
+              item.type === 'boolean' ? (
+                <label className='workflow-checkbox-field' key={key}>
+                  <input
+                    type='checkbox'
+                    checked={Boolean(values[key])}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [key]: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span className='workflow-checkbox-copy'>
+                    <span>{item.title ?? key}</span>
+                    {item.description ? (
+                      <small>{item.description}</small>
+                    ) : null}
+                  </span>
+                </label>
+              ) : (
+                <label className='workflow-parameter-field' key={key}>
                   <span>{item.title ?? key}</span>
+                  <input
+                    type={
+                      item.type === 'number' || item.type === 'integer'
+                        ? 'number'
+                        : 'text'
+                    }
+                    placeholder={
+                      item.default === undefined
+                        ? t('common.notSet')
+                        : displayInputValue(
+                            item.default,
+                            t('inspector.unserializable'),
+                          )
+                    }
+                    value={
+                      Object.hasOwn(values, key)
+                        ? displayInputValue(
+                            values[key],
+                            t('inspector.unserializable'),
+                          )
+                        : ''
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [key]:
+                          item.type === 'number' || item.type === 'integer'
+                            ? event.target.value === ''
+                              ? undefined
+                              : Number(event.target.value)
+                            : event.target.value,
+                      }))
+                    }
+                  />
                   {item.description ? <small>{item.description}</small> : null}
-                </span>
-              </label>
-            ) : (
-              <label className='workflow-parameter-field' key={key}>
-                <span>{item.title ?? key}</span>
-                <input
-                  type={
-                    item.type === 'number' || item.type === 'integer'
-                      ? 'number'
-                      : 'text'
-                  }
-                  placeholder={
-                    item.default === undefined
-                      ? t('common.notSet')
-                      : displayInputValue(
-                          item.default,
-                          t('inspector.unserializable'),
-                        )
-                  }
-                  value={
-                    Object.hasOwn(values, key)
-                      ? displayInputValue(
-                          values[key],
-                          t('inspector.unserializable'),
-                        )
-                      : ''
-                  }
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [key]:
-                        item.type === 'number' || item.type === 'integer'
-                          ? event.target.value === ''
-                            ? undefined
-                            : Number(event.target.value)
-                          : event.target.value,
-                    }))
-                  }
-                />
-                {item.description ? <small>{item.description}</small> : null}
-              </label>
-            ),
+                </label>
+              ),
+            )
           )}
           <DialogFooter>
             <button
@@ -694,6 +860,25 @@ export function NodeDescriptionDialog({
     </Dialog>
   );
 }
+function EnableRequiredDialog({
+  onClose,
+}: {
+  onClose: () => void;
+}): React.ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('workflows.enableRequiredTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('workflows.enableRequiredDescription')}
+          </DialogDescription>
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+  );
+}
 function WorkflowRow({
   item,
   onChange,
@@ -706,6 +891,7 @@ function WorkflowRow({
   const { t } = useTranslation(WORKFLOW_NS);
   const navigate = useNavigate();
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
+  const [enableRequired, setEnableRequired] = useState(false);
   const [settings, setSettings] = useState<WorkflowDetailRecord | null>(null);
   const [manual, setManual] = useState<WorkflowDetailRecord | null>(null);
   const [running, setRunning] = useState(false);
@@ -714,16 +900,20 @@ function WorkflowRow({
   if (!identifier) return null;
   const pendingArtifact = item.pendingArtifact;
   const execute = (): void => {
+    if (!item.id) {
+      setEnableRequired(true);
+      return;
+    }
     setRunning(true);
     void workflowApi
-      .workflow(identifier)
+      .workflow(item.id)
       .then((workflow) => {
         if (Object.keys(contextProperties(workflow.inputSchema)).length > 0) {
           setManual(workflow);
           return undefined;
         }
         return workflowApi
-          .execute(identifier, {}, createWorkflowEventKey())
+          .execute(workflow.id ?? workflow.hash!, {}, createWorkflowEventKey())
           .then((run) => navigate(workflowRunPath(run.id)));
       })
       .catch((cause: unknown) =>
@@ -743,14 +933,14 @@ function WorkflowRow({
             <div className='workflow-row-title'>
               <Link
                 className='font-medium text-primary underline-offset-4 hover:underline focus-visible:underline'
-                to={workflowPath(identifier)}
+                to={workflowRecordPath(item)}
               >
                 {item.title ?? item.key}
               </Link>
               {pendingArtifact ? (
                 <Link
                   className='workflow-pending-version-link'
-                  to={workflowPath(pendingArtifact.hash)}
+                  to={workflowSourcePath(item.key)}
                 >
                   <Badge className='bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'>
                     {t('workflows.newVersionAvailable')}
@@ -793,6 +983,7 @@ function WorkflowRow({
               void update.then((next) => {
                 onChange(next);
                 onReload();
+                if (!item.id && next.id) void navigate(workflowPath(next.id));
               });
             }}
           />
@@ -817,10 +1008,14 @@ function WorkflowRow({
                 className='workflow-row-menu-content'
               >
                 <DropdownMenuItem
-                  disabled={!item.hasParameters}
-                  onClick={() =>
-                    void workflowApi.workflow(identifier).then(setSettings)
-                  }
+                  disabled={Boolean(item.id) && !item.hasParameters}
+                  onClick={() => {
+                    if (!item.id) {
+                      setEnableRequired(true);
+                      return;
+                    }
+                    void workflowApi.workflow(item.id).then(setSettings);
+                  }}
                 >
                   {t('actions.parameterSettings')}
                 </DropdownMenuItem>
@@ -838,6 +1033,9 @@ function WorkflowRow({
           total={item.executed}
           onClose={() => setRuns(null)}
         />
+      ) : null}
+      {enableRequired ? (
+        <EnableRequiredDialog onClose={() => setEnableRequired(false)} />
       ) : null}
       {settings ? (
         <InputDialog workflow={settings} onClose={() => setSettings(null)} />
@@ -878,7 +1076,8 @@ export function WorkflowListPage(): React.ReactElement {
     },
     [enabled, pagination.pageSize, query],
   );
-  useEffect(() => load(1), [load]);
+  const sourceUpdate = useWorkflowSourceUpdate();
+  useEffect(() => load(1), [load, sourceUpdate]);
   if (detail) return detail;
   return (
     <section className='workflow-list-card'>
@@ -964,17 +1163,24 @@ export function WorkflowListPage(): React.ReactElement {
 
 export function WorkflowDetailPage(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
-  const { id: workflowId = '' } = useParams();
+  const { id: workflowId = '', sourceKey } = useParams();
+  const sourceUpdate = useWorkflowSourceUpdate();
   const navigate = useNavigate();
   const { open } = useNotification();
   const [running, setRunning] = useState(false);
   const loadWorkflow = useCallback(
-    () => workflowApi.workflow(workflowId),
-    [workflowId],
+    () =>
+      sourceKey
+        ? workflowApi.source(sourceKey, sourceUpdate)
+        : workflowApi.workflow(workflowId),
+    [workflowId, sourceKey, sourceUpdate],
   );
   const loadRevisions = useCallback(
-    () => workflowApi.revisions(workflowId),
-    [workflowId],
+    () =>
+      sourceKey
+        ? workflowApi.sourceRevisions(sourceKey, sourceUpdate)
+        : workflowApi.revisions(workflowId),
+    [workflowId, sourceKey, sourceUpdate],
   );
   const loaded = useAsync(loadWorkflow);
   // Load revisions alongside the definition so navigation and comparison are ready when the menu opens.
@@ -982,12 +1188,17 @@ export function WorkflowDetailPage(): React.ReactElement {
   const [comparisonTarget, setComparisonTarget] =
     useState<WorkflowDetailRecord | null>(null);
   const [dialog, setDialog] = useState<
-    'parameters' | 'manual' | 'compare' | null
+    'parameters' | 'manual' | 'compare' | 'enable-required' | null
   >(null);
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
   const canvasCardRef = useRef<HTMLElement>(null);
   const workflow = loaded.value;
+  useEffect(() => {
+    // A successfully opened candidate must survive future edits and hard reloads.
+    if (!sourceKey && workflow && !workflow.id)
+      void navigate(workflowSourcePath(workflow.key), { replace: true });
+  }, [sourceKey, workflow, navigate]);
   const source = useMemo(
     () => (workflow ? definition(workflow) : null),
     [workflow],
@@ -1002,11 +1213,18 @@ export function WorkflowDetailPage(): React.ReactElement {
           className='text-sm text-muted-foreground'
           role={loaded.error ? 'alert' : 'status'}
         >
-          {loaded.error ??
+          {(loaded.error && /^[a-f0-9]{64}$/.test(workflowId)
+            ? t('workflows.revisionUnavailable')
+            : loaded.error) ??
             (workflow && !identifier
               ? t('workflows.missingIdentifier')
               : t('workflows.loading'))}
         </p>
+        {loaded.error ? (
+          <Link to={WORKFLOW_SETTING_PATHS.workflows}>
+            {t('workflows.backToList')}
+          </Link>
+        ) : null}
       </PageContainer>
     );
   const enabled = workflow.enabled;
@@ -1071,7 +1289,8 @@ export function WorkflowDetailPage(): React.ReactElement {
                         <DropdownMenuItem
                           className='workflow-version-menu-option'
                           onClick={() => {
-                            if (!selected) void navigate(workflowPath(target));
+                            if (!selected)
+                              void navigate(workflowRecordPath(item));
                           }}
                         >
                           <span
@@ -1131,7 +1350,7 @@ export function WorkflowDetailPage(): React.ReactElement {
             {pendingArtifact ? (
               <Link
                 className='workflow-pending-version-link'
-                to={workflowPath(pendingArtifact.hash)}
+                to={workflowSourcePath(workflow.key)}
               >
                 <Badge className='bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'>
                   {t('workflows.newVersionAvailable')}
@@ -1171,14 +1390,20 @@ export function WorkflowDetailPage(): React.ReactElement {
                 className='workflow-row-menu-content'
               >
                 <DropdownMenuItem
-                  disabled={!workflow.hasParameters}
-                  onClick={() => setDialog('parameters')}
+                  disabled={Boolean(workflow.id) && !workflow.hasParameters}
+                  onClick={() =>
+                    setDialog(workflow.id ? 'parameters' : 'enable-required')
+                  }
                 >
                   {t('actions.parameterSettings')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={running || (!workflow.id && !workflow.hash)}
                   onClick={() => {
+                    if (!workflow.id) {
+                      setDialog('enable-required');
+                      return;
+                    }
                     if (hasInput) {
                       setDialog('manual');
                       return;
@@ -1230,10 +1455,14 @@ export function WorkflowDetailPage(): React.ReactElement {
           onClose={() => setDialog(null)}
         />
       ) : null}
-      {dialog === 'parameters' ? (
+      {dialog === 'enable-required' ||
+      (!workflow.id && (dialog === 'parameters' || dialog === 'manual')) ? (
+        <EnableRequiredDialog onClose={() => setDialog(null)} />
+      ) : null}
+      {dialog === 'parameters' && workflow.id ? (
         <InputDialog workflow={workflow} onClose={() => setDialog(null)} />
       ) : null}
-      {dialog === 'manual' ? (
+      {dialog === 'manual' && workflow.id ? (
         <ManualRunDialog
           workflow={workflow}
           onClose={() => setDialog(null)}
@@ -1276,7 +1505,8 @@ export function WorkflowRunListPage(): React.ReactElement {
     },
     [pagination.pageSize, query, status],
   );
-  useEffect(() => load(1), [load]);
+  const sourceUpdate = useWorkflowSourceUpdate();
+  useEffect(() => load(1), [load, sourceUpdate]);
   if (detail) return detail;
   const content = (
     <section className='workflow-list-card'>

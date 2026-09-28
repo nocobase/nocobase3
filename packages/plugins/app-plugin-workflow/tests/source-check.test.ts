@@ -34,6 +34,37 @@ afterEach(async () => {
 });
 
 describe('workflow check', () => {
+  it('checks and evaluates extensionless imports and their relative helpers', async () => {
+    const file = await sourceFile(`
+      import { title } from './handler';
+      export default defineWorkflow({ title, nodes: [] });
+    `);
+    const directory = path.dirname(file);
+    await fs.writeFile(
+      path.join(directory, 'package.json'),
+      '{"type":"module"}',
+    );
+    await fs.writeFile(
+      path.join(directory, 'handler.ts'),
+      "export { title } from './helper';",
+    );
+    await fs.writeFile(
+      path.join(directory, 'helper.ts'),
+      "export const title: string = 'Extensionless';",
+    );
+    expect(typecheckWorkflowSource(file)).toEqual([]);
+    await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
+      ir: { title: 'Extensionless', nodes: [] },
+    });
+    await fs.writeFile(
+      path.join(directory, 'helper.ts'),
+      "export const title: number = 'wrong';",
+    );
+    expect(typecheckWorkflowSource(file).map((issue) => issue.code)).toContain(
+      'TS2322',
+    );
+  });
+
   it.each([
     [
       'wrong config value type',
@@ -42,7 +73,7 @@ describe('workflow check', () => {
     ],
     [
       'wrong branch name',
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ maybe: [] })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { module: './check' } }).branch({ maybe: [] })] });`,
       'TS2353',
     ],
     [
@@ -55,11 +86,6 @@ describe('workflow check', () => {
       `export default defineWorkflow({ title: 'x', nodes: [ApprovalInstruction.create({ key: 'a', config: {} })] });`,
       'TS2304',
     ],
-    [
-      'unknown condition operator',
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { expression: { execute: ['process.exit()'] } } })] });`,
-      'TS2353',
-    ],
   ])('rejects %s during typecheck', async (_name, body, code) => {
     const file = await sourceFile(body);
     expect(typecheckWorkflowSource(file).map((issue) => issue.code)).toContain(
@@ -69,7 +95,7 @@ describe('workflow check', () => {
 
   it('runs typecheck, evaluate, schema, semantic, and compile without writing a database', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [RunInstruction.create({ key: 'inside', config: { module: './inside' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { module: './check' } }).branch({ yes: [RunInstruction.create({ key: 'inside', config: { module: './inside' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
     );
     await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
       ir: {
@@ -81,7 +107,7 @@ describe('workflow check', () => {
 
   it('accepts a terminate instruction inside a condition branch', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [TerminateInstruction.create({ key: 'stop', config: { outcome: 'success' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { module: './check' } }).branch({ yes: [TerminateInstruction.create({ key: 'stop', config: { outcome: 'success' } })] }), RunInstruction.create({ key: 'after', config: { module: './after' } })] });`,
     );
     await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
       ir: {
@@ -91,16 +117,16 @@ describe('workflow check', () => {
     });
   });
 
-  it('reports a JSON Logic validation error at the expression path', async () => {
+  it('reports a condition module validation error at the module path', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { expression: { var: 'input.constructor.secret' } } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { module: 'check' } })] });`,
     );
     await expect(checkWorkflowPackage(file)).rejects.toMatchObject({
       issues: [
         expect.objectContaining({
           phase: 'schema',
           code: 'INVALID_NODE_CONFIG',
-          astPath: expect.stringContaining('config.expression.var'),
+          astPath: expect.stringContaining('config.module'),
           nodeKey: 'c',
         }),
       ],

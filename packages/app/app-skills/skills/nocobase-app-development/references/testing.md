@@ -111,3 +111,7 @@ Application scripts delegate to `@nocobase/app-tools`, and standard runtime CLI 
 Development starts through `scripts/dev.mjs` calling `runAppTool('dev', { rootDir })`. Vite configuration imports proxy helpers directly from `@nocobase/app-tools/dev/proxy`. Keep watcher, proxy, and supervisor unit tests in `app-tools`; templates verify application entry paths and Vite integration.
 
 Standalone dependency checks and native retargeting use `scripts/server-deps.mjs` through the existing `server:deps:verify` and `server:deps:retarget` package scripts. Internal build utilities are owned and tested by `app-tools`.
+
+Application server source supports extensionless relative imports. Keep `module: "ESNext"`, `moduleResolution: "Bundler"`, and `tsc-alias.resolveFullPaths: true` in `tsconfig.server.json`. Development uses `tsx`; production builds run `tsc-alias` after `tsc` to complete ESM paths, before build hooks collect workflow resources. When changing this configuration, verify the compiled output with plain Node and no source files or TypeScript loader.
+
+Application-owned workflows live in `workflows/` beside `server/` by default. Keep `workflows/**/*.ts` in the server TypeScript build and workflow client directories in the client typecheck. Point ESLint at `tsconfig.server.json` for workflow definitions and handlers so type-aware linting covers the top-level directory. The workflow CLI builds artifacts into `dist/workflows/`; verify this directory when checking a production build.

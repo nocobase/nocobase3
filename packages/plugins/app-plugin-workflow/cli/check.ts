@@ -8,9 +8,9 @@ export default class WorkflowCheck extends Command {
     'Runs the Workflow typecheck, evaluation, schema, semantic, and compile validation phases without loading or running the workflow.';
 
   static override examples: Command.Example[] = [
-    '<%= config.bin %> <%= command.id %> server/workflows/order-fulfillment',
-    '<%= config.bin %> <%= command.id %> server/workflows/order-fulfillment/workflow.ts --json',
-    '<%= config.bin %> <%= command.id %> server/workflows/order-fulfillment --ir',
+    '<%= config.bin %> <%= command.id %> workflows/order-fulfillment',
+    '<%= config.bin %> <%= command.id %> workflows/order-fulfillment/workflow.ts --json',
+    '<%= config.bin %> <%= command.id %> workflows/order-fulfillment --ir',
   ];
 
   static override args: {

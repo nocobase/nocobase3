@@ -45,6 +45,10 @@ describe('workflow client contributions', () => {
     expect(appRoutes?.routes.map(({ name, path }) => ({ name, path }))).toEqual(
       [
         {
+          name: 'workflow-source',
+          path: '/settings/workflow/workflows/source/:sourceKey',
+        },
+        {
           name: 'workflow-detail',
           path: '/settings/workflow/workflows/:id',
         },
@@ -55,6 +59,7 @@ describe('workflow client contributions', () => {
       ],
     );
     expect(WORKFLOW_ROUTE_IDS).toEqual({
+      workflowSource: '@nocobase/app-plugin-workflow:workflow-source',
       workflowDetail: '@nocobase/app-plugin-workflow:workflow-detail',
       workflowRunDetail: '@nocobase/app-plugin-workflow:workflow-run-detail',
     });

@@ -23,21 +23,7 @@ There is intentionally no generic public `POST /workflows/:key/trigger`. A cron,
 
 ## Find a workflow to trigger
 
-When source is available, discover a workflow for new business-trigger code
-from the DSL package list, not from database ids or management titles. In the
-configured Workflow source root, each direct child directory is one workflow
-package; the directory name is the stable `workflowKey`, and `workflow.ts`
-contains its input schema and node definition. In the default application this
-is `server/workflows/<key>`.
-Enumerate these directories (for example with `rg --files server/workflows`)
-and read each `workflow.ts` top-level `title` and optional `description`. If the
-request names an exact key, locate that directory directly. Otherwise compare
-the business requirement with those human-facing fields and select the best
-matching workflow; inspect its nodes when title and description are not enough
-to distinguish candidates. If multiple candidates remain materially plausible,
-present their key/title/description and ask which one to use. After selection,
-the chosen directory name—not its title or description—is the key passed to
-`workflowRuntime.trigger()`.
+When source is available, discover a workflow for new business-trigger code from the DSL package list, not from database ids or management titles. In the configured Workflow source root, each direct child directory is one workflow package; the directory name is the stable `workflowKey`, and `workflow.ts` contains its input schema and node definition. In the default application this is `workflows/<key>`. Enumerate these directories (for example with `rg --files workflows`) and read each `workflow.ts` top-level `title` and optional `description`. If the request names an exact key, locate that directory directly. Otherwise compare the business requirement with those human-facing fields and select the best matching workflow; inspect its nodes when title and description are not enough to distinguish candidates. If multiple candidates remain materially plausible, present their key/title/description and ask which one to use. After selection, the chosen directory name—not its title or description—is the key passed to `workflowRuntime.trigger()`.
 
 The trigger input must be a JSON object that conforms exactly to that file's
 declared `inputSchema`. Use `title` and `description` to select a workflow,

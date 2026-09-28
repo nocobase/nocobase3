@@ -1,9 +1,0 @@
-import { defineWorkflow, compileToFlatIr } from '../instructions/definition.js';
-import { RunInstruction, ConditionInstruction, TerminateInstruction } from '../instructions/index.js';
-export type Expr<T>={readonly path:readonly string[];readonly __type?:T};
-export const s={string:()=>({type:'string'}),boolean:()=>({type:'boolean'}),object:(properties:Record<string,unknown>)=>({type:'object',properties})};
-export const expr={eq:(left:Expr<unknown>,right:unknown)=>({'===':[{var:left.path.join('.')},right]})};
-export const createRunInstruction=(meta:{key:string;title?:string;description?:string})=>({input:(args:Record<string,unknown>)=>({output:(result:unknown)=>({run:(handler:{module:string})=>RunInstruction.create({key:meta.key,title:meta.title,description:meta.description,config:{module:handler.module,args: args as never},result:result as never})})})});
-export const createConditionInstruction=(meta:{key:string;title?:string;description?:string})=>({expression:(expression:unknown)=>({branch:(branches:Record<'yes'|'no',readonly unknown[]>)=>ConditionInstruction.create({key:meta.key,title:meta.title,description:meta.description,config:{expression: expression as never}}).branch(branches as never)})});
-export const createTerminateInstruction=(meta:{key:string;title?:string;description?:string})=>({outcome:(outcome:'success'|'failure'='success')=>TerminateInstruction.create({key:meta.key,title:meta.title,description:meta.description,config:{outcome}})});
-export function workflow(source:{key:string;title:string;inputSchema:unknown}){const nodes:any[]=[];const input=new Proxy({}, {get:(_,p:string)=>({path:['input',p]})});return {input,addNode:(n:any)=>{nodes.push(n);return n},finalize:()=>defineWorkflow({title:source.title,inputSchema:source.inputSchema as never,nodes}),compile:()=>compileToFlatIr(defineWorkflow({title:source.title,inputSchema:source.inputSchema as never,nodes}))}};

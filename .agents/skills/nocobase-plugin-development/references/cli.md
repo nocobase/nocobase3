@@ -193,7 +193,7 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
           'workflow',
           'build',
           '--resource-root',
-          './dist/server/workflows',
+          './dist/workflows',
         ],
       },
     ],

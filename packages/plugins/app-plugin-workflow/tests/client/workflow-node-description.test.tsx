@@ -477,6 +477,11 @@ describe('workflow node descriptions', () => {
       id === 'candidate-hash' ? candidate : running,
     );
     vi.spyOn(workflowApi, 'revisions').mockResolvedValue([candidate, running]);
+    vi.spyOn(workflowApi, 'source').mockResolvedValue(candidate);
+    vi.spyOn(workflowApi, 'sourceRevisions').mockResolvedValue([
+      candidate,
+      running,
+    ]);
     const enable = vi
       .spyOn(workflowApi, 'enable')
       .mockResolvedValue(workflow({ id: 'workflow-42' }));
@@ -486,6 +491,10 @@ describe('workflow node descriptions', () => {
         <CurrentLocation />
         <Routes>
           <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
+          <Route
+            path='/settings/workflow/workflows/source/:sourceKey'
+            element={<WorkflowDetailPage />}
+          />
         </Routes>
       </MemoryRouter>,
     );
@@ -509,7 +518,7 @@ describe('workflow node descriptions', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
-        '/settings/workflow/workflows/candidate-hash',
+        '/settings/workflow/workflows/source/notification',
       ),
     );
     expect(enable).not.toHaveBeenCalled();
@@ -530,15 +539,29 @@ describe('workflow node descriptions', () => {
     });
     vi.spyOn(workflowApi, 'workflow').mockResolvedValue(candidate);
     vi.spyOn(workflowApi, 'revisions').mockResolvedValue([candidate, running]);
+    vi.spyOn(workflowApi, 'source').mockResolvedValue(candidate);
+    vi.spyOn(workflowApi, 'sourceRevisions').mockResolvedValue([
+      candidate,
+      running,
+    ]);
     const enable = vi
       .spyOn(workflowApi, 'enable')
       .mockResolvedValue(workflow({ id: 'workflow-42' }));
 
     renderWithI18n(
-      <MemoryRouter initialEntries={['/workflows/candidate-hash']}>
+      <MemoryRouter
+        initialEntries={['/settings/workflow/workflows/source/notification']}
+      >
         <CurrentLocation />
         <Routes>
-          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
+          <Route
+            path='/settings/workflow/workflows/:id'
+            element={<div>Enabled version</div>}
+          />
+          <Route
+            path='/settings/workflow/workflows/source/:sourceKey'
+            element={<WorkflowDetailPage />}
+          />
         </Routes>
       </MemoryRouter>,
     );

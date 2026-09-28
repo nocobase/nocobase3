@@ -34,7 +34,7 @@ describe('workflow CLI contribution', () => {
 
   /**
    * The build stage reads the compiled `.js` a deployment runs, so it has to follow `tsc`. There is no dev
-   * counterpart: outside production the loader compiles `server/workflows` on demand and produces the digest a build
+   * counterpart: outside production the loader compiles `workflows` on demand and produces the digest a build
    * would produce, so a preflight build would put seconds back on every `pnpm dev` start and reintroduce the
    * rebuild-and-restart loop it replaced, without making anything visible that is not already visible.
    */
@@ -49,7 +49,7 @@ describe('workflow CLI contribution', () => {
             'workflow',
             'build',
             '--resource-root',
-            './dist/server/workflows',
+            './dist/workflows',
           ],
         },
       ],
@@ -116,7 +116,7 @@ describe('workflow CLI contribution', () => {
       path.join(os.tmpdir(), 'workflow-cli-build-'),
     );
     try {
-      const packagePath = path.join(root, 'server/workflows/example');
+      const packagePath = path.join(root, 'workflows/example');
       await fsPromises.mkdir(packagePath, { recursive: true });
       await fsPromises.writeFile(
         path.join(packagePath, 'workflow.ts'),
@@ -127,7 +127,7 @@ describe('workflow CLI contribution', () => {
         ['--import', tsxLoader, appCli, 'workflow', 'build'],
         { cwd: root },
       );
-      const keyRoot = path.join(root, 'dist/server/workflows/example');
+      const keyRoot = path.join(root, 'dist/workflows/example');
       const [digest] = await fsPromises.readdir(keyRoot);
       await expect(
         fsPromises.readFile(
