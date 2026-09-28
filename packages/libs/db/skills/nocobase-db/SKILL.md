@@ -77,7 +77,7 @@ Keep `@nocobase/db` itself in `dependencies`, not `devDependencies`: the deploye
 
 ## 2. Migrations and seeds
 
-A migration creates structure. A seed inserts the records the application needs in order to run. Neither does the other's job, and a seed is never sample or demonstration content.
+A migration creates structure. A seed inserts the records the application needs in order to run. Neither does the other's job, and neither is where sample or demonstration content lands by default — [sample and demonstration data](#sample-and-demonstration-data) below is what decides that, for a task that asks for it.
 
 ```ts
 // database/main/migrations/202609020001_create_orders.ts
@@ -139,6 +139,18 @@ A backfill belongs in the migration that makes it necessary, using `query` from 
 Both run inside a transaction by default. `transaction: false` opts out, and a failure then leaves partial work behind with no history record, so take it only when the operation genuinely cannot run in one.
 
 A task's `connection` is not the runtime connection either. It carries `dialect`, `capabilities` and `client()` — enough to branch on the database, and deliberately not a way back to the manager. Anything conditional on the dialect reads it from there.
+
+### Sample and demonstration data
+
+Example records — the few customers, contacts and deals an application is asked to open with so its screens are not empty — are a third kind, and the question that places them is whether the application needs them in order to run. A status list a form cannot render without is install data and belongs with the rest of it. Rows that exist so a screen looks populated do not: carried by the same seed as the required data, they reach every installation, production included, as invented records nobody can later tell apart from real ones.
+
+An installation meant to arrive with them still gets them from seeds, because seeds are what the installation sequence runs, but from seeds of their own:
+
+- **A file per demonstration subject**, named for what it carries — `202610150003_demo_customers` — and holding nothing the application requires. Dropping the demonstration from a build is then deleting those files, which a seed mixing both kinds no longer allows: by then each half is recorded as executed and neither can be split out.
+- **Idempotent and stable like any other seed.** It runs through the same history, checksums and locks, so the rules above apply to it unchanged.
+- **Gated on configuration** read from the seed's `config`, when one build serves both a demonstration and a real installation. The gate is decided once per database: a seed that returns early is still recorded as executed, so it does not run later because the setting changed.
+
+Data meant to be reloaded on demand is not a seed at all. A repeatable load belongs in a command the application owns, which can run as often as the work needs precisely because it records no history. Where those files live in an application, and what resets a disposable database instead, is in `.agents/skills/nocobase-app-development/references/migrations.md`. Per-test data is neither: it belongs to the test that creates it.
 
 ## 3. Builder
 

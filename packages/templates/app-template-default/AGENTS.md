@@ -162,7 +162,7 @@ Bind services to their existing tokens in a provider's `register()`; calling `cr
 
 ### Database
 
-Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
+Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure. Example records asked for as a demonstration are required by nothing and belong in seeds of their own; see `.agents/skills/nocobase-app-development/references/migrations.md`.
 
 Declare database defaults with `export default defineAppDatabaseConfig((runtime) => ({ connections }))`. Before provider registration, the runtime asynchronously imports configured official drivers; explicit `drivers` registrations override them. Keep `isolatedDeclarations: false` for application server declarations so configuration and connection fields retain inference. See `.agents/skills/nocobase-app-development/references/database-connections.md`.
 
