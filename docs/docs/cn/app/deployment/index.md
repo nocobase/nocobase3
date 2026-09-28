@@ -44,14 +44,14 @@ Hub 自身需要安装在服务器上。平台管理员完成安装后，应用�
 
 ### 会话位置
 
-- **发布到 Hub**：在应用源码根目录开启会话，应用自带的部署 Skill 负责构建、上传与验证，步骤见[使用 Hub 发布应用](./hub-publishing)。
-- **Docker**：同样在应用源码根目录开启会话构建镜像。服务器上的操作需要 AI Agent 能通过 SSH 访问服务器，或在服务器上另开一个会话接手，步骤见 [Docker 部署](./docker)。
+- **发布到 Hub**：在应用源码根目录开启会话，应用自带的 `nocobase-deployment` Skill（同步在 `.agents/skills/` 下）负责构建、上传与验证，步骤见[使用 Hub 发布应用](./hub-publishing)。
+- **独立部署（Node.js 或 Docker）**：同样在应用源码根目录开启会话，构建部署包或镜像。服务器上的操作需要 AI Agent 能通过 SSH 访问服务器，或在服务器上另开一个会话接手，步骤见[打包和运行](./standalone)和 [Docker 部署](./docker)。
 - **app-installer**：构建机上的会话负责构建部署包。服务器上的安装、升级与回退由全局的 `nocobase-app-installer` Skill 负责，先执行 `npx skills add nocobase/nocobase3 --skill nocobase-app-installer -g` 安装，步骤见 [app-installer](./app-installer)。
 - **安装 Hub**：用安装器安装时同样由全局的 `nocobase-app-installer` Skill 负责；用 Docker 安装时按[部署 Hub 平台](./hub)，在一个 NocoBase 应用目录中开启会话，由应用自带的部署 Skill 执行。
 
 ### 需要说明的信息
 
-- 部署方式：Hub、Docker 或 app-installer。
+- 部署方式：Hub、独立部署（Node.js 或 Docker）或 app-installer。
 - 访问地址：例如 `https://apps.example.com/crm/`。
 - 数据库：沿用现有数据库、新建空库，还是从备份恢复。
 - 本次操作：首次部署、更新版本、回滚或恢复。

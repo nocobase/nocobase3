@@ -44,14 +44,14 @@ Every step on the pages above can be carried out by an AI Agent. Prepare the ser
 
 ### Where to open the session
 
-- **Publishing to Hub**: in the application's source root, where the application's own deployment Skill builds, uploads and verifies; the steps are in [Publish applications with Hub](./hub-publishing).
-- **Docker**: likewise in the application's source root, to build the image. The steps on the server need the agent to reach the server over SSH, or a second session opened on the server to take over; the steps are in [Docker](./docker).
+- **Publishing to Hub**: in the application's source root, where the application's own `nocobase-deployment` Skill, synchronized under `.agents/skills/`, builds, uploads and verifies; the steps are in [Publish applications with Hub](./hub-publishing).
+- **Standalone (Node.js or Docker)**: likewise in the application's source root, to build the archive or the image. The steps on the server need the agent to reach the server over SSH, or a second session opened on the server to take over; the steps are in [Build and run](./standalone) and [Docker](./docker).
 - **app-installer**: the session on the build machine builds the archive. Installing, upgrading and rolling back on the server are driven by the global `nocobase-app-installer` Skill, installed first with `npx skills add nocobase/nocobase3 --skill nocobase-app-installer -g`; the steps are in [app-installer](./app-installer).
 - **Installing Hub**: with the installer, the same global `nocobase-app-installer` Skill drives it; with Docker, follow [Deploy Hub](./hub) from a session opened in a NocoBase application directory, where the application's own deployment Skill takes over.
 
 ### What to state
 
-- Deployment mode: Hub, Docker or app-installer.
+- Deployment mode: Hub, standalone (Node.js or Docker) or app-installer.
 - Address: for example `https://apps.example.com/crm/`.
 - Database: keep the existing one, start with a new empty one, or restore a backup.
 - Operation: first deployment, update, rollback or recovery.
