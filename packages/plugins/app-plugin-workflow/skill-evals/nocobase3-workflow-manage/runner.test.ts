@@ -82,6 +82,24 @@ describe('workflow skill prompt fixtures', () => {
       testsRoot,
       keep: false,
     });
+    const fixtureManifest = JSON.parse(
+      await fs.readFile(
+        path.join(
+          workspace.root,
+          'node_modules/@nocobase/app-plugin-workflow/package.json',
+        ),
+        'utf8',
+      ),
+    ) as { exports: Record<string, unknown> };
+    expect(fixtureManifest.exports).toHaveProperty('./dsl');
+    await expect(
+      fs.stat(
+        path.join(
+          workspace.root,
+          'node_modules/@nocobase/app-plugin-workflow/dsl/index.ts',
+        ),
+      ),
+    ).resolves.toBeTruthy();
     await expect(
       fs.readFile(path.join(workspace.root, 'TEST_CONTEXT.md'), 'utf8'),
     ).resolves.toContain('/bin/run.js workflow check');

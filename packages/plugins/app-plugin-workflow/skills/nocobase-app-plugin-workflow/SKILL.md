@@ -4,8 +4,8 @@ description: 'Choose Workflow, typed code, or both for NocoBase 3 business rules
 argument-hint: '[action: explain|define|validate|invoke|manage|inspect|diagnose] [workflow-key-or-path]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: workflow
-version: 1.3.0
-last-reviewed: 2026-09-07
+version: 1.3.1
+last-reviewed: 2026-09-28
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-workflow'
@@ -26,6 +26,7 @@ The management pages report results through the App's Base UI toast, so the App 
 
 - Before designing a new business feature, creating a workflow, or moving existing behavior into Workflow, read [Workflow Architecture Decisions](references/workflow-concepts.md) and decide whether the behavior belongs in Workflow, ordinary typed code, or a combination of both. Apply this decision even when the user did not explicitly ask about Workflow, but do not expand the requested implementation scope without a concrete architectural reason.
 - For creating, editing, reviewing, or validating a workflow package, read the relevant sections of [DSL Authoring](references/dsl-authoring.md). Read the complete example only when authoring a package or when several DSL contracts interact.
+- For converting an existing `defineWorkflow()` definition, mapped run arguments, or JSON Logic condition to the typed builder, read [Migrate the previous DSL](references/dsl-migration.md) before editing the workflow and its handlers.
 - For extending node types, read [Custom Instructions](references/custom-instructions.md) for the decision criteria, public API, complete application example, async Provider registration, and shared checker/build contracts.
 - For business invocation, enablement, administrator parameters, or an authorized manual run, read [Invocation and Service API](references/invocation-and-service-api.md).
 - For inspecting definitions or diagnosing a run, read [Execution Diagnostics](references/execution-diagnostics.md).

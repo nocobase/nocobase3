@@ -56,6 +56,11 @@ export async function prepareCaseWorkspace(
             import: './index.ts',
             default: './index.ts',
           },
+          './dsl': {
+            types: './dsl/index.ts',
+            import: './dsl/index.ts',
+            default: './dsl/index.ts',
+          },
         },
       },
       null,
@@ -70,6 +75,11 @@ export async function prepareCaseWorkspace(
   await fs.symlink(
     path.join(workflowPackageRoot, 'server'),
     path.join(linkedWorkflowPackage, 'server'),
+    'dir',
+  );
+  await fs.symlink(
+    path.join(workflowPackageRoot, 'dsl'),
+    path.join(linkedWorkflowPackage, 'dsl'),
     'dir',
   );
   const sourceFixtures = path.join(options.testsRoot, 'fixtures', 'workflows');

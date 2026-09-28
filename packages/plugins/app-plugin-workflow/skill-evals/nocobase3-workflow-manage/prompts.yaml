@@ -49,8 +49,9 @@ cases:
     expected:
       - Resolves the installed plugins' exported Instruction classes and the application's registered contracts before authoring.
       - Creates one package whose directory name is the stable workflow key.
-      - Separates inputSchema from administrator parameters and declares an accurate calculateRisk result schema.
-      - Uses only RunInstruction.create(), ConditionInstruction.create(), arrays, and yes/no branch blocks supported by the current contracts.
+      - Separates the TypeBox input schema from the administrator parameter schema and infers the calculateRisk result from its handler return type.
+      - Uses workflow(), createRunInstruction(), createConditionInstruction(), defineHandler() with type-only handler imports, and supported yes/no branch blocks.
+      - Gives every node a specific non-empty description and retains each addNode() result before finalizing.
       - Runs pnpm nocobase workflow check against the package or workflow.ts and reports all five validation phases as passed.
       - Reports created source files separately from runtime mutations and states that no runtime mutation occurred.
     forbidden:
@@ -75,9 +76,10 @@ cases:
       真实 workflow checker；不要加载、启用或运行工作流。
     expected:
       - Inspects the existing package before editing and preserves loadOrder, hasStock, reserveInventory, markBackorder, and recordOutcome unchanged as stable keys.
-      - Adds fraudThreshold as an administrator parameter rather than invocation input and declares an accurate assessFraud result schema.
+      - Adds fraudThreshold to the administrator parameter schema rather than invocation input and infers the assessFraud result from its handler return type.
       - Inserts assessFraud and highRisk after loadOrder, places holdForReview only in the yes branch, and moves the existing stock decision under the no branch without duplicating its node keys.
       - Keeps recordOutcome as the common successor after both high-risk and stock-handling paths.
+      - Migrates the existing low-level definition and handlers together if using the typed builder; does not leave mapped-argument handlers attached to context-based nodes.
       - Creates a package-relative run script with a named run export and deterministic JSON-storable output.
       - Runs the real workflow checker against the modified package and reports its five-phase result, while distinguishing that source check from complete Artifact run-script collection.
       - Reports the modified and added files and states that no load, enablement, invocation, or runtime mutation occurred.
@@ -86,6 +88,47 @@ cases:
       - Duplicating hasStock or its branch nodes in multiple branches to simulate a join.
       - Inventing approval, goto, join, retry, or arbitrary edge DSL constructs.
       - Loading, enabling, invoking, or writing materialized workflow tables.
+
+  - id: explain-legacy-dsl-migration
+    action: explain
+    risk: read-only
+    fixture: source-existing-order-fulfillment
+    prompt: >-
+      阅读 workflows/existing-order-fulfillment 的旧 DSL，并说明如何将它迁移到 typed builder。
+      请指出定义和现有 run/condition handler 分别要改什么，如何保持 node key、顺序和分支语义，
+      以及迁移后要运行哪些验证。只给具体迁移方案，不要修改文件或运行工作流。
+    expected:
+      - Reads the migration reference and inspects the existing definition and handlers.
+      - Preserves the workflow key, node keys, sequence, and yes/no branch meanings.
+      - Converts mapped arguments to shared handler context and explicit result schemas to inferred handler returns; recognizes that this fixture has no administrator parameters to migrate.
+      - Uses type-only imports with defineHandler(), member-by-member FlowContext, and checks optional node results.
+      - Explains checker, handler typecheck/tests, and Artifact verification as separate boundaries without enabling or invoking.
+    forbidden:
+      - Recommending JSON Logic config.expression or keeping old argument-shaped handlers on builder-authored nodes.
+      - Claiming workflow check alone verifies handler module loading or business behavior.
+      - Mutating source or runtime state.
+
+  - id: migrate-legacy-order-workflow
+    action: define
+    risk: isolated-mutation
+    fixture: source-existing-order-fulfillment
+    prompt: >-
+      将 workflows/existing-order-fulfillment 里的旧版 defineWorkflow DSL 迁移到 typed builder。
+      保留 workflow 目录 key、所有 node key、节点顺序、yes/no 分支以及现有业务行为。
+      同时迁移 handler，移除旧的 config.args 映射和显式结果 schema，改用共享 FlowContext；
+      每个节点补充准确的 description。完成后运行 workflow check，并检查 handler 的类型。
+      只修改这个隔离应用的源文件，不要启用或运行工作流。
+    expected:
+      - Reads the migration reference before editing and inspects the original definition and handlers.
+      - Preserves the existing workflow key, node keys, order, branches, and business behavior.
+      - Uses workflow(), chained addNode(), typed node factories, type-only handler imports, and defineHandler() with matching module paths.
+      - Converts mapped-argument handlers to a shared member-by-member FlowContext, handles optional node results, and gives cyclic handlers explicit return types.
+      - Gives every node, including branch nodes, a specific non-empty description and exports a WorkflowSourceAst-annotated finalized const.
+      - Runs the workflow checker and application-compatible handler typecheck; reports any remaining validation limits accurately.
+    forbidden:
+      - Leaving config.args, JSON Logic expressions, or old argument-shaped handlers on builder-authored nodes.
+      - Renaming nodes, changing branch meaning, or silently dropping a node through a discarded addNode() return.
+      - Enabling, invoking, or editing materialized workflow tables.
 
   - id: validate-invalid-dsl-with-cli
     action: validate

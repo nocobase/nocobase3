@@ -3,6 +3,7 @@
 ## Contents
 
 - [Context handlers](#context-handlers)
+- [Migrate an existing definition](#migrate-an-existing-definition)
 - [Package and imports](#package-and-imports)
 - [Node types](#node-types)
 - [Complete current example](#complete-current-example)
@@ -18,6 +19,10 @@
 - [Node result schemas](#node-result-schemas)
 - [Validation and compilation](#validation-and-compilation)
 - [Error-prevention checklist](#error-prevention-checklist)
+
+## Migrate an existing definition
+
+For an existing `defineWorkflow()` package, follow [Migrate the previous DSL](dsl-migration.md). Convert its definition and handler modules together; mapped arguments and JSON Logic conditions have different handler contracts from the typed builder.
 
 ## Context handlers
 
@@ -113,96 +118,7 @@ A node's result type is inferred from its handler's return type, including await
 
 ## Complete current example
 
-Keep each handler as a named `run` export in its own module, and wrap its imported function with `defineHandler` at the definition site. `satisfies WorkflowHandlerFunction` supplies the common context and execution-options types without erasing the inferred return value.
-
-```ts
-// server/calculate-risk.ts
-import type { WorkflowHandlerFunction } from '@nocobase/app-plugin-workflow/dsl';
-
-export const run = (({ input }, options) => {
-  options.signal.throwIfAborted();
-  if (typeof input.amount !== 'number')
-    throw new Error('amount must be a number');
-  return { score: input.amount };
-}) satisfies WorkflowHandlerFunction;
-```
-
-```ts
-// server/needs-approval.ts
-import type { WorkflowHandlerFunction } from '@nocobase/app-plugin-workflow/dsl';
-import type { run as calculate } from './calculate-risk';
-
-export const run = (({ nodeResults, parameters }) => {
-  const risk = nodeResults.calculateRisk as
-    ReturnType<typeof calculate> | undefined;
-  if (!risk) throw new Error('The risk calculation has not completed');
-  return risk.score > Number(parameters.approvalLimit);
-}) satisfies WorkflowHandlerFunction;
-```
-
-```ts
-// server/record-routing-outcome.ts
-import type { WorkflowHandlerFunction } from '@nocobase/app-plugin-workflow/dsl';
-
-export const run = (({ nodeResults }, options) => {
-  const needsManualReview = nodeResults.needsApproval;
-  if (typeof needsManualReview !== 'boolean')
-    throw new Error('Missing routing decision');
-  options.logger.info('Routing outcome recorded', { needsManualReview });
-  return { needsManualReview };
-}) satisfies WorkflowHandlerFunction;
-```
-
-```ts
-// workflow.ts
-import { Type } from '@sinclair/typebox';
-import {
-  workflow,
-  defineHandler,
-  createRunInstruction,
-  createConditionInstruction,
-  type WorkflowSourceAst,
-} from '@nocobase/app-plugin-workflow/dsl';
-import type { run as calculateRisk } from './server/calculate-risk';
-import type { run as needsApproval } from './server/needs-approval';
-import type { run as recordRoutingOutcome } from './server/record-routing-outcome';
-
-const source = workflow({
-  key: 'quotation-routing',
-  title: 'Quotation routing',
-  input: { schema: Type.Object({ amount: Type.Number() }) },
-  parameters: {
-    schema: Type.Object({ approvalLimit: Type.Number({ default: 1000 }) }),
-  },
-});
-const flow = source
-  .addNode(
-    createRunInstruction({
-      key: 'calculateRisk',
-      description: 'Calculate risk from the invocation amount.',
-    }).run(defineHandler<typeof calculateRisk>('./server/calculate-risk')),
-  )
-  .addNode(
-    createConditionInstruction({
-      key: 'needsApproval',
-      description: 'Compare risk with the configured approval limit.',
-    }).check(defineHandler<typeof needsApproval>('./server/needs-approval')),
-  )
-  .addNode(
-    createRunInstruction({
-      key: 'recordRoutingOutcome',
-      description: 'Record the decision after either branch returns.',
-    }).run(
-      defineHandler<typeof recordRoutingOutcome>(
-        './server/record-routing-outcome',
-      ),
-    ),
-  );
-const definition: WorkflowSourceAst = flow.finalize();
-export default definition;
-```
-
-The condition's `yes` and `no` branches can contain their own nodes. Empty branches fall through to the common successor. This example classifies the invocation; it does not wait for a person's approval. Export the finalized AST rather than the mutable workflow builder.
+The [migration example](dsl-migration.md#minimal-conversion-pattern) shows a complete definition and two typechecked handler modules. The examples template also contains a workflow with both condition branches, branch-local results, client forms, and a shared `FlowContext`: `packages/templates/app-template-examples/workflows/example-quotation-routing/`. Keep handlers as named `run` exports, import their signatures with `import type`, and use `defineHandler<typeof run>(module)` in the definition.
 
 ## Default application lifecycle
 
@@ -271,16 +187,16 @@ Input is supplied for each invocation and is persisted in the run. The root sche
 
 ## Administrator parameters
 
-`parameters` declares deploy-time settings; it is not invocation input. It uses the same JSON Schema object shape as `inputSchema`:
+`parameters.schema` declares administrator settings; it is not invocation input. It uses the same JSON Schema object shape as `input.schema`:
 
 ```ts
-parameters: {
-  type: 'object',
-  properties: {
-    approvalLimit: { type: 'number', title: 'Approval limit', default: 100000 },
+const source = workflow({
+  key: 'approval',
+  title: 'Approval',
+  parameters: {
+    schema: Type.Object({ approvalLimit: Type.Number({ default: 100000 }) }),
   },
-  additionalProperties: false,
-}
+});
 ```
 
 Each property declaration accepts only:
@@ -327,17 +243,11 @@ createConditionInstruction({ key: 'needsApproval', description: '...' })
 The handler receives one argument, `{ input, parameters, nodeResults }`, each a frozen snapshot of the run's data, and the same `options` a run handler gets. It must return a boolean; anything else fails the node with an error.
 
 ```ts
-import type { ConditionDataBindings } from '@nocobase/app-plugin-workflow';
+import type { FlowContext } from '../workflow';
 
-export function run(bindings: unknown): boolean {
-  const { nodeResults, parameters } = bindings as ConditionDataBindings;
-  const risk = nodeResults.calculateRisk as { score?: unknown } | undefined;
-  const limit = parameters.approvalLimit;
-  return (
-    typeof risk?.score === 'number' &&
-    typeof limit === 'number' &&
-    risk.score > limit
-  );
+export function run({ nodeResults, parameters }: FlowContext): boolean {
+  const risk = nodeResults.calculateRisk;
+  return risk !== undefined && risk.score > parameters.approvalLimit;
 }
 ```
 
@@ -352,7 +262,7 @@ Prefer `.yes([...])` and `.no([...])` for condition nodes. Either or both may be
 `outcome()` takes `success` (the default) or `failure`:
 
 ```ts
-flow.addNode(
+const flow = workflow({ key: 'example', title: 'Example' }).addNode(
   createConditionInstruction({
     key: 'canContinue',
     description:
@@ -367,7 +277,7 @@ flow.addNode(
       }).outcome('success'),
     ]),
 );
-flow.addNode(
+const completeFlow = flow.addNode(
   createRunInstruction({
     key: 'continueProcessing',
     description:
@@ -389,7 +299,7 @@ createRunInstruction({
 }).run(defineHandler<typeof calculateRisk>('./server/calculate-risk'));
 ```
 
-The handler's first argument is the shared workflow context. The second argument contains `services`, `signal`, and `logger`. Use `satisfies WorkflowHandlerFunction` to contextually type the handler while preserving its inferred return type; a broad `: WorkflowRunFunction` annotation erases the concrete result. No node input/output schema or call-site argument map is needed. `defineHandler` returns an immutable descriptor without modifying the imported function; the serialized config contains only `module`.
+The handler's first argument is the shared workflow context. The second argument contains `services`, `signal`, and `logger`. Use an explicit handler return type when the handler imports its workflow context to break the inference cycle; a broad `: WorkflowRunFunction` annotation erases the concrete result. No node input/output schema or call-site argument map is needed. `defineHandler` returns an immutable descriptor without modifying the imported function; the serialized config contains only `module`.
 
 The module must export `run`. Its module path is a static, extensionless, package-relative specifier. The processor runs it asynchronously, saves its JSON-storable result, and resumes the flow. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, cycles, and class instances are rejected. Throw to report failure. Services must be resolved through their owner's original public token; the handler cannot replace application services. Respect cancellation through `signal` and log through the bound `logger`.
 
@@ -409,7 +319,7 @@ The templates behave the way they always have. An exact template preserves the u
 
 ## Node result schemas
 
-Node factories infer output types from handler functions and do not accept `.output()` or a result schema. Return ordinary values and let TypeScript infer their structure. A downstream handler may refer to `ReturnType<typeof upstreamRun>` or `Awaited<ReturnType<typeof upstreamRun>>` when it needs an explicit type for an upstream result; do not duplicate that result's shape.
+Node factories infer output types from handler functions and do not accept `.output()` or a result schema. Return ordinary values and let TypeScript infer their structure. Prefer the workflow's `ContextOf<typeof flow>['nodeResults']` for downstream results; use `Awaited<ReturnType<typeof upstreamRun>>` only when a standalone handler needs a specific upstream result type.
 
 The lower-level AST still accepts legacy result schemas for explicit template-reference validation. This compatibility contract is separate from context-handler authoring. A handler's `nodeResults` type annotation alone does not establish execution order or prove that a branch executed, so inspect availability before reading a branch-local result.
 
@@ -461,7 +371,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Every node, including nested branch nodes and custom Instructions, has a non-empty `description` that accurately explains its purpose and logic; review this even if the schema check passes.
 - Every branch belongs to the node contract.
 - Every run script is static, named-exported, abort-aware, and idempotent; every condition handler returns a boolean.
-- Every referenced run result has an accurate, lexically visible schema.
+- For a builder handler, check that a referenced result is available at runtime; types alone do not prove execution order or branch selection. For a hand-built template reference, maintain an accurate, lexically visible result schema.
 - The real five-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.
 
 Workflow diagnostics use the application logging service with source `workflow` and workflow, execution, and node identities where available. They share `storage/logs/app.<UTC-date>.<part>.log` by default. Set `logging.loggers.workflow.file.name: workflow` to separate them. The message-first logger passed to run modules adapts to this service; diagnostic output is not copied into the database node execution `log` field. Execution status, result, and error records remain business data.
