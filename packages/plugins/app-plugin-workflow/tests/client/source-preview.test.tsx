@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { I18nProvider } from '@nocobase/i18n/client';
+import { Toast } from '@base-ui/react/toast';
 import {
   act,
   cleanup,
@@ -34,25 +35,27 @@ function Location(): React.ReactElement {
 }
 function open(path: string): ReturnType<typeof render> {
   return render(
-    <I18nProvider runtime={runtime}>
-      <MemoryRouter initialEntries={[path]}>
-        <Location />
-        <Routes>
-          <Route
-            path={`${WORKFLOW_SETTING_PATHS.workflows}/source/:sourceKey`}
-            element={<WorkflowDetailPage />}
-          />
-          <Route
-            path={`${WORKFLOW_SETTING_PATHS.workflows}/:id`}
-            element={<WorkflowDetailPage />}
-          />
-          <Route
-            path={WORKFLOW_SETTING_PATHS.workflows}
-            element={<WorkflowListPage />}
-          />
-        </Routes>
-      </MemoryRouter>
-    </I18nProvider>,
+    <Toast.Provider>
+      <I18nProvider runtime={runtime}>
+        <MemoryRouter initialEntries={[path]}>
+          <Location />
+          <Routes>
+            <Route
+              path={`${WORKFLOW_SETTING_PATHS.workflows}/source/:sourceKey`}
+              element={<WorkflowDetailPage />}
+            />
+            <Route
+              path={`${WORKFLOW_SETTING_PATHS.workflows}/:id`}
+              element={<WorkflowDetailPage />}
+            />
+            <Route
+              path={WORKFLOW_SETTING_PATHS.workflows}
+              element={<WorkflowListPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>
+    </Toast.Provider>,
   );
 }
 it.each(['Parameter settings', 'Run manually'])(
