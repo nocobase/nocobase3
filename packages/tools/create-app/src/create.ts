@@ -61,7 +61,8 @@ function writeJson(envelope: Envelope): void {
 
 /**
  * A failure names the stage it stopped at, and whether the project exists: a failed install leaves a project to retry
- * `pnpm install` in, which creating it again would refuse.
+ * `pnpm install` in, which creating it again would refuse. A suggestion's `run` runs as given, from wherever the caller
+ * is, so the retry names the project with `--dir` rather than relying on the caller to enter it first.
  */
 function failureOf(state: CreateState, message: string): Envelope {
   return failureEnvelope(
@@ -72,8 +73,13 @@ function failureOf(state: CreateState, message: string): Envelope {
         state.stage === 'install'
           ? [
               {
-                message: `The project exists; run this inside ${state.directory ?? 'it'} to retry the installation, rather than creating it again:`,
-                run: { command: 'pnpm', args: ['install'] },
+                message: `The project exists${state.directory ? ` at ${state.directory}` : ''}; retry the installation there, rather than creating it again:`,
+                run: {
+                  command: 'pnpm',
+                  args: state.directory
+                    ? ['--dir', state.directory, 'install']
+                    : ['install'],
+                },
               },
             ]
           : [],

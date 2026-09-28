@@ -163,7 +163,7 @@ JSON mode never prompts. It writes one final JSON document to stdout and progres
 
 `result.nextCommands` is the whole remaining procedure in order, so an agent can run it as written rather than reconstructing it from prose. It always begins with `pnpm nocobase config init` and `pnpm nocobase config check`, preceded by `pnpm install` after `--no-install`, and a Hub ends with `pnpm build` and `pnpm start` instead of `pnpm dev`. `config init --json` returns the rest the same way: `result.nextCommands`, and `result.requiredSettings` for a database whose connection still has to be filled in.
 
-Success exits with 0, invalid input with 2, and operational failures with 1. An install failure preserves generated files, and its suggestion is the `pnpm install` to retry in the existing directory. `configured` is always `false`: creation writes no configuration, and nothing here verifies a database connection. The CLI never starts the application itself.
+Success exits with 0, invalid input with 2, and operational failures with 1. An install failure preserves generated files, and its suggestion is the `pnpm --dir <directory> install` that retries it in the existing directory from wherever it is run. `configured` is always `false`: creation writes no configuration, and nothing here verifies a database connection. The CLI never starts the application itself.
 
 ## About native install scripts
 

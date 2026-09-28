@@ -110,7 +110,15 @@ describe('JSON creation flow', () => {
       error: {
         code: 'INSTALL_FAILED',
         message: 'installation failed',
-        suggestions: [{ run: { command: 'pnpm', args: ['install'] } }],
+        // Runs as given from wherever the caller is: the project is named rather than assumed to be the cwd.
+        suggestions: [
+          {
+            run: {
+              command: 'pnpm',
+              args: ['--dir', path.join(root, 'crm'), 'install'],
+            },
+          },
+        ],
         details: {
           stage: 'install',
           directory: path.join(root, 'crm'),
@@ -122,6 +130,14 @@ describe('JSON creation flow', () => {
     expect(
       await readFile(path.join(root, 'crm/package.json'), 'utf8'),
     ).toContain('"name": "crm"');
+  });
+  it('prints the document on one line, which app-installer reads by line', async () => {
+    await template();
+    expect(await run(['crm', '--json'])).toBe(0);
+    // `pnpm create` prints pnpm's own notices around the document, so app-installer's `parseCreateResult` takes the
+    // last line of stdout that parses; an indented document would leave it nothing to read.
+    expect(stdout.trim()).not.toContain('\n');
+    expect(JSON.parse(stdout)).toMatchObject({ ok: true });
   });
   it('supports no-install and Hub startup commands', async () => {
     await template('hub');

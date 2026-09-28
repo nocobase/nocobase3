@@ -92,6 +92,9 @@ describe('the --json envelope', () => {
         warnings: [],
       }),
     );
+    expect(unsupportedNodeVersionEnvelope('').error.message).toBe(
+      'Node.js 24 or later is required; the current version is unknown.',
+    );
     expect(
       unsupportedNodeVersionOutput(['audit-log', '--json'], 'v22.0.0'),
     ).toMatchObject({

@@ -13,7 +13,12 @@ export function formatUnsupportedNodeVersionMessage(version) {
  * as JSON gets a result rather than nothing. It is written out here because `bin/run.js` refuses before loading the
  * code that builds the others.
  */
-export function unsupportedNodeVersionEnvelope(version = process.version) {
+export function unsupportedNodeVersionEnvelope(
+  version = process.version,
+  minimum = MINIMUM_NODE_MAJOR,
+) {
+  const current = String(version ?? '').trim() || 'unknown';
+
   return {
     schemaVersion: 1,
     ok: false,
@@ -21,10 +26,10 @@ export function unsupportedNodeVersionEnvelope(version = process.version) {
     status: 'failure',
     error: {
       code: 'NODE_UNSUPPORTED',
-      message: `Node.js ${MINIMUM_NODE_MAJOR} or later is required; the current version is ${version}.`,
+      message: `Node.js ${minimum} or later is required; the current version is ${current}.`,
       suggestions: [
         {
-          message: `Install Node.js ${MINIMUM_NODE_MAJOR} or later, then run the command again.`,
+          message: `Install Node.js ${minimum} or later, then run the command again.`,
         },
       ],
     },
