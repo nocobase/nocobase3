@@ -69,7 +69,7 @@ export function DataTablePagination<TData>({
       </div>
       <div className='flex flex-wrap items-center gap-6 lg:gap-8'>
         <div className='flex items-center gap-2'>
-          <p className='text-sm font-medium'>
+          <p className='text-sm font-medium whitespace-nowrap'>
             {t('dataTable.rowsPerPage', { defaultValue: 'Rows per page' })}
           </p>
           <Select
@@ -96,7 +96,8 @@ export function DataTablePagination<TData>({
             </SelectContent>
           </Select>
         </div>
-        <div className='flex w-[100px] items-center justify-center text-sm font-medium'>
+        {/* A minimum rather than a fixed width: "第 1 页，共 13 页" is wider than "Page 1 of 13" and must not wrap. */}
+        <div className='flex min-w-[100px] items-center justify-center text-sm font-medium whitespace-nowrap'>
           {t('dataTable.pageOf', {
             defaultValue: 'Page {{page}} of {{pageCount}}',
             page: pageIndex + 1,

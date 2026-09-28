@@ -16,7 +16,7 @@ export interface RouteChildPageProps {
  *
  * Unlike the other two it is deliberately **not** modal. It does not portal out of the content area or trap focus,
  * because the user is still on a page of the application and must be able to reach the sidebar. What closes it is
- * the breadcrumb above it, or the browser's back button — not an X or Escape.
+ * the `BackButton` above its heading, or the browser's back button — not an X or Escape.
  *
  * It is a single element, which both positions and scrolls. Anything absolutely positioned inside it therefore
  * moves with its scrolling — which is why the outlet for a deeper layer belongs *beside* this component rather

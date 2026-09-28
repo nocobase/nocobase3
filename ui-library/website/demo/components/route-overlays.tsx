@@ -230,8 +230,8 @@ function ReportChildPage(): ReactElement {
         />
         <p className='text-sm text-muted-foreground'>
           Unlike a dialog or a drawer it is not modal: the application around
-          the content area stays reachable, and the breadcrumb or the browser's
-          back button closes it.
+          the content area stays reachable, and the back link above its heading
+          or the browser's back button closes it.
         </p>
       </PageContainer>
     </RouteChildPage>

@@ -66,7 +66,7 @@ export default function NewOrderDialog() {
 
 Call `useRouteOverlay()` from a component rendered inside the overlay, such as a footer button. The page component that returns `<RouteDialog>` sits outside the overlay's provider, and the hook throws there.
 
-`RouteChildPage` is not modal. It positions itself with `absolute inset-0`, so the element that contains it must be positioned; an application's content area is. Render its `Outlet` beside the page's `PageContainer` rather than inside it, and give the child page a `PageContainer` of its own. While it is mounted, the siblings it covers are `inert`. It has no close button: the breadcrumb above it, or the browser's back button, returns to the page beneath.
+`RouteChildPage` is not modal. It positions itself with `absolute inset-0`, so the element that contains it must be positioned; an application's content area is. Render its `Outlet` beside the page's `PageContainer` rather than inside it, and give the child page a `PageContainer` of its own. While it is mounted, the siblings it covers are `inert`. It has no close button: a back link above its heading — the application templates' `BackButton` — or the browser's back button returns to the page beneath.
 
 ## Translations
 
