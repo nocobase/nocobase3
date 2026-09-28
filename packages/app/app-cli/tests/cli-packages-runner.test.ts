@@ -133,6 +133,17 @@ describe('commands from a CLI package the application depends on', () => {
     expect(result.code).toBe(0);
   }, 60_000);
 
+  it('runs a command under the package topic by its colon id, as oclif accepts one', async () => {
+    const result = await nocobase(['demo:greet', '--json']);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      result: { greeted: true },
+    });
+    expect(result.stderr).toContain(LOADED);
+    expect(result.code).toBe(0);
+  }, 60_000);
+
   it('does not import the package for another command', async () => {
     const result = await nocobase(['app', 'hello', '--json']);
 
@@ -180,6 +191,19 @@ describe('commands from a CLI package the application depends on', () => {
             run: { command: 'pnpm', args: ['install'] },
           }),
         ],
+      },
+    });
+    expect(result.code).toBe(1);
+  }, 60_000);
+
+  it('names a declared package that is not installed by its colon id too', async () => {
+    const result = await nocobase(['absent:go', '--json']);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'PACKAGE_NOT_INSTALLED',
+        message: expect.stringContaining('@nocobase/absent-cli'),
       },
     });
     expect(result.code).toBe(1);

@@ -66,7 +66,7 @@ export default class HubDeploy extends HubCommand<HubDeployResult> {
     }),
     'idempotency-key': Flags.string({
       description:
-        'Retry identity. Defaults to the archive SHA-256, or with --release-id to a digest of the App and Release IDs. Use a new key to deploy the same Release again.',
+        'Retry identity. Defaults to the archive SHA-256, or with --release-id to a digest of the App and Release IDs and the --config content. Use a new key to deploy the same Release again.',
     }),
     wait: Flags.boolean({
       default: true,

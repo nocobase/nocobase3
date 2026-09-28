@@ -161,7 +161,7 @@ function withCommandSuggestions(
     return error;
   }
   const found = findPackages();
-  const [head] = commandWords(argv).split(' ');
+  const [head] = commandWords(argv).split(/[ :]/);
   const uninstalled = found.unavailable.find(
     ({ topic }) =>
       topic === head &&
@@ -170,7 +170,7 @@ function withCommandSuggestions(
   );
   if (uninstalled !== undefined) {
     return new CommandError(
-      `"${uninstalled.topic}" commands come from ${uninstalled.packageName}, which package.json declares but node_modules does not hold.`,
+      `${uninstalled.packageName} is declared in package.json but not installed, so the command line cannot tell whether it provides "${uninstalled.topic}" commands.`,
       {
         code: 'PACKAGE_NOT_INSTALLED',
         exit: 1,
@@ -269,7 +269,8 @@ async function assembleForArguments(
 
   const builtinCommands = await loadCommandFiles(files);
   const plugins = await loadPlugins();
-  const [head] = commandWords(argv).split(' ');
+  // The first word, or the first segment of a colon-joined id: oclif accepts `hub:deploy` as well as `hub deploy`.
+  const [head] = commandWords(argv).split(/[ :]/);
   const selected = selectCliPackages(findPackages(), {
     head: head === '' ? undefined : head,
     // Past the early return above, a built-in id here is one of the commands that read the whole tree.

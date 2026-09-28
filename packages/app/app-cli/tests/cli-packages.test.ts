@@ -11,6 +11,7 @@ import {
   selectCliPackages,
   type CliPackage,
 } from '../src/runtime/cli-packages.ts';
+import { pluginTopicFor } from '../src/plugins/define.ts';
 import type { AppLocation } from '../src/runtime/location.ts';
 
 let root: string;
@@ -62,9 +63,10 @@ const CLI_MANIFEST = {
 function pluginModule(
   packageName: string,
   extra: string = 'buildHooks: {}, devHooks: {}',
+  topic: string = pluginTopicFor(packageName),
 ): string {
   return `class Go { static run() {} }
-export default { packageName: ${JSON.stringify(packageName)}, topic: 'x', commands: {}, devCommands: { go: Go }, ${extra} };
+export default { packageName: ${JSON.stringify(packageName)}, topic: ${JSON.stringify(topic)}, commands: {}, devCommands: { go: Go }, ${extra} };
 `;
 }
 
@@ -285,6 +287,17 @@ describe('loading a CLI entry', () => {
     );
     await expect(loadCliPackages([found('@nocobase/hub-cli')])).rejects.toThrow(
       /packageName must be "@nocobase\/hub-cli"/,
+    );
+  });
+
+  it('rejects an entry that mounts under a topic other than the one its name gives', async () => {
+    install(
+      '@nocobase/hub-cli',
+      CLI_MANIFEST,
+      pluginModule('@nocobase/hub-cli', undefined, 'db'),
+    );
+    await expect(loadCliPackages([found('@nocobase/hub-cli')])).rejects.toThrow(
+      /topic must be "hub"/,
     );
   });
 

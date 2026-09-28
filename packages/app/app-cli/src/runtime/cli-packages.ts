@@ -118,7 +118,10 @@ export function findCliPackages(location: AppLocation): CliPackages {
 export function selectCliPackages(
   found: CliPackages,
   options: {
-    /** The first word of the command line, or `undefined` for a bare `nocobase` or one that starts with a flag. */
+    /**
+     * The first word of the command line, before a space or a colon, or `undefined` for a bare `nocobase` or one that
+     * starts with a flag.
+     */
     readonly head: string | undefined;
     /** Whether the run reads the whole command tree. */
     readonly wholeTree: boolean;
@@ -146,23 +149,31 @@ export function selectCliPackages(
 export async function loadCliPackages(
   packages: readonly CliPackage[],
 ): Promise<AppCliPlugin[]> {
+  // The entries are independent, so their imports overlap; the first failure in package order is the one reported,
+  // whichever settled first.
+  const settled = await Promise.allSettled(packages.map(loadCliPackage));
   const loaded: AppCliPlugin[] = [];
-  for (const cliPackage of packages) {
-    const file = resolveEntry(cliPackage);
-    let module: { default?: unknown };
-    try {
-      module = (await import(pathToFileURL(file).href)) as {
-        default?: unknown;
-      };
-    } catch (cause) {
-      throw new Error(
-        `Could not load the CLI entry of ${cliPackage.packageName}, ${file}.`,
-        { cause },
-      );
-    }
-    loaded.push(checkEntry(cliPackage, module.default));
+  for (const outcome of settled) {
+    if (outcome.status === 'rejected') throw outcome.reason;
+    loaded.push(outcome.value);
   }
   return loaded;
+}
+
+async function loadCliPackage(cliPackage: CliPackage): Promise<AppCliPlugin> {
+  const file = resolveEntry(cliPackage);
+  let module: { default?: unknown };
+  try {
+    module = (await import(pathToFileURL(file).href)) as {
+      default?: unknown;
+    };
+  } catch (cause) {
+    throw new Error(
+      `Could not load the CLI entry of ${cliPackage.packageName}, ${file}.`,
+      { cause },
+    );
+  }
+  return checkEntry(cliPackage, module.default);
 }
 
 function resolveEntry(cliPackage: CliPackage): string {
@@ -224,6 +235,12 @@ function checkEntry(cliPackage: CliPackage, value: unknown): AppCliPlugin {
   if (value.packageName !== packageName) {
     throw new Error(
       `The CLI entry of ${packageName} defines the commands of ${value.packageName}; its packageName must be "${packageName}".`,
+    );
+  }
+  // The run imported this package for the topic its name gives, so that is the only topic it may mount under.
+  if (value.topic !== cliPackage.topic) {
+    throw new Error(
+      `The CLI entry of ${packageName} mounts its commands under "${value.topic}"; its topic must be "${cliPackage.topic}", the one its package name gives.`,
     );
   }
   // `pnpm build` and `pnpm dev` read hooks from `cli/plugins.ts` without assembling the command tree, which is where a
