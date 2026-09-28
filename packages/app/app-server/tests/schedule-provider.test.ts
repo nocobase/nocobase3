@@ -32,7 +32,7 @@ afterEach(async () => {
 async function application(schedule?: AppScheduleConfig) {
   const config = new AppConfig();
   await config.loadAll();
-  if (schedule) config.mergeDefaults({ schedule });
+  if (schedule) config.mergeDefaults({ jobs: schedule });
   const container = new ServiceContainer();
   const logger = {
     debug: vi.fn(),
@@ -103,12 +103,12 @@ describe('ScheduleExecuteServiceProvider', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
       { scope: SCOPE },
-      expect.stringMatching(/built-in memory schedule configuration/u),
+      expect.stringMatching(/built-in memory jobs configuration/u),
     );
 
     // The memory adapter writes its state when it shuts down.
     await provider.shutdown();
-    expect(await readdir(path.join(rootDir, 'storage', 'schedule'))).toEqual([
+    expect(await readdir(path.join(rootDir, 'storage', 'jobs'))).toEqual([
       'crm.%40nocobase%2Fapp-plugin-scheduler.json',
     ]);
   });

@@ -3,7 +3,7 @@ import {
   type ManagedScheduleExecuteService,
   type ScheduleFallbackEvent,
   type ScheduleLogger,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 import {
   ServiceProvider,
   type ServiceResolver,
@@ -25,7 +25,7 @@ const DEVELOPMENT_ENVIRONMENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Composes the schedule service from the `schedule` section, filling in what
+ * Composes the schedule service from the `jobs` section, filling in what
  * only the application knows: its name as the default namespace and its
  * storage directory for the built-in memory configuration. Executors belong
  * to the consumers that ask for them, which set them up and shut them down;
@@ -56,21 +56,21 @@ export class ScheduleExecuteServiceProvider extends ServiceProvider<AppPluginApp
     const logger: ScheduleLogger | undefined = container.has(loggingToken)
       ? container
           .resolve(loggingToken)
-          .getLogger('schedule')
-          .child({ module: 'schedule' })
+          .getLogger('jobs')
+          .child({ module: 'jobs' })
       : undefined;
     const reportFallback = !DEVELOPMENT_ENVIRONMENTS.has(
       this.options.nodeEnv ?? '',
     );
     this.service = createScheduleExecuteService(
-      this.app.config.get<AppScheduleConfig>('schedule'),
+      this.app.config.get<AppScheduleConfig>('jobs'),
       {
         appName: this.app.appName,
-        storagePath: this.app.paths.storage('schedule'),
+        storagePath: this.app.paths.storage('jobs'),
         ...(logger ? { logger } : {}),
         onFallback: (event: ScheduleFallbackEvent) => {
           if (!reportFallback) return;
-          const message = `Scope "${event.scope}" runs on the built-in memory schedule configuration: its jobs live in this process and reach storage only when it shuts down, and every other process or instance would run its own copy. Set schedule.default to a redis configuration to run more than one.`;
+          const message = `Scope "${event.scope}" runs on the built-in memory jobs configuration: its jobs live in this process and reach storage only when it shuts down, and every other process or instance would run its own copy. Set jobs.default to a redis configuration to run more than one.`;
           if (logger) logger.warn({ scope: event.scope }, message);
           else console.warn(message);
         },

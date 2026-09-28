@@ -95,10 +95,10 @@ cases:
   - id: diagnose-schedule-adapter
     action: 'inspect'
     risk: 'read-only'
-    prompt: '应用部署了两个实例，定时任务每次都执行两遍；没有配置 schedule.default，日志里有 built-in memory schedule configuration 的告警。只分析原因和配置方向，不执行。'
+    prompt: '应用部署了两个实例，定时任务每次都执行两遍；没有配置 jobs.default，日志里有 built-in memory jobs configuration 的告警。只分析原因和配置方向，不执行。'
     expected:
-      - 'Explains that without schedule.default the built-in memory adapter keeps state per process, so every instance fires its own copy.'
-      - 'Points to a redis schedule configuration selected by schedule.default, and to Redis persistence and noeviction.'
+      - 'Explains that without jobs.default the built-in memory adapter keeps state per process, so every instance fires its own copy.'
+      - 'Points to a redis jobs configuration selected by jobs.default, and to Redis persistence and noeviction.'
     forbidden:
       - 'Claiming the queue configuration selects the schedule backend.'
       - 'Suggesting a lock or deduplication in the target instead of the redis adapter.'

@@ -5,9 +5,9 @@
 '@nocobase/app-skills': patch
 ---
 
-Compose the schedule service, and replace `@nocobase/cron` with `@nocobase/schedule`
+Compose the jobs service, and replace `@nocobase/cron` with `@nocobase/jobs`
 
-The templates add `ScheduleExecuteServiceProvider` to `server/app.ts`, a `server/config/schedule.ts` offering a `memory` and a `redis` configuration, and `@nocobase/schedule` as a dependency, and remove the Scheduler's `queues.schedule` queue connection. No configuration is the default: until `schedule.default` names one, scheduled jobs run on the built-in memory adapter — one process, its state written under `storage/schedule` when the application stops — and a warning reports it outside development. Set `schedule.default` to `redis` in `config.yml` to run several instances, each firing executed once; Redis must persist its data and use `maxmemory-policy noeviction`.
+The templates add `ScheduleExecuteServiceProvider` to `server/app.ts`, a `server/config/jobs.ts` offering a `memory` and a `redis` configuration, and `@nocobase/jobs` as a dependency, and remove the Scheduler's `queues.schedule` queue connection. The default and examples templates also add `server/config/scheduler.ts`, where `scheduler.jobs` or `SCHEDULER_JOBS` selects the `jobs` configuration Scheduler runs on. No configuration is the default: until `jobs.default` names one, scheduled jobs run on the built-in memory adapter — one process, its state written under `storage/jobs` when the application stops — and a warning reports it outside development. Set `jobs.default` to `redis` in `config.yml` to run several instances, each firing executed once; Redis must persist its data and use `maxmemory-policy noeviction`.
 
 `@nocobase/cron` is no longer part of the templates or of this repository; its published 0.1.0 stays installable. Code that scheduled work with `createCronJobManager()` moves to an executor of its own, which also stops several instances from each firing the job:
 

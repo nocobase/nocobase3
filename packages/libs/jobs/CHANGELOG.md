@@ -1,4 +1,4 @@
-# @nocobase/schedule
+# @nocobase/jobs
 
 ## 0.0.1
 

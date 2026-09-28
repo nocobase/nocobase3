@@ -7,7 +7,7 @@ import {
   type ScheduleExecuteService,
   type ScheduleExecutor,
   type Subscriber,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -28,11 +28,14 @@ import {
   type ScheduleServiceHarness,
 } from './support/scheduler.js';
 
-function application(container: ServiceContainer): AppPluginApplication {
+function application(
+  container: ServiceContainer,
+  sections: Readonly<Record<string, unknown>> = {},
+): AppPluginApplication {
   return {
     appName: 'main',
     publicBasePath: '',
-    config: {} as never,
+    config: { get: (key: string) => sections[key] } as never,
     paths: {} as never,
     router: new Hono(),
     container,
@@ -115,6 +118,53 @@ describe('SchedulerProvider', () => {
     expect(schedulerTokenNames(container)).toEqual([
       '@nocobase/app-plugin-scheduler/service',
     ]);
+  });
+
+  it.each([
+    ['names no jobs configuration', {}, undefined],
+    [
+      'names the jobs configuration scheduler.jobs selects',
+      {
+        scheduler: { jobs: 'redis-scheduler' },
+        jobs: { default: 'redis', 'redis-scheduler': { adapter: 'redis' } },
+      },
+      'redis-scheduler',
+    ],
+  ])('%s', (_label, sections, name) => {
+    const container = new ServiceContainer();
+    container.instance(databaseManagerToken, {} as DatabaseManager);
+    const getScheduleExecutor = vi.fn(() => ({}) as ScheduleExecutor);
+    container.instance(scheduleExecuteServiceToken, {
+      getScheduleExecutor,
+    } as ScheduleExecuteService);
+    const provider = new SchedulerProvider(application(container, sections));
+    provider.register();
+
+    container.resolve(schedulerServiceToken);
+
+    expect(getScheduleExecutor).toHaveBeenCalledWith(SCHEDULER_SCOPE, name, {
+      concurrency: 1,
+      attempts: 1,
+    });
+  });
+
+  it('refuses a scheduler.jobs naming no jobs configuration', () => {
+    const container = new ServiceContainer();
+    container.instance(databaseManagerToken, {} as DatabaseManager);
+    container.instance(scheduleExecuteServiceToken, {
+      getScheduleExecutor: vi.fn(),
+    } as unknown as ScheduleExecuteService);
+    const provider = new SchedulerProvider(
+      application(container, {
+        scheduler: { jobs: 'redis-typo' },
+        jobs: { default: 'redis', redis: { adapter: 'redis' } },
+      }),
+    );
+    provider.register();
+
+    expect(() => container.resolve(schedulerServiceToken)).toThrow(
+      /scheduler\.jobs names "redis-typo", which is not a jobs configuration/u,
+    );
   });
 
   it('syncs, subscribes and sets the executor up before reconciling', async () => {

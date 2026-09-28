@@ -1,5 +1,5 @@
 import type { DatabaseManager } from '@nocobase/db';
-import type { ScheduleExecutionContext as FiringContext } from '@nocobase/schedule';
+import type { ScheduleExecutionContext as FiringContext } from '@nocobase/jobs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

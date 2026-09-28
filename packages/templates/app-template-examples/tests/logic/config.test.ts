@@ -232,10 +232,10 @@ describe('application config', () => {
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
     // Scheduler runs on the schedule service, not on a queue of its own.
     expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
-    expect(runtime.config.get<AppScheduleConfig>('schedule')).toEqual({
+    expect(runtime.config.get<AppScheduleConfig>('jobs')).toEqual({
       memory: {
         adapter: 'memory',
-        persistence: { path: runtime.paths.storage('schedule') },
+        persistence: { path: runtime.paths.storage('jobs') },
       },
       redis: {
         adapter: 'redis',
@@ -265,6 +265,22 @@ describe('application config', () => {
 
     expect(result.changedNamespaces).toEqual([]);
   });
+  it('lets the environment select the jobs configuration Scheduler runs on', async () => {
+    const defaults = await resolveStandaloneAppRuntime(appRuntime, {
+      rootDir: templateRootDir,
+      configPath,
+    });
+    expect(defaults.config.get('scheduler')).toEqual({});
+
+    const runtime = await resolveStandaloneAppRuntime(appRuntime, {
+      rootDir: templateRootDir,
+      configPath,
+      env: { SCHEDULER_JOBS: 'redis' },
+    });
+
+    expect(runtime.config.get('scheduler.jobs')).toBe('redis');
+  });
+
   it('loads only explicit env overrides and restores defaults on reload', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,

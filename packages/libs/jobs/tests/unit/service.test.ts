@@ -41,7 +41,7 @@ function harness(
     config,
     {
       appName: 'crm',
-      storagePath: '/app/storage/schedule',
+      storagePath: '/app/storage/jobs',
       onFallback,
       ...dependencies,
     },
@@ -80,7 +80,7 @@ describe('configuration fallback', () => {
     expect(onFallback).not.toHaveBeenCalled();
   });
 
-  it('falls back to schedule.default when no name is given or the name is unknown', () => {
+  it('falls back to jobs.default when no name is given or the name is unknown', () => {
     const { service, created, onFallback } = harness({
       default: 'redis-1',
       'redis-1': { ...redis, namespace: '{crm}' },
@@ -96,7 +96,7 @@ describe('configuration fallback', () => {
   });
 
   it.each([
-    ['no schedule configuration', undefined],
+    ['no jobs configuration', undefined],
     ['a configuration without default', { memory: { adapter: 'memory' } }],
   ] as const)(
     'falls back to the built-in memory configuration with %s',
@@ -112,7 +112,7 @@ describe('configuration fallback', () => {
           adapter: 'memory',
           builtIn: true,
           namespace: 'crm',
-          persistencePath: '/app/storage/schedule',
+          persistencePath: '/app/storage/jobs',
           concurrency: 1,
           attempts: 1,
         }),
@@ -126,7 +126,7 @@ describe('configuration fallback', () => {
     const { service } = harness({ default: 'redis-2', 'redis-1': redis });
 
     expect(() => service.getScheduleExecutor('scope-a')).toThrow(
-      /schedule\.default names "redis-2"/u,
+      /jobs\.default names "redis-2"/u,
     );
   });
 
@@ -141,7 +141,7 @@ describe('configuration fallback', () => {
     service.getScheduleExecutor('scope-a', 'disk');
 
     expect(created[0]).toMatchObject({
-      persistencePath: '/app/storage/schedule',
+      persistencePath: '/app/storage/jobs',
       concurrency: 2,
     });
     expect(created[1]).toMatchObject({

@@ -6,7 +6,7 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   createScheduleExecuteService,
   type ManagedScheduleExecuteService,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -57,7 +57,7 @@ describe('Scheduler on the redis adapter', { timeout: 60_000 }, () => {
     const provider = new SchedulerProvider({
       appName: 'main',
       publicBasePath: '',
-      config: {} as never,
+      config: { get: () => undefined } as never,
       paths: {} as never,
       router: new Hono(),
       container,

@@ -125,13 +125,13 @@ beforeAll(async function startExampleServer() {
           },
         },
       },
-      // The app-server suite starts applications at the same time; the memory schedule adapter allows one
+      // The app-server suite starts applications at the same time; the memory jobs adapter allows one
       // process per state directory.
-      schedule: {
+      jobs: {
         default: 'memory',
         memory: {
           adapter: 'memory',
-          persistence: { path: path.join(temporary, 'schedule') },
+          persistence: { path: path.join(temporary, 'jobs') },
         },
       },
     }),

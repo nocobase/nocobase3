@@ -216,7 +216,9 @@ pnpm nocobase scheduler sync --json
 
 Normal synchronization loads the complete application, validates registered targets, and non-destructively upserts definitions while preserving the enabled or disabled state administrators set in the UI. Normal application startup also performs a non-destructive synchronization before Scheduler starts running its schedules.
 
-Where schedules run is the application's `schedule` configuration. Without `schedule.default` they run on the built-in memory adapter: one process holds the state in memory, reads it from `storage/schedule` at startup and writes it back when it stops, so a process that is killed loses what changed since it started. On this adapter a running application overwrites what `scheduler sync` wrote when it stops. Nothing is lost: every start synchronizes again from the code and removes the rules of disabled and deactivated definitions again. Set `schedule.default` to `redis` in `config.yml` before running several instances; each firing then runs on exactly one of them.
+Where schedules run is the application's `jobs` configuration. Without `jobs.default` they run on the built-in memory adapter: one process holds the state in memory, reads it from `storage/jobs` at startup and writes it back when it stops, so a process that is killed loses what changed since it started. On this adapter a running application overwrites what `scheduler sync` wrote when it stops. Nothing is lost: every start synchronizes again from the code and removes the rules of disabled and deactivated definitions again. Set `jobs.default` to `redis` in `config.yml` before running several instances; each firing then runs on exactly one of them.
+
+To run the schedules on a configuration of their own, name it in `scheduler.jobs` (or `SCHEDULER_JOBS`); without it they follow `jobs.default`.
 
 During production deployment, once all plugins are loaded, run this once per application:
 
@@ -254,7 +256,7 @@ The UI can enable or disable tasks, but cannot create, edit, or delete code defi
 Focus on evidence when reviewing the work:
 
 - Does it explain why Scheduler is needed instead of an ordinary queue or a workflow alone?
-- Did it inspect the application's installed plugins, Providers, `schedule` configuration, and permission entry points?
+- Did it inspect the application's installed plugins, Providers, `jobs` configuration, and permission entry points?
 - Does it use a stable, application-wide unique `key`, a Cron expression, and an IANA timezone?
 - Does it distinguish the built-in `workflow` target from custom target extensions?
 - Does it explain the idempotency strategy, asynchronous completion reporting, and how to observe failures?

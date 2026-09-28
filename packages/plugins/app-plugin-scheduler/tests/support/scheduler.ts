@@ -13,7 +13,7 @@ import {
   type ManagedScheduleExecuteService,
   type ScheduleConfig,
   type ScheduleExecutor,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 
 import createDefinitions from '../../database/migrations/202609020001_scheduler_create_definitions.js';
 import addRunState from '../../database/migrations/202609240001_scheduler_add_run_state.js';

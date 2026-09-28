@@ -5,16 +5,16 @@ import {
 import type { AppScheduleConfig } from '@nocobase/app-server/schedule';
 
 /**
- * Configurations the schedule service can run on. None is the default: until `schedule.default` names one, executors
- * run on the built-in memory adapter, which serves one process and writes its state under storage/schedule when the
+ * Configurations the jobs service can run on. None is the default: until `jobs.default` names one, executors
+ * run on the built-in memory adapter, which serves one process and writes its state under storage/jobs when the
  * application stops, and which is reported at startup outside development. Name `memory` to keep that choice without
  * the report, or `redis` to run any number of instances with each firing executed once.
  */
-const schedule: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
+const jobs: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
   ({ paths }) => ({
     memory: {
       adapter: 'memory',
-      persistence: { path: paths.storage('schedule') },
+      persistence: { path: paths.storage('jobs') },
     },
     redis: {
       adapter: 'redis',
@@ -26,4 +26,4 @@ const schedule: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
   }),
 );
 
-export default schedule;
+export default jobs;

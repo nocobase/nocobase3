@@ -8,7 +8,7 @@ import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
 import {
   createScheduleExecuteService,
   type ManagedScheduleExecuteService,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

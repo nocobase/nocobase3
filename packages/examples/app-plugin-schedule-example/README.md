@@ -8,4 +8,4 @@ Schedule service example. The plugin's provider takes an executor of its own fro
 
 Send an authenticated `GET` request to `/api/schedule-example` to see the job's next firing and its most recent runs.
 
-On the `memory` schedule adapter, the application's default, the job runs in one process and its state is written under `storage/schedule` when the application stops; set `schedule.default` to `redis` to run it once per firing across several instances. See the `@nocobase/schedule` README for the full contract.
+On the `memory` jobs adapter, the application's default, the job runs in one process and its state is written under `storage/jobs` when the application stops; set `jobs.default` to `redis` to run it once per firing across several instances. See the `@nocobase/jobs` README for the full contract.

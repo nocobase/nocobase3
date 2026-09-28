@@ -52,7 +52,7 @@ export type ScheduleAdapterConfig =
   RedisScheduleAdapterConfig | MemoryScheduleAdapterConfig;
 
 /**
- * The `schedule` configuration section: `default` names the configuration used
+ * The `jobs` configuration section: `default` names the configuration used
  * when a consumer names none or an unknown one, and every other key defines
  * one configuration.
  */
@@ -123,7 +123,7 @@ export function selectScheduleConfig(
   const selected = defaultKey === 'default' ? undefined : config?.[defaultKey];
   if (selected === undefined || typeof selected === 'string') {
     throw new Error(
-      `schedule.default names "${defaultKey}", which is not a schedule configuration.`,
+      `jobs.default names "${defaultKey}", which is not a jobs configuration.`,
     );
   }
   return { key: defaultKey, config: selected };
@@ -171,7 +171,7 @@ export function resolveScheduleExecutorConfig(
   if (config.adapter === 'redis') {
     if (!config.connection || typeof config.connection !== 'object') {
       throw new Error(
-        `Schedule configuration "${selection.key}" needs a redis connection.`,
+        `Jobs configuration "${selection.key}" needs a redis connection.`,
       );
     }
     return {
@@ -183,7 +183,7 @@ export function resolveScheduleExecutorConfig(
     };
   }
   throw new Error(
-    `Schedule configuration "${selection.key}" uses adapter "${String((config as { adapter?: unknown }).adapter)}", which is neither "redis" nor "memory".`,
+    `Jobs configuration "${selection.key}" uses adapter "${String((config as { adapter?: unknown }).adapter)}", which is neither "redis" nor "memory".`,
   );
 }
 

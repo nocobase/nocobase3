@@ -127,10 +127,10 @@ describe('application config', () => {
     expect(runtime.config.get('logging.file.name')).toBe('app');
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
     expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
-    expect(runtime.config.get<AppScheduleConfig>('schedule')).toEqual({
+    expect(runtime.config.get<AppScheduleConfig>('jobs')).toEqual({
       memory: {
         adapter: 'memory',
-        persistence: { path: runtime.paths.storage('schedule') },
+        persistence: { path: runtime.paths.storage('jobs') },
       },
       redis: {
         adapter: 'redis',

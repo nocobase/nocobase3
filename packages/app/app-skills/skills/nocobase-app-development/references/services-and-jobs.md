@@ -128,13 +128,13 @@ The default queue connection is `sync`, which runs jobs inline — convenient in
 
 ## Work that runs on a schedule
 
-A job runs when something dispatches it. Work that has to happen _because time passed_ — scan for records overdue today, send a nightly digest, expire stale sessions — needs a scheduler, and the application's schedule service provides one. If administrators need to see the task and its runs in the UI, register a Scheduler schedule instead, as the Scheduler plugin's Skill describes; the service below is for work nobody tracks there.
+A job runs when something dispatches it. Work that has to happen _because time passed_ — scan for records overdue today, send a nightly digest, expire stale sessions — needs a scheduler, and the application's jobs service provides one. If administrators need to see the task and its runs in the UI, register a Scheduler schedule instead, as the Scheduler plugin's Skill describes; the service below is for work nobody tracks there.
 
 Resolve `scheduleExecuteServiceToken` and ask it for an executor of your own, with your package name as the scope. Register the jobs, then call `setup()`, both in `start()`, and shut the executor down in `shutdown()`:
 
 ```ts
 import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
-import type { ScheduleExecutor } from '@nocobase/schedule';
+import type { ScheduleExecutor } from '@nocobase/jobs';
 
 export default class OverdueScanProvider extends ServiceProvider<Application> {
   public readonly name: string = 'app/overdue-scan-provider';
@@ -162,13 +162,13 @@ export default class OverdueScanProvider extends ServiceProvider<Application> {
 }
 ```
 
-The rule is stored, not just held in memory: `addJob` writes it on `setup()` and leaves it alone when nothing changed, and `shutdown()` stops this instance without removing it. `removeJob(name)` deletes a job you no longer define; `getJob` and `listJob` show when each fires next. A job's `name` must be stable and may not contain `:`. `cron` takes five or six fields, `tz` defaults to UTC, and `every`, `limit`, `startDate` and `endDate` are the other options. The types come from `@nocobase/schedule`, which the application already depends on.
+The rule is stored, not just held in memory: `addJob` writes it on `setup()` and leaves it alone when nothing changed, and `shutdown()` stops this instance without removing it. `removeJob(name)` deletes a job you no longer define; `getJob` and `listJob` show when each fires next. A job's `name` must be stable and may not contain `:`. `cron` takes five or six fields, `tz` defaults to UTC, and `every`, `limit`, `startDate` and `endDate` are the other options. The types come from `@nocobase/jobs`, which the application already depends on.
 
 Keep `execute` thin. It should resolve a service and call one method, so the behavior stays testable without waiting for a schedule; test that method directly and let the schedule only decide when it runs. `jobId` identifies the firing, and is the key to make its effect idempotent.
 
 Two things to decide before shipping one:
 
-- **More than one instance.** `schedule.default` decides. The `redis` adapter runs each firing on exactly one instance, however many there are. The `memory` adapter — also what runs when no default is set — keeps its state in the process and writes it under `storage/schedule` when the application stops: it serves one process, every other process or instance would fire its own copy, and a process that is killed loses what changed since it started. Configure `redis` before scaling out.
+- **More than one instance.** `jobs.default` decides. The `redis` adapter runs each firing on exactly one instance, however many there are. The `memory` adapter — also what runs when no default is set — keeps its state in the process and writes it under `storage/jobs` when the application stops: it serves one process, every other process or instance would fire its own copy, and a process that is killed loses what changed since it started. Configure `redis` before scaling out.
 - **Long or heavy work.** A firing that runs for minutes holds one of the executor's slots. Prefer one that dispatches a job and returns, which also gets you the queue's retry behavior.
 
 ## Verify
@@ -177,7 +177,7 @@ Two things to decide before shipping one:
 - Provider lifecycle releases in `shutdown()` what `start()` acquired, including the schedule executor.
 - The job runs with a realistic payload, and running it twice is harmless.
 - A failure retries or terminates as intended.
-- A scheduled job's work is tested directly, and a deployment of more than one instance runs it on the `redis` schedule adapter.
+- A scheduled job's work is tested directly, and a deployment of more than one instance runs it on the `redis` jobs adapter.
 
 ### Application code configuration
 

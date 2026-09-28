@@ -15,7 +15,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
         migrations: './database/migrations',
       },
     });
-    // Scheduling runs on @nocobase/schedule; the plugin contributes no queue jobs.
+    // Scheduling runs on @nocobase/jobs; the plugin contributes no queue jobs.
     expect(plugin.queue).toBeUndefined();
   });
 

@@ -1,13 +1,14 @@
 import { type AppPluginApplication } from '@nocobase/app-server/plugins';
 import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
 import { databaseManagerToken } from '@nocobase/db';
-import type { ScheduleExecutor, Unsubscribe } from '@nocobase/schedule';
+import type { ScheduleExecutor, Unsubscribe } from '@nocobase/jobs';
 import {
   createServiceToken,
   ServiceProvider,
   type ServiceToken,
 } from '@nocobase/service-provider';
 
+import type { SchedulerConfig } from '../config.js';
 import { createScheduleDispatchJob } from '../dispatch.js';
 import { ScheduleOccurrenceStore } from '../occurrences.js';
 import { ScheduleTargetRegistry } from '../schedules/registry.js';
@@ -100,6 +101,25 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
     this.internals = undefined;
   }
 
+  /**
+   * The `jobs` configuration `scheduler.jobs` names. The jobs service would
+   * fall back to `jobs.default` for a name it does not know, which would put
+   * the schedules on another backend without a word, so an unknown name
+   * refuses to start instead.
+   */
+  private jobsConfiguration(): string | undefined {
+    const name = this.app.config.get<SchedulerConfig>('scheduler')?.jobs;
+    if (name === undefined) return undefined;
+    const jobs = this.app.config.get<Record<string, unknown>>('jobs');
+    const selected = name === 'default' ? undefined : jobs?.[name];
+    if (!selected || typeof selected !== 'object') {
+      throw new Error(
+        `scheduler.jobs names "${name}", which is not a jobs configuration.`,
+      );
+    }
+    return name;
+  }
+
   private compose(): SchedulerInternals {
     if (this.internals) return this.internals;
     const container = this.app.container;
@@ -110,7 +130,7 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
     // occurrence's outcome rather than retried behind the administrator's back.
     const executor = container
       .resolve(scheduleExecuteServiceToken)
-      .getScheduleExecutor(SCHEDULER_SCOPE, undefined, {
+      .getScheduleExecutor(SCHEDULER_SCOPE, this.jobsConfiguration(), {
         concurrency: 1,
         attempts: 1,
       });

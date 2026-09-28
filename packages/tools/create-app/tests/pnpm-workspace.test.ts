@@ -59,7 +59,7 @@ describe('ALLOWED_BUILDS', () => {
   });
 
   /**
-   * `msgpackr-extract` arrives through BullMQ in `@nocobase/schedule`. Its install script only looks for a prebuilt
+   * `msgpackr-extract` arrives through BullMQ in `@nocobase/jobs`. Its install script only looks for a prebuilt
    * binary, which the platform package already provides, and `msgpackr` falls back to JavaScript without it.
    */
   it('records the schedule service native accelerator as a deliberate skip', () => {

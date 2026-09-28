@@ -25,7 +25,7 @@ export interface AllowBuildsEntry {
  * was chosen: listing them costs nothing and means switching an app's database later just works, instead of failing
  * at runtime because a native addon was not built. `tesseract.js` arrives through `officeparser` in the AI runtime
  * and its `postinstall` only prints an OpenCollective donation notice, so it is skipped. `msgpackr-extract` arrives
- * through BullMQ in `@nocobase/schedule`; its install script only looks for the prebuilt binary its platform package
+ * through BullMQ in `@nocobase/jobs`; its install script only looks for the prebuilt binary its platform package
  * already ships, and `msgpackr` falls back to JavaScript without it, so it is skipped too. The list mirrors the
  * repository's own `pnpm-workspace.yaml`, so an application and the monorepo decide the same packages the same way.
  */

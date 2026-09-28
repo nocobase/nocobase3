@@ -1,4 +1,4 @@
-import type { ScheduleEvent } from '@nocobase/schedule';
+import type { ScheduleEvent } from '@nocobase/jobs';
 import {
   createServiceToken,
   type ServiceToken,

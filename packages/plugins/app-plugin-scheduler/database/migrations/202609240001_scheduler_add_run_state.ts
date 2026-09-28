@@ -4,7 +4,7 @@ import {
   type MigrationDefinition,
 } from '@nocobase/db';
 
-// Scheduling moved from the queue's schedule projection to @nocobase/schedule,
+// Scheduling moved from the queue's schedule projection to @nocobase/jobs,
 // which keeps only rules. The run state an administrator sees now lives on the
 // definition, and each occurrence records the firing time it was planned for.
 const migration: MigrationDefinition = defineMigration({

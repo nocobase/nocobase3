@@ -2,7 +2,7 @@ import type {
   ScheduleExecutionContext as FiringContext,
   ScheduleJob,
   ScheduleJobOption,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 
 import type { ScheduleOccurrenceStore } from './occurrences.js';
 import type { JsonObject } from './schedules/define.js';

@@ -1,6 +1,6 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
-import type { ScheduleExecutor, Unsubscribe } from '@nocobase/schedule';
+import type { ScheduleExecutor, Unsubscribe } from '@nocobase/jobs';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import {

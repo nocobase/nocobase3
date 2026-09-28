@@ -2,7 +2,7 @@ import type {
   ScheduleEvent,
   ScheduleExecutor,
   ScheduleJob,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 import {
   createServiceToken,
   type ServiceToken,

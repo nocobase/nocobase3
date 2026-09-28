@@ -53,7 +53,7 @@
   "peerDependencies": {
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server": "workspace:^",
-    "@nocobase/schedule": "workspace:^",
+    "@nocobase/jobs": "workspace:^",
     "@nocobase/service-provider": "workspace:^"
   }
 }

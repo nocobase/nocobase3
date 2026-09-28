@@ -1,5 +1,5 @@
 import type { DatabaseManager } from '@nocobase/db';
-import type { ScheduleEvent, ScheduleExecutor } from '@nocobase/schedule';
+import type { ScheduleEvent, ScheduleExecutor } from '@nocobase/jobs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { scheduleId, type ScheduleStore } from '../server/store.js';

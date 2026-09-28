@@ -1,4 +1,4 @@
-# @nocobase/schedule
+# @nocobase/jobs
 
 Persistent recurring jobs for NocoBase applications. The application's schedule service hands each consumer — a plugin, or the application's own code — a private executor. The executor stores each job's rule in a backend and runs the job's handler whenever the rule fires.
 
@@ -31,7 +31,7 @@ app.addServiceProvider(ScheduleExecuteServiceProvider, {
 });
 ```
 
-`server/config/schedule.ts` declares the configurations, and `server/config/index.ts` adds it to `defaultAppConfigs`:
+`server/config/jobs.ts` declares the configurations, and `server/config/index.ts` adds it to `defaultAppConfigs`:
 
 ```ts
 import {
@@ -40,11 +40,11 @@ import {
 } from '@nocobase/app-server/config';
 import type { AppScheduleConfig } from '@nocobase/app-server/schedule';
 
-const schedule: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
+const jobs: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
   ({ paths }) => ({
     memory: {
       adapter: 'memory',
-      persistence: { path: paths.storage('schedule') },
+      persistence: { path: paths.storage('jobs') },
     },
     redis: {
       adapter: 'redis',
@@ -55,19 +55,19 @@ const schedule: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
   }),
 );
 
-export default schedule;
+export default jobs;
 ```
 
-`package.json` declares `@nocobase/schedule` in `dependencies`: `@nocobase/app-server` and every plugin that schedules declare it as a peer, and the application is what provides it.
+`package.json` declares `@nocobase/jobs` in `dependencies`: `@nocobase/app-server` and every plugin that schedules declare it as a peer, and the application is what provides it.
 
 `@nocobase/app-plugin-schedule-example` is a complete plugin doing all of the below: a provider that runs a heartbeat on its own scope, removes its orphan rules, and exposes the runs through a route.
 
 ## Configuring it
 
-The `schedule` section maps configuration keys to configurations, and `default` names the one used when a consumer names none. A deployment selects one in `config.yml`:
+The `jobs` section maps configuration keys to configurations, and `default` names the one used when a consumer names none. A deployment selects one in `config.yml`:
 
 ```yaml
-schedule:
+jobs:
   default: redis
   redis:
     connection:
@@ -83,13 +83,13 @@ schedule:
 | `attempts`                          | both    | Tries per firing, the first included. Defaults to `1`, which means no retry.                                                                                                                      |
 | `connection`                        | redis   | Redis connection options, handed to BullMQ as they are.                                                                                                                                           |
 | `removeOnComplete` / `removeOnFail` | redis   | How many finished jobs BullMQ keeps: `true`, a count, or `{ count, age }` with `age` in seconds. Default `{ count: 1000 }` and `{ age: 604800 }`; every firing leaves one behind.                 |
-| `persistence.path`                  | memory  | The directory holding the state files. Defaults to `storage/schedule`.                                                                                                                            |
+| `persistence.path`                  | memory  | The directory holding the state files. Defaults to `storage/jobs`.                                                                                                                                |
 
 A consumer's configuration is chosen as follows:
 
-1. The key the consumer named, when it exists.
-2. Otherwise the key `schedule.default` names. A default naming no configuration is an error.
-3. Without `schedule.default`, a built-in memory configuration under `storage/schedule`. Outside `develop` and `development` this logs a warning, because it serves one process only. Set `schedule.default: memory` to keep that choice without the warning.
+1. The key the consumer named, when it exists. The Scheduler plugin takes it from its own `scheduler.jobs`.
+2. Otherwise the key `jobs.default` names. A default naming no configuration is an error.
+3. Without `jobs.default`, a built-in memory configuration under `storage/jobs`. Outside `develop` and `development` this logs a warning, because it serves one process only. Set `jobs.default: memory` to keep that choice without the warning.
 
 Redis must persist its data (AOF or RDB) and use `maxmemory-policy noeviction`; otherwise rules can be evicted or lost on restart. Every consumer opens its own queue and worker connections, so count them in the connection budget.
 
@@ -100,7 +100,7 @@ Resolve the service from the container in a provider, and ask it for an executor
 ```ts
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
-import type { ScheduleExecutor } from '@nocobase/schedule';
+import type { ScheduleExecutor } from '@nocobase/jobs';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 export class DigestProvider extends ServiceProvider<AppPluginApplication> {
@@ -136,7 +136,7 @@ export class DigestProvider extends ServiceProvider<AppPluginApplication> {
 
 ### Declaring the dependency
 
-A plugin declares `@nocobase/app-server` and `@nocobase/schedule` as `peerDependencies`. The types it imports from `@nocobase/schedule` remain in its published declarations, so a `devDependency` is not enough, and the application provides the one shared copy. Application code needs nothing more than the application's own `dependencies` entry.
+A plugin declares `@nocobase/app-server` and `@nocobase/jobs` as `peerDependencies`. The types it imports from `@nocobase/jobs` remain in its published declarations, so a `devDependency` is not enough, and the application provides the one shared copy. Application code needs nothing more than the application's own `dependencies` entry.
 
 ## Jobs
 
@@ -201,7 +201,7 @@ Rules live in the backend; handlers live in the process that registered them.
 Create a service directly in tests, on the memory adapter with a temporary directory, and shut it down afterwards:
 
 ```ts
-import { createScheduleExecuteService } from '@nocobase/schedule';
+import { createScheduleExecuteService } from '@nocobase/jobs';
 
 const service = createScheduleExecuteService(undefined, {
   appName: 'test',
@@ -217,6 +217,6 @@ Test what a handler does by calling the service it delegates to, rather than by 
 This package's own suites:
 
 ```bash
-pnpm --filter @nocobase/schedule test
-pnpm --filter @nocobase/schedule test:integration  # starts Redis in Docker
+pnpm --filter @nocobase/jobs test
+pnpm --filter @nocobase/jobs test:integration  # starts Redis in Docker
 ```

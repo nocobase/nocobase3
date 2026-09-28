@@ -215,7 +215,9 @@ pnpm nocobase scheduler sync --json
 
 普通同步会加载完整应用、校验已注册目标、非破坏性 upsert 定义，并保留管理员在 UI 上做过的启停状态。应用正常启动时也会自动执行一次非破坏性同步，然后 Scheduler 开始按排程执行。
 
-排程在哪里运行由应用的 `schedule` 配置决定。没有设置 `schedule.default` 时使用内置的 memory 适配器：状态保存在进程内存中，启动时从 `storage/schedule` 读取，应用停止时写回，进程被强制结束时会丢失启动以来的变化。这个适配器下，运行中的应用停止时会覆盖 `scheduler sync` 写入的内容，但不会因此丢失什么：每次启动都会从代码重新同步，并再次删除已停用和已失效定义的规则。部署多个实例前，在 `config.yml` 中把 `schedule.default` 设为 `redis`，每次触发只会在其中一个实例上执行。
+排程在哪里运行由应用的 `jobs` 配置决定。没有设置 `jobs.default` 时使用内置的 memory 适配器：状态保存在进程内存中，启动时从 `storage/jobs` 读取，应用停止时写回，进程被强制结束时会丢失启动以来的变化。这个适配器下，运行中的应用停止时会覆盖 `scheduler sync` 写入的内容，但不会因此丢失什么：每次启动都会从代码重新同步，并再次删除已停用和已失效定义的规则。部署多个实例前，在 `config.yml` 中把 `jobs.default` 设为 `redis`，每次触发只会在其中一个实例上执行。
+
+如果要让 Scheduler 的排程使用单独的一套配置，在 `scheduler.jobs`（或环境变量 `SCHEDULER_JOBS`）中写出它的名字；不设置时跟随 `jobs.default`。
 
 生产部署确认所有插件都已加载后，每个应用运行一次：
 
@@ -253,7 +255,7 @@ pnpm nocobase scheduler sync --finalize --json
 开发者审核时重点看证据：
 
 - 是否说明为什么使用 Scheduler，而不是普通队列或工作流单独处理；
-- 是否读取了当前应用已安装插件、Provider、`schedule` 配置和权限入口；
+- 是否读取了当前应用已安装插件、Provider、`jobs` 配置和权限入口；
 - 是否使用应用内全局唯一且稳定的 `key`、Cron 和 IANA 时区；
 - 是否区分了内置 `workflow` 目标和自定义 target 扩展；
 - 是否说明幂等策略、异步完成回报和失败后的观测方式；

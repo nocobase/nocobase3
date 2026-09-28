@@ -10,7 +10,7 @@ import type {
   ScheduleEvent,
   ScheduleExecutor,
   ScheduleJob,
-} from '@nocobase/schedule';
+} from '@nocobase/jobs';
 
 import type { ScheduleJobSpec } from './dispatch.js';
 import type { ScheduleOccurrenceStatus } from './occurrences.js';

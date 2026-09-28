@@ -226,7 +226,7 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/queue": "workspace:^",
-    "@nocobase/schedule": "workspace:^",
+    "@nocobase/jobs": "workspace:^",
     "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/db-mysql": "workspace:^",
     "@nocobase/db-postgres": "workspace:^",

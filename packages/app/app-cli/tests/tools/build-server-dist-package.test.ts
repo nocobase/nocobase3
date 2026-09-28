@@ -216,7 +216,7 @@ describe('server package generation', () => {
       /allowBuilds:\n(?:.*\n)*? {2}better-sqlite3: true/,
     );
     expect(workspace).toMatch(/ {2}tesseract\.js: false/);
-    // Arrives through BullMQ in @nocobase/schedule; left undecided, it stops the install.
+    // Arrives through BullMQ in @nocobase/jobs; left undecided, it stops the install.
     expect(workspace).toMatch(/ {2}msgpackr-extract: false/);
   });
 

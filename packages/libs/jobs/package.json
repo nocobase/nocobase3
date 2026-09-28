@@ -1,5 +1,5 @@
 {
-  "name": "@nocobase/schedule",
+  "name": "@nocobase/jobs",
   "version": "0.0.1",
   "description": "Persistent recurring job scheduling for NocoBase applications, backed by BullMQ or an in-process scheduler.",
   "type": "module",

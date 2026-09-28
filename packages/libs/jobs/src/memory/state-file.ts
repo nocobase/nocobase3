@@ -92,7 +92,7 @@ export class MemoryStateFile {
     }
     if (parsed?.version !== MEMORY_STATE_VERSION) {
       throw new Error(
-        `Schedule state file ${this.filePath} has format version ${JSON.stringify(parsed?.version)}, but this version of @nocobase/schedule reads version ${MEMORY_STATE_VERSION} only.`,
+        `Schedule state file ${this.filePath} has format version ${JSON.stringify(parsed?.version)}, but this version of @nocobase/jobs reads version ${MEMORY_STATE_VERSION} only.`,
       );
     }
     return new Map(
