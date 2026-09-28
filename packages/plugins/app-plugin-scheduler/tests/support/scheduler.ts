@@ -9,8 +9,8 @@ import {
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import {
-  createScheduleExecuteService,
-  type ManagedScheduleExecuteService,
+  createJobExecutorService,
+  type ManagedJobExecutorService,
   type ScheduleConfig,
   type ScheduleExecutor,
 } from '@nocobase/jobs';
@@ -48,7 +48,7 @@ export async function createSchedulerDatabase(
 
 export interface ScheduleServiceHarness {
   readonly directory: string;
-  readonly service: ManagedScheduleExecuteService;
+  readonly service: ManagedJobExecutorService;
   executor(): ScheduleExecutor;
   dispose(): Promise<void>;
 }
@@ -60,18 +60,14 @@ export async function createMemoryScheduleService(
   const directory = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-scheduler-'),
   );
-  const service = createScheduleExecuteService(config, {
+  const service = createJobExecutorService(config, {
     appName: 'main',
     storagePath: directory,
   });
   return {
     directory,
     service,
-    executor: () =>
-      service.getScheduleExecutor(SCHEDULER_SCOPE, undefined, {
-        concurrency: 1,
-        attempts: 1,
-      }),
+    executor: () => service.getScheduleExecutor(SCHEDULER_SCOPE),
     dispose: async () => {
       await service.shutdown();
       await rm(directory, { recursive: true, force: true });

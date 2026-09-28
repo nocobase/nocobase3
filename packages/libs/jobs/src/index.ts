@@ -6,11 +6,11 @@ export type {
   ScheduleRedisConnectionOptions,
   ScheduleRetentionPolicy,
 } from './config.js';
-export { createScheduleExecuteService } from './create.js';
+export { createJobExecutorService } from './create.js';
 export { ScheduleHandlerNotRegisteredError } from './executor.js';
 export type {
-  ManagedScheduleExecuteService,
-  ScheduleExecuteServiceDependencies,
+  ManagedJobExecutorService,
+  JobExecutorServiceDependencies,
   ScheduleFallbackEvent,
 } from './service.js';
 export {
@@ -19,10 +19,9 @@ export {
   type ScheduleErrorReason,
   type ScheduleEvent,
   type ScheduleEventName,
-  type ScheduleExecuteService,
+  type JobExecutorService,
   type ScheduleExecutionContext,
   type ScheduleExecutor,
-  type ScheduleExecutorOverrides,
   type ScheduleJob,
   type ScheduleJobOption,
   type ScheduleLogger,

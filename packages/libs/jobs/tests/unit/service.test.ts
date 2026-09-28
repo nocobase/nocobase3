@@ -3,12 +3,12 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  createScheduleExecuteService,
+  createJobExecutorService,
   type ScheduleConfig,
-  type ScheduleExecuteServiceDependencies,
+  type JobExecutorServiceDependencies,
 } from '../../src/index.js';
 import {
-  createScheduleExecuteServiceWith,
+  createJobExecutorServiceWith,
   type ScheduleExecutorFactory,
 } from '../../src/service.js';
 import type { ResolvedScheduleExecutorConfig } from '../../src/config.js';
@@ -29,7 +29,7 @@ function fakeExecutor(): ScheduleExecutor {
 
 function harness(
   config: ScheduleConfig | undefined,
-  dependencies: Partial<ScheduleExecuteServiceDependencies> = {},
+  dependencies: Partial<JobExecutorServiceDependencies> = {},
 ) {
   const created: ResolvedScheduleExecutorConfig[] = [];
   const factory: ScheduleExecutorFactory = (resolved) => {
@@ -37,7 +37,7 @@ function harness(
     return fakeExecutor();
   };
   const onFallback = vi.fn();
-  const service = createScheduleExecuteServiceWith(
+  const service = createJobExecutorServiceWith(
     config,
     {
       appName: 'crm',
@@ -188,51 +188,28 @@ describe('executor identity', () => {
     expect(created).toHaveLength(3);
   });
 
-  it('applies overrides to the selected configuration', () => {
+  it('takes concurrency and attempts from the selected configuration', () => {
     const { service, created } = harness({
       default: 'r',
       r: { ...redis, concurrency: 5, attempts: 3 },
     });
 
-    service.getScheduleExecutor('scope-a', undefined, {
-      concurrency: 1,
-      attempts: 1,
-    });
+    service.getScheduleExecutor('scope-a');
 
-    expect(created[0]).toMatchObject({ concurrency: 1, attempts: 1 });
-  });
-
-  it('accepts a repeated call whose effective settings are unchanged', () => {
-    const { service } = harness({ default: 'r', r: redis });
-
-    const first = service.getScheduleExecutor('scope-a', undefined, {
-      concurrency: 1,
-    });
-
-    expect(service.getScheduleExecutor('scope-a')).toBe(first);
-    expect(service.getScheduleExecutor('scope-a', 'r', { attempts: 1 })).toBe(
-      first,
-    );
-  });
-
-  it('rejects a repeated call with different overrides', () => {
-    const { service } = harness({ default: 'r', r: redis });
-
-    service.getScheduleExecutor('scope-a', undefined, { concurrency: 1 });
-
-    expect(() =>
-      service.getScheduleExecutor('scope-a', undefined, { concurrency: 2 }),
-    ).toThrow(/different overrides/u);
+    expect(created[0]).toMatchObject({ concurrency: 5, attempts: 3 });
   });
 
   it.each([[{ concurrency: 0 }], [{ concurrency: 1.5 }], [{ attempts: -1 }]])(
-    'rejects invalid overrides %o',
-    (overrides) => {
-      const { service } = harness(undefined);
+    'rejects a configuration with %o',
+    (settings) => {
+      const { service } = harness({
+        default: 'r',
+        r: { ...redis, ...settings },
+      });
 
-      expect(() =>
-        service.getScheduleExecutor('scope-a', undefined, overrides),
-      ).toThrow(/positive integer/u);
+      expect(() => service.getScheduleExecutor('scope-a')).toThrow(
+        /positive integer/u,
+      );
     },
   );
 });
@@ -269,7 +246,7 @@ describe('scope validation', () => {
   });
 });
 
-describe('createScheduleExecuteService', () => {
+describe('createJobExecutorService', () => {
   it('shuts every executor it created down once', async () => {
     const executors: ScheduleExecutor[] = [];
     const factory: ScheduleExecutorFactory = () => {
@@ -277,7 +254,7 @@ describe('createScheduleExecuteService', () => {
       executors.push(executor);
       return executor;
     };
-    const service = createScheduleExecuteServiceWith(
+    const service = createJobExecutorServiceWith(
       undefined,
       { appName: 'crm', storagePath: '/tmp/s' },
       { memory: factory, redis: factory },
@@ -295,6 +272,6 @@ describe('createScheduleExecuteService', () => {
   });
 
   it('is exported as the package entry point', () => {
-    expect(createScheduleExecuteService).toBeTypeOf('function');
+    expect(createJobExecutorService).toBeTypeOf('function');
   });
 });

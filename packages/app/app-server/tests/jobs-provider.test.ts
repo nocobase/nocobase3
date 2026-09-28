@@ -12,10 +12,10 @@ import { AppConfig, createAppPaths } from '../src/config/index.js';
 import { loggingToken } from '../src/logging/index.js';
 import type { AppPluginApplication } from '../src/plugins/index.js';
 import {
-  ScheduleExecuteServiceProvider,
-  scheduleExecuteServiceToken,
-  type AppScheduleConfig,
-} from '../src/schedule/index.js';
+  JobExecutorServiceProvider,
+  jobExecutorServiceToken,
+  type AppJobsConfig,
+} from '../src/jobs/index.js';
 
 const SCOPE = '@nocobase/app-plugin-scheduler';
 
@@ -29,7 +29,7 @@ afterEach(async () => {
   await rm(rootDir, { recursive: true, force: true });
 });
 
-async function application(schedule?: AppScheduleConfig) {
+async function application(schedule?: AppJobsConfig) {
   const config = new AppConfig();
   await config.loadAll();
   if (schedule) config.mergeDefaults({ jobs: schedule });
@@ -68,19 +68,17 @@ async function job(executorScope = SCOPE) {
   };
 }
 
-describe('ScheduleExecuteServiceProvider', () => {
+describe('JobExecutorServiceProvider', () => {
   it('registers the service lazily under its token', async () => {
     const { app, container } = await application();
-    const provider = new ScheduleExecuteServiceProvider(app);
+    const provider = new JobExecutorServiceProvider(app);
 
-    expect(provider.name).toBe('@nocobase/app-server/schedule');
+    expect(provider.name).toBe('@nocobase/app-server/jobs');
     provider.register();
-    expect(
-      container.resolveIfCreated(scheduleExecuteServiceToken),
-    ).toBeUndefined();
+    expect(container.resolveIfCreated(jobExecutorServiceToken)).toBeUndefined();
 
-    const service = container.resolve(scheduleExecuteServiceToken);
-    expect(container.resolve(scheduleExecuteServiceToken)).toBe(service);
+    const service = container.resolve(jobExecutorServiceToken);
+    expect(container.resolve(jobExecutorServiceToken)).toBe(service);
     expect(service.getScheduleExecutor(SCOPE)).toBe(
       service.getScheduleExecutor(SCOPE),
     );
@@ -88,14 +86,14 @@ describe('ScheduleExecuteServiceProvider', () => {
 
   it('falls back to memory under the application name and storage directory', async () => {
     const { app, container, logger } = await application();
-    const provider = new ScheduleExecuteServiceProvider(app, {
+    const provider = new JobExecutorServiceProvider(app, {
       nodeEnv: 'production',
     });
     provider.register();
     const { scope, job: definition } = await job();
 
     const executor = container
-      .resolve(scheduleExecuteServiceToken)
+      .resolve(jobExecutorServiceToken)
       .getScheduleExecutor(scope);
     await executor.addJob(definition);
     await executor.setup({ consume: false });
@@ -117,10 +115,10 @@ describe('ScheduleExecuteServiceProvider', () => {
     'does not warn about the fallback when NODE_ENV is %s',
     async (nodeEnv) => {
       const { app, container, logger } = await application();
-      const provider = new ScheduleExecuteServiceProvider(app, { nodeEnv });
+      const provider = new JobExecutorServiceProvider(app, { nodeEnv });
       provider.register();
 
-      container.resolve(scheduleExecuteServiceToken).getScheduleExecutor(SCOPE);
+      container.resolve(jobExecutorServiceToken).getScheduleExecutor(SCOPE);
 
       expect(logger.warn).not.toHaveBeenCalled();
     },
@@ -135,13 +133,13 @@ describe('ScheduleExecuteServiceProvider', () => {
         persistence: { path: path.join(rootDir, 'custom') },
       },
     });
-    const provider = new ScheduleExecuteServiceProvider(app, {
+    const provider = new JobExecutorServiceProvider(app, {
       nodeEnv: 'production',
     });
     provider.register();
 
     const executor = container
-      .resolve(scheduleExecuteServiceToken)
+      .resolve(jobExecutorServiceToken)
       .getScheduleExecutor(SCOPE);
     await executor.setup({ consume: false });
     await executor.addJob((await job()).job);
@@ -155,7 +153,7 @@ describe('ScheduleExecuteServiceProvider', () => {
 
   it('starts nothing and shuts down safely when nothing was used', async () => {
     const { app } = await application();
-    const provider = new ScheduleExecuteServiceProvider(app);
+    const provider = new JobExecutorServiceProvider(app);
     provider.register();
 
     await provider.start();
@@ -167,10 +165,10 @@ describe('ScheduleExecuteServiceProvider', () => {
 
   it('shuts executors down that their owners left running', async () => {
     const { app, container } = await application();
-    const provider = new ScheduleExecuteServiceProvider(app);
+    const provider = new JobExecutorServiceProvider(app);
     provider.register();
     const executor = container
-      .resolve(scheduleExecuteServiceToken)
+      .resolve(jobExecutorServiceToken)
       .getScheduleExecutor(SCOPE);
     await executor.setup({ consume: false });
 

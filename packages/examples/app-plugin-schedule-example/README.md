@@ -1,6 +1,6 @@
 # @nocobase/app-plugin-schedule-example
 
-Schedule service example. The plugin's provider takes an executor of its own from `scheduleExecuteServiceToken`, under its package name as the scope, and runs a `heartbeat` job every minute.
+Schedule service example. The plugin's provider takes an executor of its own from `jobExecutorServiceToken`, under its package name as the scope, and runs a `heartbeat` job every minute.
 
 - `start()` subscribes to the executor's events, registers the job with `addJob`, and then calls `setup()`, which writes the rule and starts executing it. It then removes the rules of jobs its code no longer defines — the scope is this plugin's alone, so every other rule under it is left over from an earlier version.
 - `shutdown()` unsubscribes and shuts the executor down, which keeps the rule for the next start.

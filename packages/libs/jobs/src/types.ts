@@ -3,18 +3,8 @@
  * — by convention its package name — and becomes the BullMQ queue name or the
  * memory adapter's state file name; `name` selects a configuration key.
  */
-export interface ScheduleExecuteService {
-  getScheduleExecutor(
-    scope: string,
-    name?: string,
-    overrides?: ScheduleExecutorOverrides,
-  ): ScheduleExecutor;
-}
-
-/** Replaces the selected configuration's execution settings for one executor. */
-export interface ScheduleExecutorOverrides {
-  readonly concurrency?: number;
-  readonly attempts?: number;
+export interface JobExecutorService {
+  getScheduleExecutor(scope: string, name?: string): ScheduleExecutor;
 }
 
 export interface ScheduleExecutor {

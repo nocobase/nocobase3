@@ -1,6 +1,6 @@
 import {
-  createScheduleExecuteService,
-  type ManagedScheduleExecuteService,
+  createJobExecutorService,
+  type ManagedJobExecutorService,
   type ScheduleFallbackEvent,
   type ScheduleLogger,
 } from '@nocobase/jobs';
@@ -11,10 +11,10 @@ import {
 
 import { loggingToken } from '../logging/index.js';
 import type { AppPluginApplication } from '../plugins/index.js';
-import type { AppScheduleConfig } from './config.js';
-import { scheduleExecuteServiceToken } from './token.js';
+import type { AppJobsConfig } from './config.js';
+import { jobExecutorServiceToken } from './token.js';
 
-export interface ScheduleExecuteServiceProviderOptions {
+export interface JobExecutorServiceProviderOptions {
   /** The application's `NODE_ENV`; the memory fallback is only reported outside development. */
   readonly nodeEnv?: string;
 }
@@ -31,19 +31,19 @@ const DEVELOPMENT_ENVIRONMENTS: ReadonlySet<string> = new Set([
  * to the consumers that ask for them, which set them up and shut them down;
  * this provider shuts down whatever they left running.
  */
-export class ScheduleExecuteServiceProvider extends ServiceProvider<AppPluginApplication> {
-  public readonly name: string = '@nocobase/app-server/schedule';
-  private service: ManagedScheduleExecuteService | undefined;
+export class JobExecutorServiceProvider extends ServiceProvider<AppPluginApplication> {
+  public readonly name: string = '@nocobase/app-server/jobs';
+  private service: ManagedJobExecutorService | undefined;
 
   public constructor(
     app: AppPluginApplication,
-    private readonly options: ScheduleExecuteServiceProviderOptions = {},
+    private readonly options: JobExecutorServiceProviderOptions = {},
   ) {
     super(app);
   }
 
   public override register(): void {
-    this.app.container.singleton(scheduleExecuteServiceToken, (container) =>
+    this.app.container.singleton(jobExecutorServiceToken, (container) =>
       this.create(container),
     );
   }
@@ -52,7 +52,7 @@ export class ScheduleExecuteServiceProvider extends ServiceProvider<AppPluginApp
     await this.service?.shutdown();
   }
 
-  private create(container: ServiceResolver): ManagedScheduleExecuteService {
+  private create(container: ServiceResolver): ManagedJobExecutorService {
     const logger: ScheduleLogger | undefined = container.has(loggingToken)
       ? container
           .resolve(loggingToken)
@@ -62,8 +62,8 @@ export class ScheduleExecuteServiceProvider extends ServiceProvider<AppPluginApp
     const reportFallback = !DEVELOPMENT_ENVIRONMENTS.has(
       this.options.nodeEnv ?? '',
     );
-    this.service = createScheduleExecuteService(
-      this.app.config.get<AppScheduleConfig>('jobs'),
+    this.service = createJobExecutorService(
+      this.app.config.get<AppJobsConfig>('jobs'),
       {
         appName: this.app.appName,
         storagePath: this.app.paths.storage('jobs'),

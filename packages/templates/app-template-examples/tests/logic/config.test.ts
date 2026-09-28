@@ -15,7 +15,7 @@ import {
 } from '@nocobase/app-server/database';
 import { createAppDatabaseTaskContributions } from '@nocobase/app-server/plugins';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
-import type { AppScheduleConfig } from '@nocobase/app-server/schedule';
+import type { AppJobsConfig } from '@nocobase/app-server/jobs';
 import {
   type CachingConfig,
   type AppDriveConfig,
@@ -232,7 +232,7 @@ describe('application config', () => {
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
     // Scheduler runs on the schedule service, not on a queue of its own.
     expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
-    expect(runtime.config.get<AppScheduleConfig>('jobs')).toEqual({
+    expect(runtime.config.get<AppJobsConfig>('jobs')).toEqual({
       memory: {
         adapter: 'memory',
         persistence: { path: runtime.paths.storage('jobs') },

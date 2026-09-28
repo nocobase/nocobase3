@@ -1,10 +1,10 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
-  createScheduleExecuteService,
+  createJobExecutorService,
   type ScheduleEvent,
-  type ScheduleExecuteService,
+  type JobExecutorService,
   type ScheduleExecutor,
   type Subscriber,
 } from '@nocobase/jobs';
@@ -62,9 +62,9 @@ function lifecycleProvider(events: string[] = []) {
     }),
   } as unknown as ScheduleExecutor;
   const getScheduleExecutor = vi.fn(() => executor);
-  container.instance(scheduleExecuteServiceToken, {
+  container.instance(jobExecutorServiceToken, {
     getScheduleExecutor,
-  } as ScheduleExecuteService);
+  } as JobExecutorService);
   container.instance(databaseManagerToken, {} as DatabaseManager);
   const provider = new SchedulerProvider(application(container));
   provider.register();
@@ -97,9 +97,9 @@ describe('SchedulerProvider', () => {
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
     const getScheduleExecutor = vi.fn(() => ({}) as ScheduleExecutor);
-    container.instance(scheduleExecuteServiceToken, {
+    container.instance(jobExecutorServiceToken, {
       getScheduleExecutor,
-    } as ScheduleExecuteService);
+    } as JobExecutorService);
     const provider = new SchedulerProvider(application(container));
 
     expect(provider.name).toBe('@nocobase/app-plugin-scheduler');
@@ -109,11 +109,10 @@ describe('SchedulerProvider', () => {
     const service = container.resolve(schedulerServiceToken);
     expect(service).toBeInstanceOf(DefaultSchedulerService);
     expect(container.resolve(schedulerServiceToken)).toBe(service);
-    // One firing at a time, tried once, on the plugin's own scope.
+    // On the plugin's own scope, with the settings of the configuration.
     expect(getScheduleExecutor).toHaveBeenCalledWith(
       SCHEDULER_SCOPE,
       undefined,
-      { concurrency: 1, attempts: 1 },
     );
     expect(schedulerTokenNames(container)).toEqual([
       '@nocobase/app-plugin-scheduler/service',
@@ -134,26 +133,23 @@ describe('SchedulerProvider', () => {
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
     const getScheduleExecutor = vi.fn(() => ({}) as ScheduleExecutor);
-    container.instance(scheduleExecuteServiceToken, {
+    container.instance(jobExecutorServiceToken, {
       getScheduleExecutor,
-    } as ScheduleExecuteService);
+    } as JobExecutorService);
     const provider = new SchedulerProvider(application(container, sections));
     provider.register();
 
     container.resolve(schedulerServiceToken);
 
-    expect(getScheduleExecutor).toHaveBeenCalledWith(SCHEDULER_SCOPE, name, {
-      concurrency: 1,
-      attempts: 1,
-    });
+    expect(getScheduleExecutor).toHaveBeenCalledWith(SCHEDULER_SCOPE, name);
   });
 
   it('refuses a scheduler.jobs naming no jobs configuration', () => {
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
-    container.instance(scheduleExecuteServiceToken, {
+    container.instance(jobExecutorServiceToken, {
       getScheduleExecutor: vi.fn(),
-    } as unknown as ScheduleExecuteService);
+    } as unknown as JobExecutorService);
     const provider = new SchedulerProvider(
       application(container, {
         scheduler: { jobs: 'redis-typo' },
@@ -284,14 +280,14 @@ describe('SchedulerProvider on the memory adapter', () => {
   });
 
   async function startApplication(
-    options: { syncOnly?: boolean; schedule?: ScheduleExecuteService } = {},
+    options: { syncOnly?: boolean; schedule?: JobExecutorService } = {},
   ) {
     database ??= await createSchedulerDatabase();
     harness ??= await createMemoryScheduleService();
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, database);
     container.instance(
-      scheduleExecuteServiceToken,
+      jobExecutorServiceToken,
       options.schedule ?? harness.service,
     );
     if (options.syncOnly) {
@@ -366,7 +362,7 @@ describe('SchedulerProvider on the memory adapter', () => {
     });
 
     // The next process reads the rules the sync left in the state directory.
-    const next = createScheduleExecuteService(undefined, {
+    const next = createJobExecutorService(undefined, {
       appName: 'main',
       storagePath: harness!.directory,
     });

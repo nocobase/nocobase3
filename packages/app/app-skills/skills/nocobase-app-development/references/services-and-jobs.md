@@ -130,10 +130,10 @@ The default queue connection is `sync`, which runs jobs inline — convenient in
 
 A job runs when something dispatches it. Work that has to happen _because time passed_ — scan for records overdue today, send a nightly digest, expire stale sessions — needs a scheduler, and the application's jobs service provides one. If administrators need to see the task and its runs in the UI, register a Scheduler schedule instead, as the Scheduler plugin's Skill describes; the service below is for work nobody tracks there.
 
-Resolve `scheduleExecuteServiceToken` and ask it for an executor of your own, with your package name as the scope. Register the jobs, then call `setup()`, both in `start()`, and shut the executor down in `shutdown()`:
+Resolve `jobExecutorServiceToken` and ask it for an executor of your own, with your package name as the scope. Register the jobs, then call `setup()`, both in `start()`, and shut the executor down in `shutdown()`:
 
 ```ts
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import type { ScheduleExecutor } from '@nocobase/jobs';
 
 export default class OverdueScanProvider extends ServiceProvider<Application> {
@@ -143,7 +143,7 @@ export default class OverdueScanProvider extends ServiceProvider<Application> {
 
   public override async start(): Promise<void> {
     this.executor = this.app.container
-      .resolve(scheduleExecuteServiceToken)
+      .resolve(jobExecutorServiceToken)
       .getScheduleExecutor('@acme/crm');
     await this.executor.addJob({
       name: 'overdue-scan',

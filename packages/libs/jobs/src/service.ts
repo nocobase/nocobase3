@@ -7,9 +7,8 @@ import {
   type ScheduleConfig,
 } from './config.js';
 import type {
-  ScheduleExecuteService,
+  JobExecutorService,
   ScheduleExecutor,
-  ScheduleExecutorOverrides,
   ScheduleLogger,
 } from './types.js';
 import { assertValidScope } from './validation.js';
@@ -25,7 +24,7 @@ export interface ScheduleFallbackEvent {
  * What the application supplies. The package reads neither application
  * settings nor the process environment itself.
  */
-export interface ScheduleExecuteServiceDependencies {
+export interface JobExecutorServiceDependencies {
   /** The namespace of every configuration that sets none. */
   readonly appName: string;
   /** Where memory configurations without `persistence.path` keep their state. */
@@ -38,8 +37,8 @@ export interface ScheduleExecuteServiceDependencies {
   readonly onFallback?: (event: ScheduleFallbackEvent) => void;
 }
 
-/** The service as its owner holds it: consumers see `ScheduleExecuteService`. */
-export interface ManagedScheduleExecuteService extends ScheduleExecuteService {
+/** The service as its owner holds it: consumers see `JobExecutorService`. */
+export interface ManagedJobExecutorService extends JobExecutorService {
   /** Shuts every executor down. Safe to call more than once. */
   shutdown(): Promise<void>;
 }
@@ -49,7 +48,7 @@ export type ScheduleExecutorFactory<
     ResolvedScheduleExecutorConfig,
 > = (
   config: TConfig,
-  dependencies: ScheduleExecuteServiceDependencies,
+  dependencies: JobExecutorServiceDependencies,
 ) => ScheduleExecutor;
 
 export interface ScheduleExecutorFactories {
@@ -57,57 +56,36 @@ export interface ScheduleExecutorFactories {
   readonly redis: ScheduleExecutorFactory<ResolvedRedisScheduleExecutorConfig>;
 }
 
-interface ExecutorEntry {
-  readonly executor: ScheduleExecutor;
-  readonly config: ResolvedScheduleExecutorConfig;
-}
-
-export function createScheduleExecuteServiceWith(
+export function createJobExecutorServiceWith(
   config: ScheduleConfig | undefined,
-  dependencies: ScheduleExecuteServiceDependencies,
+  dependencies: JobExecutorServiceDependencies,
   factories: ScheduleExecutorFactories,
-): ManagedScheduleExecuteService {
-  const executors = new Map<string, ExecutorEntry>();
+): ManagedJobExecutorService {
+  const executors = new Map<string, ScheduleExecutor>();
   let shutdownPromise: Promise<void> | undefined;
 
   return {
-    getScheduleExecutor(
-      scope: string,
-      name?: string,
-      overrides?: ScheduleExecutorOverrides,
-    ): ScheduleExecutor {
+    getScheduleExecutor(scope: string, name?: string): ScheduleExecutor {
       if (shutdownPromise) {
         throw new Error('The schedule service has been shut down.');
       }
       assertValidScope(scope);
       const selection = selectScheduleConfig(config, name);
+      // A scope and a configuration key identify one queue, so they identify
+      // one executor: two would compete for the same firings.
+      const identity = JSON.stringify([selection.key, scope]);
+      const existing = executors.get(identity);
+      if (existing) return existing;
       const resolved = resolveScheduleExecutorConfig(
         selection,
         scope,
-        overrides,
         dependencies,
       );
-      // A scope and a configuration key identify one queue, so they identify
-      // one executor: two would compete for the same firings under two sets of
-      // execution settings.
-      const identity = JSON.stringify([selection.key, scope]);
-      const existing = executors.get(identity);
-      if (existing) {
-        if (
-          existing.config.concurrency !== resolved.concurrency ||
-          existing.config.attempts !== resolved.attempts
-        ) {
-          throw new Error(
-            `The schedule executor for scope "${scope}" already exists with different overrides (concurrency ${existing.config.concurrency}, attempts ${existing.config.attempts}).`,
-          );
-        }
-        return existing.executor;
-      }
       const executor =
         resolved.adapter === 'memory'
           ? factories.memory(resolved, dependencies)
           : factories.redis(resolved, dependencies);
-      executors.set(identity, { executor, config: resolved });
+      executors.set(identity, executor);
       if (resolved.builtIn) {
         dependencies.onFallback?.({
           scope,
@@ -119,7 +97,7 @@ export function createScheduleExecuteServiceWith(
 
     shutdown(): Promise<void> {
       shutdownPromise ??= Promise.allSettled(
-        [...executors.values()].map((entry) => entry.executor.shutdown()),
+        [...executors.values()].map((executor) => executor.shutdown()),
       ).then((results) => {
         const failures = results.flatMap((result) =>
           result.status === 'rejected' ? [result.reason as unknown] : [],

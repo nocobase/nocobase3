@@ -217,7 +217,7 @@ pnpm nocobase scheduler sync --json
 
 排程在哪里运行由应用的 `jobs` 配置决定。没有设置 `jobs.default` 时使用内置的 memory 适配器：状态保存在进程内存中，启动时从 `storage/jobs` 读取，应用停止时写回，进程被强制结束时会丢失启动以来的变化。这个适配器下，运行中的应用停止时会覆盖 `scheduler sync` 写入的内容，但不会因此丢失什么：每次启动都会从代码重新同步，并再次删除已停用和已失效定义的规则。部署多个实例前，在 `config.yml` 中把 `jobs.default` 设为 `redis`，每次触发只会在其中一个实例上执行。
 
-如果要让 Scheduler 的排程使用单独的一套配置，在 `scheduler.jobs`（或环境变量 `SCHEDULER_JOBS`）中写出它的名字；不设置时跟随 `jobs.default`。
+如果要让 Scheduler 的排程使用单独的一套配置，在 `scheduler.jobs`（或环境变量 `SCHEDULER_JOBS`）中写出它的名字；不设置时跟随 `jobs.default`。排程使用这套配置的 `concurrency` 和 `attempts`。`attempts` 请保持为 `1`：失败的触发已经记录为该次执行的结果，重试时发现已有记录，不会再执行。
 
 生产部署确认所有插件都已加载后，每个应用运行一次：
 

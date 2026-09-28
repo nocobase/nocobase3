@@ -4,10 +4,10 @@ import path from 'node:path';
 
 import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import {
-  createScheduleExecuteService,
-  type ManagedScheduleExecuteService,
+  createJobExecutorService,
+  type ManagedJobExecutorService,
 } from '@nocobase/jobs';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -22,7 +22,7 @@ import {
 } from '../server/service.js';
 
 let directory: string;
-const services: ManagedScheduleExecuteService[] = [];
+const services: ManagedJobExecutorService[] = [];
 
 beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'schedule-example-'));
@@ -35,13 +35,13 @@ afterEach(async () => {
 
 /** One application start: a schedule service over the same storage each time. */
 function application() {
-  const schedule = createScheduleExecuteService(undefined, {
+  const schedule = createJobExecutorService(undefined, {
     appName: 'main',
     storagePath: directory,
   });
   services.push(schedule);
   const container = new ServiceContainer();
-  container.instance(scheduleExecuteServiceToken, schedule);
+  container.instance(jobExecutorServiceToken, schedule);
   const app: AppPluginApplication = {
     appName: 'main',
     publicBasePath: '',

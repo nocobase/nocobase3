@@ -1,5 +1,5 @@
 import { type AppPluginApplication } from '@nocobase/app-server/plugins';
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import { databaseManagerToken } from '@nocobase/db';
 import type { ScheduleExecutor, Unsubscribe } from '@nocobase/jobs';
 import {
@@ -126,14 +126,12 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
     const database = container.resolve(databaseManagerToken);
     const targets = new ScheduleTargetRegistry();
     const occurrences = new ScheduleOccurrenceStore(database);
-    // One firing at a time, tried once: a failed dispatch is recorded as the
-    // occurrence's outcome rather than retried behind the administrator's back.
+    // Concurrency and attempts are the selected configuration's. A failed
+    // dispatch is recorded as the occurrence's outcome, so a retry of the same
+    // firing finds it recorded and does nothing: keep attempts at 1 there.
     const executor = container
-      .resolve(scheduleExecuteServiceToken)
-      .getScheduleExecutor(SCHEDULER_SCOPE, this.jobsConfiguration(), {
-        concurrency: 1,
-        attempts: 1,
-      });
+      .resolve(jobExecutorServiceToken)
+      .getScheduleExecutor(SCHEDULER_SCOPE, this.jobsConfiguration());
     const store = new ScheduleStore(
       database,
       this.app.appName,

@@ -1,5 +1,5 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import type { ScheduleExecutor, Unsubscribe } from '@nocobase/jobs';
 import { ServiceProvider } from '@nocobase/service-provider';
 
@@ -30,7 +30,7 @@ export class ScheduleExampleProvider extends ServiceProvider<AppPluginApplicatio
     // An executor of this plugin's own, under its package name. The
     // application's configuration decides the backend.
     const executor = this.app.container
-      .resolve(scheduleExecuteServiceToken)
+      .resolve(jobExecutorServiceToken)
       .getScheduleExecutor(SCHEDULE_EXAMPLE_SCOPE);
     this.executor = executor;
     this.unsubscribe = executor.subscribe((event) => {

@@ -5,8 +5,8 @@ import { Queue } from 'bullmq';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createScheduleExecuteService,
-  type ManagedScheduleExecuteService,
+  createJobExecutorService,
+  type ManagedJobExecutorService,
   type RedisScheduleAdapterConfig,
   type ScheduleEvent,
   type ScheduleExecutionContext,
@@ -20,7 +20,7 @@ const connection = {
 };
 const SCOPE = '@nocobase/app-plugin-scheduler';
 
-const services: ManagedScheduleExecuteService[] = [];
+const services: ManagedJobExecutorService[] = [];
 const queues: Queue[] = [];
 
 afterEach(async () => {
@@ -33,7 +33,7 @@ function instance(
   namespace: string,
   overrides: Partial<RedisScheduleAdapterConfig> = {},
 ): ScheduleExecutor {
-  const service = createScheduleExecuteService(
+  const service = createJobExecutorService(
     {
       default: 'redis',
       redis: { adapter: 'redis', connection, namespace, ...overrides },

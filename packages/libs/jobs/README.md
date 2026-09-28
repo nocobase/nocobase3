@@ -7,7 +7,7 @@ Persistent recurring jobs for NocoBase applications. The application's schedule 
 | `redis`  | BullMQ job schedulers, through its public API only                                       | Any number of instances; each firing runs on exactly one of them                        |
 | `memory` | Process memory, read from a local state file at setup and written back whole at shutdown | One process; a process killed without shutting down loses what changed since it started |
 
-The package exports factories and types only. It holds no module-level state and reads neither application settings nor the process environment. Applications compose it through `@nocobase/app-server/schedule`, which supplies the application name, the storage directory and the logger. Plugins and application code use it through that composition, never by creating a service of their own.
+The package exports factories and types only. It holds no module-level state and reads neither application settings nor the process environment. Applications compose it through `@nocobase/app-server/jobs`, which supplies the application name, the storage directory and the logger. Plugins and application code use it through that composition, never by creating a service of their own.
 
 ## Choosing it
 
@@ -24,9 +24,9 @@ The application templates already do this; an application created before them ad
 `server/app.ts` adds the provider, passing the environment so that the fallback warning stays quiet in development:
 
 ```ts
-import { ScheduleExecuteServiceProvider } from '@nocobase/app-server/schedule';
+import { JobExecutorServiceProvider } from '@nocobase/app-server/jobs';
 
-app.addServiceProvider(ScheduleExecuteServiceProvider, {
+app.addServiceProvider(JobExecutorServiceProvider, {
   nodeEnv: runtime.env.NODE_ENV,
 });
 ```
@@ -38,22 +38,20 @@ import {
   defineAppConfig,
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
-import type { AppScheduleConfig } from '@nocobase/app-server/schedule';
+import type { AppJobsConfig } from '@nocobase/app-server/jobs';
 
-const jobs: AppConfigFactory<AppScheduleConfig> = defineAppConfig(
-  ({ paths }) => ({
-    memory: {
-      adapter: 'memory',
-      persistence: { path: paths.storage('jobs') },
-    },
-    redis: {
-      adapter: 'redis',
-      connection: { host: '127.0.0.1', port: 6379, db: 0 },
-      removeOnComplete: { count: 1000 },
-      removeOnFail: { age: 604_800 },
-    },
-  }),
-);
+const jobs: AppConfigFactory<AppJobsConfig> = defineAppConfig(({ paths }) => ({
+  memory: {
+    adapter: 'memory',
+    persistence: { path: paths.storage('jobs') },
+  },
+  redis: {
+    adapter: 'redis',
+    connection: { host: '127.0.0.1', port: 6379, db: 0 },
+    removeOnComplete: { count: 1000 },
+    removeOnFail: { age: 604_800 },
+  },
+}));
 
 export default jobs;
 ```
@@ -99,7 +97,7 @@ Resolve the service from the container in a provider, and ask it for an executor
 
 ```ts
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import type { ScheduleExecutor } from '@nocobase/jobs';
 import { ServiceProvider } from '@nocobase/service-provider';
 
@@ -109,7 +107,7 @@ export class DigestProvider extends ServiceProvider<AppPluginApplication> {
 
   public override async start(): Promise<void> {
     this.executor = this.app.container
-      .resolve(scheduleExecuteServiceToken)
+      .resolve(jobExecutorServiceToken)
       .getScheduleExecutor('@acme/app-plugin-digest');
     await this.executor.addJob({
       name: 'nightly-digest',
@@ -131,7 +129,7 @@ export class DigestProvider extends ServiceProvider<AppPluginApplication> {
 - **Scope.** Use your package name. It becomes the BullMQ queue name and the memory state file name, and it may contain only the one `/` of an `@scope/name`, with no `:` and no whitespace. Each consumer uses its own scope and never shares an executor.
 - **Order.** Register every job before `setup()`. `setup()` writes the rules and only then starts executing, so a due firing never reaches a job whose handler is not registered yet. Before `setup()`, `addJob` only registers the job, and its receipt carries no `scheduledAt`. `removeJob`, `getJob`, `listJob` and `countJob` fail until `setup()` has run.
 - **Shutting down.** Call `executor.shutdown()` from your provider's `shutdown()`. It aborts the `signal` of running handlers and waits for them to finish. It keeps the rules, so other instances continue and the next start resumes. Do not call `removeJob` on shutdown: that removes the rule for every instance.
-- **Overrides.** `getScheduleExecutor(scope, name, { concurrency, attempts })` replaces those two settings for your executor only. Asking again for the same scope and configuration with different values is an error.
+- **Settings.** `concurrency`, `attempts` and retention come from the configuration the executor runs on; an executor cannot change them. A consumer that needs different values names a configuration of its own in `getScheduleExecutor(scope, name)`, which the application defines in its `jobs` section.
 - **Commands.** A CLI command that only writes rules calls `setup({ consume: false })`, which writes the rules without starting a worker.
 
 ### Declaring the dependency
@@ -201,9 +199,9 @@ Rules live in the backend; handlers live in the process that registered them.
 Create a service directly in tests, on the memory adapter with a temporary directory, and shut it down afterwards:
 
 ```ts
-import { createScheduleExecuteService } from '@nocobase/jobs';
+import { createJobExecutorService } from '@nocobase/jobs';
 
-const service = createScheduleExecuteService(undefined, {
+const service = createJobExecutorService(undefined, {
   appName: 'test',
   storagePath: temporaryDirectory,
 });

@@ -218,7 +218,7 @@ Normal synchronization loads the complete application, validates registered targ
 
 Where schedules run is the application's `jobs` configuration. Without `jobs.default` they run on the built-in memory adapter: one process holds the state in memory, reads it from `storage/jobs` at startup and writes it back when it stops, so a process that is killed loses what changed since it started. On this adapter a running application overwrites what `scheduler sync` wrote when it stops. Nothing is lost: every start synchronizes again from the code and removes the rules of disabled and deactivated definitions again. Set `jobs.default` to `redis` in `config.yml` before running several instances; each firing then runs on exactly one of them.
 
-To run the schedules on a configuration of their own, name it in `scheduler.jobs` (or `SCHEDULER_JOBS`); without it they follow `jobs.default`.
+To run the schedules on a configuration of their own, name it in `scheduler.jobs` (or `SCHEDULER_JOBS`); without it they follow `jobs.default`. The schedules take that configuration's `concurrency` and `attempts`. Keep `attempts` at `1`: a failed firing is already recorded as the occurrence's outcome, so a retry finds it recorded and runs nothing.
 
 During production deployment, once all plugins are loaded, run this once per application:
 

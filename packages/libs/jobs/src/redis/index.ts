@@ -1,6 +1,6 @@
 import type { ResolvedRedisScheduleExecutorConfig } from '../config.js';
 import { BackendScheduleExecutor } from '../executor.js';
-import type { ScheduleExecuteServiceDependencies } from '../service.js';
+import type { JobExecutorServiceDependencies } from '../service.js';
 import type { ScheduleExecutor } from '../types.js';
 import {
   defaultRedisFactories,
@@ -10,7 +10,7 @@ import {
 
 export function createRedisScheduleExecutor(
   config: ResolvedRedisScheduleExecutorConfig,
-  dependencies: Pick<ScheduleExecuteServiceDependencies, 'logger'>,
+  dependencies: Pick<JobExecutorServiceDependencies, 'logger'>,
   factories: RedisScheduleBackendFactories = defaultRedisFactories,
 ): ScheduleExecutor {
   return new BackendScheduleExecutor(

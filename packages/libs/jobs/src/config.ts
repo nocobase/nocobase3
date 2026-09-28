@@ -1,7 +1,5 @@
 import path from 'node:path';
 
-import type { ScheduleExecutorOverrides } from './types.js';
-
 /**
  * How many finished jobs BullMQ keeps: `true` removes them at once, a number
  * keeps that many, and `{ count, age }` bounds by count and by age in seconds.
@@ -137,7 +135,6 @@ export interface ScheduleConfigDefaults {
 export function resolveScheduleExecutorConfig(
   selection: ScheduleConfigSelection,
   scope: string,
-  overrides: ScheduleExecutorOverrides | undefined,
   defaults: ScheduleConfigDefaults,
 ): ResolvedScheduleExecutorConfig {
   const config = selection.config;
@@ -146,14 +143,8 @@ export function resolveScheduleExecutorConfig(
     builtIn: config === undefined,
     scope,
     namespace: config?.namespace ?? defaults.appName,
-    concurrency: positiveInteger(
-      overrides?.concurrency ?? config?.concurrency ?? 1,
-      'concurrency',
-    ),
-    attempts: positiveInteger(
-      overrides?.attempts ?? config?.attempts ?? 1,
-      'attempts',
-    ),
+    concurrency: positiveInteger(config?.concurrency ?? 1, 'concurrency'),
+    attempts: positiveInteger(config?.attempts ?? 1, 'attempts'),
   };
   if (!base.namespace) {
     throw new Error('A schedule namespace must be a non-empty string.');

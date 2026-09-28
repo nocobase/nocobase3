@@ -42,9 +42,9 @@
       "types": "./src/queue/index.ts",
       "import": "./src/queue/index.ts"
     },
-    "./schedule": {
-      "types": "./src/schedule/index.ts",
-      "import": "./src/schedule/index.ts"
+    "./jobs": {
+      "types": "./src/jobs/index.ts",
+      "import": "./src/jobs/index.ts"
     },
     "./session": {
       "types": "./src/session/index.ts",
@@ -128,9 +128,9 @@
         "types": "./dist/queue/index.d.ts",
         "import": "./dist/queue/index.js"
       },
-      "./schedule": {
-        "types": "./dist/schedule/index.d.ts",
-        "import": "./dist/schedule/index.js"
+      "./jobs": {
+        "types": "./dist/jobs/index.d.ts",
+        "import": "./dist/jobs/index.js"
       },
       "./session": {
         "types": "./dist/session/index.d.ts",

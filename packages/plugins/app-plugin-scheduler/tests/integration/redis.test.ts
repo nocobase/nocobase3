@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { scheduleExecuteServiceToken } from '@nocobase/app-server/schedule';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
-  createScheduleExecuteService,
-  type ManagedScheduleExecuteService,
+  createJobExecutorService,
+  type ManagedJobExecutorService,
 } from '@nocobase/jobs';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -25,7 +25,7 @@ const SCHEDULE = scheduleId('main', 'every-second');
 describe('Scheduler on the redis adapter', { timeout: 60_000 }, () => {
   let database: DatabaseManager;
   let namespace: string;
-  const services: ManagedScheduleExecuteService[] = [];
+  const services: ManagedJobExecutorService[] = [];
   const providers: SchedulerProvider[] = [];
 
   beforeEach(async () => {
@@ -43,7 +43,7 @@ describe('Scheduler on the redis adapter', { timeout: 60_000 }, () => {
 
   /** One application instance: its own container, schedule service and worker, one shared database. */
   async function instance(started: string[]) {
-    const service = createScheduleExecuteService(
+    const service = createJobExecutorService(
       {
         default: 'redis',
         redis: { adapter: 'redis', connection, namespace },
@@ -53,7 +53,7 @@ describe('Scheduler on the redis adapter', { timeout: 60_000 }, () => {
     services.push(service);
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, database);
-    container.instance(scheduleExecuteServiceToken, service);
+    container.instance(jobExecutorServiceToken, service);
     const provider = new SchedulerProvider({
       appName: 'main',
       publicBasePath: '',
