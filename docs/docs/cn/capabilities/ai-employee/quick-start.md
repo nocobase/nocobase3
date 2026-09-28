@@ -109,7 +109,7 @@ export default ai;
 
 :::warning 部署时单独配置
 
-部署环境有自己的运行配置，做法见[独立部署](../../app/deployment/standalone.md)和[运行配置](../../app/deployment/configuration.md)。`ai.llmServices` 的服务条目和密钥也属于这份配置，要在部署环境里同样设置。
+部署环境有自己的运行配置，做法见[独立部署](../../deployment/standalone.md)和[运行配置](../../deployment/configuration.md)。`ai.llmServices` 的服务条目和密钥也属于这份配置，要在部署环境里同样设置。
 
 :::
 

@@ -76,16 +76,16 @@ users:
 
 ## 地址与环境变量
 
-| 环境变量                  | 示例                           | 说明                                                                         |
-| ------------------------- | ------------------------------ | ---------------------------------------------------------------------------- |
-| `APP_PUBLIC_ORIGIN`       | `https://apps.example.com`     | 对外访问的协议和域名，不包含挂载路径                                         |
-| `APP_BASE_PATH`           | `/crm`                         | 挂载路径，启动时读取，无需重新构建；默认为 `/main`，Hub 为 `/hub`            |
-| `APP_SERVER_HOST`         | `127.0.0.1`                    | 监听地址；容器内使用 `0.0.0.0`                                               |
-| `APP_SERVER_PORT`         | `13000`                        | 监听端口                                                                     |
-| `APP_CONFIG_FILE`         | `/srv/nocobase/crm/config.yml` | 配置文件的绝对路径。未设置时密钥在每次启动时随机生成，重启后所有登录状态失效 |
-| `APP_STORAGE_DIR`         | `/srv/nocobase/crm/storage`    | 持久目录，默认为部署根目录下的 `storage/`                                    |
-| `NODE_ENV`                | `production`                   | 会话 Cookie 带 `Secure` 标记，仅可通过 HTTPS 或 localhost 登录               |
-| `NOCOBASE_STRICT_STARTUP` | `true`                         | 启动失败时以非零状态退出，以便服务管理器重启应用                             |
+| 环境变量                  | 示例                           | 说明                                                                                                        |
+| ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `APP_PUBLIC_ORIGIN`       | `https://apps.example.com`     | 对外访问的协议和域名，不包含挂载路径                                                                        |
+| `APP_BASE_PATH`           | `/crm`                         | 挂载路径，启动时读取，无需重新构建；默认为 `/main`，Hub 为 `/hub`                                           |
+| `APP_SERVER_HOST`         | `127.0.0.1`                    | 监听地址；容器内使用 `0.0.0.0`                                                                              |
+| `APP_SERVER_PORT`         | `13000`                        | 监听端口                                                                                                    |
+| `APP_CONFIG_FILE`         | `/srv/nocobase/crm/config.yml` | 指定配置文件路径；未设置时默认查找部署根目录的配置文件（如 `config.yml`），其中保存的密钥会在重启后继续使用 |
+| `APP_STORAGE_DIR`         | `/srv/nocobase/crm/storage`    | 持久目录，默认为部署根目录下的 `storage/`                                                                   |
+| `NODE_ENV`                | `production`                   | 会话 Cookie 带 `Secure` 标记，仅可通过 HTTPS 或 localhost 登录                                              |
+| `NOCOBASE_STRICT_STARTUP` | `true`                         | 启动失败时以非零状态退出，以便服务管理器重启应用                                                            |
 
 同一配置项同时出现在文件和对应环境变量中时，以环境变量为准，例如 `AUTH_SECRET` 覆盖 `auth.secret`。仅 `config env` 列出的变量有效，不要按名称推测。Hub 托管的应用不设置这些变量：路径由 Hub 分配，配置中的 `app.publicOrigin` 表示对外 origin。
 

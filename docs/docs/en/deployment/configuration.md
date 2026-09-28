@@ -76,16 +76,16 @@ This configuration applies only when the seed task runs against an empty user ta
 
 ## Addresses and environment variables
 
-| Variable                  | Example                        | Description                                                                                                                               |
-| ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_PUBLIC_ORIGIN`       | `https://apps.example.com`     | The public scheme and host, without the mount path                                                                                        |
-| `APP_BASE_PATH`           | `/crm`                         | The mount path, read at startup without a rebuild; `/main` by default, `/hub` for a Hub                                                   |
-| `APP_SERVER_HOST`         | `127.0.0.1`                    | The listen address; `0.0.0.0` inside a container                                                                                          |
-| `APP_SERVER_PORT`         | `13000`                        | The listen port                                                                                                                           |
-| `APP_CONFIG_FILE`         | `/srv/nocobase/crm/config.yml` | The absolute path of the configuration file. When unset, secrets are generated at every start and all sessions are invalidated on restart |
-| `APP_STORAGE_DIR`         | `/srv/nocobase/crm/storage`    | The persistent directory; `storage/` under the deployment root by default                                                                 |
-| `NODE_ENV`                | `production`                   | Marks the session cookie `Secure`, so sign-in is possible only over HTTPS or localhost                                                    |
-| `NOCOBASE_STRICT_STARTUP` | `true`                         | Exits non-zero when startup fails, so that the service manager restarts the application                                                   |
+| Variable                  | Example                        | Description                                                                                                                                                                         |
+| ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_PUBLIC_ORIGIN`       | `https://apps.example.com`     | The public scheme and host, without the mount path                                                                                                                                  |
+| `APP_BASE_PATH`           | `/crm`                         | The mount path, read at startup without a rebuild; `/main` by default, `/hub` for a Hub                                                                                             |
+| `APP_SERVER_HOST`         | `127.0.0.1`                    | The listen address; `0.0.0.0` inside a container                                                                                                                                    |
+| `APP_SERVER_PORT`         | `13000`                        | The listen port                                                                                                                                                                     |
+| `APP_CONFIG_FILE`         | `/srv/nocobase/crm/config.yml` | Selects the configuration file; when unset, the application looks for a configuration file such as `config.yml` in the deployment root and reuses its saved secrets across restarts |
+| `APP_STORAGE_DIR`         | `/srv/nocobase/crm/storage`    | The persistent directory; `storage/` under the deployment root by default                                                                                                           |
+| `NODE_ENV`                | `production`                   | Marks the session cookie `Secure`, so sign-in is possible only over HTTPS or localhost                                                                                              |
+| `NOCOBASE_STRICT_STARTUP` | `true`                         | Exits non-zero when startup fails, so that the service manager restarts the application                                                                                             |
 
 When a setting appears both in the file and in its environment variable, the environment variable takes precedence; `AUTH_SECRET`, for example, overrides `auth.secret`. Only the variables listed by `config env` are recognized; do not infer names. A Hub-hosted application sets none of these variables: Hub assigns the path, and `app.publicOrigin` in the configuration specifies the public origin.
 

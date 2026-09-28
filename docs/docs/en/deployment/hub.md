@@ -156,7 +156,7 @@ pnpm nocobase hub deploy --release-id <RELEASE_ID> --json
 ## Update, roll back, start and stop
 
 - **Update**: build a new archive, upload and deploy it. Complete a backup first when the change includes database migrations. The application is interrupted while the version is replaced.
-- **Roll back**: select a successful deployment in the deployment history and roll back to it, or deploy an earlier Release with `hub deploy --release-id` from the CLI. A rollback does not undo database changes; if the old version is incompatible with the current database, the matching backup taken before the deployment must be restored.
+- **Roll back**: select a successful deployment in the deployment history and roll back to it, or deploy an earlier Release with `pnpm nocobase hub deploy --release-id <RELEASE_ID> --idempotency-key <NEW_ROLLBACK_KEY> --json` from the CLI. Use a new idempotency key for each new rollback; reuse that key only when retrying the same rollback after a network error or an unconfirmed result. Without a new key, the command may reuse a historical deployment and return its earlier result without switching the running version. A rollback does not undo database changes; if the old version is incompatible with the current database, the matching backup taken before the deployment must be restored.
 - **Stop and start**: operated from the application details. Stopping keeps the deployment, configuration and data.
 - **Remove**: deletes the application record, all Releases, the configuration and the application's data volume. Complete a backup before removing.
 
