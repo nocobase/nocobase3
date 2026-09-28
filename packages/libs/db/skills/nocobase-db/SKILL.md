@@ -126,6 +126,8 @@ Apply both with `pnpm nocobase db apply`, adding `--connection <name>` for a non
 
 Each context carries its own tools, and which one to use is not a free choice — see [Repository and Query](#4-repository-and-query). In short: a migration works through `builder` and `query`, and a seed writes through `repository`.
 
+`createdAt` above is an ordinary NOT NULL column rather than something the framework maintains, so every write of an `orders` row has to supply it; `id` is filled by the database only because it is declared `increments`. [Builder](#3-builder) states the rule.
+
 The rules are absolute, because these files are history that has already run on other machines:
 
 - **Self-contained.** Spell out every table, field, index, constraint and metadata operation in the file. Never import a Collection definition, model, registry or shared constant that keeps evolving — that silently changes both the behavior and the checksum of something already applied.
@@ -162,6 +164,8 @@ await builder.createCollection('orderItems', (collection) => {
 Field builders are `increments`, `integer`, `bigInt`, `string`, `char`, `text`, `boolean`, `decimal`, `float`, `double`, `date`, `time`, `datetime`, `datetimeTz`, `json`, `blob`, `uuid`, and `native` for a dialect-specific type. Options include `nullable`, `length`, `defaultValue`, `precision` and `scale`; the equivalent chained form (`.notNull()`, `.defaultTo()`, `.unique()`) is also available — pick one style and keep the file consistent.
 
 Relations are `belongsTo`, `hasOne`, `hasMany` and `belongsToMany`. Constraints and indexes are `primary`, `unique`, `foreignKey` and `index`, each taking one field name or an array.
+
+Nothing is added implicitly. A Collection has exactly the fields the callback declares — there is no `id` unless one is declared, and no `createdAt`/`updatedAt` pair either — and each field builder passes its options through as written. `increments` is the only one that makes the database produce the value; `datetime` and `uuid` declare a type and nothing more. So a column declared `nullable: false`, and any primary key that is not `increments`, is filled by whoever writes the row unless the declaration gives it a `defaultValue`. Decide that at the migration, because the writing side is where it fails: see the write bullet in [Repository and Query](#4-repository-and-query).
 
 Change an existing table with explicit alter, rename and drop operations in a safe dependency order. Do not drop and recreate — that destroys data and is not what `down()` should undo.
 
@@ -246,6 +250,7 @@ Boundaries that are easy to get wrong:
 - `createMany` and `updateMany` do not accept nested relation writes. `createOne` accepts `create` and `connect` on a relation, not the full set.
 - `disconnect` detaches; `delete` removes the target record. A relation target update or delete stays inside the current parent record's scope.
 - Repository does not apply the application's permissions. A route handler decides what the caller may see and change _before_ anything reaches `filter`, `values` or `select`. `writePolicy` defaults to `true` for an internal Repository and `false` for one reached from an API route, so a route-facing Repository needs an explicit allow list.
+- A write fills in nothing. Audit timestamps and a primary key the database does not generate come from `values`: a `createdAt` declared `nullable: false` fails the insert with the database's own NOT NULL error, and a `uuid` primary key left out of `values` fails with `INVALID_UNIQUE_SELECTOR`, because a create identifies the record it has just written by a complete, non-null primary or unique selector and only a single auto-increment identity is recovered from the driver. Generate the value in the calling code — `crypto.randomUUID()`, or `idGeneratorToken` — or give the column a `defaultValue` in the migration that declares it.
 - Do not assume an `id` exists, and do not infer a field's type, primary key or auto-increment from its name.
 
 **Query** knows tables and columns, not Collections: it does not read Collection metadata, does not honor Collection-level naming overrides, applies no policy or optimistic locking, and performs no relation-aware CRUD.
