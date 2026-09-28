@@ -2,7 +2,7 @@
 
 Child pages, page tabs and navigation groups are all declared as routes. Routes are the source of navigation in App, Settings and Dev; how child content is presented (inline, covering, dialog, drawer) is decided by page code.
 
-For the basic rules on route fields, `auth`, `authz`, menus and breadcrumbs, see [`page.md`](page.md). For dialogs and drawers (`RouteDialog`, `RouteDrawer`, `useRouteOverlay`, `beforeClose`), see [`overlay.md`](overlay.md).
+For the basic rules on route fields, `auth`, `authz`, menus, the back button and breadcrumbs, see [`page.md`](page.md). For dialogs and drawers (`RouteDialog`, `RouteDrawer`, `useRouteOverlay`, `beforeClose`), see [`overlay.md`](overlay.md).
 
 ## 1. Basic rules
 
@@ -24,7 +24,8 @@ client/pages/projects/
   index.tsx                  /projects                     List page; <Outlet context={outletContext} /> at the end
   new.tsx                    /projects/new                 RouteDialog: new project
   detail/index.tsx           /projects/:projectId          RouteDrawer: project details; <Outlet context={...} /> inside the drawer
-  detail/edit.tsx            /projects/:projectId/edit     RouteDialog: edit project, stacked on the drawer
+  detail/edit.tsx            /projects/edit/:projectId     RouteDialog: edit project from a row's menu, alone over the list
+                             /projects/:projectId/edit     The same dialog from the drawer, stacked on it
   project-form.tsx           Form component shared by create and edit
   project-delete-dialog.tsx  Delete confirmation (AlertDialog, state inside the component)
   types.ts
@@ -32,6 +33,7 @@ client/pages/projects/
 
 - A fixed path segment uses a file of the same name: `/projects/new` is `projects/new.tsx`.
 - A parameter segment uses a name that describes what the page is for: `:projectId` is `detail/`.
+- One file serves every route that shows the same thing: both edit routes load `detail/edit.tsx`, and a page that opens the project drawer over itself loads `detail/index.tsx` ([section 2.1 of `overlay.md`](overlay.md#21-declare-the-child-routes)).
 - Components and types used only by these pages stay in the same folder, not in `client/components/` (which holds components shared across the whole application).
 - Keep components and non-primitive constants in separate files: when one file exports both a component and an object or array constant, Fast Refresh stops working and ESLint (`react-refresh/only-export-components`) reports an error; string and number constants are allowed. Put constants and types in a separate module such as `types.ts`.
 
@@ -53,19 +55,19 @@ A child route renders in the parent page's Outlet. It can be displayed inline, o
 | --------------- | ---------------------------------------- | -------------------------------------------- | -------------------------------------- | ---------------- |
 | Position        | Where the Outlet sits in the parent page | Covers the whole content area                | Center of the page                     | Side of the page |
 | Modal           | No                                       | No; the sidebar and header remain usable     | Yes                                    | Yes              |
-| `breadcrumb`    | Omit                                     | Write (it is a destination)                  | Omit                                   | Omit             |
+| `breadcrumb`    | Omit                                     | Only for breadcrumbs the user asked for      | Omit                                   | Omit             |
 | `PageContainer` | None; uses the parent page's             | Adds its own                                 | None                                   | None             |
-| How to leave    | Switch to another child route            | Breadcrumbs or browser back                  | Close button, Esc, backdrop, `close()` | Same as left     |
+| How to leave    | Switch to another child route            | `BackButton` or browser back                 | Close button, Esc, backdrop, `close()` | Same as left     |
 | Use for         | Page tabs                                | Child pages with long forms or many sections | Create and edit forms                  | Record details   |
 
-For how to write `RouteDialog` and `RouteDrawer`, see [`overlay.md`](overlay.md). Ordinary page routes can also have `breadcrumb`; it is not limited to `RouteChildPage` (see [section 7 of `page.md`](page.md#7-breadcrumbs)).
+For how to write `RouteDialog` and `RouteDrawer`, see [`overlay.md`](overlay.md). A record's own page declared beside its list leaves by `BackButton` too, with `to` pointing at the list ([section 7 of `page.md`](page.md#7-back-button-and-breadcrumbs)).
 
 ## 4. Page tabs
 
 ### Use child routes by default
 
 - When building a page with tabs, each tab is a child route by default; the user does not have to ask for "routes" separately. This is the same for App, Settings and Dev pages, including plugin pages. When the user explicitly asks for a different interaction, follow the user's request.
-- A tab is a view of the parent page, not a separate destination: tab routes declare no `breadcrumb` (the breadcrumbs stop at the parent page) and no `navigation`.
+- A tab is a view of the parent page, not a separate destination: tab routes declare no `navigation`, and no `breadcrumb` even on a page that shows breadcrumbs (the trail stops at the parent page).
 - Tab content goes in the parent route's `children`; the parent page places `<Outlet />` in its content area; switching tabs uses route navigation.
 - **Derive the selected tab from the URL**; do not keep a separate `activeTab` state. Every tab can be opened directly, survives a reload, and works with the browser's back and forward.
 - Fixed tabs (Summary, By owner) and parameterized tabs (for example `:year`) both use this pattern. A child page with parameters reads them with `useParams()`.
@@ -253,7 +255,8 @@ Tabs are implemented as links because they are page navigation, announced as lin
 
 A detail view with several sections, sub-tables or tabs is a page rather than a drawer (guideline T2.1). It combines the pieces above:
 
-- Route `/customers/:customerId` with `breadcrumb` (a static title such as `customers.detail.title`; the record name goes in `PageHeader`) and tab children such as `overview` and `orders`; no `navigation`, because the path has a parameter. It sits beside the list route, or covers it as a child with `RouteChildPage` ([section 5](#5-covering-child-pages-routechildpage)) when the list must keep its state.
+- Route `/customers/:customerId` with tab children such as `overview` and `orders`; no `navigation`, because the path has a parameter. It covers the list as a child with `RouteChildPage` ([section 5](#5-covering-child-pages-routechildpage)), which keeps the list's state, or sits beside the list route.
+- `BackButton` above `PageHeader` returns to the list; the record name is the `PageHeader` title. Beside the list, give it `to`: `<BackButton to={{ pathname: '/customers', search: location.search }} />`.
 - The page reads the id with `useParams()`, renders an inner component keyed by it, and loads the record once with the pattern in ["Loading data in a component" of `api.md`](api.md#loading-data-in-a-component), including its 401, 403 and 404 states; the record name is the `PageHeader` title.
 - The tab bar and the default-tab redirect work as in the example above; the page passes the loaded record to the tabs with `<Outlet context={…}>` (memoized, [section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page)), so the tabs do not load it again, and each tab loads only its own data, such as the customer's orders.
 
@@ -391,7 +394,7 @@ export default function ProjectReportsPage(): ReactElement {
 
 ## 5. Covering child pages (RouteChildPage)
 
-When a child page has a lot of content (a long form, many sections) and needs the whole page area, but the parent page's state must be preserved, cover the parent page with `RouteChildPage`. For example, add an "Import projects" page at `/projects/import` under the projects list. It is a destination, so both the parent route and the page declare `breadcrumb`:
+When a child page has a lot of content (a long form, many sections) and needs the whole page area, but the parent page's state must be preserved, cover the parent page with `RouteChildPage`. For example, add an "Import projects" page at `/projects/import` under the projects list:
 
 ```ts
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
@@ -401,16 +404,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     auth: 'required',
     authz: 'skip',
     navigation: { title: 'navigation.projects', icon: FolderKanban },
-    // navigation and breadcrumb do not replace each other: to get both a menu entry and a breadcrumb, write both.
-    breadcrumb: { title: 'navigation.projects' },
     componentLoader: () => import('./pages/projects/index.js'),
     children: [
-      // … dialogs and drawers such as new and :projectId are not destinations; they get no breadcrumb
+      // … the dialogs and the drawer of page.md
       {
-        // A covering child page is a destination, so give it a breadcrumb; the title names the page type, not the record.
+        // A covering child page; the back button above its title returns to the list.
         name: 'project-import',
         path: 'import',
-        breadcrumb: { title: 'projects.import.title' },
         authz: 'skip',
         componentLoader: () => import('./pages/projects/import.js'),
       },
@@ -426,7 +426,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 import { Outlet } from 'react-router';
 
-import { Breadcrumbs } from '@/components/breadcrumbs';
+import { BackButton } from '@/components/back-button';
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
 import { RouteChildPage } from '@/components/route-child-page';
@@ -439,7 +439,8 @@ export default function ProjectImportPage(): ReactElement {
       <RouteChildPage>
         {/* A covering child page uses its own PageContainer */}
         <PageContainer>
-          <Breadcrumbs />
+          {/* Returns to /projects with the list's search and filters. */}
+          <BackButton />
           <PageHeader
             title={t('projects.import.title')}
             description={t('projects.import.description')}
@@ -456,10 +457,11 @@ export default function ProjectImportPage(): ReactElement {
 
 The list page's `<Outlet />` is already at the end of `PageContainer` (see [section 2 of `page.md`](page.md#2-the-page-component)), so it needs no change; just add a secondary button that links to `import` in the page header: `<Button variant='outline' nativeButton={false} render={<Link to={{ pathname: 'import', search: location.search }} />}>`.
 
-- The breadcrumbs show "Projects > Import projects". "Projects" links back to the list; "Import projects" is the current page and is not a link.
+- `BackButton` sits above the title, where breadcrumbs would otherwise be, and returns to the list with its query string ([section 7 of `page.md`](page.md#7-back-button-and-breadcrumbs)). Put no "Back to list" button in `actions`.
+- When the user asks for breadcrumbs, render `<Breadcrumbs />` in its place and declare `breadcrumb` on both routes: `{ title: 'navigation.projects' }` on `projects` and `{ title: 'projects.import.title' }` on `project-import`. The trail then shows "Projects > Import projects".
 - Put the deeper `<Outlet />` beside `RouteChildPage`, not inside it: `RouteChildPage` scrolls on its own, so a next level placed inside it would scroll away with it.
 - The covered parent page keeps its own DOM, including half-filled form input and the scroll position. While covering, `RouteChildPage` makes the sibling elements before it `inert` (not focusable, not clickable) and restores them when it leaves.
-- It is not modal: the sidebar and header remain usable. It has no close button and does not respond to Esc; users go back through the breadcrumbs or the browser's back button.
+- It is not modal: the sidebar and header remain usable. It has no close button and does not respond to Esc; users go back with `BackButton` or the browser's back button.
 - Use it only for child pages that cover their parent page, never on a top-level page.
 - A form too long for a dialog uses the same frame; `create.tsx` ([`example/create-page.md`](example/create-page.md)) is the complete page.
 
@@ -491,6 +493,6 @@ The list page's `<Outlet />` is already at the end of `PageContainer` (see [sect
 5. Check the menu, the copy in each language, the link and expand button of clickable parents, and navigation on narrow screens.
 6. Remove permission for the parent page: none of the child pages can load. Then remove permission for just one child page that declares `authz` explicitly.
 7. Settings pages and dev pages: the menu position is as expected; dev pages do not appear in the production build.
-8. Covering child pages: the breadcrumbs are correct; the covered page keeps its input and scroll position; after going back, it works normally.
+8. Covering child pages: the back button returns to the list with its search and filters; the covered page keeps its input and scroll position; after going back, it works normally.
 
 Write these behaviors as tests in `tests/` (see [`testing.md`](testing.md)).

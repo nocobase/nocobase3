@@ -8,14 +8,15 @@ Part of the [projects worked example](../example.md).
 
 Rules: [section 1 of `table.md`](../table.md#1-choosing-a-table-component). Use it instead of `DataTable` when the endpoint paginates; the list page keeps the page in the URL and passes it down.
 
-The endpoint contract this assumes: `GET /api/projects` takes `page` (from 1) and `pageSize` besides `search` and `status`, and returns `{ data: Project[], meta: { total: number } }`, where `total` counts the matching records on all pages.
+The endpoint contract this assumes: `GET /api/projects` takes `page` (from 1), `pageSize` and `sort` besides `search` and `status`, and returns `{ data: Project[], meta: { total: number } }`, where `total` counts the matching records on all pages. `sort` names a column the endpoint sorts by, `name` (in the order of the request's language) or `updatedAt`, prefixed with `-` for descending; the page always sends it, `-updatedAt` by default (guideline T1.8).
 
-The server-paginated list page is [`example/list-page.md`](list-page.md) with the changes below; everything else (the toolbar, the four states, the row menu, the delete dialog and the focus handling after a delete) stays as it is there. Its `DataTableColumnHeader` headers render as plain titles because `ProjectsServerTable` disables sorting; to sort, keep a `sort` parameter in the URL, send it to the endpoint and extend the component with `manualSorting`, `state.sorting` and `onSortingChange`.
+The server-paginated list page is [`example/list-page.md`](list-page.md) with the changes below; everything else (the toolbar, the four states, the row menu, the delete dialog and the focus handling after a delete) stays as it is there. Its `DataTableColumnHeader` headers sort through the URL: the page reads `sort`, sends it with the page, and passes it to `ProjectsServerTable`, which shows it in the header with `manualSorting`. Choosing another order writes `sort` and starts on the first page. A column that should sort must be one the endpoint accepts, so `SORTABLE` lists exactly the columns with a `DataTableColumnHeader`.
 
 The changes, inside the list page's component; everything marked `// …` stays as it is there:
 
 ```tsx
 // client/pages/projects/index.tsx (server-paginated: the list page with these changes)
+import type { ColumnSort } from '@tanstack/react-table';
 import {
   type ReactElement,
   useEffect,
@@ -29,8 +30,24 @@ import {
 import { ProjectsServerTable } from './projects-server-table.js';
 
 const PAGE_SIZES = [10, 20, 50] as const;
+// The columns the endpoint sorts by: the URL may name only these.
+const SORTABLE = ['name', 'updatedAt'] as const;
+// The default order, most recently updated first (guideline T1.8); the header shows it too.
+const DEFAULT_SORT: ColumnSort = { id: 'updatedAt', desc: true };
 
 // … isProjectStatus, as in the list page
+
+/** Reads `sort` from the URL: a sortable column, prefixed with `-` for descending. Anything else is the default. */
+function parseSort(value: string | null): ColumnSort {
+  if (!value) return DEFAULT_SORT;
+  const desc = value.startsWith('-');
+  const id = desc ? value.slice(1) : value;
+  return SORTABLE.some((column) => column === id) ? { id, desc } : DEFAULT_SORT;
+}
+
+function formatSort(column: ColumnSort): string {
+  return `${column.desc ? '-' : ''}${column.id}`;
+}
 
 export default function ProjectsPage(): ReactElement {
   // … t, locale, api, location and searchRef, as in the list page
@@ -45,6 +62,8 @@ export default function ProjectsPage(): ReactElement {
     PAGE_SIZES.find((size) => String(size) === searchParams.get('pageSize')) ??
     PAGE_SIZES[0];
   const page = Math.max(1, Math.trunc(Number(searchParams.get('page'))) || 1);
+  const columnSort = parseSort(searchParams.get('sort'));
+  const sort = formatSort(columnSort);
 
   function changeStatus(value: string | null): void {
     updateParams((params) => {
@@ -69,6 +88,7 @@ export default function ProjectsPage(): ReactElement {
     status ?? null,
     page,
     pageSize,
+    sort,
     reloadCount,
   ]);
   const [result, setResult] = useState<{
@@ -87,12 +107,13 @@ export default function ProjectsPage(): ReactElement {
       status ?? null,
       page,
       pageSize,
+      sort,
       reloadCount,
     ]);
     api
       .request<{ data: Project[]; meta: { total: number } }>({
         path: 'projects',
-        query: { search: search || undefined, status, page, pageSize },
+        query: { search: search || undefined, status, page, pageSize, sort },
         signal: controller.signal,
       })
       .then(
@@ -115,7 +136,7 @@ export default function ProjectsPage(): ReactElement {
         },
       );
     return () => controller.abort();
-  }, [api, search, status, page, pageSize, reloadCount]);
+  }, [api, search, status, page, pageSize, sort, reloadCount]);
 
   // … loading, rows, rowsFiltered, the focus handling after a delete, outletContext, the deletion state, the formatters
   // and the columns, as in the list page
@@ -166,6 +187,16 @@ export default function ProjectsPage(): ReactElement {
             params.set('pageSize', String(next.pageSize));
           });
         }}
+        sorting={[columnSort]}
+        onSortingChange={(next) => {
+          const column = next.at(0);
+          updateParams((params) => {
+            if (column) params.set('sort', formatSort(column));
+            else params.delete('sort');
+            // A new order starts on the first page.
+            params.delete('page');
+          });
+        }}
         // No results for the filters. Without filters an empty page only shows while a page past the end moves to the
         // last one, so it stays blank.
         emptyMessage={
@@ -195,6 +226,7 @@ import {
   flexRender,
   getCoreRowModel,
   type PaginationState,
+  type SortingState,
   useReactTable,
 } from '@tanstack/react-table';
 import type { ReactElement, ReactNode } from 'react';
@@ -221,19 +253,25 @@ export interface ProjectsServerTableProps {
   readonly pagination: PaginationState;
   /** Writes the new page to the URL; the list request follows the URL. */
   readonly onPaginationChange: (pagination: PaginationState) => void;
+  /** The sort read from the URL, which the endpoint applied. */
+  readonly sorting: SortingState;
+  /** Writes the new sort to the URL; the list request follows the URL. */
+  readonly onSortingChange: (sorting: SortingState) => void;
   /** Shown when the page has no rows, as DataTable's emptyMessage. */
   readonly emptyMessage: ReactNode;
   /** The rows-per-page choices; the list page accepts only these from the URL. */
   readonly pageSizeOptions: readonly number[];
 }
 
-/** The markup of DataTable, paginated by the server instead of the browser. */
+/** The markup of DataTable, paginated and sorted by the server instead of the browser. */
 export function ProjectsServerTable({
   columns,
   rows,
   total,
   pagination,
   onPaginationChange,
+  sorting,
+  onSortingChange,
   emptyMessage,
   pageSizeOptions,
 }: ProjectsServerTableProps): ReactElement {
@@ -244,16 +282,20 @@ export function ProjectsServerTable({
     columns,
     getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
-    // The server already paginated: no getPaginationRowModel, and the page count comes from rowCount.
+    // The server already paginated and sorted: no pagination or sorted row model, and the page count comes from
+    // rowCount. Sorting one page in the browser would mislead, so the header only shows and changes the URL's sort.
     manualPagination: true,
+    manualSorting: true,
     rowCount: total,
-    // Sorting one page in the browser would mislead, so every header renders as plain text, including the
-    // DataTableColumnHeader headers of the list page's columns. To sort, send it to the endpoint (table.md section 1).
-    enableSorting: false,
-    state: { pagination },
+    state: { pagination, sorting },
     onPaginationChange: (updater) => {
       onPaginationChange(
         typeof updater === 'function' ? updater(pagination) : updater,
+      );
+    },
+    onSortingChange: (updater) => {
+      onSortingChange(
+        typeof updater === 'function' ? updater(sorting) : updater,
       );
     },
   });

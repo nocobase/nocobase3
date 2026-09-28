@@ -14,7 +14,7 @@ The example assumes the backend provides these endpoints:
 | `PATCH /api/projects/:id`  | Changes only the fields sent; returns `{ data: Project }`; 404 if it does not exist                                             |
 | `DELETE /api/projects/:id` | 204 on success; 404 if it does not exist                                                                                        |
 
-The frontend types live in the page folder, in `client/pages/projects/types.ts`, together with the two context types the overlays pass down ([section 2.2 of `overlay.md`](../overlay.md#22-place-the-outlet-in-the-parent-page)):
+The frontend types live in the page folder, in `client/pages/projects/types.ts`, together with the two context types the overlays read from the view behind them ([section 2.2 of `overlay.md`](../overlay.md#22-place-the-outlet-in-the-parent-page)):
 
 ```ts
 // client/pages/projects/types.ts
@@ -30,19 +30,22 @@ export interface Project {
   readonly updatedAt: string;
 }
 
-/** What the list page passes to its child routes (create dialog, detail drawer) through `<Outlet context>`. */
+/**
+ * What the create dialog and the detail drawer read through `<Outlet context>` from the page they open over: the
+ * list, or another page that opens the drawer over itself.
+ */
 export interface ProjectsOutletContext {
-  /** Refreshes the list in the background. */
+  /** Refreshes the page's data in the background. */
   readonly reload: () => void;
-  /** Called after the detail drawer deletes the record: refreshes the list, then moves focus to the search box. */
+  /** Called after the detail drawer deletes the record: refreshes, then moves focus to a stable place (guideline A6). */
   readonly afterDelete: () => void;
 }
 
-/** What the detail drawer passes to the edit dialog through `<Outlet context>`. */
-export interface ProjectDetailOutletContext {
-  /** Called after a successful save: updates the drawer with the record the endpoint returned and refreshes the list (guideline R2). */
+/** What the edit dialog reads through `<Outlet context>` from the view behind it: the detail drawer, or the list for a row's menu. */
+export interface ProjectEditOutletContext {
+  /** Called after a successful save with the record the endpoint returned: the drawer shows it at once, and the list refreshes (guideline R2). */
   readonly onSaved: (project: Project) => void;
-  /** Called on finding that the record no longer exists: the drawer switches to "not found" and the list refreshes (guideline R3). */
+  /** Called on finding that the record no longer exists: the drawer switches to "not found", and the list refreshes (guideline R3). */
   readonly onNotFound: () => void;
 }
 ```

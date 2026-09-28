@@ -4,7 +4,7 @@ Part of the [projects worked example](../example.md).
 
 **Depends on**: [form](project-form.md), [types](types.md), [copy](copy.md); the route entry below.
 
-Rules: guidelines T3.1 and T3.9, ["Where forms go" in `form.md`](../form.md#where-forms-go), and [section 5 of `child-routes.md`](../child-routes.md#5-covering-child-pages-routechildpage). The frame for a form too long for a dialog: a covering child page of the list, with the buttons below the form. `ProjectForm` stands in for the long form here; group a real one's fields with `FieldSet`. Declare it beside `new` in the projects route's `children` with a `breadcrumb` of its own: `{ name: 'project-create', path: 'create', breadcrumb: { title: 'projects.create.title' }, authz: 'skip', componentLoader: () => import('./pages/projects/create.js') }`. The trail needs two levels, so the `projects` route also declares `breadcrumb: { title: 'navigation.projects' }` ([section 5 of `child-routes.md`](../child-routes.md#5-covering-child-pages-routechildpage)); `project-create` joins the route test's grant list as `null` ([section 12 of `page.md`](../page.md#12-update-the-route-test)).
+Rules: guidelines T3.1 and T3.9, ["Where forms go" in `form.md`](../form.md#where-forms-go), and [section 5 of `child-routes.md`](../child-routes.md#5-covering-child-pages-routechildpage). The frame for a form too long for a dialog: a covering child page of the list, with the buttons below the form. `ProjectForm` stands in for the long form here; group a real one's fields with `FieldSet`. Declare it beside `new` in the projects route's `children`: `{ name: 'project-create', path: 'create', authz: 'skip', componentLoader: () => import('./pages/projects/create.js') }`. The back button above its title returns to the list ([section 7 of `page.md`](../page.md#7-back-button-and-breadcrumbs)); `project-create` joins the route test's grant list as `null` ([section 12 of `page.md`](../page.md#12-update-the-route-test)).
 
 ```tsx
 // client/pages/projects/create.tsx
@@ -12,7 +12,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router';
 
-import { Breadcrumbs } from '@/components/breadcrumbs';
+import { BackButton } from '@/components/back-button';
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
 import { RouteChildPage } from '@/components/route-child-page';
@@ -48,7 +48,8 @@ export default function CreateProjectPage(): ReactElement {
   return (
     <RouteChildPage>
       <PageContainer>
-        <Breadcrumbs />
+        {/* Returns to the list with its search and filters, like Cancel. */}
+        <BackButton />
         <PageHeader
           title={t('projects.create.title')}
           description={t('projects.form.description')}

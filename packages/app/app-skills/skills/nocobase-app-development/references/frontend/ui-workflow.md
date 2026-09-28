@@ -69,7 +69,7 @@ These files are used only while the task is in progress: the reviewer and the ma
    - The endpoint exists: read its implementation or documentation, and copy its fields, parameters, response shape and error codes into the design.
    - The endpoint does not exist: specify the endpoint you need in the design; the backend is implemented to that contract.
 3. Take stock of the available components: `client/components/ui/` (primitives) and `client/components/` (compositions). The design uses only existing components or components the shadcn registry can add; list every primitive it needs that is not installed yet, so development starts with one `yes n | pnpm exec shadcn add` run ([`references/shadcn.md`](references/shadcn.md)), and say so when it needs a new component of its own. Open the source to confirm any component behavior the design depends on (default width, footer button alignment, how tables paginate and sort, overlay nesting); the file name alone is not enough.
-4. Write `design.md` from the template: choose a page template (guidelines T1–T4), draw a wireframe, and list the components, states, interactions and copy.
+4. Write `design.md` from the template: choose a page template (guidelines T1–T5), draw a wireframe, and list the components, states, interactions and copy.
 5. Write the acceptance criteria, numbered D1, D2, …, each one checkable by an action or a screenshot; step 4 checks them one by one. When the design changes later, keep existing numbers unchanged, append new criteria at the end, and mark removed ones "Deleted", so that references in the review records still match.
 
 When done, set the status in `design.md` to "Pending review".

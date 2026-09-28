@@ -6,15 +6,43 @@ Before writing a new page, find the closest file in the worked example: the task
 
 ## 1. Declare the route
 
-Append an entry to the end of the existing `defineAppRoutes([...])` array in `client/routes.ts`. Leave the existing routes (home, sign-in pages) as they are, and do not overwrite the whole file. Add the icon to the existing `lucide-react` import at the top of the file:
+Append an entry to the end of the existing `defineAppRoutes([...])` array in `client/routes.ts`. Leave the existing routes (home, sign-in pages) as they are, and do not overwrite the whole file. Add the icon to the existing `lucide-react` import at the top of the file, and the route type to the existing `@nocobase/app-client/plugins` import:
 
 ```ts
 import { FolderKanban, Home } from 'lucide-react';
+import {
+  defineAppRoutes,
+  defineSettingsRoutes,
+  type AppClientRouteContribution,
+  type AppClientRouteDefinition,
+} from '@nocobase/app-client/plugins';
 ```
 
-The projects list page to append, with three child routes for create, detail and edit:
+The projects list page to append, with child routes for create, edit, detail and the edit stacked on the detail. The detail drawer and its edit dialog come from a function, because every page that opens a project declares the same pair under itself, so the drawer opens over that page ([section 2.1 of `overlay.md`](overlay.md#21-declare-the-child-routes)):
 
 ```ts
+/** The project drawer and the edit dialog stacked on it, under a page that opens projects; `owner` keeps the names unique. */
+function projectDetailRoutes(owner: string): AppClientRouteDefinition[] {
+  return [
+    {
+      // …/:projectId: detail drawer (RouteDrawer), over the page that declares it
+      name: `${owner}-detail`,
+      path: ':projectId',
+      authz: 'skip',
+      componentLoader: () => import('./pages/projects/detail/index.js'),
+      children: [
+        {
+          // …/:projectId/edit: edit dialog, stacked on the drawer
+          name: `${owner}-detail-edit`,
+          path: 'edit',
+          authz: 'skip',
+          componentLoader: () => import('./pages/projects/detail/edit.js'),
+        },
+      ],
+    },
+  ];
+}
+
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
   // … existing routes (home, sign-in pages); keep them
   {
@@ -33,36 +61,29 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         componentLoader: () => import('./pages/projects/new.js'),
       },
       {
-        // /projects/:projectId: detail drawer (RouteDrawer)
-        name: 'project-detail',
-        path: ':projectId',
+        // /projects/edit/:projectId: edit dialog opened from a row's menu, alone over the list
+        name: 'project-edit',
+        path: 'edit/:projectId',
         authz: 'skip',
-        componentLoader: () => import('./pages/projects/detail/index.js'),
-        children: [
-          {
-            // /projects/:projectId/edit: edit dialog, stacked on the detail drawer
-            name: 'project-edit',
-            path: 'edit',
-            authz: 'skip',
-            componentLoader: () => import('./pages/projects/detail/edit.js'),
-          },
-        ],
+        componentLoader: () => import('./pages/projects/detail/edit.js'),
       },
+      // /projects/:projectId (project-detail) and /projects/:projectId/edit (project-detail-edit)
+      ...projectDetailRoutes('project'),
     ],
   },
 ]);
 ```
 
-| Field             | Description                                                                                                                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`            | Route name. Only letters, digits, `.`, `_` and `-` are allowed; kebab-case is recommended. Unique among the application's App routes. It is the target of route overrides, so do not change it after release |
-| `path`            | A root route starts with `/`; a child route is one segment relative to its parent (`new`, `:projectId`). It cannot contain query parameters, `#`, `*` or `..`                                                |
-| `auth`            | Who can open the page; see [section 3](#3-auth-who-can-open-the-page). Defaults to `'required'`                                                                                                              |
-| `authz`           | Page authorization; declare it on the first page of every path, nested pages inherit it; see [section 4](#4-authz-page-authorization)                                                                        |
-| `navigation`      | Menu entry: `title` (translation key), `icon`, `order`; see [section 6](#6-menus). Omit it when the page needs no menu entry                                                                                 |
-| `breadcrumb`      | Breadcrumb title (translation key); see [section 7](#7-breadcrumbs)                                                                                                                                          |
-| `componentLoader` | Lazily loads the page module; the module must `export default` the page component                                                                                                                            |
-| `children`        | Child routes; see [`child-routes.md`](child-routes.md)                                                                                                                                                       |
+| Field             | Description                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | Route name. Only letters, digits, `.`, `_` and `-` are allowed; kebab-case is recommended. Unique among the application's App routes. It is the target of route overrides, so do not change it after release                                                                                                                |
+| `path`            | A root route starts with `/`; a child route is relative to its parent, usually one segment (`new`, `:projectId`), two for a second way into the same overlay (`edit/:projectId`). It cannot contain query parameters, `#`, `*` or `..`. Two routes whose paths differ only in parameter names are rejected as the same path |
+| `auth`            | Who can open the page; see [section 3](#3-auth-who-can-open-the-page). Defaults to `'required'`                                                                                                                                                                                                                             |
+| `authz`           | Page authorization; declare it on the first page of every path, nested pages inherit it; see [section 4](#4-authz-page-authorization)                                                                                                                                                                                       |
+| `navigation`      | Menu entry: `title` (translation key), `icon`, `order`; see [section 6](#6-menus). Omit it when the page needs no menu entry                                                                                                                                                                                                |
+| `breadcrumb`      | Breadcrumb title (translation key), only on the routes of a trail the user asked for; see [section 7](#7-back-button-and-breadcrumbs)                                                                                                                                                                                       |
+| `componentLoader` | Lazily loads the page module; the module must `export default` the page component                                                                                                                                                                                                                                           |
+| `children`        | Child routes; see [`child-routes.md`](child-routes.md)                                                                                                                                                                                                                                                                      |
 
 Rules:
 
@@ -114,14 +135,14 @@ export default function ProjectsPage(): ReactElement {
 }
 ```
 
-- **`PageContainer`** (`@/components/page-container`) renders a `section` that owns the full width, the spacing between blocks and the responsive padding (`w-full space-y-6 p-6 md:p-8`); the title, breadcrumbs, actions, content and the loading, empty and error states all go inside it. Do not hand-write an outer `div`, `main` or `section` with page padding, and do not change its spacing on one page (to change it everywhere, change the component).
+- **`PageContainer`** (`@/components/page-container`) renders a `section` that owns the full width, the spacing between blocks and the responsive padding (`w-full space-y-6 p-6 md:p-8`); the back button, the title, actions, content and the loading, empty and error states all go inside it. Do not hand-write an outer `div`, `main` or `section` with page padding, and do not change its spacing on one page (to change it everywhere, change the component).
 - **`PageContainer` is provided by the component that owns the page, one per page**:
   - An inline child page (including tab content) renders inside the parent page's `PageContainer`; do not add another one.
   - A covering child page uses its own `PageContainer` inside `RouteChildPage` (see [`child-routes.md`](child-routes.md)).
   - Dialog and drawer content uses the overlay's own container; do not add `PageContainer`.
 - **`PageHeader`** (`@/components/page-header`) props: `title` (required), `description`, `actions` (on the right, for page-level actions). The title matches the menu name (guidelines L1, L3 and L5).
 - A page with child routes must place `<Outlet />` itself, or the child route content does not render; put it at the end of `PageContainer`. For how to write child routes, see [`child-routes.md`](child-routes.md) and [`overlay.md`](overlay.md).
-- Navigate to a child route with a relative path (`new`, `String(id)`, `` `${id}/edit` ``) and keep the query string, as [section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page) explains.
+- Navigate to a child route with a relative path (`new`, `String(id)`, `` `edit/${id}` ``) and keep the query string, as [section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page) explains.
 
 ## 3. auth: who can open the page
 
@@ -305,13 +326,26 @@ Write `navigation` on the route. The application sidebar, the settings menu and 
 - Do not change the shell (`client/layouts/`) or the ServiceProvider to add a menu entry, and do not add a Refine resource for a menu. Refine resources produce no menu entries (see ["Loading data in a component" in `api.md`](api.md#loading-data-in-a-component) for what they are for); the home page entry is declared in the routes as well.
 - A new page with a menu entry usually touches four places: `client/routes.ts`, the page component, `client/locales/` and, for an App page that requires sign-in, the page grant list in `tests/logic/client-routes.test.ts` ([section 12](#12-update-the-route-test)).
 
-## 7. Breadcrumbs
+## 7. Back button and breadcrumbs
+
+A page that sits below another one — a covering child page, a record's own page, a form too long for a dialog — has a back button above its title (guideline L6). Use breadcrumbs instead only when the user asks for them; do not render both, and do not add a "Back to list" button to `actions`.
+
+### The back button
+
+`BackButton` (`@/components/back-button`) is a component of its own: the page places it inside `PageContainer`, above `PageHeader`, and it needs nothing from the header. [Section 5 of `child-routes.md`](child-routes.md#5-covering-child-pages-routechildpage) has the complete example, a covering child page.
+
+- It is a link styled as a ghost button, with an arrow and "Back" (`navigation.back`).
+- By default it leads to the parent route and keeps the query string, as closing an overlay does: from `/projects/import?status=active` it returns to `/projects?status=active`, and the list keeps its search and filters. The parent is found by route, not by path segment, so a child route with a two-segment path returns to its parent too.
+- `to` sends it elsewhere, for a page that is not a child of the page it belongs to, such as a record page declared beside its list: `<BackButton to={{ pathname: '/customers', search: location.search }} />`. `children` replaces the label; keep "Back" unless the destination needs naming.
+- It navigates rather than going back in the browser history, which a page opened from a link or a refresh does not have, and it replaces the history entry, as closing an overlay does: the browser's Back then does not reopen the page just left, such as a form that would come back empty.
+
+### Breadcrumbs, when the user asks for them
 
 The route tree behind the breadcrumbs is provided by the layout the page is in: `AppLayout` for business pages, `SettingsLayout` for settings pages and `DevLayout` for dev pages. `StandalonePageLayout` does not provide one at present, so breadcrumbs placed there show nothing.
 
-`navigation` defines the menu entry and `breadcrumb` defines the breadcrumb title; neither replaces the other. To get both a menu entry and a breadcrumb, write both on the route: `navigation: { title: 'navigation.projects' }` and `breadcrumb: { title: 'navigation.projects' }`. `breadcrumb.title` is a static translation key and can be used on a path with parameters.
+`navigation` defines the menu entry and `breadcrumb` defines the breadcrumb title; neither replaces the other. To get both a menu entry and a breadcrumb, write both on the route: `navigation: { title: 'navigation.projects' }` and `breadcrumb: { title: 'navigation.projects' }`. `breadcrumb.title` is a static translation key and can be used on a path with parameters. Declare `breadcrumb` only on the routes of the trail the user asked for.
 
-The page places `<Breadcrumbs />` (`@/components/breadcrumbs`) itself: inside `PageContainer`, above `PageHeader`. [Section 5 of `child-routes.md`](child-routes.md#5-covering-child-pages-routechildpage) has the complete example: the projects route with an "Import projects" covering child page, both declaring `breadcrumb`, and the page that renders the trail.
+The page places `<Breadcrumbs />` (`@/components/breadcrumbs`) where the back button would go: inside `PageContainer`, above `PageHeader`.
 
 Breadcrumbs are generated from the matched route levels:
 
@@ -469,7 +503,7 @@ When customizing the shell, keep the behaviors listed in [section 1 of `shell.md
 
 - `keeps the landing page and the authentication pages`: the home page and the four authentication pages still exist. Adding a page does not require changing it.
 - `loads every page component`: calls every page's `componentLoader` in turn (including child routes at every level, settings pages and dev pages) and confirms that the module default-exports a component. Adding a page does not require changing it; it fails when a page file has no default export. A settings or App entry with `parent` pointing at another package's group is the exception: register that package's routes in `resolveRoutes()` first (see "Contribute pages to another plugin's settings group" in [section 5](#5-three-kinds-of-routes)).
-- `pins the page authorization of every signed-in page`: lists, in depth-first order, every page in the app routes that requires sign-in, including child routes (settings pages and dev pages excluded). **When you add an App page (`defineAppRoutes`) with `auth: 'required'`, including its child routes, add it here; do not add settings or dev pages, or the comparison fails**: `authorizedAs` is `null` for a page whose resolved `authz` is `'skip'`, `'unrestricted'` for an unrestricted-only page, the resource id for a page that checks page access (`'projects'`), and `type:id` for any other resource (`'composite:project-reports'`); a nested page that omits `authz` shows its parent's value. The example's projects routes add `projects`, `project-new`, `project-detail` and `project-edit`, all `null`. Stored page grants reference the resource id, and changing one requires migrating existing grants, so this list is deliberately pinned.
+- `pins the page authorization of every signed-in page`: lists, in depth-first order, every page in the app routes that requires sign-in, including child routes (settings pages and dev pages excluded). **When you add an App page (`defineAppRoutes`) with `auth: 'required'`, including its child routes, add it here; do not add settings or dev pages, or the comparison fails**: `authorizedAs` is `null` for a page whose resolved `authz` is `'skip'`, `'unrestricted'` for an unrestricted-only page, the resource id for a page that checks page access (`'projects'`), and `type:id` for any other resource (`'composite:project-reports'`); a nested page that omits `authz` shows its parent's value. The example's projects routes add `projects`, `project-new`, `project-edit`, `project-detail` and `project-detail-edit`, all `null`, in that order; a page that declares the drawer under itself adds its own pair, such as `project-dashboard-detail` and `project-dashboard-detail-edit`. Stored page grants reference the resource id, and changing one requires migrating existing grants, so this list is deliberately pinned.
 
 After the change, run `pnpm exec vitest run tests/logic/client-routes.test.ts`.
 
@@ -479,7 +513,7 @@ After the change, run `pnpm exec vitest run tests/logic/client-routes.test.ts`.
 - The menu entry appears in the sidebar, its text is correct in every language, and it is highlighted when the page is open.
 - Visiting a `required` page while signed out redirects to the sign-in page.
 - Without permission, a page with `authz` disappears from the menu, and opening its URL directly does not load the page component.
-- Opening a child route URL directly (for example `/projects/1` or `/projects/1/edit`) shows both the parent page and the child route correctly.
+- Opening a child route URL directly (for example `/projects/1`, `/projects/1/edit` or `/projects/edit/1`) shows the parent page and the child route correctly: the drawer and the dialog on it for the second, the dialog alone for the third.
 - Page code loads only on navigation and is not in the initial bundle.
 - Call the endpoints the page uses directly as an ordinary user, and confirm that server authorization matches the page settings.
 

@@ -12,7 +12,7 @@ Forms use react-hook-form, zod 4 and `@hookform/resolvers/zod`, the `Field` fami
 
 ### Inside a RouteDialog
 
-Create (`/projects/new`) and edit (`/projects/:projectId/edit`) are both child routes whose pages wrap `ProjectForm` in a `RouteDialog`. Their complete code is `new.tsx` and `detail/edit.tsx` ([`example/create-dialog.md`](example/create-dialog.md) and [`example/edit-dialog.md`](example/edit-dialog.md)), and [section 2.5 of `overlay.md`](overlay.md#25-beforeclose-checks-before-closing) explains the close guard. What the form contributes to that wiring:
+Create (`/projects/new`) and edit (`/projects/edit/:projectId` from a row's menu, `/projects/:projectId/edit` from the drawer) are child routes whose pages wrap `ProjectForm` in a `RouteDialog`. Their complete code is `new.tsx` and `detail/edit.tsx` ([`example/create-dialog.md`](example/create-dialog.md) and [`example/edit-dialog.md`](example/edit-dialog.md)), and [section 2.5 of `overlay.md`](overlay.md#25-beforeclose-checks-before-closing) explains the close guard. What the form contributes to that wiring:
 
 1. **The submit button lives in the dialog's `footer`**, outside the `<form>`, so it sets `type='submit' form={formId}`. Each dialog passes its own `formId` (`project-new-form`, `project-edit-form`), which keeps field ids unique when the edit dialog stacks on the detail drawer. Enter in an input still submits; while the button is disabled, it does not.
 2. **`onSubmittingChange` reports the submitting state** to the page, which disables both buttons, shows a `Spinner` on the submit button and blocks closing (guideline T3.5). On success the form reports `false` before calling `onSubmitted`, so the page can call `close()` straight from `onSubmitted`.

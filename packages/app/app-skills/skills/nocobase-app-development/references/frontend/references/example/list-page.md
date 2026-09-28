@@ -6,9 +6,9 @@ Part of the [projects worked example](../example.md).
 
 **Add first**: `yes n | pnpm exec shadcn add alert empty input-group skeleton`, then format the files it creates ([how](../shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest)).
 
-**Links to**: the [create dialog](create-dialog.md), the [detail drawer](detail-drawer.md) and the [edit dialog](edit-dialog.md) are its child routes. Without a detail view, render the name as plain text: a link to a route that does not exist lands on the home page.
+**Links to**: the [create dialog](create-dialog.md), the [detail drawer](detail-drawer.md) and the [edit dialog](edit-dialog.md), which a row's menu opens alone, are its child routes. Without a detail view, render the name as plain text: a link to a route that does not exist lands on the home page.
 
-**Without detail and delete** (a list with only a create dialog), remove: the `actions` column and its row menu, the `deletion` state, `ProjectDeleteDialog` at the end, `focusSearchAfterReloadRef` with its effect, and `afterDelete`, which leaves `outletContext` as `{ reload }` and `ProjectsOutletContext` in `types.ts` with only `reload`; render the name as plain text.
+**Without detail and delete** (a list with only a create dialog), remove: the `actions` column and its row menu, the `deletion` state, `ProjectDeleteDialog` at the end, `focusSearchAfterReloadRef` with its effect, and `afterDelete`, `onSaved` and `onNotFound`, which leaves `outletContext` as `{ reload }`, `ProjectsOutletContext` in `types.ts` with only `reload` and no `ProjectEditOutletContext`; render the name as plain text.
 
 Rules: sections [3](../table.md#3-known-datatable-behavior), [5](../table.md#5-writing-search-and-filters-to-the-url), [6](../table.md#6-loading-the-list), [7](../table.md#7-the-four-list-states), [8](../table.md#8-column-definitions-and-row-actions) and [9](../table.md#9-child-routes-and-refreshing-the-list) of `table.md`.
 
@@ -86,6 +86,7 @@ import { ProjectStatusBadge } from './status-badge.js';
 import {
   PROJECT_STATUSES,
   type Project,
+  type ProjectEditOutletContext,
   type ProjectStatus,
   type ProjectsOutletContext,
 } from './types.js';
@@ -186,13 +187,19 @@ export default function ProjectsPage(): ReactElement {
   }, [loading]);
 
   // Keep the context passed to child routes stable; otherwise effects in child routes that depend on it run again and again.
-  const outletContext = useMemo<ProjectsOutletContext>(
+  // The list opens the create dialog, the drawer and a row's edit dialog, so it passes what each of them reads.
+  const outletContext = useMemo<
+    ProjectsOutletContext & ProjectEditOutletContext
+  >(
     () => ({
       reload,
       afterDelete: () => {
         focusSearchAfterReloadRef.current = true;
         reload();
       },
+      // A row's edit dialog: after a save or on finding the record gone, the list is all there is to refresh.
+      onSaved: () => reload(),
+      onNotFound: reload,
     }),
     [reload],
   );
@@ -298,12 +305,12 @@ export default function ProjectsPage(): ReactElement {
               </DropdownMenuTrigger>
               <DropdownMenuContent align='end'>
                 <DropdownMenuGroup>
-                  {/* Edit is a child route: the menu item renders as a link. */}
+                  {/* Edit is the list's own child route, edit/:projectId: the menu item is a link, and the dialog opens alone over the list. */}
                   <DropdownMenuItem
                     render={
                       <Link
                         to={{
-                          pathname: `${row.original.id}/edit`,
+                          pathname: `edit/${row.original.id}`,
                           search: location.search,
                         }}
                       />
@@ -486,7 +493,7 @@ export default function ProjectsPage(): ReactElement {
         deletedFocusRef={searchRef}
       />
 
-      {/* The create and detail child routes render here and get the list refresh function from context. */}
+      {/* The create dialog, the drawer and a row's edit dialog render here and get the list's refresh functions from context. */}
       <Outlet context={outletContext} />
     </PageContainer>
   );

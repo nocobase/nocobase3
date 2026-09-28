@@ -11,6 +11,7 @@ const enUS = {
   navigation: {
     // … existing entries
     projects: 'Projects',
+    projectDashboard: 'Project dashboard',
     projectManagement: 'Project management',
     projectReports: 'Project reports',
     projectSettings: 'Project settings',
@@ -175,6 +176,32 @@ const enUS = {
     summary: { title: 'Summary', description: 'Projects by status.' },
     owners: { title: 'By owner', description: 'Projects by owner.' },
   },
+  projectDashboard: {
+    title: 'Project dashboard',
+    description: 'Where the projects stand, and what changed recently.',
+    refresh: 'Refresh',
+    metrics: {
+      total: 'All projects',
+      active: 'Active',
+      doneRecently: 'Done in the last 30 days',
+      unassigned: 'Without an owner',
+    },
+    byStatus: {
+      title: 'Projects by status',
+      description: 'How many projects are in each status.',
+      count: 'Projects',
+    },
+    recent: {
+      title: 'Recently updated',
+      description: 'The five projects changed most recently.',
+      viewAll: 'View all',
+    },
+    empty: {
+      title: 'No projects yet',
+      description: 'Projects appear here once someone creates one.',
+    },
+    error: { title: 'Unable to load the dashboard' },
+  },
   projectSettings: {
     title: 'Project settings',
     description: 'Defaults that apply to every new project.',
@@ -196,6 +223,7 @@ const zhCN: AppResource = {
   navigation: {
     // … existing entries
     projects: '项目',
+    projectDashboard: '项目仪表盘',
     projectManagement: '项目管理',
     projectReports: '项目报表',
     projectSettings: '项目设置',
@@ -346,6 +374,32 @@ const zhCN: AppResource = {
     tabs: { label: '报表视图', summary: '概览', owners: '按负责人' },
     summary: { title: '概览', description: '按状态统计的项目。' },
     owners: { title: '按负责人', description: '按负责人统计的项目。' },
+  },
+  projectDashboard: {
+    title: '项目仪表盘',
+    description: '项目的整体进展，以及最近的变化。',
+    refresh: '刷新',
+    metrics: {
+      total: '全部项目',
+      active: '进行中',
+      doneRecently: '近 30 天完成',
+      unassigned: '未指定负责人',
+    },
+    byStatus: {
+      title: '按状态分布',
+      description: '各状态下的项目数量。',
+      count: '项目数',
+    },
+    recent: {
+      title: '最近更新',
+      description: '最近有变化的 5 个项目。',
+      viewAll: '查看全部',
+    },
+    empty: {
+      title: '还没有项目',
+      description: '有人新建项目后，会显示在这里。',
+    },
+    error: { title: '无法加载仪表盘' },
   },
   projectSettings: {
     title: '项目设置',

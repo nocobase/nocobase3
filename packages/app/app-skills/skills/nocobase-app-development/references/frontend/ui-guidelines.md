@@ -16,7 +16,7 @@ These are this application's UI design guidelines: foundations, page structure, 
 
 **F2 [Must] Font sizes come from the scale**: PageHeader provides the page title; section titles use `text-base font-medium`; body text, tables and forms use the components' default size (`text-sm`); helper text uses `text-sm text-muted-foreground` or `text-xs`. Do not use arbitrary values such as `text-[13px]`.
 
-**F3 [Must] Spacing comes from the scale**: PageContainer spaces the sections of a page, and blocks you stack yourself use `flex flex-col` with `gap-4` or `gap-6` rather than `space-y-*`; cards keep the `Card` component's own padding, and a panel you build yourself uses `p-4` or `p-6`; `gap-2` between related controls; FieldGroup's default spacing between form fields. Do not use arbitrary values such as `mt-[7px]`.
+**F3 [Must] Spacing comes from the scale**: PageContainer spaces the sections of a page, and blocks you stack yourself use `flex flex-col` with `gap-4` or `gap-6` rather than `space-y-*`; cards keep the `Card` component's own padding, and whatever sits in a card lines up with its title: a table that runs to the card's edges pads its first and last cells to the card's spacing instead ("Table in a card" in ["Common layouts" of `references/styling.md`](references/styling.md#common-layouts)); a panel you build yourself uses `p-4` or `p-6`; `gap-2` between related controls; FieldGroup's default spacing between form fields. Do not use arbitrary values such as `mt-[7px]`.
 
 **F4 [Must] Radius and shadow use the component defaults**; when you need a custom one, use only utility classes such as `rounded-lg` and `shadow-sm`.
 
@@ -38,6 +38,8 @@ These are this application's UI design guidelines: foundations, page structure, 
 
 **L5 [Must]** Page-level actions go on the right of the PageHeader; actions on a single record go in that record's row or detail view; bulk actions appear only after records are selected.
 
+**L6 [Must] Back button**: a page that sits below another one — a covering child page, a record's own page, a form too long for a dialog — has a back button above its title (`BackButton`). It returns to the page it belongs to and keeps that page's search and filters. Use breadcrumbs instead only when the user asks for them. Do not put a "Back" or "Back to list" button among the page actions.
+
 ## T Page templates
 
 ### T1 List page: browse, find and manage one kind of record
@@ -51,7 +53,7 @@ Structure, top to bottom: PageHeader (primary action "New X") → toolbar (searc
 - **T1.5 [Must]** Row actions go in a "More" menu at the end of the row (a ⋯ icon button); the most common one may be shown directly in the row. Delete goes last in the menu, in the destructive style, separated from the other items by a divider.
 - **T1.6 [Must]** Dates and times are formatted for the current language; numbers and amounts are right-aligned, with thousands separators.
 - **T1.7 [Should]** Search and filter conditions are written to the URL, so they survive a refresh and going back.
-- **T1.8 [Should]** Sortable columns show their sort state in the header; the default order is by last update time, newest first.
+- **T1.8 [Must]** Columns of dates and times (created, updated, due) and of numbers (amounts, quantities, counts) are sortable by default, and so is the name column when it sorts in the current language's order (pinyin for Chinese). Statuses, types, tags, people, long text and yes/no values are not, unless the business asks for it and the order means something (a priority by its rank, not alphabetically). The default order is by last update time, newest first, and a sorted column shows its direction in the header.
 - **T1.9 [Must]** A list page must have a design for all four states S1–S4.
 - **T1.10 [Must]** When the endpoint caps the number of results and does not return a total, show a notice when the results reach the cap ("Only the first N records are shown. Use search or filters to narrow the results."); records beyond the cap must not silently disappear.
 
@@ -80,9 +82,18 @@ Structure, top to bottom: PageHeader (primary action "New X") → toolbar (searc
 - **T4.2 [Must]** Each Card is saved on its own, with its save button at the bottom right of the Card.
 - **T4.3 [Must]** A toggle setting takes effect as soon as it is switched and shows a toast; a setting that needs input takes effect when Save is clicked.
 
+### T5 Dashboard: where things stand, at a glance
+
+Structure, top to bottom: PageHeader (title and description; actions only for the whole page, such as Refresh) → a row of metric cards → charts → the records that need attention (recently updated, overdue), each list in a card.
+
+- **T5.1 [Must]** A metric card shows its label above its value, the value large and formatted for the current language (T1.6). A change against an earlier period states its direction in words or with a sign, not by color alone (A2).
+- **T5.2 [Must]** Each chart sits in a Card with a title and a one-sentence description. Axis labels, series names and the tooltip are translated, and the colors come from the theme's chart tokens.
+- **T5.3 [Must]** A list of records in a card shows a few rows (at most 10) with no search, filters, sorting or pagination, lines up with the card's title (F3), and links to the full list ("View all"). Its first column opens the record over the dashboard (I9).
+- **T5.4 [Must]** A dashboard has a design for its states: skeletons shaped like its cards while loading (S1), an error with "Retry" where a retry can help (S4), and a card with no data yet says so inside the card instead of showing an empty chart or table (S2).
+
 ### Page types not covered
 
-Dashboards, kanban boards, calendars and similar pages have no template yet. When designing one, follow the rules in sections F, L, I, R, S, C and A, and explain in the design file why you chose its structure.
+Kanban boards, calendars and similar pages have no template yet. When designing one, follow the rules in sections F, L, I, R, S, C and A — a record on them opens over the page, as on a dashboard (I9) — and explain in the design file why you chose its structure.
 
 ## I Interaction choices
 
@@ -96,7 +107,7 @@ Dashboards, kanban boards, calendars and similar pages have no template yet. Whe
 | Long form, multiple steps, complex details      | Separate page (a covering child page when the user returns to the list) |
 | A few options, filter conditions, quick actions | DropdownMenu or Popover                                                 |
 
-Stacking rules: a drawer can open a dialog (for example, to edit from the detail view) and a confirmation dialog; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer.
+Stacking rules: a drawer can open a dialog (for example, to edit from the detail view) and a confirmation dialog; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer. Edit opened from a list row's menu is the dialog alone over the list; edit opened from the detail drawer stacks the dialog on the drawer, and closing it returns to the drawer.
 
 **I2 [Must] Confirm destructive actions first**: deleting, disabling, clearing, revoking access and similar actions open an AlertDialog first. The title names the object (`Delete customer "Zhang San"?`), the description states the consequence ("This cannot be undone"), and the confirm button uses the destructive style, with a label naming the specific action ("Delete").
 
@@ -121,6 +132,8 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 **I7 [Must]** Actions the user has no permission for are not shown; actions that are temporarily unavailable are disabled, with a tooltip explaining why. When the reason is visible next to the action, it needs no tooltip: a submission or save in progress, a form with no changes, or a limit the view states ("Up to 10 member emails").
 
 **I8 [Must]** Every action can be completed with the keyboard: when a dialog opens, focus moves into it, Esc closes it, and Enter submits the form. The components have these behaviors built in; do not break them.
+
+**I9 [Must] Records open where the user is**: a record opened from a list, a dashboard, a board or another record's tab shows its drawer or dialog over the page the user is on, at a URL under that page, and closing returns there. Never send the user to another page's overlay URL to show a record: the page they were on disappears, the menu highlight moves to another entry, and closing lands them on a page they did not come from.
 
 ## R Data freshness
 
@@ -166,17 +179,18 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 
 The design review and the acceptance review both go through this checklist item by item; record each unmet item in the review record and cite its IDs. The checklist covers every Must rule; a rule the page cannot trigger (no detail view, no settings page) is marked "Not applicable" rather than skipped silently.
 
-- [ ] The page template and overlay choices are correct, and stacking follows the rules (T1–T4, I1)
-- [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places (L1, L2, L5)
+- [ ] The page template and overlay choices are correct, and stacking follows the rules (T1–T5, I1)
+- [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places, a back button on a page below another one (L1, L2, L5, L6)
 - [ ] All states are covered: loading, empty, no results, load failed, submitting, a block the user may not see; whether a failure offers a retry follows S4 (S1–S6)
-- [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, all four states, result cap notice (T1.1–T1.6, T1.9, T1.10)
+- [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, date and number columns sortable, all four states, result cap notice (T1.1–T1.6, T1.8–T1.10)
 - [ ] Detail view: drawer or page, record name and grouped actions, opens by URL, label–value layout with "—" for empty values (T2.1–T2.4)
 - [ ] Form: container, labels and required marks, validation timing, button order and copy, submitting, failure, success, loading the latest data before editing (T3.1–T3.8)
 - [ ] Settings page: one Card per topic, each saved on its own, toggles that apply at once (T4.1–T4.3)
+- [ ] Dashboard: metric cards, charts in titled cards, short record lists aligned with their card and linking to the full list, the states of each card (T5.1–T5.4)
 - [ ] Data freshness: writes are based on the latest data, the UI updates immediately after success, a missing record is handled (R1–R3)
 - [ ] Destructive actions are confirmed, and the confirmation dialog names the object and the consequence (I2)
 - [ ] Feedback and loading indicators are correct, and raw backend errors are not exposed (I3, I4)
-- [ ] Overlays and their state have URLs; actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I6–I8)
+- [ ] Overlays and their state have URLs, and a record opens over the page the user is on; actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I6–I9)
 - [ ] Color, font size, spacing, radius and icons use only tokens, scales and lucide-react, and fixed sizes are explained (F1–F5, F7)
 - [ ] Copy exists in every language `client/locales/index.ts` offers, wording is consistent, and button and title copy follows the rules (C1–C4, C6, C7)
 - [ ] Icon buttons are accessible, focus is visible and goes somewhere sensible, information is not conveyed by color alone, and custom colors meet AA contrast (A1–A3, A5, A6)

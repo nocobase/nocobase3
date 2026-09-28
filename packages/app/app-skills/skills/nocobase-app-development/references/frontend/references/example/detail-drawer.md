@@ -2,11 +2,11 @@
 
 Part of the [projects worked example](../example.md).
 
-**Depends on**: [delete dialog](delete-dialog.md), [status badge](../i18n.md#dynamic-keys), [session alert](session-expired-alert.md), [types](types.md), [copy](copy.md); its child route in [section 1 of `page.md`](../page.md#1-declare-the-route).
+**Depends on**: [delete dialog](delete-dialog.md), [status badge](../i18n.md#dynamic-keys), [session alert](session-expired-alert.md), [types](types.md), [copy](copy.md); its routes, which `projectDetailRoutes` declares under every page that opens a project, in [section 1 of `page.md`](../page.md#1-declare-the-route).
 
 **Add first**: `yes n | pnpm exec shadcn add alert skeleton`, then format the files it creates ([how](../shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest)).
 
-**Links to**: the [edit dialog](edit-dialog.md) is its child route.
+**Links to**: the [edit dialog](edit-dialog.md) is its child route, stacked on it.
 
 Rules: [section 2 of `overlay.md`](../overlay.md#2-overlays-as-child-routes); guidelines T2, R2 and R3.
 
@@ -35,11 +35,11 @@ import { ProjectDeleteDialog } from '../project-delete-dialog.js';
 import { ProjectStatusBadge } from '../status-badge.js';
 import type {
   Project,
-  ProjectDetailOutletContext,
+  ProjectEditOutletContext,
   ProjectsOutletContext,
 } from '../types.js';
 
-/** Route `/projects/:projectId`: the project detail drawer. */
+/** Route `/projects/:projectId`, and `:projectId` under every other page that opens a project: the project detail drawer. */
 export default function ProjectDetailPage(): ReactElement {
   const { projectId = '' } = useParams();
   // Key by id: when forward or back switches to another record, the drawer's state starts over.
@@ -53,8 +53,8 @@ function ProjectDetail({
 }): ReactElement {
   const { t } = useTranslation();
   const api = useApiClient();
-  // Functions the list page passes down through <Outlet context>.
-  const { reload: reloadList, afterDelete } =
+  // Functions of the page behind the drawer, through <Outlet context>: the list, or another page that opens projects.
+  const { reload: reloadPage, afterDelete } =
     useOutletContext<ProjectsOutletContext>();
 
   const [reloadCount, setReloadCount] = useState(0);
@@ -81,14 +81,14 @@ function ProjectDetail({
         (error: unknown) => {
           if (controller.signal.aborted) return;
           setResult({ key, error });
-          // The record no longer exists: the list behind may still show its row, so refresh the list (guideline R3).
+          // The record no longer exists: the page behind may still show it, so refresh that page (guideline R3).
           if (error instanceof ApiClientError && error.status === 404) {
-            reloadList();
+            reloadPage();
           }
         },
       );
     return () => controller.abort();
-  }, [api, projectId, reloadCount, reloadList]);
+  }, [api, projectId, reloadCount, reloadPage]);
 
   const loading = result?.key !== requestKey;
   const error = loading ? undefined : result?.error;
@@ -104,18 +104,18 @@ function ProjectDetail({
 
   // The edit dialog (child route edit) gets these two callbacks through <Outlet context>.
   // Keep them stable with useMemo: the dialog's loading effect depends on them.
-  const outletContext = useMemo<ProjectDetailOutletContext>(
+  const outletContext = useMemo<ProjectEditOutletContext>(
     () => ({
       onSaved: (updated) => {
         setSaved(updated);
-        reloadList();
+        reloadPage();
       },
       onNotFound: () => {
         setGone(true);
-        reloadList();
+        reloadPage();
       },
     }),
-    [reloadList],
+    [reloadPage],
   );
 
   let body: ReactElement;
@@ -258,9 +258,10 @@ function ProjectFields({
 ```
 
 - **Key by id**: when browser forward or back switches to another record, state such as `saved` and `gone` starts over.
-- **States**: while loading, show a skeleton in the "label — value" shape; 404 and 403 only explain the situation and offer no "Retry"; other failures offer "Retry" (guidelines S1 and S4). A 404 also refreshes the list (guideline R3).
+- **One drawer for every page**: the list and every other page that opens a project declare this module under themselves ([section 2.1 of `overlay.md`](../overlay.md#21-declare-the-child-routes)) and pass it the same `ProjectsOutletContext`, so it opens over whichever page the user is on and refreshes that page.
+- **States**: while loading, show a skeleton in the "label — value" shape; 404 and 403 only explain the situation and offer no "Retry"; other failures offer "Retry" (guidelines S1 and S4). A 404 also refreshes the page behind (guideline R3).
 - **Record actions in the footer** (guideline T2.2): shown only after the record has loaded. "Delete" and "Edit" sit together on the right, and "Edit" is the only primary button. `ProjectDetailActions` renders inside the drawer as its `footer`, so it can call `useRouteOverlay()` directly.
-- **Edit is a link**: `nativeButton={false}` + `render={<Link to={{ pathname: 'edit', search: location.search }} />}` resolves relative to the current route to `/projects/12/edit` and keeps the query parameters.
-- **Close the drawer after deleting**: first call the list's `afterDelete` (refreshes the list, then focuses the search box), then `close()`. After the drawer closes, focus first returns to that row's link; when the list refreshes, the row disappears, and `afterDelete` then moves focus to the search box (guideline A6).
+- **Edit is a link**: `nativeButton={false}` + `render={<Link to={{ pathname: 'edit', search: location.search }} />}` resolves relative to the drawer's route — `/projects/12/edit` over the list, `/project-dashboard/12/edit` over the dashboard — so the dialog stacks on the drawer wherever it is, and the query parameters stay.
+- **Close the drawer after deleting**: first call `afterDelete` of the page behind, then `close()`. After the drawer closes, focus first returns to the link that opened it; when the page refreshes, that link disappears with its record, and `afterDelete` then moves focus to a stable place: the list's search box, the dashboard's "View all" link (guideline A6).
 - **The edit dialog's Outlet goes inside the drawer, outside the state branches**: the dialog stacks on the drawer, and Esc closes only the dialog; when the drawer switches to "not found", a dialog that is already open is not unmounted along with it.
-- **Update immediately after saving**: the edit dialog calls `onSaved`, the drawer updates at once with the record the endpoint returned (`saved`), and then the list behind refreshes (guideline R2).
+- **Update immediately after saving**: the edit dialog calls `onSaved`, the drawer updates at once with the record the endpoint returned (`saved`), and then the page behind refreshes (guideline R2).

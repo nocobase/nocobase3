@@ -14,6 +14,7 @@ This document shows how to write overlays. For the rules on choosing and stackin
 
 - **Build dialogs and drawers that represent a page, form, editor or detail view as child routes by default**, even when the user does not mention "routing": a link opens them directly, a refresh restores them, and browser back and forward work. Follow an explicit user request for a different interaction.
 - For these overlays, do not use an `open` state inside the component, do not add an `open` prop to `RouteDialog`/`RouteDrawer`, and do not build a separate route-overlay implementation. Route matching decides whether the overlay exists: the child route's URL opens it, and the parent route's URL closes it.
+- **An overlay opens over the page the user is on** (guideline I9). A record shown on a dashboard, a board or another record's tab opens the same drawer as in its list, declared under that page ([section 2.1](#21-declare-the-child-routes)). Never link to the list's overlay URL from another page.
 - Only a confirmation of a single action (`AlertDialog`) and a temporary panel (`Sheet`) use component state.
 - `RouteChildPage` covers the content area and is not modal, so the sidebar and header stay usable; see [`child-routes.md`](child-routes.md).
 - Stacking: a drawer can open dialogs and confirmation dialogs on top of it; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer (guideline I1).
@@ -33,25 +34,56 @@ Work in this order:
 
 ### 2.1 Declare the child routes
 
-The projects route with its three overlay children is declared in [section 1 of `page.md`](page.md#1-declare-the-route): `new` (`/projects/new`, the create dialog), `:projectId` (`/projects/12`, the detail drawer) and, inside it, `edit` (`/projects/12/edit`, the edit dialog). The static segment `new` takes precedence over `:projectId`.
+The projects route with its overlay children is declared in [section 1 of `page.md`](page.md#1-declare-the-route): `new` (`/projects/new`, the create dialog), `edit/:projectId` (`/projects/edit/12`, the edit dialog opened from a row's menu), `:projectId` (`/projects/12`, the detail drawer) and, inside it, `edit` (`/projects/12/edit`, the same edit dialog opened from the drawer). Static segments such as `new` and `edit` take precedence over `:projectId`.
 
 - Declare them in `defineAppRoutes()` in `client/routes.ts`, not in a page component file.
-- An overlay is a child route of "the page to return to after closing": create and detail are children of the list route; edit is a child of the detail route, so the edit dialog stacks on the drawer and closing it returns to the drawer.
+- **An overlay is a child route of the view it opens over, and closing returns to that view.** Create and detail are children of the list route. Edit is declared twice, with the same module: under the list as `edit/:projectId`, so a row's menu opens the dialog alone and closing returns to the list; and under the detail drawer as `edit`, so the drawer's "Edit" stacks the dialog on the drawer and closing returns to the drawer. The two cannot both be `:projectId/edit`: registration rejects a second route whose path differs only in parameter names.
 - Child routes declare no `navigation` (they are not menu items, and a dynamic path cannot be one anyway) and no `breadcrumb` (an overlay is not a destination).
 - Child routes follow the `authz` inheritance rules in [section 4 of `page.md`](page.md#4-authz-page-authorization); the parent route's check always applies first.
-- Lay out files by path segment: `new.tsx`, `detail/index.tsx`, `detail/edit.tsx` (see [`child-routes.md`](child-routes.md)).
+- Lay out files by what they show, not by every URL that reaches them: `new.tsx`, `detail/index.tsx` and `detail/edit.tsx`, which both edit routes load (see [`child-routes.md`](child-routes.md)).
+
+#### The same drawer over another page
+
+A page that shows records whose details a drawer already presents — a dashboard's recent projects, a board's cards, a customer's projects tab — opens that drawer over itself. It declares the drawer and its edit dialog under its own route, with the same modules, and renders an `Outlet` with the drawer's context ([section 2.2](#22-place-the-outlet-in-the-parent-page)). `projectDetailRoutes` in `client/routes.ts` declares the pair, so each page adds one line; its `owner` argument keeps the route names unique:
+
+```ts
+const appRoutes: AppClientRouteContribution = defineAppRoutes([
+  // … existing routes, and the projects route of page.md, which calls projectDetailRoutes('project')
+  {
+    name: 'project-dashboard',
+    path: '/project-dashboard',
+    auth: 'required',
+    authz: 'skip',
+    navigation: { title: 'navigation.projectDashboard', icon: LayoutDashboard },
+    componentLoader: () => import('./pages/project-dashboard/index.js'),
+    // /project-dashboard/12 and /project-dashboard/12/edit: the project drawer, over the dashboard
+    children: projectDetailRoutes('project-dashboard'),
+  },
+]);
+```
+
+- The page links to a record with a relative path, `{ pathname: String(project.id), search: location.search }`, as the list does; the drawer's own "Edit" link, `edit`, then resolves under this page as well.
+- Do not link to `/projects/12` instead: the list replaces the page the user was on, the menu highlight moves to Projects, and closing the drawer leaves them on the list.
+- The drawer's route inherits the page's `authz`. When opening a project must require the projects page's grant rather than this page's, declare it on the drawer's route in the function, as `{ resource: { type: 'page', id: 'projects' }, action: 'access' }`.
+- The new route names join the route test's grant list ([section 12 of `page.md`](page.md#12-update-the-route-test)).
+- [`example/project-dashboard.md`](example/project-dashboard.md) is the complete page that does this.
 
 ### 2.2 Place the Outlet in the parent page
 
 `RouteDialog` and `RouteDrawer` do not insert `<Outlet />` automatically. A page that declares `children` must place it itself; the child routes render there.
 
-The list passes `ProjectsOutletContext` (`reload`, `afterDelete`) to the create dialog and the detail drawer, and the drawer passes `ProjectDetailOutletContext` (`onSaved`, `onNotFound`) to the edit dialog; both types are in `types.ts` ([`example/types.md`](example/types.md)).
+An overlay reads its context from whichever view it opens over, so every such view passes the same context. The overlays declare what they read in `types.ts` ([`example/types.md`](example/types.md)):
 
-The list page builds this context with `useMemo` and places `<Outlet context={outletContext} />` at the end of its `PageContainer`; the code is the list page, [`example/list-page.md`](example/list-page.md) (`outletContext`, and the `focusSearchAfterReloadRef` effect behind `afterDelete`), explained in [section 9 of `table.md`](table.md#9-child-routes-and-refreshing-the-list).
+| Context                    | Fields                  | Read by                                 | Passed by                                          |
+| -------------------------- | ----------------------- | --------------------------------------- | -------------------------------------------------- |
+| `ProjectsOutletContext`    | `reload`, `afterDelete` | The create dialog and the detail drawer | The list, and every other page that opens a drawer |
+| `ProjectEditOutletContext` | `onSaved`, `onNotFound` | The edit dialog                         | The detail drawer, and the list for a row's menu   |
+
+The list opens all three overlays, so its context carries both sets of fields. It builds the context with `useMemo` and places `<Outlet context={outletContext} />` at the end of its `PageContainer`; the code is the list page, [`example/list-page.md`](example/list-page.md) (`outletContext`, and the `focusSearchAfterReloadRef` effect behind `afterDelete`), explained in [section 9 of `table.md`](table.md#9-child-routes-and-refreshing-the-list).
 
 - Closing an overlay does not reload the parent page: the parent stays mounted, and its form contents and scroll position are kept. When the parent page's data needs refreshing, the child route calls a function from the context.
 - Keep the context stable with `useMemo`: the child route's loading effect lists the context functions as dependencies, so an object that changes on every render causes repeated requests.
-- A child route reads it with `useOutletContext<ProjectsOutletContext>()`. It gets the context of the nearest `<Outlet>` above it: the drawer gets the list's, and the edit dialog gets the drawer's.
+- A child route reads it with `useOutletContext<ProjectsOutletContext>()`. It gets the context of the nearest `<Outlet>` above it: the drawer gets the list's or the dashboard's, and the edit dialog gets the drawer's, or the list's when a row's menu opened it.
 - When an overlay has child routes of its own, place another `<Outlet />` inside the overlay. Placed in `children`, the child route stacks on this overlay, and focus returns to this layer after it closes; placed outside the overlay, the child route opens as a separate layer, which is rarely needed.
 - A link that opens an overlay must keep the query parameters: `<Link to={{ pathname: String(row.original.id), search: location.search }}>`. The list's search and filters live in the URL; if the query parameters are lost, the list behind the overlay changes with them.
 
@@ -78,7 +110,7 @@ What the components already do:
 - **Content container**: the content area already has `p-4` padding. Do not nest a `PageContainer` inside it, and do not add outer padding of your own.
 - **Ways to close**: a close button is built into the top-right corner (its accessible name comes from `routeOverlay.close`); Esc and clicking the backdrop close the overlay too. Each overlay layer has its own backdrop, and when layers stack only the topmost one closes.
 - **Closing is navigation**: closing first calls `beforeClose`, then navigates to `closeTo` with `replace`. Because it uses `replace`, pressing the browser's "Forward" after closing does not reopen the overlay.
-- **Focus**: on open, focus moves into the overlay; when the focused element inside the overlay disappears (for example, a button is replaced by a skeleton after clicking "Retry"), focus returns to the overlay panel; after closing, focus returns to the element that had focus before opening (usually the link that opened it). When a nested overlay closes, focus returns to the element in the parent layer that opened it, or to the parent layer's panel if that element is gone; when `/projects/12/edit` is opened directly, both layers mount at once, and after the dialog closes, focus is on the drawer panel.
+- **Focus**: on open, focus moves into the overlay; when the focused element inside the overlay disappears (for example, a button is replaced by a skeleton after clicking "Retry"), focus returns to the overlay panel; after closing, focus returns to the element that had focus before opening (usually the link that opened it; for a row menu's "Edit", the menu's trigger). When a nested overlay closes, focus returns to the element in the parent layer that opened it, or to the parent layer's panel if that element is gone; when `/projects/12/edit` is opened directly, both layers mount at once, and after the dialog closes, focus is on the drawer panel.
 - When the element that focus should return to is no longer on the page after closing (for example, the list row disappears after a delete), the component cannot handle it. Move focus to a stable place yourself; see `afterDelete` above (guideline A6).
 
 ### 2.4 Close with useRouteOverlay
@@ -212,7 +244,7 @@ export default function EditProjectPage(): ReactElement {
 
 ## 3. Complete example
 
-The create dialog, the detail drawer and the edit dialog built with these rules are [`example/create-dialog.md`](example/create-dialog.md), [`example/detail-drawer.md`](example/detail-drawer.md) and [`example/edit-dialog.md`](example/edit-dialog.md) (`new.tsx`, `detail/index.tsx`, `detail/edit.tsx`), each with notes on the choices it makes; the form they share is [`example/project-form.md`](example/project-form.md). Read them before writing an overlay of your own.
+The create dialog, the detail drawer and the edit dialog built with these rules are [`example/create-dialog.md`](example/create-dialog.md), [`example/detail-drawer.md`](example/detail-drawer.md) and [`example/edit-dialog.md`](example/edit-dialog.md) (`new.tsx`, `detail/index.tsx`, `detail/edit.tsx`), each with notes on the choices it makes; the form they share is [`example/project-form.md`](example/project-form.md). The dashboard, [`example/project-dashboard.md`](example/project-dashboard.md), opens the same drawer over another page. Read them before writing an overlay of your own.
 
 ## 4. Delete confirmation (AlertDialog)
 
@@ -301,11 +333,12 @@ The details below describe `sheet.tsx` as the registry writes it today; the file
 After implementing, confirm each item by actually trying it:
 
 - [ ] Overlays such as create, edit and detail views are all child routes; only confirmation dialogs and temporary panels use component state.
+- [ ] A row menu's "Edit" opens the dialog alone; the drawer's "Edit" stacks it on the drawer. A record opened from any other page opens over that page, and closing stays there.
 - [ ] The parent page places `<Outlet />` in the intended spot; an overlay with child routes also places `<Outlet />` inside itself.
 - [ ] The right one of `RouteDialog` / `RouteDrawer` is chosen; child routes declare no `navigation` or `breadcrumb`.
 - [ ] `useRouteOverlay()` is called in components inside the overlay, not in the page component that renders the overlay; when `beforeClose` can throw, the rejection from `close()` is handled.
 - [ ] While submitting or deleting, ×, Esc, clicking the backdrop (dialogs and drawers; an AlertDialog never closes on it) and "Cancel" all fail to close it; where needed, there is a confirmation for unsaved changes.
-- [ ] Opening a child route's URL directly (with the deployment base path, for example `/main/projects/12/edit`), refreshing, browser back and forward, and nested overlays all show the correct layers.
+- [ ] Opening a child route's URL directly (with the deployment base path, for example `/main/projects/12/edit` and `/main/projects/edit/12`), refreshing, browser back and forward, and nested overlays all show the correct layers.
 - [ ] Opening and closing overlays keeps the query parameters, so the search and filters of the list behind stay the same; the parent page stays mounted and does not reload.
 - [ ] After saving, the drawer shows the new values immediately, and the list refreshes afterwards (guideline R2).
 - [ ] Record not found: the situation is explained, no "Retry" is offered, and the list refreshes (guideline R3); other load failures can be retried (guideline S4).
