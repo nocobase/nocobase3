@@ -6,9 +6,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import semver from 'semver';
+
 /** Install scripts that mean the package compiles or downloads a binary at install time. */
 const NATIVE_INSTALL_SIGNAL =
   /prebuild-install|node-gyp|node-pre-gyp|prebuildify|cmake-js/;
+
+// Platform-package families use either a toolchain/libc suffix (napi-rs) or keep libc variants inside one package.
+const PLATFORM_PACKAGE_SUFFIX =
+  /-(darwin|linux|win32|android)-(x64|arm64|arm|ia32|riscv64|ppc64|s390x)(?:-(gnu|musl|msvc|gnueabihf|musleabihf))?$/u;
+
+const OPTIONAL_PACKAGE_LOADER = /^node-gyp-build-optional-packages$/u;
 
 export const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -70,6 +78,8 @@ function* installedPackages(nodeModulesDir) {
  *
  * - `platform-package` — the manifest declares `cpu`/`os`, so the package *is* one platform's binary and another
  *   target means a different package. Its parent lists the whole set in `optionalDependencies`.
+ * - `optional-package-loader` — the install command checks platform packages declared by this manifest. Retarget
+ *   those packages, not the loader itself; it has no prebuild-install release to download.
  * - `fetched-at-install` — the install script runs a native build helper, so the binary was obtained for whichever
  *   platform ran the install.
  * - `bundled-multi-platform` — binaries for several platforms ship inside the package, so the target's is already
@@ -92,6 +102,19 @@ function classifyNative(packageDir) {
       os: manifest.os,
     };
   }
+  if (
+    OPTIONAL_PACKAGE_LOADER.test(installScript.trim()) &&
+    Object.keys(manifest.optionalDependencies ?? {}).some((name) =>
+      PLATFORM_PACKAGE_SUFFIX.test(name),
+    )
+  ) {
+    return {
+      kind: 'optional-package-loader',
+      manifest,
+      binaries,
+      installScript,
+    };
+  }
   if (NATIVE_INSTALL_SIGNAL.test(installScript)) {
     return { kind: 'fetched-at-install', manifest, binaries, installScript };
   }
@@ -106,7 +129,7 @@ function classifyNative(packageDir) {
   };
 }
 
-/** Packages declaring a set of platform-specific builds, mapped to the parent that lists the set. */
+/** Keep every owner's declarations, including versions, rather than inventing a sibling name or fetching latest. */
 export function platformPackageOwners(nodeModulesDir) {
   const owners = new Map();
   for (const packageDir of installedPackages(nodeModulesDir)) {
@@ -116,11 +139,89 @@ export function platformPackageOwners(nodeModulesDir) {
     } catch {
       continue;
     }
-    const optional = Object.keys(manifest.optionalDependencies ?? {});
-    if (optional.length < 2) continue;
-    for (const name of optional) owners.set(name, manifest.name);
+    for (const name of Object.keys(manifest.optionalDependencies ?? {})) {
+      const declarations = owners.get(name) ?? [];
+      declarations.push(manifest);
+      owners.set(name, declarations);
+    }
   }
   return owners;
+}
+
+/** Select only a supported member of the installed package's family, using the owner's declared version. */
+export function resolvePlatformPackage(native, target, owners) {
+  const currentName = native.manifest.name;
+  const match = PLATFORM_PACKAGE_SUFFIX.exec(currentName);
+  if (!match) return undefined;
+  const base = currentName.slice(0, match.index);
+  const suffixes = [target.napiSuffix];
+  if (target.platform === 'linux' && target.arch === 'arm') {
+    suffixes.unshift(
+      `linux-arm-${target.libc === 'musl' ? 'musleabihf' : 'gnueabihf'}`,
+    );
+  }
+  suffixes.push(`${target.platform}-${target.arch}`);
+  let candidate;
+  const ranges = [];
+  for (const owner of owners.get(currentName) ?? []) {
+    let supported = false;
+    for (const suffix of suffixes) {
+      const name = `${base}-${suffix}`;
+      const version = owner.optionalDependencies[name];
+      if (typeof version !== 'string' || !version) continue;
+      if (candidate && candidate !== name) return undefined;
+      if (!semver.validRange(version)) return undefined;
+      candidate = name;
+      ranges.push(version);
+      supported = true;
+      break;
+    }
+    if (!supported) return undefined;
+  }
+  if (!candidate) return undefined;
+  // Reject incompatible constraints before fetching anything. A pin inside another owner's range is compatible.
+  if (
+    ranges.some((range) =>
+      ranges.some((other) => !semver.intersects(range, other)),
+    )
+  ) {
+    return undefined;
+  }
+  return {
+    name: candidate,
+    ranges,
+    // Reuse a declared constraint when it satisfies every owner. Otherwise the caller resolves published versions.
+    version: ranges.find((range) =>
+      ranges.every((other) => semver.subset(range, other)),
+    ),
+  };
+}
+
+/** Check npm's platform allow/deny lists, including packages that explicitly exclude a C library. */
+export function matchesNativeTarget(manifest, target) {
+  const allows = (values, value) => {
+    if (!values) return true;
+    const list = Array.isArray(values) ? values : [values];
+    return (
+      !list.includes(`!${value}`) &&
+      (list.includes(value) ||
+        list.includes('any') ||
+        list.every((entry) => entry.startsWith('!')))
+    );
+  };
+  const namedTarget = PLATFORM_PACKAGE_SUFFIX.exec(manifest.name ?? '');
+  const namedLibc = namedTarget?.[3];
+  return (
+    (!namedTarget ||
+      (namedTarget[1] === target.platform && namedTarget[2] === target.arch)) &&
+    (target.platform !== 'linux' ||
+      !namedLibc ||
+      (namedLibc.startsWith('gnu') && target.libc === 'glibc') ||
+      (namedLibc.startsWith('musl') && target.libc === 'musl')) &&
+    allows(manifest.os, target.platform) &&
+    allows(manifest.cpu, target.arch) &&
+    (target.platform !== 'linux' || allows(manifest.libc, target.libc))
+  );
 }
 
 /** Native modules present in a built tree. */

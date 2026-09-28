@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -76,6 +77,12 @@ describe('deployment target metadata', () => {
     const root = createFixture();
     copyScript(root, 'utils/retarget-native.mjs');
     copyScript(root, 'utils/server-deps.mjs');
+    // Copied tooling still resolves the CLI's declared runtime dependencies.
+    symlinkSync(
+      path.resolve(import.meta.dirname, '../../node_modules'),
+      path.join(root, 'node_modules'),
+      'dir',
+    );
     const manifestPath = path.join(root, 'dist', 'package.json');
     writeFileSync(
       manifestPath,
