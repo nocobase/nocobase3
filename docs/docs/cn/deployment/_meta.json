@@ -1,0 +1,32 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "部署"
+  },
+  {
+    "type": "file",
+    "name": "with-agent",
+    "label": "用 AI Agent 部署"
+  },
+  {
+    "type": "file",
+    "name": "hub",
+    "label": "手动部署：Hub"
+  },
+  {
+    "type": "file",
+    "name": "standalone",
+    "label": "手动部署：独立运行"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "运行配置"
+  },
+  {
+    "type": "file",
+    "name": "troubleshooting",
+    "label": "排障"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Deployment"
+  },
+  {
+    "type": "file",
+    "name": "with-agent",
+    "label": "Deploy with an AI Agent"
+  },
+  {
+    "type": "file",
+    "name": "hub",
+    "label": "Manual: Hub"
+  },
+  {
+    "type": "file",
+    "name": "standalone",
+    "label": "Manual: standalone"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "Runtime configuration"
+  },
+  {
+    "type": "file",
+    "name": "troubleshooting",
+    "label": "Troubleshooting"
+  }
+]
