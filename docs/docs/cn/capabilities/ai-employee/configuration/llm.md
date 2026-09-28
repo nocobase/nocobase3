@@ -119,7 +119,9 @@ ai:
 
 ## 配置验证
 
-配置验证会在写数据库前完成。`llmServices` 不是对象、条目里写了 `name`、字段类型错误、空 `provider`，或者 `overrideEnabledModels` 不是布尔值，都会拒绝整份快照，避免只同步一半。
+`llmServices` 不是对象、条目里写了 `name`、字段类型错误、空 `provider`，或者 `overrideEnabledModels` 不是布尔值，服务启动时都会拒绝整份快照，避免只同步一半。
+
+`pnpm nocobase config check` 会提前报告这些问题，每一项按路径报错误；Provider 需要密钥却没有配置 `options.apiKey` 的服务报警告，并给出设置命令。这需要 `server/config/ai.ts` 用插件提供的 `defineAIConfig` 声明 `ai` 配置，模板默认就是这样写的。
 
 ## 相关链接
 

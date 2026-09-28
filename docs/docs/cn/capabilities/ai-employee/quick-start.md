@@ -81,7 +81,7 @@ $k = Read-Host 'OpenAI API Key' -AsSecureString; $env:OPENAI_API_KEY = [System.N
 
 不要把密钥发给 AI 助手，也不要让它代你执行这条命令，否则密钥会留在对话记录里。`config.example.yml` 会入库，不写密钥。
 
-写入后重启服务，`pnpm dev` 在 `config.yml` 变化时会自动重启。
+写入后可以运行 `pnpm nocobase config check` 确认：服务的 Provider 需要密钥却没有配置时，它会对 `ai.llmServices.openai.options.apiKey` 给出警告，写入后警告消失。然后重启服务，`pnpm dev` 在 `config.yml` 变化时会自动重启。
 
 ### 由运行环境注入密钥
 

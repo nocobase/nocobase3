@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type AIApplicationConfig,
+  defineAIConfig,
   normalizeDisks,
   resolveAIEmployeeStorageDisk,
   resolveAIKnowledgeBaseStorageDisks,
@@ -251,6 +252,83 @@ describe('AI application config', () => {
     expect(() =>
       normalizeLLMServiceConfig({ openai: { title: 'OpenAI' } as never }),
     ).toThrow('Invalid ai.llmServices.openai.provider');
+  });
+
+  describe('validateAIConfig', () => {
+    async function issuesFor(value: unknown) {
+      const config = await loadAIConfig({ ai: value });
+      config.defineSections(
+        defaultAppConfigs({
+          ai: defineAIConfig({ defaults: { llmServices: {} } }),
+        }).sections!,
+      );
+      return config.validate();
+    }
+
+    it('warns about a service whose provider needs a key and has none', async () => {
+      await expect(
+        issuesFor({
+          llmServices: {
+            openai: { provider: 'openai' },
+            blank: { provider: 'anthropic', options: { apiKey: '  ' } },
+            keyed: { provider: 'deepseek', options: { apiKey: 'sk-test' } },
+            local: { provider: 'ollama' },
+            custom: { provider: 'company' },
+          },
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          level: 'warning',
+          path: 'ai.llmServices.openai.options.apiKey',
+          fix: expect.stringContaining(
+            'pnpm nocobase config set --from-env ai.llmServices.openai.options.apiKey=<VARIABLE>',
+          ),
+        }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'ai.llmServices.blank.options.apiKey',
+        }),
+      ]);
+    });
+
+    it('reports nothing for a configuration without services', async () => {
+      await expect(issuesFor({})).resolves.toEqual([]);
+    });
+
+    it('reports a structural problem as an error, by path', async () => {
+      await expect(
+        issuesFor({
+          llmServices: { openai: { name: 'openai', title: 1 } },
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.llmServices.openai.name',
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.llmServices.openai.provider',
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.llmServices.openai.title',
+        }),
+      ]);
+    });
+
+    it('reports the list form as an error', async () => {
+      await expect(
+        issuesFor({ llmServices: [{ name: 'openai', provider: 'openai' }] }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.llmServices',
+          message: expect.stringContaining(
+            'expected a map keyed by service name',
+          ),
+        }),
+      ]);
+    });
   });
 
   it('normalizes disk arrays without parsing comma-separated strings', () => {
