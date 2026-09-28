@@ -21,7 +21,7 @@ import {
   type CommandFailureJson,
   type CommandSuccessJson,
   type CommandSuccessStatus,
-} from './command/envelope.ts';
+} from '@nocobase/cli-envelope';
 import {
   debugEnabled,
   describeForDebugging,

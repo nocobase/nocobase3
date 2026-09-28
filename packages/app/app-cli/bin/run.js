@@ -4,13 +4,23 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  formatUnsupportedNodeVersionMessage,
+  exitWhenFlushed,
   isSupportedNodeVersion,
-} from './node-version.js';
+  unsupportedNodeVersionOutput,
+} from '@nocobase/cli-envelope/node-guard';
 
 if (!isSupportedNodeVersion()) {
-  console.error(formatUnsupportedNodeVersionMessage(process.version));
-  process.exit(1);
+  const argv = process.argv.slice(2);
+  // The command as typed, such as `db apply`: the arguments before the first flag.
+  const flagAt = argv.findIndex((arg) => arg.startsWith('-'));
+  const command = argv.slice(0, flagAt === -1 ? argv.length : flagAt).join(' ');
+  const { stream, text } = unsupportedNodeVersionOutput({
+    name: 'nocobase',
+    command,
+    argv,
+  });
+  process[stream].write(`${text}\n`);
+  await exitWhenFlushed(1);
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
