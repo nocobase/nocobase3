@@ -36,6 +36,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/chat',
           navigation: { title: 'demo.navigation.chat' },
           breadcrumb: { title: 'demo.navigation.chat' },
+          authz: 'skip',
           componentLoader: createAIEmployeeDemoLoader('AIChatDemoPage'),
         },
         {
@@ -43,6 +44,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/floating',
           navigation: { title: 'demo.navigation.floating' },
           breadcrumb: { title: 'demo.navigation.floating' },
+          authz: 'skip',
           componentLoader: createAIEmployeeDemoLoader('FloatingChatDemoPage'),
         },
         {
@@ -50,6 +52,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/tasks',
           navigation: { title: 'demo.navigation.tasks' },
           breadcrumb: { title: 'demo.navigation.tasks' },
+          authz: 'skip',
           componentLoader: createAIEmployeeDemoLoader(
             'AIEmployeeTasksDemoPage',
           ),
@@ -59,6 +62,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/context',
           navigation: { title: 'demo.navigation.context' },
           breadcrumb: { title: 'demo.navigation.context' },
+          authz: 'skip',
           componentLoader: createAIEmployeeDemoLoader('PageContextDemoPage'),
         },
         {
@@ -66,6 +70,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/tools',
           navigation: { title: 'demo.navigation.tools' },
           breadcrumb: { title: 'demo.navigation.tools' },
+          authz: 'skip',
           componentLoader: createAIEmployeeDemoLoader('ToolCardsDemoPage'),
         },
       ],

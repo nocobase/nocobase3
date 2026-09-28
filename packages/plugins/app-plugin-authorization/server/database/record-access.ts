@@ -1,24 +1,23 @@
-import type { Principal } from '@nocobase/authorization/core';
+import type {
+  Principal,
+  RecordAccessDefinition,
+  RecordAccessReference,
+} from '@nocobase/authorization/core';
+import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
 import { condition, type DatabaseScope } from './scope.js';
 
-import { type RecordAccessPolicy } from '@nocobase/authorization/core';
-
-export function allRecords(): RecordAccessPolicy {
-  return databaseRecordAccess({
-    key: 'allRecords',
-    title: { key: 'options.recordAccessPolicies.allRecords' },
-    resolve: () => true,
-  });
-}
-
-/** Which column carries the principal. The default suits most Collections. */
+/** Which column carries the principal. The default suits most collections. */
 export interface RecordOwnerParams {
   field?: string;
 }
 
+export interface CustomFilterParams {
+  filter: DatabaseScope;
+}
+
 export class UserContextRequiredError extends Error {
   constructor() {
-    super('This record scope requires a user principal.');
+    super('This record access requires a user principal.');
   }
 }
 
@@ -27,68 +26,81 @@ function userId(principal: Principal): string {
   return principal.id;
 }
 
-export function recordsIOwn(): RecordAccessPolicy<
-  RecordOwnerParams | undefined
-> {
-  return databaseRecordAccess<RecordOwnerParams | undefined>({
-    key: 'recordsIOwn',
-    requiredFields: ['ownerId'],
-    title: { key: 'options.recordAccessPolicies.recordsIOwn' },
-    resolve: ({ principal, params }) =>
-      condition(params?.field ?? 'ownerId', '$eq', userId(principal)),
-  });
-}
-
-export function recordsICreated(): RecordAccessPolicy<
-  RecordOwnerParams | undefined
-> {
-  return databaseRecordAccess<RecordOwnerParams | undefined>({
-    key: 'recordsICreated',
-    requiredFields: ['createdById'],
-    title: { key: 'options.recordAccessPolicies.recordsICreated' },
-    resolve: ({ principal, params }) =>
-      condition(params?.field ?? 'createdById', '$eq', userId(principal)),
-  });
-}
-
-export interface CustomFilterParams {
-  filter: DatabaseScope;
-}
-
-export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
-  return databaseRecordAccess({
-    key: 'customFilter',
-    title: { key: 'options.recordAccessPolicies.customFilter' },
-    description: { key: 'options.recordAccessPolicies.customFilterHint' },
-    paramsSchema: { type: 'filter-node' },
-    resolve: ({ params }) => {
-      if (!params || typeof params !== 'object' || !('filter' in params)) {
-        throw new Error('Custom Filter requires filter params');
-      }
-      return params.filter;
-    },
-  });
-}
+const title = (key: string) => ({ key, ns: AUTHORIZATION_NAMESPACE });
 
 /** DB-specific applicability metadata, interpreted only by the DB adapter. */
-export interface DatabaseRecordAccessPolicy<
+export interface DatabaseRecordAccessDefinition<
   P = unknown,
-> extends RecordAccessPolicy<P> {
+> extends RecordAccessDefinition<P> {
   requiredFields?: readonly string[];
 }
-function databaseRecordAccess<P = unknown>(
-  definition: Omit<DatabaseRecordAccessPolicy<P>, 'resources'>,
-): DatabaseRecordAccessPolicy<P> {
-  return {
-    ...definition,
-    resources: [{ type: 'database.collection', id: '*' }],
-  };
+
+/** The built-in record access, registered by `databasePlugin`. */
+export const builtInRecordAccess: readonly DatabaseRecordAccessDefinition[] = [
+  {
+    key: 'allRecords',
+    collections: ['*'],
+    title: title('options.recordAccessPolicies.allRecords'),
+    resolve: () => true,
+  },
+  {
+    key: 'recordsIOwn',
+    collections: ['*'],
+    requiredFields: ['ownerId'],
+    title: title('options.recordAccessPolicies.recordsIOwn'),
+    resolve: ({ principal, params }) =>
+      condition(
+        (params as RecordOwnerParams | undefined)?.field ?? 'ownerId',
+        '$eq',
+        userId(principal),
+      ),
+  },
+  {
+    key: 'recordsICreated',
+    collections: ['*'],
+    requiredFields: ['createdById'],
+    title: title('options.recordAccessPolicies.recordsICreated'),
+    resolve: ({ principal, params }) =>
+      condition(
+        (params as RecordOwnerParams | undefined)?.field ?? 'createdById',
+        '$eq',
+        userId(principal),
+      ),
+  },
+  {
+    key: 'customFilter',
+    collections: ['*'],
+    title: title('options.recordAccessPolicies.customFilter'),
+    description: title('options.recordAccessPolicies.customFilterHint'),
+    paramsSchema: { type: 'filter-node' },
+    resolve: ({ params }) => {
+      if (!params || typeof params !== 'object' || !('filter' in params))
+        throw new Error('Custom Filter requires filter params');
+      return (params as CustomFilterParams).filter;
+    },
+  },
+];
+
+export interface BuiltInRecordAccess {
+  readonly allRecords: RecordAccessReference<'allRecords'>;
+  readonly recordsIOwn: RecordAccessReference<'recordsIOwn'>;
+  readonly recordsICreated: RecordAccessReference<'recordsICreated'>;
+  readonly customFilter: RecordAccessReference<'customFilter'>;
 }
+
+/** References to the built-in record access, for type-safe options and grants. */
+export const recordAccess: BuiltInRecordAccess = {
+  allRecords: { key: 'allRecords', collections: ['*'] },
+  recordsIOwn: { key: 'recordsIOwn', collections: ['*'] },
+  recordsICreated: { key: 'recordsICreated', collections: ['*'] },
+  customFilter: { key: 'customFilter', collections: ['*'] },
+};
+
 export function databaseRecordAccessApplicable(
-  policy: RecordAccessPolicy,
+  definition: RecordAccessDefinition,
   fields: readonly string[],
 ): boolean {
-  const required: unknown = Reflect.get(policy, 'requiredFields');
+  const required: unknown = Reflect.get(definition, 'requiredFields');
   return (
     required === undefined ||
     (Array.isArray(required) &&

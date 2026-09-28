@@ -1,4 +1,3 @@
-import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   ArrowLeft,
@@ -28,13 +27,12 @@ import {
 } from '../../registry/nocobase-ai/shared/ui/collapsible.js';
 import { cn } from '../../registry/nocobase-ai/shared/utils.js';
 import {
-  getManagedConversationMessages,
-  listManagedConversations,
   type ConversationCenterPage,
   type ConversationHistoryPage,
   type ManagedConversation,
 } from '../conversation-center-service.js';
 import { useT } from '../locales/index.js';
+import { useAIEmployeeClient } from '../ai-employee-client.js';
 
 function asError(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error(String(cause));
@@ -49,7 +47,7 @@ function formatDate(value: string | undefined, language: string): string {
 }
 
 export default function ConversationCenterPageComponent(): ReactElement {
-  const api = useService(apiClientToken);
+  const ai = useAIEmployeeClient();
   const t = useT();
   const { i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? 'en';
@@ -88,11 +86,12 @@ export default function ConversationCenterPageComponent(): ReactElement {
     const controller = new AbortController();
     setLoading(true);
     setListError(undefined);
-    void listManagedConversations(api, {
-      keyword,
-      page,
-      signal: controller.signal,
-    })
+    void ai
+      .listManagedConversations({
+        keyword,
+        page,
+        signal: controller.signal,
+      })
       .then((value) => {
         if (controller.signal.aborted) return;
         setResult({ key: queryKey, value });
@@ -104,7 +103,7 @@ export default function ConversationCenterPageComponent(): ReactElement {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [api, keyword, page, queryKey, revision]);
+  }, [ai, keyword, page, queryKey, revision]);
 
   const navigate = (values: Record<string, string | undefined>): void => {
     const next = new URLSearchParams(params);
@@ -139,11 +138,12 @@ export default function ConversationCenterPageComponent(): ReactElement {
 
   return (
     <section
-      className='flex min-w-0 flex-col gap-4'
+      className='flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1'
       aria-label={t('Conversations')}
     >
-      {/* The viewport constraint keeps history scrollable without expanding the settings page. */}
-      <div className='flex h-[clamp(24rem,68dvh,56rem)] min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm'>
+      {/* Below lg the viewport constraint keeps history scrollable without expanding the page; from lg the settings
+        shell passes its height down, so the panes fill what is left instead of guessing it from the viewport. */}
+      <div className='flex h-[clamp(24rem,68dvh,56rem)] min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm lg:h-auto lg:min-h-0 lg:flex-1'>
         <aside
           aria-label={t('Conversations')}
           className={cn(
@@ -355,7 +355,7 @@ function ConversationTranscript({
 }: {
   sessionId: string;
 }): ReactElement {
-  const api = useService(apiClientToken);
+  const ai = useAIEmployeeClient();
   const t = useT();
   const [history, setHistory] = useState<ConversationHistoryPage>({
     messages: [],
@@ -376,9 +376,10 @@ function ConversationTranscript({
     requestRef.current = controller;
     setLoading(true);
     setError(undefined);
-    void getManagedConversationMessages(api, sessionId, {
-      signal: controller.signal,
-    })
+    void ai
+      .getManagedConversationMessages(sessionId, {
+        signal: controller.signal,
+      })
       .then((value) => {
         if (!controller.signal.aborted) setHistory(value);
       })
@@ -390,7 +391,7 @@ function ConversationTranscript({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [api, sessionId, revision]);
+  }, [ai, sessionId, revision]);
 
   const loadEarlier = async (): Promise<void> => {
     const controller = requestRef.current;
@@ -406,7 +407,7 @@ function ConversationTranscript({
     setLoadingMore(true);
     setError(undefined);
     try {
-      const value = await getManagedConversationMessages(api, sessionId, {
+      const value = await ai.getManagedConversationMessages(sessionId, {
         cursor: history.cursor,
         signal: controller.signal,
       });

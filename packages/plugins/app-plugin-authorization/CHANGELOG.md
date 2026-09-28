@@ -1,5 +1,87 @@
 # @nocobase/app-plugin-authorization
 
+## 0.2.0-beta.21
+
+### Minor Changes
+
+- 2f97f00: The inspector shows inherited access. `POST /inspector/configured` also answers `identity.subjects`, the subjects a user inherits from, and per effective permission set the assignments that bring it (`ConfiguredPermissionSet` in `sets`); the inspector page shows which subjects the user inherits from and whether each granting set comes through one of them or a direct assignment. A subject option's `title` and `description` may be a `{ key, ns }` translation descriptor, which the subject picker, assignment lists, rule panels and inspector render in the viewer's language; the client `SubjectOption` types them as `LocalizedText`. A permission-set assignment change on any subject other than a user now refreshes every signed-in client, so members of a department see the change without reloading.
+
+### Patch Changes
+
+- 2f97f00: A denied `require` now answers `403 { code: 'FORBIDDEN', message }` from any Hono route without an `onError` mapping: `AuthorizationDeniedError` carries `status: 403` and a `getResponse()` that Hono's default error handler honours. A record access that resolves to no records for a principal who holds the grant, such as a user in no department, now yields a conditional decision whose scope matches no rows, with the `EMPTY_RECORD_ACCESS` reason, so a bound Repository returns an empty result and updates or deletes nothing instead of refusing to run. A principal without a grant, or a grant whose data scopes configure no selection, is still denied.
+- 2f97f00: The authorization Skills are self-contained: they no longer send readers to the example plugins or rely on their sample ids, and use a neutral `org.team` subject type in their snippets. Organisation work, such as departments, positions and department heads, is routed to the application development Skill's organisation reference, and each rule plugin's Skill links its permission design guide for department baselines, cross-department sharing and department-assigned restrictions, noting that the guide's core needs permission sets alone.
+- Updated dependencies [a4ee8aa]
+- Updated dependencies [2f97f00]
+  - @nocobase/app-server@1.0.0-beta.28
+  - @nocobase/authorization@0.1.0-beta.10
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+
+## 0.2.0-beta.20
+
+### Patch Changes
+
+- 757eedf: Check unrestricted access from the client, and never offer unrestricted-only pages as grants
+
+  `AuthorizationClient.can` and `useCan` accept `'unrestricted'` in addition to a `{ resource, action }` check, typed as the new exported `AuthorizationRequirement`. It passes only when the session's permission snapshot is unrestricted, as root's is, and nothing can grant it. Route guards and menus use it for pages whose `authz` is `'unrestricted'`, which is what a protected App or settings page without a declared `authz` now defaults to.
+
+  The permission workspace and inspector list only routes whose `authz` checks `page` `access`, so an unrestricted-only page is never offered as a page grant. The client development guidance in the plugin's Skill now describes `authz` inheritance, the defaults for a page that omits it, and the unrestricted requirement.
+
+- 1b139b6: List Permission Sets first and the Permission Inspector last in the authorization settings subsection, with the rule plugins between them. `authz.ui.place` accepts an optional `order` within a subsection; unordered resources follow in registration order. The permission workspace now shows a resource's key under its name, and its sidebar leads with subsections, keeping section headers as muted labels.
+- Updated dependencies [02d5402]
+- Updated dependencies [dbf5631]
+- Updated dependencies [05af1d4]
+- Updated dependencies [4adcf24]
+- Updated dependencies [ec92b20]
+- Updated dependencies [ec92b20]
+- Updated dependencies [757eedf]
+  - @nocobase/app-server@1.0.0-beta.27
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+  - @nocobase/app-client@1.0.0-beta.21
+  - @nocobase/authorization@0.1.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.2.0-beta.19
+
+### Minor Changes
+
+- c8ddd7d: Consolidate the authorization API. Resource types are either catalog types (`settings`, `composite`, `database.collection`), whose items and actions must be registered, or record types (`page`, `user`, `notification`, `hub.app`, `hub.host`), which declare type-level actions and judge each record; there are no `*` items. Business resources become composite resources, a built-in core mechanism: every Authorization has `authz.compositeResources` (which replaces `authz.business`) and reserves the `composite` resource type, so `businessPlugin()` is gone with no replacement and `resourceTypes.add({ type: 'composite' })` throws; `defineBusinessResource` is `defineCompositeResource`, every `Business*` type is `CompositeResource*` (`CompositeResource`, `CompositeResourceBuilder`, `CompositeResourceActionBuilder`, `CompositeResourceReference`, `CompositeResourceConditions`, `CompositeResourceApi`, `BindableCompositeResourcePermission` and so on) and the grant policy is `{ type: 'composite', scopes }`. Resource types carry no `title`: they are never displayed, and the library holds no translation keys. A composite composes exactly the grants its definition lists, on any type except another composite. A data scope no longer names a `collection`: it targets the one resource its grant actions address (`dataScopeTarget(action, key)`), whose type must declare `recordAccess: true` on `resourceTypes.add`, as `database.collection` does; `define` checks this when the type is registered, and `authz.compositeResources.validate()` and first use check types registered later. The library holds no display concepts. `@nocobase/app-plugin-authorization` provides `authz.ui`, also exposed to plugin setup contexts: `ui.sections.add` for the top-level sections `pages`, `business` and `administration` and one level of subsections (with `extend: true` for a subsection another plugin owns, as workflow owns `automation` and scheduler extends it), `ui.groups.add` for right-side groups, `ui.place(ref, { section, group? })`, and `ui.defaultSection(type, section)`. `pagesPlugin` registers the `pages.page` subsection, the only one the client fills, from its route tree. The client no longer remaps the `@nocobase/authorization` namespace. `authz.settings.add` no longer takes `section`; settings items and composites are placed with `authz.ui.place`, and unplaced ones land in their type's default section "Other". Startup validation runs after every provider has booted and reports unknown subsections and groups, placements of unregistered resources and unfit data scopes, throwing in development and logging a warning in production. A resource holds at most one default-access rule: the table is unique on `(resourceType, resourceId)` as well as `key`, and a second rule raises `DefaultAccessConflictError`, answered with 409. `authorizationToken` is the only service token: `permissionSetsToken` is gone, `authz.db` is now `authz.database`, settings items are registered with `authz.settings.add` and checked with semantic actions, and rule plugins build on `@nocobase/app-plugin-authorization/server/extension`. The client exposes `AuthorizationClient.snapshot/revision/invalidate/onInvalidated` and renamed management components. Every client page route must now declare `authz` (a check or `'skip'`); nothing is inferred from the route name. The authorization migrations and seeds were edited in place, including the new `key` column on default-access rules, so existing databases must be reset and reinstalled. A stored composite grant that no longer expands — an unknown action or data scope, an invalid scope value or policy — is skipped for that grant alone instead of failing every check of the identity: it permits nothing, a direct check of its action denies with `INVALID_GRANT`, and `createAuthorization({ onInvalidGrant })` is told once, which the application plugin logs; `authz.compositeResources.validateGrant` explains a stored grant, and the plugin's startup validation scans every stored Permission Set, throwing in development and warning in production. `authz.database.collections.add` treats a re-registration with the same actions as a no-op even when its title or description differ, keeping the first and reporting a startup warning through `collections.warnings()`; only different actions throw. `authz.resourceTypes.get(type).items.add(item)` remains the generic low-level item registration that `settings.add`, `database.collections.add` and `compositeResources.define` build on.
+
+### Patch Changes
+
+- 0b37436: Fit the default access page to the available height on large screens, so the page no longer scrolls around the resource table that already scrolls on its own. `PermissionsPage` gains an opt-in `fill` prop and `ManagementTable` accepts a `className` for pages that lay out their own scroll regions; on viewports too short for a usable layout the page keeps a minimum height and scrolls once as a whole.
+- Updated dependencies [f6c3cd8]
+- Updated dependencies [c8ddd7d]
+- Updated dependencies [f3917b6]
+- Updated dependencies [d18e964]
+- Updated dependencies [0231d46]
+  - @nocobase/app-server@1.0.0-beta.26
+  - @nocobase/app-client@1.0.0-beta.20
+  - @nocobase/app-plugin-authentication@1.0.0-beta.23
+  - @nocobase/authorization@0.1.0-beta.9
+
+## 0.2.0-beta.18
+
+### Patch Changes
+
+- 808bf34: Remove the authorization workspace dependency cycle by keeping rule plugin dependencies one way and running cross-plugin coverage in the authorization example. Verify each rule plugin's management handler and migration in its own test suite.
+- Updated dependencies [cda1175]
+- Updated dependencies [e286e0d]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [80ef702]
+  - @nocobase/app-plugin-authentication@1.0.0-beta.21
+  - @nocobase/app-server@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.15
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/authorization@0.1.0-beta.8
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.2.0-beta.17
 
 ### Patch Changes

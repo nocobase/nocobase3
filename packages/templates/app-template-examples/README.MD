@@ -29,17 +29,31 @@ The scaffolder creates an independent configuration and database. Never copy ano
 
 Article migration and seed sources create six articles on a fresh managed default connection. Every signed-in user can view, create, and edit all articles. Article pages and APIs do not participate in permission-set authorization. Other examples retain their plugins' authorization policies.
 
+## Internationalization example
+
+Open **Internationalization** from the homepage or sidebar (`/i18n-examples`, relative to the application's mount path). Like the other protected examples, this page requires sign-in and its page permission; administrators can explore it directly.
+
+Choose a count of 0, 1, 2 or 5, or enter a non-negative safe integer. Switch between English and Chinese from the account menu: English changes between `item` and `items`, Chinese keeps `个项目`, and the selected count survives the switch. The keys belong to the application in `client/locales/` and use `_one` and `_other` with `t('i18nExamples.itemCount', { count })`.
+
+The fallback table runs deliberately incomplete resources in a page-local `I18nRuntime`, following the current language → application default → `en-US` chain. Switch to Chinese to see the English-only message fall back; the source column reports the language actually used. A key absent from all resources displays `defaultValue` when provided and the key itself otherwise. These fixtures live in `client/pages/i18n-examples/demo.ts`; they do not delete application translations, weaken `AppResource`, register another language picker, or change global resources.
+
+The regional comparison formats the same number, USD amount and fixed UTC timestamp for `zh-CN`, `en-US` and `de-DE` using `Intl`. It performs no currency conversion and does not add German to the application's language list. This example covers regional formatting; it does not demonstrate RTL layout.
+
 ## Maintain this template
 
-Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
+Keep framework files aligned with Default and Hub: the `package.json` scripts that call `nocobase`, runtime composition mechanisms, the `cli/plugins.ts` composition root, shell, theme and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
 
 ## Getting started
 
-Start the development server:
+Configure the application, then start the development server:
 
 ```bash
+pnpm nocobase config init
+pnpm nocobase config check
 pnpm dev
 ```
+
+`pnpm nocobase config init` writes `config.yml` from `config.example.yml`, keeping its comments and filling in `auth.secret` and `session.secret`. It is only needed once; `pnpm dev` and `pnpm start` refuse to run until it has been. `pnpm nocobase config check` loads the configuration the way a start would, connects to any database other than SQLite, and reports what would stop the application from starting or quietly misbehave.
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
@@ -80,9 +94,10 @@ APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 
 ### Review your configuration
 
-`config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
+`pnpm nocobase config init` wrote `config.yml` from `config.example.yml`, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
 
-- **Database.** SQLite needs no server and works as it is. To use another one, register its dialect in `server/config/database.ts`, add the matching `@nocobase/db-*` package, and point the connection here at it — host, port, and credentials. Drivers are code rather than settings, so a dialect the application does not register cannot be introduced from this file.
+- **Database.** SQLite needs no server and works as it is. Another one means installing its driver first — `pnpm add @nocobase/db-postgres`, and `pnpm remove @nocobase/db-sqlite` if nothing else uses SQLite — then `pnpm nocobase config init --dialect postgres --force` to rewrite the connection, and `pnpm nocobase config set` for its settings, with `--from-env` for the password so it stays out of the shell history. Which dialects the application can run on is decided by what it depends on, not by this file: a driver it does not have cannot be introduced from here.
+- **Change a value** with `pnpm nocobase config set key=value`, which keeps the comments and refuses a section the application does not know. Values that differ per machine — `APP_SERVER_PORT`, `APP_SERVER_HOST`, `APP_PUBLIC_ORIGIN` — are better set in the environment, which is applied over this file; `config set` says when an environment variable overrides what it wrote.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
 - **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. Every section is already here, commented out where it is optional.
 
@@ -124,6 +139,10 @@ server/                  API server
 ├── standalone.ts        Node entry point
 └── embedded.ts          Entry point when a host process mounts it
 
+cli/                     Command line
+├── plugins.ts           Which plugins contribute commands and build and dev hooks
+└── commands/            Your own commands, under the app topic (created when needed)
+
 database/
 ├── main/
 │   ├── migrations/      Schema history for the main connection
@@ -132,17 +151,19 @@ database/
 │   ├── migrations/      Independent analytics schema
 │   └── seeds/           Channel, campaign and daily metric examples
 └── externalCrm/
-    └── collections/     metadata.json per Collection: the external CRM's metadata source
+    └── metadata/        <name>.json per Collection: the external CRM's hand-written metadata
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
-config.yml              Your configuration, generated at setup; gitignored
+config.yml              Your configuration, written by pnpm nocobase config init; gitignored
 config.example.yml       Documented configuration template
 ```
 
 The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are composition roots: they list what the application is made of. Reading them tells you what is loaded and in what order.
 
 ## Scripts
+
+`pnpm dev`, `pnpm build` and `pnpm start` are the application's scripts. Everything else is `pnpm nocobase <topic> <command>`, which pnpm resolves to the application's CLI without a script; `pnpm nocobase --help` lists them all.
 
 ### Everyday development
 
@@ -155,14 +176,14 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script                      | What it does                                                                                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm db:apply`             | Apply pending migrations from your `database/main/migrations/` and from every registered plugin, then pending seeds from `database/main/seeds/` and from those plugins                              |
-| `pnpm db:reset`             | Destructive: drop every managed schema object, then rerun all migrations and seeds from empty; asks first, and needs `--force` in CI                                                                |
-| `pnpm db:repair`            | Realign recorded migration and seed checksums with the current sources; `--dry-run` reports without writing                                                                                         |
-| `pnpm collections:generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
+| Command                              | What it does                                                                                                                                                                                        |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm nocobase db apply`             | Apply pending migrations from your `database/main/migrations/` and from every registered plugin, then pending seeds from `database/main/seeds/` and from those plugins                              |
+| `pnpm nocobase db reset`             | Destructive: drop every managed schema object, then rerun all migrations and seeds from empty; asks first, and needs `--force` in CI                                                                |
+| `pnpm nocobase db repair`            | Realign recorded migration and seed checksums with the current sources; `--dry-run` reports without writing                                                                                         |
+| `pnpm nocobase collections generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
 
-Migrations and seeds also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm db:apply` explicitly when you want to apply a change without restarting. Both halves run only what is pending, so running it on an already-migrated database applies seeds alone.
+Migrations and seeds also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm nocobase db apply` explicitly when you want to apply a change without restarting. Both halves run only what is pending, so running it on an already-migrated database applies seeds alone.
 
 Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](.agents/skills/nocobase-app-development/references/migrations.md).
 
@@ -178,7 +199,7 @@ Migrations and seeds run automatically on startup. To initialize only analytics
 from this application directory:
 
 ```bash
-pnpm db:apply --connection analytics
+pnpm nocobase db apply --connection analytics
 ```
 
 | Collection     | Initial records | Purpose                                                        |
@@ -239,16 +260,7 @@ change it, and `naming` strips the CRM's `crm_` table prefix when mapping
 tables to logical Collection names. No migrations or seeds run against it, and
 the Builder refuses DDL on it.
 
-What the schema cannot say — titles, descriptions, and which column is a
-relation — comes from `database/externalCrm/collections/<name>/metadata.json`.
-That is the default metadata source for an external connection, so nothing has
-to be configured; `metadataStore` can point at another collections directory
-when metadata is kept elsewhere. The files are the source, not generated
-output: the workflow is `pnpm collections:generate --connection externalCrm`
-to scaffold one `metadata.json` per table with an empty document, fill in the
-documents by hand, and generate again so `collection.json` reflects them.
-Dropping a table removes its generated files but keeps its `metadata.json`,
-which the command reports as an orphan.
+What the schema cannot say — titles, descriptions, and which column is a relation — comes from `database/externalCrm/metadata/<name>.json`, one metadata document per Collection, written by hand and committed. That is the default metadata source for an external connection, so nothing has to be configured; `metadataStore` can point at another directory in the same layout when metadata is kept elsewhere. Nothing generates or rewrites these files. Run `pnpm nocobase collections generate --connection externalCrm` afterwards to refresh the gitignored cache under `database/externalCrm/collections/`; a document whose table has gone is reported as unused metadata rather than deleted.
 
 The connection points at `storage/external-crm.sqlite` so the example runs
 without a real CRM. `server/providers/external-crm.ts` plays the part of the
@@ -303,12 +315,7 @@ example, `POST /main/api/crmOrders:findMany` with:
 }
 ```
 
-`pnpm collections:generate --connection externalCrm` writes `collection.json`
-and `schema.json` next to each `metadata.json` under
-`database/externalCrm/collections/`; the manifest records
-`schemaManagement: external` and no migration head, since the CRM has no
-migration history this application knows about. Only the `metadata.json` files
-are committed here.
+`pnpm nocobase collections generate --connection externalCrm` writes `collection.json`, `metadata.json` and `schema.json` per Collection under `database/externalCrm/collections/`, as it does for a managed connection; the manifest records `schemaManagement: external` and no migration head, since the CRM has no migration history this application knows about. That directory is a gitignored cache; only `database/externalCrm/metadata/` is committed.
 
 ### Checks
 
@@ -322,30 +329,30 @@ are committed here.
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
-`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse, and exits nonzero until the lists align. The browser builds its language picker from the client list, so a client-only language still works in the interface; server messages fall back to English and the language control explains that fallback. Add the matching server locale when server-produced text should use the same language.
+`pnpm nocobase locales check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse, and exits nonzero until the lists align. The browser builds its language picker from the client list, so a client-only language still works in the interface; server messages fall back to English and the language control explains that fallback. Add the matching server locale when server-produced text should use the same language.
 
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                                |
-| ------------------------------- | ----------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server     |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                              |
-| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills    |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only             |
-| `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
-| `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
+| Command                                  | What it does                                                |
+| ---------------------------------------- | ----------------------------------------------------------- |
+| `pnpm nocobase plugin register <name>`   | Install a plugin and wire it into the client and server     |
+| `pnpm nocobase plugin unregister <name>` | Remove a plugin and its wiring                              |
+| `pnpm nocobase plugin update [name]`     | Upgrade one or all registered plugins and re-sync skills    |
+| `pnpm nocobase plugin inspect <name>`    | Report a plugin's registration state; read-only             |
+| `pnpm nocobase package remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
+| `pnpm nocobase skills sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
 
-`pnpm install` automatically runs `pnpm skills:sync` through the application's `postinstall` hook. Run `pnpm skills:sync` manually when install scripts were disabled or Skills need refreshing. The CLI retains `nocobase plugin skills sync` for older applications, but new templates do not provide a separate script alias.
+`pnpm install` automatically runs `pnpm nocobase skills sync` through the application's `postinstall` hook. Run `pnpm nocobase skills sync` manually when install scripts were disabled or Skills need refreshing.
 
-Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+Use a full package name, as with `plugin register` and `plugin unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
 ```bash
-pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
-pnpm plugin:update authentication                      # Equivalent short name
-pnpm plugin:update                                     # Update all registered plugins
-pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+pnpm nocobase plugin update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm nocobase plugin update authentication                      # Equivalent short name
+pnpm nocobase plugin update                                     # Update all registered plugins
+pnpm nocobase plugin update @nocobase/app-plugin-authentication --dry-run  # Preview only
 ```
 
 Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
@@ -357,27 +364,27 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 Before removing a direct `@nocobase/*` dependency, search the application's imports, plugin registrations, routes, services, configuration keys, tests, and build scripts for references to it. Migrate or remove those references first. The removal command updates package metadata and synchronized Skills; it does not rewrite application source or configuration and cannot decide whether the capability is still required.
 
 ```bash
-pnpm package:remove @nocobase/example
-pnpm package:remove @nocobase/example --dry-run
-pnpm package:remove @nocobase/example --json
+pnpm nocobase package remove @nocobase/example
+pnpm nocobase package remove @nocobase/example --dry-run
+pnpm nocobase package remove @nocobase/example --json
 ```
 
-For an ordinary package, the command uses the application's package manager to remove the dependency and update both `package.json` and the lockfile, then removes only the Skill directories recorded as owned by that package. For an `@nocobase/app-plugin-*` package, it reuses the `plugin:unregister` workflow so Client, Server, and CLI registrations are removed together with the dependency and its Skills. `pnpm plugin:unregister <name>` remains available when the task is specifically expressed as unregistering a plugin.
+For an ordinary package, the command uses the application's package manager to remove the dependency and update both `package.json` and the lockfile, then removes only the Skill directories recorded as owned by that package. For an `@nocobase/app-plugin-*` package, it reuses the `plugin unregister` workflow so Client, Server, and CLI registrations are removed together with the dependency and its Skills. `pnpm nocobase plugin unregister <name>` remains available when the task is specifically expressed as unregistering a plugin.
 
-An older application with the new CLI but without the script can run `pnpm nocobase package remove @nocobase/example`. If the installed CLI does not provide `package remove`, update `@nocobase/nb3-cli` first; as a compatibility fallback on a version that already provides `skills:sync`, remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, make sure the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing a package already absent from the manifest to `package:remove` can clean its recorded historical Skill ownership without uninstalling any other package.
+After an interrupted or manual removal, make sure the manifest no longer declares the package and run a full `pnpm nocobase skills sync` to reconcile stale package-owned output. Passing a package already absent from the manifest to `package remove` can clean its recorded historical Skill ownership without uninstalling any other package.
 
 ### Diagnostics
 
-| Script                      | What it does                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
-| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
+| Command                       | What it does                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm nocobase dist retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
+| `pnpm nocobase dist check`    | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
 
 #### Deploying to a different machine
 
 `pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. The build already ran `pnpm install --prod` inside `dist/`, so the tree ships with its `node_modules` and needs no install step on the server. It also keeps its own `package.json`, so `pnpm install --prod` run inside `dist/` on the server reinstalls exactly the same set: useful when `node_modules` was left out of a copy, never required after a normal build.
 
-Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react`, `sonner` and the rest never reach a server that has no browser in it.
+Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react` and the rest never reach a server that has no browser in it.
 
 **The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
 
@@ -440,6 +447,38 @@ Combine it with `--target` when the archive is for another machine:
 pnpm build --target linux-x64 --tar
 ```
 
+#### Building a Docker image
+
+`Dockerfile` builds this application from its sources into a production image. From the project root:
+
+```bash
+docker build -t my-app .
+```
+
+The build runs `pnpm build` inside the container, and the image holds only `dist/` and `config.example.yml`. `Dockerfile.dockerignore` keeps `config.yml`, `.env`, `storage/`, and `node_modules` out of the build context; keep the two files together. Settings in `.env` do not reach the image, so pass them to the container as environment variables.
+
+The client is not tied to a mount path, so choose it when starting the container, `-e APP_BASE_PATH=/crm`; the image defaults to `/main`. The build runs on the builder's own architecture and cross-targets native modules, so `docker buildx build --platform linux/amd64,linux/arm64` compiles nothing under emulation.
+
+To package a `dist/` you have already built instead, build it for the image's platform and pass `DIST=prebuilt`. Nothing is installed or compiled in the image, and it works in any directory that holds the build:
+
+```bash
+pnpm build --target linux-x64
+docker build --platform linux/amd64 --build-arg DIST=prebuilt -t my-app .
+```
+
+`--target` and `--platform` must name the same architecture: Docker otherwise builds for the machine it runs on, which on Apple silicon is `linux/arm64`. The image build fails unless `dist/` was built for `linux` with glibc, the image's architecture, and Node 24, and unless it records `nocobase.relocatable`, which an `@nocobase/app-cli` from before relocatable builds does not. `dist/.env`, which `pnpm build` fills from your local `.env` files, is never copied in. One `dist/` covers one architecture, so a multi-platform image has to be built from source.
+
+Run it with the configuration and data mounted, never copied in:
+
+```bash
+docker run -d --init -p 13000:13000 \
+  -v ./config.yml:/app/config.yml:ro \
+  -v ./storage:/app/storage \
+  my-app
+```
+
+The image runs as the `node` user without pnpm, so `storage/` must be writable by UID 1000, and application commands run through `node dist/cli/index.js`, as in `docker run --rm -v ./config.yml:/app/config.yml:ro my-app node dist/cli/index.js config check`.
+
 #### Adding a dependency
 
 Where a package goes depends on which half of your application imports it.
@@ -481,7 +520,7 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written by `pnpm nocobase config init` and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
 
 Two settings decide where the application is reachable:
 
@@ -506,7 +545,7 @@ The form is generated from safe Channel test metadata; Email tests require an ad
 
 ## Working with an AI agent
 
-`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm skills:sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
+`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm nocobase skills sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
 
 ## License
 
@@ -559,7 +598,7 @@ BIGINT 使用字符串 `9007199254740992` / `9007199254740993`，不会先转成
 应用启动时按现有配置执行迁移与种子。关闭自动执行时，在模板目录运行：
 
 ```sh
-pnpm db:apply
+pnpm nocobase db apply
 ```
 
 页面使用带引号的 JSON 值和实际 JavaScript 类型标签展示普通读取，并支持按 increments、INTEGER、BIGINT、DECIMAL、FLOAT 或 DOUBLE 升序 / 降序排序，以及查看各字段的 COUNT、SUM、AVG、MIN、MAX。DECIMAL 保留数据库格式；SQLite 的底层存储精度限制、
@@ -582,7 +621,7 @@ The application owns `numericExamples`: an `increments` ID, a unique sample key,
 and INTEGER, BIGINT, DECIMAL(30,6), FLOAT and DOUBLE fields. The migration is
 `database/main/migrations/202609100002_create_numeric_examples.ts`; initial data
 lives in `database/main/seeds/202609100002_seed_numeric_examples.ts`. Run
-`pnpm db:apply` when automatic startup tasks are disabled. Seeds insert missing
+`pnpm nocobase db apply` when automatic startup tasks are disabled. Seeds insert missing
 sample keys and preserve existing records on repeat runs.
 
 Seven fixed samples include 42, negatives, zero, the adjacent BIGINT values
@@ -598,7 +637,7 @@ This is Examples-only teaching content, so it does not change Default or Hub.
 
 ## Runtime paths and application creation
 
-`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory. That storage is `storage/` under the deployment root unless `APP_STORAGE_DIR` names another directory, absolute or relative to the deployment root; set it when the deployment root itself is replaced on every release, as an installer that keeps one directory per release does.
 
 `server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.
 

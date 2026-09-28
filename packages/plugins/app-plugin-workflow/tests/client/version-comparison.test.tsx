@@ -9,6 +9,7 @@ import {
   screen,
   within,
 } from '@testing-library/react';
+import { Toast } from '@base-ui/react/toast';
 import { I18nProvider } from '@nocobase/i18n/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowComparisonDialog } from '../../client/workflow-management/version-comparison.js';
@@ -117,6 +118,7 @@ describe('version comparison entry', () => {
           </Routes>
         </MemoryRouter>
       </I18nProvider>,
+      { wrapper: Toast.Provider },
     );
     await openMenu('Version');
     expect(
@@ -148,6 +150,7 @@ describe('version comparison entry', () => {
           </Routes>
         </MemoryRouter>
       </I18nProvider>,
+      { wrapper: Toast.Provider },
     );
     await openMenu('Version');
     expect(await screen.findByRole('menuitem', { name: 'v1' })).toBeDefined();

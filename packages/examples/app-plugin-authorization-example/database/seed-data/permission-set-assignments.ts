@@ -33,16 +33,10 @@ export function permissionSetAssignmentRows(context: SalesSeedContext) {
       permissionSetKey: 'example-sales-manager',
     },
     {
-      id: 'example-team:proposal',
-      subjectType: 'example.sales.team',
-      subjectId: 'proposal',
+      id: 'example-role:proposal',
+      subjectType: 'user',
+      subjectId: users.proposal,
       permissionSetKey: 'example-sales-engineer',
-    },
-    {
-      id: 'example-team:delivery',
-      subjectType: 'example.sales.team',
-      subjectId: 'delivery',
-      permissionSetKey: 'example-sales-delivery',
     },
   ].map((row) => ({ ...row, ...timestamps(context) }));
 }

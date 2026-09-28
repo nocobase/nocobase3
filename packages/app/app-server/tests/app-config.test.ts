@@ -78,6 +78,27 @@ describe('AppConfig', () => {
     expect(() => new AppConfig().loadFile('config.ini')).toThrow('Unsupported');
   });
 
+  /** The merged result cannot tell a key the application knows from one only a file ever set — the layers can. */
+  it('exposes the defaults and the source values as separate read-only layers', async () => {
+    const file = path.join(directory(), 'config.yml');
+    writeFileSync(file, 'feature:\n  port: 2000\ndatabse:\n  typo: true\n');
+    const config = new AppConfig().loadFile(file);
+    await config.loadAll();
+    config.mergeDefaults({ feature: { port: 1000, label: 'default' } });
+
+    const layers = config.layers();
+    expect(Object.keys(layers.defaults)).toEqual(['feature']);
+    expect(Object.keys(layers.overrides).sort()).toEqual([
+      'databse',
+      'feature',
+    ]);
+    expect(layers.overrides).toMatchObject({ feature: { port: 2000 } });
+
+    // Copies: changing one does not reach the configuration it was taken from.
+    (layers.overrides.feature as { port: number }).port = 9;
+    expect(config.get('feature.port')).toBe(2000);
+  });
+
   it('merges code defaults below file and explicit environment sources and reloads them', async () => {
     const file = path.join(directory(), 'config.toml');
     writeFileSync(file, '[feature]\nport=2000\nlabel="file"');

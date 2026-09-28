@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "1.0.0-beta.32",
+  "version": "1.0.0-beta.39",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.32"
+    "defaultTemplateVersion": "1.0.0-beta.39"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -20,9 +20,8 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-template-print": "workspace:*",
     "@nocobase/app-skills": "workspace:*",
-    "@nocobase/app-plugin-notification-provider": "workspace:^",
-    "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
@@ -84,7 +83,6 @@
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "catalog:",
-    "sonner": "^2.0.3",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
     "tsc-alias": "^1.9.2",
@@ -93,8 +91,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/app-tools": "workspace:^",
-    "@shadcn/react": "^0.3.1"
+    "@shadcn/react": "^0.3.1",
+    "tar": "catalog:"
   },
   "files": [
     ".env.example",
@@ -107,7 +105,6 @@
     "database/*/migrations/**",
     "database/*/seeds/**",
     "public",
-    "scripts",
     "tests",
     "index.html",
     "components.json",
@@ -119,6 +116,8 @@
     "tsconfig.node.json",
     "tsconfig.server.json",
     "ecosystem.config.js",
+    "Dockerfile",
+    "Dockerfile.dockerignore",
     "config.example.yml",
     "README.MD",
     "AGENTS.md",
@@ -133,10 +132,10 @@
     "directory": "packages/templates/app-template-hub"
   },
   "scripts": {
-    "postinstall": "pnpm skills:sync",
-    "dev": "node --import tsx ./scripts/dev.mjs",
-    "build": "node ./scripts/build.mjs",
-    "start": "node ./scripts/start.mjs",
+    "postinstall": "nocobase skills sync",
+    "dev": "nocobase dev",
+    "build": "nocobase build",
+    "start": "nocobase start",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
@@ -146,24 +145,7 @@
     "format:check": "prettier . --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "nocobase": "tsx ./cli/index.ts",
-    "collections:generate": "tsx ./cli/index.ts app collections generate",
-    "db:apply": "tsx ./cli/index.ts app db apply",
-    "db:reset": "tsx ./cli/index.ts app db reset",
-    "db:repair": "tsx ./cli/index.ts app db repair",
-    "db:rollback": "tsx ./cli/index.ts app db rollback",
-    "db:redo": "tsx ./cli/index.ts app db redo",
-    "db:unlock": "tsx ./cli/index.ts app db unlock",
-    "db:doctor": "tsx ./cli/index.ts app db doctor",
-    "plugin:register": "nocobase plugin register",
-    "plugin:inspect": "nocobase plugin inspect",
-    "plugin:unregister": "nocobase plugin unregister",
-    "plugin:update": "nocobase plugin update",
-    "package:remove": "nocobase package remove",
-    "skills:sync": "nocobase skills sync",
-    "server:deps:retarget": "node ./scripts/server-deps.mjs retarget",
-    "server:deps:verify": "node ./scripts/server-deps.mjs verify"
+    "test:coverage": "vitest run --coverage"
   },
   "browserslist": {
     "production": [
@@ -184,12 +166,11 @@
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
-    "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",

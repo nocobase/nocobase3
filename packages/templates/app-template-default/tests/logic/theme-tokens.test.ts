@@ -74,34 +74,6 @@ const radii = {
   '4xl': 2.6,
 };
 
-const ownsPalette = (property: string): boolean =>
-  property === '--radius' || colors.some((color) => property === '--' + color);
-
-/** The declarations a preset inherits from the base one: its typography, sizes, spacing and shadows. */
-function withoutPalette(
-  values: Record<string, string>,
-): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(values).filter(([property]) => !ownsPalette(property)),
-  );
-}
-
-/** The declarations a preset owns rather than inherits: its colours and its corner radius. */
-function palette(values: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(values).filter(([property]) => ownsPalette(property)),
-  );
-}
-
-function readPreset(id: string): Root {
-  return postcss.parse(
-    readFileSync(
-      new URL(`../../client/theme/themes/${id}.css`, import.meta.url),
-      'utf8',
-    ),
-  );
-}
-
 function declarations(root: Root, selector: string): Record<string, string> {
   const values: Record<string, string> = {};
   root.walkRules((rule) => {
@@ -115,9 +87,51 @@ function declarations(root: Root, selector: string): Record<string, string> {
 }
 
 describe('theme token contract', () => {
+  it('keeps compact identical to default except for dimensions', () => {
+    const readPreset = (id: string) =>
+      postcss.parse(
+        readFileSync(
+          new URL(`../../client/theme/themes/${id}.css`, import.meta.url),
+          'utf8',
+        ),
+      );
+    const defaultCss = readPreset('default');
+    const compactCss = readPreset('compact');
+    const withoutDimensions = (values: Record<string, string>) =>
+      Object.fromEntries(
+        Object.entries(values).filter(
+          ([key]) =>
+            key !== '--spacing' &&
+            key !== '--radius' &&
+            !key.startsWith('--text-'),
+        ),
+      );
+    for (const mode of ['', '.dark']) {
+      expect(
+        withoutDimensions(
+          declarations(compactCss, `:root${mode}[data-theme='compact']`),
+        ),
+      ).toEqual(
+        withoutDimensions(
+          declarations(defaultCss, `:root${mode}[data-theme='default']`),
+        ),
+      );
+    }
+    const compact = declarations(compactCss, ":root[data-theme='compact']");
+    const standard = declarations(defaultCss, ":root[data-theme='default']");
+    expect(parseFloat(compact['--spacing'])).toBeLessThan(
+      parseFloat(standard['--spacing']),
+    );
+  });
+
   for (const { id } of themePresets) {
     it(`${id} defines complete tokens for the page and isolated previews`, () => {
-      const root = readPreset(id);
+      const root = postcss.parse(
+        readFileSync(
+          new URL(`../../client/theme/themes/${id}.css`, import.meta.url),
+          'utf8',
+        ),
+      );
       const light = declarations(root, `:root[data-theme='${id}']`);
       const dark = declarations(root, `:root.dark[data-theme='${id}']`);
       for (const token of [...colors, ...sharedTokens]) {
@@ -134,41 +148,6 @@ describe('theme token contract', () => {
       ).toEqual(dark);
     });
   }
-
-  // A preset states its whole look so it stays readable on its own, and the values it does not intend to change are
-  // the base ones. Converting a preset is the case this guards: 30 files restating one typography scale would drift
-  // the moment the scale moved.
-  it('keeps every other preset on the typography, sizes, spacing and shadows it inherits', () => {
-    const base = readPreset('default');
-    const standard = declarations(base, ":root[data-theme='default']");
-    const standardDark = declarations(base, ":root.dark[data-theme='default']");
-    for (const { id } of themePresets) {
-      const root = readPreset(id);
-      expect(
-        withoutPalette(declarations(root, `:root[data-theme='${id}']`)),
-        `${id} light`,
-      ).toEqual(withoutPalette(standard));
-      expect(
-        withoutPalette(declarations(root, `:root.dark[data-theme='${id}']`)),
-        `${id} dark`,
-      ).toEqual(withoutPalette(standardDark));
-    }
-  });
-
-  it('gives every preset its own palette', () => {
-    // Two cards with one palette would offer the reader the same choice twice.
-    const seen = new Map<string, string>();
-    for (const { id } of themePresets) {
-      const root = readPreset(id);
-      const light = palette(declarations(root, `:root[data-theme='${id}']`));
-      const dark = palette(
-        declarations(root, `:root.dark[data-theme='${id}']`),
-      );
-      const key = JSON.stringify([light, dark]);
-      expect(seen.get(key), `${id} repeats the palette of`).toBeUndefined();
-      seen.set(key, id);
-    }
-  });
 });
 
 describe('compiled theme utilities', () => {

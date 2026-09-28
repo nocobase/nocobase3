@@ -24,7 +24,7 @@ database:
   connections:
     main:
       dialect: sqlite
-      filename: /app/dist/storage/database.sqlite
+      filename: /app/storage/database.sqlite
       debug: false
       schemaManagement: managed
       migrations:

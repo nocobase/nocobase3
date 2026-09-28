@@ -18,9 +18,11 @@ client:
     # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
 users:
-  # Used only when seeding an empty user table.
+  # The first administrator, created only when seeding an empty user table. Changing these values later does not
+  # reset an existing account. Replace the password before exposing the application.
   initialAdmin:
-    username: nocobase
+    username: nocobase # 3–30 letters, digits, underscores or dots; stored lowercase
+    email: admin@nocobase.com # stored lowercase; also signs in
     password: admin123
 
 auth:
@@ -38,44 +40,29 @@ session:
 
 notification:
   channels:
-    - type: in-app
-      enabled: true
-      providers:
-        - type: database
-          name: default
+    inbox:
+      provider: in-app
 
-    # Uncomment and configure this channel to send email notifications.
-    # - type: email
-    #   enabled: true
-    #   providers:
-    #     - type: smtp
-    #       name: smtp
-    #       host: smtp.example.com
-    #       port: 587
-    #       secure: false
-    #       auth:
-    #         user: mailer@example.com
-    #         pass: replace-with-the-smtp-password
-    #       from: NocoBase <mailer@example.com>
-    #
-    #     - type: resend
-    #       name: resend
-    #       apiKey: replace-with-the-resend-api-key
-    #       from: NocoBase <notifications@example.com>
+    # Uncomment and configure independent email Channels.
+    # system-email:
+    #   provider: smtp
+    #   host: smtp.example.com
+    #   port: 587
+    #   auth:
+    #     user: ${SMTP_USER}
+    #     pass: ${SMTP_PASSWORD}
+    #   from: notifications@example.com
+    # marketing-email:
+    #   provider: resend
+    #   apiKey: ${RESEND_API_KEY}
+    #   from: marketing@example.com
 
-    # Uncomment and configure this channel to send IM notifications.
-    # - type: im
-    #   enabled: true
-    #   providers:
-    #     - type: feishu-webhook
-    #       name: feishu
-    #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
-    #       secret: replace-with-the-feishu-secret
-    #
-    #     - type: dingtalk-webhook
-    #       name: dingtalk
-    #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
-    #       secret: replace-with-the-dingtalk-secret
+    # ops-feishu:
+    #   provider: feishu-webhook
+    #   webhookUrl: ${FEISHU_WEBHOOK_URL}
+    # ops-dingtalk:
+    #   provider: dingtalk-webhook
+    #   webhookUrl: ${DINGTALK_WEBHOOK_URL}
 
 # Declarative LLM services are loaded from application config.
 # Reload application config after editing; no process restart or AI resource rescan is required.
@@ -118,8 +105,8 @@ database:
         autoRun: true
     # An existing database another system owns: NocoBase reads its schema and never changes it, and no
     # migrations or seeds run against it. Titles, descriptions and relations the schema cannot express are
-    # read from database/<connection>/collections/<name>/metadata.json — edit those files and rerun
-    # `pnpm collections:generate`. The externalCrm connection in server/config/database.ts is the example;
+    # read from database/<connection>/metadata/<name>.json, one hand-written metadata document per Collection.
+    # Rerun `pnpm nocobase collections generate --connection externalCrm` after editing them to refresh the gitignored cache. The externalCrm connection in server/config/database.ts is the example;
     # point it at the real database here to replace the SQLite stand-in.
     # externalCrm:
     #   dialect: postgres
@@ -129,8 +116,8 @@ database:
     #   password: ${CRM_DATABASE_PASSWORD}
     #   schemaManagement: external
     #   naming: { underscored: true, tablePrefix: crm_ }
-    #   # Optional: read metadata from another collections directory instead of this connection's own.
-    #   # metadataStore: database/shared-crm/collections
+    #   # Optional: read metadata from another directory in the same layout instead of this connection's own.
+    #   # metadataStore: database/shared-crm/metadata
 
 snowflake:
   # Assign a unique worker ID to each concurrently running instance.

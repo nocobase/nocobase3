@@ -10,7 +10,7 @@ import {
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permission-sets';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -103,6 +103,26 @@ describe('@nocobase/app-plugin-users API routes', () => {
     expect(JSON.stringify(logger.info.mock.calls)).not.toContain(
       'do-not-log-this',
     );
+  });
+
+  it('reports a failure inside the service as a server error, not as invalid input', async () => {
+    const service = userService();
+    // A defect in a service or a registered role scope commonly surfaces as a
+    // TypeError. Answering 400 for it would hide the fault from monitoring and
+    // hand the caller an internal message.
+    vi.mocked(service.disable).mockRejectedValue(
+      new TypeError("Cannot read properties of undefined (reading 'key')"),
+    );
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service),
+    );
+
+    const response = await router.request('/users/user-1/disable', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.not.toContain('INVALID_USER_INPUT');
   });
 
   it('returns 409 when an administrator creates a duplicate identity', async () => {

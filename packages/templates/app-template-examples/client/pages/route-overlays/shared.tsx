@@ -7,6 +7,7 @@ import { useRouteOverlay } from '@/components/use-route-overlay';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast';
 
 function CloseAction() {
   const { t } = useTranslation();
@@ -66,26 +67,41 @@ export function RouteOverlayExample({
           />
           {t('routeOverlays.allowClose')}
         </label>
-        {!nested && (
+        <div className='flex flex-wrap gap-2'>
+          {!nested && (
+            <Button
+              render={
+                <Link
+                  to={{
+                    pathname: variant === 'dialog' ? 'drawer' : 'dialog',
+                    search: location.search,
+                  }}
+                />
+              }
+              nativeButton={false}
+              variant='outline'
+            >
+              {t(
+                variant === 'dialog'
+                  ? 'routeOverlays.openDrawer'
+                  : 'routeOverlays.openDialog',
+              )}
+            </Button>
+          )}
+          {/* Raised from inside the overlay, so it shows whether the toaster stays above it. */}
           <Button
-            render={
-              <Link
-                to={{
-                  pathname: variant === 'dialog' ? 'drawer' : 'dialog',
-                  search: location.search,
-                }}
-              />
-            }
-            nativeButton={false}
             variant='outline'
+            onClick={() =>
+              toast.add({
+                type: 'success',
+                title: t('routeOverlays.toastTitle'),
+                description: t('routeOverlays.toastDescription'),
+              })
+            }
           >
-            {t(
-              variant === 'dialog'
-                ? 'routeOverlays.openDrawer'
-                : 'routeOverlays.openDialog',
-            )}
+            {t('routeOverlays.showToast')}
           </Button>
-        )}
+        </div>
         <p className='text-sm text-muted-foreground'>
           {t('routeOverlays.historyHint')}
         </p>

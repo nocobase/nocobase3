@@ -5,6 +5,5 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.d.mts"]
+  "include": ["src/**/*.ts", "src/**/*.d.mts"]
 }

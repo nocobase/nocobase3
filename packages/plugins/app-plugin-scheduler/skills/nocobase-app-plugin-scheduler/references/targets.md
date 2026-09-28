@@ -114,7 +114,7 @@ If notification arrives before the accepted reference is persisted, it can retur
 
 After registration, declare `target: { type: 'your-stable-type', config: { ... } }`. The extension owner handles parameters, business permissions, credentials, and the executor. Application integration does not require changing Scheduler's private registry, tables, or dispatch Job.
 
-`registerTarget()` is the target extension surface. The target registry, the schedule store and the occurrence history are private to the plugin; read and change schedules through the HTTP API, and synchronize through `nb3 schedule:sync`.
+`registerTarget()` is the target extension surface. The target registry, the schedule store and the occurrence history are private to the plugin; read and change schedules through the HTTP API, and synchronize through `pnpm nocobase scheduler sync`.
 
 ## Shared Result Protocol
 

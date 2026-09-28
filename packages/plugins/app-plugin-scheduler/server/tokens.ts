@@ -31,7 +31,7 @@ export interface SchedulerService {
 /**
  * The scheduler's one public service, carrying its one extension point.
  * Reading and changing schedules is reachable through the plugin's HTTP API
- * and its `schedule:sync` command; the store, the target registry and the
+ * and its `scheduler sync` command; the store, the target registry and the
  * occurrence history stay private to this package.
  */
 export const schedulerServiceToken: ServiceToken<SchedulerService> =

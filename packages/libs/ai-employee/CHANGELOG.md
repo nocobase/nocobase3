@@ -1,5 +1,46 @@
 # @nocobase/ai-employee
 
+## 0.2.0-beta.8
+
+### Minor Changes
+
+- c2aceaa: Give an agent execution one state, one context and a result contract
+
+  **Breaking.** An agent execution is now described once and reached through public types:
+
+  - **One `AgentState`.** `parseAgentState()` builds it where the request body is parsed, and it reaches `createAIEmployee()` whole. `sessionId` is required, `model` is `{ llmService, model }`, and `messages` is `handoffMessages`, the message a sub-agent receives when the user answers its pending question with a new turn. `AgentServiceFactory` replaces `model` once, against the employee's own policy, and `SubAgentsDispatcher` replaces `sessionId` for a sub-agent's own conversation. `AgentRequest` keeps only what varies per call — `userMessages`, `userDecisions`, `messageId`, `writer`, `signal`, and `runtime` for middleware data — so a request can no longer ask for a model the employee does not allow.
+  - **One `AgentContext`**: `actor`, `state`, `deps`, `runtime` (the host's `logger`, `translate` and `getHeader`) and `availableSkills`. `ai`, `database`, `repositories` and `services` are gone. A tool declares the container tokens it needs in `dependencies` and reads them, resolved and typed, from `ctx.deps`; a token the container cannot resolve fails the run naming the tool and the token. The context is bound when a tool is built, so an `agentContext` key on a request reaches nothing. The data tools declare an authorized, read-only reader rather than the database.
+  - **Required identity.** `CreateEmployeeOptions` and `CreateAgentOptions` require `actor` and `runtime`, and `createAgent()` requires `sessionId`; neither fills in an implicit root any more. `CreateEmployeeOptions.tools`, which nothing could fill, is removed: an employee's tools come from its own `skillSettings`, narrowed by the conversation's `skillSettings`.
+  - **A result contract.** `invoke()`, `resumeInvoke()` and `forkInvoke()` return `AgentInvokeResult`: the assistant turn as `message` in this package's `AIMessageInput` shape, or `null`; `structuredResponse` when the request passes a Zod `responseFormat`; and `interrupt: { id, actions }` when a tool paused the run for approval. An interrupted `invoke()` records the paused calls as `stream()` does, so a decision can be attached to them and the run resumed with `interrupt.id`.
+  - **A conversation to run in.** `AIConversationsManager.create()` resolves to `CreatedAIConversation`, whose `sessionId` is a `string`.
+  - **Exports.** `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, `AgentInvokeInterrupt`, `AgentInterruptAction`, `AgentStreamEvent` and `CreatedAIConversation` are exported from `@nocobase/app-plugin-ai-employee/server`.
+
+  Migrating: pass `state` and `runtime` to `createAIEmployee()` instead of `sessionId`, `webSearch`, `frontendTools` or `execution`; read `ctx.runtime.logger` rather than `ctx.logger`, and `ctx.state.handoffMessages` rather than `ctx.state.messages`; declare a token in `dependencies` wherever a tool read `ctx.ai`, `ctx.database`, `ctx.repositories` or `ctx.services`; pass the bound context as `buildTool(entity, ctx)`'s second argument; read `result.message` rather than `result.messages`; and pass an `actor` everywhere one was left out.
+
+- c2aceaa: Keep LLM services, provider model lists and an employee's model limits consistent
+
+  - **`overrideEnabledModels`.** A configured LLM service kept the `enabledModels` stored in the database once it existed, so a model list in `config.yml` took effect only when the service was first created, and a service created without one stayed at zero models whatever was added later. A service that sets `overrideEnabledModels: true` has its configured list reapplied on every load; edits made in AI settings are then overwritten. It governs the list alone: a service an administrator disabled stays disabled even when its entry says `enabled: true`. It defaults to `false`.
+  - **What `enabledModels` constrains.** It scopes the model selector, `ai:listAllEnabledModels` and the model `resolveModel()` falls back to; a caller that names a model is not checked against it. The documentation now says so, and `ModelService` loses `requireModel()`, an unreachable check that suggested otherwise.
+  - **An employee's own models.** For an employee with its own model settings, the chat offers only the models it lists that are currently enabled, in its order, opens on the first, and sends the one it shows; the server runs no other. When none of them is enabled, the chat offers no model and cannot send, and the server rejects the run with a `CONFIGURATION_ERROR` rather than falling back to another model. Installed copies of the `nocobase-ai` Registry item get the chat half by updating.
+  - **Breaking: provider model lists.** `LLMProviderMeta.models` is typed for embedding model suggestions alone, and `ai:listModels` answers only `model=EMBEDDING`. Chat models are listed from each provider's own API through `ai:listProviderModels`, and the hard-coded chat model lists nothing read are removed, as is the Tongyi provider, which was commented out and exported nothing.
+
+- c2aceaa: Fix attachments, direct provider calls, and web search on a provider that cannot search
+
+  - **Attachments.** DeepSeek received no images, and a user dropping a screenshot was told the type is unsupported; images now go to the model as content blocks. Ollama failed the whole turn on a PDF; it now sends images as content blocks and documents through the document loader. An uploaded file kept only the ASCII characters of its name, so `客户截图.png` was stored as `.png`, and once a message was sent its attachments came back from history with no preview address, so an image showed as a plain file; `DriveFileStorage` now stores the name as given, minus any directory part, while only the storage key is reduced to safe characters, and history gives every stored attachment the preview address its upload returned.
+  - **Web search that cannot search.** `subAgentWebSearch` asked for built-in search and invoked the model even on a provider that ignores the request, which then answered from training data with sources that looked real, reported as success. It now checks `supportWebSearch` and `webSearchModels` first, and returns an error naming what did not happen and what to use instead.
+  - **Tools on a direct call.** `LLMProvider.prepareChain()` — and so `invoke()` and `stream()` — built `context.tools` with each tool's position in the list where its context belongs, and never resolved its `dependencies`. `AIChatContext` gains an optional `toolContext` (`{ agentContext, container? }`), and tools are built with the new `buildAgentTools()`, giving each the context and resolved `deps` an agent does; `createToolContext()` and `ToolRuntimeContext` are exported beside it, and the plugin's agents use the same function. Without `toolContext` a tool that requires a context fails when called. Built-in web search is meant for a call without tools: passing both now logs a warning, and binding is otherwise unchanged.
+  - **Breaking (types only).** `AIChatContext.systemPrompt`, `decisions` and `middleware`, which a provider never read, are removed, and so is the unused `AIChatContextOptions`. A direct call's system prompt is a `role: 'system'` message at the start of `messages`; a paused run is resumed through `AgentService.resumeInvoke()`.
+
+### Patch Changes
+
+- c2aceaa: Make MCP servers configurable only in `config.yml`, and keep their state
+
+  - **Environment references.** `${NAME}` in `ai.mcpServers` — `headers`, `args`, `env` and `url` — was sent to the server literally; it is now expanded as it is for LLM services, and a missing variable becomes an empty string.
+  - **Persistent state.** The enable switch and tool permissions set in AI settings reset at every start. Servers are now stored in `aiMcpClients`: `enabled` in `config.yml` applies when a server is first created and the switch is the administrator's after that, and tool permissions are saved on the server's row in a new `toolPermissions` column, added by a migration. Both belong to the server's name, so removing or renaming a server in `config.yml` discards them. The row holds the configuration with every `${NAME}` expanded, so a credential in `headers` or `env` is stored in plain text and is part of database backups.
+  - **An unreachable server.** One server that did not answer stopped the application from starting. It is now skipped with a warning naming it, whose reason reduces any URL to its origin, and the other servers keep their tools. Nothing retries until the client is rebuilt — at start, or when a server is switched on or off.
+  - **Unknown tools.** Setting the permission of a tool no connected server exposes answered success and kept nothing; `aiMcpServers:updateToolPermission` now answers 404, and `MCPServerManager.updateMCPToolPermission()` throws.
+  - **Breaking:** `AIResourceRegistrarOptions.mcpDirectory` and the protected `AIResourceRegistrar.loadMCP()` are removed, since the configuration sync deleted any server registered that way on its next run. Move such servers into `config.yml`. `registerAIResources()` runs tools, then Skills, then employees.
+
 ## 0.2.0-beta.7
 
 ### Patch Changes

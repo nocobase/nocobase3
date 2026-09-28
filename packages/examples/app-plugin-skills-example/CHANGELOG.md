@@ -1,5 +1,21 @@
 # @nocobase/app-plugin-skills-example
 
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [cda1175]
+- Updated dependencies [e286e0d]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [80ef702]
+  - @nocobase/app-plugin-authentication@1.0.0-beta.21
+  - @nocobase/app-server@1.0.0-beta.25
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.3
 
 ### Patch Changes

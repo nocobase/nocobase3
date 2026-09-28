@@ -23,8 +23,8 @@ beforeEach(() => {
   fixture.canReset = true;
   fixture.request.mockClear();
 });
-it('requires confirmation before resetting the shared practice records', async () => {
-  render(<OverviewPage />);
+it('requires confirmation before resetting the shared practice records, and hides the control from demo accounts', async () => {
+  const { unmount } = render(<OverviewPage />);
   fireEvent.click(screen.getByRole('button', { name: 'reset.action' }));
   expect(screen.getByText('reset.confirm')).toBeInTheDocument();
   expect(fixture.request).not.toHaveBeenCalled();
@@ -40,8 +40,8 @@ it('requires confirmation before resetting the shared practice records', async (
     path: '/authorization-example/reset',
     json: {},
   });
-});
-it('hides reset controls from demo accounts', () => {
+  unmount();
+
   fixture.canReset = false;
   render(<OverviewPage />);
   expect(

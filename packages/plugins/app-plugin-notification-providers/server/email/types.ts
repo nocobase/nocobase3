@@ -4,15 +4,15 @@ export interface EmailRecipient {
 
 export interface EmailMessage {
   readonly subject: string;
-  readonly text: string;
+  readonly to: string | readonly [string, ...string[]];
+  readonly text?: string;
   readonly html?: string;
   readonly from?: string;
   readonly replyTo?: string;
 }
 
 export interface SmtpProviderConfig {
-  readonly type: 'smtp';
-  readonly name: string;
+  readonly provider: 'smtp';
   readonly enabled?: boolean;
   readonly host: string;
   readonly port: number;
@@ -23,19 +23,14 @@ export interface SmtpProviderConfig {
 }
 
 export interface ResendProviderConfig {
-  readonly type: 'resend';
-  readonly name: string;
+  readonly provider: 'resend';
   readonly enabled?: boolean;
   readonly apiKey: string;
   readonly from: string;
   readonly replyTo?: string;
 }
 
-export interface EmailChannelConfig {
-  readonly type: 'email';
-  readonly enabled: boolean;
-  readonly providers: readonly (SmtpProviderConfig | ResendProviderConfig)[];
-}
+export type EmailChannelConfig = SmtpProviderConfig | ResendProviderConfig;
 
 export interface PreparedEmailMessage {
   readonly to: string;

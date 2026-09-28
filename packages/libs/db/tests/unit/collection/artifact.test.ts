@@ -144,6 +144,7 @@ describe('serializeCollectionArtifactManifest', () => {
     const manifest = JSON.parse(text) as CollectionArtifactManifest;
     expect(manifest).toEqual({
       formatVersion: 1,
+      generated: true,
       connection: 'main',
       dialect: 'sqlite',
       schemaManagement: 'managed',

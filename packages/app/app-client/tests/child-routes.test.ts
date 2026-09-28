@@ -20,8 +20,19 @@ it('resolves nested pages and pathless navigation groups as trees', () => {
               name: 'orders',
               path: '/orders',
               navigation: { title: 'Orders' },
+              authz: {
+                resource: { type: 'page', id: 'orders' },
+                action: 'access',
+              },
               componentLoader,
-              children: [{ name: 'detail', path: ':orderId', componentLoader }],
+              children: [
+                {
+                  name: 'detail',
+                  path: ':orderId',
+                  authz: 'skip',
+                  componentLoader,
+                },
+              ],
             },
           ],
         },
@@ -42,8 +53,16 @@ it('retains settings page children separately from navigation groups', () => {
         {
           name: 'orders',
           path: '/orders',
+          authz: 'skip',
           componentLoader,
-          children: [{ name: 'detail', path: ':orderId', componentLoader }],
+          children: [
+            {
+              name: 'detail',
+              path: ':orderId',
+              authz: 'skip',
+              componentLoader,
+            },
+          ],
         },
       ]),
     },
@@ -62,8 +81,16 @@ it('overrides nested pages without losing their children', () => {
         {
           name: 'orders',
           path: '/orders',
+          authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
           componentLoader,
-          children: [{ name: 'detail', path: ':orderId', componentLoader }],
+          children: [
+            {
+              name: 'detail',
+              path: ':orderId',
+              authz: 'skip',
+              componentLoader,
+            },
+          ],
         },
       ]),
     },
@@ -84,6 +111,10 @@ it('rejects dynamic menu links and changed child authentication', () => {
             name: 'detail',
             path: '/orders/:id',
             navigation: { title: 'Detail' },
+            authz: {
+              resource: { type: 'page', id: 'detail' },
+              action: 'access',
+            },
             componentLoader,
           },
         ]),
@@ -98,12 +129,17 @@ it('rejects dynamic menu links and changed child authentication', () => {
           {
             name: 'orders',
             path: '/orders',
+            authz: {
+              resource: { type: 'page', id: 'orders' },
+              action: 'access',
+            },
             componentLoader,
             children: [
               {
                 name: 'detail',
                 path: ':id',
                 auth: 'optional',
+                authz: 'skip',
                 componentLoader,
               },
             ],
@@ -118,7 +154,14 @@ it('rejects duplicate app names and conflicting child paths across groups', () =
   const group = (name: string, childName: string, path: string) => ({
     name,
     navigation: { title: name },
-    children: [{ name: childName, path, componentLoader }],
+    children: [
+      {
+        name: childName,
+        path,
+        authz: { resource: { type: 'page', id: childName }, action: 'access' },
+        componentLoader,
+      },
+    ],
   });
   expect(() =>
     resolveAppClientContributions([
@@ -149,7 +192,14 @@ it('freezes recursive declarations and rejects overrides of groups', () => {
     {
       name: 'group',
       navigation: { title: 'Group' },
-      children: [{ name: 'page', path: '/page', componentLoader }],
+      children: [
+        {
+          name: 'page',
+          path: '/page',
+          authz: { resource: { type: 'page', id: 'page' }, action: 'access' },
+          componentLoader,
+        },
+      ],
     },
   ]);
   expect(Object.isFrozen(declaration.routes[0]?.children?.[0])).toBe(true);
@@ -178,7 +228,9 @@ it('resolves multiple navigation groups without changing descendant authenticati
               name: 'inner',
               path: 'catalog',
               navigation: { title: 'Inner' },
-              children: [{ name: 'page', path: 'items', componentLoader }],
+              children: [
+                { name: 'page', path: 'items', authz: 'skip', componentLoader },
+              ],
             },
           ],
         },
@@ -202,8 +254,11 @@ it('preserves the parent and sibling loaders when overriding a nested page', asy
         {
           name: 'parent',
           path: '/parent',
+          authz: { resource: { type: 'page', id: 'parent' }, action: 'access' },
           componentLoader: async () => ({ default: original }),
-          children: [{ name: 'child', path: 'child', componentLoader }],
+          children: [
+            { name: 'child', path: 'child', authz: 'skip', componentLoader },
+          ],
         },
       ]),
     },
@@ -226,7 +281,14 @@ it('keeps settings and dev trees independent while preserving repeated page IDs 
     name,
     path: name,
     navigation: { title: name },
-    children: [{ name: 'details', path: 'details', componentLoader }],
+    children: [
+      {
+        name: 'details',
+        path: 'details',
+        authz: { resource: { type: 'page', id: 'details' }, action: 'access' },
+        componentLoader,
+      },
+    ],
   }));
   const result = resolveAppClientContributions([
     {
@@ -249,8 +311,18 @@ it('keeps settings and dev trees independent while preserving repeated page IDs 
 
 it('allows existing top-level settings page names at distinct paths', () => {
   const definitions = [
-    { name: 'details', path: '/one', componentLoader },
-    { name: 'details', path: '/two', componentLoader },
+    {
+      name: 'details',
+      path: '/one',
+      authz: { resource: { type: 'page', id: 'details' }, action: 'access' },
+      componentLoader,
+    },
+    {
+      name: 'details',
+      path: '/two',
+      authz: { resource: { type: 'page', id: 'details' }, action: 'access' },
+      componentLoader,
+    },
   ];
   const result = resolveAppClientContributions([
     {
@@ -277,6 +349,7 @@ it('names a child page through breadcrumb without putting it in a menu', () => {
           name: 'orders',
           path: '/orders',
           navigation: { title: 'Orders' },
+          authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
           componentLoader,
           children: [
             // A menu entry needs a static path, so a detail page can only name itself through `breadcrumb`.
@@ -284,9 +357,15 @@ it('names a child page through breadcrumb without putting it in a menu', () => {
               name: 'detail',
               path: ':orderId',
               breadcrumb: { title: 'Order detail' },
+              authz: 'skip',
               componentLoader,
             },
-            { name: 'preview', path: 'preview', componentLoader },
+            {
+              name: 'preview',
+              path: 'preview',
+              authz: 'skip',
+              componentLoader,
+            },
           ],
         },
       ]),
@@ -315,6 +394,7 @@ it('keeps the menu title and the breadcrumb title independent', () => {
           path: '/orders',
           breadcrumb: { title: 'All orders' },
           navigation: { title: 'Orders' },
+          authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
           componentLoader,
         },
       ]),
@@ -337,6 +417,10 @@ it('rejects a blank title', () => {
             name: 'orders',
             path: '/orders',
             breadcrumb: { title: '  ' },
+            authz: {
+              resource: { type: 'page', id: 'orders' },
+              action: 'access',
+            },
             componentLoader,
           },
         ]),
@@ -356,6 +440,10 @@ it('rejects an empty breadcrumb title', () => {
             path: '/orders',
             breadcrumb: { title: '' },
             navigation: { title: 'Orders' },
+            authz: {
+              resource: { type: 'page', id: 'orders' },
+              action: 'access',
+            },
             componentLoader,
           },
         ]),

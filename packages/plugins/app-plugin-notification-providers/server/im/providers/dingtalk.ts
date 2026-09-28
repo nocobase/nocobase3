@@ -12,17 +12,16 @@ import { formatImText } from '../channel.js';
 import { evaluateJsonResult } from '../result.js';
 
 export interface DingTalkWebhookProviderConfig {
-  readonly type: 'dingtalk-webhook';
-  readonly name: string;
+  readonly provider: 'dingtalk-webhook';
   readonly enabled?: boolean;
   readonly webhookUrl: string;
   readonly secret?: string;
 }
 
 export function defineDingTalkWebhookProviderConfig(
-  input: Omit<DingTalkWebhookProviderConfig, 'type'>,
+  input: Omit<DingTalkWebhookProviderConfig, 'provider'>,
 ): DingTalkWebhookProviderConfig {
-  return { type: 'dingtalk-webhook', ...input };
+  return { provider: 'dingtalk-webhook', ...input };
 }
 
 export function createDingTalkWebhookProviderDefinition(): NotificationProviderDefinition<
@@ -31,6 +30,7 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
 > {
   return {
     type: 'dingtalk-webhook',
+    messageType: 'im',
     label: notificationProviderText(
       'test.providers.dingtalkWebhook',
       'DingTalk webhook',
@@ -39,7 +39,6 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
     async createProvider(_context, config) {
       validateDingTalkConfig(config);
       return {
-        name: config.name,
         type: 'dingtalk-webhook',
         async send({
           message,

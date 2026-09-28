@@ -1,52 +1,41 @@
 import type { NotificationChannelContext } from '@nocobase/app-plugin-notification';
-import { describe, expect, it, vi } from 'vitest';
-
+import { expect, it } from 'vitest';
 import { createEmailChannelDefinition } from '../server/email/channel.js';
 
-describe('Email Channel common input', () => {
-  it('resolves recipients and renders content with overrides', async () => {
-    const resolveUserEmail = vi.fn(
-      async (userId: string, provider: { readonly name: string }) =>
-        provider.name === 'primary' ? `${userId}@example.com` : undefined,
-    );
-    const definition = createEmailChannelDefinition({ resolveUserEmail });
-    const channel = await definition.createChannel(
-      {} as NotificationChannelContext,
-      { type: 'email', enabled: true, providers: [] },
-    );
-
-    const provider = { name: 'primary', type: 'smtp' };
-    expect(
-      await channel.resolveRecipient?.({
-        recipient: { type: 'user', id: 'user-1' },
-        provider,
-      }),
-    ).toEqual({ address: 'user-1@example.com' });
-    expect(resolveUserEmail).toHaveBeenCalledWith('user-1', provider);
-    expect(
-      await channel.resolveRecipient?.({
-        recipient: {
-          type: 'email',
-          address: 'alice@example.com',
-        },
-        provider,
-      }),
-    ).toEqual({ address: 'alice@example.com' });
-    expect(
-      await channel.resolveRecipient?.({
-        recipient: { type: 'phone', number: '123' },
-        provider,
-      }),
-    ).toBeUndefined();
-    expect(
-      channel.render?.({
-        content: { title: 'Approval complete', body: 'Review the result.' },
-        override: { subject: 'Custom subject', html: '<p>Review</p>' },
-      }),
-    ).toEqual({
-      subject: 'Custom subject',
-      text: 'Review the result.',
-      html: '<p>Review</p>',
-    });
-  });
+it('validates native email addresses and accepts HTML-only messages', async () => {
+  const channel = await createEmailChannelDefinition().createChannel(
+    { logger: {} } as NotificationChannelContext,
+    { provider: 'smtp', host: 'localhost', port: 587 },
+  );
+  const input = {
+    to: ['a@example.com', 'b@example.com'] as const,
+    subject: 'Approved',
+    html: '<p>Approved</p>',
+  };
+  const validated = channel.validateMessage(input);
+  expect(validated.recipients).toEqual([
+    { address: 'a@example.com' },
+    { address: 'b@example.com' },
+  ]);
+  expect(validated.message).toMatchObject(input);
+  for (const to of [
+    undefined,
+    [],
+    '',
+    'bad',
+    ['valid@example.com', 'bad'],
+    { type: 'user', id: '123' },
+  ]) {
+    expect(() => channel.validateMessage({ ...input, to })).toThrow();
+  }
+  for (const message of [
+    { ...input, subject: '' },
+    { ...input, html: undefined },
+    { ...input, text: 12 },
+  ])
+    expect(() => channel.validateMessage(message)).toThrow();
+  expect(
+    channel.validateMessage({ ...input, actionUrl: 'javascript:alert(1)' })
+      .message,
+  ).not.toHaveProperty('actionUrl');
 });

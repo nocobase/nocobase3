@@ -1,47 +1,17 @@
 # Channel and Provider Extensions
 
-## Ownership split
+A message handler implements `NotificationChannelDefinition` with `type`, `createChannel`, and optional safe test-field metadata. Its runtime `validateMessage(unknown)` returns a validated complete message and native recipient snapshots before any persistence. `prepare` builds the Provider payload for one Delivery and honors its abort signal. Resolve no application-user contact fields here.
 
-A Channel defines the business-to-delivery adaptation:
-
-- Resolve an optional generic `NotificationRecipient` into a Channel recipient; return a recipient directly when the Channel supports recipientless delivery.
-- Render common `NotificationContent` plus a Channel override into a Channel message.
-- Prepare a Provider-ready payload with an abort signal.
-
-A Channel may also contribute a narrow test adapter: safe field descriptors and conversion/validation into the normal send inputs. A Provider may contribute a public label and server-only configuration validation. Never place Provider configuration or secrets in a test descriptor.
-
-A Provider defines one transport implementation:
-
-- Expose stable `name` and `type` matching configuration.
-- Submit the prepared payload before the deadline and honor cancellation.
-- Return `accepted`, known `failed`, or `submission_unknown` without throwing transport details across the contract.
-- Close network resources when the manager shuts down.
-- Declare whether repeated submission with the same `deliveryId` is idempotent and, if applicable, the retention window.
-
-Keep network I/O and credentials in the Provider. Keep user/address resolution, message rendering, and Provider-independent validation in the Channel. Keep persistence, queueing, leases, retries, and logs in the core manager.
-
-## Definition contracts
-
-Implement a `NotificationChannelDefinition<TConfig, TRecipient, TMessage, TPrepared>` with a stable `type` and `createChannel(context, config)`. Its optional `test` adapter owns only safe fields and `toSendInput()`. Implement a `NotificationProviderDefinition<TConfig, TPrepared>` with a stable Provider `type` and `createProvider(context, config)`. Reuse the same validation helper from optional `validateConfig()` and `createProvider()` so activation and runtime creation cannot disagree.
-
-Register the Channel once, then register every Provider definition under that Channel type before the first runtime creation:
+A Provider implements `NotificationProviderDefinition` with globally unique `type`, `messageType`, optional `validateConfig`, and `createProvider(context, config)`. Configuration has a `provider` discriminator and flat transport options. The runtime exposes the same `type`, `send`, optional capabilities, and optional `close`. There is no Provider instance name.
 
 ```ts
-import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
-
-const notificationRegistry = app.container.resolve(
-  notificationExtensionRegistryToken,
-);
-notificationRegistry
+const registry = app.container.resolve(notificationExtensionRegistryToken);
+registry
   .registerChannel(createSmsChannelDefinition())
-  .registerProvider('sms', createExampleSmsProviderDefinition());
+  .registerProvider(createExampleSmsProviderDefinition());
 ```
 
-Extension plugins use `notificationExtensionRegistryToken`; they do not
-resolve `notificationServiceToken` or depend on the manager lifecycle and
-route surface.
-
-Duplicate Channel types and duplicate Provider types within a Channel are rejected. At runtime, Provider names from configuration must be unique within the Channel.
+Provider definitions reference their reusable message handler through `messageType`. Extend `NotificationChannelSchemas` with the Provider identifier and its recipient/message schema so configured Channel names infer the correct `messages` values. Extension plugins register through `notificationExtensionRegistryToken` before activation; consumers send through `notificationServiceToken`.
 
 ## Result classification
 
@@ -51,11 +21,11 @@ Return `failed` when the service definitively rejected or did not submit the mes
 
 - `never` for invalid recipient/content/configuration and other permanent failures.
 - `same_provider` for bounded transient failures such as a retryable rate limit or temporary network failure.
-- Set `retryAfterMs` only from a validated Provider hint or bounded local policy.
+- Set `retryAfterMs` only from a validated Provider hint. The notification runtime uses the configured fixed retry interval when this field is absent.
 
 Return `submission_unknown` when the request may have reached the Provider but confirmation was lost. This prevents automatic duplicates.
 
-Declare Provider retry safety with `capabilities.idempotency`. Omitted capabilities are treated as `{ idempotency: { supported: false } }`. Set `{ supported: true }` only when repeated submissions with the same core-supplied `deliveryId` are idempotent; include `retentionMs` when the guarantee expires. The built-in database Provider is durable for the Delivery lifetime, Resend is bounded to its declared retention, and SMTP plus the built-in Webhook Providers omit capabilities because they do not claim idempotency.
+Declare Provider-side duplicate protection with `capabilities.idempotency`. This describes the external Provider contract only; it does not make an `unknown` Delivery directly retryable. Omitted capabilities are treated as `{ idempotency: { supported: false } }`. Set `{ supported: true }` only when repeated submissions with the same core-supplied `deliveryId` are idempotent; include `retentionMs` when the guarantee expires. The built-in database Provider is durable for the Delivery lifetime, Resend is bounded to its declared retention, and SMTP plus the built-in Webhook Providers omit capabilities because they do not claim idempotency.
 
 Use the core error categories: `authentication`, `channel`, `configuration`, `content`, `network`, `provider`, `rate_limit`, `recipient`, `storage`, `timeout`, or `unknown`. Error messages must be actionable and sanitized.
 
@@ -69,14 +39,4 @@ Use the core error categories: `authentication`, `channel`, `configuration`, `co
 
 ## Extension tests
 
-- Channel resolves each allowed recipient, supports an omitted recipient when applicable, and rejects unsupported shapes without external I/O.
-- Renderer merges common content and overrides without mutating input.
-- Preparation validates payload and honors abort.
-- Provider returns accepted with the external id on a confirmed success.
-- Permanent errors use `never`; transient errors use bounded `same_provider` retry; uncertain timeouts return `submission_unknown`.
-- Provider identity matches configuration and duplicates are rejected.
-- Credentials and message/recipient secrets do not appear in logs or errors.
-- Manager integration persists Deliveries/Attempts, retries correctly, recovers leases, and closes Provider resources.
-- Authentication and authorization protect any extension-owned management or test routes.
-
-Run lint, typecheck, test, and build in both the extension package and the consuming application package when public types or registration change.
+Cover complete message validation, native recipient expansion, atomic rejection before enqueue, final recipient validation where applicable, Provider result classification, timeout/abort, same-Provider retries, lease recovery, resource cleanup, and redacted errors. Verify globally unique Provider registration and that persisted deliveries cannot move to a replacement Channel or Provider. Run package checks and consuming application checks after changing public contracts.

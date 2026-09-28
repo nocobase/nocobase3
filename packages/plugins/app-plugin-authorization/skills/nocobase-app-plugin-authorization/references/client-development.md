@@ -1,12 +1,12 @@
 # Client routes, action visibility and record eligibility
 
-Use the sales example's three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. The overview is an authenticated demonstration guide; its `authz: 'skip'` is not a pattern for business pages.
+The sales workflow has three independent pages: Projects, Quotes and Orders. Delivery specialists enter Orders without gaining entry to Projects or Quotes. Declare `authz` on every entry page; nothing is inferred from the route name. A page that needs only sign-in, such as an overview, declares `authz: 'skip'`; business pages never do.
 
 ## Register the runtime first
 
 Register the main authorization client factory and server plugin alongside authentication. The authorization React provider depends on the authentication provider; retain their normal composition order. A package dependency alone does not activate either side. Optional rule screens require their owning installed Skills; follow [capability discovery](optional-capabilities.md) before using them. See [runtime setup](runtime-api.md).
 
-Application-owned pages belong in the App's `client/routes.ts` and page modules. A reusable plugin contributes routes through its client declaration. Use stable page IDs that match server registration and the permission-set page grant:
+Application-owned pages belong in the App's `client/routes.ts` and page modules. A reusable plugin contributes routes through its client declaration. Use stable page ids that match the permission-set page grant:
 
 ```ts
 import { defineAppRoutes } from '@nocobase/app-client/plugins';
@@ -23,7 +23,7 @@ export default defineAppRoutes([
 ]);
 ```
 
-The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. The management UI discovers grantable pages from the client's normalized route declarations. Registering the same stable page ID server-side with `authz.pages.add({ name: 'sales.quotes', title, actions: ['access'] })` also supplies metadata to server consumers; server registration is not required for client page discovery. The page and business permission categories remain visible when empty and explain how to ask AI to develop their resources; those placeholders grant no access. Page navigation groups come from client navigation, whereas business and administration groups come from `resourceGroups`. A page grant opens an entry; business data needs its own action grants.
+The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. Declare `authz` on the first page of every path. A nested page that omits it inherits its nearest ancestor page's value, and a child's own value overrides it. A first page that omits it still registers, with a development warning, but defaults to `'unrestricted'` on a protected App page or a settings page, which only identities with unrestricted access such as root may open or see, and to `'skip'` on a guest, optional or dev page; always declare it rather than rely on that. Declare `'skip'` for a page that needs no check beyond sign-in, and remember that `'skip'` does not bypass parent guards. `'unrestricted'` may also be declared for a root-only page; nothing grants it, so it is never listed in the permission workspace. The permission workspace lists every route whose `authz` checks `page` `access`, under the Pages entry with its navigation groups as resource groups, from the client route tree in menu order; there is no server page registration. `authz.pages.grant('sales.quotes')` builds the matching grant for seeds and provisioning. Composites and settings items are listed under the subsections the server places them in with `authz.ui.place` (subsections are added with `authz.ui.sections.add`), or under their default section's "Other". A page grant opens an entry; business data needs its own action grants, and renaming a page id orphans the grants that reference it.
 
 ## Check feature visibility
 
@@ -31,15 +31,15 @@ The page module default-exports a React component. Translate the navigation key 
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 
 const permission = useCan({
-  resource: { type: 'resource', id: 'sales.quotes' },
+  resource: { type: 'composite', id: 'sales.quotes' },
   action: 'submit',
 });
 // permission: { can, isPending, error, retry }
 ```
 
-Call Hooks inside a component or custom Hook. While pending or failed, `can` is false; show a loading state or retryable permission error without exposing stale actions. `{ enabled: false }` as the second argument skips a check. Never call Hooks conditionally. A successful check means the feature is granted, not that a particular quote can be submitted.
+Call Hooks inside a component or custom Hook. While pending or failed, `can` is false; show a loading state or retryable permission error without exposing stale actions. `{ enabled: false }` as the second argument skips a check. `useCan('unrestricted')` passes only for an identity whose snapshot is unrestricted, such as root; route guards and menus use it for `authz: 'unrestricted'` pages. Never call Hooks conditionally. A successful check means the feature is granted, not that a particular quote can be submitted.
 
-React code can obtain the shared client with `useAuthorizationClient()`. Outside React, resolve `authorizationClientToken` from the App container and call `client.can({ resource, action })`. `useAuthorizationRevision()` supports custom state that must reload on invalidation. Avoid a module-global client or permission response surviving an identity change. The standard provider and `useCan` already handle session invalidation; do not duplicate snapshot caching.
+React code can obtain the shared client with `useAuthorizationClient()`. Outside React, resolve `authorizationClientToken` from the App container and call `client.can({ resource, action })`, or `client.can('unrestricted')` to ask whether the identity has unrestricted access. `useAuthorizationRevision()` supports custom state that must reload on invalidation. Avoid a module-global client or permission response surviving an identity change. The standard provider and `useCan` already handle session invalidation; do not duplicate snapshot caching. After a change that affects permissions, call `client.invalidate()` so the next check reloads `snapshot()`.
 
 ## Obtain row eligibility from the server
 
@@ -61,7 +61,7 @@ export function SubmitQuote({
 }) {
   const api = useApiClient();
   const access = useCan({
-    resource: { type: 'resource', id: 'sales.quotes' },
+    resource: { type: 'composite', id: 'sales.quotes' },
     action: 'submit',
   });
   const [pending, setPending] = useState(false);
@@ -104,18 +104,18 @@ export function SubmitQuote({
 }
 ```
 
-This component illustrates a customer-owned endpoint and a `canSubmit` response field that its server must implement. The installed example's paths start with `authorization-example/sales/`; use the actual owning endpoint rather than mixing the two prefixes. Replace the minimal button/status markup with App UI primitives and translation keys in production. `api.request` uses `path`, `method`, `query` and `json`; it returns the parsed response body. Do not repeat `/api` or the deployment mount, construct a second API client, or import server registration modules into the client bundle to obtain a resource name. Share small browser-safe identifiers when needed.
+This component illustrates a customer-owned endpoint and a `canSubmit` response field that its server must implement. Replace the minimal button/status markup with App UI primitives and translation keys in production. `api.request` uses `path`, `method`, `query` and `json`; it returns the parsed response body. Do not repeat `/api` or the deployment mount, construct a second API client, or import server registration modules into the client bundle to obtain a resource name. Share small browser-safe identifiers when needed.
 
 After a write, reload affected records and relationship controls, preserve the current selected order where possible, and recompute eligibility. For stale state, forbidden and validation responses, display the server outcome and refresh relevant data; never force the optimistic state to remain submitted after rejection. No client flag can replace server enforcement.
 
 ## Delivery relation controls
 
-The order relation endpoint returns existing relations, permitted relation operations and target options derived from the `manageRelations` policy. Offer only allowed create/update/upsert/connect/disconnect/set/delete controls. Existing relation reads use the View policy; mutation eligibility also requires an eligible order and business state. Team options come from the relation target scope, for example active teams. They do not use the authorization-management subject picker.
+The order relation endpoint returns existing relations, permitted relation operations and target options derived from the `manageRelations` policy. Offer only allowed create/update/upsert/connect/disconnect/set/delete controls. Existing relation reads use the View policy; mutation eligibility also requires an eligible order and business state. Carrier options come from the relation target scope, for example active carriers. They do not use the authorization-management subject picker.
 
-Example request bodies for the current plugin's `POST authorization-example/sales/orders/:id/relations` are:
+Request bodies for an App-owned `POST sales/orders/:id/relations` endpoint look like:
 
 ```json
-{ "deliveryTeam": { "connect": { "id": "delivery" } } }
+{ "carrier": { "connect": { "id": "express" } } }
 ```
 
 ```json
@@ -130,20 +130,20 @@ Example request bodies for the current plugin's `POST authorization-example/sale
 {
   "collaborators": {
     "connect": [
-      { "where": { "id": "proposal" }, "through": { "note": "Review" } }
+      { "where": { "id": "freight" }, "through": { "note": "Review" } }
     ]
   }
 }
 ```
 
-These are demonstration IDs; fetch actual options in a customer App. Never expose protected foreign keys or internal join fields as a shortcut around a denied relation operation. A rejected nested mutation must leave the whole write rolled back.
+These are sample ids; fetch actual options from the endpoint. Never expose protected foreign keys or internal join fields as a shortcut around a denied relation operation. A rejected nested mutation must leave the whole write rolled back.
 
 ## Settings screens
 
-Use `defineSettingsRoutes` with a stable `settings` resource ID/action, a lazy page module and navigation keys. Do not put `/settings` in its declared path. Register corresponding administration actions on the server and check read/mutation capabilities separately in endpoints. Existing permission-set and rule screens already provide assignment and scope editing; reuse them rather than building another editor.
+Use `defineSettingsRoutes` with a lazy page module, navigation keys and `authz: { resource: { type: 'settings', id }, action: 'read' }` naming a settings item registered on the server with `authz.settings.add`. Declare `authz` on every settings entry page: one that omits it defaults to `'unrestricted'`, which only root may open. Do not put `/settings` in its declared path. Check read and each write action separately in the endpoints. Existing permission-set and rule screens already provide assignment and data scope editing; reuse them rather than building another editor.
 
-For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save/error states. Read-only access should render data without writable controls. Options/search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; the example's team authorization picker relies on existing management permissions.
+For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save and error states. Read-only access renders data without writable controls. Options and search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; a subject picker relies on the calling management permission.
 
-Verify menu and direct URL behavior, no-grant/page-only/action-only cases, pending/failed checks, session switching, out-of-scope rows, stale transitions, relation target constraints and post-save refresh. Perform actual API requests as ordinary users in addition to UI checks.
+Verify menu and direct URL behavior, no-grant, page-only and action-only cases, pending and failed checks, session switching, out-of-scope rows, stale transitions, relation target constraints and post-save refresh. Perform actual API requests as ordinary users in addition to UI checks.
 
-Settings routes and their standalone detail routes use the relevant `settings` capability, never `page/access`. Their grants belong to composed administration resources. Do not add the Settings route tree to ordinary page discovery, and do not infer authorization ownership solely from whether a route was declared with `defineAppRoutes`.
+Settings routes and their standalone detail routes check the relevant `settings` item, never `page` `access`, so they are not listed as pages in the permission workspace.

@@ -257,7 +257,7 @@ export default function BubbleExamplePage(): ReactElement {
                   <li>
                     {t('components.bubble.richStepOne')}{' '}
                     <code className='rounded bg-muted px-1 py-0.5 font-mono text-xs'>
-                      pnpm migrate
+                      pnpm nocobase db apply
                     </code>
                   </li>
                   <li>{t('components.bubble.richStepTwo')}</li>

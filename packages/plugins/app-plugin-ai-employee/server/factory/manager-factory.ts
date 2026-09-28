@@ -9,21 +9,13 @@ import { cachingToken } from '@nocobase/app-server/caching';
 import { databaseManagerToken } from '@nocobase/db';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
-import {
-  createServiceToken,
-  type ServiceResolver,
-  type ServiceToken,
-} from '@nocobase/service-provider';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 import type { AIFileEntity } from '../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import { AIFileMetadataRepository } from '../repository/file-storage/ai-file-metadata-repository.js';
-import {
-  type RepositoryFactory,
-  repositoryFactoryToken,
-} from './repository-factory.js';
-import { aiManagerToken } from '../provider/ai-employee.js';
+import type { RepositoryFactory } from './repository-factory.js';
 import { AIConversationsManager } from '../manager/ai-conversations-manager.js';
 import { AIEmployeesManager } from '../manager/ai-employees-manager.js';
 import { BuiltInManager } from '../manager/built-in-manager.js';
@@ -34,11 +26,13 @@ import {
   createWorkContextHandler,
   type WorkContextHandler,
 } from '../manager/work-context/index.js';
+import {
+  aiManagerToken,
+  managerFactoryToken,
+  repositoryFactoryToken,
+} from '../tokens.js';
 
-export const managerFactoryToken: ServiceToken<ManagerFactory> =
-  createServiceToken<ManagerFactory>(
-    '@nocobase/app-plugin-ai-employee/internal/managers',
-  );
+export { managerFactoryToken };
 
 export interface ManagerFactoryOptions {
   readonly container: ServiceResolver;

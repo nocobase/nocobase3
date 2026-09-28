@@ -66,21 +66,37 @@ async function template(kind = 'app'): Promise<void> {
 const run = (argv: string[]) =>
   createApp({ argv, version: 'test', binary: 'create-app' });
 describe('JSON creation flow', () => {
-  it('installs by default and reports actionable configuration without leaking secrets', async () => {
+  it('installs by default and hands the configuration step to config init', async () => {
     await template();
-    expect(await run(['crm', '--dialect', 'postgres', '--json'])).toBe(0);
+    expect(await run(['crm', '--json'])).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      command: 'create-app',
       status: 'success',
-      projectCreated: true,
-      dependenciesInstalled: true,
-      configurationRequired: true,
-      nextCommands: ['pnpm dev'],
+      result: {
+        directory: path.join(root, 'crm'),
+        projectCreated: true,
+        dependenciesInstalled: true,
+        configured: false,
+        nextCommands: [
+          'pnpm nocobase config init',
+          'pnpm nocobase config check',
+          'pnpm dev',
+        ],
+      },
+      warnings: [],
     });
     expect(installDependencies).toHaveBeenCalledOnce();
-    const config = await readFile(path.join(root, 'crm/config.yml'), 'utf8');
-    expect(config).toContain('dialect: postgres');
+    // Creation writes no configuration at all, so there is no secret for it to leak and nothing for `config init` to
+    // refuse to overwrite.
+    await expect(readFile(path.join(root, 'crm/config.yml'))).rejects.toThrow();
     expect(stdout).not.toContain('secret');
     await expect(readFile(path.join(root, 'crm/.env'))).rejects.toThrow();
+    // The registry the templates came from has to survive into the project, or the next `pnpm add @nocobase/…` the
+    // user runs resolves against the public npm.
+    expect(await readFile(path.join(root, 'crm/.npmrc'), 'utf8')).toContain(
+      '@nocobase:registry=',
+    );
   });
   it('returns a nonzero install failure and retains the generated project', async () => {
     await template();
@@ -89,15 +105,39 @@ describe('JSON creation flow', () => {
     );
     expect(await run(['crm', '--json'])).toBe(1);
     expect(JSON.parse(stdout)).toMatchObject({
-      status: 'error',
-      stage: 'install',
-      projectCreated: true,
-      dependenciesInstalled: false,
-      nextCommands: ['pnpm install'],
+      ok: false,
+      status: 'failure',
+      error: {
+        code: 'INSTALL_FAILED',
+        message: 'installation failed',
+        // Runs as given from wherever the caller is: the project is named rather than assumed to be the cwd.
+        suggestions: [
+          {
+            run: {
+              command: 'pnpm',
+              args: ['--dir', path.join(root, 'crm'), 'install'],
+            },
+          },
+        ],
+        details: {
+          stage: 'install',
+          directory: path.join(root, 'crm'),
+          projectCreated: true,
+          dependenciesInstalled: false,
+        },
+      },
     });
-    expect(await readFile(path.join(root, 'crm/config.yml'), 'utf8')).toContain(
-      'database.sqlite',
-    );
+    expect(
+      await readFile(path.join(root, 'crm/package.json'), 'utf8'),
+    ).toContain('"name": "crm"');
+  });
+  it('prints the document on one line, which app-installer reads by line', async () => {
+    await template();
+    expect(await run(['crm', '--json'])).toBe(0);
+    // `pnpm create` prints pnpm's own notices around the document, so app-installer's `parseCreateResult` takes the
+    // last line of stdout that parses; an indented document would leave it nothing to read.
+    expect(stdout.trim()).not.toContain('\n');
+    expect(JSON.parse(stdout)).toMatchObject({ ok: true });
   });
   it('supports no-install and Hub startup commands', async () => {
     await template('hub');
@@ -105,19 +145,31 @@ describe('JSON creation flow', () => {
       await run(['crm', '--template', 'hub', '--json', '--no-install']),
     ).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
-      dependenciesInstalled: false,
-      configurationRequired: false,
-      nextCommands: ['pnpm install', 'pnpm build', 'pnpm start'],
+      result: {
+        dependenciesInstalled: false,
+        nextCommands: [
+          'pnpm install',
+          'pnpm nocobase config init',
+          'pnpm nocobase config check',
+          'pnpm build',
+          'pnpm start',
+        ],
+      },
     });
     expect(installDependencies).not.toHaveBeenCalled();
   });
-  it.each([['--json'], ['crm', '--json', '--dialect', 'invalid']])(
+  it.each([['--json'], ['crm', '--json', '--template-tag', 'invalid']])(
     'rejects invalid input before download: %s',
     async (...argv) => {
       expect(await run(argv)).toBe(2);
       expect(JSON.parse(stdout)).toMatchObject({
-        status: 'error',
-        stage: 'input',
+        ok: false,
+        status: 'failure',
+        error: {
+          code: 'INVALID_USAGE',
+          suggestions: [],
+          details: { stage: 'input', projectCreated: false },
+        },
       });
       expect(downloadTemplate).not.toHaveBeenCalled();
     },
@@ -127,38 +179,43 @@ describe('JSON creation flow', () => {
     await writeFile(path.join(root, 'crm/keep.txt'), 'existing content');
     expect(await run(['crm', '--json'])).toBe(1);
     expect(JSON.parse(stdout)).toMatchObject({
-      status: 'error',
-      stage: 'scaffold',
-      projectCreated: false,
+      status: 'failure',
+      error: {
+        code: 'SCAFFOLD_FAILED',
+        details: { stage: 'scaffold', projectCreated: false },
+      },
     });
     expect(downloadTemplate).not.toHaveBeenCalled();
     expect(await readFile(path.join(root, 'crm/keep.txt'), 'utf8')).toBe(
       'existing content',
     );
   });
-  it.each(['postgres', 'oracle'])(
-    'states verification limits for %s even after a successful install',
-    async (dialect) => {
-      await template();
-      expect(await run(['crm', '--dialect', dialect, '--json'])).toBe(0);
-      expect(JSON.parse(stdout)).toMatchObject({
-        status: 'success',
-        dependenciesInstalled: true,
-        databaseConnectionVerified: false,
-        warnings: [
-          expect.stringContaining(
-            `The selected ${dialect} driver and database connection have not been verified`,
-          ),
-        ],
-      });
-      expect(verifyDriver).toHaveBeenCalledWith(path.join(root, 'crm'));
-    },
-  );
-  it('returns help as JSON', async () => {
-    expect(await run(['--json', '--help'])).toBe(0);
+  /** The one native addon every application gets, through the SQLite driver the templates depend on. */
+  it('verifies the native driver after installing', async () => {
+    await template();
+    expect(await run(['crm', '--json'])).toBe(0);
     expect(JSON.parse(stdout)).toMatchObject({
       status: 'success',
-      help: expect.stringContaining('--dialect'),
+      result: { dependenciesInstalled: true },
+    });
+    expect(verifyDriver).toHaveBeenCalledWith(path.join(root, 'crm'));
+  });
+  it('returns help and the version as JSON', async () => {
+    expect(await run(['--json', '--help'])).toBe(0);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      status: 'success',
+      result: { help: expect.stringContaining('nocobase config init') },
+    });
+    stdout = '';
+    expect(await run(['--version', '--json'])).toBe(0);
+    expect(JSON.parse(stdout)).toStrictEqual({
+      schemaVersion: 1,
+      ok: true,
+      command: 'create-app',
+      status: 'success',
+      result: { version: 'test' },
+      warnings: [],
     });
   });
 });

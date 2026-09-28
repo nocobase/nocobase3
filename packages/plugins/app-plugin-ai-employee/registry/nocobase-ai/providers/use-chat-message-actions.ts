@@ -7,9 +7,9 @@ import {
 } from 'react';
 import type { AIChatAction, AIChatState } from './chat-reducer.js';
 import { findChatMessage, isAIToolPart } from './chat-message-utils.js';
-import { getAIWorkContextToolScope } from './page-context.js';
+import { getAIWorkContextToolScope } from './page-context-utils.js';
 import type { NocoBaseChatTransport } from './chat-transport.js';
-import type { useAI } from './ai-provider.js';
+import type { useAI } from './ai-context.js';
 import type { AIConversationRuntimeContext } from './use-chat-runtime.js';
 import { useAutomaticToolApproval } from './use-automatic-tool-approval.js';
 import type {
@@ -77,6 +77,7 @@ const getToolInvocationContext = ({
 export function useChatMessageActions({
   ai,
   activeChat,
+  getChat,
   stateRef,
   chatSurfaceOpenRef,
   transportsRef,
@@ -94,6 +95,7 @@ export function useChatMessageActions({
 }: {
   ai: AIContextValue;
   activeChat: Chat<AIChatMessage>;
+  getChat: (conversationId: string) => Chat<AIChatMessage>;
   stateRef: MutableRefObject<AIChatState>;
   chatSurfaceOpenRef: MutableRefObject<boolean>;
   transportsRef: MutableRefObject<Map<string, NocoBaseChatTransport>>;
@@ -475,7 +477,9 @@ export function useChatMessageActions({
         workContext: getConversationWorkContext(conversationId),
       };
       setEditingMessageId(serverMessageId ?? targetMessage.id);
-      activeChat.messages = messages.slice(0, index);
+      // Resolve the chat here rather than mutating the one this render closed
+      // over: the store write belongs to the callback, not to the render.
+      getChat(conversationId).messages = messages.slice(0, index);
       setConversationAttachments(
         conversationId,
         targetMessage.metadata?.attachments ?? [],
@@ -498,6 +502,7 @@ export function useChatMessageActions({
       activeChat,
       dispatch,
       editingSnapshotRef,
+      getChat,
       getConversationAttachments,
       getConversationWorkContext,
       refreshConversationMessages,
@@ -516,7 +521,7 @@ export function useChatMessageActions({
       snapshot &&
       snapshot.conversationId === stateRef.current.activeConversationId
     ) {
-      activeChat.messages = snapshot.messages;
+      getChat(snapshot.conversationId).messages = snapshot.messages;
       setConversationAttachments(snapshot.conversationId, snapshot.attachments);
       setConversationWorkContext(snapshot.conversationId, snapshot.workContext);
       dispatch({
@@ -528,9 +533,9 @@ export function useChatMessageActions({
     setEditingMessageId(undefined);
     editingSnapshotRef.current = undefined;
   }, [
-    activeChat,
     dispatch,
     editingSnapshotRef,
+    getChat,
     setConversationAttachments,
     setConversationWorkContext,
     setEditingMessageId,

@@ -7,6 +7,7 @@ export default function AIConversationsSettingsPage(): ReactElement {
     <SettingsShell
       title='Conversations'
       description='conversations.pageDescription'
+      fill
     >
       <ConversationCenterPage />
     </SettingsShell>

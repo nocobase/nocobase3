@@ -1,15 +1,19 @@
 import { useApiClient, type ApiClient } from '@nocobase/app-client';
 import { useMemo } from 'react';
 import type {
-  AccessScope,
   AuthorizationSubject,
   AuthorizationRecordOption,
+  RecordSelection,
 } from '@nocobase/app-plugin-authorization/client/management';
 export interface RestrictionRule {
   key: string;
   title?: string | { key: string; ns: string };
   resource: { type: string; id: string };
-  actions: readonly { action: string; scopeKey?: string; scope: AccessScope }[];
+  actions: readonly {
+    action: string;
+    scopeKey?: string;
+    selection: RecordSelection;
+  }[];
   subjects: readonly AuthorizationSubject[];
   reason?: string;
 }

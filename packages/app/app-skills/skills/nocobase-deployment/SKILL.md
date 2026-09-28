@@ -13,7 +13,7 @@ Do not treat a process being healthy as proof that the application is usable. A 
 
 Before building or changing a server, record:
 
-- The deployment mode: standalone Node.js, standalone Docker, Hub platform, or publishing an App to an existing Hub.
+- The deployment mode: standalone Node.js managed by app-installer, standalone Node.js by hand, standalone Docker, Hub platform, or publishing an App to an existing Hub.
 - The source revision, application version, Node.js and pnpm versions, target CPU/OS/libc, and the destination host.
 - Whether the destination uses the existing database and storage, a new database, or a restore. Business data is not included in `dist`, `dist.tar.gz`, or a Docker image.
 - The application base path, public origin, database type, external services, reverse proxy, persistent directories, and service identity.
@@ -35,16 +35,18 @@ pnpm lint
 Run the checks that the project actually defines; do not invent a test or lint command when it is absent. Build for the destination platform:
 
 ```bash
-APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
+pnpm build --target linux-x64 --node-version 24 --tar
 ```
 
-`pnpm build` creates the production `dist` tree and installs or retargets production dependencies for the selected platform. `--tar` additionally creates `storage/exports/dist.tar.gz`, containing `dist/` and `config.example.yml`; it does not contain the runtime configuration, database, uploads, or other business data. Inspect the archive before transfer:
+`pnpm build` creates the production `dist` tree and installs or retargets production dependencies for the selected platform. The build is not tied to a mount path: the client uses relative asset URLs, and the server serves it at the `APP_BASE_PATH` it runs with, so one archive can be mounted at `/crm`, at the origin root, or by a Hub. `--tar` additionally creates `storage/exports/dist.tar.gz`, containing `dist/` and `config.example.yml`; it does not contain the runtime configuration, database, uploads, or other business data. Inspect the archive before transfer:
 
 ```bash
 tar -tzf storage/exports/dist.tar.gz | head -30
 ```
 
-For a direct server deployment, transfer the archive and extract it into the deployment root. Nothing needs installing there: `pnpm build` already ran `pnpm install --prod` inside `dist/`, and the archive carries the resulting `dist/node_modules`. `dist/package.json` stays in the tree so that the same command can be rerun inside `dist/` on the server if `node_modules` was left out of a copy; that is a repair, not a step of a normal deployment, and it is never run in the application source tree. For Docker, build the image from the production `dist` tree and keep configuration and storage outside the image. Ensure the build target matches the server or image architecture, libc, and Node ABI.
+For a direct server deployment, transfer the archive and extract it into the deployment root. Nothing needs installing there: `pnpm build` already ran `pnpm install --prod` inside `dist/`, and the archive carries the resulting `dist/node_modules`. `dist/package.json` stays in the tree so that the same command can be rerun inside `dist/` on the server if `node_modules` was left out of a copy; that is a repair, not a step of a normal deployment, and it is never run in the application source tree. For Docker, build with the application's own `Dockerfile` instead, which runs `pnpm build` inside the image; keep configuration and storage outside the image. Otherwise ensure the build target matches the server's architecture, libc, and Node ABI.
+
+A `dist/` built for the wrong platform does not need a full rebuild: `pnpm nocobase dist retarget --target <platform> --node-version <major>` in the source checkout reinstalls only its native modules, and `pnpm nocobase dist check` re-verifies that everything the server imports is installed. On the server, run the application's commands as `node dist/cli/index.js <topic> <command>` from any directory, or `pnpm nocobase <topic> <command>` inside `dist/`; only runtime commands exist there. `.agents/skills/nocobase-app-development/references/cli.md` lists them and the flags that must not be added unasked.
 
 ## Decide the data operation
 
@@ -60,8 +62,8 @@ Prepare the complete runtime configuration before starting the service. At minim
 
 - Database dialect, host, port, database, credentials, schema and migration policy. A container's `localhost` means that container, not the host or another service.
 - A unique stable `auth.secret` and `session.secret`. Keep them unchanged across restarts and upgrades and out of artifacts, source control, and logs.
-- `users.initialAdmin.username` and `users.initialAdmin.password` for a new empty user table. These settings apply only during the initial seed and do not reset an existing account.
-- `APP_PUBLIC_ORIGIN` as the external scheme and host without the application path, and `APP_BASE_PATH` as the public mount path used at build time and runtime.
+- `users.initialAdmin.username`, `users.initialAdmin.email` and `users.initialAdmin.password` for a new empty user table. These settings apply only during the initial seed and do not reset an existing account.
+- `APP_PUBLIC_ORIGIN` as the external scheme and host without the application path, and `APP_BASE_PATH` as the public mount path, read when the server starts; it defaults to `/main`.
 - `APP_SERVER_HOST` and `APP_SERVER_PORT`, with containers normally listening on `0.0.0.0` and the proxy controlling external exposure.
 - Persistent storage paths, file permissions, service identity, and any external database, object storage, mail, or callback settings.
 
@@ -71,21 +73,34 @@ The reverse proxy must preserve the public `Host` and protocol headers, forward 
 
 ### Standalone Node.js
 
-Extract the archive as the service user or transfer ownership to that user. Keep `config.yml` and `storage/` beside `dist/`, configure `APP_CONFIG_FILE`, and run `node ./dist/server/standalone.js` through the service manager. Replace `dist` during an update while retaining configuration and storage. Do not start a second process against the same data directory.
+Extract the archive as the service user or transfer ownership to that user. Write the configuration by running `pnpm nocobase config init` inside `dist/`, which generates `config.yml` beside it from the `config.example.yml` the archive carries, with fresh secrets; it installs nothing, so a dialect whose driver the build does not include has to be added in the application sources and built again. Set its values with `pnpm nocobase config set`, and `--from-env` for passwords. Then run `pnpm nocobase config check` inside `dist/` on the target machine before the first start: it loads the configuration the way the service will, connects to every database but SQLite, and exits non-zero with the cause when something would stop the start. Keep `config.yml` and `storage/` beside `dist/`, configure `APP_CONFIG_FILE`, and run `node ./dist/server/standalone.js` through the service manager. Replace `dist` during an update while retaining configuration and storage. Do not start a second process against the same data directory.
+
+### Standalone with app-installer
+
+On a server without a Hub or a container platform, prefer `@nocobase/app-installer` to running the archive by hand: it installs the archive into a directory of its own, writes `config.yml` and `app.env`, applies migrations, runs the application under pm2, and later upgrades to a new archive with a backup of every SQLite database and an automatic rollback when the new release fails to start. The server needs Node.js 24 and a global pm2, nothing from the project. The global `nocobase-app-installer` Skill drives it, and its `--help` documents every flag:
+
+```bash
+npx --registry=https://npm.nocobase.ai @nocobase/app-installer install /srv/nocobase/crm --archive /tmp/crm.tar.gz --origin https://apps.example.com
+npx --registry=https://npm.nocobase.ai @nocobase/app-installer upgrade --dir /srv/nocobase/crm --archive /tmp/crm.tar.gz
+```
+
+`install --base-path /crm` chooses the mount path and writes it to `app.env` as `APP_BASE_PATH`; without it the server default `/main` applies, and `/hub` for the Hub template. Upgrades keep the path `app.env` names, and editing it there moves the application on its next start. The installer refuses an archive for another application, an older version or another machine. The same version built again deploys as a new release, so the version need not be bumped for each deployment. An archive from an `@nocobase/app-cli` that predates relocatable builds has its mount path compiled in and runs only at that path, so a mismatch is refused with `BASE_PATH_MISMATCH`; one older still, which records no build time, or a release whose `@nocobase/app-server` predates `APP_STORAGE_DIR`, is refused: upgrade the project's NocoBase packages and build again. Each application on the server gets its own directory, port and pm2 process.
 
 ### Standalone Docker
 
-Build or transfer the image, bind-mount the complete runtime configuration read-only, and bind-mount the persistent storage. Validate the Compose file before starting. For a configuration file replacement, recreate the container so the process reads the new file. Keep the image, config, storage, and proxy changes separately identifiable.
+Build the image from the application root with its own `Dockerfile`: `docker build -t crm:<release> .`. The image is not tied to a mount path: it serves at `/main` (`/hub` for a Hub image), and `docker run -e APP_BASE_PATH=/crm` mounts it elsewhere, which the image's health check follows. `Dockerfile.dockerignore` must sit beside the `Dockerfile` — without it `config.yml`, `.env` and `storage/` enter the build context — and an application created before the template shipped them copies both from a newer template version. For another architecture use `docker buildx build --platform`; the build stage cross-targets native modules itself. To package a `dist/` already built, pass `--build-arg DIST=prebuilt` after `pnpm build --target linux-<arch>`; the image build rejects a `dist/` built for another platform, libc or Node major, or by an `@nocobase/app-cli` that predates relocatable builds, and never copies `dist/.env`. Use the source build for release images: a prebuilt `dist/` reflects the building machine's working tree. `.env` is not carried into the image, so pass its settings as container environment variables.
+
+Bind-mount the complete runtime configuration read-only at `/app/config.yml` and the persistent storage at `/app/storage`, writable by the image's `node` user (UID 1000), and run the container with `init: true`. The image has no pnpm: run application commands as `node dist/cli/index.js <command>`, for example `docker run --rm -v ./config.yml:/app/config.yml:ro <image> node dist/cli/index.js config check` before the first start. Validate the Compose file before starting. For a configuration file replacement, recreate the container so the process reads the new file. Keep the image, config, storage, and proxy changes separately identifiable.
 
 ### Hub platform
 
-Deploy Hub with Docker or the Hub application template. Persist the Hub storage root, platform database, Releases, desired configurations, expanded application versions, application data volumes, and logs. Set Hub's `/hub` base path and route the complete public site to Hub. A Hub restart interrupts its hosted applications; after restart, verify each eager App individually.
+A Hub project created from the Hub template, whose source changes, deploys like any other application, standalone or with Docker. An unmodified Hub needs no project: run the published image with Docker, or on a Node.js server install, upgrade and roll it back with `@nocobase/app-installer --template hub`, which the global `nocobase-app-installer` Skill drives and whose `--help` documents every flag. Persist the Hub storage root, platform database, Releases, desired configurations, expanded application versions, application data volumes, and logs. Set Hub's `/hub` base path and route the complete public site to Hub. A Hub restart interrupts its hosted applications; after restart, verify each eager App individually.
 
 ### Publish an App to an existing Hub
 
-Create or select the target App, build the artifact for the Host platform, and upload it. Uploading a Release does not switch the running version. Deploy the selected Release with the complete runtime configuration, wait for the operation result, and inspect the deployment record and App runtime. A separately uploaded Release is deployed with `app deploy`; do not re-upload it with `upload --deploy`.
+Publishing to a Hub uses `pnpm nocobase hub deploy` and `hub upload`, which an application has for as long as its `package.json` lists `@nocobase/hub-cli`. The Default template declares it; any other application gets the commands with `pnpm add -D @nocobase/hub-cli`. They run in the source checkout or in CI, never in a built `dist/`, because what they send is the archive `pnpm build --tar` writes beside the sources.
 
-For network uncertainty, inspect the Hub record before retrying. Reuse the same idempotency key and request when the result is unknown. Use a new key only for an intentional new deployment or a confirmed failed deployment. A supplied `--config` replaces the complete configuration document; submit all required fields rather than a partial patch.
+Read `.agents/skills/nocobase-hub-cli/SKILL.md`, which that package ships, before publishing: it covers the API key, the build, `--config`, waiting, exit codes and retries. `HUB_API_KEY` is created in Hub, not in the application; tell the user to create the key before the first upload rather than guessing its value. Never print an API key or put it in committed configuration.
 
 ## Handle workflow artifacts after production build
 

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
-  permissionSetsToken,
+  authorizationToken,
   createAppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -12,10 +12,7 @@ it.each([true, false])(
   'registers the default scope only when enabled: %s',
   async (enabled) => {
     const container = new ServiceContainer();
-    container.instance(
-      permissionSetsToken,
-      createAppAuthorization({}).permissionSets,
-    );
+    container.instance(authorizationToken, createAppAuthorization({}));
     const provider = new UsersProvider({
       container,
       config: { get: () => ({ permissionSets: enabled }) },

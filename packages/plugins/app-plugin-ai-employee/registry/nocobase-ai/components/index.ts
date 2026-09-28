@@ -49,23 +49,25 @@ export {
 } from './triggers/ai-employee-shortcut.js';
 export {
   AIPageElementProvider,
+  type AIPageElementProviderProps,
+} from './page-elements/page-element-provider.js';
+export {
+  AIPageContextResolutionError,
   useAIPageElement,
   useAIPageElementHandle,
   useAIPageElementPicker,
-  AIPageContextResolutionError,
   type AIPageContextFailurePolicy,
   type AIPageElementDescriptor,
   type AIPageElementHandle,
   type AIPageElementPickerOptions,
-  type AIPageElementProviderProps,
-} from './page-elements/page-element-provider.js';
+} from './page-elements/page-element-store.js';
 export { useAIForm, type AIFormDescriptor } from './page-elements/ai-form.js';
+export { AIToolRendererProvider } from './tools/tool-renderer-provider.js';
 export {
-  AIToolRendererProvider,
   useAIToolRenderer,
   type AIToolRenderer,
   type AIToolRendererDefinition,
   type AIToolRendererEntry,
   type AIToolRendererMap,
   type AIToolRendererProps,
-} from './tools/tool-renderer-provider.js';
+} from './tools/tool-renderer-context.js';

@@ -1,15 +1,5 @@
+import type { PermissionGrant } from '../../core/grants.js';
 import type { AuthorizationTitle } from '../../core/titles.js';
-import type { AuthorizationPolicy, ResourceRef } from '../../core/index.js';
-
-export interface PermissionGrantAction {
-  action: string;
-  policy?: AuthorizationPolicy;
-}
-
-export interface PermissionGrant {
-  resource: ResourceRef;
-  actions: readonly PermissionGrantAction[];
-}
 
 export interface PermissionSet {
   key: string;

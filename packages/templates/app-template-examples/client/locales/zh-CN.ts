@@ -1,6 +1,50 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  i18nExamples: {
+    title: '多语言示例',
+    description:
+      '体验复数、缺失翻译回退和多区域格式。通过账户菜单切换语言，观察结果即时更新。',
+    pluralTitle: '复数形式',
+    pluralDescription:
+      '英文区分数量为 1 和其他数量时的词形，中文在这两种情况下使用相同的表达。',
+    count: '项目数量',
+    countHint: '输入非负安全整数，或选择一个预设数量。',
+    presets: '预设数量',
+    invalidCount: '请输入有效的非负安全整数。',
+    itemCount_one: '{{count}} 个项目',
+    itemCount_other: '{{count}} 个项目',
+    fallbackTitle: '缺失翻译回退',
+    fallbackDescription:
+      '切换到中文后，仅有英文翻译的消息会回退到英文。最后两行在两种语言中都没有翻译。',
+    fallbackChain:
+      '查找顺序：当前语言（{{locale}}）→ 应用默认语言（{{defaultLocale}}）→ en-US。重复的语言只查找一次。',
+    scenarios: {
+      translated: '中英文都有翻译',
+      englishOnly: '仅有英文翻译',
+      withDefault: '翻译缺失，提供 defaultValue',
+      withoutDefault: '翻译缺失，未提供 defaultValue',
+    },
+    scenario: '场景 / key',
+    result: '显示结果',
+    source: '结果来源',
+    keySource: 'key 本身',
+    defaultValue: '暂无可用翻译。',
+    isolationNote:
+      '这些刻意缺失翻译的演示资源使用独立的 I18nRuntime，并沿用当前语言和应用默认语言。应用自身的翻译保持完整。',
+    loading: '正在加载回退示例',
+    error: '无法加载回退示例。',
+    retry: '重试',
+    formatTitle: '多区域格式',
+    formatDescription:
+      '使用 Intl.NumberFormat 和 Intl.DateTimeFormat，对照同一个数字、美元金额和 UTC 时间的显示方式。',
+    region: '区域',
+    number: '数字',
+    currency: '金额（USD）',
+    date: '日期与时间（UTC）',
+    formatNote:
+      '格式化只改变显示方式，不改变数值，也不进行汇率换算。这些区域不会新增界面语言；切换语言后，对照结果保持不变。',
+  },
   notifications: { unreadLabel: '通知中心，{{count}} 条未读' },
   overrides: {
     '@nocobase/app-plugin-notification-in-app': {
@@ -66,6 +110,7 @@ const zhCN: AppResource = {
   'navigation.brandHome': 'NocoBase 首页',
   'navigation.brandApps': 'NocoBase 应用',
   'auth.passwordMismatch': '两次输入的密码不一致。',
+  'routeOverlay.close': '关闭',
   'status.deniedDescription': '你没有访问 {{label}} 的权限。',
   'status.routeFailedDescription':
     '无法加载 {{packageName}} 的路由 {{label}}。',
@@ -157,6 +202,9 @@ const zhCN: AppResource = {
     allowClose: '允许关闭当前层',
     historyHint:
       '取消勾选后，按 Esc、点击遮罩或关闭按钮都会保持当前层打开。浏览器前进和后退仍会正常导航。',
+    showToast: '显示通知',
+    toastTitle: '来自弹层内的通知',
+    toastDescription: '通知会显示在弹窗和抽屉之上。',
   },
   numbers: {
     title: '数字类型',
@@ -201,9 +249,18 @@ const zhCN: AppResource = {
     },
   },
   examples: {
+    i18n: {
+      title: '多语言示例',
+      description:
+        '体验复数形式、缺失翻译回退，以及数字、金额和日期的多区域格式。',
+    },
     notifications: {
       title: '通知中心',
       description: '查看发给你的站内通知，筛选未读消息并管理已读状态。',
+    },
+    notificationTasks: {
+      title: '任务通知',
+      description: '将任务分配给不同用户，收件人可以从通知进入详情并调整任务。',
     },
     routeOverlays: {
       title: '路由弹窗与抽屉',
@@ -296,46 +353,13 @@ const zhCN: AppResource = {
     saving: '正在保存…',
   },
   appearance: {
-    toggle: '切换浅色/深色',
-    theme: {
-      title: '主题',
-      description: '选择应用使用的主题。浅色与深色在右上角切换。',
-      search: '搜索主题',
-      empty: '没有匹配“{{query}}”的主题。',
-    },
-    themes: {
-      default: '默认',
-      'modern-minimal': '现代极简',
-      'violet-bloom': '紫罗兰',
-      'mocha-mousse': '摩卡',
-      bubblegum: '泡泡糖',
-      'amethyst-haze': '紫晶雾',
-      notebook: '手账',
-      graphite: '石墨',
-      perpetuity: '恒青',
-      'kodama-grove': '木灵',
-      'cosmic-night': '宇宙夜',
-      tangerine: '橘色',
-      'quantum-rose': '量子玫瑰',
-      nature: '自然',
-      'bold-tech': '硬朗科技',
-      'elegant-luxury': '典雅',
-      'amber-minimal': '琥珀',
-      'neo-brutalism': '新粗野',
-      'solar-dusk': '落日',
-      claymorphism: '陶土',
-      cyberpunk: '赛博',
-      'pastel-dreams': '粉彩',
-      'clean-slate': '白板',
-      caffeine: '咖啡因',
-      'ocean-breeze': '海风',
-      'retro-arcade': '复古街机',
-      'midnight-bloom': '午夜花',
-      candyland: '糖果',
-      'northern-lights': '极光',
-      'vintage-paper': '复古纸',
-      'sunset-horizon': '日落',
-    },
+    title: '外观',
+    mode: '颜色模式',
+    preset: '主题',
+    light: '浅色',
+    dark: '深色',
+    system: '跟随系统',
+    themes: { default: '宽松', compact: '紧凑' },
   },
   app: {
     title: 'NocoBase',
@@ -355,7 +379,7 @@ const zhCN: AppResource = {
     eyebrow: '外部数据库示例',
     title: 'CRM 订单',
     description:
-      '这些数据存放在一个不属于本应用的数据库里。externalCrm 连接只读取它的结构、从不修改，并从 database/externalCrm/collections/*/metadata.json 叠加标题和客户关系。页面全部按逻辑名访问，crm_ 表前缀不会出现在这里。',
+      '这些数据存放在一个不属于本应用的数据库里。externalCrm 连接只读取它的结构、从不修改，并从 database/externalCrm/metadata/*.json 叠加标题和客户关系。页面全部按逻辑名访问，crm_ 表前缀不会出现在这里。',
     readOnly: '只读',
     customers: '{{count}} 位客户',
     filter: '按状态筛选',
@@ -389,6 +413,7 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
+    i18nExamples: '多语言示例',
     notifications: '通知中心',
     numbers: '数字类型',
     externalCrm: '外部 CRM',

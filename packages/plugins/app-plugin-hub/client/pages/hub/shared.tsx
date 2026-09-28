@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { Toast } from '@base-ui/react/toast';
 import { Badge } from '../../components/ui/badge.js';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.js';
 import { Button } from '../../components/ui/button.js';
@@ -106,17 +106,24 @@ export function ErrorNotification({
 }): null {
   const { title, description, technicalMessage } = useErrorCopy(error, message);
   const code = error?.code;
+  const { add, close } = Toast.useToastManager();
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
   useEffect(() => {
     const text = message ?? description;
-    const toastId = toast.error(title ?? text, {
+    // The cleanup closes this toast when the error is replaced or unmounted.
+    // Base UI calls onClose synchronously for that too, and reporting it
+    // would make the parent clear the error that replaced this one.
+    let closedByCleanup = false;
+    // Default priority on purpose: a high-priority toast stays aria-hidden
+    // until the viewport is focused, which would hide the details toggle.
+    const toastId = add({
       id: `hub-error:${code ?? ''}:${text}`,
-      position: 'top-right',
-      closeButton: true,
-      duration: 8000,
+      type: 'error',
+      title: title ?? text,
+      timeout: 8000,
       description: (
         <>
           {title ? <p>{text}</p> : null}
@@ -128,12 +135,15 @@ export function ErrorNotification({
           ) : null}
         </>
       ),
-      onDismiss: () => onCloseRef.current?.(),
+      onClose: () => {
+        if (!closedByCleanup) onCloseRef.current?.();
+      },
     });
     return () => {
-      toast.dismiss(toastId);
+      closedByCleanup = true;
+      close(toastId);
     };
-  }, [title, description, message, technicalMessage, code]);
+  }, [add, close, title, description, message, technicalMessage, code]);
   return null;
 }
 

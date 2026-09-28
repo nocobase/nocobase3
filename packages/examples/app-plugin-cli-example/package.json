@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-cli-example",
   "displayName": "CLI Example App Plugin",
   "description": "Example app plugin that contributes commands to the app's nocobase CLI.",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -44,7 +44,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/app-cli": "workspace:^",
     "@oclif/core": "^4.14.0"
   },
   "devDependencies": {

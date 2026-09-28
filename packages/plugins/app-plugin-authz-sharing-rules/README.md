@@ -1,71 +1,161 @@
 # @nocobase/app-plugin-authz-sharing-rules
 
-Adds selected records or a dynamic record scope for selected subjects who already hold the action. Sharing does not grant the operation, fields, page access or related records. Permission-set/default/shared scopes combine before restrictions narrow them.
+Adds sharing rules: selected records, or a record access selection, for the subjects a rule lists, in addition to what their grants select. Sharing never grants an action, a page, a field or related records, and a sharing rule cannot select all records. Grants, default access and sharing combine first; restriction rules then narrow the result.
+
+## Terminology
+
+| Term             | Meaning                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Sharing rule     | `SharingRule { key, resource, actions, title?, subjects, reason? }`, stored by this plugin.                              |
+| Rule action      | `RuleAction { action, scopeKey?, selection }`: one action of the rule and the records it shares.                         |
+| Record selection | `records` with ids, or `recordAccess` with a key and params. `all` is rejected.                                          |
+| Data scope       | A named slot on a composite action; `scopeKey` names it when the rule targets a composite.                               |
+| Subject          | Who the rule applies to, `{ type, id }`: a user, a team, or any subject type the application declares.                   |
+| Settings item    | `settings:authorization.sharing-rules`, whose `read`, `create`, `update` and `delete` actions gate this plugin's routes. |
+
+## Layers
+
+```text
+ storage                     judgement                                                use
+ ──────────────────────      ─────────────────────────────────────────────────        ────────────────────────────
+ sharing rules ────────────▶ `expand` constraint for the rule's subjects ─┐           context.authorize(...)
+                              Permission Set grants ──────────────────────┴▶ type     authz.database.policyFor(...)
+ display: the "Sharing rules" settings page; its settings item is placed in the authorization subsection through authz.ui
+```
+
+## Entry points
+
+| Import                                                   | Contents                                      |
+| -------------------------------------------------------- | --------------------------------------------- |
+| `@nocobase/app-plugin-authz-sharing-rules/server`        | Server plugin and the `sharingRules` factory. |
+| `@nocobase/app-plugin-authz-sharing-rules/client`        | Client plugin.                                |
+| `@nocobase/app-plugin-authz-sharing-rules/client/plugin` | The client plugin factory alone.              |
+| `@nocobase/app-plugin-authz-sharing-rules/client/routes` | The settings route contribution.              |
+| `@nocobase/app-plugin-authz-sharing-rules/package.json`  | The package manifest.                         |
 
 ## Install
 
-Register the default export from `@nocobase/app-plugin-authz-sharing-rules/client` in `client/plugins.ts` and from `@nocobase/app-plugin-authz-sharing-rules/server` in `server/plugins.ts`. Register the main authorization plugin on both sides and run the application's migrations. Add the rule factory to `server/config/authorization.ts`:
+Register the default exports of `./client` and `./server` beside the main authorization plugin and run the application's migrations. Then add the factory to the application's authorization configuration:
 
 ```ts
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
+
 export default { plugins: [sharingRules()] };
 ```
 
-Merge this factory with the application's other authorization factories. `sharingRules({ store? })` uses the bundled database Store by default; a replacement must implement `SharingRuleStore` from `@nocobase/authorization/sharing-rules` with the application's transaction type. The pure library factory requires a Store and does not install UI or HTTP management. If the config factory is absent, this plugin installs no management endpoints.
+`sharingRules({ store? })` wraps `sharingRulesPlugin` from `@nocobase/authorization/sharing-rules` with the bundled database store; a replacement store implements `SharingRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.sharing-rules`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/sharing-rules', handler)`. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 
-Resolve the main `authorizationToken`. Optional APIs are present only when configured; narrow the service before using one:
-
 ```ts
-import type { SharingRulesAuthorizationApi } from '@nocobase/authorization/sharing-rules';
+import { selection } from '@nocobase/authorization/core';
+import {
+  defineSharingRule,
+  type SharingRulesAuthorizationApi,
+} from '@nocobase/authorization/sharing-rules';
 import type { DatabaseConnection } from '@nocobase/db';
-import { sharingRule } from '@nocobase/authorization/sharing-rules';
-import { databaseScope } from '@nocobase/app-plugin-authorization';
 
 if (!('sharingRules' in authz))
   throw new Error('Sharing rules is not configured');
 const rules = (
   authz as typeof authz & SharingRulesAuthorizationApi<DatabaseConnection>
 ).sharingRules;
-// quotes is a declared resource; sales.* strategies and team subjects are registered by its owner.
+
 await rules.create(
-  sharingRule('proposal-handover', quotes.reference())
+  defineSharingRule('proposal-handover', quotes.reference())
     .title('Proposal handover')
     .subjects({ type: 'sales.team', id: 'proposal' })
-    .scope('submit', 'quotes', { type: 'records', ids: ['quote-7'] })
-    .scope('submit', 'projects', { type: 'records', ids: ['project-3'] })
+    .scope('submit', 'quotes', selection.records(['quote-7']))
+    .scope(
+      'submit',
+      'projects',
+      selection.recordAccess('sales.region', { region: 'north' }),
+    )
     .reason('Delegate this proposal to the team')
     .build(),
 );
-// A dynamic selection instead uses:
-const selection = {
-  type: 'policy' as const,
-  policy: databaseScope('sales.region'),
-};
-const saved = await rules.get('proposal-handover');
-await rules.delete('proposal-handover');
+await rules.create({
+  key: 'orders-for-alice',
+  resource: { type: 'database.collection', id: 'orders' },
+  subjects: [{ type: 'user', id: 'alice' }],
+  actions: [{ action: 'read', selection: selection.records(['order-1']) }],
+});
 ```
 
-`create(rule)`, `update(key, rule)` (complete definition), `get(key)`, `list()`, `delete(key)` and `withTransaction(connection)`. A rule contains `{ key, title?, resource, subjects, reason?, actions }`. Each action is `{ action, scopeKey?, selection }`, where selection is `{ type: 'records', ids }` or `{ type: 'policy', policy: databaseScope(recordAccess) }`. IDs are stored separately per action/scope. Use record selection for explicit IDs, not an ID policy disguised as a dynamic selection.
+| `authz.sharingRules` method         | Contract                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| `create(rule)`                      | Stores a new rule after validating it; a selection of `all` is refused. |
+| `update(key, rule)`                 | Replaces a rule with a complete definition; the key may change.         |
+| `delete(key)`, `get(key)`, `list()` | Remove and read rules.                                                  |
+| `withTransaction(transaction)`      | An API bound to a caller-owned transaction.                             |
 
-Builders return immutable declarations and do not save/register anything. Titles accept strings or `{ key, ns }`. Business references infer action/scope keys; the scope registration determines which collection supplies fields and record IDs. Service writes are trusted provisioning APIs: custom HTTP callers must enforce settings authorization and validate resource/action/scope applicability, as this plugin's handlers do. Bound transactions are committed by their caller.
+A rule on a composite names the data scope in `scopeKey` and applies to that composite action's branch only. A rule on a `database.collection` omits `scopeKey` and applies across every branch that reaches the collection. Record ids are stored per action and data scope. The service is a trusted provisioning API: a custom HTTP caller must check the settings item itself and validate the rule with `validateDataScopeRule`, as this plugin's handler does.
 
-## Management HTTP API
+## Check access
 
-Paths are relative to the application's `/api` prefix. Requests require authentication and `{ resource: { type: 'settings', id: 'authorization.sharing-rules' }, action }`. Write bodies are complete rule definitions matching the service model.
+Rules take effect through the ordinary checks; nothing calls them directly.
 
-| Method | Path                        | Action   |
-| ------ | --------------------------- | -------- |
-| GET    | `/authz/sharing-rules`      | `read`   |
-| POST   | `/authz/sharing-rules`      | `create` |
-| PUT    | `/authz/sharing-rules/:key` | `update` |
-| DELETE | `/authz/sharing-rules/:key` | `delete` |
+```ts
+const decision = await c.get('authz').authorize({
+  resource: { type: 'composite', id: 'sales.quotes' },
+  action: 'submit',
+});
+const policy = decision.conditions?.database?.quotes; // includes quote-7 for the proposal team
+```
 
-`GET /authz/sharing-rules/options` and record/subject selection subroutes require `read`; subject selectors additionally enforce any independent directory restrictions. List/write responses wrap results in `{ data }`; deletes return 204. POST creation returns 201. There is no single-rule GET endpoint; use the list or server service. The settings page is `/settings/authorization/sharing-rules`, under the authorization group.
+An unrestricted identity skips every rule.
 
-## Scope boundaries
+## HTTP API
 
-Business rules target `{ type: 'resource', id: businessResourceName }` and an `action` plus `scopeKey`. They affect only the matching business grant branch. Underlying collection rules target `database.collection` with CRUD actions; collection restrictions apply across branches. Neither form shares related records implicitly or replaces field/relation capabilities. Unrestricted identities bypass rule constraints.
+Paths are under `/api/authz` and require a signed-in user. Every route checks `{ resource: { type: 'settings', id: 'authorization.sharing-rules' }, action }`. Responses wrap results in `{ data }`; creation answers `201` and deletion `204`. Errors answer `403 { code: 'FORBIDDEN' }`, `400 { code: 'INVALID_AUTHORIZATION_INPUT' }` and `404` for an unknown key.
 
-See the [development Skill](skills/nocobase-app-plugin-authz-sharing-rules/SKILL.md), [main API](../app-plugin-authorization/README.md), and [user guide](../../../docs/docs/en/capabilities/authorization/sharing-rules.md).
+| Method and path                              | Required action | Request                             | Response `data`                     |
+| -------------------------------------------- | --------------- | ----------------------------------- | ----------------------------------- |
+| `GET /sharing-rules`                         | `read`          |                                     | `SharingRule[]`                     |
+| `POST /sharing-rules`                        | `create`        | a complete `SharingRule`            | the rule                            |
+| `PUT /sharing-rules/:key`                    | `update`        | a complete `SharingRule`            | the rule                            |
+| `DELETE /sharing-rules/:key`                 | `delete`        |                                     | none                                |
+| `GET /sharing-rules/options`                 | `read`          |                                     | `AuthorizationOptions`              |
+| `GET /sharing-rules/subjects/:type`          | `read`          | query `search?`, `page`, `pageSize` | `{ items: SubjectOption[], total }` |
+| `POST /sharing-rules/subjects/:type/resolve` | `read`          | `{ ids: string[] }`                 | `SubjectOption[]`                   |
+| `GET /sharing-rules/records/:collection`     | `read`          |                                     | `[{ id, label, description? }]`     |
+
+The settings page is `/settings/authorization/sharing-rules`; its route declares `authz: { resource: { type: 'settings', id: 'authorization.sharing-rules' }, action: 'read' }`.
+
+## `@nocobase/app-plugin-authz-sharing-rules/server`
+
+### Exports
+
+| Export                | Kind     | Signature                                                                                                                                | Purpose                        |
+| --------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `default`             | plugin   | `defineServerPlugin(...)`                                                                                                                | The server plugin to register. |
+| `sharingRules`        | function | `sharingRules(options?: SharingRulesOptions): AuthorizationPlugin<SharingRulesAuthorizationApi<DatabaseConnection>, DatabaseConnection>` | The configuration factory.     |
+| `SharingRulesOptions` | type     | `{ store?: SharingRuleStore<DatabaseConnection> }`                                                                                       | Replaces the bundled store.    |
+
+## `@nocobase/app-plugin-authz-sharing-rules/client`
+
+### Exports
+
+| Export    | Kind   | Signature                 | Purpose                        |
+| --------- | ------ | ------------------------- | ------------------------------ |
+| `default` | plugin | `defineClientPlugin(...)` | The client plugin to register. |
+
+## `@nocobase/app-plugin-authz-sharing-rules/client/plugin`
+
+### Exports
+
+| Export    | Kind   | Signature                | Purpose                    |
+| --------- | ------ | ------------------------ | -------------------------- |
+| `default` | plugin | `AppClientPluginFactory` | The client plugin factory. |
+
+## `@nocobase/app-plugin-authz-sharing-rules/client/routes`
+
+### Exports
+
+| Export    | Kind  | Signature                    | Purpose                                       |
+| --------- | ----- | ---------------------------- | --------------------------------------------- |
+| `default` | const | `AppClientRouteContribution` | The settings route of the sharing-rules page. |
+
+## `@nocobase/app-plugin-authz-sharing-rules/package.json`
+
+The package manifest.

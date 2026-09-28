@@ -1,7 +1,6 @@
 ---
 '@nocobase/app-client': major
 '@nocobase/app-plugin-authentication': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-routes-example': patch
 '@nocobase/app-template-default': patch
 ---

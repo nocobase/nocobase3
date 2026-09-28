@@ -1,7 +1,10 @@
 import type { AppRuntimeLogging } from '../logging/config.js';
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
-import { type AppIdentityConfig } from '../config/index.js';
+import {
+  AppConfigInvalidError,
+  type AppIdentityConfig,
+} from '../config/index.js';
 
 import type { AppPaths } from '../config/index.js';
 import {
@@ -51,6 +54,8 @@ export interface ApplicationOptions<
   readonly paths: AppPaths;
   readonly websocket?: ApplicationWebSocketFactory;
   readonly runtimeLogging?: AppRuntimeLogging;
+  /** Where console log records go; see `AppScope.consoleLogStream`. */
+  readonly consoleLogStream?: 'stdout' | 'stderr';
   readonly strictStartup?: boolean;
 }
 
@@ -83,6 +88,7 @@ export class Application<
 > {
   public readonly strictStartup: boolean;
   public readonly runtimeLogging: AppRuntimeLogging | undefined;
+  public readonly consoleLogStream: 'stdout' | 'stderr' | undefined;
   public readonly config: TConfig;
   public readonly mode: 'standalone' | 'embedded';
   public readonly paths: AppPaths;
@@ -124,6 +130,7 @@ export class Application<
   public constructor(options: ApplicationOptions<TConfig>) {
     this.strictStartup = options.strictStartup ?? false;
     this.runtimeLogging = options.runtimeLogging;
+    this.consoleLogStream = options.consoleLogStream;
     this.config = options.config;
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;
@@ -248,12 +255,25 @@ export class Application<
   }
 
   private async startServiceProviders(): Promise<void> {
+    await this.validateConfig();
     this.registerProviders();
     await this.registerLocales();
     await this.providerRegistry.bootAll();
     await this.registerRoutes();
     await this.providerRegistry.startAll();
     await this.providerRegistry.readyAll();
+  }
+
+  /**
+   * Refuses to start on a configuration that breaks a rule its sections declare. It runs here rather than when the
+   * runtime is resolved, so commands that only read the configuration, such as `config init` and `config check`, still
+   * load it and can report what is wrong.
+   */
+  private async validateConfig(): Promise<void> {
+    const issues = (await this.config.validate?.()) ?? [];
+    if (issues.some((issue) => issue.level === 'error')) {
+      throw new AppConfigInvalidError(issues);
+    }
   }
 
   /**

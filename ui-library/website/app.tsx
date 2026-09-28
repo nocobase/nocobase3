@@ -1,14 +1,21 @@
 import {
+  AppWindow,
+  Blocks,
   Check,
   Copy,
+  Heading,
+  Layers,
+  LayoutTemplate,
   Monitor,
   Moon,
+  PanelRight,
   RefreshCw,
   Search,
   ShieldCheck,
   Smartphone,
   Sun,
   Tablet,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   createContext,
@@ -16,6 +23,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
@@ -43,6 +51,9 @@ import {
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
 import { AuthenticationUiDemo } from './demo/auth/auth-ui';
+import { PageContainerDemo } from './demo/components/page-container';
+import { PageHeaderDemo } from './demo/components/page-header';
+import { RouteOverlaysDemo } from './demo/components/route-overlays';
 
 interface RegistryItem {
   name: string;
@@ -66,6 +77,35 @@ const authUiItem: RegistryItem = {
   type: 'registry:block',
 };
 
+interface ItemPreview {
+  /** The demo route rendered in the item's preview frame. */
+  readonly path: string;
+  readonly icon: LucideIcon;
+}
+
+// Items are not discovered: each one is wired here, and routed to its demo in `AppContent`.
+const itemPreviews: Record<string, ItemPreview> = {
+  'auth-ui': { path: '/demo/auth/auth-ui/login', icon: ShieldCheck },
+  'page-container': {
+    path: '/demo/components/page-container',
+    icon: LayoutTemplate,
+  },
+  'page-header': { path: '/demo/components/page-header', icon: Heading },
+  // The three route overlays share one demo; each preview opens the route that presents its component.
+  'route-dialog': {
+    path: '/demo/components/route-overlays/new',
+    icon: AppWindow,
+  },
+  'route-drawer': {
+    path: '/demo/components/route-overlays/SO-1043',
+    icon: PanelRight,
+  },
+  'route-child-page': {
+    path: '/demo/components/route-overlays/report',
+    icon: Layers,
+  },
+};
+
 type ThemePreference = 'light' | 'dark' | 'system';
 type ResolvedTheme = 'light' | 'dark';
 
@@ -81,26 +121,20 @@ export function App(): ReactElement {
   const [preference, setPreference] =
     useState<ThemePreference>(readThemePreference);
   const previewTheme = readPreviewTheme();
-  const [resolved, setResolved] = useState<ResolvedTheme>(
-    () => previewTheme ?? resolveTheme(preference),
+  const prefersDark = useSyncExternalStore(
+    subscribeToColorScheme,
+    readPrefersDark,
   );
+  const resolved = previewTheme ?? resolveTheme(preference, prefersDark);
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyTheme = () => {
-      const nextTheme = previewTheme ?? resolveTheme(preference);
-      setResolved(nextTheme);
-      document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-      if (!previewTheme) {
-        localStorage.setItem('nocobase-ui-library-theme', preference);
-      }
-    };
-
-    applyTheme();
-    if (previewTheme) return;
-    media.addEventListener('change', applyTheme);
-    return () => media.removeEventListener('change', applyTheme);
-  }, [preference, previewTheme]);
+    // index.html sets both on first load; the inline color-scheme outranks the stylesheet's, so it has to follow too.
+    document.documentElement.classList.toggle('dark', resolved === 'dark');
+    document.documentElement.style.colorScheme = resolved;
+    if (!previewTheme) {
+      localStorage.setItem('nocobase-ui-library-theme', preference);
+    }
+  }, [preference, previewTheme, resolved]);
 
   return (
     <ThemeContext.Provider value={{ preference, resolved, setPreference }}>
@@ -110,8 +144,18 @@ export function App(): ReactElement {
 }
 
 function AppContent(): ReactElement {
-  if (window.location.pathname.startsWith('/demo/auth/auth-ui')) {
+  const { pathname } = window.location;
+  if (pathname.startsWith('/demo/auth/auth-ui')) {
     return <AuthenticationUiDemo />;
+  }
+  if (pathname.startsWith('/demo/components/page-container')) {
+    return <PageContainerDemo />;
+  }
+  if (pathname.startsWith('/demo/components/page-header')) {
+    return <PageHeaderDemo />;
+  }
+  if (pathname.startsWith('/demo/components/route-overlays')) {
+    return <RouteOverlaysDemo />;
   }
 
   return <RegistryDocs />;
@@ -123,7 +167,8 @@ function RegistryDocs(): ReactElement {
   const [activeName, setActiveName] = useState<string>(authUiItem.name);
 
   useEffect(() => {
-    fetch('/r/registry.json')
+    const controller = new AbortController();
+    fetch('/r/registry.json', { signal: controller.signal })
       .then((response) => response.json())
       .then((data: { items?: RegistryItem[] }) => {
         const nextItems = data.items?.length ? data.items : [authUiItem];
@@ -143,7 +188,10 @@ function RegistryDocs(): ReactElement {
           });
         }
       })
-      .catch(() => setItems([authUiItem]));
+      .catch(() => {
+        if (!controller.signal.aborted) setItems([authUiItem]);
+      });
+    return () => controller.abort();
   }, []);
 
   const visibleItems = items.filter((item) => {
@@ -344,6 +392,7 @@ function RegistrySidebarItem({
 }): ReactElement {
   const { setOpenMobile } = useSidebar();
   const label = item.title ?? item.name;
+  const Icon = itemPreviews[item.name]?.icon ?? Blocks;
 
   return (
     <SidebarMenuItem>
@@ -362,7 +411,7 @@ function RegistrySidebarItem({
         }
         tooltip={label}
       >
-        <ShieldCheck aria-hidden='true' />
+        <Icon aria-hidden='true' />
         <span className='group-data-[collapsible=icon]:hidden'>{label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -374,8 +423,7 @@ function RegistryPreviewSection({
 }: {
   item: RegistryItem;
 }): ReactElement {
-  const previewPath =
-    item.name === 'auth-ui' ? '/demo/auth/auth-ui/login' : undefined;
+  const previewPath = itemPreviews[item.name]?.path;
 
   return (
     <section className='scroll-mt-4' data-registry-item='true' id={item.name}>
@@ -535,6 +583,7 @@ function RegistryPreview({
             path={previewPath}
             reloadKey={refreshKey}
             theme={resolved}
+            title={`${item.title ?? item.name} preview`}
             viewport={viewport}
           />
         </CardContent>
@@ -584,12 +633,14 @@ function PreviewCanvas({
   path,
   reloadKey,
   theme,
+  title,
   viewport,
 }: {
   height: number;
   path: string;
   reloadKey: number;
   theme: ResolvedTheme;
+  title: string;
   viewport: PreviewViewport;
 }): ReactElement {
   const viewportStyle: CSSProperties =
@@ -621,7 +672,7 @@ function PreviewCanvas({
         }}
         src={`${path}?theme=${theme}&preview=${theme}-${reloadKey}`}
         style={{ ...viewportStyle, height }}
-        title='Password authentication preview'
+        title={title}
       />
     </div>
   );
@@ -679,11 +730,24 @@ function readThemePreference(): ThemePreference {
   return 'system';
 }
 
-function resolveTheme(preference: ThemePreference): ResolvedTheme {
+function resolveTheme(
+  preference: ThemePreference,
+  prefersDark: boolean,
+): ResolvedTheme {
   if (preference === 'light' || preference === 'dark') return preference;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
+  return prefersDark ? 'dark' : 'light';
+}
+
+const colorSchemeQuery = '(prefers-color-scheme: dark)';
+
+function subscribeToColorScheme(onChange: () => void): () => void {
+  const media = window.matchMedia(colorSchemeQuery);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+function readPrefersDark(): boolean {
+  return window.matchMedia(colorSchemeQuery).matches;
 }
 
 function readPreviewTheme(): ResolvedTheme | undefined {

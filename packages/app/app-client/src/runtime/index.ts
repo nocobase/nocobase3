@@ -36,9 +36,13 @@ import {
   type AppClientSourceExtension,
   type ClientServiceProviderConstructor,
 } from '../plugins.js';
-import { readAppClientRuntimeConfig } from './browser-config.js';
+import {
+  readAppClientPublicConfig,
+  readAppClientRuntimeConfig,
+} from './browser-config.js';
 
 export {
+  readAppClientPublicConfig,
   readAppClientRuntimeConfig,
   type AppClientRuntimeConfigPayload,
 } from './browser-config.js';
@@ -55,7 +59,6 @@ export interface AppRuntimeDefinition {
   readonly reactProviders?: AppClientReactProviders;
   readonly routes?: AppClientRoutes;
   readonly locales?: AppClientLocales;
-  readonly basename?: string;
   readonly plugins: AppClientPlugins;
   readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
   readonly sourceExtensions?: readonly AppClientSourceExtension[];
@@ -64,6 +67,8 @@ export interface AppRuntimeDefinition {
 
 export interface ResolveAppRuntimeOptions {
   readonly rawConfig?: unknown;
+  /** The server's published values; read from the page when neither this nor `rawConfig` is given. */
+  readonly rawPublicConfig?: unknown;
 }
 
 export interface AppRuntimeContext {
@@ -113,6 +118,9 @@ export async function resolveAppRuntime(
       options.rawConfig === undefined
         ? readAppClientRuntimeConfig()
         : options.rawConfig,
+    rawPublicConfig:
+      options.rawPublicConfig ??
+      (options.rawConfig === undefined ? readAppClientPublicConfig() : {}),
   });
   const applicationContribution = createApplicationContribution(definition);
   const pluginContributions = definition.plugins.plugins.map((plugin) => ({
@@ -131,7 +139,11 @@ export async function resolveAppRuntime(
     .flatMap(({ locales }) =>
       Object.keys('default' in locales ? locales.default : locales),
     );
-  const configuredLocale = config.get<unknown>('i18n.defaultLocale');
+  // The server publishes the locale it starts in; a `client.i18n.defaultLocale` is the fallback for a page served
+  // without it.
+  const configuredLocale = config.public.has('i18n.defaultLocale')
+    ? config.public.get('i18n.defaultLocale')
+    : config.get<unknown>('i18n.defaultLocale');
   const defaultLocale =
     (typeof configuredLocale === 'string'
       ? resolveSupportedLocale(configuredLocale, [
@@ -158,7 +170,8 @@ export async function resolveAppRuntime(
   const runtime: AppRuntimeContext = {
     config,
     i18n,
-    basename: definition.basename ?? '/',
+    // The mount path the server published, so the router and every URL the client builds agree on one value.
+    basename: config.get<string>('app.basePath') ?? '/',
     serviceProviders: Object.freeze([
       ...registerServiceProviders(
         definition.packageName,

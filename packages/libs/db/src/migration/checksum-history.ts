@@ -62,7 +62,7 @@ export function describeChecksumMismatch(
   mismatch: ChecksumMismatch,
   kind: 'migration' | 'seed',
 ): string {
-  return `Executed ${kind} "${mismatch.name}" checksum changed. Package: "${mismatch.packageName}". Recorded: ${mismatch.recordedChecksum}. Source: ${mismatch.sourceChecksum}. Run "nocobase app db repair" to realign the history after confirming the change is intentional.`;
+  return `Executed ${kind} "${mismatch.name}" checksum changed. Package: "${mismatch.packageName}". Recorded: ${mismatch.recordedChecksum}. Source: ${mismatch.sourceChecksum}. Run "nocobase db repair" to realign the history after confirming the change is intentional.`;
 }
 
 /** Called under the task lock, after the entire history has passed validation. */

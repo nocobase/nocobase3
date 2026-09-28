@@ -1,10 +1,8 @@
 import { messageKey } from '../../lib/message-key.js';
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { PageHeader } from '../../components/page-header.js';
-import {
-  ToolCallCard,
-  type ToolCallPart,
-} from '../../../registry/nocobase-ai/components/chat/tool-call-card.js';
+import { ToolCallCard } from '../../../registry/nocobase-ai/components/chat/tool-call-card.js';
+import type { ToolCallPart } from '../../../registry/nocobase-ai/components/chat/tool-call-utils.js';
 import { PromptOutput } from '../../../registry/nocobase-ai/shared/prompt-output.js';
 import {
   Card,

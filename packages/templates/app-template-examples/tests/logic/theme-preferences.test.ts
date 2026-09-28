@@ -6,10 +6,10 @@ import {
 } from '../../client/theme/theme-preferences';
 
 describe('application appearance storage', () => {
-  it('lists Default first as the default preset', () => {
-    expect(themePresets[0].id).toBe('default');
+  it('lists Compact first as the default preset', () => {
+    expect(themePresets[0].id).toBe('compact');
   });
-  it('restores Default when the saved Ant Design preset is removed', () => {
+  it('restores Compact when the saved Ant Design preset is removed', () => {
     const keys = themeStorageKeys('/crm/');
     localStorage.setItem(keys.preset, 'ant-design');
     localStorage.setItem(keys.mode, 'light');
@@ -17,7 +17,7 @@ describe('application appearance storage', () => {
       '/crm/',
       themePresets.map(({ id }) => id),
     );
-    expect(document.documentElement.dataset.theme).toBe('default');
+    expect(document.documentElement.dataset.theme).toBe('compact');
     expect(document.documentElement).toHaveClass('light');
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -46,21 +46,18 @@ describe('application appearance storage', () => {
 
   it('restores both preferences before React without reading another app', () => {
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
-    localStorage.setItem('nocobase:crm:theme:preset', 'modern-minimal');
+    localStorage.setItem('nocobase:crm:theme:preset', 'default');
     initializeTheme(
       '/crm/',
       themePresets.map(({ id }) => id),
     );
-    expect(document.documentElement).toHaveAttribute(
-      'data-theme',
-      'modern-minimal',
-    );
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     expect(document.documentElement).toHaveClass('light');
     initializeTheme(
       '/erp/',
       themePresets.map(({ id }) => id),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('dark');
   });
 
@@ -71,7 +68,7 @@ describe('application appearance storage', () => {
       '/crm/',
       themePresets.map(({ id }) => id),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('dark');
     const spy = vi
       .spyOn(Storage.prototype, 'getItem')

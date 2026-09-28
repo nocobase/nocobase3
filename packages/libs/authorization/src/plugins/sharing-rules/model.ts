@@ -1,25 +1,10 @@
 import type { AuthorizationTitle } from '../../core/titles.js';
-import type {
-  AccessConstraintValue,
-  AuthorizationSubject,
-  ResourceRef,
-} from '../../core/index.js';
+import type { AuthorizationSubject } from '../../core/types.js';
+import type { DefaultAccessRule } from '../default-access/model.js';
 
-export type SharingSelection =
-  | { type: 'records'; ids: readonly string[] }
-  | { type: 'policy'; policy: AccessConstraintValue };
-
-export interface SharingRuleAction {
-  action: string;
-  scopeKey?: string;
-  selection: SharingSelection;
-}
-
-export interface SharingRule {
-  key: string;
+/** Extra records for the listed subjects. Never selects all records. */
+export interface SharingRule extends DefaultAccessRule {
   title?: AuthorizationTitle;
-  resource: ResourceRef;
-  actions: readonly SharingRuleAction[];
   subjects: readonly AuthorizationSubject[];
   reason?: string;
 }

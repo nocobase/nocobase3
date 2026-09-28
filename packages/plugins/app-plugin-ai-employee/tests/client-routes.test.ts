@@ -11,6 +11,8 @@ const expectedDemoRoutes = [
 ] as const;
 
 describe('AI Employee client routes', () => {
+  // Loading a page module transforms its whole import graph on first use, which can outlast the default 5 s timeout
+  // when a release runner runs every package's tests at once.
   it('contributes settings and one development-only AI Components group', async () => {
     const [settingsContribution, devContribution] = routes;
 
@@ -85,5 +87,5 @@ describe('AI Employee client routes', () => {
     for (const page of loadedPages) {
       expect(page.default).toEqual(expect.any(Function));
     }
-  });
+  }, 30_000);
 });

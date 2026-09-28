@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Blocks, ShieldCheck, Sparkles } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
@@ -17,33 +18,54 @@ export interface AuthMarketingPanelProps {
   readonly title?: ReactNode;
 }
 
-export function AuthMarketingPanel({
-  ariaLabel = 'About this application',
-  description = 'Give AI a flexible frontend framework to shape each experience, while NocoBase secures the data, permissions, workflows and governance underneath.',
-  eyebrow = 'AI-native application platform',
-  features = [
-    {
-      description: 'Compose interfaces freely on a flexible framework.',
-      id: 'frontend',
-      title: 'AI-native frontend',
-    },
-    {
-      description: 'Reliable data, access control, workflows and governance.',
-      id: 'foundation',
-      title: 'NocoBase foundation',
-    },
-  ],
-  footer = 'Freedom above. Confidence below.',
-  title = (
-    <>
-      Let AI build freely.
-      <br />
-      NocoBase keeps it
-      <br />
-      reliable.
-    </>
-  ),
-}: AuthMarketingPanelProps): ReactElement {
+export function AuthMarketingPanel(
+  inputProps: AuthMarketingPanelProps,
+): ReactElement {
+  const { t } = useTranslation();
+  const {
+    ariaLabel = t('auth.about', { defaultValue: 'About this application' }),
+    description = t('auth.marketingDescription', {
+      defaultValue:
+        'Give AI a flexible frontend framework to shape each experience, while NocoBase secures the data, permissions, workflows and governance underneath.',
+    }),
+    eyebrow = t('auth.platform', {
+      defaultValue: 'AI-native application platform',
+    }),
+    features = [
+      {
+        description: t('auth.frontendDescription', {
+          defaultValue: 'Compose interfaces freely on a flexible framework.',
+        }),
+        id: 'frontend',
+        title: t('auth.frontend', { defaultValue: 'AI-native frontend' }),
+      },
+      {
+        description: t('auth.foundationDescription', {
+          defaultValue:
+            'Reliable data, access control, workflows and governance.',
+        }),
+        id: 'foundation',
+        title: t('auth.foundation', { defaultValue: 'NocoBase foundation' }),
+      },
+    ],
+    footer = t('auth.marketingFooter', {
+      defaultValue: 'Freedom above. Confidence below.',
+    }),
+    title = (
+      <>
+        {t('auth.marketingTitleFirst', {
+          defaultValue: 'Let AI build freely.',
+        })}
+        <br />
+
+        {t('auth.marketingTitleSecond', { defaultValue: 'NocoBase keeps it' })}
+        <br />
+
+        {t('auth.marketingTitleThird', { defaultValue: 'reliable.' })}
+      </>
+    ),
+  } = inputProps;
+
   return (
     <aside
       aria-label={ariaLabel}

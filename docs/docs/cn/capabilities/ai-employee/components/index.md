@@ -33,6 +33,8 @@ export function AppAIProvider({ children }: PropsWithChildren) {
 
 `NocoBaseAIRootProvider` 组合 AI 数据、Tool 渲染和页面上下文所需的 Provider，并默认使用插件现有的 `nocobaseAIService`。它在应用级只挂载一次；具体页面只需要为每个独立对话场景创建 `AIChatProvider`。
 
+`NocoBaseAIRootProvider` 会异步加载员工和模型，但不会等加载完成才渲染子组件。所以页面里的 `AIChatProvider` 要放在一个就绪检查之后，等员工和模型都加载好再挂载，否则第一次发送会失败。写法见 [聊天框 · 等配置就绪再挂载](./chat.md#等配置就绪再挂载)。
+
 ## 五种组件场景
 
 | Dev Route                     | 适合解决的问题                           | 核心 API                                                      |
@@ -41,7 +43,7 @@ export function AppAIProvider({ children }: PropsWithChildren) {
 | `/dev/ai-components/floating` | 全局悬浮按钮、右侧面板和对话框           | `AIChatFloatingTrigger`、`ChatSurfaceActions`                 |
 | `/dev/ai-components/tasks`    | 把固定业务任务交给指定员工               | `AIEmployeeShortcut`、`employeeTasks`                         |
 | `/dev/ai-components/context`  | 把记录、表单和页面 Tool 交给对话         | `useAIPageElement`、`useAIForm`、`AIPageContextScope`         |
-| `/dev/ai-components/tools`    | 为 Tool 调用提供审批、进度和业务结果界面 | `AIToolRendererProvider`、`ToolCallCard`                      |
+| `/dev/ai-components/tools`    | 为 Tool 调用提供审批、进度和业务结果界面 | `NocoBaseAIRootProvider.toolRenderers`、`AIToolRendererProps` |
 
 ![AI Chat Window 组件示例](https://static-docs.nocobase.com/20260914111142-ai-components-chat.png)
 
@@ -50,10 +52,11 @@ Dev Route 只在开发构建中存在，它们是可交互的实现样例，不�
 ## 共同规则
 
 1. 每个对话场景使用稳定且唯一的 `AIChatProvider.id`。不要用随机值或每次渲染都变化的值。
-2. 同一个会话在嵌入、侧栏和 Dialog 之间切换时，复用同一个 `AIChatWindow` 和 Controller，不要通过条件分支反复卸载。
-3. 工作上下文必须可序列化；不要传 DOM、函数、React 节点、数据库连接或带循环引用的对象。
-4. 页面组件只声明交互和上下文，网络、SSE、会话持久化、Tool 审批和恢复交给现有 AI Service。
-5. 前端 Tool 仍要按最小权限设计。页面隐藏按钮不能替代服务端授权。
+2. 员工和模型加载完成之前不要挂载 `AIChatProvider`，并用 `defaultEmployee` 明确指定员工的 `username`。不指定时聊天会打开 `sort` 最小的员工，通常是内置的 `atlas`。
+3. 同一个会话在嵌入、侧栏和 Dialog 之间切换时，复用同一个 `AIChatWindow` 和 Controller，不要通过条件分支反复卸载。
+4. 工作上下文必须可序列化；不要传 DOM、函数、React 节点、数据库连接或带循环引用的对象。
+5. 页面组件只声明交互和上下文，网络、SSE、会话持久化、Tool 审批和恢复交给现有 AI Service。
+6. 前端 Tool 仍要按最小权限设计。页面隐藏按钮不能替代服务端授权。
 
 ## 相关链接
 

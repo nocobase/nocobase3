@@ -1,3 +1,4 @@
+import type { NotificationTarget } from '@nocobase/app-plugin-notification/client';
 import type { ApiClient } from '@nocobase/app-client';
 
 export type InboxMutationAction = 'read' | 'unread' | 'delete';
@@ -8,7 +9,7 @@ export interface InboxItem {
   readonly notificationId: string;
   readonly title: string;
   readonly body: string;
-  readonly actionUrl?: string;
+  readonly target?: NotificationTarget;
   readonly readAt?: string;
   readonly createdAt: string;
 }

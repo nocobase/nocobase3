@@ -59,3 +59,7 @@ The plugin owns the inbox components, Provider, Dev Route, authentication enforc
 7. Confirm cleanup removes the topic, connection-open, and window-focus listeners.
 
 Do not diagnose a missing UI update by manually changing the inbox table or publishing synthetic production events. Reproduce with an isolated test notification or inspect the durable route and subscription logs.
+
+Configure `notification.channels.inbox: { provider: 'in-app' }` and send `messages: { inbox: { to: 'user-id', title: 'Title', body: 'Body' } }`. Channel keys are names; multiple names using `in-app` are independent targets. `to` requires an application user ID or a non-empty readonly array, with one Delivery per user. No current user is inferred. The test form requires an explicit recipient.
+
+Use `target: { type: 'route', path: '/topics/123' }` for an internal route without the deployment prefix, or `target: { type: 'url', url: 'https://example.com/main/topics/123' }` for a complete HTTP(S) URL. The inbox adds the Router basename only for routes. Without a target, no Open link is shown. Legacy `actionUrl` is ignored; run the new target-column migration without converting old links.

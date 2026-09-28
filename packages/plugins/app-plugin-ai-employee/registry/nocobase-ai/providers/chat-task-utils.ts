@@ -1,7 +1,7 @@
 import {
   getAIWorkContextRequiredTools,
   mergeAIRequiredTools,
-} from './page-context.js';
+} from './page-context-utils.js';
 import type {
   AIChatTaskRuntime,
   AIEmployee,
@@ -43,7 +43,7 @@ export function getConfiguredAIChatTaskSet({
 
 export function findTriggeredAIEmployee(
   employees: AIEmployee[],
-  requested: AIEmployeeTaskTrigger['aiEmployee'],
+  requested: NonNullable<AIEmployeeTaskTrigger['aiEmployee']>,
 ) {
   return typeof requested === 'string'
     ? employees.find((item) => item.username === requested)

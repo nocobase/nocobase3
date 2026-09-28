@@ -286,15 +286,6 @@ export class AnthropicProvider extends LLMProvider {
 export const anthropicProviderOptions: LLMProviderMeta = {
   title: 'Anthropic',
   supportedModel: [SupportedModel.LLM],
-  models: {
-    [SupportedModel.LLM]: [
-      'claude-opus-4-0',
-      'claude-sonnet-4-0',
-      'claude-3-7-sonnet-latest',
-      'claude-3-5-sonnet-latest',
-      'claude-3-5-haiku-latest',
-    ],
-  },
   provider: AnthropicProvider,
   supportWebSearch: true,
 };

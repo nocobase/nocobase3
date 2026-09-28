@@ -3,7 +3,12 @@ import {
   useSubjectNames,
   subjectKey,
 } from '../components/use-subject-names.js';
-import { permissionSections } from '../components/resource-sections.js';
+import {
+  configuredKey,
+  entryConfigured,
+  selectedEntry,
+  workspaceEntries,
+} from '../components/workspace-sections.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SubjectPicker } from '../components/subject-picker.js';
 import { useResourceOptions } from '../components/use-resource-options.js';
@@ -27,6 +32,7 @@ import type {
   AuthorizationInspection,
   AuthorizationOptions,
   AuthorizationSubject,
+  ConfiguredAccess,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
 import { useAuthorizationTranslation } from '../i18n.js';
@@ -39,7 +45,7 @@ import {
   AuthorizationPageState,
   useAuthorizationPageData,
 } from './page-support.js';
-import { ScopeMark } from '../components/scope-marks.js';
+import { SelectionMark } from '../components/selection-marks.js';
 import { resourceRows } from './permission-sets/resource-groups.js';
 import { inspectionStatus } from './inspector-status.js';
 import { Decision } from './inspector-decision.js';
@@ -47,7 +53,7 @@ import { Decision } from './inspector-decision.js';
 const pageSize = 20;
 export default function InspectorPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/inspector/options');
+  const page = useAuthorizationPageData('inspector');
   const options = useResourceOptions(page.options);
   return (
     <PermissionsPage
@@ -81,21 +87,9 @@ function Inspector({
         : undefined,
     [subjectType, subjectId],
   );
-  const names = useSubjectNames(
-    'inspector',
-    options.subjectTypes,
-    subject ? [subject] : [],
-  );
-  const sections = useMemo(() => permissionSections(options, t), [options, t]);
-  const type =
-    sections.find((item) => item.key === params.get('type')) ??
-    sections.find((item) => item.resources.length > 0) ??
-    sections[0];
-  const emptyCategory =
-    type?.resources.length === 0 &&
-    (type.category === 'pages' || type.category === 'business')
-      ? type.category
-      : undefined;
+  const entries = useMemo(() => workspaceEntries(options), [options]);
+  const entry = selectedEntry(entries, params.get('section'));
+  const emptySection = entry?.empty ? entry.section : undefined;
   const search = params.get('search') ?? '';
   const configuredOnly = params.get('configuredOnly') === 'true';
   const requestedPage = Number(params.get('page'));
@@ -111,13 +105,48 @@ function Inspector({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [configured, setConfigured] = useState<{
-    key: string;
-    unrestricted: boolean;
-    types: readonly string[];
-    resources: readonly { type: string; id: string }[];
-  }>();
+  const [configured, setConfigured] = useState<
+    ConfiguredAccess & { key: string }
+  >();
   const configurationKey = JSON.stringify([subject, revision]);
+  const loadedConfiguration =
+    configured?.key === configurationKey ? configured : undefined;
+  const inherited = useMemo(
+    () => loadedConfiguration?.identity?.subjects ?? [],
+    [loadedConfiguration],
+  );
+  const names = useSubjectNames('inspector', options.subjectTypes, [
+    ...(subject ? [subject] : []),
+    ...inherited,
+    ...(loadedConfiguration?.sets ?? []).flatMap((set) => set.sources),
+  ]);
+  const subjectName = (item: AuthorizationSubject): string =>
+    names[subjectKey(item)] ?? item.id;
+  // Per permission set, how the inspected subject holds it.
+  const grantSources = useMemo<Readonly<Record<string, string>>>(
+    () =>
+      Object.fromEntries(
+        (loadedConfiguration?.sets ?? []).flatMap((set) =>
+          set.sources.length && subject
+            ? [
+                [
+                  set.key,
+                  set.sources
+                    .map((source) =>
+                      source.type === subject.type && source.id === subject.id
+                        ? t('inspector.grantedDirectly')
+                        : t('inspector.grantedVia', {
+                            label: names[subjectKey(source)] ?? source.id,
+                          }),
+                    )
+                    .join(t('inspector.listSeparator')),
+                ],
+              ]
+            : [],
+        ),
+      ),
+    [loadedConfiguration, subject, names, t],
+  );
   useEffect(() => {
     if (!subject) return;
     let active = true;
@@ -135,39 +164,44 @@ function Inspector({
   }, [authz, subject, configurationKey]);
   const [detail, setDetail] = useState<AuthorizationInspection>();
   const [detailKey, setDetailKey] = useState('');
-  const configuredResources = useMemo(
+  const configuredGrants = useMemo(
     () =>
-      new Set(
-        configured?.key === configurationKey
-          ? configured.resources
-              ?.filter((resource) => resource.type === type?.value)
-              .map((resource) => resource.id)
-          : [],
-      ),
-    [configured, configurationKey, type],
+      loadedConfiguration
+        ? {
+            unrestricted: loadedConfiguration.unrestricted,
+            // `configured.types` lists every granted type, not wildcards.
+            types: new Set(
+              loadedConfiguration.resources
+                .filter((resource) => resource.id === '*')
+                .map((resource) => resource.type),
+            ),
+            resources: new Set(
+              loadedConfiguration.resources.map((resource) =>
+                configuredKey(resource.type, resource.id),
+              ),
+            ),
+          }
+        : undefined,
+    [loadedConfiguration],
   );
   const configurationLoading =
     !!subject && configured?.key !== configurationKey && !error;
   const filtered = useMemo(
     () =>
-      (type?.resources ?? []).filter(
+      (entry?.resources ?? []).filter(
         (item) =>
           `${item.label} ${item.value}`
             .toLowerCase()
             .includes(search.toLowerCase()) &&
           (!configuredOnly ||
-            (configured?.key === configurationKey && configured.unrestricted) ||
-            configuredResources.has(item.value) ||
-            configuredResources.has('*')),
+            (configuredGrants !== undefined &&
+              (configuredGrants.unrestricted ||
+                configuredGrants.types.has(item.type) ||
+                configuredGrants.resources.has(
+                  configuredKey(item.type, item.value),
+                )))),
       ),
-    [
-      type,
-      search,
-      configuredOnly,
-      configured,
-      configurationKey,
-      configuredResources,
-    ],
+    [entry, search, configuredOnly, configuredGrants],
   );
   const page = Math.min(
     requestedPageNumber,
@@ -181,22 +215,22 @@ function Inspector({
     () => [
       ...new Map(
         [
-          ...(type?.actions ?? []),
-          ...(type?.resources ?? []).flatMap((item) => item.actions ?? []),
+          ...(entry?.actions ?? []),
+          ...(entry?.resources ?? []).flatMap((item) => item.actions ?? []),
         ].map((item) => [item.value, item]),
       ).values(),
     ],
-    [type],
+    [entry],
   );
   const checks = useMemo(
     () =>
       visible.flatMap((item) =>
-        (item.actions ?? type?.actions ?? []).map((action) => ({
-          resource: { type: type.value, id: item.value },
+        (item.actions ?? entry?.actions ?? []).map((action) => ({
+          resource: { type: item.type, id: item.value },
           action: action.value,
         })),
       ),
-    [visible, type],
+    [visible, entry],
   );
   const queryKey = JSON.stringify([subject, checks, revision]);
   const [loadedKey, setLoadedKey] = useState('');
@@ -206,7 +240,7 @@ function Inspector({
       if (value) next.set(key, value);
       else next.delete(key);
       if (key !== 'page') next.delete('page');
-      if (key === 'type') next.delete('search');
+      if (key === 'section') next.delete('search');
       return next;
     });
     setDetail(undefined);
@@ -247,7 +281,11 @@ function Inspector({
     !error &&
     (loadedKey !== queryKey || (configuredOnly && configurationLoading));
   const selectedResource =
-    detail && type?.resources.find((item) => item.value === detail.resource.id);
+    detail &&
+    entry?.resources.find(
+      (item) =>
+        item.type === detail.resource.type && item.value === detail.resource.id,
+    );
   return (
     <div className='space-y-4'>
       <div className='flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3'>
@@ -282,6 +320,25 @@ function Inspector({
           <RefreshCw className='size-4' />
           {t('inspector.refresh')}
         </Button>
+        {inherited.length ? (
+          <p className='w-full text-sm text-muted-foreground'>
+            {t('inspector.inheritsFrom')}{' '}
+            {inherited
+              .map((item) => {
+                const type = options.subjectTypes.find(
+                  (entry) => entry.value === item.type,
+                );
+                // A fixed audience is named by its type already.
+                return type?.selection?.type === 'fixed'
+                  ? subjectName(item)
+                  : t('inspector.inheritedSubject', {
+                      name: subjectName(item),
+                      type: type?.label ?? item.type,
+                    });
+              })
+              .join(t('inspector.listSeparator'))}
+          </p>
+        ) : null}
       </div>
       {!subject ? (
         <p className='p-8 text-center text-muted-foreground'>
@@ -293,43 +350,28 @@ function Inspector({
             aria-label={t('editors.resourceGroup')}
             className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
           >
-            {sections.map((item, index) => (
-              <Fragment key={item.key}>
-                {item.category &&
-                  item.category !== sections[index - 1]?.category && (
-                    <div
-                      className={`flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
-                    >
-                      <span
-                        className='h-3 w-0.5 rounded-full bg-primary'
-                        aria-hidden='true'
-                      />
-                      {t(`permissionWorkspace.categories.${item.category}`)}
-                    </div>
-                  )}
+            {entries.map((item, index) => (
+              <Fragment key={item.value}>
+                {item.section !== entries[index - 1]?.section && (
+                  <div
+                    className={`px-3 pb-1 text-xs font-medium text-muted-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
+                  >
+                    {item.sectionLabel}
+                  </div>
+                )}
                 <Button
-                  key={item.key}
-                  className='w-full justify-start'
-                  variant={item === type ? 'outline' : 'ghost'}
+                  className={`w-full justify-start ${item === entry ? 'bg-primary/10 font-medium text-primary hover:bg-primary/10' : 'font-normal text-foreground'}`}
+                  variant='ghost'
                   aria-label={item.label}
-                  aria-current={item === type ? 'page' : undefined}
+                  aria-current={item === entry ? 'page' : undefined}
                   onClick={() => {
-                    change('type', item.key);
+                    change('section', item.value);
                     setCollapsed(new Set());
                   }}
                 >
                   <span className='flex-1 text-left'>{item.label}</span>
-                  {item.resources.length > 0 &&
-                  configured?.key === configurationKey &&
-                  (configured.unrestricted ||
-                    configured.resources.some(
-                      (resource) =>
-                        resource.type === item.value &&
-                        (resource.id === '*' ||
-                          item.resources.some(
-                            (member) => member.value === resource.id,
-                          )),
-                    )) ? (
+                  {configuredGrants &&
+                  entryConfigured(item, configuredGrants) ? (
                     <span
                       role='img'
                       title={t('permissionWorkspace.configured')}
@@ -377,7 +419,7 @@ function Inspector({
                   </tr>
                 </thead>
                 <tbody>
-                  {resourceRows(type?.groups ?? [], visible, collapsed).map(
+                  {resourceRows(entry?.groups ?? [], visible, collapsed).map(
                     (row) =>
                       row.kind === 'group' ? (
                         <tr
@@ -409,7 +451,10 @@ function Inspector({
                           </td>
                         </tr>
                       ) : (
-                        <tr key={row.item.value} className='border-t'>
+                        <tr
+                          key={`${row.item.type}:${row.item.value}`}
+                          className='border-t'
+                        >
                           <td
                             className='py-3 pr-3'
                             style={{ paddingLeft: 12 + row.depth * 16 }}
@@ -418,12 +463,14 @@ function Inspector({
                           </td>
                           <td className='p-2'>
                             <div className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'>
-                              {(row.item.actions ?? type?.actions ?? []).map(
+                              {(row.item.actions ?? entry?.actions ?? []).map(
                                 (action) => {
                                   const result =
                                     loadedKey === queryKey
                                       ? results?.find(
                                           (item) =>
+                                            item.resource.type ===
+                                              row.item.type &&
                                             item.resource.id ===
                                               row.item.value &&
                                             item.action === action.value,
@@ -473,7 +520,7 @@ function Inspector({
                                                 )}
                                               />
                                             ) : (
-                                              <ScopeMark
+                                              <SelectionMark
                                                 value={status!}
                                                 label={t(
                                                   `inspector.status.${status}`,
@@ -495,12 +542,12 @@ function Inspector({
                   )}
                 </tbody>
               </table>
-              {!visible.length && !loading && emptyCategory ? (
-                <PermissionDevelopmentHint category={emptyCategory} />
+              {!visible.length && !loading && emptySection ? (
+                <PermissionDevelopmentHint section={emptySection} />
               ) : !visible.length && !loading ? (
                 <p className='p-8 text-center text-muted-foreground'>
                   {t(
-                    type?.resources.length
+                    entry?.resources.length
                       ? 'inspector.noResources'
                       : 'inspector.noRegisteredResources',
                   )}
@@ -511,7 +558,7 @@ function Inspector({
               <div className='flex flex-wrap gap-3 text-xs text-muted-foreground'>
                 {(['all', 'scoped', 'none'] as const).map((status) => (
                   <span key={status} className='flex items-center gap-1'>
-                    <ScopeMark
+                    <SelectionMark
                       legend
                       value={status}
                       label={t(`inspector.status.${status}`)}
@@ -552,6 +599,7 @@ function Inspector({
           <div className='overflow-y-auto p-6'>
             <Decision
               value={detail.decision}
+              sources={grantSources}
               options={options}
               resource={selectedResource}
               action={detail.action}

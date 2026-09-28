@@ -9,7 +9,7 @@ import {
 import {
   PermissionSetLastAssignmentError,
   type PermissionSetsAuthorizationApi,
-} from '@nocobase/authorization/permissions';
+} from '@nocobase/authorization/permission-sets';
 import {
   createDatabaseManager,
   createMigrator,

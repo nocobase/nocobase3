@@ -179,7 +179,7 @@ export function PermissionSetsPanel({
       const saved = draft.originalKey
         ? await authz.updatePermissionSet(draft.originalKey, input)
         : await authz.createPermissionSet(input);
-      authz.invalidatePermissions();
+      authz.invalidate();
       setSets((items) =>
         items.some((item) => item.key === saved.key)
           ? items.map((item) => (item.key === saved.key ? saved : item))
@@ -201,7 +201,7 @@ export function PermissionSetsPanel({
     setBusy(true);
     try {
       await authz.deletePermissionSet(current.key);
-      authz.invalidatePermissions();
+      authz.invalidate();
       setSets((items) => items.filter((item) => item.key !== current.key));
       setDraft(undefined);
       setBaseline('');
@@ -230,11 +230,11 @@ export function PermissionSetsPanel({
     }
   }
   async function revoke(ids: readonly string[]): Promise<void> {
-    if (!capabilities.canRevoke) return;
+    if (!current || !capabilities.canRevoke) return;
     setBusy(true);
     setErrorCause(undefined);
     try {
-      await Promise.all(ids.map((id) => authz.revoke(id)));
+      await Promise.all(ids.map((id) => authz.revoke(current.key, id)));
       setAssignments((items) => items.filter((item) => !ids.includes(item.id)));
     } catch (cause) {
       setErrorCause(cause);

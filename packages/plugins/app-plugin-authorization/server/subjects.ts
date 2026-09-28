@@ -1,14 +1,15 @@
-import type { AuthorizationScope } from '@nocobase/authorization/core';
+import type { AuthorizationContext } from '@nocobase/authorization/core';
 import type { OptionText } from './i18n.js';
 
 export interface SubjectOption {
   id: string;
-  title: string;
-  description?: string;
+  /** Plain text, or a `{ key, ns }` descriptor the client renders in the viewer's language. */
+  title: OptionText;
+  description?: OptionText;
 }
 
 export interface SubjectSelectionContext {
-  authz: AuthorizationScope;
+  authz: AuthorizationContext;
 }
 
 export interface SubjectAdministration {

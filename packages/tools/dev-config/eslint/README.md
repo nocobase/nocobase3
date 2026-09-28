@@ -12,7 +12,7 @@ The ESLint export uses ESLint 10 flat config, `@eslint/js`,
 - `createNodeLibraryConfig` applies Node globals to source files.
 - `createClientLibraryConfig` applies browser and React rules, with Node globals
   for scripts and configuration files.
-- `createPortalConfig` scopes browser and React rules to `client`, `registry`,
+- `createApplicationConfig` scopes browser and React rules to `client`, `registry`,
   and tests, and scopes Node globals to `server`, scripts, and config files. It
   also relaxes the rules shadcn/ui registry output trips over, for the registry
   paths alone; see below.
@@ -26,9 +26,9 @@ All factories accept:
 - `environment`: additional environment config objects.
 
 ```js
-import { createPortalConfig } from '@nocobase/dev-config/eslint';
+import { createApplicationConfig } from '@nocobase/dev-config/eslint';
 
-export default createPortalConfig({
+export default createApplicationConfig({
   tsconfigRootDir: import.meta.dirname,
   ignores: ['public/vendor/**'],
   overrides: [
@@ -57,9 +57,11 @@ test artifacts. React and Vitest rules are scoped to their relevant files.
 
 ## shadcn/ui registry output
 
-`createPortalConfig` relaxes a short list of rules for
+`createApplicationConfig` relaxes a short list of rules for
 `client/components/ui/**/*.tsx` and `client/hooks/use-mobile.ts`, and a few more
 for `client/components/ui/chart.tsx`.
+
+The list comes from `createShadcnRegistryConfig(root)`, which scopes the same blocks to `<root>/components/ui/` and `<root>/hooks/` and defaults `root` to `client`. A package whose primitives live elsewhere passes its own directory rather than copying the rules, so it keeps up with the list; the UI Library, whose primitives live in `website/`, uses `environment: createShadcnRegistryConfig('website')`.
 
 Those files are not written by hand. `shadcn add` copies them from the upstream
 registry verbatim, and `shadcn add <name> --diff` only stays meaningful while
@@ -69,8 +71,8 @@ upstream source does, so rules such as `react-refresh/only-export-components`
 report on a shape nobody here chose and whose only available fix is the edit
 that destroys the diff.
 
-The relaxation is the factory's rather than each portal's because every portal
-adds registry components eventually, including the applications generated from
-the templates — each would otherwise discover the same failure and write the
+The relaxation is the factory's rather than each application's because every
+application adds registry components eventually, including the ones generated
+from the templates — each would otherwise discover the same failure and write the
 same exception. Everything outside those paths, `client/components/` included,
 is held to the full rule set.

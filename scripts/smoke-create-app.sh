@@ -112,15 +112,13 @@ echo "workdir:     $WORKDIR"
 cd "$WORKDIR"
 
 CREATE_ARGS=("@nocobase/app@$CREATE_APP_VERSION" "$APP_NAME" "--registry=$REGISTRY" "--template=$TEMPLATE")
-if [ -n "$DIALECT" ]; then CREATE_ARGS+=("--dialect=$DIALECT"); fi
 if [ "$JSON_OUTPUT" = 1 ]; then
   pnpm create "${CREATE_ARGS[@]}" --json > "$WORKDIR/create.json"
-  node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(r.status!=="success" || !r.dependenciesInstalled) process.exit(1)' "$WORKDIR/create.json"
+  # --create-app-version may name a release from before create-app printed the application CLI's envelope, whose
+  # result was flat: `ok` is then absent and `dependenciesInstalled` sits at the top level.
+  node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(!(r.ok ?? r.status==="success") || !(r.result ?? r).dependenciesInstalled) process.exit(1)' "$WORKDIR/create.json"
 else
   pnpm create "${CREATE_ARGS[@]}"
-fi
-if [ -n "$CONFIG" ]; then
-  node "$SCRIPT_DIR/local-registry-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
 fi
 echo "::endgroup::"
 
@@ -129,11 +127,46 @@ if [ ! -d "$APP_DIR/node_modules" ]; then
   exit 1
 fi
 
+# Creation deliberately leaves the application unconfigured; `config init` is what writes this file.
+if [ -e "$APP_DIR/config.yml" ]; then
+  echo "::error::create-app wrote config.yml, which config init owns"
+  exit 1
+fi
+
 cd "$APP_DIR"
+
+echo "::group::Configure the application with pnpm nocobase config init"
+# Which dialects an application can run on is decided by the driver it depends on, so a non-SQLite run installs one
+# first — exactly the two commands the documentation gives a user switching databases.
+if [ -n "$DIALECT" ] && [ "$DIALECT" != "sqlite" ]; then
+  pnpm add "@nocobase/db-$DIALECT"
+fi
+CONFIG_INIT_ARGS=("--json")
+if [ -n "$DIALECT" ]; then CONFIG_INIT_ARGS+=("--dialect=$DIALECT"); fi
+pnpm nocobase config init "${CONFIG_INIT_ARGS[@]}" > "$WORKDIR/config-init.json"
+node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(!r.ok) process.exit(1)' "$WORKDIR/config-init.json"
+if [ ! -f "$APP_DIR/config.yml" ]; then
+  echo "::error::pnpm nocobase config init reported success without writing config.yml"
+  exit 1
+fi
+if [ -n "$CONFIG" ]; then
+  node "$SCRIPT_DIR/smoke-database-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
+fi
+echo "::endgroup::"
+
+echo "::group::Check the configuration with pnpm nocobase config check"
+# Loads the configuration through the application and, for anything but SQLite, connects to the database — so a
+# broken configuration fails here with a named cause rather than as a startup that never becomes ready.
+if ! pnpm nocobase config check --json > "$WORKDIR/config-check.json"; then
+  cat "$WORKDIR/config-check.json"
+  echo "::error::pnpm nocobase config check reported a problem with the generated configuration"
+  exit 1
+fi
+echo "::endgroup::"
 echo "::group::Synchronize NocoBase package Skills"
 # create-app reports a synchronization failure as a warning. Exercise the command
 # explicitly so an invalid published Skill cannot pass this smoke test.
-pnpm skills:sync
+pnpm nocobase skills sync
 echo "::endgroup::"
 
 echo "::group::Test the application with pnpm test"
@@ -380,14 +413,23 @@ tar -xzf "$ARCHIVE" -C "$DEPLOY_DIR"
 # own storage rather than opening the database `pnpm start` used.
 cp "$APP_DIR/config.yml" "$DEPLOY_DIR/config.yml"
 mkdir -p "$DEPLOY_DIR/storage"
+# The deployment guide checks the configuration from inside dist before starting, with the build's own CLI. This is the
+# only place dist/cli is run at all, so a CLI that builds but does not run in a deployment fails here.
+if ! (cd "$DEPLOY_DIR/dist" && APP_CONFIG_FILE="$DEPLOY_DIR/config.yml" pnpm nocobase config check --json > "$WORKDIR/deploy-config-check.json"); then
+  cat "$WORKDIR/deploy-config-check.json"
+  echo "::error::pnpm nocobase config check failed in the deployed archive"
+  exit 1
+fi
 
 DEPLOY_PORT=$(free_port)
 DEPLOY_URL="http://127.0.0.1:$DEPLOY_PORT$APP_PATH"
 : > "$DEPLOY_LOG"
 cd "$DEPLOY_DIR"
 set -m
+# The archive is not tied to a mount path and carries none, so the server is given one the way a deployment gives it:
+# the same path the checkout served, which for the Hub is /hub rather than the server's /main default.
 NODE_ENV=production NOCOBASE_STRICT_STARTUP=true APP_CONFIG_FILE="$DEPLOY_DIR/config.yml" \
-  APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$DEPLOY_PORT" \
+  APP_BASE_PATH="$APP_PATH" APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$DEPLOY_PORT" \
   node ./dist/server/standalone.js > "$DEPLOY_LOG" 2>&1 &
 APP_PID=$!
 set +m
@@ -406,7 +448,7 @@ echo "::group::Retarget native modules for another platform"
 OTHER_TARGET=$(node -e 'console.log(process.platform === "linux" && process.arch === "x64" ? "linux-arm64" : "linux-x64")')
 RETARGET_LOG="$WORKDIR/retarget.log"
 echo "Retargeting for $OTHER_TARGET"
-if ! pnpm server:deps:retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
+if ! pnpm nocobase dist retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
   echo "::endgroup::"
   echo "::error::Retargeting native modules for $OTHER_TARGET failed"
   exit 1

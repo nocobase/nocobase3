@@ -16,17 +16,15 @@ Templates ship their tests into generated applications. Keep them runnable from 
 
 ## What to test, by change
 
-| You changed         | Test at least                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------- |
-| A server route      | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload      |
-| A public webhook    | Missing signature, invalid signature, valid signature, duplicate delivery                   |
-| A migration         | `up` produces the expected schema; `down` reverses it; against a real database              |
-| A seed              | First run, run against existing data, repeat run                                            |
-| A service           | Its domain behavior, with its dependencies supplied directly                                |
-| A job               | `execute()` with a realistic payload; a second run is harmless; failures behave as intended |
-| A page or component | What renders and what happens on interaction                                                |
-| A route declaration | Path, auth mode, and that `componentLoader()` actually resolves                             |
-| Translations        | Both languages render real text                                                             |
+| You changed      | Test at least                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload            |
+| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                         |
+| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                    |
+| A seed           | First run, run against existing data, repeat run                                                  |
+| A service        | Its domain behavior, with its dependencies supplied directly                                      |
+| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended       |
+| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy |
 
 ## Testing a route
 
@@ -51,9 +49,9 @@ expect(response.status).toBe(401);
 
 Do not add a `registerRoutes(router, ...)` helper just to make a route testable. It moves the security boundary out of the thing you are testing.
 
-## Testing components
+## Testing the frontend
 
-`@testing-library/react` with jsdom is configured, and jest-dom matchers are already installed. Assert what a user can observe — visible text, roles, what a click does — not internal state.
+Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md).
 
 ## Testing migrations
 
@@ -79,10 +77,9 @@ Add focused regression coverage when behavior changes. Documentation-only change
 
 Then verify the affected behavior, selecting only the applicable steps below. Green commands mean the code compiles and the assertions you wrote hold — not that the feature works:
 
-- Open the page and use it, in both light and dark themes.
+- For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took; a quick change needs only static checks.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
-- Confirm `pnpm db:apply` applies cleanly.
-- Switch language and confirm the text changes.
+- Confirm `pnpm nocobase db apply` applies cleanly.
 
 ## Reporting
 
@@ -106,12 +103,9 @@ Do not delete or rebuild a running development server's cache. For an already co
 
 ## Shared application tooling
 
-Application scripts delegate to `@nocobase/app-tools`, and standard runtime CLI commands delegate to `@nocobase/app-cli`. In the source repository, run shared implementation tests in those packages and application composition tests in each affected template. Keep custom application command tests local. A generated application consumes compiled packages; do not edit installed package files to customize behavior.
-
-Development starts through `scripts/dev.mjs` calling `runAppTool('dev', { rootDir })`. Vite configuration imports proxy helpers directly from `@nocobase/app-tools/dev/proxy`. Keep watcher, proxy, and supervisor unit tests in `app-tools`; templates verify application entry paths and Vite integration.
-
-Standalone dependency checks and native retargeting use `scripts/server-deps.mjs` through the existing `server:deps:verify` and `server:deps:retarget` package scripts. Internal build utilities are owned and tested by `app-tools`.
+`@nocobase/app-cli` implements the application's scripts and commands: `pnpm dev`, `pnpm build` and `pnpm start` run `nocobase dev`, `nocobase build` and `nocobase start`, and every standard command is `pnpm nocobase <topic> <command>`. In the source repository, run shared implementation tests in `packages/app/app-cli` and application composition tests in each affected template. Keep tests for the application's own commands in the application. A generated application consumes the compiled package; do not edit installed package files to customize behavior.
 
 Application server source supports extensionless relative imports. Keep `module: "ESNext"`, `moduleResolution: "Bundler"`, and `tsc-alias.resolveFullPaths: true` in `tsconfig.server.json`. Development uses `tsx`; production builds run `tsc-alias` after `tsc` to complete ESM paths, before build hooks collect workflow resources. When changing this configuration, verify the compiled output with plain Node and no source files or TypeScript loader.
 
 Application-owned workflows live in `workflows/` beside `server/` by default. Keep `workflows/**/*.ts` in the server TypeScript build and workflow client directories in the client typecheck. Point ESLint at `tsconfig.server.json` for workflow definitions and handlers so type-aware linting covers the top-level directory. The workflow CLI builds artifacts into `dist/workflows/`; verify this directory when checking a production build.
+Vite configuration imports the proxy helpers from `@nocobase/app-cli/dev/proxy`. Watcher, proxy, supervisor and build-step unit tests live in `app-cli`; templates verify their composition and Vite integration.

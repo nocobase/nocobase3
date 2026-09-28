@@ -88,15 +88,15 @@ The Workflow plugin registers its target, reports terminal completion through it
 Run from the target application root:
 
 ```bash
-pnpm nocobase schedule sync --json
+pnpm nocobase scheduler sync --json
 ```
 
-Success returns `{ ok: true, status: 'success', finalize: false }`; also inspect the exit code for failures. The command starts the application for synchronization and then shuts it down, without starting Scheduler's schedule worker. Normal application startup also performs non-destructive synchronization before starting the worker.
+Success returns the command envelope with `ok: true`, `status: "success"` and `result: { finalize: false }`; also inspect the exit code for failures. The command starts the application for synchronization and then shuts it down, without starting Scheduler's schedule worker. Normal application startup also performs non-destructive synchronization before starting the worker.
 
-Normal synchronization validates the complete loaded manifest and upserts definitions without deactivating missing ones. It preserves existing administrator enable/disable settings. During production deployment, once the complete manifest is available, run once per application:
+Normal synchronization validates the complete loaded manifest and upserts definitions without deactivating missing ones. It preserves existing administrator enable/disable settings. During production deployment, once the complete manifest is available, run once per application against the built `dist/`:
 
 ```bash
-pnpm nocobase schedule sync --finalize --json
+node dist/cli/index.js scheduler sync --finalize --json
 ```
 
-This additionally soft-deactivates definitions removed from code, preserving history. Never finalize from a process that loads only some plugins. Import, validation, or write failures must not commit partial reconciliation. Finalization and temporary administrator disabling are distinct operations.
+A built `dist/` has no `.bin`, so run its entry as shown, from any directory, or run `pnpm nocobase scheduler sync --finalize --json` inside `dist/`. Finalization additionally soft-deactivates definitions removed from code, preserving history. Never finalize from a process that loads only some plugins. Import, validation, or write failures must not commit partial reconciliation. Finalization and temporary administrator disabling are distinct operations.

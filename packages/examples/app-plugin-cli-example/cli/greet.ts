@@ -1,7 +1,14 @@
-import { Args, Command, Flags } from '@oclif/core';
-import type { Interfaces } from '@oclif/core';
+import { AppCommand } from '@nocobase/app-cli';
+import { Args, Flags } from '@oclif/core';
+import type { Command, Interfaces } from '@oclif/core';
 
-export default class CliExampleGreet extends Command {
+/** What `greet` returns. Under `--json` it is the `result` of the one document the command prints. */
+export interface GreetResult {
+  readonly message: string;
+  readonly target: string;
+}
+
+export default class CliExampleGreet extends AppCommand {
   static override summary = 'Print a greeting.';
   static override description =
     'Demonstrates arguments, flags, and JSON output in a plugin-contributed command.';
@@ -21,30 +28,24 @@ export default class CliExampleGreet extends Command {
     }),
   };
 
+  // `--json` is not declared here: AppCommand provides it, and prints what `run()` returns.
   static override flags: {
     loud: Interfaces.BooleanFlag<boolean>;
-    json: Interfaces.BooleanFlag<boolean>;
   } = {
     loud: Flags.boolean({
       default: false,
       description: 'Upper-case the greeting.',
     }),
-    json: Flags.boolean({
-      default: false,
-      description: 'Print one machine-readable JSON result.',
-    }),
   };
 
-  public async run(): Promise<void> {
+  public async run(): Promise<GreetResult> {
     const { args, flags } = await this.parse(CliExampleGreet);
     const message = flags.loud
       ? `HELLO, ${args.target.toUpperCase()}!`
       : `Hello, ${args.target}.`;
 
-    if (flags.json) {
-      this.logJson({ ok: true, message, target: args.target });
-      return;
-    }
+    // Silent under `--json`, where the returned result is printed instead.
     this.log(message);
+    return { message, target: args.target };
   }
 }

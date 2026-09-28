@@ -9,7 +9,6 @@
   },
   "include": [
     "vite.config.ts",
-    "scripts/*.ts",
     "cli/**/*.ts",
     "playwright.config.ts",
     "e2e/**/*.ts"

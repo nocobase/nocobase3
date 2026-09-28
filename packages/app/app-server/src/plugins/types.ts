@@ -12,6 +12,8 @@ import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
   readonly runtimeLogging?: AppRuntimeLogging;
+  /** Where console log records go; set by a command-line host to `stderr`. */
+  readonly consoleLogStream?: 'stdout' | 'stderr';
   readonly strictStartup?: boolean;
   readonly appName: string;
   /**

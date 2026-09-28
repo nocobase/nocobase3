@@ -30,7 +30,7 @@ export function CustomerAssistant() {
     <NocoBaseAIRootProvider>
       <AIChatProvider id='customer-assistant'>
         <ChatInline>
-          <AIChatWindow enableAttachments />
+          <AIChatWindow enableAttachments enableWebSearch />
         </ChatInline>
       </AIChatProvider>
     </NocoBaseAIRootProvider>
@@ -38,9 +38,7 @@ export function CustomerAssistant() {
 }
 ```
 
-`NocoBaseAIRootProvider` uses `nocobaseAIService` by default. The service calls
-the plugin's existing authenticated `/api/ai` actions for employee and model
-discovery, conversations, history, uploads, streaming, decisions, and resume.
+`NocoBaseAIRootProvider` creates a `NocoBaseAIService` from the application's `ApiClient` (`useApiClient()`) unless a `service` is passed. The service calls the plugin's existing authenticated `/api/ai` actions for employee and model discovery, conversations, history, uploads, streaming, decisions, and resume. `AIProvider` has no default: pass it a service, such as `new NocoBaseAIService(api)`.
 
 ## Capabilities
 

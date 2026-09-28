@@ -60,10 +60,7 @@ export default defineAppRuntime({
 resolution collects its route component overrides automatically;
 `routeComponentOverrides` contains only overrides owned by the application.
 
-Static import makes the composition plan available to runtime resolution and
-inspection. It does not register a service, execute lifecycle hooks, render a
-React component, load a route page, or load locale messages. Declaration
-modules must therefore remain side-effect-free.
+Static import makes the composition plan available to runtime resolution. It does not register a service, execute lifecycle hooks, render a React component, load a route page, or load locale messages. Declaration modules must therefore remain side-effect-free.
 
 ## Client entry
 
@@ -257,6 +254,7 @@ export default defineAppRoutes([
     name: 'audit-log',
     path: '/audit-log',
     auth: 'required',
+    authz: { resource: { type: 'page', id: 'audit-log' }, action: 'access' },
     componentLoader: () => import('./pages/audit-log.js'),
   },
 ]);
@@ -332,17 +330,7 @@ TypeScript configuration factory with the runtime and merges its defaults below
 the public values. Services read the assembled configuration through
 `app.config.get()`; `app.config` and `runtime.config` reference the same object.
 
-Only public Browser configuration belongs in this payload. Server secrets must
-never be copied into the HTML data block, Client plugin options, logs, or
-inspection output.
-
-## Inspection boundary
-
-Client inspection imports `client/runtime.ts` and `client/plugins.ts` and reads
-static declarations. It does not create `ClientApplication`, instantiate or run
-ServiceProviders, render React Providers, load route page components, or load
-locale messages. Inspection is a composition diagnostic, not proof of runtime
-behavior.
+Only public Browser configuration belongs in this payload. Server secrets must never be copied into the HTML data block, Client plugin options, or logs.
 
 ## Verification
 
@@ -360,4 +348,4 @@ plugins that consume the changed fields.
 
 Application authorization is provided by `@nocobase/app-plugin-authorization/client`. Use `useCan` for reactive visibility checks and `useAuthorizationClient` or `authorizationClientToken` for the current application client. `AppClientRefineConfig` excludes `accessControlProvider`, and the Refine registry has no `setAccessControlProvider` setter.
 
-Client route authentication uses `auth: 'required' | 'guest' | 'optional'`. Authorization uses `authz: 'skip' | { resource: { type, id }, action }`; skip applies only to the current page. Route registration normalizes omitted authorization: authenticated App pages without a page ancestor check `{ resource: { type: 'page', id: name }, action: 'access' }`, while child pages, Settings, Dev, guest and optional pages add no check. Page guards, menus and permission discovery consume the normalized result. The removed `access` field and string resource declarations are rejected.
+Client route authentication uses `auth: 'required' | 'guest' | 'optional'`. Authorization uses `authz: 'skip' | 'unrestricted' | { resource: { type, id }, action }`. Declare it on the first page of every path. A nested page that omits it inherits the effective value of its nearest ancestor page, through any number of groups and levels, and a child that declares its own value overrides it for its subtree. A first page that omits it never stops the application: protected `app` pages (`auth: 'required'`) and `settings` pages default to `'unrestricted'`, which admits only identities with unrestricted access such as root and hides the page from everyone else's menus, while `guest` and `optional` app pages and `dev` pages default to `'skip'`. Development builds log one warning per defaulted page naming its id, path and default; production logs nothing. `'unrestricted'` may also be declared explicitly for a root-only page, and it is never offered as a grant. `'skip'` applies only to the current page and does not bypass parent guards. Route groups cannot declare `authz`. Malformed values, the removed `access` field and string resource declarations are rejected.

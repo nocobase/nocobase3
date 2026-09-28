@@ -57,7 +57,7 @@ export function ApplicationsCatalog(): ReactElement {
   const reportError = useCallback(
     (reason: unknown): void => {
       if (reason instanceof ApiClientError && reason.status === 403) {
-        authorization.invalidatePermissions();
+        authorization.invalidate();
       }
       setError(readError(reason));
     },
@@ -114,7 +114,7 @@ export function ApplicationsCatalog(): ReactElement {
       () => void loadCapabilities().catch(reportError),
       0,
     );
-    const unsubscribe = authorization.onPermissionsInvalidated(() => {
+    const unsubscribe = authorization.onInvalidated(() => {
       void loadCapabilities().catch(reportError);
     });
     return () => {

@@ -8,7 +8,7 @@ export function resolveOwnedSalesRecords(
 ): Promise<boolean | FilterAst> {
   return projectScope(
     database,
-    context.resource.id,
+    context.collection,
     buildFilter((filter) => filter.string('ownerId').eq(context.principal.id)),
   );
 }
@@ -25,7 +25,7 @@ export async function resolveRegionalSalesRecords(
   return member
     ? projectScope(
         database,
-        context.resource.id,
+        context.collection,
         buildFilter((filter) =>
           filter.string('region').eq(String(member.region)),
         ),
@@ -38,7 +38,7 @@ export function resolvePublicSalesRecords(
 ): Promise<boolean | FilterAst> {
   return projectScope(
     database,
-    context.resource.id,
+    context.collection,
     buildFilter((filter) => filter.boolean('confidential').isFalse()),
   );
 }

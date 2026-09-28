@@ -27,7 +27,6 @@ Put user-facing text behind a translation key correctly the first time: in the r
 
 - Do not build a language picker. `useAppLocale()` exists; `app-template-default` already renders one in `client/shell/language-switcher.tsx`.
 - Do not add i18n machinery to an application. The plugin is registered by default and the runtime is wired in `createAppRuntime`.
-- Do not use `@nocobase/app-portal-sdk/i18n`. It is the retired Portal runtime with its own i18next instance; mixing the two leaves each holding half the resources.
 
 # The one rule that decides everything
 
@@ -179,11 +178,11 @@ Overrides apply after every namespace has registered, so the application always 
 
 ```bash
 pnpm typecheck                    # a key absent from the interface
-pnpm nocobase app i18n:check      # a language declared on only one side
+pnpm nocobase locales check      # a language declared on only one side
 pnpm test                         # if application text changed
 ```
 
-Run these from the application. Inside this monorepo the equivalents are `pnpm --filter <package> typecheck` and `pnpm i18n:check`, which reads every `locales/` directory under `packages/`.
+Run these from the application. Inside this monorepo the equivalents are `pnpm --filter <package> typecheck` and `pnpm --filter <app> exec nocobase locales check`. The root `pnpm i18n:check` is a different check: it reads every `locales/` directory under `packages/` and reports keys missing from a locale, without comparing the languages each side declares.
 
 Then switch language in the running application and confirm the new text follows. A string that does not change is still a literal somewhere.
 

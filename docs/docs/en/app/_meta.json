@@ -48,5 +48,17 @@
     "type": "file",
     "name": "testing",
     "label": "Testing"
+  },
+  {
+    "type": "dir",
+    "name": "deployment",
+    "label": "Deployment",
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "reference",
+    "label": "Reference",
+    "collapsed": true
   }
 ]

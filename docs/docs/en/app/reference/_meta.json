@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "routes",
+    "label": "Route types"
+  },
+  {
+    "type": "file",
+    "name": "theme-tokens",
+    "label": "Style tokens"
+  }
+]

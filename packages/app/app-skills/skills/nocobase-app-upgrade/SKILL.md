@@ -121,14 +121,14 @@ When the right answer is unclear, stop and ask. The user is the only one who kno
 
 ## 7. Reconcile what is not ordinary source
 
-`package.json`, generated configuration, synchronized Skills, and the plugin composition roots have their own rules — see [edge cases](references/edge-cases.md). For each user-confirmed `@nocobase/*` removal, run `pnpm package:remove @nocobase/example` while the dependency is still declared, so the package manager updates the manifest and lockfile and the CLI cleans its Skills and plugin registrations. Do not delete only its manifest key; the edge-case reference covers older CLI versions and already-removed dependencies.
+`package.json`, generated configuration, synchronized Skills, and the plugin composition roots have their own rules — see [edge cases](references/edge-cases.md). For each user-confirmed `@nocobase/*` removal, run `pnpm nocobase package remove @nocobase/example` while the dependency is still declared, so the package manager updates the manifest and lockfile and the CLI cleans its Skills and plugin registrations. Do not delete only its manifest key; the edge-case reference covers older CLI versions and already-removed dependencies.
 
 ## 8. Finish
 
 Set `defaultTemplateVersion` to the target, now that the source is actually merged.
 
 ```bash
-pnpm install && pnpm dedupe && pnpm skills:sync
+pnpm install && pnpm dedupe && pnpm nocobase skills sync
 pnpm typecheck && pnpm test && pnpm lint && pnpm build
 ```
 

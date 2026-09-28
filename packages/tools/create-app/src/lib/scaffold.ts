@@ -40,8 +40,9 @@ export async function assertTargetIsUsable(directory: string): Promise<void> {
 }
 
 /**
- * The minimum a generated project must ignore. `config.yml` carries the generated `auth.secret` and `.env` carries a
- * hub's settings, so committing either would publish local configuration; the rest are build output and local state.
+ * The minimum a generated project must ignore. `config.yml` carries the `auth.secret` that `config init` generates
+ * and `.env` carries a hub's settings, so committing either would publish local configuration; the rest are build
+ * output and local state.
  */
 const FALLBACK_GITIGNORE = [
   'node_modules/',
@@ -60,10 +61,10 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-journal',
   '/database.sqlite-wal',
   '/database.sqlite-shm',
-  // Written by `pnpm collections:generate`: a snapshot of what this machine's database resolves every Collection
-  // to, regenerated after migrating rather than committed. Only the managed connection the template ships is named,
-  // because an `external` connection keeps its metadata.json in the repository as the metadata source.
-  '/database/main/collections/',
+  // Written by `pnpm nocobase collections generate`: a cache of what this machine's database resolves every Collection
+  // to, for every connection, regenerated rather than committed. Hand-written metadata lives in
+  // `database/<connection>/metadata/` instead, so the whole collections directory can be ignored.
+  '/database/*/collections/',
   '/.agents/',
   '/.claude/skills/',
   '/.agent-annotations/',
@@ -139,12 +140,12 @@ async function restoreGitignore(directory: string): Promise<void> {
  * The name is not decoration in any of these: `client/runtime.ts` declares the `packageName` that becomes the
  * application's i18n namespace on the browser side, while the server derives the same namespace from `package.json`.
  * Left unrewritten the two disagree, so `APP_NS` resolves to a different namespace in each half of the application.
- * It also fails `pnpm client:inspect`, which compares the two and refuses to run when they differ.
  *
  * `server/providers/app-example.ts` names a service token, and a token's identity is its name.
  *
- * Documentation is deliberately absent. `MIGRATION.md` refers to `@nocobase/app-template-default` as the upstream
- * template a derived application merges from, which stays correct and would be made wrong by rewriting it.
+ * Documentation is deliberately absent. Where it names a template package, as the Examples `README.MD` names
+ * `@nocobase/app-template-default`, it refers to the upstream template, which stays correct and would be made wrong
+ * by rewriting it.
  */
 const PACKAGE_NAME_SOURCES = [
   'client/runtime.ts',
@@ -155,8 +156,8 @@ const PACKAGE_NAME_SOURCES = [
 /**
  * Replaces the template's package name with the application's in the few sources that embed it.
  *
- * A missing file is skipped rather than treated as an error: the list covers both templates, and neither is required
- * to keep a file the other has.
+ * A missing file is skipped rather than treated as an error: the list covers all three templates, and none is
+ * required to keep a file another has.
  */
 async function rewritePackageName(
   directory: string,
@@ -193,7 +194,6 @@ export interface ScaffoldOptions {
   name: string;
   /** Extra files to write once the template is in place, keyed by path relative to the target. */
   extraFiles?: Record<string, string>;
-  additionalDependencies?: Record<string, string>;
 }
 
 /**
@@ -223,15 +223,6 @@ export async function scaffoldFromTemplate(
   const templateName = typeof manifest.name === 'string' ? manifest.name : '';
 
   manifest.name = name;
-  if (
-    options.additionalDependencies &&
-    Object.keys(options.additionalDependencies).length
-  ) {
-    manifest.dependencies = {
-      ...(manifest.dependencies as Record<string, string> | undefined),
-      ...options.additionalDependencies,
-    };
-  }
 
   // Records which template this application was generated from, because nothing else left in the manifest can say.
   // `name` has just become the application's own, and `nocobase.templateKind` is `app` for both Default and Examples,
@@ -247,9 +238,9 @@ export async function scaffoldFromTemplate(
     manifest.nocobase = nocobase;
   }
 
-  // `displayName` is what the client shell renders in its sidebar footer, through the `__PORTAL_TEMPLATE_NAME__`
-  // constant `vite.config.ts` defines from it. Deleting it left that constant `undefined`, so a generated app fell
-  // back to the literal "Default Template" baked into the shell — the template's label, on every app built from it.
+  // `displayName` is what the client shell renders in its sidebar footer: the server publishes it from the
+  // application's package.json as `app.displayName`. Deleting it left nothing to publish, so a generated app fell
+  // back to the literal "Default Template" in the shell — the template's label, on every app built from it.
   manifest.displayName = name;
 
   // The remaining publish metadata describes the template rather than what is built from it, and would point a
@@ -281,20 +272,6 @@ export async function scaffoldFromTemplate(
 
 export async function removeDirectory(directory: string): Promise<void> {
   await rm(directory, { force: true, recursive: true });
-}
-
-/**
- * Reads the template's `config.example.yml`, which becomes the generated `config.yml`. A template is not required to
- * ship one, so the caller falls back rather than failing.
- */
-export async function readConfigExample(
-  directory: string,
-): Promise<string | undefined> {
-  try {
-    return await readFile(path.join(directory, 'config.example.yml'), 'utf8');
-  } catch {
-    return undefined;
-  }
 }
 
 /**

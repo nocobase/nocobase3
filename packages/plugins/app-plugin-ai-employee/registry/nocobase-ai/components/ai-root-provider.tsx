@@ -8,9 +8,11 @@ import {
   AIToolRendererProvider,
   type AIToolRendererMap,
 } from './tools/tool-renderer-provider.js';
-import type { AIPageContextFailurePolicy } from './page-elements/page-element-provider.js';
+import type { AIPageContextFailurePolicy } from './page-elements/page-element-store.js';
 
-export type NocoBaseAIRootProviderProps = AIProviderProps & {
+export type NocoBaseAIRootProviderProps = Omit<AIProviderProps, 'service'> & {
+  /** Replaces the service built from the application's `ApiClient`. */
+  service?: AIProviderProps['service'];
   toolRenderers?: AIToolRendererMap;
   contextFailurePolicy?: AIPageContextFailurePolicy;
 };

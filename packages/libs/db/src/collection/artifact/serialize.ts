@@ -72,6 +72,7 @@ export function serializeCollectionArtifactManifest(
 ): string {
   const manifest: CollectionArtifactManifest = {
     formatVersion: COLLECTION_ARTIFACT_FORMAT_VERSION,
+    generated: true,
     connection: input.connection,
     dialect: input.dialect,
     schemaManagement: input.schemaManagement,

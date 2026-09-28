@@ -2,11 +2,32 @@
 
 Use this page to switch the application's database or add a connection: the dialect packages and their fields, what `server/config/database.ts` and `config.yml` each own, and the installation and typing problems that follow. For schema changes read [migrations and seeds](migrations.md); for runtime queries read [database and data access](database-and-data.md).
 
-What a connection means once code touches it — `schemaManagement` as a schema-ownership boundary rather than read-only credentials, and what `database/<connectionName>/collections/` holds for a managed connection versus an external one — is in `.agents/skills/nocobase-db/SKILL.md` sections 1 and 6.
+What a connection means once code touches it — `schemaManagement` as a schema-ownership boundary rather than read-only credentials, and what `database/<connectionName>/collections/` and `metadata/` hold — is in `.agents/skills/nocobase-db/SKILL.md` sections 1 and 6.
 
-## Creating an application
+## Creating and configuring an application
 
-Use `pnpm create @nocobase/app <directory> --dialect <dialect> --json` for non-interactive creation. Supported dialects are `sqlite` (default), `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, and `oceanbase`. Creation writes the selected `database.connections.main` to `config.yml`, adds the required driver dependency, and runs `pnpm install` unless `--no-install` is supplied. Generated applications default to `verifyDepsBeforeRun: false` in `pnpm-workspace.yaml`; run `pnpm install` explicitly after changing dependencies or when creation used `--no-install`, before starting or building. Check the exit code and JSON result; if installation fails, retry `pnpm install` in the generated directory rather than recreating it. For non-SQLite databases, obtain the actual connection settings and edit `config.yml` directly, including the password; no database `.env` is needed. Prepare the target database before running the returned `nextCommands` (`pnpm dev` for apps; build/start for Hub). Do not treat successful scaffolding as verified database connectivity. Keep `config.yml` gitignored and do not expose its secrets in output.
+Use `pnpm create @nocobase/app <directory> --json` for non-interactive creation. Creation does not choose a database: it scaffolds the project, installs dependencies unless `--no-install` is supplied, and returns the remaining procedure in `result.nextCommands`. Run those commands in order.
+
+Configuration uses three commands of the application, each with `--json`:
+
+```bash
+pnpm nocobase config init --dialect postgres --json      # write config.yml
+pnpm nocobase config set database.connections.main.host=db.internal database.connections.main.username=crm --json
+pnpm nocobase config set --from-env database.connections.main.password=CRM_DB_PASSWORD --json
+pnpm nocobase config check --json                        # verify, database connection included
+```
+
+`config init` writes `database.connections.main` and generated `auth.secret` and `session.secret` into `config.yml`, built from `config.example.yml` so its comments survive. Supported dialects are `sqlite`, `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, and `oceanbase`. For anything but SQLite its JSON `result` lists `requiredSettings` — the connection settings still at a placeholder — and `nextCommands`. On an application that is already configured it reports `status: "success-noop"` and exits 0, and it fails with `error.code` `ALREADY_CONFIGURED` only when `--dialect` asks for a different database than the one configured.
+
+`config init` installs nothing. Which dialects an application can run on is decided by the driver packages it depends on, so a dialect whose driver is absent fails with `error.code` `DRIVER_MISSING`, and `error.suggestions[0].run` holds the `pnpm add` pinned to the range the runtime accepts; nothing is written. Run that command, then run `config init` again. Templates depend on `@nocobase/db-sqlite`, so SQLite needs no install; another dialect needs its driver added, and `pnpm remove @nocobase/db-sqlite` if nothing else uses SQLite.
+
+`config set` sets `key=value` assignments in the file the application reads, keeping comments. It refuses a section the application does not know, with the nearest known name, and reports a key an environment variable overrides. Pass a password with `--from-env` and the name of a variable the user has set; never put a secret on the command line or in the conversation. Lists, such as notification channels, are edited in the file itself.
+
+`config check` exits non-zero with `error.code` `CONFIG_INVALID` and a finding per problem in `error.details.findings` — a missing driver, a missing or placeholder secret, a failed connection — each with `key` and, where there is one, a `fix` command to run; a passing check lists its warnings in `result.findings`. It also warns about a section nothing reads, a `${NAME}` that is used as literal text (only the AI employee plugin's `llmServices` and `mcpServers` expand those), and a session secret that is regenerated at every start. Treat a passing check as the confirmation that the application can start; do not treat successful scaffolding or `config init` as verified connectivity.
+
+Applications default to `verifyDepsBeforeRun: false` in `pnpm-workspace.yaml`; run `pnpm install` explicitly after changing dependencies or when creation used `--no-install`, before configuring, starting or building. If installation fails, retry `pnpm install` in the generated directory rather than recreating it. Keep `config.yml` gitignored and do not expose its secrets in output.
+
+`pnpm dev` refuses to run until the application has a configuration source — a file, or `AUTH_SECRET` in the environment — and `pnpm start` exits at once without `auth.secret`. `pnpm build` needs neither, because building reads no secret.
 
 ## Configuration responsibilities
 
@@ -121,7 +142,7 @@ Connection names used by database tasks contain only letters, digits, underscore
 
 The default connection runs migrations and seeds at startup unless disabled. Other connections default to `autoRun: false`; enable each task explicitly when startup should run it. Plugin sources are added only to the default connection. See [task ordering and source selection](migrations.md#multiple-connections).
 
-At the application layer, an external connection without a configured metadata store uses `database/<connectionName>/collections/` by default. A connection-level `metadataStore` or shared `database.metadataStore` can provide another source. Metadata directory strings resolve relative to the application root. Account for the target's naming conventions and collection metadata when verifying runtime access.
+At the application layer, an external connection without a configured metadata store reads `database/<connectionName>/metadata/<name>.json` by default: one hand-written metadata document per Collection, committed. A connection-level `metadataStore` or shared `database.metadataStore` can provide another source; a directory string names a directory in the same layout, resolves relative to the application root, and may not be a generated `collections/` directory. Account for the target's naming conventions and collection metadata when verifying runtime access.
 
 Use one managed connection per physical database/schema. The application rejects identical configured managed targets before running tasks; hostname aliases, symlinks and driver routing can hide a shared target. Different history table names do not isolate schema ownership. External connections are excluded from this duplicate-ownership check.
 
@@ -148,8 +169,8 @@ Run `pnpm typecheck` for the typed defaults, then verify the specific connection
 
 | Change                        | Runtime verification                                                                                                                                                                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default managed connection    | Run `pnpm db:apply` when applying pending migrations and seeds is intended. It targets `database.default`.                                                                                                              |
-| Additional managed connection | Run `pnpm db:apply --connection analytics` when applying that connection's pending tasks is intended. A successful default-connection run does not verify it.                                                           |
+| Default managed connection    | Run `pnpm nocobase db apply` when applying pending migrations and seeds is intended. It targets `database.default`.                                                                                                     |
+| Additional managed connection | Run `pnpm nocobase db apply --connection analytics` when applying that connection's pending tasks is intended. A successful default-connection run does not verify it.                                                  |
 | External connection           | Perform a bounded read from an existing collection using `database.query('externalCrm')` in an application service or test. Verify the expected target, naming and metadata. Do not run migrations or seeds against it. |
 
 Migration commands execute schema changes and write migration history; they are not read-only connection probes. Manual execution ignores `autoRun`. For connectivity-only verification of a managed connection, use a bounded read of an existing collection instead. See [database and data access](database-and-data.md) for resolving the manager, and the `nocobase-db` Skill for the query API itself.
@@ -184,4 +205,4 @@ With multiple connections, TypeScript may omit suggestions inside an empty `dial
 
 Application server builds retain declaration emission with `isolatedDeclarations: false`, allowing direct default exports of configuration factory calls. The helper returns the common `AppConfigFactory<AppDatabaseConfig>` contract; its result does not expose the inferred concrete driver types. Library packages retain isolated declaration checking. `AppDatabaseConfigFromDrivers` remains available for explicit annotations outside the helper.
 
-Application templates do not declare `@nocobase/db-sqlite` as a default dependency. `create-app` adds the official driver selected by `--dialect`, including SQLite when the flag is omitted. When running a template directly instead of using `create-app`, explicitly install the driver required by its database configuration before deployment.
+Application templates declare `@nocobase/db-sqlite`, the driver for the dialect their `server/config/database.ts` defaults to, and `create-app` adds no other. Any further driver an application's configuration needs — for its main connection or an additional one — has to be installed into its `dependencies` before building, because a deployment installs only what the application declares.

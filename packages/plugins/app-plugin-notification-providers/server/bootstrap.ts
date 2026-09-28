@@ -16,9 +16,9 @@ export function registerBuiltInNotificationProviders(
 ): void {
   registry
     .registerChannel(createEmailChannelDefinition())
-    .registerProvider('email', createSmtpProviderDefinition())
-    .registerProvider('email', createResendProviderDefinition())
+    .registerProvider(createSmtpProviderDefinition())
+    .registerProvider(createResendProviderDefinition())
     .registerChannel(createImChannelDefinition())
-    .registerProvider('im', createFeishuWebhookProviderDefinition())
-    .registerProvider('im', createDingTalkWebhookProviderDefinition());
+    .registerProvider(createFeishuWebhookProviderDefinition())
+    .registerProvider(createDingTalkWebhookProviderDefinition());
 }

@@ -9,7 +9,7 @@ keywords: 'AI 知识库,快速开始,PGVector,上传文档,命中测试,RAG'
 
 ## 前置条件
 
-- 已通过 `plugin:register` 将专业版 `@nocobase/app-plugin-ai-knowledge-base` 添加到应用并启用
+- 已通过 `plugin register` 将专业版 `@nocobase/app-plugin-ai-knowledge-base` 添加到应用并启用
 - 已配置一个可用的 Embedding 模型
 - 已准备 PostgreSQL 数据库，并安装 `vector` 扩展
 - 你拥有应用管理权限

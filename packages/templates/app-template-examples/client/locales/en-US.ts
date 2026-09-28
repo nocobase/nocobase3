@@ -1,6 +1,50 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  i18nExamples: {
+    title: 'Internationalization',
+    description:
+      'Explore plurals, missing translations and regional formats. Switch language from the account menu to see the results update.',
+    pluralTitle: 'Plurals',
+    pluralDescription:
+      'English uses different forms for one and other counts. Chinese uses the same wording for both.',
+    count: 'Item count',
+    countHint: 'Enter a non-negative safe integer or choose a preset.',
+    presets: 'Count presets',
+    invalidCount: 'Enter a valid non-negative safe integer.',
+    itemCount_one: '{{count}} item',
+    itemCount_other: '{{count}} items',
+    fallbackTitle: 'Missing translations',
+    fallbackDescription:
+      'Switch to Chinese: the English-only message falls back to English. The last two rows have no translation in either language.',
+    fallbackChain:
+      'Lookup order: current language ({{locale}}) → application default ({{defaultLocale}}) → en-US. Repeated languages are checked once.',
+    scenarios: {
+      translated: 'Available in both languages',
+      englishOnly: 'Available in English only',
+      withDefault: 'Missing, with defaultValue',
+      withoutDefault: 'Missing, without defaultValue',
+    },
+    scenario: 'Scenario / key',
+    result: 'Rendered result',
+    source: 'Source',
+    keySource: 'Key itself',
+    defaultValue: 'Translation unavailable.',
+    isolationNote:
+      'These deliberately incomplete resources use an isolated I18nRuntime with the current language and application default. The application’s own translations remain complete.',
+    loading: 'Loading fallback examples',
+    error: 'Unable to load the fallback examples.',
+    retry: 'Retry',
+    formatTitle: 'Regional formats',
+    formatDescription:
+      'Compare the same number, USD amount and UTC timestamp using Intl.NumberFormat and Intl.DateTimeFormat.',
+    region: 'Region',
+    number: 'Number',
+    currency: 'Currency (USD)',
+    date: 'Date and time (UTC)',
+    formatNote:
+      'Formatting changes presentation, not value: no currency conversion takes place. These regions do not add interface languages; the comparison stays fixed when you switch language.',
+  },
   notifications: { unreadLabel: 'Notifications, {{count}} unread' },
   overrides: {
     '@nocobase/app-plugin-notification-in-app': {
@@ -70,6 +114,7 @@ const enUS = {
   'navigation.brandHome': 'NocoBase home',
   'navigation.brandApps': 'NocoBase applications',
   'auth.passwordMismatch': "Passwords don't match.",
+  'routeOverlay.close': 'Close',
   'status.deniedDescription': 'You do not have permission to access {{label}}.',
   'status.routeFailedDescription':
     'Route {{label}} from {{packageName}} could not be loaded.',
@@ -169,6 +214,9 @@ const enUS = {
     allowClose: 'Allow closing this layer',
     historyHint:
       'Turn off closing to keep this layer open when you press Escape, click outside, or use Close. Browser back and forward still navigate normally.',
+    showToast: 'Show a notification',
+    toastTitle: 'Shown from inside the overlay',
+    toastDescription: 'Notifications stay above dialogs and drawers.',
   },
   numbers: {
     title: 'Numeric types',
@@ -214,10 +262,20 @@ const enUS = {
     },
   },
   examples: {
+    i18n: {
+      title: 'Internationalization',
+      description:
+        'Try plural forms, missing-translation fallbacks and regional number, currency and date formats.',
+    },
     notifications: {
       title: 'Notifications',
       description:
         'View your in-app notifications, filter unread messages, and manage their read state.',
+    },
+    notificationTasks: {
+      title: 'Task notifications',
+      description:
+        'Assign tasks to different users and let recipients update the task from the notification detail page.',
     },
     routeOverlays: {
       title: 'Route dialogs and drawers',
@@ -317,47 +375,13 @@ const enUS = {
     saving: 'Saving…',
   },
   appearance: {
-    toggle: 'Switch between light and dark',
-    theme: {
-      title: 'Theme',
-      description:
-        'Choose the theme this application uses. Light and dark are switched from the header.',
-      search: 'Search themes',
-      empty: 'No theme matches “{{query}}”.',
-    },
-    themes: {
-      default: 'Default',
-      'modern-minimal': 'Modern Minimal',
-      'violet-bloom': 'Violet Bloom',
-      'mocha-mousse': 'Mocha',
-      bubblegum: 'Bubblegum',
-      'amethyst-haze': 'Amethyst Haze',
-      notebook: 'Notebook',
-      graphite: 'Graphite',
-      perpetuity: 'Perpetuity',
-      'kodama-grove': 'Kodama Grove',
-      'cosmic-night': 'Cosmic Night',
-      tangerine: 'Tangerine',
-      'quantum-rose': 'Quantum Rose',
-      nature: 'Nature',
-      'bold-tech': 'Bold Tech',
-      'elegant-luxury': 'Elegant Luxury',
-      'amber-minimal': 'Amber Minimal',
-      'neo-brutalism': 'Neo Brutalism',
-      'solar-dusk': 'Solar Dusk',
-      claymorphism: 'Claymorphism',
-      cyberpunk: 'Cyberpunk',
-      'pastel-dreams': 'Pastel Dreams',
-      'clean-slate': 'Clean Slate',
-      caffeine: 'Caffeine',
-      'ocean-breeze': 'Ocean Breeze',
-      'retro-arcade': 'Retro Arcade',
-      'midnight-bloom': 'Midnight Bloom',
-      candyland: 'Candyland',
-      'northern-lights': 'Northern Lights',
-      'vintage-paper': 'Vintage Paper',
-      'sunset-horizon': 'Sunset Horizon',
-    },
+    title: 'Appearance',
+    mode: 'Color mode',
+    preset: 'Theme',
+    light: 'Light',
+    dark: 'Dark',
+    system: 'System',
+    themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',
@@ -379,7 +403,7 @@ const enUS = {
     eyebrow: 'External database example',
     title: 'CRM orders',
     description:
-      'These rows live in a database this application does not own. The externalCrm connection reads its schema, never changes it, and layers titles and the customer relation on top from database/externalCrm/collections/*/metadata.json. The page addresses everything by logical name; the crm_ table prefix never appears here.',
+      'These rows live in a database this application does not own. The externalCrm connection reads its schema, never changes it, and layers titles and the customer relation on top from database/externalCrm/metadata/*.json. The page addresses everything by logical name; the crm_ table prefix never appears here.',
     readOnly: 'Read-only',
     customers: '{{count}} customers',
     filter: 'Filter by status',
@@ -414,6 +438,7 @@ const enUS = {
     signingOut: 'Signing out…',
   },
   navigation: {
+    i18nExamples: 'Internationalization',
     notifications: 'Notifications',
     numbers: 'Numeric types',
     externalCrm: 'External CRM',

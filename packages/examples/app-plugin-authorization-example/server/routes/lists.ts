@@ -1,6 +1,6 @@
 import type {
   AuthorizationEnv,
-  AuthorizationScope,
+  AuthorizationContext,
 } from '@nocobase/app-plugin-authorization';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import type { DatabaseManager } from '@nocobase/db';
@@ -156,12 +156,12 @@ export function createSalesListRoutes(
 
 async function viewRecords(
   database: DatabaseManager,
-  scope: AuthorizationScope,
+  scope: AuthorizationContext,
   resource: string,
   collection: string,
 ) {
   const decision = await scope.authorize({
-    resource: { type: 'resource', id: resource },
+    resource: { type: 'composite', id: resource },
     action: 'view',
   });
   if (decision.effect === 'deny' || !decision.conditions?.database)
@@ -177,7 +177,7 @@ async function viewRecords(
 }
 
 async function pageNavigation(
-  scope: AuthorizationScope,
+  scope: AuthorizationContext,
 ): Promise<Record<string, boolean>> {
   return {
     projects: await scope.can({
@@ -197,14 +197,14 @@ async function pageNavigation(
 
 async function operationAccess(
   database: DatabaseManager,
-  scope: AuthorizationScope,
+  scope: AuthorizationContext,
   resource: string,
   collection: string,
   action: string,
   fields: string[],
 ) {
   const decision = await scope.authorize({
-    resource: { type: 'resource', id: resource },
+    resource: { type: 'composite', id: resource },
     action,
   });
 
@@ -222,10 +222,10 @@ async function operationAccess(
 
 async function projectSummaries(
   database: DatabaseManager,
-  scope: AuthorizationScope,
+  scope: AuthorizationContext,
 ): Promise<Record<string, { title: string; region: string }>> {
   const decision = await scope.authorize({
-    resource: { type: 'resource', id: 'example.sales.projects' },
+    resource: { type: 'composite', id: 'example.sales.projects' },
     action: 'view',
   });
   const policy =

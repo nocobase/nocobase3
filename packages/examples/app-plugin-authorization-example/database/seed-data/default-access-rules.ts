@@ -1,31 +1,36 @@
-import { defaultAccessRule } from '@nocobase/authorization/default-access';
-import { databaseScope } from '@nocobase/app-plugin-authorization';
+import { selection } from '@nocobase/authorization/core';
+import { defineDefaultAccessRule } from '@nocobase/authorization/default-access';
 import {
-  projectResource,
+  projectReference,
   quoteResource,
   orderResource,
 } from '../../server/sales-resources.js';
 import { timestamps, type SalesSeedContext } from './context.js';
 export const defaultAccessRules = [
-  defaultAccessRule(projectResource.reference())
-    .scope('view', 'projects', databaseScope('recordsIOwn'))
-    .scope('edit', 'projects', databaseScope('recordsIOwn'))
+  defineDefaultAccessRule('example-default-projects', projectReference)
+    .scope('view', 'projects', selection.recordAccess('recordsIOwn'))
+    .scope('edit', 'projects', selection.recordAccess('recordsIOwn'))
     .build(),
-  defaultAccessRule(quoteResource.reference())
-    .scope('view', 'quotes', databaseScope('example.sales.own'))
-    .scope('edit', 'quotes', databaseScope('example.sales.prepared'))
-    .scope('submit', 'quotes', databaseScope('example.sales.prepared'))
-    .scope('submit', 'projects', databaseScope('example.sales.region'))
+  defineDefaultAccessRule('example-default-quotes', quoteResource.reference())
+    .scope('view', 'quotes', selection.recordAccess('example.sales.own'))
+    .scope('edit', 'quotes', selection.recordAccess('example.sales.prepared'))
+    .scope('submit', 'quotes', selection.recordAccess('example.sales.prepared'))
+    .scope('submit', 'projects', selection.recordAccess('example.sales.region'))
     .build(),
-  defaultAccessRule(orderResource.reference())
-    .scope('view', 'orders', databaseScope('example.sales.own'))
-    .scope('deliver', 'orders', databaseScope('example.sales.own'))
-    .scope('manageRelations', 'orders', databaseScope('example.sales.own'))
+  defineDefaultAccessRule('example-default-orders', orderResource.reference())
+    .scope('view', 'orders', selection.recordAccess('example.sales.own'))
+    .scope('deliver', 'orders', selection.recordAccess('example.sales.own'))
+    .scope(
+      'manageRelations',
+      'orders',
+      selection.recordAccess('example.sales.own'),
+    )
     .build(),
 ];
 export function defaultAccessRuleRows(context: SalesSeedContext) {
   return defaultAccessRules.map((rule) => ({
-    id: `default:${rule.resource.id}`,
+    id: rule.key,
+    key: rule.key,
     resourceType: rule.resource.type,
     resourceId: rule.resource.id,
     actions: JSON.stringify(rule.actions),

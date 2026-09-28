@@ -489,12 +489,13 @@ const zhCN: HubResource = {
     existingDescription:
       '进入已有的 NocoBase 3 项目目录，直接继续构建，无需重新创建项目。',
     publishTitle: '上传并部署',
-    buildDescription: '在项目目录中运行，压缩包将保存到 storage/dist.tar.gz。',
+    buildDescription:
+      '在项目目录中运行，压缩包将保存到 storage/exports/dist.tar.gz。',
     copyBuild: '复制构建命令',
     buildTarget:
       '部署到另一台机器？使用 --target 和 --node-version 匹配 Hub 主机环境，支持的选项见 pnpm build --help。',
     uploadDescription:
-      '在“发布与部署”中上传 storage/dist.tar.gz，再点击版本右侧的“部署”并检查配置。',
+      '在“发布与部署”中上传 storage/exports/dist.tar.gz，再点击版本右侧的“部署”并检查配置。',
     openReleases: '前往版本',
     deployDescription: '上传不会启动应用，请在部署成功后再访问。',
     openDeployments: '前往部署',
@@ -514,12 +515,10 @@ const zhCN: HubResource = {
     names: {
       'hub-administrator': '平台管理员',
       'hub-operator': '应用管理员',
-      'hub-viewer': '查看者（历史角色）',
     },
     descriptions: {
       'hub-administrator': '管理全部应用、发布 API Key 和用户权限',
       'hub-operator': '管理自己创建的应用及自己的发布 API Key',
-      'hub-viewer': '仅可查看有权限的应用及运行状态',
     },
     groups: {
       visibility: '应用与状态',

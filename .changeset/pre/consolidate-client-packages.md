@@ -1,6 +1,5 @@
 ---
 '@nocobase/app-client': major
-'@nocobase/app-portal-sdk': major
 '@nocobase/app-template-default': major
 '@nocobase/app-template-hub': major
 '@nocobase/app-server': major
@@ -8,9 +7,7 @@
 '@nocobase/app-plugin-authorization': minor
 '@nocobase/app-plugin-file': minor
 '@nocobase/app-plugin-i18n': minor
-'@nocobase/app-plugin-install': minor
 '@nocobase/app-plugin-notification': minor
-'@nocobase/app-plugin-notification-provider': minor
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/app-plugin-routes-example': minor
 '@nocobase/create-app': minor

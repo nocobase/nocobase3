@@ -8,11 +8,6 @@ export function sharingRuleAssignmentRows({ users, now }: SalesSeedContext) {
       subjectId: users.delivery,
     },
     {
-      sharingRuleId: 'example-delivery-orders',
-      subjectType: 'example.sales.team',
-      subjectId: 'delivery',
-    },
-    {
       sharingRuleId: 'example-selected-projects',
       subjectType: 'user',
       subjectId: users.assistant,
@@ -24,8 +19,8 @@ export function sharingRuleAssignmentRows({ users, now }: SalesSeedContext) {
     },
     {
       sharingRuleId: 'example-proposal-handover',
-      subjectType: 'example.sales.team',
-      subjectId: 'proposal',
+      subjectType: 'user',
+      subjectId: users.proposal,
     },
   ].map((row) => ({
     id: randomUUID(),

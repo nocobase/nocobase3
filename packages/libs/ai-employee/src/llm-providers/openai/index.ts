@@ -18,26 +18,6 @@ import { OpenAIResponsesProvider } from './responses.js';
 const commonProperties: Pick<LLMProviderMeta, 'supportedModel' | 'models'> = {
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
   models: {
-    [SupportedModel.LLM]: [
-      'gpt-5',
-      'gpt-4.1',
-      'gpt-4o',
-      'chatgpt-4o',
-      'o4-mini',
-      'o3',
-      'o3-pro',
-      'o3-mini',
-      'o1',
-      'o1-pro',
-      'o1-mini',
-      'o3-deep-research',
-      'o4-mini-deep-research',
-      'gpt-4-turbo',
-      'gpt-4',
-      'gpt-3.5-turbo',
-      'gpt-4o-search-preview',
-      'gpt-4o-mini-search-preview',
-    ],
     [SupportedModel.EMBEDDING]: [
       'text-embedding-3-small',
       'text-embedding-3-large',

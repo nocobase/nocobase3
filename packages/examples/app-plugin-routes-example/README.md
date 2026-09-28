@@ -33,6 +33,29 @@ menu entry, as the App page in this example does. Pages with children must place
 `<Outlet />` at the intended content location; pure navigation groups have no
 `componentLoader`. Refine resources serve CRUD configuration, not menus.
 
+Each entry page declares `authz`; nothing is inferred from the route name. Nested pages inherit it, and an entry page that omits it registers with a development warning and a default of `'unrestricted'` (root only) on protected App and settings pages or `'skip'` on guest, optional and dev pages. The App page checks a page grant, the Settings page names the check it requires, and the development page declares `'skip'`, which checks nothing beyond sign-in and parent routes:
+
+```ts
+defineAppRoutes([
+  {
+    name: 'index',
+    path: '/routes-example',
+    auth: 'required',
+    authz: { resource: { type: 'page', id: 'index' }, action: 'access' },
+    componentLoader: () => import('./pages/routes-example-page.js'),
+  },
+]);
+defineDevRoutes([
+  {
+    name: 'routes-example',
+    path: '/routes-example',
+    navigation: { title: 'title' },
+    authz: 'skip',
+    componentLoader: () => import('./pages/routes-example-dev-page.js'),
+  },
+]);
+```
+
 The Root Route and API Route each resolve the public Authentication Token and
 install `auth.required()` on their own router. Neither depends on App
 middleware, the other Route, or Server contribution order. The App Route guard
@@ -49,8 +72,8 @@ The Examples template already registers this plugin. To enable it in another
 workspace App, run from the repository root, choosing the target with `--app`:
 
 ```bash
-pnpm plugin:register @nocobase/app-plugin-routes-example --app app-template-default --dry-run --json
-pnpm plugin:register @nocobase/app-plugin-routes-example --app app-template-default
+pnpm nocobase plugin register @nocobase/app-plugin-routes-example --workspace-root . --app app-template-default --dry-run --json
+pnpm nocobase plugin register @nocobase/app-plugin-routes-example --workspace-root . --app app-template-default
 ```
 
 Registration updates the App's package dependency and adds explicit entries to

@@ -4,11 +4,10 @@ import { useEffect, useState, type ReactElement } from 'react';
 import type {
   AuthorizationSubject,
   SubjectOption,
-  SubjectSettings,
   SubjectTypeOption,
 } from '../authorization-client.js';
 import { useAuthorizationClient } from '../use-authorization-client.js';
-import { useAuthorizationTranslation } from '../i18n.js';
+import { titleText, useAuthorizationTranslation } from '../i18n.js';
 import { Button } from './ui/button.js';
 import { SearchField } from './filters.js';
 import { errorMessage } from './feedback.js';
@@ -21,7 +20,7 @@ export function SubjectsEditor({
   onChange,
 }: {
   types: readonly SubjectTypeOption[];
-  settings: SubjectSettings;
+  settings: string;
   value: readonly AuthorizationSubject[];
   excluded?: readonly AuthorizationSubject[];
   onChange: (value: readonly AuthorizationSubject[]) => void;
@@ -154,7 +153,7 @@ export function SubjectsEditor({
                     className='flex min-w-0 items-center gap-3 px-3 py-2 hover:bg-muted/20'
                   >
                     <Checkbox
-                      aria-label={item.title}
+                      aria-label={titleText(item.title, t)}
                       checked={
                         selected.has(key(subject)) || assigned.has(key(subject))
                       }
@@ -163,10 +162,10 @@ export function SubjectsEditor({
                     />
                     <span className='min-w-0'>
                       <span className='block truncate text-sm'>
-                        {item.title}
+                        {titleText(item.title, t)}
                       </span>
                       <span className='block truncate text-xs text-muted-foreground'>
-                        {item.description}
+                        {titleText(item.description, t)}
                       </span>
                     </span>
                   </label>
@@ -219,7 +218,8 @@ export function SubjectsEditor({
                   >
                     <span className='truncate text-sm'>
                       {resolvedNames[key(item)] ??
-                        names[key(item)]?.title ??
+                        (names[key(item)] &&
+                          titleText(names[key(item)]?.title, t)) ??
                         (types.find((type) => type.value === group)?.selection
                           ?.type === 'fixed'
                           ? types.find((type) => type.value === group)?.label

@@ -26,7 +26,7 @@ export interface SchedulerStartupMode {
 }
 
 /**
- * Injected by `nb3 schedule:sync` before the application starts, so the CLI
+ * Injected by `nocobase scheduler sync` before the application starts, so the CLI
  * synchronizes the manifest without leaving a worker behind. It carries a
  * startup switch rather than a service, and stays internal to this package.
  */

@@ -1,11 +1,13 @@
 import {
   defineAppConfig,
+  envString,
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
 import type { AppSessionConfigInput } from '@nocobase/app-server/session';
 
-const session: AppConfigFactory<AppSessionConfigInput> = defineAppConfig(
-  ({ paths, env }) => ({
+const session: AppConfigFactory<AppSessionConfigInput> = defineAppConfig({
+  env: { SESSION_SECRET: envString('secret') },
+  defaults: ({ paths, env }) => ({
     enabled: true,
     default: 'memory',
     cookie: {
@@ -43,6 +45,6 @@ const session: AppConfigFactory<AppSessionConfigInput> = defineAppConfig(
       null: { driver: 'null' },
     },
   }),
-);
+});
 
 export default session;

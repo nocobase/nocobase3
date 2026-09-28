@@ -87,7 +87,7 @@ export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
   scope: AppScope,
 ): Promise<ResolvedAppRuntime> {
-  const resolved = resolveAppScopeRuntime(scope);
+  const resolved = withStandaloneStorageDir(resolveAppScopeRuntime(scope));
   const base = definition.resolvePaths
     ? { ...resolved, paths: definition.resolvePaths(resolved) }
     : resolved;
@@ -107,6 +107,10 @@ export async function resolveAppRuntime(
   };
   if (definition.defaultConfigs) {
     runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
+    if (definition.defaultConfigs.sections) {
+      runtime.config.defineSections(definition.defaultConfigs.sections);
+      await runtime.config.loadSectionEnvironment(context.environment);
+    }
   }
   const database = runtime.config.get<AppDatabaseConfig>('database');
   if (database && database.default !== 'none') {
@@ -130,6 +134,24 @@ export async function resolveAppRuntime(
     });
   }
   return runtime;
+}
+
+/**
+ * A standalone deployment keeps its data under `APP_STORAGE_DIR` when it is set, so a deployment whose code root is
+ * replaced on every release (one release directory per version) keeps one storage directory across them. A relative
+ * value resolves from the deployment root, as the default `storage` does. Explicit paths win, and embedded
+ * applications always use the volume their host provides.
+ */
+function withStandaloneStorageDir(
+  runtime: ResolvedAppScopeRuntime,
+): ResolvedAppScopeRuntime {
+  if (runtime.mode !== 'standalone' || runtime.paths.storageDir !== undefined) {
+    return runtime;
+  }
+  const storageDir = runtime.env.APP_STORAGE_DIR?.trim();
+  return storageDir
+    ? { ...runtime, paths: { ...runtime.paths, storageDir } }
+    : runtime;
 }
 
 function createAppRuntimeConfigContext(

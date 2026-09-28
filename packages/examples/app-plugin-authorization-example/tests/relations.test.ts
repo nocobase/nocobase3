@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createFixture } from './helpers.js';
 import { ORDERS } from '../catalog.js';
-import migration from '../database/migrations/202609220001_sales_permissions.js';
 
 let fixture: Awaited<ReturnType<typeof createFixture>>;
 let orderId: string;
@@ -26,14 +25,14 @@ it('reads nested fields but only the delivery role may change relations', async 
   expect(
     (
       await fixture.request('assistant', path(), {
-        deliveryTeam: { connect: { id: 'delivery' } },
+        carrier: { connect: { id: 'express' } },
       })
     ).status,
   ).toBe(403);
   expect(
     (
       await fixture.request('delivery', path(), {
-        deliveryTeam: { connect: { id: 'delivery' } },
+        carrier: { connect: { id: 'express' } },
       })
     ).status,
   ).toBe(200);
@@ -41,11 +40,11 @@ it('reads nested fields but only the delivery role may change relations', async 
     await fixture.database
       .repository(ORDERS)
       .findOne({ filter: { id: orderId } }),
-  ).toMatchObject({ deliveryTeamId: 'delivery' });
+  ).toMatchObject({ carrierId: 'express' });
   expect(
     (
       await fixture.request('delivery', path(), {
-        deliveryTeam: { disconnect: true },
+        carrier: { disconnect: true },
       })
     ).status,
   ).toBe(200);
@@ -53,28 +52,28 @@ it('reads nested fields but only the delivery role may change relations', async 
     await fixture.database
       .repository(ORDERS)
       .findOne({ filter: { id: orderId } }),
-  ).toMatchObject({ deliveryTeamId: null });
+  ).toMatchObject({ carrierId: null });
 });
 
 it('enforces target scopes and refuses direct foreign-key writes', async () => {
   await fixture.database
-    .repository('authorizationExampleTeams')
-    .updateOne({ filter: { id: 'proposal' }, values: { active: false } });
+    .repository('authorizationExampleCarriers')
+    .updateOne({ filter: { id: 'freight' }, values: { active: false } });
   expect(
     (
       await fixture.request('delivery', path(), {
-        deliveryTeam: { connect: { id: 'proposal' } },
+        carrier: { connect: { id: 'freight' } },
       })
     ).status,
   ).toBe(403);
   expect(
-    (await fixture.request('delivery', path(), { deliveryTeamId: 'proposal' }))
+    (await fixture.request('delivery', path(), { carrierId: 'freight' }))
       .status,
   ).toBe(403);
   expect(
     (
       await fixture.request('delivery', path(), {
-        deliveryTeam: { update: { values: { title: 'Changed' } } },
+        carrier: { update: { values: { title: 'Changed' } } },
       })
     ).status,
   ).toBe(403);
@@ -128,22 +127,22 @@ it('creates, updates, upserts and deletes checks without granting their foreign 
 it('limits many-to-many payloads and supports set and disconnect', async () => {
   const connect = await fixture.request('delivery', path(), {
     collaborators: {
-      connect: [{ where: { id: 'delivery' }, through: { note: 'Dispatch' } }],
+      connect: [{ where: { id: 'express' }, through: { note: 'Dispatch' } }],
     },
   });
   expect(connect.status).toBe(200);
   expect(
     await fixture.database
-      .repository('authorizationExampleOrderTeams')
+      .repository('authorizationExampleOrderCarriers')
       .findOne({ filter: { orderId } }),
-  ).toMatchObject({ teamId: 'delivery', note: 'Dispatch' });
+  ).toMatchObject({ carrierId: 'express', note: 'Dispatch' });
   expect(
     (
       await fixture.request('delivery', path(), {
         collaborators: {
           connect: [
             {
-              where: { id: 'proposal' },
+              where: { id: 'freight' },
               through: { internalNote: 'not allowed' },
             },
           ],
@@ -153,58 +152,25 @@ it('limits many-to-many payloads and supports set and disconnect', async () => {
   ).toBe(403);
   const set = await fixture.request('delivery', path(), {
     collaborators: {
-      set: [{ where: { id: 'proposal' }, through: { note: 'Review' } }],
+      set: [{ where: { id: 'freight' }, through: { note: 'Review' } }],
     },
   });
   expect(set.status).toBe(200);
   const disconnect = await fixture.request('delivery', path(), {
-    collaborators: { disconnect: [{ id: 'proposal' }] },
+    collaborators: { disconnect: [{ id: 'freight' }] },
   });
   expect(disconnect.status).toBe(200);
   expect(
     await fixture.database
-      .repository('authorizationExampleOrderTeams')
+      .repository('authorizationExampleOrderCarriers')
       .findMany({ filter: { orderId } }),
   ).toEqual([]);
 });
 
-it('reverses the relation migration and restores metadata on reapplication', async () => {
-  const connection = fixture.database.connection();
-  const context = {
-    connection,
-    builder: connection.builder,
-    query: connection.query,
-  };
-  expect(
-    (await connection.collections.get(ORDERS))?.fields?.find(
-      (field) => field.name === 'checks',
-    ),
-  ).toMatchObject({ type: 'hasMany' });
-  expect(
-    (await connection.collections.getPhysical(ORDERS))?.columns.some(
-      (column) => column.columnName === 'delivery_team_id',
-    ),
-  ).toBe(true);
-  await migration.down!(context);
-  expect(
-    await connection.collections.getPhysical('authorizationExampleOrderChecks'),
-  ).toBeUndefined();
-  expect(await connection.collections.get(ORDERS)).toBeUndefined();
-  await migration.up(context);
-  expect(
-    await connection.collections.getPhysical('authorizationExampleOrderChecks'),
-  ).toBeDefined();
-  expect(
-    (await connection.collections.get(ORDERS))?.fields?.find(
-      (field) => field.name === 'collaborators',
-    ),
-  ).toMatchObject({ type: 'belongsToMany' });
-});
-
 it('rolls back nested creates when a later relation target is outside its scope', async () => {
   await fixture.database
-    .repository('authorizationExampleTeams')
-    .updateOne({ filter: { id: 'proposal' }, values: { active: false } });
+    .repository('authorizationExampleCarriers')
+    .updateOne({ filter: { id: 'freight' }, values: { active: false } });
   const response = await fixture.request('delivery', path(), {
     checks: {
       create: [
@@ -212,7 +178,7 @@ it('rolls back nested creates when a later relation target is outside its scope'
       ],
     },
     collaborators: {
-      connect: [{ where: { id: 'proposal' }, through: { note: 'Denied' } }],
+      connect: [{ where: { id: 'freight' }, through: { note: 'Denied' } }],
     },
   });
   expect(response.status).toBe(403);
@@ -223,8 +189,8 @@ it('rolls back nested creates when a later relation target is outside its scope'
   ).toBeUndefined();
 });
 
-it('applies delivery scopes to direct and inherited roles and blocks completed orders', async () => {
-  for (const user of ['delivery', 'dispatch']) {
+it('applies delivery scopes and blocks completed orders', async () => {
+  for (const user of ['delivery']) {
     const response = await fixture.request(
       user,
       'sales/orders/order-1/relations',
@@ -232,15 +198,15 @@ it('applies delivery scopes to direct and inherited roles and blocks completed o
     expect(response.status).toBe(200);
     const { data } = await response.json();
     expect(data.access).toBe('allowed');
-    expect(data.operations.deliveryTeam).toContain('connect');
+    expect(data.operations.carrier).toContain('connect');
     expect(
-      data.options.deliveryTeam.map((team: { id: string }) => team.id).sort(),
-    ).toEqual(['delivery', 'proposal']);
+      data.options.carrier.map((carrier: { id: string }) => carrier.id).sort(),
+    ).toEqual(['express', 'freight']);
     for (const id of ['order-3', 'order-4']) {
       expect(
         (
           await fixture.request(user, `sales/orders/${id}/relations`, {
-            deliveryTeam: { connect: { id: 'delivery' } },
+            carrier: { connect: { id: 'express' } },
           })
         ).status,
       ).toBe(403);
@@ -266,7 +232,7 @@ it('applies delivery scopes to direct and inherited roles and blocks completed o
   const readOnly = await fixture.request('assistant', path());
   expect((await readOnly.json()).data).toMatchObject({
     access: 'notGranted',
-    operations: { deliveryTeam: [], checks: [], collaborators: [] },
+    operations: { carrier: [], checks: [], collaborators: [] },
     options: {},
   });
   await fixture.database

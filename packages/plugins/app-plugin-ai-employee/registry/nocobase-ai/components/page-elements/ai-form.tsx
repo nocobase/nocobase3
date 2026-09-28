@@ -1,12 +1,13 @@
 import { useEffect, useRef, type RefCallback } from 'react';
 import { useAIFormRegistry, type AIFormField } from '../../providers/index.js';
-import { useAIPageElement } from './page-element-provider.js';
+import { useAIPageElement } from './page-element-store.js';
 
 export type AIFormDescriptor = {
   id: string;
   title: string;
   fields: AIFormField[];
-  getValues: () => unknown | Promise<unknown>;
+  /** The result is awaited, so an implementation may return a promise. */
+  getValues: () => unknown;
   setValues: (values: Record<string, unknown>) => void | Promise<void>;
 };
 
@@ -15,7 +16,9 @@ export function useAIForm(
 ): RefCallback<HTMLElement> {
   const registry = useAIFormRegistry();
   const descriptorRef = useRef(descriptor);
-  descriptorRef.current = descriptor;
+  useEffect(() => {
+    descriptorRef.current = descriptor;
+  }, [descriptor]);
 
   useEffect(
     () =>

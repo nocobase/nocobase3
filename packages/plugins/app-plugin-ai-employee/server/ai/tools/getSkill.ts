@@ -7,10 +7,10 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
 
-export default defineTools<AgentContext<{}, {}>>({
+export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },

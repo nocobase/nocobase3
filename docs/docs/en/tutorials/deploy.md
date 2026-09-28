@@ -90,7 +90,7 @@ export NODE_ENV=production
 node ./dist/server/standalone.js
 ```
 
-The archive does not contain the source workspace's `scripts/start.mjs`. After extracting an archive, run the compiled entry `dist/server/standalone.js` with `node`; in the source workspace use `pnpm start`.
+The archive holds only the build output. After extracting it, run the compiled entry `dist/server/standalone.js` with `node`; in the source workspace use `pnpm start`. Run the application's commands, such as `db apply`, with `node dist/cli/index.js db apply`.
 
 Configure an HTTPS reverse proxy for the domain, retaining API, static asset, and WebSocket paths. Use a service manager for process startup, restarts, and logs. Back up an existing database before migrations and decide whether the target runs them at startup or as a separate release step.
 

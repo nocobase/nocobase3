@@ -1,60 +1,38 @@
 # Integration and Configuration
 
-## Prefer plugin composition
+Register the core Server plugin before the in-app and built-in Provider plugins. Register their Client plugins for the desired logs and inbox UI. Apply plugin migrations and start the application's queue through its normal lifecycle. Hub does not register end-user notification plugins by default; add them explicitly only when the product needs them.
 
-For a normal NocoBase application, enable the core plugin plus the Channel packages the application needs. Their server plugins contribute migrations, Service Providers, and routes. The core Provider resolves the existing database, queue, and logger from the shared Application container and registers the narrow `notificationServiceToken` for business sending plus `notificationExtensionRegistryToken` for Channel and Provider contributions.
+`notification.channels` is a name-to-configuration map. Keys must be non-empty trimmed names of at most 100 characters. Each entry has a `provider`, optional `enabled` (default true), and flat Provider-specific settings. Duplicate YAML keys are configuration errors. Provider identifiers are globally unique; the Provider definition supplies the message type. `name`, `type`, and `providers` are not Channel configuration fields.
 
-Apply the owning application's migration command after changing enabled plugins. The core package creates Notification, Delivery, and Attempt tables; the in-app package creates the personal inbox table.
+```yaml
+notification:
+  channels:
+    system-email:
+      provider: smtp
+      host: smtp.example.com
+      port: 587
+      auth: { user: '${SMTP_USER}', pass: '${SMTP_PASSWORD}' }
+      from: notifications@example.com
+    marketing-email:
+      provider: resend
+      apiKey: '${RESEND_API_KEY}'
+      from: marketing@example.com
+    ops-feishu:
+      provider: feishu-webhook
+      webhookUrl: '${FEISHU_WEBHOOK_URL}'
+    inbox:
+      provider: in-app
 
-Boot ordering matters:
-
-1. The core notification Provider registers the manager singleton.
-2. Channel packages register definitions during boot.
-3. The core Provider validates every enabled Channel/Provider configuration after boot, then activates queue registration and reconciliation during application start; Channel runtimes are created lazily on first use.
-4. A custom host may call `start()` after registering every definition to initialize all enabled Channel runtimes eagerly.
-5. Shutdown calls `close()` so the reconciler and Providers release resources.
-
-Install mode may activate queue registration before notification tables exist, but runtime delivery requires migrations to be complete.
-
-## Built-in configuration
-
-The application's `notification.channels` array is the source of enabled runtime configurations. A default application commonly enables the database-backed in-app Channel and conditionally adds Email or IM Providers from secrets:
-
-```ts
-const notification = {
-  channels: [
-    defineInAppChannelConfig({
-      enabled: true,
-      providers: [{ type: 'database', name: 'default' }],
-    }),
-    defineEmailChannelConfig({
-      enabled: true,
-      providers: [
-        defineSmtpProviderConfig({
-          name: 'smtp',
-          host: secrets.smtpHost,
-          port: 587,
-          secure: false,
-          auth: { user: secrets.smtpUser, pass: secrets.smtpPassword },
-          from: 'NocoBase <notifications@example.com>',
-        }),
-      ],
-    }),
-  ],
-};
+  retry:
+    maxAttempts: 1
+    intervalMs: 5000
 ```
 
-Use `secure: true` only for immediate TLS as required by the server, commonly port 465. Port 587 commonly starts plaintext and upgrades with STARTTLS. SMTP user/password must both be present or both absent.
+`notification.retry.maxAttempts` is the maximum number of automatic attempts for one Delivery, including the first attempt; it defaults to `1`, so automatic retries are disabled by default. `notification.retry.intervalMs` is the fixed wait between automatic attempts and defaults to `5000` milliseconds. A validated Provider `Retry-After` hint takes precedence over this interval.
 
-Resend requires an API key and sender accepted by the account/domain. Feishu Webhooks must use HTTPS on `open.feishu.cn` or `open.larksuite.com`; DingTalk Webhooks must use HTTPS on `oapi.dingtalk.com`. The built-in Webhook Providers reject redirects. Prefer signature secrets when the platform supports them.
+The application owns secret interpolation. SMTP supports `host`, `port`, `secure`, `auth`, `from`, and `replyTo`; Resend uses `apiKey`, `from`, and optional `replyTo`. Webhook Providers use `webhookUrl` and optional signing `secret`. Feishu requires HTTPS on `open.feishu.cn` or `open.larksuite.com`; DingTalk requires HTTPS on `oapi.dingtalk.com`. Redirects are rejected. Keep credentials out of public descriptors and logs.
 
-Webhook URLs are credentials. Load Webhook URLs, signature secrets, SMTP passwords, and Resend API keys from the application's runtime secret source. Never commit, print, or return them.
-
-## Stable identities
-
-Each enabled Channel requires at least one enabled Provider. Provider names must be unique within the Channel. The runtime verifies that each created Provider's `name` and `type` match configuration.
-
-Persisted Deliveries record Provider name and type. Configuration changes should preserve those identities until no Delivery is pending, retrying, preparing, or submitting. If a definition disappears, the manager fails that Delivery instead of silently moving it to a different Provider.
+Keep Channel names and Provider identifiers stable while deliveries remain pending or retryable. Removing, disabling, or changing a Channel's Provider prevents the old Delivery from being retried elsewhere.
 
 ## Registration without plugin discovery
 
@@ -72,15 +50,6 @@ List the current user's inbox with `GET /api/notifications/in-app`. `limit` must
 
 The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status`. All three require authentication and `x-nocobase-notification-test: 1`; only `POST /send` requires the `notification:test` `send` permission. Logs remain separately protected by `page:notification.logs` `access`.
 
-Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel/Provider identities, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
+Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel names, Provider identifiers, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
 
-A production test is a real external send and requires explicit scope, the recipient or recipientless mode, Provider, permission, and follow-up verification.
-
-## Configuration verification
-
-- Inspect the application's effective redacted configuration, not only environment files.
-- Confirm each configured Channel and Provider definition is registered.
-- Confirm migrations exist before starting delivery workers.
-- Confirm the queue worker and reconciler are active.
-- Confirm logs and test routes reject unauthenticated and unauthorized requests.
-- Confirm startup fails clearly for duplicate Provider names, missing definitions, or mismatched runtime identity.
+A production test is a real external send and requires explicit scope, the recipient or recipientless mode, Channel, permission, and follow-up verification.

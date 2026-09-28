@@ -79,7 +79,7 @@ export interface AppDatabaseMigrationConfig {
   /**
    * How to react when an executed migration's source no longer hashes to the
    * checksum recorded for it. `warn` (the default) reports the drift and
-   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * continues; `error` refuses to run until `nocobase db repair` realigns the
    * history. A migration the sources cannot explain at all always fails.
    */
   onChecksumMismatch?: ChecksumMismatchPolicy;
@@ -96,7 +96,7 @@ export interface AppDatabaseSeedConfig {
   /**
    * How to react when an executed seed's source no longer hashes to the
    * checksum recorded for it. `warn` (the default) reports the drift and
-   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * continues; `error` refuses to run until `nocobase db repair` realigns the
    * history.
    */
   onChecksumMismatch?: ChecksumMismatchPolicy;
@@ -114,8 +114,10 @@ export type AppDatabaseConnectionConfig<
   seeds?: Partial<AppDatabaseSeedConfig>;
   /**
    * Where supplemental metadata comes from. An `external` connection that
-   * sets nothing here or at the top level reads
-   * `database/<connection>/collections/*\/metadata.json`.
+   * sets nothing here or at the top level reads the hand-written
+   * `database/<connection>/metadata/<name>.json` files. A string is a
+   * directory in that layout, relative to the application root; it may not
+   * be a generated `collections/` directory.
    */
   metadataStore?: AppMetadataStoreConfig;
 };

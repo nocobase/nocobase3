@@ -9,10 +9,10 @@ import type {
   AuthorizationDecision,
   AuthorizationGrant,
   AuthorizationGrantService,
+  AuthorizationReason,
   AuthorizationRequest,
   Principal,
 } from '@nocobase/authorization/core';
-import { DatabaseCollectionRegistry } from './collection-registry.js';
 import {
   databaseCollectionFieldsKnown,
   databaseFieldsAllowed,
@@ -21,7 +21,7 @@ import {
 } from './field-access.js';
 import type {
   AuthorizationCollection,
-  DatabaseActionGrant,
+  DatabaseGrantConfig,
   DatabaseAuthorizationPolicy,
   DatabaseAuthorizationParams,
   DatabaseAuthorizationConditions,
@@ -34,6 +34,7 @@ import {
   anyScope,
   assertDatabaseScope,
   idsScope,
+  noRowsScope,
   scopeAst,
   type DatabaseScope,
 } from './scope.js';
@@ -46,35 +47,19 @@ export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
 const actions: readonly string[] = ['read', 'create', 'update', 'delete'];
 
 export interface DatabaseResourceAuthorizerOptions {
-  collections: DatabaseCollectionRegistry;
   recordAccess: RecordAccessRegistry;
   /** Absent when the application installed the plugin without a connection. */
   resolveCollection?: ResolveAuthorizationCollection;
 }
 
 export class DatabaseResourceAuthorizer {
-  private readonly collections: DatabaseCollectionRegistry;
   private readonly recordAccess: RecordAccessRegistry;
   private readonly resolveCollection:
     ResolveAuthorizationCollection | undefined;
 
   constructor(options: DatabaseResourceAuthorizerOptions) {
-    this.collections = options.collections;
     this.recordAccess = options.recordAccess;
     this.resolveCollection = options.resolveCollection;
-  }
-
-  /**
-   * An unregistered Collection is outside the permission model, so nothing can
-   * be granted on it and nothing bypasses that — a superuser skips grants, not
-   * the model.
-   */
-  private unregistered(name: string): AuthorizationDecision | undefined {
-    if (this.collections.has(name)) return undefined;
-    return this.deny(
-      'COLLECTION_NOT_REGISTERED',
-      `Collection ${name} is not part of the permission model`,
-    );
   }
 
   /** db owns the metadata, so an unknown Collection is whatever db does not hold. */
@@ -106,8 +91,6 @@ export class DatabaseResourceAuthorizer {
     constraintsService: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
     const resourceId = request.resource.id;
-    const unregistered = this.unregistered(resourceId);
-    if (unregistered) return unregistered;
     const resolved = await this.collection(resourceId, request.action);
     if ('effect' in resolved) return resolved;
     const resource = resolved;
@@ -161,9 +144,9 @@ export class DatabaseResourceAuthorizer {
               resource: { type: 'database.collection', id: resourceId },
               action: request.action,
             });
-      let scope =
+      const effective =
         request.action === 'create'
-          ? true
+          ? { scope: true, configured: true }
           : await this.resolveEffectiveScope(
               request.principal,
               resource,
@@ -172,6 +155,7 @@ export class DatabaseResourceAuthorizer {
               constraints,
               params?.fields,
             );
+      let scope: DatabaseScope = effective.scope;
       const resolver = new RelationPermissionResolver({
         resolveCollection: this.resolveCollection!,
         resolveScope: async (collection, rules) =>
@@ -198,14 +182,16 @@ export class DatabaseResourceAuthorizer {
                 ? true
                 : configs.length === 1
                   ? scope
-                  : await this.resolveEffectiveScope(
-                      request.principal,
-                      resource,
-                      request.action,
-                      [config],
-                      constraints,
-                      params?.fields,
-                    ),
+                  : (
+                      await this.resolveEffectiveScope(
+                        request.principal,
+                        resource,
+                        request.action,
+                        [config],
+                        constraints,
+                        params?.fields,
+                      )
+                    ).scope,
           };
         }),
       );
@@ -228,7 +214,7 @@ export class DatabaseResourceAuthorizer {
         relationBranches.map((branch) => branch.relations),
         request.action,
       );
-      const explanation = [
+      const explanation: AuthorizationReason[] = [
         ...reasons,
         ...[
           ...constraints,
@@ -236,19 +222,33 @@ export class DatabaseResourceAuthorizer {
         ].map((constraint) => ({
           code:
             constraint.effect === 'expand'
-              ? 'SCOPE_EXPANDED'
-              : 'SCOPE_RESTRICTED',
+              ? 'SELECTION_EXPANDED'
+              : 'SELECTION_RESTRICTED',
           message: `${constraint.source.plugin}:${constraint.source.id}`,
           plugin: 'database',
-          details: { source: constraint.source, scope: constraint.value },
+          details: {
+            source: constraint.source,
+            selection: constraint.selection,
+          },
         })),
       ];
-      if (scope === false) {
+      // Nothing configured a positive scope: the grant opens no records at all.
+      if (scope === false && !effective.configured) {
         const denied = this.deny(
           'NO_RECORD_ACCESS',
           'No Record Access allows this action',
         );
         return { ...denied, reasons: [...denied.reasons, ...explanation] };
+      }
+      // A configured scope resolved to nothing, such as a user in no
+      // department: permitted, and the query matches no rows.
+      if (scope === false) {
+        scope = noRowsScope(resource.primaryKey);
+        explanation.push({
+          code: 'EMPTY_RECORD_ACCESS',
+          message: 'Record Access matches no records',
+          plugin: 'database',
+        });
       }
       const conditions: DatabaseAuthorizationConditions = {
         type: 'database',
@@ -300,8 +300,6 @@ export class DatabaseResourceAuthorizer {
     request: AuthorizationRequest<DatabaseAuthorizationParams>,
   ): Promise<AuthorizationDecision> {
     const resourceId = request.resource.id;
-    const unregistered = this.unregistered(resourceId);
-    if (unregistered) return unregistered;
     const resolved = await this.collection(resourceId, request.action);
     if ('effect' in resolved) return resolved;
     const resource = resolved;
@@ -337,10 +335,10 @@ export class DatabaseResourceAuthorizer {
     principal: Principal,
     resource: AuthorizationCollection,
     action: string,
-    configs: readonly DatabaseActionGrant[],
+    configs: readonly DatabaseGrantConfig[],
     constraints: readonly AccessConstraint[],
     requestedFields?: import('./model.js').DatabaseAuthorizationFieldRequest,
-  ): Promise<DatabaseScope> {
+  ): Promise<{ scope: DatabaseScope; configured: boolean }> {
     // Each grant keeps its own fields and role filters through scope evaluation.
     const branches = await Promise.all(
       configs.map(async (config) => {
@@ -370,6 +368,7 @@ export class DatabaseResourceAuthorizer {
         );
         return {
           config,
+          configured: positive.length > 0,
           scope: allScopes([anyScope(positive), ...branchRestrictions]),
         };
       }),
@@ -421,7 +420,10 @@ export class DatabaseResourceAuthorizer {
         );
       }
     }
-    return allScopes([...required, ...restrictions]);
+    return {
+      scope: allScopes([...required, ...restrictions]),
+      configured: branches.some((branch) => branch.configured),
+    };
   }
 
   private async compileConstraints(
@@ -432,29 +434,20 @@ export class DatabaseResourceAuthorizer {
   ): Promise<DatabaseScope[]> {
     const scopes: DatabaseScope[] = [];
     for (const constraint of constraints) {
-      const value = constraint.value;
-      if (value.type === 'all') {
+      const selection = constraint.selection;
+      if (selection.type === 'all') {
         scopes.push(true);
         continue;
       }
-      if (value.type === 'ids') {
-        const ids = 'ids' in value ? value.ids : undefined;
-        if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
-          throw new Error('Invalid IDs access scope');
-        }
-        scopes.push(idsScope(resource.primaryKey, ids as string[]));
+      if (selection.type === 'records') {
+        scopes.push(idsScope(resource.primaryKey, selection.ids));
         continue;
-      }
-      if (value.type !== 'database') {
-        throw new Error(`Unsupported database access scope: ${value.type}`);
-      }
-      const recordAccess = value.recordAccess;
-      if (!isDatabaseRecordAccess(recordAccess)) {
-        throw new Error('Invalid database Record Access scope');
       }
       scopes.push(
         ...(await this.compileScopes(principal, resource, action, [
-          recordAccess,
+          selection.params === undefined
+            ? selection.key
+            : { key: selection.key, params: selection.params },
         ])),
       );
     }
@@ -476,7 +469,7 @@ export class DatabaseResourceAuthorizer {
       }
       let value: unknown = await this.recordAccess.resolve(config.key, {
         principal,
-        resource: { type: 'database.collection', id: resource.name },
+        collection: resource.name,
         action,
         params: config.params,
       });
@@ -515,10 +508,31 @@ export class DatabaseResourceAuthorizer {
   }
 }
 
-function toDatabaseGrant(grant: AuthorizationGrant): DatabaseActionGrant[] {
+/**
+ * A grant's policy, with its composite branch folded in: the selection its data
+ * scope chose adds records, and the branch's rules apply to it alone.
+ */
+function toDatabaseGrant(grant: AuthorizationGrant): DatabaseGrantConfig[] {
   if (!isDatabaseAuthorizationPolicy(grant.policy)) return [];
   const { type: _type, ...config } = grant.policy;
-  return [config];
+  const origin = grant.origin;
+  const branch: AccessConstraint[] = [
+    ...(origin?.selection
+      ? [
+          {
+            source: { plugin: grant.source.plugin, id: grant.source.id },
+            effect: 'expand' as const,
+            selection: origin.selection,
+          },
+        ]
+      : []),
+    ...(origin?.constraints ?? []),
+  ];
+  return [
+    origin?.scopeKey === undefined
+      ? config
+      : { ...config, branchConstraints: branch },
+  ];
 }
 
 function isDatabaseAuthorizationPolicy(
@@ -538,16 +552,6 @@ function isPermissionFields(value: unknown): boolean {
     value === undefined ||
     value === '*' ||
     (Array.isArray(value) && value.every((field) => typeof field === 'string'))
-  );
-}
-
-function isDatabaseRecordAccess(value: unknown): value is DatabaseRecordAccess {
-  if (typeof value === 'string') return value.length > 0;
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    typeof Reflect.get(value, 'key') === 'string'
   );
 }
 

@@ -12,17 +12,16 @@ import { formatImText } from '../channel.js';
 import { evaluateJsonResult } from '../result.js';
 
 export interface FeishuWebhookProviderConfig {
-  readonly type: 'feishu-webhook';
-  readonly name: string;
+  readonly provider: 'feishu-webhook';
   readonly enabled?: boolean;
   readonly webhookUrl: string;
   readonly secret?: string;
 }
 
 export function defineFeishuWebhookProviderConfig(
-  input: Omit<FeishuWebhookProviderConfig, 'type'>,
+  input: Omit<FeishuWebhookProviderConfig, 'provider'>,
 ): FeishuWebhookProviderConfig {
-  return { type: 'feishu-webhook', ...input };
+  return { provider: 'feishu-webhook', ...input };
 }
 
 export function createFeishuWebhookProviderDefinition(): NotificationProviderDefinition<
@@ -31,6 +30,7 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
 > {
   return {
     type: 'feishu-webhook',
+    messageType: 'im',
     label: notificationProviderText(
       'test.providers.feishuWebhook',
       'Feishu webhook',
@@ -39,7 +39,6 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
     async createProvider(_context, config) {
       validateFeishuConfig(config);
       return {
-        name: config.name,
         type: 'feishu-webhook',
         async send({
           message,

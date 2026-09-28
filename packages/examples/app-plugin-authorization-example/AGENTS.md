@@ -27,7 +27,7 @@ Where a package goes depends on who has to resolve the import, and there are thr
 
 Do not mark such a peer `optional`. An optional peer is not auto-installed anywhere, including in the application that needs it, which is the failure this arrangement exists to prevent. `optional` means the consumer may legitimately not need the package at all.
 
-So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears.
+So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer. Shared runtime packages follow the peer rule below even in server code. A dynamic `import()` counts as a value import. A type-only import is erased from JavaScript but can survive in published declarations; if consumers must resolve it, declare the dependency or shared peer instead of relying on a devDependency.
 
 `registry/` is the exception: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all, so declaring them would claim dependencies it does not have.
 
@@ -37,15 +37,15 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 ### Runtime packages are peers, never dependencies
 
-`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
+`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, `@nocobase/caching`, `@nocobase/ai-employee`, `@nocobase/authorization`, `@nocobase/repository-input`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
-Declare each as a `peerDependency` — the published contract: "provide this, and provide exactly one". One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+Declare each as a `peerDependency` — the published compatibility contract requiring a host-provided package. One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces the packages in its recorded list; review newly identified shared packages explicitly. The generator already emits this shape for the capabilities you selected.
 
 ## Contributing CLI commands
 
 A plugin can add commands to an application's `pnpm nocobase`, and can ask an application to run a command during its `pnpm build` or `pnpm dev`. Both are declared in `cli/index.ts` through `defineCliPlugin`, and the `cli` capability generates that entry with one example command.
 
-Commands here are static tooling: they read and write files and packages. They never start the application, so nothing in one may resolve a service or query the database — anything needing the running application is a server route or a job.
+A command extends `AppCommand` from `@nocobase/app-cli`: it returns its result, throws `CommandError` on failure, and gets `--json` for free. By default a command is static tooling that reads and writes files and packages. One that needs the application creates it with `this.withApp(async ({ app }) => …)`, which always shuts it down again, and calls `app.start()` only when it needs every provider running. Work users trigger while the application serves is a server route or a job, not a command. The `nocobase-plugin-development` Skill's CLI reference has the full contract.
 
 Build and dev hooks are for a plugin that has to produce something before the application can run. Declaring the step here rather than in each application's build script is what keeps it correct: it appears only where this plugin is registered, and disappears with it.
 
@@ -56,8 +56,6 @@ buildHooks: {
 ```
 
 A hook command is any executable with its arguments, already split — no shell, so no quoting to get right, and no `&&` or pipes. The stage names say what exists when the hook runs: `beforeBuild` (empty `dist`), `afterClientBuild` (`dist/client`), `afterServerBuild` (`+ dist/server`), `afterBuild` (the installed deployment tree), and `beforeDev` for `pnpm dev`.
-
-Read `internal-docs/development/plugin-development/cli.md` before adding either.
 
 ## Before you finish
 

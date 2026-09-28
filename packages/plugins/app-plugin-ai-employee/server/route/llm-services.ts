@@ -1,8 +1,9 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
-import type { LLMServiceResourceInput } from './contracts.js';
 import { requiredString } from './utils.js';
 
+// LLM services are defined in config.yml `ai.llmServices`. The settings page
+// may only switch a service on or off and choose its models.
 export function createLLMServicesRouter(
   app: Hono,
   services: ServiceFactory,
@@ -19,28 +20,16 @@ export function createLLMServicesRouter(
     return context.json(result as never);
   });
 
-  app.post('/llmServices:create', async (context) => {
-    const result = await services.llmService.upsert({
-      input: await context.req.json<LLMServiceResourceInput>(),
+  app.post('/llmServices:updateEnabled', async (context) => {
+    const result = await services.llmService.updateEnabled({
+      input: await context.req.json(),
     });
     return context.json(result as never);
   });
 
-  app.put('/llmServices:update', async (context) => {
-    const input = await context.req.json<LLMServiceResourceInput>();
-    const key = requiredString(context.req.query('key'), 'key');
-    const result = await services.llmService.upsert({
-      input: {
-        ...input,
-        name: key,
-      },
-    });
-    return context.json(result as never);
-  });
-
-  app.delete('/llmServices:destroy', async (context) => {
-    const result = await services.llmService.delete({
-      name: requiredString(context.req.query('key'), 'key'),
+  app.post('/llmServices:updateEnabledModels', async (context) => {
+    const result = await services.llmService.updateEnabledModels({
+      input: await context.req.json(),
     });
     return context.json(result as never);
   });

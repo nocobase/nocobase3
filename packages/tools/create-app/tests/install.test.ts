@@ -19,14 +19,12 @@ afterEach(async () => {
 });
 
 /**
- * A stand-in project whose sync script is whatever the test needs it to be. The real script runs the CLI against
+ * A stand-in project whose `nocobase` is whatever the test needs it to be. The real one is the CLI's bin, run against
  * installed NocoBase packages, which needs a full install; what this function has to cover is how the caller reacts
- * to the script succeeding or failing, and that only needs a script.
+ * to it succeeding or failing. pnpm resolves `pnpm nocobase` to a script of that name before a bin, so a script is
+ * enough.
  */
-async function createProject(
-  script: string,
-  scriptName: 'skills:sync' | 'plugin:skills:sync' = 'skills:sync',
-): Promise<string> {
+async function createProject(script: string): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'create-app-skills-'));
   created.push(directory);
 
@@ -36,7 +34,7 @@ async function createProject(
       {
         name: 'app',
         version: '0.0.0',
-        scripts: { [scriptName]: script },
+        scripts: { nocobase: script },
       },
       null,
       2,
@@ -48,7 +46,7 @@ async function createProject(
 }
 
 describe('syncSkills', () => {
-  it('runs the app-side script and reports success', async () => {
+  it('runs the app-side CLI and reports success', async () => {
     const directory = await createProject(
       `node -e "require('node:fs').writeFileSync('marker', 'ran')"`,
     );
@@ -65,38 +63,7 @@ describe('syncSkills', () => {
     const result = await syncSkills(directory);
 
     expect(result.ok).toBe(false);
-    expect(result.reason).toContain('pnpm skills:sync');
-  });
-
-  it('falls back to the legacy plugin script for an older template', async () => {
-    const directory = await createProject(
-      `node -e "require('node:fs').writeFileSync('legacy-marker', 'ran')"`,
-      'plugin:skills:sync',
-    );
-
-    await expect(syncSkills(directory)).resolves.toEqual({ ok: true });
-    await expect(
-      readFile(path.join(directory, 'legacy-marker'), 'utf8'),
-    ).resolves.toBe('ran');
-  });
-
-  it('reports a failure when the project has no such script', async () => {
-    const directory = await mkdtemp(
-      path.join(os.tmpdir(), 'create-app-skills-'),
-    );
-    created.push(directory);
-    await writeFile(
-      path.join(directory, 'package.json'),
-      `${JSON.stringify({ name: 'app', version: '0.0.0' }, null, 2)}\n`,
-      'utf8',
-    );
-
-    const result = await syncSkills(directory);
-
-    expect(result.ok).toBe(false);
-    expect(result.reason).toContain(
-      'Could not synchronize NocoBase package skills into .agents/skills.',
-    );
+    expect(result.reason).toContain('pnpm nocobase skills sync');
   });
 });
 

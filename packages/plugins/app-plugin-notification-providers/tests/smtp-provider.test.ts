@@ -227,7 +227,6 @@ async function createProvider(): Promise<
   return createSmtpProviderDefinition().createProvider(
     providerContext(),
     defineSmtpProviderConfig({
-      name: 'primary',
       host: 'smtp.example.com',
       port: 587,
       from: 'NocoBase <notifications@example.com>',

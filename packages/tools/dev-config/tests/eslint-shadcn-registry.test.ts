@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createClientLibraryConfig,
-  createPortalConfig,
+  createApplicationConfig,
+  createShadcnRegistryConfig,
 } from '../eslint/index.ts';
 
 const named = (configs: Linter.Config[], name: string): Linter.Config => {
@@ -13,10 +14,10 @@ const named = (configs: Linter.Config[], name: string): Linter.Config => {
 };
 
 describe('shadcn/ui registry exceptions', () => {
-  const portal = createPortalConfig();
+  const application = createApplicationConfig();
 
   it('relaxes the registry rules for the registry paths only', () => {
-    const registry = named(portal, '@nocobase/dev-config/shadcn-registry');
+    const registry = named(application, '@nocobase/dev-config/shadcn-registry');
 
     expect(registry.files).toEqual([
       'client/components/ui/**/*.tsx',
@@ -29,7 +30,10 @@ describe('shadcn/ui registry exceptions', () => {
   });
 
   it('relaxes the recharts payload rules for the chart wrapper only', () => {
-    const chart = named(portal, '@nocobase/dev-config/shadcn-registry-chart');
+    const chart = named(
+      application,
+      '@nocobase/dev-config/shadcn-registry-chart',
+    );
 
     expect(chart.files).toEqual(['client/components/ui/chart.tsx']);
     expect(chart.rules?.['@typescript-eslint/no-unsafe-member-access']).toBe(
@@ -37,8 +41,8 @@ describe('shadcn/ui registry exceptions', () => {
     );
   });
 
-  it('lets a portal override the relaxation', () => {
-    const configs = createPortalConfig({
+  it('lets an application override the relaxation', () => {
+    const configs = createApplicationConfig({
       overrides: [
         {
           name: 'local/strict-registry',
@@ -56,6 +60,23 @@ describe('shadcn/ui registry exceptions', () => {
     );
 
     expect(overrideIndex).toBeGreaterThan(registryIndex);
+  });
+
+  it('scopes the same relaxation to another primitives directory', () => {
+    const configs = createShadcnRegistryConfig('website');
+
+    expect(
+      named(configs, '@nocobase/dev-config/shadcn-registry').files,
+    ).toEqual([
+      'website/components/ui/**/*.tsx',
+      'website/hooks/use-mobile.ts',
+    ]);
+    expect(
+      named(configs, '@nocobase/dev-config/shadcn-registry-chart').files,
+    ).toEqual(['website/components/ui/chart.tsx']);
+    expect(configs.map((config) => config.rules)).toEqual(
+      createShadcnRegistryConfig().map((config) => config.rules),
+    );
   });
 
   it('does not reach library packages, which have no registry directory', () => {

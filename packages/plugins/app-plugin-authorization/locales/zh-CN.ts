@@ -1,6 +1,14 @@
 import type { AuthorizationServerResource } from './en-US.js';
 
 const zhCN: AuthorizationServerResource = {
+  // Workspace sections this plugin registers through `authz.ui`.
+  sections: {
+    pages: '页面权限',
+    page: '页面',
+    business: '业务权限',
+    administration: '系统管理',
+    other: '其他',
+  },
   options: {
     defaultAndSharing: '沿用默认数据范围',
     actions: {
@@ -13,11 +21,6 @@ const zhCN: AuthorizationServerResource = {
       update: '编辑',
       delete: '删除',
       access: '访问',
-    },
-    resourceTypes: {
-      page: '页面',
-      collection: '数据表',
-      settings: '后台设置',
     },
     settingsModules: { authorization: '权限管理' },
     pages: {

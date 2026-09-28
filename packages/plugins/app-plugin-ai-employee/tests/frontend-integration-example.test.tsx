@@ -15,11 +15,10 @@ import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AIProvider,
-  useAI,
   type AIProviderProps,
 } from '../registry/nocobase-ai/providers/ai-provider.js';
+import { useAI } from '../registry/nocobase-ai/providers/ai-context.js';
 import { useAIChat } from '../registry/nocobase-ai/providers/chat-context.js';
-import { useAIChatController } from '../registry/nocobase-ai/providers/chat-controller.js';
 import { AIChatProvider } from '../registry/nocobase-ai/providers/chat-provider.js';
 import type {
   AIEmployee,
@@ -28,9 +27,10 @@ import type {
 import type { AIService } from '../registry/nocobase-ai/services/types.js';
 
 const skillDirectory = '../skills/nocobase-app-plugin-ai-employee/';
+// The Skill publishes this example once. It is executed here rather than read,
+// because a readiness gate that only looks right is the defect it exists for.
 const documents = [
-  { path: 'SKILL.md', heading: '# Frontend App Integration' },
-  { path: 'references/frontend-registry.md', heading: '## Chat surfaces' },
+  { path: 'references/chat-surfaces.md', heading: '## The readiness gate' },
 ];
 
 function readExample(document: (typeof documents)[number]) {
@@ -145,12 +145,12 @@ function executeExample(
     AIChatProvider,
     AIChatWindow: ChatProbe,
     ChatInline: ({ children }: PropsWithChildren) => <>{children}</>,
+    // Without a `service` the real root talks through the App's API client;
+    // this service stands in for it.
     NocoBaseAIRootProvider: (props: AIProviderProps) => (
-      <AIProvider {...props} {...configuration} />
+      <AIProvider service={service} {...props} {...configuration} />
     ),
-    nocobaseAIService: service,
     useAI,
-    useAIChatController,
   };
   const { outputText, diagnostics } = ts.transpileModule(source, {
     fileName: 'sales-chat-page.tsx',
@@ -185,10 +185,6 @@ function expectNoChat(service: ReturnType<typeof createService>) {
   expect(service.createConversation).not.toHaveBeenCalled();
   expect(service.sendMessagesStream).not.toHaveBeenCalled();
 }
-
-it('publishes the same complete integration example in both documents', () => {
-  expect(readExample(documents[0]!)).toBe(readExample(documents[1]!));
-});
 
 describe.each(documents)('issue 6561: $path', (document) => {
   const source = readExample(document);

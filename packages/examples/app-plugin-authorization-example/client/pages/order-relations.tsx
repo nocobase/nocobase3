@@ -13,7 +13,7 @@ interface OrderRelationsData {
   access: string;
   operations: Record<string, string[]>;
   options: Record<string, { id: string; title: string }[]>;
-  deliveryTeam: { id: string; title: string } | null;
+  carrier: { id: string; title: string } | null;
   checks: { id: string; title: string; done: boolean }[];
   collaborators: { id: string; title: string }[];
 }
@@ -59,7 +59,7 @@ function RelationEditor({ id }: { id: string }): ReactElement {
     `sales/orders/${encodeURIComponent(id)}/relations`,
   );
   const [title, setTitle] = useState('');
-  const [deliveryTeam, setDeliveryTeam] = useState('');
+  const [carrier, setCarrier] = useState('');
   const [collaborator, setCollaborator] = useState('');
   const [note, setNote] = useState('');
   const [message, setMessage] = useState('');
@@ -90,7 +90,7 @@ function RelationEditor({ id }: { id: string }): ReactElement {
     );
   const can = (relation: string, operation: string): boolean =>
     !busy && !!order.operations?.[relation]?.includes(operation);
-  const deliveryId = deliveryTeam || order.options?.deliveryTeam?.[0]?.id;
+  const deliveryId = carrier || order.options?.carrier?.[0]?.id;
   const collaboratorId = collaborator || order.options?.collaborators?.[0]?.id;
   return (
     <div className='space-y-5'>
@@ -98,34 +98,34 @@ function RelationEditor({ id }: { id: string }): ReactElement {
         <p role='status'>{t(`relations.access.${order.access}`)}</p>
       )}
       <div className='space-y-2'>
-        <h3 className='font-medium'>{t('relations.deliveryTeam')}</h3>
-        <p>{order.deliveryTeam?.title ?? t('relations.unassigned')}</p>
+        <h3 className='font-medium'>{t('relations.carrier')}</h3>
+        <p>{order.carrier?.title ?? t('relations.unassigned')}</p>
         <select
-          aria-label={t('relations.deliveryTeam')}
+          aria-label={t('relations.carrier')}
           className='rounded-md border border-input bg-background p-2'
           value={deliveryId ?? ''}
-          onChange={(event) => setDeliveryTeam(event.target.value)}
-          disabled={!can('deliveryTeam', 'connect')}
+          onChange={(event) => setCarrier(event.target.value)}
+          disabled={!can('carrier', 'connect')}
         >
-          {order.options?.deliveryTeam?.map((team) => (
-            <option key={team.id} value={team.id}>
-              {team.title}
+          {order.options?.carrier?.map((carrier) => (
+            <option key={carrier.id} value={carrier.id}>
+              {carrier.title}
             </option>
           ))}
         </select>
         <div className='flex flex-wrap gap-2'>
           <Button
-            disabled={!can('deliveryTeam', 'connect') || !deliveryId}
+            disabled={!can('carrier', 'connect') || !deliveryId}
             onClick={() =>
-              void mutate({ deliveryTeam: { connect: { id: deliveryId } } })
+              void mutate({ carrier: { connect: { id: deliveryId } } })
             }
           >
             {t('relations.assign')}
           </Button>
           <Button
             variant='outline'
-            disabled={!can('deliveryTeam', 'disconnect') || !order.deliveryTeam}
-            onClick={() => void mutate({ deliveryTeam: { disconnect: true } })}
+            disabled={!can('carrier', 'disconnect') || !order.carrier}
+            onClick={() => void mutate({ carrier: { disconnect: true } })}
           >
             {t('relations.disconnect')}
           </Button>
@@ -199,7 +199,7 @@ function RelationEditor({ id }: { id: string }): ReactElement {
       <div className='space-y-2'>
         <h3 className='font-medium'>{t('relations.collaborators')}</h3>
         <p>
-          {order.collaborators.map((team) => team.title).join(', ') ||
+          {order.collaborators.map((carrier) => carrier.title).join(', ') ||
             t('relations.unassigned')}
         </p>
         <select
@@ -211,9 +211,9 @@ function RelationEditor({ id }: { id: string }): ReactElement {
             !can('collaborators', 'connect') && !can('collaborators', 'set')
           }
         >
-          {order.options?.collaborators?.map((team) => (
-            <option key={team.id} value={team.id}>
-              {team.title}
+          {order.options?.collaborators?.map((carrier) => (
+            <option key={carrier.id} value={carrier.id}>
+              {carrier.title}
             </option>
           ))}
         </select>
@@ -259,8 +259,8 @@ function RelationEditor({ id }: { id: string }): ReactElement {
             onClick={() =>
               void mutate({
                 collaborators: {
-                  disconnect: order.collaborators.map((team) => ({
-                    id: team.id,
+                  disconnect: order.collaborators.map((carrier) => ({
+                    id: carrier.id,
                   })),
                 },
               })

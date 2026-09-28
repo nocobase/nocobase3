@@ -3,7 +3,7 @@ import { useClientApplication } from '@nocobase/app-client';
 import { PermissionSelection } from '../components/permission-selection.js';
 import { PermissionAssignmentDrawer } from '../components/permission-assignment-drawer.js';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
-import { toast } from 'sonner';
+import { Toast } from '@base-ui/react/toast';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
 import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
@@ -99,6 +99,7 @@ const EMPTY_PAGE: ManagedUserPage = {
 export default function UsersPage(): ReactElement {
   const { session } = useAuthentication();
   const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { add: addToast } = Toast.useToastManager();
   const api = useApiClient();
   const authorization = useService(authorizationClientToken);
   const users = useMemo(() => new UsersClient(api), [api]);
@@ -121,13 +122,15 @@ export default function UsersPage(): ReactElement {
   const reportError = useCallback(
     (reason: unknown) => {
       const code = reason instanceof ApiClientError ? reason.code : undefined;
-      toast.error(
-        t(`errors.${code ?? 'operationFailed'}`, {
+      addToast({
+        type: 'error',
+        priority: 'high',
+        title: t(`errors.${code ?? 'operationFailed'}`, {
           defaultValue: readError(reason, t('errors.operationFailed')),
         }),
-      );
+      });
     },
-    [t],
+    [addToast, t],
   );
   const [editor, setEditor] = useState<ManagedUser | 'create'>();
   const [assignment, setAssignment] = useState<{
@@ -216,7 +219,7 @@ export default function UsersPage(): ReactElement {
   }, [load]);
 
   useEffect(
-    () => authorization.onPermissionsInvalidated(() => void load()),
+    () => authorization.onInvalidated(() => void load()),
     [authorization, load],
   );
 
@@ -227,7 +230,7 @@ export default function UsersPage(): ReactElement {
       await load();
     } catch (reason) {
       if (reason instanceof ApiClientError && reason.status === 403) {
-        authorization.invalidatePermissions();
+        authorization.invalidate();
       }
       reportError(reason);
     } finally {
@@ -288,7 +291,7 @@ export default function UsersPage(): ReactElement {
               setPage(1);
             }}
           >
-            <SelectTrigger className='w-48'>
+            <SelectTrigger className='w-56'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -559,7 +562,7 @@ export default function UsersPage(): ReactElement {
               await users.remove(deleteUser.id);
               setDeleteUser(undefined);
               if (result.items.length === 1 && page > 1) setPage(page - 1);
-              toast.success(t('deletion.success'));
+              addToast({ type: 'success', title: t('deletion.success') });
             })
           }
         />

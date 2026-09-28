@@ -13,7 +13,7 @@ import type {
  * The two constants exist because an empty `or` and an empty `and` are not
  * expressible as groups — `{ logic: 'or', items: [] }` reads as a filter that
  * matches everything in most engines — so emptiness is carried out of band and
- * decided at the node level: `false` denies the action, `true` binds no filter.
+ * decided at the node level: `false` selects no row, `true` binds no filter.
  */
 export type DatabaseScope = boolean | FilterNode;
 
@@ -33,6 +33,17 @@ export function condition(
     operator,
     ...(value === undefined ? {} : { value }),
   };
+}
+
+/**
+ * A scope that matches no row, for a permitted action whose scope resolved to
+ * `false`. A value cannot be both empty and not empty, in any dialect.
+ */
+export function noRowsScope(primaryKey: string): FilterNode {
+  return group('and', [
+    condition(primaryKey, '$empty'),
+    condition(primaryKey, '$notEmpty'),
+  ]);
 }
 
 export function anyScope(scopes: readonly DatabaseScope[]): DatabaseScope {

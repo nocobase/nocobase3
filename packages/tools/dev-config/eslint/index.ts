@@ -21,18 +21,19 @@ const toolingFiles: string[] = [
   '**/scripts/**/*.{ts,mts,cts}',
   '**/cli/**/*.{ts,mts,cts}',
 ];
-const portalClientFiles: string[] = [
+const applicationClientFiles: string[] = [
   'client/**/*.{js,jsx,ts,tsx}',
   'registry/**/*.{js,jsx,ts,tsx}',
   'tests/**/*.{js,jsx,ts,tsx}',
 ];
-const portalNodeFiles: string[] = [
+const applicationNodeFiles: string[] = [
   '*.{js,mjs,cjs}',
   'server/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
   'scripts/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
   'cli/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
   '*.config.{js,mjs,cjs,ts,mts,cts}',
 ];
+const commandFiles: string[] = ['**/cli/**/*.{js,mjs,cjs,ts,tsx,mts,cts}'];
 const defaultIgnores: string[] = [
   '**/dist/**',
   '**/build/**',
@@ -40,9 +41,10 @@ const defaultIgnores: string[] = [
   '**/generated/**',
   '**/playwright-report/**',
   '**/test-results/**',
-  // Skills are prose for agents to read. `.claude/skills/` additionally holds symbolic links into `.agents/skills/`,
-  // written by `nocobase skills sync` in an application and by `scripts/link-claude-skills.mjs` in the monorepo, so
-  // linting through one reports the same file twice under two paths and `--fix` would edit the committed original.
+  // Skills are prose for agents to read. `.claude/skills/` holds symbolic links into `.agents/skills/` in an
+  // application, written by `nocobase skills sync`, and both hold links into `skills/` in the monorepo, written by
+  // `scripts/sync-skills.mjs`, so linting through one would report the same file twice and `--fix` would edit the
+  // committed original.
   '**/.agents/skills/**',
   '**/.claude/skills/**',
 ];
@@ -182,6 +184,24 @@ export const react: Linter.Config[] = [
       ],
     },
   },
+  {
+    // The server renders every runtime value the browser needs into the page's client configuration, so browser
+    // code has no environment of its own to read. `PROD`, `DEV` and `MODE` stay: Vite replaces them with literals at
+    // build time, and they are how development-only code is left out of a production build.
+    name: '@nocobase/dev-config/client-env',
+    files: reactFiles,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "MemberExpression[object.type='MemberExpression'][object.object.type='MetaProperty'][object.property.name='env']:not([property.name=/^(PROD|DEV|MODE)$/])",
+          message:
+            'Read runtime values from the client configuration (resolveAppUrl, useClientApplication().config). import.meta.env is limited to PROD, DEV and MODE.',
+        },
+      ],
+    },
+  },
 ];
 
 export const vitest: Linter.Config[] = [
@@ -203,6 +223,69 @@ export const vitest: Linter.Config[] = [
       '@typescript-eslint/no-unused-expressions': 'off',
       'vitest/expect-expect': 'off',
       'vitest/no-conditional-expect': 'off',
+    },
+  },
+];
+
+const APP_SERVER_NODE = '@nocobase/app-server/node';
+
+/**
+ * Commands in an application's or a plugin's `cli/` run inside the `nocobase` command line, which owns stdout and puts
+ * the application away after the command. Each rule names what to use instead of the thing it refuses.
+ */
+export const commandRules: Linter.Config[] = [
+  {
+    name: '@nocobase/dev-config/cli-commands',
+    files: commandFiles,
+    ignores: testFiles,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: APP_SERVER_NODE,
+              message:
+                'Use withApp() from AppCommand instead of creating the application yourself.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'process',
+          property: 'cwd',
+          message:
+            'Use this.rootDir for application files, or an appPath() flag for paths the user passes.',
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `ImportExpression[source.value='${APP_SERVER_NODE}']`,
+          message:
+            'Use withApp() from AppCommand instead of creating the application yourself.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name=/^(log|info|debug|table)$/]",
+          message:
+            'Use this.log for text and return the result from run(); console output bypasses --json.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.type='ThisExpression'][callee.property.name='exit']",
+          message:
+            'Return the result or throw CommandError instead of calling exit().',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.type='ThisExpression'][callee.property.name='logJson']",
+          message:
+            'Return the result from run(); AppCommand prints the --json document.',
+        },
+      ],
     },
   },
 ];
@@ -237,6 +320,7 @@ const createConfig = ({
     name: '@nocobase/dev-config/untyped-support-files',
     files: [...testFiles, ...toolingFiles],
   },
+  ...commandRules,
   {
     name: '@nocobase/dev-config/local-rules',
     files: allFiles,
@@ -277,7 +361,7 @@ export const createClientLibraryConfig: (
     ...options,
     environment: [
       ...react,
-      ...scopeConfigs(node, portalNodeFiles),
+      ...scopeConfigs(node, applicationNodeFiles),
       ...(options.environment ?? []),
     ],
   });
@@ -289,10 +373,17 @@ export const createClientLibraryConfig: (
 // upstream source does, so the rules that object to those shapes are relaxed
 // for the registry paths alone. Hand-written components in
 // `client/components/` are still held to the full rule set.
-const shadcnRegistry: Linter.Config[] = [
+//
+// `root` is the directory holding the `components/ui/` and `hooks/` that
+// `shadcn add` writes to. The application factory passes `client`; a package that
+// keeps its primitives elsewhere, such as the UI Library's `website`, passes
+// its own directory instead of copying the list.
+export const createShadcnRegistryConfig: (root?: string) => Linter.Config[] = (
+  root = 'client',
+) => [
   {
     name: '@nocobase/dev-config/shadcn-registry',
-    files: ['client/components/ui/**/*.tsx', 'client/hooks/use-mobile.ts'],
+    files: [`${root}/components/ui/**/*.tsx`, `${root}/hooks/use-mobile.ts`],
     rules: {
       'react-refresh/only-export-components': 'off',
       'react-hooks/set-state-in-effect': 'off',
@@ -307,7 +398,7 @@ const shadcnRegistry: Linter.Config[] = [
     // Recharts exposes loosely typed tooltip and legend payloads; the upstream
     // chart wrapper reads them as-is.
     name: '@nocobase/dev-config/shadcn-registry-chart',
-    files: ['client/components/ui/chart.tsx'],
+    files: [`${root}/components/ui/chart.tsx`],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -317,15 +408,15 @@ const shadcnRegistry: Linter.Config[] = [
   },
 ];
 
-export const createPortalConfig: (
+export const createApplicationConfig: (
   options?: SharedConfigOptions,
 ) => Linter.Config[] = (options = {}) =>
   createConfig({
     ...options,
     environment: [
-      ...scopeConfigs(react, portalClientFiles),
-      ...scopeConfigs(node, portalNodeFiles),
-      ...shadcnRegistry,
+      ...scopeConfigs(react, applicationClientFiles),
+      ...scopeConfigs(node, applicationNodeFiles),
+      ...createShadcnRegistryConfig(),
       ...(options.environment ?? []),
     ],
   });

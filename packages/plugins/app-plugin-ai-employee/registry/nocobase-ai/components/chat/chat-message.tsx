@@ -7,16 +7,20 @@ import { Check, Copy, Pencil, RefreshCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { MarkdownMessage } from './markdown-message.js';
 import { ReasoningPanel } from './reasoning-panel.js';
-import {
-  getToolCallName,
-  isToolCallPart,
-  ToolCallCard,
-} from './tool-call-card.js';
+import { ToolCallCard } from './tool-call-card.js';
+import { getToolCallName, isToolCallPart } from './tool-call-utils.js';
 import { ChatAttachment } from './chat-attachment.js';
-import { useAIToolRenderer } from '../tools/tool-renderer-provider.js';
+import { useAIToolRenderer } from '../tools/tool-renderer-context.js';
 import { SubAgentConversation } from './sub-agent-conversation.js';
 import { WorkContextChip } from './work-context-chip.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
+import { withStableKeys } from '../../shared/keys.js';
+
+const getPartKey = (part: AIChatMessageType['parts'][number]) => {
+  if (part.type === 'data-subAgent') return part.id ?? part.data.sessionId;
+  if (isToolCallPart(part)) return part.toolCallId;
+  return part.type;
+};
 
 type ChatMessageProps = {
   message: AIChatMessageType;
@@ -44,6 +48,11 @@ function ChatMessageComponent({
   const t = useAITranslate();
   const interactionPending = status === 'streaming' || status === 'submitted';
   const [copied, setCopied] = useState(false);
+  const copyText = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
   const isUser = message.role === 'user';
   const text = message.parts
     .filter((part) => part.type === 'text')
@@ -112,11 +121,7 @@ function ChatMessageComponent({
                 variant='ghost'
                 size='icon-xs'
                 aria-label={t('chat.message.copy', 'Copy message')}
-                onClick={async () => {
-                  await navigator.clipboard.writeText(text);
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1200);
-                }}
+                onClick={() => void copyText()}
               >
                 {copied ? <Check /> : <Copy />}
               </Button>
@@ -134,11 +139,7 @@ function ChatMessageComponent({
           variant='ghost'
           size='icon-xs'
           aria-label={t('chat.message.copyResponse', 'Copy response')}
-          onClick={async () => {
-            await navigator.clipboard.writeText(text);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1200);
-          }}
+          onClick={() => void copyText()}
         >
           {copied ? <Check /> : <Copy />}
         </Button>
@@ -158,76 +159,78 @@ function ChatMessageComponent({
   return (
     <article className='group/message min-w-0 max-w-full px-4 py-2 sm:px-5'>
       <div className='min-w-0 space-y-4'>
-        {assistantParts.map((part, index) => {
-          if (part.type === 'reasoning') {
+        {withStableKeys(assistantParts, getPartKey).map(
+          ({ key, item: part }) => {
+            if (part.type === 'reasoning') {
+              return (
+                <ReasoningPanel
+                  key={key}
+                  streaming={part.state === 'streaming'}
+                >
+                  {part.text}
+                </ReasoningPanel>
+              );
+            }
+            if (part.type === 'text') {
+              return (
+                <div
+                  key={key}
+                  className='ai-markdown min-w-0 max-w-full [overflow-wrap:anywhere] text-sm leading-6 text-foreground'
+                >
+                  <MarkdownMessage>{part.text}</MarkdownMessage>
+                </div>
+              );
+            }
+            if (part.type === 'data-subAgent') {
+              return (
+                <SubAgentConversation
+                  key={key}
+                  conversation={part.data}
+                  readOnly={readOnly}
+                  onToolCallDecision={onToolCallDecision}
+                  status={status}
+                  decideToolCall={decideToolCall}
+                  focusComposer={focusComposer}
+                />
+              );
+            }
+            if (!isToolCallPart(part)) return null;
             return (
-              <ReasoningPanel
-                key={`reasoning-${index}`}
-                streaming={part.state === 'streaming'}
-              >
-                {part.text}
-              </ReasoningPanel>
-            );
-          }
-          if (part.type === 'text') {
-            return (
-              <div
-                key={`text-${index}`}
-                className='ai-markdown min-w-0 max-w-full [overflow-wrap:anywhere] text-sm leading-6 text-foreground'
-              >
-                <MarkdownMessage>{part.text}</MarkdownMessage>
-              </div>
-            );
-          }
-          if (part.type === 'data-subAgent') {
-            return (
-              <SubAgentConversation
-                key={part.id ?? part.data.sessionId}
-                conversation={part.data}
+              <ToolCallCard
+                key={key}
+                part={part}
+                approval={message.metadata?.toolApprovals?.[part.toolCallId]}
+                disabled={interactionPending}
                 readOnly={readOnly}
-                onToolCallDecision={onToolCallDecision}
-                status={status}
-                decideToolCall={decideToolCall}
-                focusComposer={focusComposer}
+                onRevise={focusComposer}
+                inlineActions={
+                  showActions &&
+                  !readOnly &&
+                  useInlineToolActions &&
+                  part === singleToolCall
+                    ? messageActions
+                    : undefined
+                }
+                onDecision={async (decision, input) => {
+                  if (readOnly) return;
+                  const toolDecision = {
+                    messageId: message.id,
+                    toolCallId: part.toolCallId,
+                    toolName: getToolCallName(part),
+                    decision,
+                    input,
+                  } satisfies AIToolCallDecision;
+                  await decideToolCall?.(toolDecision);
+                  try {
+                    await onToolCallDecision?.(toolDecision);
+                  } catch (error) {
+                    console.error('Tool-call decision callback failed', error);
+                  }
+                }}
               />
             );
-          }
-          if (!isToolCallPart(part)) return null;
-          return (
-            <ToolCallCard
-              key={part.toolCallId}
-              part={part}
-              approval={message.metadata?.toolApprovals?.[part.toolCallId]}
-              disabled={interactionPending}
-              readOnly={readOnly}
-              onRevise={focusComposer}
-              inlineActions={
-                showActions &&
-                !readOnly &&
-                useInlineToolActions &&
-                part === singleToolCall
-                  ? messageActions
-                  : undefined
-              }
-              onDecision={async (decision, input) => {
-                if (readOnly) return;
-                const toolDecision = {
-                  messageId: message.id,
-                  toolCallId: part.toolCallId,
-                  toolName: getToolCallName(part),
-                  decision,
-                  input,
-                } satisfies AIToolCallDecision;
-                await decideToolCall?.(toolDecision);
-                try {
-                  await onToolCallDecision?.(toolDecision);
-                } catch (error) {
-                  console.error('Tool-call decision callback failed', error);
-                }
-              }}
-            />
-          );
-        })}
+          },
+        )}
         {showGenerating ? (
           <div className='min-h-6 text-sm leading-6 text-foreground'>
             <span

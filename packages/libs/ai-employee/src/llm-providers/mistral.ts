@@ -431,16 +431,6 @@ export const mistralProviderOptions: LLMProviderMeta = {
   title: 'Mistral AI',
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
   models: {
-    [SupportedModel.LLM]: [
-      'mistral-large-latest',
-      'mistral-medium-latest',
-      'mistral-medium-3-5',
-      'mistral-small-latest',
-      'ministral-8b-latest',
-      'ministral-3b-latest',
-      'codestral-latest',
-      'pixtral-large-latest',
-    ],
     [SupportedModel.EMBEDDING]: ['mistral-embed'],
   },
   provider: MistralProvider,

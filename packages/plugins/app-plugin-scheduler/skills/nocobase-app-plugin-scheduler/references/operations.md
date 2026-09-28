@@ -33,7 +33,7 @@ defineSchedule(definition: ScheduleDefinition): void;
 
 The returned handle carries `reportCompletion(occurrenceId, reference, completion)`, and completes only occurrences its own target started. `defineSchedule` has no return value; it validates and stores the definition in the in-memory manifest consumed by the next sync.
 
-Reading and changing schedules — list, occurrences, enable and disable — is reachable through the HTTP API above, and synchronization through `nb3 schedule:sync`. Neither is exposed as a resolvable service: the store, the target registry and the job dispatch table are private to the plugin, so an application cannot bypass the authorization its Routes enforce by resolving them from the container.
+Reading and changing schedules — list, occurrences, enable and disable — is reachable through the HTTP API above, and synchronization through `pnpm nocobase scheduler sync`. Neither is exposed as a resolvable service: the store, the target registry and the job dispatch table are private to the plugin, so an application cannot bypass the authorization its Routes enforce by resolving them from the container.
 
 ## Interpret Permissions and State Separately
 

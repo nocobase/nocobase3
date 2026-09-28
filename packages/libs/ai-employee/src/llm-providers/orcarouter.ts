@@ -124,17 +124,5 @@ class ChatOrcaRouterCompletions extends ReasoningChatOpenAI {
 export const orcarouterProviderOptions: LLMProviderMeta = {
   title: 'OrcaRouter',
   supportedModel: [SupportedModel.LLM],
-  models: {
-    [SupportedModel.LLM]: [
-      'orcarouter/auto',
-      'openai/gpt-5.5',
-      'google/gemini-3.5-flash',
-      'anthropic/claude-opus-4.8',
-      'grok/grok-4.3',
-      'deepseek/deepseek-v4-pro',
-      'minimax/minimax-m2.7',
-      'qwen/qwen3.7-max',
-    ],
-  },
   provider: OrcaRouterProvider,
 };

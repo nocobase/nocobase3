@@ -90,7 +90,7 @@ export NODE_ENV=production
 node ./dist/server/standalone.js
 ```
 
-部署包不包含源码目录的 `scripts/start.mjs`，因此解压部署包后直接用 `node` 运行编译产物入口 `dist/server/standalone.js`；源码目录中则使用 `pnpm start`。
+部署包只包含构建产物，解压后直接用 `node` 运行编译产物入口 `dist/server/standalone.js`；源码目录中则使用 `pnpm start`。应用的命令（如 `db apply`）用 `node dist/cli/index.js db apply` 运行。
 
 把域名的 HTTPS 流量通过反向代理转发到应用，保留 API、静态资源和 WebSocket 路径；使用服务管理器管理进程、重启和日志。正式迁移前备份已有数据库，并按照目标配置决定启动时迁移还是发布时单独迁移。
 
@@ -103,7 +103,7 @@ node ./dist/server/standalone.js
 | 提交与主管审批     | 状态按规则变化，重复审批被拒绝                                   |
 | 管理接口权限       | 普通账号不能读取他人的执行记录或执行管理操作，服务端独立检查权限 |
 | 工作流版本         | 目标环境的正确版本已启用                                         |
-| 我的通知           | 申请人收到一条结果，链接指向正确订单                             |
+| 我的通知           | 申请人收到通知，链接指向对应订单                                 |
 | 重启服务           | 订单和通知仍存在                                                 |
 
 工作流产物随构建部署，但数据库中的启用状态仍要在目标环境核对。失败时先分清配置、迁移、原生依赖和业务执行错误，避免通过清空数据库“修复上线”。

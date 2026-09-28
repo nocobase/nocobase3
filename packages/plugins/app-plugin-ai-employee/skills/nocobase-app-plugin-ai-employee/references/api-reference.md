@@ -1,6 +1,8 @@
 # Exact `/api/ai` and AI Service Contracts
 
-Prefer the installed `nocobaseAIService` and chat transport. Use direct routes only from a centralized App adapter. All route paths below are relative to `/api/ai` and use `resource:action` notation.
+Read this only when the App must call `/api/ai` directly. The installed `nocobaseAIService` and chat transport already cover employee and model discovery, conversation lifecycle and history, file upload, SSE send/resend/resume, tool decisions, frontend-tool results, and reconnect recovery — so a handwritten request is warranted only for an operation the service does not expose, and belongs in one centralized App adapter rather than in a page component.
+
+When you do write one, preserve current-user scope, abort signals, SSE framing, approval and resume, and error handling. All route paths below are relative to `/api/ai` and use `resource:action` notation.
 
 ## Table of contents
 
@@ -84,7 +86,7 @@ The actual interface uses `unknown` for raw streaming bodies so custom transport
 
 ### `GET aiEmployees:listByUser`
 
-No body/query. Returns accessible frontend employee objects:
+No body/query. Returns every enabled employee — there is no per-user or per-role filter — ordered by the user's own sort, then the employee's `sort`:
 
 ```ts
 type AIEmployee = {
@@ -99,6 +101,11 @@ type AIEmployee = {
   deprecated?: boolean;
   builtIn?: boolean;
   userConfig?: { prompt?: string };
+  chatSettings?: Record<string, unknown>;
+  skillSettings?: {
+    skills?: string[]; // effective: the employee's own plus every GENERAL Skill
+    tools?: { name: string; autoCall?: boolean }[]; // effective, GENERAL tools included
+  };
   modelSettings?: {
     enabled?: boolean;
     llmService?: string;
@@ -141,9 +148,9 @@ The Registry flattens each `enabledModels` item into `AIModel`.
 Other model actions:
 
 - `GET ai:listLLMProviders`: no input; returns provider metadata.
-- `GET ai:listLLMServices?model=<model-id>`: `model` optional.
-- `GET ai:listModels?llmService=<service>&model=<model-id>`: `llmService` required by behavior; `model` optional.
-- `POST ai:listProviderModels`: body `{ llmService: string; search?: string }`; returns `{ id: string }[]`.
+- `GET ai:listLLMServices?model=LLM|EMBEDDING`: `model` is a capability, not a model id, and optional; returns enabled services whose provider supports it as `{ name, title, provider }[]`. A model id matches no provider and returns `[]`.
+- `GET ai:listModels?llmService=<service>&model=EMBEDDING`: returns the provider's suggested embedding model ids as `{ id }[]`. Any other `model`, and an unknown or disabled service, returns `[]`; chat models come from `ai:listProviderModels`.
+- `POST ai:listProviderModels`: body `{ llmService: string; search?: string }`; returns `{ id: string }[]`. It calls the provider with the service's stored key, so it requires AI settings access like the [management resources](#management-resources).
 
 ## Conversation lifecycle
 
@@ -226,7 +233,7 @@ type GetMessagesResponse =
 
 With pagination enabled, the server returns at most 10 rows in descending message-id order (newest first). `cursor` is the oldest returned row's id, even when `hasMore` is false; an empty page returns `{ "rows": [], "hasMore": false, "cursor": null }`. Request older messages with the returned `cursor` only while `hasMore` is true. There is no total, page number, or configurable page size. `paginate=false` still returns `{ rows }`, omits `hasMore` and `cursor`, ignores an input cursor, and is capped at the latest 200 non-tool messages; it does not promise the entire conversation.
 
-`updateRead=true` marks the conversation read before loading messages. A missing or unowned conversation is an error, not an empty history. Standalone `role: 'tool'` rows are excluded; their results are joined into assistant tool calls. System rows are not filtered out by this endpoint. Nested sub-agent messages are ordered oldest first within their own session, unlike the top-level rows.
+`updateRead=true` marks the conversation read before loading messages. A missing or unowned conversation is an error — HTTP 400 `Invalid request` — not an empty history. Standalone `role: 'tool'` rows are excluded; their results are joined into assistant tool calls. System rows are not filtered out by this endpoint. Nested sub-agent messages are ordered oldest first within their own session, unlike the top-level rows.
 
 #### History message schema
 
@@ -235,7 +242,7 @@ These are parsed response rows, not raw database `AIMessage` records, incoming s
 ```ts
 type HistoryMessage = {
   key: string; // stable persisted message id; keep it as a string
-  role?: string | null; // normally user, assistant, or system; not an employee username
+  role?: string | null; // 'user', 'system', or the employee's username on its replies; never 'assistant'
   createdAt?: string | null; // serialized timestamp, normally ISO 8601; not a JS Date
   content: HistoryContent; // object even when stored content is null
 };
@@ -262,7 +269,7 @@ type HistoryContent = {
 
 type HistoryWorkContext = {
   type: string;
-  uid: string;
+  id?: string;
   title?: string;
   content?: unknown;
   [key: string]: unknown;
@@ -289,16 +296,16 @@ type HistoryToolCall = {
 | Field                                           | Meaning and absence handling                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `key`, `content.messageId`                      | Both identify the same persisted message. There is **no top-level `messageId`**, `id`, or `sessionId` in the built-in parsed row. Use `key` for stable rendering/deduplication and as the `messageId` for resend, tool decisions, or resume; send/edit uses `editingMessageId`. Keep the conversation's `sessionId` separately. Never convert a message id or cursor to `number`.                                                                                           |
-| `role`, `createdAt`                             | Passed through from persistence. Normal writes provide a role and creation time, but storage allows nulls; tolerate missing/null values from older or custom records. Do not infer chronological order from timestamps or use an array index as a persistent id.                                                                                                                                                                                                            |
+| `role`, `createdAt`                             | Passed through from persistence. An employee's reply is stored with its username as `role` (`atlas`, say), not `assistant`, so treat any role other than `user` or `system` as that employee's. Normal writes provide a role and creation time, but storage allows nulls; tolerate missing/null values from older or custom records. Do not infer chronological order from timestamps or use an array index as a persistent id.                                             |
 | `content.type`, `content.content`               | Structured content wrapper and its payload. Display text only after checking `typeof row.content.content === 'string'`. An assistant tool-only message can have empty text; provider parsers can retain structured content or omit a text payload.                                                                                                                                                                                                                          |
 | `content.metadata`                              | Optional/nullable persisted metadata, such as `model`, `provider`, `llmService`, usage, response metadata, and interrupt state. Provider-dependent; not a required display contract.                                                                                                                                                                                                                                                                                        |
 | `content.attachments`                           | Optional/nullable array of persisted attachment JSON. Normal uploaded references contain `filename` and may include `id`, `uid`, `size`, `mimetype`, `url`, `preview`, and `source`; see [Files](#files) and `IncomingAttachmentRef` below. No attachment is guaranteed on a row, and URLs are not necessarily absolute.                                                                                                                                                    |
-| `content.workContext`                           | Optional/nullable array of resolved context snapshots. `type` and `uid` identify normal context items; their content and additional fields depend on the App. This is not a live DOM/page handle.                                                                                                                                                                                                                                                                           |
+| `content.workContext`                           | Optional/nullable array of resolved context snapshots. `type` and `id` identify the items the Registry sends; their content and additional fields depend on the App. This is not a live DOM/page handle.                                                                                                                                                                                                                                                                    |
 | `content.tool_calls`                            | Response spelling is snake case, unlike incoming/persisted `toolCalls`. Normally absent when persisted `toolCalls` is null, or `[]` when an empty array was stored; raw/provider content can also carry null. Join fields can be absent/null when no tool result exists, and execution/permission can be absent if the tool is no longer registered. `willInterrupt` reflects frontend execution or `auto === false`, not proof that a call is currently awaiting approval. |
 | `content.from`, `content.subAgentConversations` | Top-level rows are marked `main-agent`. When sub-agent metadata exists, nested sessions carry `sessionId`, the dispatch `toolCallId`, status, and parsed messages marked `sub-agent`; a session can have an empty `messages` array.                                                                                                                                                                                                                                         |
 | `content.reasoning`, `content.reference`        | Optional provider additions. Reasoning can include `{ status: 'stop', content: string }`; references can include titles/URLs. Do not require them or assume every provider returns the same structure.                                                                                                                                                                                                                                                                      |
 
-Normalize optional arrays with an array check rather than assuming every response contains `[]`. The Registry service requests `paginate=false`, reverses the rows, removes tool/system roles, and maps them to UI messages; its `AIChatMessage[]` return value is not the HTTP response schema. See the [HTTP walkthrough](#http-conversation-walkthrough), [message boundary pitfalls](contracts.md#message-input-and-history-boundaries), and [server manager history boundary](agent-service.md#conversation-manager-methods).
+Normalize optional arrays with an array check rather than assuming every response contains `[]`. The Registry service requests `paginate=false`, reverses the rows, removes tool/system roles, and maps them to UI messages; its `AIChatMessage[]` return value is not the HTTP response schema. See the [HTTP walkthrough](#http-conversation-walkthrough) and the [server manager history boundary](server-runs.md#aiconversationsmanager).
 
 ### `GET aiConversations:get`
 
@@ -314,7 +321,7 @@ If no conversation row is found, active state falls back to `idle`.
 
 ### `PUT aiConversations:update`
 
-Query `{ sessionId: string }`, body `{ title?: string }`.
+Query `{ sessionId: string }`, body `{ title?: string }`. Returns the number of rows updated.
 
 ### `PUT aiConversations:updateOptions`
 
@@ -478,6 +485,8 @@ X-Accel-Buffering: no
 
 Do not call `response.json()` on this response. If invocation throws after the SSE response opens, the body instead contains an error frame such as `data: {"type":"error","body":"conversation not found"}` followed by two newlines; HTTP 200 alone does not prove execution succeeded. Prefer the normal streaming transport for chat. For this non-streaming execution example, wait for the response to close, inspect any SSE error frames, and read persisted history. Do not resend automatically if the request disconnects or the result is uncertain.
 
+An empty body also does not mean the run finished. A run that paused for a tool decision closes the same way, and history is where the difference shows: its tool calls are recorded as `interrupted` rather than completed, and the assistant turn carries the interrupt id. Answer them with [`updateUserDecision`](#post-aiconversationsupdateuserdecision) and continue with [`resumeToolCall`](#post-aiconversationsresumetoolcall) rather than treating the tool-calling turn as the reply.
+
 ### 6. Read persisted user and assistant messages
 
 ```bash
@@ -495,7 +504,7 @@ Illustrative text-only result after successful completion (metadata varies by pr
     {
       "key": "2030000000000000002",
       "createdAt": "2026-04-09T10:00:02.000Z",
-      "role": "assistant",
+      "role": "atlas",
       "content": {
         "type": "text",
         "content": "Hello! How can I help you today?",
@@ -570,13 +579,16 @@ type SendMessagesRequest = {
   aiEmployee: string; // employee username
   model: ModelRef;
   messages: IncomingChatMessage[]; // must contain a user message
-  systemMessage?: string;
-  skillSettings?: { skills?: string[]; tools?: string[] };
   editingMessageId?: string;
   webSearch?: boolean;
+  frontendTools?: unknown[]; // the page's frontend tool registrations
+  important?: string;
+  timezone?: string; // falls back to the `x-timezone` header
   stream?: boolean; // Registry omits; false invokes internally but HTTP still returns SSE
 };
 ```
+
+The system message and skill settings come from the conversation, set by [`aiConversations:create`](#post-aiconversationscreate) or [`updateOptions`](#put-aiconversationsupdateoptions); fields of those names in this body are ignored.
 
 Registry normal flow sends exactly one latest user message with content `{ type: 'text', content: string }`, completed attachments only, and resolved work context. The HTTP response is SSE, including when a custom caller sends `stream: false`; see the [non-streaming execution example and limitation](#5-send-a-message-with-stream-false). For the JSON history response after execution, use [getMessages](#get-aiconversationsgetmessages).
 
@@ -599,7 +611,7 @@ Body `{ sessionId: string }`. Response is SSE. Use for reconnecting to an active
 
 ### `POST aiConversations:abort`
 
-Body `{ sessionId: string }`. Aborts active agent execution for that conversation. Returns a JSON result from the conversation service.
+Body `{ sessionId: string }`. Aborts active agent execution for that conversation and returns `null`; 400 without `sessionId`, 404 when the conversation is not the caller's.
 
 ## Tool decisions and resume
 
@@ -622,7 +634,7 @@ type UpdateToolCallDecisionRequest = {
 };
 ```
 
-All ids are required. The target tool call must exist and be interrupted. For `executeFrontendTool`, the nested tool id must still exist in current conversation context. Returns:
+All ids are required. Only a tool call that is still interrupted is updated; any other leaves `updated: 0` rather than failing, so check it. For `executeFrontendTool`, the nested tool id must still exist in current conversation context. Returns:
 
 ```ts
 {
@@ -636,6 +648,7 @@ All ids are required. The target tool call must exist and be interrupted. For `e
     execution?: string;
     willInterrupt?: boolean;
     args?: unknown;
+    [key: string]: unknown; // every other stored field, such as content and userDecision
   }[];
 }
 ```
@@ -646,7 +659,6 @@ All ids are required. The target tool call must exist and be interrupted. For `e
 type ResumeToolCallRequest = {
   sessionId: string;
   messageId?: string; // if omitted, server uses latest message
-  toolCallIds?: string[];
   toolCallResults?: { id: string; result: unknown }[];
   model: ModelRef;
   webSearch?: boolean;
@@ -674,22 +686,22 @@ Updates matching persisted tool-call arguments and returns `null`. This does not
 
 ### `POST aiFiles:create`
 
-Multipart form data with exactly one field named `file` whose value is a browser `File`. Returns file metadata such as id/uid, filename, size, mimetype, URL, or preview depending on storage implementation. The Registry resolves returned relative URLs.
+Multipart form data with exactly one field named `file` whose value is a browser `File`. Returns `{ id, filename, size, mimetype, extname, disk, path, url, preview, data, source: { collectionName: 'aiFiles' } }`, where `url` and `preview` are both the `aiFiles:preview` address. `filename` is the name the file was uploaded with, in any script, minus any directory part and control characters, and at most 128 characters with the extension kept. The Registry resolves returned relative URLs.
 
 ### `GET aiFiles:preview`
 
-Query `{ id: string }`. Returns a file preview response, not a JSON envelope.
+Query `{ id: string }`. Returns a file preview response, not a JSON envelope, served inline with the original file name in `Content-Disposition`. An attachment stored by `aiFiles:create` comes back in history with `preview` pointing here, and with `url` pointing here too unless its disk gives the file a URL of its own. On send, an `aiFiles` attachment the sender did not upload is dropped. The user who uploaded the file can preview it; anyone else, and anyone previewing a file that records no uploader, needs AI settings access, and gets 403 without it.
 
 ## Management resources
 
-These are administrative/settings actions and should not be exposed to ordinary users without App authorization.
+The endpoints behind the AI settings page. Besides a signed-in session, every action in this section requires access to that page — `page:ai.settings` with the `access` action — and answers 403 without it; an ordinary chat user reaches none of them. LLM services and MCP servers are configured in `config.yml`, and their actions here only change what the settings page manages.
 
 ### Employees
 
 - `GET aiEmployees:list`
 - `GET aiEmployees:get?key=<username>`
 - `GET aiEmployees:getTemplates`
-- `POST aiEmployees:create` with an employee resource body
+- `POST aiEmployees:create` with an employee resource body; an existing username is updated rather than rejected
 - `PUT aiEmployees:update?key=<username>` with editable fields; query key forces username
 - `DELETE aiEmployees:destroy?key=<username>`
 
@@ -706,8 +718,10 @@ Common editable employee fields:
     models?: ModelRef[];
   };
   skillSettings?: {
-    skills?: string[];
+    skills?: string[]; // omitted from a sent skillSettings, it becomes []
     tools?: { name: string; autoCall?: boolean }[];
+    enabledSkills?: string[] | null; // when set, the exact Skills listByUser reports
+    enabledTools?: string[] | null; // when set, the exact tools listByUser reports
   };
   enableKnowledgeBase?: boolean;
   knowledgeBasePrompt?: string;
@@ -722,7 +736,7 @@ Common editable employee fields:
 
 ### Skills
 
-Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `aiSkills`.
+Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `aiSkills`. `create` updates a Skill that already has the name.
 
 Managed body:
 
@@ -740,7 +754,7 @@ Managed body:
 
 ### Tools
 
-Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `aiTools`.
+Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `aiTools`. `create` updates a tool that already has the name.
 
 Managed metadata body:
 
@@ -764,7 +778,9 @@ A managed backend tool cannot be created from JSON alone without an existing exe
 
 ### MCP servers
 
-Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `aiMcpServers`.
+MCP servers are configured only in `config.yml` `ai.mcpServers`; there is no action that creates, edits, or deletes one. The enable switch and tool permissions these actions change are stored and survive a restart; a tool is named `mcp-<server>-<tool>`. Actions on resource `aiMcpServers`: `GET list`, `GET get?key`, `GET listTools`, `POST testConnection`, `POST updateEnabled` (`{ name, enabled }`), and `POST updateToolPermission` (`{ toolName, permission: 'ASK' | 'ALLOW' }`).
+
+A configured server as returned by `list`/`get`:
 
 ```ts
 {
@@ -779,28 +795,37 @@ Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `a
   url?: string;
   headers?: Record<string, string>;
   restart?: Record<string, unknown>;
+  toolPermissions?: Record<string, 'ASK' | 'ALLOW'>; // keyed by the server's own tool name
+  sort?: number;
 }
 ```
 
-List/get responses redact secret-like environment/header values.
+List/get responses redact secret-like environment/header values. `updateEnabled` and `updateToolPermission` return `{}`; `updateEnabled` on an unknown name changes nothing and does not fail.
+
+`testConnection` takes either `{ name }`, which tests that configured server and ignores any other field in the body, or inline `{ transport: 'http' | 'sse', url, headers? }` for a remote server. A `stdio` server runs a local command, so it can only be tested by `name`; an inline `transport: 'stdio'` body is rejected with 400, and an unknown `name` returns 404.
 
 ### LLM services
 
-Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `llmServices`.
+LLM services are defined only in `config.yml` `ai.llmServices`; there is no action that creates, deletes, or reconfigures one. Actions on resource `llmServices`: `GET list`, `GET get?key`, and two narrow updates of a configured service's state:
+
+- `POST updateEnabled` with `{ name: string; enabled: boolean }`
+- `POST updateEnabledModels` with `{ name: string; enabledModels: { mode: 'provider' | 'custom'; models: { label: string; value: string }[] } }`
+
+Each changes only its one field and ignores any other in the body, returns the updated service, answers 404 for a name that is not configured, and never creates a service. A `list`/`get` response has this shape, with secret-like `options` redacted:
 
 ```ts
 {
-  name?: string; // create requires a usable name; update query key forces it
-  title?: string;
-  provider?: string;
-  options?: Record<string, unknown>;
-  enabledModels?: {
+  name: string;
+  title: string;
+  provider: string;
+  options: Record<string, unknown>;
+  enabledModels: {
     mode: 'provider' | 'custom';
     models: { label: string; value: string }[];
   };
   modelOptions?: Record<string, unknown>;
-  enabled?: boolean;
-  sort?: number;
+  enabled: boolean;
+  sort: number;
 }
 ```
 
@@ -821,17 +846,23 @@ Each frame is:
 data: <JSON>\n\n
 ```
 
-The installed stream parser handles content, reasoning, web search, tool-call chunks/status, interrupts, message persistence, new messages, sub-agent lifecycle, and errors. A stream failure is sent as:
+Frame types include `stream_start`, `stream_end`, content, reasoning and web search frames, `tool_calls` and `tool_call_status`, `new_message`, `sub_agent_completed`, `chunks_cache_missing` from `resumeStream`, and `error`. There is no separate interrupt frame: a tool call awaiting approval arrives through `tool_calls` or `tool_call_status` with `invokeStatus: 'interrupted'`. A stream failure is sent as:
 
 ```json
-{ "type": "error", "body": "message", "errorName": "optional" }
+{
+  "type": "error",
+  "body": "message",
+  "code": "optional"
+}
 ```
+
+The chat actions answer HTTP 200 once the stream opens, whatever the run does afterwards, so the status never tells a failed run from a successful one. When the failure is the agent's — on `sendMessages`, `resendMessages` or `resumeToolCall` — `code` carries its `AgentServiceErrorCode` and `body` its root message — `CONFIGURATION_ERROR` for a missing or disabled model or service, `PROVIDER_ERROR` for a provider failure, and the rest as listed in [server-runs.md § Failures a caller has to tell apart](server-runs.md#failures-a-caller-has-to-tell-apart) — so branch on `code`, never on the text of `body`. A failure before the agent runs, such as an unknown conversation, has no `code`, and neither does a failure replaying a stream through `resumeStream`.
 
 Always pass an `AbortSignal`. After disconnect, inspect active state/history and use resume; never blindly duplicate a mutation.
 
 ## Errors and security
 
-JSON failures use an envelope compatible with:
+Failures the plugin raises use an envelope compatible with:
 
 ```ts
 {
@@ -840,4 +871,10 @@ JSON failures use an envelope compatible with:
 }
 ```
 
-Validation commonly returns HTTP 400, not-found 404, and unexpected errors 500. Routes use the authenticated App session and current-user conversation ownership. Backend tools must still enforce business authorization using `ctx.actor` and supplied services/repositories. The presence of a management endpoint does not grant ordinary-user access.
+Two responses come from elsewhere and do not: a missing session answers 401 with the authentication plugin's `{ code: 'UNAUTHORIZED', message }`, and an action that does not exist answers a plain-text 404.
+
+Every route requires a signed-in session; there is no anonymous caller. Beyond that, actions fall into three groups:
+
+- **AI settings access** (`page:ai.settings`, `access`), 403 without it: every [management resource](#management-resources), `ai:listProviderModels`, and the settings-page reads `aiConversations:listAll` and `getAllMessages`, `aiSkills:listAll` and `getDetails`, and `aiTools:listAll` and `getDetails`.
+- **Every signed-in user**, scoped to what that user owns: the conversation actions other than those two, `aiFiles:create` and `aiFiles:preview` (with the ownership rule above), `aiEmployees:listByUser` and `updateUserPrompt`, and `ai:listAllEnabledModels`.
+- **Every signed-in user, because the data is not sensitive**: `ai:listLLMProviders`, `ai:listLLMServices` and `ai:listModels` return the provider catalog, enabled service names and suggested embedding model ids, never credentials, and other plugins read them to offer a model choice. Validation commonly returns HTTP 400 and unexpected errors 500; a missing record is usually 404, but history reads answer 400 for a conversation that is missing or not the caller's. Backend tools must still enforce business authorization using `ctx.actor` and supplied services/repositories.

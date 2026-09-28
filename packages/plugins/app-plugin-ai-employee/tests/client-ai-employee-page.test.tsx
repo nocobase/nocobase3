@@ -24,8 +24,8 @@ vi.mock('@nocobase/app-client', () => ({
   createApiClient: () => mocks.api,
   resolveAppUrl: (value: string) => value,
 }));
-vi.mock('@refinedev/core', () => ({
-  useNotification: () => ({ open: mocks.notify }),
+vi.mock('@base-ui/react/toast', () => ({
+  Toast: { useToastManager: () => ({ add: mocks.notify }) },
 }));
 vi.mock('../client/locales/index.js', () => ({
   useT: () => (key: string) => key,
@@ -108,10 +108,10 @@ beforeEach(() => {
     },
   );
   mocks.list.mockResolvedValue(employees);
-  mocks.get.mockImplementation(async (username: string) =>
+  mocks.get.mockImplementation(async (_api: unknown, username: string) =>
     employees.find((employee) => employee.username === username),
   );
-  mocks.update.mockImplementation(async (employee, draft) => ({
+  mocks.update.mockImplementation(async (_api, employee, draft) => ({
     ...employee,
     ...draft,
   }));
@@ -277,10 +277,12 @@ describe('AI employee list disclosure', () => {
       'lg:grid-cols-[32px_minmax(0,1fr)]',
       'lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]',
       'h-[clamp(52rem,85dvh,68rem)]',
-      'lg:h-[clamp(40rem,80dvh,64rem)]',
+      'lg:h-auto',
+      'lg:flex-1',
       'min-h-0',
       'overflow-hidden',
     );
+    expect(screen.getByRole('main')).not.toHaveClass('lg:min-h-[32rem]');
     const tabList = screen.getByRole('tablist');
     expect(tabList).toHaveClass('shrink-0');
     const content = tabList.nextElementSibling;
@@ -416,9 +418,9 @@ describe('AI employee list disclosure', () => {
     const loading = screen.getByText('Loading employee details…');
     expect(loading).toBeVisible();
     expect(mocks.get).toHaveBeenCalledExactlyOnceWith(
+      mocks.api,
       'ellis',
       expect.any(AbortSignal),
-      mocks.api,
     );
     expect(
       screen.queryByRole('heading', { name: 'Ellis' }),
@@ -561,9 +563,9 @@ describe('AI employee list disclosure', () => {
       expect(screen.getByLabelText('Username')).toHaveValue('dex'),
     );
     expect(mocks.get).toHaveBeenLastCalledWith(
+      mocks.api,
       'dex',
       expect.any(AbortSignal),
-      mocks.api,
     );
     toggleList();
     expect(screen.getByRole('heading', { name: 'Dex' })).toBeVisible();
@@ -628,9 +630,9 @@ describe('AI employee list disclosure', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mocks.update).toHaveBeenCalledWith(
+        mocks.api,
         employees[0],
         expect.objectContaining({ enabled: false }),
-        mocks.api,
       ),
     );
     await waitFor(() =>

@@ -99,6 +99,10 @@ it('loads the current inbox, persists read state with CSRF, filters unread, and 
 });
 
 beforeEach(() => {
+  mocks.request.mockReset();
+  mocks.subscribe.mockReset().mockReturnValue(mocks.cleanup);
+  mocks.onOpen.mockReset().mockReturnValue(mocks.cleanup);
+  mocks.cleanup.mockReset();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -213,18 +217,27 @@ it('expands and collapses overflowing message bodies independently', async () =>
     </MemoryRouter>,
   );
   await screen.findByText('Long message body');
+  // Each row starts observing in an effect, which can still be pending once its text is in the DOM. Measuring before
+  // both rows observe measures nothing, and "Show more" never appears — the failure a loaded CI runner produced.
+  await waitFor(() => expect(measurements).toHaveLength(2));
   act(() => measurements.forEach((measure) => measure()));
-  const expand = screen.getByRole('button', { name: 'Show more' });
+  const expand = await screen.findByRole('button', { name: 'Show more' });
   expect(expand).toHaveAttribute('aria-expanded', 'false');
   expect(expand).toHaveAttribute(
     'aria-controls',
     screen.getByText('Long message body').id,
   );
   fireEvent.click(expand);
-  const collapse = screen.getByRole('button', { name: 'Show less' });
+  const collapse = await screen.findByRole('button', { name: 'Show less' });
   expect(collapse).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByText('Long message body')).not.toHaveClass('line-clamp-3');
   fireEvent.click(collapse);
-  expect(screen.getByText('Long message body')).toHaveClass('line-clamp-3');
-  expect(screen.getAllByRole('button', { name: 'Show more' })).toHaveLength(1);
+  await waitFor(() =>
+    expect(screen.getByText('Long message body')).toHaveClass('line-clamp-3'),
+  );
+  await waitFor(() =>
+    expect(screen.getAllByRole('button', { name: 'Show more' })).toHaveLength(
+      1,
+    ),
+  );
 });

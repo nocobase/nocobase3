@@ -4,7 +4,6 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  permissionSetsToken,
   type Authorization,
   type PermissionSetsApi,
 } from '@nocobase/app-plugin-authorization';
@@ -167,8 +166,8 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             grants: [],
           },
           {
-            key: 'hub-viewer',
-            title: 'Hub viewer',
+            key: 'hub-operator',
+            title: 'Hub operator',
             grants: [
               {
                 resource: { type: 'hub.app', id: '*' },
@@ -192,6 +191,16 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             {
               resource: { type: 'user', id: '*' },
               actions: ['read', 'create'],
+            },
+          ],
+        },
+        {
+          key: 'hub-operator',
+          title: 'Hub operator',
+          grants: [
+            {
+              resource: { type: 'hub.app', id: '*' },
+              actions: ['read'],
             },
           ],
         },
@@ -489,10 +498,10 @@ function createApplication(
       await next();
     },
   } as Auth);
-  container.instance(permissionSetsToken, {
-    list: () => Promise.resolve(permissionSets),
-  } as unknown as PermissionSetsApi);
   container.instance(authorizationToken, {
+    permissionSets: {
+      list: () => Promise.resolve(permissionSets),
+    } as unknown as PermissionSetsApi,
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },

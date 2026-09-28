@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
@@ -53,8 +53,8 @@ export interface DriverVerification {
  *
  * It arrives transitively rather than being installed by name: each template depends on `@nocobase/db-sqlite`, which
  * depends on `better-sqlite3`. That makes it the one native addon a generated project is guaranteed to need, and the
- * only addon this verifier checks. Selecting another dialect may add other drivers; their runtime readiness and
- * database connectivity are not verified here. Creation reports that limitation for non-SQLite dialects.
+ * only addon this verifier checks. An application that adds another driver later, for another dialect, is on its own
+ * for that driver's runtime readiness; database connectivity is never verified here.
  */
 export const DEFAULT_NATIVE_DRIVER = 'better-sqlite3';
 
@@ -183,27 +183,15 @@ export interface SkillsSyncResult {
  * Copies the skills of the app's NocoBase dependencies into `.agents/skills/`.
  *
  * This only works once the dependencies are installed, because the packages the sync reads from are resolved out of
- * `node_modules`. The template ships the script and the CLI behind it, so the generated app owns the command and
- * running it here is the same thing the user would run themselves after a package upgrade. Templates created before
- * `skills:sync` was introduced retain the old `plugin:skills:sync` script, which remains a supported fallback here.
+ * `node_modules`. The template depends on the CLI behind it, so the generated app owns the command and running it here
+ * is the same thing the user would run themselves after a package upgrade.
  *
  * Skills are an assistive layer rather than something the app needs to boot, so a failure is reported and the
  * generated project is still usable — the caller warns instead of aborting.
  */
 export async function syncSkills(directory: string): Promise<SkillsSyncResult> {
-  let scriptName = 'skills:sync';
   try {
-    const manifest = JSON.parse(
-      await readFile(path.join(directory, 'package.json'), 'utf8'),
-    ) as { scripts?: Record<string, unknown> };
-    if (
-      typeof manifest.scripts?.[scriptName] !== 'string' &&
-      typeof manifest.scripts?.['plugin:skills:sync'] === 'string'
-    ) {
-      scriptName = 'plugin:skills:sync';
-    }
-
-    await runCommand('pnpm', ['run', scriptName], {
+    await runCommand('pnpm', ['nocobase', 'skills', 'sync'], {
       cwd: directory,
       timeoutMs: SKILLS_SYNC_TIMEOUT_MS,
     });
@@ -222,7 +210,7 @@ export async function syncSkills(directory: string): Promise<SkillsSyncResult> {
         detail,
         '',
         'To do it later, run this inside the app directory:',
-        `  pnpm ${scriptName}`,
+        '  pnpm nocobase skills sync',
       ].join('\n'),
     };
   }

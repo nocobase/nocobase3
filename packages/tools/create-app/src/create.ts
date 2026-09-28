@@ -1,11 +1,4 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { buildConfigFile } from './lib/config-file.ts';
-import {
-  configureDatabase,
-  resolveDialectDependency,
-  type Dialect,
-} from './lib/dialects.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import {
   installDependencies,
@@ -25,7 +18,6 @@ import {
 import {
   assertTargetIsUsable,
   assertValidAppName,
-  readConfigExample,
   removeDirectory,
   scaffoldFromTemplate,
 } from './lib/scaffold.ts';
@@ -36,6 +28,14 @@ import {
   resolveTemplateSource,
 } from './lib/template.ts';
 import { buildHubEnvFile, readEnvExample } from './lib/hub.ts';
+import { buildNpmrcFile } from './lib/npmrc.ts';
+import {
+  FAILURE_CODES,
+  failureEnvelope,
+  successEnvelope,
+  type Envelope,
+  type Stage,
+} from './lib/output.ts';
 
 export interface CreateAppOptions {
   argv: string[];
@@ -43,43 +43,71 @@ export interface CreateAppOptions {
   binary: string;
 }
 
-interface CreateResult {
-  status: 'success' | 'error';
-  stage: 'input' | 'download' | 'scaffold' | 'install' | 'verify' | 'complete';
+/** How far creation got, and what it has produced so far. */
+interface CreateState {
+  stage: Stage;
   directory?: string;
-  dialect?: Dialect;
   projectCreated: boolean;
   dependenciesInstalled: boolean;
-  databaseConnectionVerified: false;
-  configurationRequired?: boolean;
-  configFile?: string;
-  configPath?: string;
   nextCommands?: string[];
   message?: string;
   warnings: string[];
 }
 
 /** One result on stdout in JSON mode; human progress uses stderr in that mode. */
-function writeJson(result: unknown): void {
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+function writeJson(envelope: Envelope): void {
+  process.stdout.write(`${JSON.stringify(envelope)}\n`);
+}
+
+/**
+ * A failure names the stage it stopped at, and whether the project exists: a failed install leaves a project to retry
+ * `pnpm install` in, which creating it again would refuse. A suggestion's `run` runs as given, from wherever the caller
+ * is, so the retry names the project with `--dir` rather than relying on the caller to enter it first.
+ */
+function failureOf(state: CreateState, message: string): Envelope {
+  return failureEnvelope(
+    {
+      code: FAILURE_CODES[state.stage],
+      message,
+      suggestions:
+        state.stage === 'install'
+          ? [
+              {
+                message: `The project exists${state.directory ? ` at ${state.directory}` : ''}; retry the installation there, rather than creating it again:`,
+                run: {
+                  command: 'pnpm',
+                  args: state.directory
+                    ? ['--dir', state.directory, 'install']
+                    : ['install'],
+                },
+              },
+            ]
+          : [],
+      details: {
+        stage: state.stage,
+        ...(state.directory ? { directory: state.directory } : {}),
+        projectCreated: state.projectCreated,
+        dependenciesInstalled: state.dependenciesInstalled,
+      },
+    },
+    state.warnings,
+  );
 }
 
 export async function createApp(options: CreateAppOptions): Promise<number> {
   let input: ParsedInput;
-  const result: CreateResult = {
-    status: 'error',
+  const state: CreateState = {
     stage: 'input',
     projectCreated: false,
     dependenciesInstalled: false,
-    databaseConnectionVerified: false,
     warnings: [],
   };
   try {
     input = await parseInput(options.argv);
   } catch (error) {
-    result.message = (error as Error).message;
-    if (options.argv.includes('--json')) writeJson(result);
-    else process.stderr.write(`${result.message}\n`);
+    const message = (error as Error).message;
+    if (options.argv.includes('--json')) writeJson(failureOf(state, message));
+    else process.stderr.write(`${message}\n`);
     return 2;
   }
   if (input.flags.help || input.flags.version) {
@@ -87,14 +115,14 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
       ? formatHelp(options.binary)
       : options.version;
     if (input.flags.json)
-      writeJson({
-        status: 'success',
-        [input.flags.help ? 'help' : 'version']: value,
-      });
+      writeJson(
+        successEnvelope(
+          input.flags.help ? { help: value } : { version: value },
+        ),
+      );
     else process.stdout.write(`${value}\n`);
     return 0;
   }
-  result.dialect = input.flags.dialect;
   const progress = (message: string): void => {
     if (input.flags.json) process.stderr.write(`${message}\n`);
     else log.info(message);
@@ -103,20 +131,26 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
     if (input.flags.json && !input.directory)
       throw new Error('DIRECTORY is required with --json.');
     if (!input.flags.json) intro('Create a NocoBase project');
-    await run(input, result, progress);
-    result.status = 'success';
-    result.stage = 'complete';
-    if (input.flags.json) writeJson(result);
+    await run(input, state, progress);
+    if (input.flags.json)
+      writeJson(
+        successEnvelope(
+          {
+            directory: state.directory,
+            projectCreated: state.projectCreated,
+            dependenciesInstalled: state.dependenciesInstalled,
+            configured: false,
+            nextCommands: state.nextCommands,
+            message: state.message,
+          },
+          state.warnings,
+        ),
+      );
     else {
       note(
         [
-          `cd ${input.directory ?? path.basename(result.directory ?? '')}`,
-          ...(result.configurationRequired
-            ? [
-                'Edit database.connections.main in config.yml with actual connection settings; prepare the target database.',
-              ]
-            : []),
-          ...(result.nextCommands ?? []),
+          `cd ${input.directory ?? path.basename(state.directory ?? '')}`,
+          ...(state.nextCommands ?? []),
         ].join('\n'),
         'Next steps',
       );
@@ -124,16 +158,15 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
     }
     return 0;
   } catch (error) {
-    result.message = (error as Error).message;
-    if (result.stage === 'install') result.nextCommands = ['pnpm install'];
-    if (input.flags.json) writeJson(result);
+    const message = (error as Error).message;
+    if (input.flags.json) writeJson(failureOf(state, message));
     else
       cancel(
-        `${result.message}${result.projectCreated ? `\nProject files are in ${result.directory}.` : ''}${result.stage === 'install' ? '\nRun pnpm install inside the project to retry.' : ''}`,
+        `${message}${state.projectCreated ? `\nProject files are in ${state.directory}.` : ''}${state.stage === 'install' ? '\nRun pnpm install inside the project to retry.' : ''}`,
       );
     return error instanceof PromptCancelledError
       ? 130
-      : result.stage === 'input'
+      : state.stage === 'input'
         ? 2
         : 1;
   }
@@ -141,77 +174,71 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
 
 async function run(
   input: ParsedInput,
-  result: CreateResult,
+  state: CreateState,
   progress: (message: string) => void,
 ): Promise<void> {
   const name = input.directory ?? (await promptAppName());
   assertValidAppName(name);
   const targetDirectory = path.resolve(process.cwd(), name);
-  result.directory = targetDirectory;
-  result.stage = 'scaffold';
+  state.directory = targetDirectory;
+  state.stage = 'scaffold';
   await assertTargetIsUsable(targetDirectory);
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
   const source = resolveTemplateSource(input.flags.template, {
     tag: input.flags['template-tag'],
   });
-  result.stage = 'download';
+  state.stage = 'download';
   progress(`Downloading ${source}`);
   const template = await downloadTemplate({ registry, source });
-  result.stage = 'scaffold';
+  state.stage = 'scaffold';
   try {
     const kind = resolveTemplateKind(input.flags.template, {
       name: template.name,
       nocobase: { templateKind: template.kind },
     });
-    const example = await readConfigExample(template.directory);
-    const configured = configureDatabase(
-      example ?? '',
-      input.flags.dialect,
-      name,
-    );
     const extraFiles: Record<string, string> = {
-      'config.yml': buildConfigFile({ example: configured }),
+      '.npmrc': buildNpmrcFile({ registry }),
     };
     if (kind === 'hub')
       extraFiles['.env'] = buildHubEnvFile({
         example: await readEnvExample(template.directory),
-        name,
       });
-    const manifest = JSON.parse(
-      await readFile(path.join(template.directory, 'package.json'), 'utf8'),
-    ) as { dependencies?: Record<string, string> };
-    const additionalDependencies = await resolveDialectDependency(
-      manifest.dependencies ?? {},
-      input.flags.dialect,
-      registry,
-    );
     await scaffoldFromTemplate({
       name,
       targetDirectory,
       templateDirectory: template.directory,
       extraFiles,
-      additionalDependencies,
     });
-    result.projectCreated = true;
+    state.projectCreated = true;
     await ensureAllowBuilds(targetDirectory);
-    result.configurationRequired = input.flags.dialect !== 'sqlite';
-    result.configFile = path.join(targetDirectory, 'config.yml');
-    result.configPath = 'database.connections.main';
-    result.nextCommands =
-      kind === 'hub' ? ['pnpm build', 'pnpm start'] : ['pnpm dev'];
-    result.message = result.configurationRequired
-      ? 'Edit database.connections.main in config.yml with actual connection settings and prepare the target database before starting.'
-      : 'SQLite is ready to use after dependencies are installed.';
-    progress(`Created ${name} using ${input.flags.dialect}. ${result.message}`);
+    // Creation stops at a project that can be configured, not at one that can run. Which database an application uses
+    // is decided by the driver it depends on, and configuring it is `config init`'s job — so the next steps name it
+    // rather than this command writing a configuration nobody asked for.
+    state.nextCommands =
+      kind === 'hub'
+        ? [
+            'pnpm nocobase config init',
+            'pnpm nocobase config check',
+            'pnpm build',
+            'pnpm start',
+          ]
+        : [
+            'pnpm nocobase config init',
+            'pnpm nocobase config check',
+            'pnpm dev',
+          ];
+    state.message =
+      'Configure the application with pnpm nocobase config init before starting it. That uses SQLite; for another database, install its driver and name the dialect, for example: pnpm add @nocobase/db-postgres, then pnpm nocobase config init --dialect postgres';
+    progress(`Created ${name}. ${state.message}`);
   } finally {
     await removeDirectory(template.directory);
   }
   if (!input.flags.install) {
-    result.nextCommands?.unshift('pnpm install');
+    state.nextCommands?.unshift('pnpm install');
     return;
   }
-  result.stage = 'install';
+  state.stage = 'install';
   progress('Installing dependencies with pnpm');
   await installDependencies({
     directory: targetDirectory,
@@ -220,8 +247,8 @@ async function run(
       process.stderr.write(chunk);
     },
   });
-  result.dependenciesInstalled = true;
-  result.stage = 'verify';
+  state.dependenciesInstalled = true;
+  state.stage = 'verify';
   const verification = await verifyDriver(targetDirectory);
   if (verification.rebuilt)
     progress('Compiled the native addon for the database driver.');
@@ -229,17 +256,12 @@ async function run(
     throw new Error(
       verification.reason ?? 'Database driver verification failed.',
     );
-  if (input.flags.dialect !== 'sqlite') {
-    const warning = `Post-install native dependency verification only checks better-sqlite3 when present. The selected ${input.flags.dialect} driver and database connection have not been verified; configure config.yml and verify startup against your database.`;
-    result.warnings.push(warning);
-    progress(warning);
-  }
   progress('Synchronizing NocoBase package skills');
   const synchronized = await syncSkills(targetDirectory);
   if (!synchronized.ok) {
     const warning =
       synchronized.reason ?? 'Could not synchronize NocoBase package skills.';
-    result.warnings.push(warning);
+    state.warnings.push(warning);
     progress(warning);
   }
 }

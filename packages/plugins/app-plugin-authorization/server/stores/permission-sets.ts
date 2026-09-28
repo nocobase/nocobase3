@@ -5,13 +5,13 @@ import {
 import type { DatabaseConnection } from '@nocobase/db';
 import type { DatabaseConnectionSource } from './connection.js';
 import type { Knex } from 'knex';
+import type { PermissionGrant } from '@nocobase/authorization/core';
 import type {
-  PermissionGrant,
   PermissionSet,
   PermissionSetAssignment,
   PermissionSetSubject,
-} from '@nocobase/authorization/permissions';
-import type { PermissionSetStore } from '@nocobase/authorization/permissions';
+} from '@nocobase/authorization/permission-sets';
+import type { PermissionSetStore } from '@nocobase/authorization/permission-sets';
 
 export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseConnection> {
   constructor(
@@ -33,7 +33,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     return new DatabasePermissionSetStore(() => connection, this.lockTableName);
   }
 
-  async listPermissionSets(): Promise<readonly PermissionSet[]> {
+  async list(): Promise<readonly PermissionSet[]> {
     const rows = await this.connection()
       .query.selectFrom('authorizationPermissionSets')
       .select(['key', 'title', 'grants'])
@@ -70,7 +70,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     }));
   }
 
-  async getPermissionSet(key: string): Promise<PermissionSet | undefined> {
+  async get(key: string): Promise<PermissionSet | undefined> {
     const row = await this.connection()
       .query.selectFrom('authorizationPermissionSets')
       .select(['key', 'title', 'grants'])
@@ -80,7 +80,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     return permissionSetFromRow(row);
   }
 
-  async createPermissionSet(input: PermissionSet): Promise<PermissionSet> {
+  async create(input: PermissionSet): Promise<PermissionSet> {
     const now = new Date();
     await this.connection()
       .query.insertInto('authorizationPermissionSets')
@@ -96,10 +96,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     return input;
   }
 
-  async updatePermissionSet(
-    key: string,
-    input: PermissionSet,
-  ): Promise<PermissionSet> {
+  async update(key: string, input: PermissionSet): Promise<PermissionSet> {
     await this.connection().transaction(async (connection): Promise<void> => {
       await connection.query
         .updateTable('authorizationPermissionSets')
@@ -122,7 +119,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     return input;
   }
 
-  async deletePermissionSet(key: string): Promise<void> {
+  async delete(key: string): Promise<void> {
     await this.connection().transaction(async (connection): Promise<void> => {
       await connection.query
         .deleteFrom('authorizationPermissionSetAssignments')
@@ -135,7 +132,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     });
   }
 
-  async assignPermissionSet(
+  async assign(
     input: PermissionSetAssignment,
   ): Promise<PermissionSetAssignment> {
     const now = new Date();
@@ -153,7 +150,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     return input;
   }
 
-  async revokeAssignment(id: string): Promise<void> {
+  async revoke(id: string): Promise<void> {
     await this.connection()
       .query.deleteFrom('authorizationPermissionSetAssignments')
       .where('id', '=', id)

@@ -59,6 +59,12 @@ export interface CollectionArtifactSchemaFile {
  */
 export interface CollectionArtifactManifest {
   readonly formatVersion: CollectionArtifactFormatVersion;
+  /**
+   * Always `true`. Says to whoever opens the directory that everything in it
+   * is derived from the database: it can be deleted and regenerated, and is
+   * never edited or read back as a source.
+   */
+  readonly generated: true;
   readonly connection: string;
   readonly dialect: string;
   /** `managed` connections run migrations; an `external` one is owned by another system and has no history. */

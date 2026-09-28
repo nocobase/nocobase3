@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNotification } from '@refinedev/core';
+import { Toast } from '@base-ui/react/toast';
 import type { Translator } from '@nocobase/i18n';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -609,7 +609,7 @@ export function ManualRunDialog({
   onExecuted: (run: WorkflowRunRecord) => void;
 }): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
-  const { open } = useNotification();
+  const { add: addToast } = Toast.useToastManager();
   const [running, setRunning] = useState(false);
   const workflowId = workflow.id ?? workflow.hash;
   if (!workflowId) throw new Error(t('workflows.runMissingIdentifier'));
@@ -644,9 +644,10 @@ export function ManualRunDialog({
         onExecuted(execution);
       })
       .catch((cause: unknown) =>
-        open?.({
+        addToast({
           type: 'error',
-          message: t('workflows.runFailed'),
+          priority: 'high',
+          title: t('workflows.runFailed'),
           description: cause instanceof Error ? cause.message : String(cause),
         }),
       )
@@ -895,7 +896,7 @@ function WorkflowRow({
   const [settings, setSettings] = useState<WorkflowDetailRecord | null>(null);
   const [manual, setManual] = useState<WorkflowDetailRecord | null>(null);
   const [running, setRunning] = useState(false);
-  const { open } = useNotification();
+  const { add: addToast } = Toast.useToastManager();
   const identifier = item.id ?? item.hash;
   if (!identifier) return null;
   const pendingArtifact = item.pendingArtifact;
@@ -917,9 +918,10 @@ function WorkflowRow({
           .then((run) => navigate(workflowRunPath(run.id)));
       })
       .catch((cause: unknown) =>
-        open?.({
+        addToast({
           type: 'error',
-          message: t('workflows.runFailed'),
+          priority: 'high',
+          title: t('workflows.runFailed'),
           description: cause instanceof Error ? cause.message : String(cause),
         }),
       )
@@ -1166,7 +1168,7 @@ export function WorkflowDetailPage(): React.ReactElement {
   const { id: workflowId = '', sourceKey } = useParams();
   const sourceUpdate = useWorkflowSourceUpdate();
   const navigate = useNavigate();
-  const { open } = useNotification();
+  const { add: addToast } = Toast.useToastManager();
   const [running, setRunning] = useState(false);
   const loadWorkflow = useCallback(
     () =>
@@ -1414,9 +1416,10 @@ export function WorkflowDetailPage(): React.ReactElement {
                       .execute(identifier, {}, createWorkflowEventKey())
                       .then((run) => navigate(workflowRunPath(run.id)))
                       .catch((cause: unknown) =>
-                        open?.({
+                        addToast({
                           type: 'error',
-                          message: t('workflows.runFailed'),
+                          priority: 'high',
+                          title: t('workflows.runFailed'),
                           description:
                             cause instanceof Error
                               ? cause.message

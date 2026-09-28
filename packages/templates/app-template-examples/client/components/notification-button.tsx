@@ -4,7 +4,6 @@ import {
   useNotificationInAppRuntime,
 } from '@nocobase/app-plugin-notification-in-app/client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { useCan } from '@nocobase/app-plugin-authorization/client';
 import { Bell } from 'lucide-react';
 import { Link } from 'react-router';
 import {
@@ -15,11 +14,7 @@ import {
 
 export function NotificationButton() {
   const { session, isPending } = useAuthentication();
-  const { can } = useCan({
-    resource: { type: 'page', id: 'notifications' },
-    action: 'access',
-  });
-  if (isPending || !session?.user || !can) return null;
+  if (isPending || !session?.user) return null;
   return (
     <NotificationInAppProvider key={session.user.id}>
       <NotificationLink />
@@ -45,7 +40,7 @@ function NotificationLink() {
         {unreadCount > 0 ? (
           <span
             aria-hidden='true'
-            className='absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-xs font-medium text-primary-foreground'
+            className={`absolute -top-1 -right-1 flex h-4 items-center justify-center rounded-full bg-primary text-center text-xs font-medium text-primary-foreground ${unreadCount > 9 ? 'min-w-5 px-1' : 'w-4'}`}
           >
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>

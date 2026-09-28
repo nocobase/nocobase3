@@ -23,13 +23,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const provider = new NotificationProvider({
       config: {
         get: () => ({
-          channels: [
-            {
-              type: 'email',
-              enabled: true,
-              providers: [{ type: 'fake', name: 'primary' }],
-            },
-          ],
+          channels: { email: { provider: 'fake', enabled: true } },
         }),
       },
       container,
@@ -45,18 +39,22 @@ describe('@nocobase/app-plugin-notification provider', () => {
         async createChannel() {
           return {
             type: 'email',
+            validateMessage: (message: object) => ({
+              message,
+              recipients: [{}],
+            }),
             async prepare(input): Promise<object> {
               return input.message;
             },
           };
         },
       })
-      .registerProvider('email', {
+      .registerProvider({
+        messageType: 'email',
         type: 'fake',
         async createProvider(_context, config) {
           return {
-            name: config.name,
-            type: config.type,
+            type: config.provider,
             async send() {
               return { status: 'accepted' } as const;
             },
@@ -87,38 +85,43 @@ describe('@nocobase/app-plugin-notification provider', () => {
       typeof vi.fn
     >;
     const handler = add.mock.calls[0]?.[0] as {
+      type: string;
+      actions: readonly string[];
       authorize(
         request: object,
         context: object,
       ): Promise<{ readonly effect: string }>;
     };
+    expect(handler).toMatchObject({ type: 'notification', actions: ['send'] });
+    const context = {
+      grants: {
+        resolve: () =>
+          Promise.resolve([
+            {
+              source: { plugin: 'permission-sets', id: 'operators' },
+              resource: { type: 'notification', id: '*' },
+              action: 'send',
+            },
+          ]),
+      },
+    };
+    const request = (id: string) => ({
+      principal: { type: 'user', id: 'user-1' },
+      resource: { type: 'notification', id },
+      action: 'send',
+    });
     await expect(
-      handler.authorize(
-        {
-          principal: { type: 'user', id: 'user-1' },
-          resource: { type: 'notification', id: 'test' },
-          action: 'send',
-        },
-        {
-          grants: {
-            resolve: () =>
-              Promise.resolve([
-                {
-                  source: { plugin: 'permission-sets', id: 'operators' },
-                  resource: { type: 'notification', id: 'test' },
-                  action: 'send',
-                },
-              ]),
-          },
-        },
-      ),
+      handler.authorize(request('test'), context),
     ).resolves.toMatchObject({ effect: 'permit' });
+    await expect(
+      handler.authorize(request('other'), context),
+    ).resolves.toMatchObject({ effect: 'deny' });
   });
 
   it('fails fast when the required database dependency is missing', () => {
     const container = createContainer(false);
     const provider = new NotificationProvider({
-      config: { get: () => ({ channels: [] }) },
+      config: { get: () => ({ channels: {} }) },
       container,
     });
 

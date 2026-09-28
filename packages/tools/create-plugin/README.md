@@ -29,11 +29,13 @@ CAPABILITIES
   client.service-providers
   client.react-providers
   client.locales
+  cli
   registry
   skills
 
 OPTIONS
   --with <capability>          Add a capability; may be repeated
+                               all selects every capability listed above
   --empty                      Create only the package foundation
   --display-name <name>        Human-readable package display name
   --description <description>  Package description
@@ -52,6 +54,8 @@ App and Settings Routes. `client.service-providers` generates application-owned
 Client services and lifecycle hooks, while `client.react-providers` generates
 React context composition owned by the rendered tree.
 
+`cli` adds a CLI plugin in `cli/index.ts`, exported as `./cli`, with one example command under the topic derived from the package name; an application lists it in its `cli/plugins.ts` to get the commands. `--with all` selects every capability at once.
+
 The generator derives Client and Server plugin declarations, package exports,
 dependencies, tests, publication files, Registry scripts, and Plugin Skill
 publication from the same capability model. It does not invent business routes
@@ -61,10 +65,7 @@ Use `--dry-run --json` to inspect the exact read-only generation plan before
 creating a plugin. Registering or enabling the generated plugin remains an
 explicit step.
 
-JSON mode emits one document for both success and failure. Successful results
-set `ok` to `true`; failures keep a non-zero exit code and return `ok: false`
-with a stable `error.code`, the human-readable `error.message`, and actionable
-`error.suggestions`.
+JSON mode emits one document on stdout for both success and failure, in the same envelope as `pnpm nocobase … --json`: `{ schemaVersion: 1, ok, command: "create-plugin", status, result | error, warnings }`. A success has `ok: true` and the plan under `result` — `mode`, `plugin`, `requestedCapabilities`, `capabilities`, `derivedStructure`, `files`, `writes`, `commands` and `nextSteps` — with `status: "success"`, or `"success-noop"` for a `--dry-run`, which writes nothing. A failure keeps a non-zero exit code and returns `ok: false` and `status: "failure"` with a stable `error.code`, the human-readable `error.message`, and `error.suggestions`, each a `{ message }`. `--help --json` and `--version --json` return `result.help` and `result.version`.
 
 ## Server resources and compiled database tasks
 

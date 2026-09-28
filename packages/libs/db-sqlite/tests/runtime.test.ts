@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import knex from 'knex';
@@ -133,6 +133,21 @@ describe('sqlite runtime strategy', () => {
           filename: ':memory:',
         }),
       ).toBeUndefined();
+      // Reports storage without creating it; an in-memory database always has it.
+      expect(
+        await sqlite.driver.hasStorage?.({ dialect: 'sqlite', filename }),
+      ).toBe(false);
+      await mkdir(path.dirname(filename), { recursive: true });
+      await writeFile(filename, '');
+      expect(
+        await sqlite.driver.hasStorage?.({ dialect: 'sqlite', filename }),
+      ).toBe(true);
+      expect(
+        await sqlite.driver.hasStorage?.({
+          dialect: 'sqlite',
+          filename: ':memory:',
+        }),
+      ).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

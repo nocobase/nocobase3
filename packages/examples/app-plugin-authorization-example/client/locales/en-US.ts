@@ -16,26 +16,19 @@ export default {
       reason:
         'Non-confidential quotes are internal reference material across regions. The preparer owns the content; regional responsibility governs submission. Viewing does not grant editing. Existing orders reference separate accepted quotes; submitting a practice quote does not create an order.',
     },
-    teams: {
-      title: 'Temporary collaboration with the proposal team',
+    handover: {
+      title: 'A delegated engineer takes over a quote',
       steps:
-        'A South-region project owner asks the proposal team to complete quote-7. Sign in as sales_proposal, edit the quote and submit it. As an administrator, reset the records and remove the Proposal team assignment from the Proposal team quote collaboration sharing rule. Sign in again: the team can no longer edit or submit this quote.',
+        'A South-region project owner hands quote-7 to sales_proposal, an engineer from the North region. Sign in as sales_proposal, edit the quote and submit it. As an administrator, reset the records and remove sales_proposal from the Proposal quote handover sharing rule. Sign in again: the account can no longer edit or submit this quote.',
       reason:
         'The handover permits editing and submitting this quote plus the project access needed for submission; it does not delegate the entire South region. The engineer role grants operations, while sharing identifies the records. As an advanced exercise, withdraw either the project or quote scope: submission requires both.',
     },
-    combined: {
-      title: 'A project manager also helps the proposal team',
-      steps:
-        'Sign in as sales_coordinator: maintain your project-8 and help with quote-7. As an administrator, revoke the engineer permission set from the proposal team. The account can still edit project-8 but can no longer edit or submit quote-7. Restore the team role afterwards.',
-      reason:
-        'Personal project management and team engineering are separate responsibilities. Revoking a team role affects every member, while directly assigned project management remains intact.',
-    },
     delivery: {
-      title: 'The delivery team fulfils an order',
+      title: 'A delivery specialist fulfils an order',
       steps:
-        'Sign in as sales_delivery or sales_dispatch. Open order-2, assign a delivery team, maintain checks and enter a delivery reference. After confirming delivery, neither its relations nor its delivery state can be changed again. Reset the records before repeating with another account.',
+        'Sign in as sales_delivery. Open order-2, assign a carrier, maintain checks and enter a delivery reference. After confirming delivery, neither its relations nor its delivery state can be changed again. Reset the records before repeating the exercise.',
       reason:
-        'Delivery staff enter Orders only; links to quotes and projects do not grant access to those pages. The accounts demonstrate direct and inherited authorization for the same duties.',
+        'Delivery staff enter Orders only; links to quotes and projects do not grant access to those pages.',
     },
   },
   reset: {
@@ -44,25 +37,20 @@ export default {
     confirm:
       'Restore the seeded projects, quotes and orders for every demo account? Changes to those records will be overwritten.',
     description:
-      'An administrator can reset business records here before repeating an exercise or switching delivery accounts. Accounts, memberships and permission settings are preserved; restore any authorization changes manually.',
+      'An administrator can reset business records here before repeating an exercise. Accounts and permission settings are preserved; restore any authorization changes manually.',
     done: 'Practice records restored. Refresh any open record lists.',
   },
 
-  teams: {
-    subject: 'Teams',
-    handover: 'Proposal team quote collaboration',
-    title: 'Roles and team authorization',
+  access: {
+    title: 'Your roles',
     direct: 'Direct assignment',
-    inherited: 'Inherited from team',
-    proposal: 'Proposal team',
-    delivery: 'Delivery team',
-    combined: 'Direct project manager + sales engineer from proposal team',
     coverage:
-      'Each account has its own job responsibilities. Joining a collaboration team adds duties; leaving it does not remove directly assigned responsibilities.',
+      'Each example account holds its job responsibilities through a direct assignment. The departments example shows roles inherited from an organisation.',
   },
   rules: {
     public: 'Exclude confidential projects',
-    delivery: 'Orders assigned to the delivery team',
+    delivery: 'Regional orders for delivery',
+    handover: 'Proposal quote handover',
     projects: 'Shared example projects',
   },
   accountMenus: {
@@ -71,6 +59,8 @@ export default {
       'Consult non-confidential quotes; edit own quotes and submit within the assigned region',
     manager: 'Manage owned projects; quotes and orders are read only',
     delivery: 'Orders only; confirm regional deliveries',
+    proposal: 'Edit and submit the handed-over quote-7',
+    coordinator: 'Manage project-8, outside the home region',
   },
   relations: {
     access: {
@@ -80,11 +70,11 @@ export default {
     },
     title: 'Order relationships',
     description:
-      'Assign an active delivery team, maintain checks, and manage collaborating teams. Try a delivery account and a read-only account to compare access.',
+      'Assign an active carrier, maintain checks, and manage collaborating carriers. Try a delivery account and a read-only account to compare access.',
     order: 'Order',
-    deliveryTeam: 'Delivery team',
+    carrier: 'Carrier',
     unassigned: 'None assigned',
-    assign: 'Assign delivery team',
+    assign: 'Assign carrier',
     disconnect: 'Remove assignment',
     checks: 'Delivery checks',
     done: 'Done',
@@ -93,10 +83,10 @@ export default {
     delete: 'Delete check',
     checkTitle: 'Check title',
     add: 'Add check',
-    collaborators: 'Collaborating teams',
+    collaborators: 'Collaborating carriers',
     note: 'Collaboration note',
-    addProposal: 'Add selected team',
-    replace: 'Replace with selected team',
+    addProposal: 'Add selected carrier',
+    replace: 'Replace with selected carrier',
     clear: 'Remove all collaborators',
     unavailable: 'These relationships are not accessible.',
     loading: 'Loading relationships…',
@@ -168,7 +158,7 @@ export default {
     view: 'View',
     edit: 'Edit notes',
     intro:
-      'Explore the access boundaries of assistants consulting records, engineers preparing quotes, temporary proposal teams and delivery staff fulfilling orders.',
+      'Explore the access boundaries of assistants consulting records, engineers preparing quotes, delegated quote handovers and delivery staff fulfilling orders.',
     record: 'Record',
     notes: 'Notes',
     save: 'Save',

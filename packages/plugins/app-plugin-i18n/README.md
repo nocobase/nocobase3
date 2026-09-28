@@ -6,7 +6,7 @@ The mechanism — namespaces, resource loading, translation — lives in [`@noco
 
 ## Registration
 
-`pnpm plugin:register i18n` writes both entries. They amount to:
+`pnpm nocobase plugin register i18n` writes both entries. They amount to:
 
 ```ts
 // client/plugins.ts

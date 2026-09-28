@@ -42,17 +42,20 @@ export function Decision({
   options,
   resource,
   action,
+  sources,
 }: {
   fields: readonly string[];
   value: AuthorizationDecision;
   options?: AuthorizationOptions;
   resource?: ResourceOption;
   action?: string;
+  /** Per permission set key, how the inspected subject holds it. */
+  sources?: Readonly<Record<string, string>>;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const status = inspectionStatus(value, fields);
-  const business =
-    value.conditions?.type === 'resource' || !!value.checks?.length;
+  const composite =
+    value.conditions?.type === 'composite' || !!value.checks?.length;
   const checks =
     value.checks?.filter(
       (check) => check.resource.type === 'database.collection',
@@ -60,10 +63,8 @@ export function Decision({
   const reasons = uniqueReasons(
     value.reasons.filter(
       (reason) =>
-        !business ||
-        !['PAGE_ACCESS_GRANTED', 'SCOPE_EXPANDED', 'SCOPE_RESTRICTED'].includes(
-          reason.code,
-        ),
+        !composite ||
+        !['SELECTION_EXPANDED', 'SELECTION_RESTRICTED'].includes(reason.code),
     ),
   );
   return (
@@ -85,9 +86,14 @@ export function Decision({
         <h3 className='text-sm font-medium'>{t('inspector.reasons')}</h3>
         {reasons.length ? (
           reasons.map((reason, index) => (
-            // Reasons have no stable identity beyond their deduplicated position.
-            // eslint-disable-next-line @eslint-react/no-array-index-key
-            <Reason key={index} value={reason} options={options} />
+            <Reason
+              // Reasons have no stable identity beyond their deduplicated position.
+              // eslint-disable-next-line @eslint-react/no-array-index-key
+              key={index}
+              value={reason}
+              options={options}
+              sources={sources}
+            />
           ))
         ) : (
           <p className='text-sm text-muted-foreground'>
@@ -95,17 +101,16 @@ export function Decision({
           </p>
         )}
       </section>
-      {business && checks.length > 0 && (
+      {composite && checks.length > 0 && (
         <section className='space-y-3'>
           <h3 className='text-sm font-medium'>{t('inspector.dataAccess')}</h3>
           <p className='text-sm text-muted-foreground'>
             {t('inspector.subjectHint')}
           </p>
           {checks.map((check) => {
-            const scope = resource?.ruleScopes?.find(
-              (item) =>
-                item.action === action && item.collection === check.resource.id,
-            );
+            const scope = Object.entries(resource?.dataScopes ?? {})
+              .flatMap(([name, scopes]) => (name === action ? scopes : []))
+              .find((item) => item.collection === check.resource.id);
             const scopeReasons = uniqueReasons(
               check.decision.reasons.filter(
                 (reason) =>
@@ -132,9 +137,14 @@ export function Decision({
                   </p>
                 )}
                 {scopeReasons.map((reason, index) => (
-                  // Each check replaces the whole ordered reason list.
-                  // eslint-disable-next-line @eslint-react/no-array-index-key
-                  <Reason key={index} value={reason} options={options} />
+                  <Reason
+                    // Each check replaces the whole ordered reason list.
+                    // eslint-disable-next-line @eslint-react/no-array-index-key
+                    key={index}
+                    value={reason}
+                    options={options}
+                    sources={sources}
+                  />
                 ))}
                 {check.decision.conditions && (
                   <details className='text-sm'>
@@ -151,7 +161,7 @@ export function Decision({
           })}
         </section>
       )}
-      {!business && value.conditions?.type === 'database' && (
+      {!composite && value.conditions?.type === 'database' && (
         <InspectionConditions value={value.conditions} />
       )}
       <details className='border-t pt-3 text-xs text-muted-foreground'>
@@ -170,18 +180,26 @@ export function Decision({
 function Reason({
   value,
   options,
+  sources,
 }: {
   value: AuthorizationReason;
   options?: AuthorizationOptions;
+  sources?: Readonly<Record<string, string>>;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const source = object(value.details?.source);
-  const scope = object(value.details?.scope);
-  const access = scope?.recordAccess;
-  const policy = typeof access === 'string' ? access : object(access)?.key;
-  const label = options?.recordAccessPolicies.find(
-    (item) => item.value === policy,
-  )?.label;
+  const held =
+    value.code === 'GRANT_MATCHED' &&
+    source?.plugin === 'permission-sets' &&
+    typeof source.id === 'string'
+      ? sources?.[source.id]
+      : undefined;
+  const selection = object(value.details?.selection);
+  const label =
+    selection?.type === 'recordAccess'
+      ? options?.recordAccess.find((item) => item.value === selection.key)
+          ?.label
+      : undefined;
   const title = source?.title;
   const descriptor = object(title);
   const sourceTitle =
@@ -192,11 +210,11 @@ function Reason({
         : undefined;
   const scopeLabel =
     label ??
-    (scope?.type === 'all'
+    (selection?.type === 'all'
       ? t('labels.allRecords')
-      : scope?.type === 'ids'
+      : selection?.type === 'records'
         ? t('inspector.selectedRecords', {
-            count: Array.isArray(scope.ids) ? scope.ids.length : 0,
+            count: Array.isArray(selection.ids) ? selection.ids.length : 0,
           })
         : undefined);
   return (
@@ -213,6 +231,7 @@ function Reason({
             · <span className='font-medium'>{sourceTitle}</span>
           </>
         )}
+        {held ? <span className='text-muted-foreground'> · {held}</span> : null}
       </p>
       {scopeLabel ? (
         <p className='text-muted-foreground'>{scopeLabel}</p>

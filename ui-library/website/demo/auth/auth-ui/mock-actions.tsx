@@ -1,37 +1,40 @@
+import type {
+  AuthenticationActionState,
+  PasswordLoginInput,
+  PasswordRegistrationInput,
+  PasswordResetInput,
+  PasswordResetRequestActionState,
+  PasswordResetRequestInput,
+} from '@nocobase/app-plugin-authentication/client/actions';
 import { useState } from 'react';
 
-interface ActionState {
-  readonly error?: { message: string };
-  readonly isPending: boolean;
-}
-
-function useDemoAction(): ActionState & {
-  readonly submit: (input: unknown) => Promise<void>;
-} {
-  const [state, setState] = useState<ActionState>({ isPending: false });
+// The static preview has no authentication server, so vite.config.ts points the plugin's `client/actions` export at
+// this file. TypeScript still resolves the real module, which is what checks these signatures, and the registry forms
+// that call them, against the plugin's contract.
+function useDemoAction<Input>(): AuthenticationActionState<Input> {
+  const [isPending, setIsPending] = useState(false);
   return {
-    ...state,
+    isPending,
     submit: async () => {
-      setState({ isPending: true });
+      setIsPending(true);
       await Promise.resolve();
-      setState({ isPending: false });
+      setIsPending(false);
     },
   };
 }
 
-export function usePasswordLogin() {
+export function usePasswordLogin(): AuthenticationActionState<PasswordLoginInput> {
   return useDemoAction();
 }
 
-export function usePasswordRegistration() {
+export function usePasswordRegistration(): AuthenticationActionState<PasswordRegistrationInput> {
   return useDemoAction();
 }
 
-export function usePasswordReset() {
+export function usePasswordReset(): AuthenticationActionState<PasswordResetInput> {
   return useDemoAction();
 }
 
-export function usePasswordResetRequest() {
-  const action = useDemoAction();
-  return { ...action, isSuccess: false };
+export function usePasswordResetRequest(): PasswordResetRequestActionState {
+  return { ...useDemoAction<PasswordResetRequestInput>(), isSuccess: false };
 }

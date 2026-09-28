@@ -2,10 +2,10 @@ import type { Hono } from 'hono';
 import path from 'node:path';
 
 import { joinBasePath, normalizeBasePath } from '../support/paths.js';
-import { injectSpaRuntimeHtml } from './runtime-globals.js';
+import { injectSpaRuntimeHtml } from './runtime-html.js';
 import { serveSpaIndex } from './serve-index.js';
 import { serveSpaAsset } from './static-assets.js';
-import type { RegisterSpaRoutesOptions } from './types.js';
+import type { RegisterSpaRoutesOptions, SpaClientConfigMap } from './types.js';
 
 export function registerSpaRoutes(
   router: Hono,
@@ -43,18 +43,18 @@ export function registerSpaRoutes(
     }),
   );
   router.get(basePath || '/', () =>
-    serveSpaIndex(
-      options.indexPath,
-      options.runtimeGlobals,
-      options.clientConfig,
-    ),
+    serveSpaIndex(options.indexPath, {
+      clientConfig: options.clientConfig,
+      publicConfig: resolvePublicConfig(options),
+      publicBasePath: options.publicBasePath,
+    }),
   );
   router.get(`${basePath}/*`, () =>
-    serveSpaIndex(
-      options.indexPath,
-      options.runtimeGlobals,
-      options.clientConfig,
-    ),
+    serveSpaIndex(options.indexPath, {
+      clientConfig: options.clientConfig,
+      publicConfig: resolvePublicConfig(options),
+      publicBasePath: options.publicBasePath,
+    }),
   );
 }
 
@@ -76,8 +76,17 @@ async function serveSpaHandler(
   return new Response(
     injectSpaRuntimeHtml(await response.text(), {
       clientConfig: options.clientConfig,
-      runtimeGlobals: options.runtimeGlobals,
+      publicConfig: resolvePublicConfig(options),
+      publicBasePath: options.publicBasePath,
     }),
     { headers, status: response.status, statusText: response.statusText },
   );
+}
+
+function resolvePublicConfig(
+  options: RegisterSpaRoutesOptions,
+): SpaClientConfigMap | undefined {
+  return typeof options.publicConfig === 'function'
+    ? options.publicConfig()
+    : options.publicConfig;
 }

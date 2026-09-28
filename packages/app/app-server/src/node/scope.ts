@@ -5,6 +5,7 @@ import { dotenvParser } from '@nocobase/config/parsers/dotenv';
 
 import { type EnvMap } from '../config/index.js';
 import {
+  DEFAULT_APP_BASE_PATH,
   normalizeBasePath,
   resolveAppNameFromBasePath,
 } from '../support/index.js';
@@ -41,6 +42,7 @@ export interface StandaloneAppScopeOptions {
   readonly configPath?: string;
   readonly env: EnvMap;
   readonly abortReason?: unknown;
+  readonly consoleLogStream?: 'stdout' | 'stderr';
 }
 
 export interface CreateStandaloneScopeOptions {
@@ -53,6 +55,8 @@ export interface CreateStandaloneScopeOptions {
   /** Final environment overrides applied after dotenv files and process.env. */
   readonly env?: EnvMap;
   readonly abortReason?: unknown;
+  /** See {@link AppScope.consoleLogStream}. */
+  readonly consoleLogStream?: 'stdout' | 'stderr';
 }
 
 export interface ResolveStandaloneAppPathsOptions {
@@ -72,6 +76,7 @@ export class StandaloneAppScope extends AppScopeLifecycle implements AppScope {
   public readonly clientDir: string | undefined;
   public readonly configPath: string | undefined;
   public readonly env: EnvMap;
+  public readonly consoleLogStream: 'stdout' | 'stderr' | undefined;
 
   public constructor(options: StandaloneAppScopeOptions) {
     super({ abortReason: options.abortReason });
@@ -84,6 +89,7 @@ export class StandaloneAppScope extends AppScopeLifecycle implements AppScope {
     this.clientDir = options.paths.clientDir;
     this.configPath = options.configPath;
     this.env = options.env;
+    this.consoleLogStream = options.consoleLogStream;
   }
 }
 
@@ -107,9 +113,8 @@ export function createStandaloneScope(
     overrides: options.env,
   });
   const defaultAppName = 'main';
-  const defaultBasePath = '/main';
   const basePath = normalizeBasePath(
-    options.basePath ?? env.APP_BASE_PATH ?? defaultBasePath,
+    options.basePath ?? env.APP_BASE_PATH ?? DEFAULT_APP_BASE_PATH,
   );
   const appName =
     options.appName ?? resolveAppNameFromBasePath(basePath, defaultAppName);
@@ -122,6 +127,7 @@ export function createStandaloneScope(
     env,
     abortReason:
       options.abortReason ?? new Error('Standalone application closed.'),
+    consoleLogStream: options.consoleLogStream,
   });
 }
 

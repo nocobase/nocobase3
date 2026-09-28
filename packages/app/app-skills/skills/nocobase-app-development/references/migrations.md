@@ -1,8 +1,8 @@
 # Migrations and seeds
 
-This page is the application side: where the directories live, how `pnpm db:apply` runs them, how additional connections configure their tasks, and what to do about checksum drift and compiled manifests.
+This page is the application side: where the directories live, how `pnpm nocobase db apply` runs them, how additional connections configure their tasks, and what to do about checksum drift and compiled manifests.
 
-How to write the files themselves — the migration and seed shape, the immutability and self-containment rules, the Collection Builder, and which of `builder`, `query` and `repository` a task context should reach for — belongs to the package that owns them. Read `.agents/skills/nocobase-db/SKILL.md` sections 2 and 3 before writing one, and run `pnpm skills:sync` if that file is missing.
+How to write the files themselves — the migration and seed shape, the immutability and self-containment rules, the Collection Builder, and which of `builder`, `query` and `repository` a task context should reach for — belongs to the package that owns them. Read `.agents/skills/nocobase-db/SKILL.md` sections 2 and 3 before writing one, and run `pnpm nocobase skills sync` if that file is missing.
 
 Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run. Migrations create structure. Seeds never do.
 
@@ -11,7 +11,7 @@ Migrations under `database/main/migrations/` are the application's schema histor
 ## Running
 
 ```bash
-pnpm db:apply
+pnpm nocobase db apply
 ```
 
 This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. Both halves run only what is pending, so on an already-migrated database it applies seeds alone. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
@@ -27,42 +27,42 @@ Configure `connections.<name>.migrations` and `.seeds` in the database section. 
 The default connection runs migrations and seeds automatically unless disabled; other connections default to `autoRun: false`. Startup runs the default connection first, then other names in stable ascending order, migrations before seeds within each connection. A failure stops startup; completed database changes remain committed. No cross-connection transaction or rollback is provided.
 
 ```bash
-pnpm db:apply --connection analytics
-pnpm db:apply --all --json
+pnpm nocobase db apply --connection analytics
+pnpm nocobase db apply --all --json
 ```
 
-Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. JSON results include completed, skipped, failed and not-run entries, one per connection and kind; failures exit nonzero. Single-connection JSON from `migrate` and `seed` retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
+Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. `db apply --json` prints the command envelope with a `result.results` array — one entry per connection and kind, each completed, skipped, failed or not-run — and `result.collections` for the Collection cache it refreshed. An entry carries `connection`, `kind` (`migrations` or `seeds`) and its own `status`, plus `batch` (migrations only), `executed` and `skipped` once the task has run. A run with nothing pending answers `status: "success-noop"`, and so does an application with no database configured, with `result.state: "not-configured"`. A failed task exits nonzero with `error.code` `DATABASE_TASK_FAILED` and the per-connection `results` in `error.details`; `db reset`, `db rollback`, `db redo` and `db repair` refuse with `FORCE_REQUIRED` (exit 2) outside a terminal without `--force`.
 
-`pnpm db:reset` is a destructive reset for managed connections. It removes the managed schema objects — which clears migration and seed history along with every row in a managed table — then reruns all currently visible migrations and seeds from empty. It never calls migration `down()`. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm db:reset --force` only when the target is intentionally disposable. It is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
+`pnpm nocobase db reset` is a destructive reset for managed connections. It removes the managed schema objects — which clears migration and seed history along with every row in a managed table — then reruns all currently visible migrations and seeds from empty. It never calls migration `down()`. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm nocobase db reset --force` only when the target is intentionally disposable. It is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
 
-`pnpm db:rollback` runs `down()` for every migration in the latest batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one: the confirmation lists every migration and the package it belongs to before anything runs. It fails, having run nothing, when any migration in the batch is irreversible or has no `down()`. Data in anything those migrations drop is lost, and seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored. CI and non-interactive terminals require `--force`.
+`pnpm nocobase db rollback` runs `down()` for every migration in the latest batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one: the confirmation lists every migration and the package it belongs to before anything runs. It fails, having run nothing, when any migration in the batch is irreversible or has no `down()`. Data in anything those migrations drop is lost, and seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored. CI and non-interactive terminals require `--force`.
 
-`pnpm db:redo` is `db:rollback` followed by `db:apply`, which is what correcting an unmerged migration needs.
+`pnpm nocobase db redo` is `db rollback` followed by `db apply`, which is what correcting an unmerged migration needs.
 
 ## Re-running a migration you corrected
 
-Editing a migration that has already run changes nothing by itself. It is recorded as executed, so the next `pnpm db:apply` skips it, and the database keeps the schema the old source produced. What it does change is the recorded checksum, which is why the run then reports drift.
+Editing a migration that has already run changes nothing by itself. It is recorded as executed, so the next `pnpm nocobase db apply` skips it, and the database keeps the schema the old source produced. What it does change is the recorded checksum, which is why the run then reports drift.
 
 While the branch is unmerged, re-run it:
 
 ```bash
-pnpm db:redo
+pnpm nocobase db redo
 ```
 
 Once the branch is merged, do not edit it at all: write a new migration for the correction.
 
-Two things are never the answer here. `pnpm db:repair` only rewrites the recorded checksum, so it makes an un-applied change look applied — the schema stays wrong and nothing says so. Editing `__nocobase_migrations`, `__nocobase_collection_metadata` or a physical table by hand splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable, and the next run fails with `Metadata Collection "…" maps to missing physical table "…"` before it reaches your migration.
+Two things are never the answer here. `pnpm nocobase db repair` only rewrites the recorded checksum, so it makes an un-applied change look applied — the schema stays wrong and nothing says so. Editing `__nocobase_migrations`, `__nocobase_collection_metadata` or a physical table by hand splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable, and the next run fails with `Metadata Collection "…" maps to missing physical table "…"` before it reaches your migration.
 
-`pnpm db:doctor` compares every metadata record with the table behind it and reports what disagrees; `--fix` deletes the records whose table is gone, which is the state a hand-rolled reset leaves behind. Anything else it finds is reported only — the table exists and something in it no longer matches what was recorded, which a migration has to reconcile.
+`pnpm nocobase collections doctor` compares every metadata record with the table behind it and reports what disagrees; `--fix` deletes the records whose table is gone, which is the state a hand-rolled reset leaves behind. Anything else it finds is reported only — the table exists and something in it no longer matches what was recorded, which a migration has to reconcile.
 
 Each internal table has a command that maintains it, and none of them should be edited directly:
 
-| Table                                               | Holds                                     | Maintained by                                     |
-| --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
-| `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db:apply`, `db:rollback`, `db:redo`, `db:repair` |
-| `__nocobase_seeds`                                  | Which seeds ran                           | `db:apply`, `db:repair`                           |
-| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`; `db:doctor`        |
-| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db:unlock`                   |
+| Table                                               | Holds                                     | Maintained by                                       |
+| --------------------------------------------------- | ----------------------------------------- | --------------------------------------------------- |
+| `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db apply`, `db rollback`, `db redo`, `db repair`   |
+| `__nocobase_seeds`                                  | Which seeds ran                           | `db apply`, `db repair`                             |
+| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`; `collections doctor` |
+| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db unlock`                     |
 
 ## When a run is killed while it holds the lock
 
@@ -71,14 +71,14 @@ Migrations and seeds each run inside a lock, so two runs cannot apply the same h
 Waiting is not always wanted, and a lock is sometimes worth looking at:
 
 ```bash
-pnpm db:unlock
+pnpm nocobase db unlock
 ```
 
 It reports who holds each lock and releases the ones that have stopped beating. A lock that is still beating is reported rather than released: a run is working behind it, and `--force` releases it anyway, which lets a second run start beside the first. Both the migration and the seed lock are covered, for the selected connections.
 
 `migrate --fresh` was the earlier form and is gone. It reset the schema without reseeding, so it left the seed history cleared but no seed executed; the default connection recovered on the next startup and a connection with `autoRun: false` did not.
 
-`schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. The application resolves a metadata store for runtime access, using `database/<connectionName>/collections/` when neither a connection-level nor shared store is configured; see [database connections](database-connections.md#add-managed-or-external-connections). Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
+`schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. The application resolves a metadata store for runtime access, reading the hand-written `database/<connectionName>/metadata/<name>.json` documents when neither a connection-level nor shared store is configured; `database/<connectionName>/collections/` is the generated cache, not a metadata source. See [database connections](database-connections.md#add-managed-or-external-connections). Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
 
 Use one managed connection per physical database/schema. Identical configured targets are rejected before execution, even when only one is selected. Hostname aliases, symlinks and driver-specific routing can hide a shared target; do not configure these as independent managed databases. Distinct history or lock table names alone do not isolate collection metadata and schema ownership.
 
@@ -96,11 +96,11 @@ Review `server/plugins.ts` and each registered plugin’s migration declarations
 
 ## Checksum drift
 
-A checksum recorded when a migration or seed ran no longer matching its current source means the file changed after it was executed. By default the run reports the drift and continues: `pnpm db:apply` prints a warning, startup logs one through the application logger, and `--json` carries it in `warnings`. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration — or at the top level — to refuse to run instead. A record whose migration is missing from the sources entirely always fails, whatever the policy says.
+A checksum recorded when a migration or seed ran no longer matching its current source means the file changed after it was executed. By default the run reports the drift and continues: `pnpm nocobase db apply` prints a warning, startup logs one through the application logger, and `--json` carries it in the entry's `warnings`, under `result.results`. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration — or at the top level — to refuse to run instead. A record whose migration is missing from the sources entirely always fails, whatever the policy says.
 
-`pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
+`pnpm nocobase db repair` rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
 
-Repair records a decision; it does not make one. It is the right tool for drift where the schema is already what the new source would produce — a reformat, a comment, a rebuild that produced different output. When the edit changed what the migration does, repair is the wrong tool in both directions: while the branch is unmerged, `pnpm db:redo` applies the correction; once it is merged, a new migration does. Rewriting the checksum instead leaves the database with the old schema and nothing recording that it differs.
+Repair records a decision; it does not make one. It is the right tool for drift where the schema is already what the new source would produce — a reformat, a comment, a rebuild that produced different output. When the edit changed what the migration does, repair is the wrong tool in both directions: while the branch is unmerged, `pnpm nocobase db redo` applies the correction; once it is merged, a new migration does. Rewriting the checksum instead leaves the database with the old schema and nothing recording that it differs.
 
 ### Why the default is `warn`
 
@@ -114,7 +114,7 @@ Set `onChecksumMismatch: 'error'` per connection when both halves of that trade 
 
 ## Verify
 
-- `pnpm db:apply` applies cleanly on an empty database and on an already-migrated one.
+- `pnpm nocobase db apply` applies cleanly on an empty database and on an already-migrated one.
 - The physical schema matches what the migration declared, checked against a real test database rather than the builder's return value.
 - Running the same seed twice changes nothing.
 - For the per-file checks — filename against exported `name`, immutability, `down` ordering — follow the `nocobase-db` Skill's own verification list.
@@ -139,4 +139,4 @@ Migration callbacks and seed `run` also receive `container`, a `ServiceResolver`
 
 Use the callback's `query` and `builder` for transactional database work. Services resolved from the container are application-scoped and are not automatically rebound to the migration or seed transaction. Keep historical schema definitions self-contained rather than delegating them to evolving application services.
 
-`cli/standard-commands.ts` uses `createAppCommands({ rootDir, publishing })`: Default enables publishing; Examples and Hub disable it. Runtime and application modules load lazily from `server/runtime` and `server/app`, preferring `.ts` over `.js` when both exist. Module execution errors propagate without falling back to another file. Nonstandard layouts can supply optional `loadRuntime` and `createApp` callbacks in the same options object.
+Database commands load the runtime and application modules lazily from `server/runtime` and `server/app` below the application root, preferring `.ts` over `.js` when both exist. Module execution errors propagate without falling back to another file.

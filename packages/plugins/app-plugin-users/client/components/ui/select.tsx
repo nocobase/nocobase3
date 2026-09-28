@@ -8,7 +8,12 @@ import { cn } from '../../lib/utils.js';
 export const Select: typeof SelectPrimitive.Root = SelectPrimitive.Root;
 
 export function SelectValue(props: SelectPrimitive.Value.Props): ReactElement {
-  return <SelectPrimitive.Value className='flex flex-1 text-left' {...props} />;
+  return (
+    <SelectPrimitive.Value
+      className='min-w-0 flex-1 truncate text-left'
+      {...props}
+    />
+  );
 }
 export function SelectTrigger({
   className,
@@ -25,7 +30,9 @@ export function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon
-        render={<ChevronDown className='size-4 text-muted-foreground' />}
+        render={
+          <ChevronDown className='size-4 shrink-0 text-muted-foreground' />
+        }
       />
     </SelectPrimitive.Trigger>
   );

@@ -9,7 +9,15 @@ const enUS = {
       feishuWebhook: 'Feishu webhook',
       dingtalkWebhook: 'DingTalk webhook',
     },
-    fields: { recipient: 'Recipient', title: 'Title', message: 'Message' },
+    fields: {
+      subject: 'Subject',
+      text: 'Text',
+      html: 'HTML',
+      url: 'Full HTTP(S) URL',
+      recipient: 'Recipient',
+      title: 'Title',
+      message: 'Message',
+    },
     placeholders: { email: 'name@example.com' },
     defaults: {
       title: 'NocoBase notification test',

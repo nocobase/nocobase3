@@ -3,6 +3,7 @@ import {
   ClientApplicationContext,
   createAppI18nRuntime,
   type ClientApplication,
+  createAppClientConfig,
 } from '@nocobase/app-client';
 import {
   resolveAppClientContributions,
@@ -71,9 +72,7 @@ describe('application shell', () => {
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).not.toHaveAttribute('title');
-    expect(
-      screen.getByRole('button', { name: 'Switch between light and dark' }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
     ).not.toBeInTheDocument();
@@ -243,9 +242,7 @@ describe('application shell', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Application navigation' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Switch between light and dark' }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 
   it.each([true, false])(
@@ -519,6 +516,7 @@ function renderApplication(
     }),
   };
   const app = {
+    config: createAppClientConfig({ rawConfig: {} }),
     runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {

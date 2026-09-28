@@ -28,8 +28,8 @@ describe('notification test sending', () => {
           ],
           toSendInput() {
             return {
-              to: { type: 'email', address: 'safe@example.com' },
-              content: { body: 'test' },
+              to: 'safe@example.com',
+              text: 'test',
             };
           },
         },
@@ -37,7 +37,8 @@ describe('notification test sending', () => {
           throw new Error('not used');
         },
       })
-      .registerProvider('email', {
+      .registerProvider({
+        messageType: 'email',
         type: 'smtp',
         label: notificationI18nText('test.providers.smtp', 'SMTP'),
         async createProvider() {
@@ -46,31 +47,25 @@ describe('notification test sending', () => {
       });
 
     const config = {
-      channels: [
-        {
-          type: 'email',
+      channels: {
+        email: {
+          provider: 'smtp',
+          host: 'private.example.com',
+          password: 'secret',
           enabled: true,
-          providers: [
-            {
-              type: 'smtp',
-              name: 'primary',
-              host: 'private.example.com',
-              password: 'secret',
-            },
-            { type: 'missing', name: 'not-registered' },
-            { type: 'smtp', name: 'disabled', enabled: false },
-          ],
         },
-      ],
+        'email-1': { provider: 'missing', enabled: true },
+        'email-2': { provider: 'smtp', enabled: false },
+      },
     } as unknown as NotificationConfig;
     expect(registry.testTargets(config)).toEqual([
       {
         channel: {
+          name: 'email',
           type: 'email',
-          label: notificationI18nText('test.channels.email', 'Email'),
+          label: 'email',
         },
         provider: {
-          name: 'primary',
           type: 'smtp',
           label: notificationI18nText('test.providers.smtp', 'SMTP'),
         },
@@ -92,13 +87,7 @@ describe('notification test sending', () => {
       queue,
       logger: createLogger({ level: 'silent' }),
       config: {
-        channels: [
-          {
-            type: 'email',
-            enabled: true,
-            providers: [{ type: 'smtp', name: 'primary' }],
-          },
-        ],
+        channels: { email: { provider: 'smtp', enabled: true } },
       },
       store: new FakeNotificationStore(),
     });
@@ -117,8 +106,9 @@ describe('notification test sending', () => {
           ],
           toSendInput({ values }) {
             return {
-              to: { type: 'email', address: values.recipient },
-              content: { title: 'Test', body: 'Hello' },
+              to: values.recipient,
+              subject: 'Test',
+              text: 'Hello',
             };
           },
         },
@@ -126,7 +116,8 @@ describe('notification test sending', () => {
           throw new Error('not used');
         },
       })
-      .registerProvider('email', {
+      .registerProvider({
+        messageType: 'email',
         type: 'smtp',
         async createProvider() {
           throw new Error('not used');
@@ -143,7 +134,6 @@ describe('notification test sending', () => {
     await manager.sendTest(
       {
         channel: 'email',
-        provider: { name: 'primary', type: 'smtp' },
         values: { recipient: 'safe@example.com' },
       },
       { userId: 'user-1' },
@@ -151,11 +141,9 @@ describe('notification test sending', () => {
 
     expect(send).toHaveBeenCalledWith({
       idempotencyKey: expect.stringMatching(/^notification-test:/),
-      to: { type: 'email', address: 'safe@example.com' },
-      channels: ['email'],
-      routing: { email: { providers: { provider: 'primary' } } },
-      content: { title: 'Test', body: 'Hello' },
-      channelOverrides: undefined,
+      messages: {
+        email: { to: 'safe@example.com', subject: 'Test', text: 'Hello' },
+      },
       source: { type: 'notification-test', referenceId: 'user-1' },
     });
     await manager.close();
@@ -181,7 +169,7 @@ describe('notification test sending', () => {
       database: {} as DatabaseManager,
       queue,
       logger: createLogger({ level: 'silent' }),
-      config: { channels: [] },
+      config: { channels: {} },
       store,
     });
 

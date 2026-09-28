@@ -1,3 +1,6 @@
+import { findApplicationNotConfigured } from '../config/not-configured.js';
+import { findAppConfigInvalid } from '../config/validation.js';
+import { formatNotConfigured } from './not-configured-message.js';
 import { loggingToken } from '../logging/token.js';
 import type { Application } from '../application/index.js';
 import { NodeServerProxy, type NodeServerProxyOptions } from './proxy.js';
@@ -132,7 +135,17 @@ export function startServer(options: CreateStandaloneServerOptions): void {
     }).env.NOCOBASE_STRICT_STARTUP === 'true';
   const startPromise = startStandaloneServer(options);
   startPromise.catch((error) => {
-    console.error(error);
+    // An unconfigured or misconfigured application gets its instruction without a stack trace; anything else is
+    // printed whole.
+    const notConfigured = findApplicationNotConfigured(error);
+    const invalid = notConfigured ? undefined : findAppConfigInvalid(error);
+    console.error(
+      notConfigured
+        ? formatNotConfigured(notConfigured)
+        : invalid
+          ? invalid.message
+          : error,
+    );
     process.exitCode = 1;
     // Startup has already disposed the scope. Do not retain leaked handles.
     if (strictStartup) process.exit(1);

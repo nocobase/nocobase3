@@ -5,6 +5,7 @@ import {
   writeTaskChecksums,
   type ChecksumMismatch,
 } from '../migration/checksum-history.js';
+import type { Knex } from 'knex';
 import { createMigrationConnection } from '../migration/internal/context.js';
 import { createSeedContext } from './internal/context.js';
 import {
@@ -43,6 +44,12 @@ export interface Seeder {
    * reported by a run. Executes no seed and changes no data.
    */
   repair(options?: SeedRepairOptions): Promise<SeedRepairResult>;
+  /**
+   * Seeds already executed on the connection, oldest first. Reads only: a
+   * connection without a history table yields an empty list rather than
+   * getting one created, and no lock is taken.
+   */
+  history(): Promise<SeedHistoryRecord[]>;
   /** The seed lock as it stands, or undefined when no run holds it. */
   lock(): Promise<TaskLockState | undefined>;
   /** Releases the seed lock; an active one needs `force`. */
@@ -56,6 +63,17 @@ export function createSeeder(options: CreateSeederOptions): Seeder {
 
 class DefaultSeeder implements Seeder {
   constructor(private readonly options: CreateSeederOptions) {}
+
+  async history(): Promise<SeedHistoryRecord[]> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const tableName = this.options.tableName ?? DEFAULT_SEED_TABLE;
+    const seedConnection = createMigrationConnection(connection);
+    const knex = await seedConnection.client<Knex>();
+    if (!(await knex.schema.hasTable(tableName))) return [];
+    return readSeedHistory(seedConnection, tableName);
+  }
 
   async lock(): Promise<TaskLockState | undefined> {
     return readTaskLockState(this.lockConnection(), this.lockTableName());

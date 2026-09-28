@@ -1,67 +1,79 @@
 import { expect, it, vi } from 'vitest';
 import { createAuthorization, defineRecordAccess } from '../src/core/index.js';
 
-it('registers and resolves non-database policies without executing during declaration', async () => {
+it('registers a builder without running its resolver', async () => {
   const resolve = vi.fn(({ params }: { params: { prefix: string } }) => ({
     prefix: params.prefix,
   }));
-  const policy = defineRecordAccess('files.team', (access) =>
+  const teamFiles = defineRecordAccess('files.team', (access) =>
     access
       .title('Team files')
-      .resources({ type: 'file', id: 'attachments' })
+      .collections('attachments')
       .params<{ prefix: string }>({ type: 'object' })
-      .resolve(resolve),
+      .resolver(resolve),
   );
   const authz = createAuthorization({ plugins: [] });
-  authz.recordAccess.add(policy);
+  const reference = authz.recordAccess.define(teamFiles);
+  expect(reference).toEqual({
+    key: 'files.team',
+    collections: ['attachments'],
+  });
+  expect(teamFiles.reference()).toEqual(reference);
   expect(resolve).not.toHaveBeenCalled();
   const context = {
     principal: { type: 'user', id: 'alice' },
-    resource: { type: 'file', id: 'attachments' },
+    collection: 'attachments',
     action: 'read',
     params: { prefix: 'team/' },
   };
-  expect(await authz.recordAccess.resolve(policy.key, context)).toEqual({
+  expect(await authz.recordAccess.resolve(reference.key, context)).toEqual({
     prefix: 'team/',
   });
   await expect(
-    authz.recordAccess.resolve(policy.key, {
+    authz.recordAccess.resolve(reference.key, {
       ...context,
-      resource: { type: 'database.collection', id: 'attachments' },
+      collection: 'orders',
     }),
   ).rejects.toThrow('inapplicable');
   expect(resolve).toHaveBeenCalledTimes(1);
-  expect(() => authz.recordAccess.add(policy)).toThrow('Duplicate');
+  expect(() => authz.recordAccess.define(teamFiles)).toThrow('already defined');
 });
 
-it('isolates declarations and snapshots and exposes the registry to plugins', () => {
-  const resource = { type: 'file', id: '*' };
-  const policy = defineRecordAccess('files.all', (access) =>
-    access.resources(resource).resolve(() => true),
-  );
-  resource.type = 'changed';
+it('registers the object form and isolates stored metadata', () => {
+  const collections = ['*'];
   const authz = createAuthorization({
     plugins: [
       {
         id: 'files',
         setup(context) {
-          context.recordAccess.add(policy);
+          context.recordAccess.define({
+            key: 'all',
+            title: { key: 'recordAccess.all', ns: 'app' },
+            collections,
+            resolve: () => true,
+          });
         },
       },
     ],
   });
-  expect(authz.recordAccess.listFor({ type: 'file', id: 'one' })).toHaveLength(
-    1,
-  );
-  Reflect.set(
-    authz.recordAccess.get(policy.key)!.resources[0],
-    'type',
-    'changed',
-  );
-  expect(authz.recordAccess.listFor({ type: 'file', id: 'two' })).toHaveLength(
-    1,
-  );
+  collections[0] = 'changed';
+  expect(authz.recordAccess.listFor('orders')).toHaveLength(1);
+  const stored = authz.recordAccess.get('all')!;
+  Reflect.set(stored.collections, 0, 'changed');
+  expect(authz.recordAccess.listFor('quotes')).toHaveLength(1);
+  expect(authz.recordAccess.list().map((entry) => entry.key)).toEqual(['all']);
+});
+
+it('requires collections and a resolver', () => {
+  const authz = createAuthorization({ plugins: [] });
   expect(() =>
-    defineRecordAccess('invalid', (access) => access.resolve(() => true)),
-  ).toThrow('requires resources');
+    authz.recordAccess.define(
+      defineRecordAccess('invalid', (access) => access.resolver(() => true)),
+    ),
+  ).toThrow('requires collections');
+  expect(() =>
+    authz.recordAccess.define(
+      defineRecordAccess('invalid', (access) => access.collections('*')),
+    ),
+  ).toThrow('requires a resolver');
 });

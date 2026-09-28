@@ -14,11 +14,13 @@ const enUS = {
     channels: { inApp: 'In-app' },
     providers: { builtIn: 'Built-in' },
     fields: {
+      route: 'Internal route (without deployment prefix)',
+      url: 'Full HTTP(S) URL',
       recipientUserId: 'Recipient user ID',
       title: 'Title',
       message: 'Message',
     },
-    placeholders: { currentUser: 'Defaults to the current user' },
+    placeholders: { currentUser: 'Application user ID' },
     defaults: {
       title: 'NocoBase notification test',
       body: 'This is a test notification from NocoBase.',

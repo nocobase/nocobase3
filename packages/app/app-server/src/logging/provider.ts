@@ -105,6 +105,10 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
           config.pretty ??
           false,
         ...(consoleColor === undefined ? {} : { color: consoleColor }),
+        // Set by the host, not by configuration: a command-line run moves records off the stdout its result owns.
+        ...(this.app.consoleLogStream === undefined
+          ? {}
+          : { stream: this.app.consoleLogStream }),
       },
     };
   }

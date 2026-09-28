@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 
 export interface RouteChildPageProps {
   readonly children?: ReactNode;
@@ -64,5 +64,3 @@ export function RouteChildPage({
     </div>
   );
 }
-
-RouteChildPage.displayName = 'RouteChildPage';

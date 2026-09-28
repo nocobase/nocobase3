@@ -1,6 +1,6 @@
 ---
 '@nocobase/create-plugin': patch
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 ---
 
 Return a single versioned JSON envelope for both successful and failed Create

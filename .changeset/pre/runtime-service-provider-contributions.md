@@ -5,9 +5,7 @@
 '@nocobase/app-plugin-authorization': patch
 '@nocobase/app-plugin-file': patch
 '@nocobase/app-plugin-i18n': patch
-'@nocobase/app-plugin-install': patch
 '@nocobase/app-plugin-notification-in-app': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-notification-providers': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-realtime-example': patch

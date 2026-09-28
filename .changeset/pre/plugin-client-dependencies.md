@@ -4,10 +4,8 @@
 '@nocobase/app-plugin-authorization': patch
 '@nocobase/app-plugin-file': patch
 '@nocobase/app-plugin-hub': patch
-'@nocobase/app-plugin-install': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-in-app': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-workflow': patch
 '@nocobase/app-plugin-registry-example': patch
 '@nocobase/app-plugin-repository-example': patch

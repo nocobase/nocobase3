@@ -1,5 +1,10 @@
-export * from './model.js';
-export * from './plugin.js';
-export * from './service.js';
-export * from './store.js';
-export * from './builder.js';
+export type { SharingRule } from './model.js';
+export type { SharingRuleStore } from './store.js';
+export {
+  sharingRulesPlugin,
+  type SharingRulesApi,
+  type SharingRulesAuthorizationApi,
+  type SharingRulesOptions,
+  type SharingRulesPlugin,
+} from './plugin.js';
+export { SharingRuleBuilder, defineSharingRule } from './builder.js';

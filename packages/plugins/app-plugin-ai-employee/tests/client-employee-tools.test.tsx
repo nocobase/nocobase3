@@ -23,8 +23,8 @@ vi.mock('@nocobase/app-client', () => ({
   createApiClient: () => mocks.api,
   resolveAppUrl: (value: string) => value,
 }));
-vi.mock('@refinedev/core', () => ({
-  useNotification: () => ({ open: mocks.notify }),
+vi.mock('@base-ui/react/toast', () => ({
+  Toast: { useToastManager: () => ({ add: mocks.notify }) },
 }));
 vi.mock('../client/locales/index.js', () => ({
   useT:
@@ -154,7 +154,9 @@ beforeEach(() => {
 afterEach(cleanup);
 async function renderTools() {
   render(<AIEmployeePage />);
-  await screen.findByRole('heading', { name: 'Ellis' });
+  // The first render in this file transforms the page's whole import graph, which can outlast findBy's default 1 s
+  // when a runner executes every package's tests at once.
+  await screen.findByRole('heading', { name: 'Ellis' }, { timeout: 10_000 });
   fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
 }
 function toolSwitch(name: string) {

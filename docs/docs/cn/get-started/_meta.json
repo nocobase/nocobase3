@@ -7,7 +7,7 @@
   {
     "type": "file",
     "name": "overview",
-    "label": "开始前准备"
+    "label": "概览"
   },
   {
     "type": "file",
@@ -23,5 +23,11 @@
     "type": "file",
     "name": "first-feature",
     "label": "让 AI Agent 做第一个功能"
+  },
+  {
+    "type": "dir",
+    "name": "ai-agent",
+    "label": "和 AI Agent 协作",
+    "collapsed": true
   }
 ]

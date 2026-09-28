@@ -25,6 +25,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'orders',
     path: '/orders',
     navigation: { title: 'Orders', icon: Package },
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
 ]);
@@ -51,6 +52,7 @@ defineAppRoutes([
         name: 'orders',
         path: '/orders',
         navigation: { title: 'Orders', icon: Package },
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
         componentLoader: () => import('./pages/orders.js'),
       },
     ],
@@ -71,6 +73,7 @@ defineAppRoutes([
         name: 'orders',
         path: '/orders',
         navigation: { title: 'Orders' },
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
         componentLoader: () => import('./pages/orders.js'),
       },
     ],
@@ -107,6 +110,7 @@ export default function OrdersPage(): ReactElement {
 - import 路径使用 `.js`，即使页面文件的实际扩展名是 `.tsx`。
 - `path` 只填写应用内部路径，不要加入部署前缀。比如应用部署在 `/main` 下，路由写 `/orders`，浏览器访问地址就是 `/main/orders`。
 - 路由不配置 `navigation` 时，页面仍然可以通过 URL 访问，但不会出现在菜单中，详情页通常采用这种方式。
+- 在每条路径的第一个页面上声明 `authz`：`{ resource: { type: 'page', id }, action: 'access' }` 让页面出现在权限配置中并按权限显示，`'skip'` 表示不检查（访客页面常用），`'unrestricted'` 表示只有 root 等拥有无限制权限的身份可以打开。子页面省略 `authz` 时继承最近的上级页面的值，子页面自己声明的值会覆盖继承值。系统不会根据路由名称推断。第一个页面省略 `authz` 不会导致应用无法启动：需要登录的页面默认为 `'unrestricted'`，除 root 外对所有人隐藏；访客页面和可选登录页面默认为 `'skip'`，开发环境会输出警告。建议始终显式声明，详见[路由参考](./reference/routes)。
 
 ## 页面目录和子页面
 
@@ -131,12 +135,14 @@ defineAppRoutes([
     path: '/orders',
     navigation: { title: 'orders.title' },
     breadcrumb: { title: 'orders.title' },
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders/index.js'),
     children: [
       {
         name: 'order-detail',
         path: ':orderId',
         breadcrumb: { title: 'orders.detailTitle' },
+        authz: 'skip',
         componentLoader: () => import('./pages/orders/detail.js'),
       },
     ],
@@ -235,18 +241,21 @@ defineAppRoutes([
     name: 'orders',
     path: '/orders',
     auth: 'required',
+    authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
     componentLoader: () => import('./pages/orders.js'),
   },
   {
     name: 'login-help',
     path: '/login-help',
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/login-help.js'),
   },
   {
     name: 'about',
     path: '/about',
     auth: 'optional',
+    authz: 'skip',
     componentLoader: () => import('./pages/about.js'),
   },
 ]);
@@ -259,5 +268,5 @@ defineAppRoutes([
 - [界面和样式](./components-and-styling) — 使用 shadcn/ui 组件和主题变量编写页面
 - [多语言](./i18n) — 为页面文案添加翻译
 - [服务端路由](./server-routes) — 为页面调用的接口声明服务端路由
-- [路由参考](../reference/routes) — 查看客户端和服务端路由的类型与路径规则
-- [主题变量](../reference/theme-tokens) — 查看颜色、字体、间距、圆角和阴影等主题变量
+- [路由参考](./reference/routes) — 查看客户端和服务端路由的类型与路径规则
+- [主题变量](./reference/theme-tokens) — 查看颜色、字体、间距、圆角和阴影等主题变量

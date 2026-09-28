@@ -5,10 +5,7 @@ import {
 } from '../../shared/ui/collapsible.js';
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
-import type {
-  AIChatMessage,
-  AIToolCallApproval,
-} from '../../providers/index.js';
+import type { AIToolCallApproval } from '../../providers/index.js';
 import {
   Check,
   ChevronDown,
@@ -16,23 +13,10 @@ import {
   LoaderCircle,
   Wrench,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
-import { useAIToolRenderer } from '../tools/tool-renderer-provider.js';
+import { useState, type ReactNode } from 'react';
+import { useAIToolRenderer } from '../tools/tool-renderer-context.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
-
-export type ToolCallPart = Extract<
-  AIChatMessage['parts'][number],
-  { type: `tool-${string}` | 'dynamic-tool' }
->;
-
-export function isToolCallPart(
-  part: AIChatMessage['parts'][number],
-): part is ToolCallPart {
-  return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
-}
-
-export const getToolCallName = (part: ToolCallPart) =>
-  part.type === 'dynamic-tool' ? part.toolName : part.type.slice(5);
+import { getToolCallName, type ToolCallPart } from './tool-call-utils.js';
 
 const toolLabel = (part: ToolCallPart) =>
   getToolCallName(part)
@@ -94,23 +78,6 @@ const approvalFromPart = (
     : undefined;
 };
 
-export type NocoBaseToolCallMetadata = {
-  autoApprove?: boolean;
-  invokeStatus?: string;
-  messageId?: string;
-  requiresApproval?: boolean;
-  selectedSuggestion?: string;
-  status?: string;
-};
-
-export const getNocoBaseToolCallMetadata = (part: ToolCallPart) => {
-  if (!('callProviderMetadata' in part)) return undefined;
-  const metadata = part.callProviderMetadata?.nocobase;
-  return metadata && typeof metadata === 'object'
-    ? (metadata as NocoBaseToolCallMetadata)
-    : undefined;
-};
-
 type ToolCallCardProps = {
   part: ToolCallPart;
   approval?: AIToolCallApproval;
@@ -169,9 +136,13 @@ export function ToolCallCard({
   const hasInput = part.input !== undefined;
   const hasError = part.state === 'output-error';
 
-  useEffect(() => {
+  const [syncedApprovalStatus, setSyncedApprovalStatus] = useState(
+    resolvedApproval?.status,
+  );
+  if (syncedApprovalStatus !== resolvedApproval?.status) {
+    setSyncedApprovalStatus(resolvedApproval?.status);
     setApprovalStatus(resolvedApproval?.status ?? 'pending');
-  }, [resolvedApproval?.status]);
+  }
 
   const decide = async (
     decision: 'approve' | 'reject' | 'edit',

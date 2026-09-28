@@ -2,15 +2,13 @@
 '@nocobase/app-server': minor
 '@nocobase/app-client': minor
 '@nocobase/app-template-default': patch
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 '@nocobase/create-plugin': patch
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/app-plugin-authorization': patch
 '@nocobase/app-plugin-file': patch
-'@nocobase/app-plugin-install': patch
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-in-app': patch
-'@nocobase/app-plugin-notification-provider': patch
 '@nocobase/app-plugin-queue-example': patch
 '@nocobase/app-plugin-realtime-example': patch
 '@nocobase/app-plugin-routes-example': patch

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authz-restriction-rules",
   "displayName": "Authz Restriction Rules App Plugin",
   "description": "Restriction Rules authorization rules and administration UI.",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -82,6 +82,7 @@
     "@base-ui/react": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
@@ -89,7 +90,12 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/service-provider": "workspace:*"
+    "@nocobase/service-provider": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "jsdom": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:"
   },
   "dependencies": {
     "@nocobase/authorization": "workspace:^",

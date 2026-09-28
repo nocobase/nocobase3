@@ -1,9 +1,8 @@
 import {
-  Bell,
   FileText,
   Home,
   Hash,
-  Palette,
+  Languages,
   PanelsTopLeft,
   Plug,
 } from 'lucide-react';
@@ -25,10 +24,12 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/',
   },
   {
+    // The header bell is where a user looks for unread items, so this page is reached from there. Declaring no
+    // navigation keeps a second menu entry from pointing at the one destination the bell already owns.
+    authz: 'skip',
     auth: 'required',
     componentLoader: () => import('./pages/notifications.js'),
     name: 'notifications',
-    navigation: { title: 'navigation.notifications', icon: Bell },
     path: '/notifications',
   },
   {
@@ -37,16 +38,22 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/route-overlays',
     navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
     breadcrumb: { title: 'navigation.routeOverlays' },
+    authz: {
+      resource: { type: 'page', id: 'routeOverlays' },
+      action: 'access',
+    },
     componentLoader: () => import('./pages/route-overlays/index.js'),
     children: [
       {
         name: 'routeDialogExample',
         path: 'dialog',
+        authz: 'skip',
         componentLoader: () => import('./pages/route-overlays/dialog/index.js'),
         children: [
           {
             name: 'routeDialogDrawerExample',
             path: 'drawer',
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/dialog/drawer.js'),
           },
@@ -55,11 +62,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       {
         name: 'routeDrawerExample',
         path: 'drawer',
+        authz: 'skip',
         componentLoader: () => import('./pages/route-overlays/drawer/index.js'),
         children: [
           {
             name: 'routeDrawerDialogExample',
             path: 'dialog',
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/drawer/dialog.js'),
           },
@@ -71,12 +80,14 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         name: 'routeChildPages',
         path: 'pages',
         breadcrumb: { title: 'routeOverlays.childPagesTitle' },
+        authz: 'skip',
         componentLoader: () => import('./pages/route-overlays/pages/index.js'),
         children: [
           {
             name: 'routeChildPageQuotation',
             path: 'quotation',
             breadcrumb: { title: 'routeOverlays.topicQuotation' },
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/pages/quotation/index.js'),
             children: [
@@ -84,6 +95,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
               {
                 name: 'routeChildPageDialog',
                 path: 'dialog',
+                authz: 'skip',
                 componentLoader: () =>
                   import('./pages/route-overlays/pages/quotation/dialog.js'),
               },
@@ -93,6 +105,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
             name: 'routeChildPageOnboarding',
             path: 'onboarding',
             breadcrumb: { title: 'routeOverlays.topicOnboarding' },
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/pages/onboarding.js'),
           },
@@ -100,6 +113,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
             name: 'routeChildPageRenewal',
             path: 'renewal',
             breadcrumb: { title: 'routeOverlays.topicRenewal' },
+            authz: 'skip',
             componentLoader: () =>
               import('./pages/route-overlays/pages/renewal.js'),
           },
@@ -117,6 +131,10 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    authz: {
+      resource: { type: 'page', id: 'numeric-examples' },
+      action: 'access',
+    },
     componentLoader: () => import('./pages/numeric-examples.js'),
     name: 'numeric-examples',
     navigation: { title: 'navigation.numbers', icon: Hash },
@@ -124,6 +142,18 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    authz: {
+      resource: { type: 'page', id: 'i18n-examples' },
+      action: 'access',
+    },
+    componentLoader: () => import('./pages/i18n-examples/index.js'),
+    name: 'i18n-examples',
+    navigation: { title: 'navigation.i18nExamples', icon: Languages },
+    path: '/i18n-examples',
+  },
+  {
+    auth: 'required',
+    authz: { resource: { type: 'page', id: 'external-crm' }, action: 'access' },
     componentLoader: () => import('./pages/external-crm.js'),
     name: 'external-crm',
     navigation: { title: 'navigation.externalCrm', icon: Plug },
@@ -131,46 +161,35 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/login.js'),
     name: 'login',
     path: '/login',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/register.js'),
     name: 'register',
     path: '/register',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/forgot-password.js'),
     name: 'forgot-password',
     path: '/forgot-password',
   },
   {
     auth: 'guest',
+    authz: 'skip',
     componentLoader: () => import('./pages/auth/reset-password.js'),
     name: 'reset-password',
     path: '/reset-password',
   },
 ]);
 
-const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
-  {
-    // A settings page carries no access rule on its own. Asking for a page grant keeps the application's own
-    // appearance settings with the administrators who own the configuration, and lets them grant the page onward
-    // instead of exposing it to every signed-in user. "order" keeps this preference page below the operational ones.
-    authz: { resource: { type: 'page', id: 'theme' }, action: 'access' },
-    componentLoader: () => import('./pages/settings/theme/index.js'),
-    name: 'theme',
-    navigation: {
-      title: 'appearance.theme.title',
-      icon: Palette,
-      order: 100,
-    },
-    path: '/theme',
-  },
-]);
+const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([]);
 
 const routes: readonly AppClientRouteContribution[] = [
   appRoutes,

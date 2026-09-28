@@ -1,9 +1,22 @@
 export {
+  MissingDatabaseDriversError,
+  OFFICIAL_DIALECTS,
   resolveDatabaseConfig,
   type DatabaseConfigInput,
+  type MissingDatabaseDriver,
+  type OfficialDialect,
   type ResolvedDatabaseConfig,
 } from './resolve-config.js';
-export { defineAppDatabaseConfig } from './define-app-database-config.js';
+export {
+  defineAppDatabaseConfig,
+  validateAppDatabaseConfig,
+} from './define-app-database-config.js';
+export {
+  checkConnections,
+  type CheckConnectionsOptions,
+  type ConnectionCheckResult,
+  type ConnectionCheckStatus,
+} from './connection-check.js';
 export {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,
@@ -14,6 +27,8 @@ export {
 } from './provider.js';
 export {
   createAppMigrator,
+  type AppPendingTasksOptions,
+  type AppPendingTasksResult,
   type AppMigrationRepairResult,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,
@@ -32,11 +47,15 @@ export { prepareAppDatabaseStorage } from './storage.js';
 export {
   isCollectionMetadataStoreInstance,
   resolveAppCollectionsDirectory,
+  resolveAppMetadataDirectory,
   resolveAppMetadataStore,
   type ResolveAppMetadataStoreOptions,
 } from './collections-directory.js';
 export {
   generateAppCollectionsArtifact,
+  refreshAppCollectionsArtifact,
+  type AppCollectionsRefreshResult,
+  type RefreshAppCollectionsArtifactOptions,
   type AppCollectionsArtifactConnectionResult,
   type AppCollectionsArtifactDifference,
   type AppCollectionsArtifactDifferenceKind,

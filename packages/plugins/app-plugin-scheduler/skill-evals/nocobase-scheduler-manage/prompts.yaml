@@ -136,18 +136,18 @@ cases:
   - id: review-workflow-readiness
     action: 'validate'
     risk: 'read-only'
-    prompt: 'schedule sync 成功了，target.type 是 workflow，config.workflowKey 填了工作流标题。为什么还不执行？只给排查步骤。'
+    prompt: 'scheduler sync 成功了，target.type 是 workflow，config.workflowKey 填了工作流标题。为什么还不执行？只给排查步骤。'
     expected:
       - 'Uses workflow directory key rather than title or revision ID and checks input schema.'
       - 'Separately verifies workflow checker, Artifact build, sync, enablement and current version.'
       - 'Reads occurrence status/reason; uses built-in workflow completion integration and stable schedule event identity.'
     forbidden:
-      - 'Claiming schedule sync builds or enables workflows.'
+      - 'Claiming scheduler sync builds or enables workflows.'
       - 'Triggering a second independent workflow to repair the occurrence.'
   - id: partial-manifest-finalize
     action: 'explain'
     risk: 'read-only'
-    prompt: '生产发布进程只加载了一半插件，为了清掉旧任务想直接跑 schedule sync --finalize。请审查，不执行。'
+    prompt: '生产发布进程只加载了一半插件，为了清掉旧任务想直接跑 scheduler sync --finalize。请审查，不执行。'
     expected:
       - 'Explains finalization would soft-deactivate definitions absent from the partial manifest and requires the complete manifest first.'
       - 'Distinguishes non-destructive sync, administrator disable and removal lifecycle while preserving history.'
@@ -178,7 +178,7 @@ cases:
   - id: diagnose-sync-only
     action: 'inspect'
     risk: 'read-only'
-    prompt: '我运行 schedule sync --json 显示成功，命令结束后等了半小时却没执行。只分析，不启动任务。'
+    prompt: '我运行 scheduler sync --json 显示成功，命令结束后等了半小时却没执行。只分析，不启动任务。'
     expected:
       - 'Explains sync starts and shuts down the app without a background schedule worker.'
       - 'Checks normal app startup, worker, nextRunAt, timezone, bounds, limit, enablement and target readiness.'

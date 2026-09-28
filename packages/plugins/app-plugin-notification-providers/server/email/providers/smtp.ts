@@ -11,9 +11,9 @@ import {
 import type { PreparedEmailMessage, SmtpProviderConfig } from '../types.js';
 
 export function defineSmtpProviderConfig(
-  input: Omit<SmtpProviderConfig, 'type'>,
+  input: Omit<SmtpProviderConfig, 'provider'>,
 ): SmtpProviderConfig {
-  return { type: 'smtp', ...input };
+  return { provider: 'smtp', ...input };
 }
 
 export function createSmtpProviderDefinition(): NotificationProviderDefinition<
@@ -22,6 +22,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
 > {
   return {
     type: 'smtp',
+    messageType: 'email',
     label: notificationProviderText('test.providers.smtp', 'SMTP'),
     validateConfig: validateSmtpProviderConfig,
     async createProvider(_context, config) {
@@ -34,7 +35,6 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
         auth: config.auth,
       });
       return {
-        name: config.name,
         type: 'smtp',
         async send({ message }): Promise<ProviderSendResult> {
           try {

@@ -38,15 +38,13 @@ const SOURCE_EXTENSIONS = new Set([
 ]);
 
 /**
- * Directories never scanned, whatever a manifest says about them.
+ * Directories never scanned, at any depth, whatever a manifest says about them.
  *
- * `dist` is build output whose imports are already accounted for by the sources it was built from. The rest hold
- * tests and fixtures, which are excluded from every package here by its `files` field — their imports of `vitest`
- * and of fixture-only packages are correctly devDependencies.
+ * They hold tests and fixtures, which are excluded from every package here by its `files` field — their imports of
+ * `vitest` and of fixture-only packages are correctly devDependencies.
  */
 const SKIPPED_DIRECTORIES = new Set([
   'node_modules',
-  'dist',
   'tests',
   'e2e',
   'fixtures',

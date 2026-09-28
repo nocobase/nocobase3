@@ -32,17 +32,17 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
     this.unsubscribePermissionsChanged = realtime.subscribe(
       AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
       () => {
-        authz.invalidatePermissions();
+        authz.invalidate();
       },
     );
     this.unsubscribeGlobalPermissionsChanged = realtime.subscribe(
       AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
       () => {
-        authz.invalidatePermissions();
+        authz.invalidate();
       },
     );
     this.unsubscribeRealtimeOpen = realtime.onOpen(() => {
-      authz.invalidatePermissions();
+      authz.invalidate();
     });
     return Promise.resolve();
   }

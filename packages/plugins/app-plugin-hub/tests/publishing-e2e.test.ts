@@ -24,7 +24,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { publishToHub } from '@nocobase/app-cli/hub-publishing';
+import { publishToHub } from '@nocobase/hub-cli';
 import { AppHostSupervisor } from '@nocobase/app-host/supervisor';
 import { ApiKeyService } from '@nocobase/app-plugin-api-keys/server';
 import {
@@ -34,7 +34,6 @@ import {
 import {
   authorizationToken,
   createAppAuthorization,
-  permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
@@ -175,7 +174,6 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
     const container = new ServiceContainer();
     container.instance(authenticationToken, authentication);
     container.instance(authorizationToken, authorization);
-    container.instance(permissionSetsToken, authorization.permissionSets);
     container.instance(hubApiKeyServiceToken, hubApiKeys);
     container.instance(hubServiceToken, service);
     const router = await apiRoutes.createRouter({
@@ -225,7 +223,7 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
         {},
       );
 
-    // `pnpm upload --deploy --wait`: one streamed request creates the Release and
+    // `hub deploy`: one streamed request creates the Release and
     // deploys it, then the CLI polls the status route until the Host is serving.
     const uploaded = await cli('upload', first.root, {
       deploy: true,
@@ -251,7 +249,7 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
     expect(await servedVersion()).toBe('1.0.0');
     expect(await revisionNames(hostRevisionsDir())).toEqual([first.checksum]);
 
-    // `pnpm upload` then `pnpm deploy --release-id`: the two-step publishing path.
+    // `hub upload` then `hub deploy --release-id`: the two-step publishing path.
     const secondUpload = await cli('upload', second.root, {});
     expect(secondUpload).toMatchObject({
       version: '2.0.0',

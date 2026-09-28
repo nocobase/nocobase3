@@ -22,7 +22,7 @@ Inspect `client/extensions/nocobase-file-component-ui/` before writing upload or
 
 For custom attachment lists, uploads or business associations, reuse `FilePreviewDialog` with file records and `contentUrl`; it requires no repository prop. Extend the existing UI or add the necessary content adapter rather than reimplementing format detection and dropping supported formats. A DOCX download fallback indicates a request/rendering failure or an outdated/custom component, not that the plugin lacks DOCX support. Report the actual failure and preserve its evidence.
 
-If the installed package, synchronized Skill and copied UI disagree, inspect the resolved plugin version, run `pnpm skills:sync` to refresh guidance, and reconcile the UI source separately. Skills synchronization does not upgrade Registry copies.
+If the installed package, synchronized Skill and copied UI disagree, inspect the resolved plugin version, run `pnpm nocobase skills sync` to refresh guidance, and reconcile the UI source separately. Skills synchronization does not upgrade Registry copies.
 
 ## Work incrementally
 
@@ -178,7 +178,7 @@ pnpm add -D --save-exact @silurus/ooxml@0.85.1
 
 The viewer belongs in the App's `devDependencies`: Vite compiles this application-owned client source. Registry `dependencies` describes the installation recipe, while a plugin's published runtime Client imports belong in that plugin's `peerDependencies`. Do not move this viewer into server `dependencies` or add it as a plugin peer solely for copied Registry source. Retain the registered file Client plugin for its locale resources. Merge Registry upgrades with App customizations instead of overwriting installed source.
 
-Use a version of `@nocobase/dev-config` whose `createPortalViteConfig` excludes `@silurus/ooxml` from dependency prebundling. For an older shared preset or custom Vite configuration, merge this entry into the existing configuration and preserve other exclusions:
+Use a version of `@nocobase/dev-config` whose `createAppViteConfig` excludes `@silurus/ooxml` from dependency prebundling. For an older shared preset or custom Vite configuration, merge this entry into the existing configuration and preserve other exclusions:
 
 ```ts
 optimizeDeps: {

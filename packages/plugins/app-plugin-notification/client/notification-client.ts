@@ -13,6 +13,7 @@ export type NotificationStatus =
   | 'partial'
   | 'preparing'
   | 'submitting'
+  | 'retrying'
   | 'accepted'
   | 'failed'
   | 'unknown';
@@ -20,7 +21,6 @@ export type NotificationStatus =
 export interface NotificationAttempt {
   readonly id: string;
   readonly sequence: number;
-  readonly providerName: string;
   readonly providerType: string;
   readonly status: NotificationStatus;
   readonly startedAt: string;
@@ -33,10 +33,7 @@ export interface NotificationRetryAudit {
   readonly id: string;
   readonly deliveryId: string;
   readonly resolution: {
-    readonly type:
-      | 'safe_provider_idempotency'
-      | 'duplicate_risk_accepted'
-      | 'terminal_failure';
+    readonly type: 'terminal_failure';
     readonly reason: string;
     readonly requestedAt: string;
   };
@@ -50,8 +47,8 @@ export interface NotificationRetryAudit {
 export interface NotificationDeliveryDetails {
   readonly delivery: {
     readonly id: string;
-    readonly channel: string;
-    readonly providerName: string;
+    readonly channelName: string;
+    readonly channelType: string;
     readonly providerType: string;
     readonly attemptCount: number;
     readonly status: NotificationStatus;

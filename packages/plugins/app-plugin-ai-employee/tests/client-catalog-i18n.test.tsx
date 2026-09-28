@@ -32,8 +32,8 @@ vi.mock('@nocobase/app-client', async (importOriginal) => ({
   useApiClient: () => mocks.api,
   useService: () => mocks.api,
 }));
-vi.mock('@refinedev/core', () => ({
-  useNotification: () => ({ open: mocks.notify }),
+vi.mock('@base-ui/react/toast', () => ({
+  Toast: { useToastManager: () => ({ add: mocks.notify }) },
 }));
 
 const namespace = '@test/catalog-owner';

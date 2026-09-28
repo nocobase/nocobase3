@@ -1,3 +1,4 @@
+import targetMigration from '../database/migrations/202609200002_notification_in_app_target.js';
 import { resolve } from 'node:path';
 
 import sqlite from '@nocobase/db-sqlite';
@@ -26,6 +27,7 @@ interface SqliteClient {
 
 const MIGRATIONS_DIRECTORY = resolve(process.cwd(), 'database/migrations');
 const MIGRATION_NAME = '202608190002_create_notification_in_app_items' as const;
+const TARGET_MIGRATION_NAME = '202609200002_notification_in_app_target';
 const INSTANT_MIGRATION_NAME =
   '202609180001_notification_in_app_instant_columns';
 
@@ -58,6 +60,11 @@ describe('in-app notification database migration', () => {
         '2026-09-17T12:00:00.123Z', '2026-09-17T12:00:00.123Z')`);
     const connection = database.connection();
     await instantMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await targetMigration.up({
       builder: connection.builder,
       query: connection.query,
       connection,
@@ -115,6 +122,75 @@ describe('in-app notification database migration', () => {
     await expect(
       client.raw('SELECT count(*) AS count FROM notification_in_app_items'),
     ).resolves.toEqual([{ count: 2 }]);
+  });
+
+  it('adds structured targets without converting historical actionUrl values, and rolls back', async () => {
+    await migrateUp(database);
+    const connection = database.connection();
+    const context = {
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    };
+    await instantMigration.up(context);
+    await connection.query
+      .insertInto('notificationInAppItems')
+      .values({
+        id: 'old',
+        deliveryId: 'old',
+        notificationId: 'old',
+        userId: 'u',
+        body: 'Old',
+        actionUrl: '/main/topics/123',
+        createdAt: '2026-09-20T00:00:00.000Z',
+        updatedAt: '2026-09-20T00:00:00.000Z',
+      })
+      .execute();
+    await targetMigration.up(context);
+    const client = await connection.client<SqliteClient>();
+    expect(
+      await client.schema.hasColumn('notification_in_app_items', 'target'),
+    ).toBe(true);
+    expect(
+      await connection.collections.get('notificationInAppItems'),
+    ).toMatchObject({
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'target', type: 'json' }),
+      ]),
+    });
+    const store = new DatabaseInAppStore(database);
+    const [old] = await store.list({ userId: 'u' });
+    expect(old.target).toBeUndefined();
+    expect(old).not.toHaveProperty('actionUrl');
+    for (const target of [
+      { type: 'route', path: '/topics/123?q=1#reply' },
+      { type: 'url', url: 'https://example.com/main/topics/123' },
+    ] as const) {
+      const item = await store.deliver({
+        deliveryId: target.type,
+        notificationId: 'n',
+        userId: 'u',
+        message: { body: 'New', target },
+        createdAt: '2026-09-20T00:00:00.000Z',
+      });
+      expect(
+        (await store.list({ userId: 'u' })).find((row) => row.id === item.id)
+          ?.target,
+      ).toEqual(target);
+      expect(
+        (await store.update({ id: item.id, userId: 'u', action: 'read' }))
+          ?.target,
+      ).toEqual(target);
+    }
+    await targetMigration.down?.(context);
+    expect(
+      await client.schema.hasColumn('notification_in_app_items', 'target'),
+    ).toBe(false);
+    expect(
+      await client.raw(
+        'SELECT count(*) AS count FROM notification_in_app_items',
+      ),
+    ).toEqual([{ count: 3 }]);
   });
 
   it('creates the physical schema, indexes, constraints, and metadata', async () => {
@@ -210,21 +286,23 @@ describe('in-app notification database migration', () => {
     expect(loaded.map(({ name }) => name)).toEqual([
       MIGRATION_NAME,
       INSTANT_MIGRATION_NAME,
+      TARGET_MIGRATION_NAME,
     ]);
     expect(loaded.map(({ checksum }) => checksum)).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/),
       expect.stringMatching(/^[a-f0-9]{64}$/),
       expect.stringMatching(/^[a-f0-9]{64}$/),
     ]);
     await expect(migrator.latest()).resolves.toEqual({
       batch: 1,
-      executed: [MIGRATION_NAME, INSTANT_MIGRATION_NAME],
+      executed: [MIGRATION_NAME, INSTANT_MIGRATION_NAME, TARGET_MIGRATION_NAME],
       skipped: [],
       warnings: [],
     });
     await expect(migrator.latest()).resolves.toEqual({
       batch: 1,
       executed: [],
-      skipped: [MIGRATION_NAME, INSTANT_MIGRATION_NAME],
+      skipped: [MIGRATION_NAME, INSTANT_MIGRATION_NAME, TARGET_MIGRATION_NAME],
       warnings: [],
     });
 
@@ -246,10 +324,20 @@ describe('in-app notification database migration', () => {
         batch: 1,
         checksum: loaded[1]?.checksum,
       },
+      {
+        packageName: '@nocobase/app-plugin-notification-in-app',
+        name: TARGET_MIGRATION_NAME,
+        batch: 1,
+        checksum: loaded[2]?.checksum,
+      },
     ]);
     await expect(migrator.rollback()).resolves.toMatchObject({
       batch: 1,
-      rolledBack: [INSTANT_MIGRATION_NAME, MIGRATION_NAME],
+      rolledBack: [
+        TARGET_MIGRATION_NAME,
+        INSTANT_MIGRATION_NAME,
+        MIGRATION_NAME,
+      ],
       warnings: [],
     });
     await expect(

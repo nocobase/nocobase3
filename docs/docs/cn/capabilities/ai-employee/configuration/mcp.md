@@ -44,15 +44,31 @@ HTTP 服务使用 `url` 和可选 `headers`。旧服务只支持 Server-Sent Eve
 
 ## 环境变量
 
-AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替换为空字符串，通常会在连接测试或认证阶段暴露错误。不要把 Token 直接提交到 YAML，也不要把 MCP 密钥放入浏览器可见的 `config.yml.client`。
+AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替换为空字符串，通常会在连接测试或认证阶段暴露错误。不要把 Token 直接提交到 YAML，也不要把 MCP 密钥放进 `config.yml` 的 `client` 块，这个块会下发到浏览器。
 
-## 重载和诊断
+凭据放在 HTTP、SSE 服务的 `headers` 里，或者 `stdio` 服务的 `env` 里，不要写进 `url` 或 `args`。管理接口返回服务配置时，会把名称像密钥的 Header 和环境变量（比如 `Authorization`、`token`、`api_key`）遮住，但 `url` 和 `args` 原样返回，写在查询参数里的 Token 会被每个打开管理页的管理员看到。
 
-配置重载会同步新增、更新和删除的服务，并重建 MCP Client。打开 `/settings/ai` 的「MCP」Tab，可以启用服务并查看它发现的 Tool。
+展开后的所有值，无论是否被遮住，都以明文保存在数据库 `aiMcpClients` 表中这个服务的记录上，也会随数据库备份一起保存。所以给 MCP 服务的凭据只授予它的 Tool 真正需要的权限。
+
+## 重启和诊断
+
+服务重启后会同步新增、更新和删除的服务，并重建 MCP Client。打开设置页侧栏「AI」分组中的「MCP 服务」页（`/settings/ai/mcp-services`），可以启用服务并查看它发现的 Tool。
+
+服务条目里可以写 `enabled`，但它只在服务第一次被创建时生效。之后启用状态以管理页的开关为准，开关和 Tool 权限都保存在数据库中，重启后保持不变。
+
+构建 MCP Client 时（服务启动，或在管理页打开、关闭某个服务时）连不上的服务会被跳过，并在服务端日志里记一条警告，写明服务名称；应用照常启动，其他服务正常连接，只是这个服务的 Tool 暂时不可用。两次构建之间不会自动重试，远程服务恢复之后，在管理页把它关掉再打开，或者重启服务。对话里找不到某个 MCP Tool 时，先看日志里有没有这条警告。
+
+开关和 Tool 权限跟着服务名称走。从 `config.yml` 删掉一个服务会删除它的记录；改名等于删掉旧服务、新建一个服务。两种情况都会丢掉管理员设置过的开关和 Tool 权限：服务按 `config.yml` 的 `enabled` 重新创建，每个 Tool 回到按名称推断的默认权限。
 
 ![MCP 服务和 Tool](https://static-docs.nocobase.com/20260914111142-ai-employee-mcp-services.png)
 
-管理页是只读连接视图。需要修改 URL、命令、参数或 Header 时，编辑 `config.yml` 后重载配置或重启服务。
+管理页是只读连接视图。需要修改 URL、命令、参数或 Header 时，编辑 `config.yml` 后重启服务。
+
+## 发现的 Tool
+
+MCP 服务发现的 Tool 注册为 `GENERAL` Tool，注册名是 `mcp-<服务名>-<Tool 名>`，比如上面 `company-search` 服务的 `search` Tool 会注册成 `mcp-company-search-search`。服务连上之后所有员工都能用到它；在 Skill 的 `tools`、员工的 `tools` 或会话的 `skillSettings` 中引用时，使用这个完整的注册名。
+
+名称以 `get` 开头的 Tool 默认权限是 `ALLOW`，其他默认 `ASK`。这个默认值只是根据名称推断，可以在管理页逐个调整，详见 [MCP 服务管理](../management/mcp-services.md#设置-tool-权限)。
 
 ## 安全建议
 

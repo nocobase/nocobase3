@@ -315,8 +315,6 @@ jobs:
       tag: ${{ needs.prepare.outputs.release_branch }}
       merged: ${{ steps.merge.outputs.merged }}
       published: ${{ steps.publish_result.outputs.published }}
-      create_app_version: ${{ steps.hub_versions.outputs.create_app_version }}
-      hub_template_version: ${{ steps.hub_versions.outputs.hub_template_version }}
     steps:
       - name: Check out workflow tooling
         uses: actions/checkout@v4
@@ -493,15 +491,6 @@ jobs:
         if: '!inputs.dry_run'
         run: git push origin --tags
 
-      - name: Capture Hub image package versions
-        if: '!inputs.dry_run'
-        id: hub_versions
-        run: |
-          {
-            echo "create_app_version=$(node -p "require('./packages/tools/create-app/package.json').version")"
-            echo "hub_template_version=$(node -p "require('./packages/templates/app-template-hub/package.json').version")"
-          } >> "$GITHUB_OUTPUT"
-
       # Keep the release commit's ancestry by merging instead of squashing. A conflict leaves the branch available for
       # manual resolution rather than overriding changes that reached develop during the release.
       - name: Merge back into develop
@@ -626,8 +615,8 @@ jobs:
       && needs.release.outputs.merged == 'true'
     uses: ./.github/workflows/docker-hub.yml
     with:
-      create_app_version: ${{ needs.release.outputs.create_app_version }}
-      hub_template_version: ${{ needs.release.outputs.hub_template_version }}
+      # The tag marks the exact commit that was versioned and published; the release branch is deleted on merge.
+      ref: refs/tags/${{ needs.release.outputs.tag }}
       image_tag: latest
     secrets:
       ALI_DOCKER_REGISTRY: ${{ secrets.ALI_DOCKER_REGISTRY }}

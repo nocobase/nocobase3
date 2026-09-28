@@ -9,11 +9,12 @@ import {
 
 export default function DefaultAccessPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/default-access/options');
+  const page = useAuthorizationPageData('default-access');
   return (
     <PermissionsPage
       title={t('defaultAccess.page.title')}
       description={t('defaultAccess.page.description')}
+      fill
     >
       {page.options ? (
         <DefaultAccessPanel options={page.options} />

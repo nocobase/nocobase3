@@ -4,11 +4,10 @@ A working Repository API plugin demonstrating `defineRepositoryApiRoutes`, array
 
 ## Open the example
 
-This workspace registers the plugin in `@nocobase/app-template-default`.
+This workspace registers the plugin in `@nocobase/app-template-default`. `db apply` runs the application's pending migrations and then its seeds.
 
 ```bash
-pnpm --filter @nocobase/app-template-default migrate
-pnpm --filter @nocobase/app-template-default seed
+pnpm --filter @nocobase/app-template-default exec nocobase db apply
 pnpm --filter @nocobase/app-template-default dev
 ```
 

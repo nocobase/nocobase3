@@ -109,7 +109,7 @@ describe('migration lock contention', () => {
     });
 
     await expect(migrator.latest()).rejects.toThrow(
-      /Migration lock "__nocobase_migration_lock" is already held by "4242:1789967254830:abcdef" since 2026-09-21T05:07:34\.847Z\..*nocobase app db unlock/s,
+      /Migration lock "__nocobase_migration_lock" is already held by "4242:1789967254830:abcdef" since 2026-09-21T05:07:34\.847Z\..*nocobase db unlock/s,
     );
     // The driver's constraint text is the cause, never the reported message.
     await expect(migrator.latest()).rejects.not.toThrow(/UNIQUE constraint/);

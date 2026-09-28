@@ -2,7 +2,6 @@ import { useAppLocale } from '@nocobase/app-plugin-i18n/client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Languages } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { toast } from 'sonner';
 
 import {
   DropdownMenuRadioGroup,
@@ -11,6 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 
 export interface LanguageSwitcherProps {
@@ -27,13 +27,14 @@ export function LanguageSwitcher({
   async function applyLocaleChange(value: string): Promise<void> {
     const result = await setLocale(value);
     if (result.fallback) {
-      toast.info(
-        t('notices.serverLocaleFallback', {
+      toast.add({
+        type: 'info',
+        title: t('notices.serverLocaleFallback', {
           lng: value,
           defaultValue:
             'The server does not support this language, so server messages will use English.',
         }),
-      );
+      });
     }
   }
 
@@ -42,13 +43,15 @@ export function LanguageSwitcher({
 
     const localeChange = applyLocaleChange(value);
     localeChange.catch(() => {
-      toast.error(
-        t('notices.languageChangeFailed', {
+      toast.add({
+        type: 'error',
+        priority: 'high',
+        title: t('notices.languageChangeFailed', {
           lng: value,
           defaultValue:
             'Unable to complete the language change. Please try again.',
         }),
-      );
+      });
     });
   }
 

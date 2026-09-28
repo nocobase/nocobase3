@@ -31,6 +31,11 @@ import type { AppPathOptions } from '../config/paths.js';
  */
 export interface AppScope extends AppLifecycle {
   readonly logging?: AppRuntimeLogging;
+  /**
+   * Where the application's console log records go. A command-line run sets `stderr` so records never mix with the
+   * command's own result on stdout; everything else leaves it unset and logs to stdout.
+   */
+  readonly consoleLogStream?: 'stdout' | 'stderr';
   readonly mode?: 'embedded' | 'standalone';
   readonly id: string;
   readonly appName?: string;

@@ -28,6 +28,11 @@ import {
   type NotificationStatus,
 } from './api.js';
 
+type Translate = (
+  key: string,
+  options?: Readonly<Record<string, unknown>>,
+) => string;
+
 export function NotificationLogsPage(): React.ReactElement {
   const api = useApiClient();
   const { t } = useTranslation('@nocobase/app-plugin-notification');
@@ -329,13 +334,12 @@ function DeliveryTable(props: {
             <Fragment key={details.delivery.id}>
               <TableRow>
                 <TableCell>
-                  <Badge variant='outline'>{details.delivery.channel}</Badge>
+                  <Badge variant='outline'>
+                    {details.delivery.channelName}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <div className='font-medium'>
-                    {details.delivery.providerName}
-                  </div>
-                  <div className='text-xs text-muted-foreground'>
                     {details.delivery.providerType}
                   </div>
                 </TableCell>
@@ -391,13 +395,10 @@ function AttemptTable(props: {
               #{attempt.sequence}
             </span>
             <span className='min-w-0'>
-              <strong>{attempt.providerName}</strong>
-              <span className='ml-2 text-muted-foreground'>
-                {attempt.providerType}
-              </span>
+              <strong>{attempt.providerType}</strong>
               {attempt.error ? (
                 <span className='mt-1 block truncate text-destructive'>
-                  {attempt.error.message}
+                  {providerErrorMessage(t, attempt.error)}
                 </span>
               ) : null}
             </span>
@@ -442,4 +443,18 @@ function formatTime(value: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function providerErrorMessage(
+  t: Translate,
+  error: { readonly message: string; readonly code?: string },
+): string {
+  if (
+    error.code === 'IN_APP_NOTIFICATION_RECIPIENT_NOT_FOUND' ||
+    error.message === 'In-app notification recipient does not exist.'
+  )
+    return t('errors.inAppRecipientNotFound', {
+      defaultValue: 'In-app notification recipient does not exist.',
+    });
+  return error.message;
 }

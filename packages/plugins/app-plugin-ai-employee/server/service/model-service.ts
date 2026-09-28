@@ -1,9 +1,5 @@
-import {
-  normalizeEnabledModelsConfig,
-  SupportedModel,
-} from '@nocobase/ai-employee';
+import { SupportedModel } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
-import { randomUUID } from 'node:crypto';
 import type {
   EnabledLLMServiceDto,
   ProviderModelDto,
@@ -81,12 +77,13 @@ export class ModelService {
       service.provider,
     );
     if (!provider) return [];
-    if (model) {
-      const type = model as SupportedModel;
-      if (!provider.supportedModel?.includes(type)) return [];
-      return (provider.models?.[type] ?? []).map((id) => ({ id }));
-    }
-    return [];
+    // Only embedding models are suggested from the provider metadata. Chat models
+    // come from the provider's own API through `listProviderModels`.
+    if (model !== SupportedModel.EMBEDDING) return [];
+    if (!provider.supportedModel?.includes(SupportedModel.EMBEDDING)) return [];
+    return (provider.models?.[SupportedModel.EMBEDDING] ?? []).map((id) => ({
+      id,
+    }));
   }
   async listProviderModels({
     input,
@@ -135,43 +132,5 @@ export class ModelService {
       seen.add(id);
       return [{ id }];
     });
-  }
-
-  async getSupportedProvider({ model }: { model: string }): Promise<string[]> {
-    return this.ai.llmProviderManager.getSupportedProvider(model as any);
-  }
-
-  async requireModel({
-    model,
-  }: {
-    model: { llmService: string; model: string };
-  }): Promise<{ llmService: string; provider: string }> {
-    const service = await this.ai.llmServiceManager.getLLMService(
-      model.llmService,
-    );
-    if (!service || service.enabled === false) {
-      throw new Error(`LLM service not found or disabled: ${model.llmService}`);
-    }
-    const providerMeta = this.ai.llmProviderManager.llmProviders.get(
-      service.provider,
-    );
-    if (!providerMeta) {
-      throw new Error(`LLM provider is not configured: ${service.provider}`);
-    }
-    const models = normalizeEnabledModelsConfig(service.enabledModels).models;
-    if (
-      !models.some(
-        (candidate: { value?: string }) => candidate?.value === model.model,
-      )
-    ) {
-      throw new Error(
-        `Model is not enabled: ${model.llmService}/${model.model}`,
-      );
-    }
-    return { llmService: model.llmService, provider: service.provider };
-  }
-
-  randomUuid(_options: {}): string {
-    return randomUUID();
   }
 }

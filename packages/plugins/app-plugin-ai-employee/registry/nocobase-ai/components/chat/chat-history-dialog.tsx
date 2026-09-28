@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from '../../shared/ui/dialog.js';
 import { History, Menu } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { AIToolCallDecision } from '../../providers/index.js';
 import { ChatMessages } from './chat-messages.js';
 import { ConversationList } from './conversation-list.js';
@@ -29,9 +29,11 @@ export function AIChatHistoryDialog({
   const setOpen = onOpenChange ?? setInternalOpen;
   const [conversationListVisible, setConversationListVisible] = useState(true);
 
-  useEffect(() => {
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) setConversationListVisible(true);
-  }, [open]);
+  }
 
   return (
     <>

@@ -5,12 +5,9 @@ import { useAuthorizationClient } from './use-authorization-client.js';
 export function useAuthorizationRevision(): number {
   const client = useAuthorizationClient();
   const subscribe = useCallback(
-    (listener: () => void) => client.onPermissionsInvalidated(listener),
+    (listener: () => void) => client.onInvalidated(listener),
     [client],
   );
-  const getSnapshot = useCallback(
-    () => client.getPermissionsRevision(),
-    [client],
-  );
+  const getSnapshot = useCallback(() => client.revision(), [client]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

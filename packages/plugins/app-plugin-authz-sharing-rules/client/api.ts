@@ -1,9 +1,9 @@
 import { useApiClient, type ApiClient } from '@nocobase/app-client';
 import { useMemo } from 'react';
 import type {
-  AccessScope,
   AuthorizationSubject,
   AuthorizationRecordOption,
+  RecordSelection,
 } from '@nocobase/app-plugin-authorization/client/management';
 export interface SharingRule {
   key: string;
@@ -12,9 +12,8 @@ export interface SharingRule {
   actions: readonly {
     action: string;
     scopeKey?: string;
-    selection:
-      | { type: 'records'; ids: readonly string[] }
-      | { type: 'policy'; policy: AccessScope };
+    /** Never `all`: sharing adds specific records. */
+    selection: RecordSelection;
   }[];
   subjects: readonly AuthorizationSubject[];
   reason?: string;

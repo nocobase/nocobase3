@@ -455,8 +455,23 @@ describe('Tools management API', () => {
     }
   });
 
-  it('preserves legacy list, key-based get and mutations without the new management capability', async () => {
+  it('refuses legacy list, get and mutations without AI settings access', async () => {
     sessionUser = { id: 'ungranted' };
+    expect((await request('list')).status).toBe(403);
+    expect((await request('get', 'key=specified-tool')).status).toBe(403);
+    const create = await app.request('/api/ai/aiTools:create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ definition: { name: 'intruder-tool' } }),
+    });
+    expect(create.status).toBe(403);
+    expect(
+      await deps.ai.toolsManager.getTools('intruder-tool'),
+    ).toBeUndefined();
+  });
+
+  it('preserves legacy list, key-based get and mutations for AI settings access', async () => {
+    sessionUser = { id: 'exact-reader' };
     const list = await request('list');
     expect(list.status).toBe(200);
     const rows: unknown = await list.json();

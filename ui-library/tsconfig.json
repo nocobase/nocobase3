@@ -3,11 +3,14 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "paths": {
-      "@/*": ["./website/*"],
-      "@nocobase/app-plugin-authentication/client/actions": [
-        "./website/demo/auth/auth-ui/mock-actions.tsx"
-      ]
+      "@/*": ["./website/*"]
     }
   },
-  "include": ["website/**/*.ts", "website/**/*.tsx", "vite.config.ts"]
+  "include": [
+    "registry/**/*.ts",
+    "registry/**/*.tsx",
+    "website/**/*.ts",
+    "website/**/*.tsx",
+    "vite.config.ts"
+  ]
 }

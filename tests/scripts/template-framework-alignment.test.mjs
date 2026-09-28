@@ -142,19 +142,22 @@ function sharedFrameworkSource(template, file) {
     }, source);
   }
 
-  // The pm2 configuration names the process after the template; everything else about how it starts is shared.
-  if (file === 'ecosystem.config.js') {
-    const processName = (manifest) =>
-      `nocobase-${manifest.name.replace(/^@nocobase\//u, '')}`;
-    const name = processName(template.manifest);
-    assert.ok(
-      source.includes(`name: '${name}',`),
-      `${template.kind}: ecosystem.config.js must name the process ${name}`,
+  // The image recipe is shared. Only the template's own directory, named in the usage comment, and Hub's `/hub` runtime
+  // mount path differ; both are normalized to Default's before comparing.
+  if (file === 'Dockerfile') {
+    source = source.replaceAll(
+      `packages/templates/app-template-${template.kind}`,
+      'packages/templates/app-template-default',
     );
-    return source.replace(
-      `name: '${name}',`,
-      `name: '${processName(baseline.manifest)}',`,
-    );
+    if (template.kind === 'hub') {
+      const runtimeDefault = /^ {4}APP_BASE_PATH=\/hub \\$/gmu;
+      assert.equal(
+        [...source.matchAll(runtimeDefault)].length,
+        1,
+        'Hub Dockerfile must default the runtime APP_BASE_PATH to /hub',
+      );
+      source = source.replace(runtimeDefault, '    APP_BASE_PATH=/main \\');
+    }
   }
 
   // Keep product identity and Hub's deliberate menu order local while comparing the shared layout.
@@ -241,7 +244,6 @@ function sharedFrameworkSource(template, file) {
 for (const template of templates) {
   test(`${template.kind} keeps the shared build and CLI framework aligned with Default`, () => {
     for (const directory of [
-      'scripts',
       'client/routing',
       'client/layouts',
       'client/theme',
@@ -267,6 +269,8 @@ for (const template of templates) {
       'vitest.config.ts',
       'vite.config.ts',
       'ecosystem.config.js',
+      'Dockerfile',
+      'Dockerfile.dockerignore',
       'server/app.ts',
       'server/embedded.ts',
       'server/standalone.ts',
@@ -279,8 +283,6 @@ for (const template of templates) {
     }
     // Product-specific scripts need a documented exception; compare the shared contract in both directions.
     const exceptions = [
-      'upload', // Hub publishing commands are implemented only by Default.
-      'deploy',
       ...(template.kind === 'hub' ? ['test:e2e'] : []), // Hub has no AI plugin.
     ];
     const sharedScripts = (scripts) =>
@@ -294,25 +296,34 @@ for (const template of templates) {
     );
   });
 
-  test(`${template.kind} exposes publishing scripts only when supported`, () => {
-    for (const command of ['upload', 'deploy']) {
-      if (template.kind === 'default') {
-        // Straight at the CLI entry, not through `pnpm nocobase`: a script
-        // calling another script is a second `pnpm run`, and each layer
-        // prints its own ELIFECYCLE line for one non-zero exit.
-        assert.equal(
-          template.manifest.scripts[command],
-          `tsx ./cli/index.ts app ${command}`,
-        );
-      } else {
-        assert.equal(Object.hasOwn(template.manifest.scripts, command), false);
-      }
+  test(`${template.kind} enables Hub publishing only when supported`, () => {
+    // `hub deploy` and `hub upload` come from depending on @nocobase/hub-cli, so the dependency is the whole
+    // publishing switch. The flag it replaced must not come back.
+    assert.equal(
+      template.manifest.devDependencies?.['@nocobase/hub-cli'] !== undefined,
+      template.kind === 'default',
+    );
+    assert.equal(
+      template.manifest.dependencies?.['@nocobase/hub-cli'],
+      undefined,
+    );
+    assert.equal(template.manifest.nocobase?.cli?.publishing, undefined);
+  });
+
+  test(`${template.kind} publishes its Dockerfile to generated applications`, () => {
+    // BuildKit reads `Dockerfile.dockerignore` only beside the Dockerfile it belongs to. Shipping one without the
+    // other builds an image from a context that includes config.yml, .env, and storage/.
+    for (const entry of ['Dockerfile', 'Dockerfile.dockerignore']) {
+      assert.ok(
+        template.manifest.files.includes(entry),
+        `${template.kind}: files must list ${entry}`,
+      );
     }
   });
 
   test(`${template.kind} publishes the database directory by part, not whole`, () => {
     // `files` is a whitelist npm applies ahead of every ignore file, so a bare `database` entry publishes
-    // whatever `collections:generate` happens to have written locally: a snapshot of one developer's database,
+    // whatever `collections generate` happens to have written locally: a snapshot of one developer's database,
     // in whatever dialect they run it against, shipped to every application scaffolded from the template.
     // Neither .gitignore nor .npmignore can take it back out. Name the parts that are source instead.
     const { files } = template.manifest;
@@ -336,16 +347,30 @@ for (const template of templates) {
     );
     assert.deepEqual(duplicates, []);
     assert.ok(dependencies['@nocobase/db']);
-    // create-app adds SQLite when selected; templates must not force its installation.
-    assert.equal(
+    // The dialect `server/config/database.ts` defaults to. Creation no longer chooses a database, so a template that
+    // did not depend on its own default would scaffold an application unable to start until a driver was installed
+    // by hand. Switching databases means adding another driver and, if nothing else uses SQLite, removing this one.
+    assert.ok(
       dependencies['@nocobase/db-sqlite'],
-      undefined,
-      `${template.kind}: the SQLite driver must be supplied by create-app`,
+      `${template.kind}: the driver for the default dialect must be a dependency`,
     );
     assert.equal(
       devDependencies['@nocobase/db-sqlite'],
       undefined,
-      `${template.kind}: devDependencies must not force SQLite installation`,
+      `${template.kind}: the SQLite driver is a runtime dependency, not a development one`,
+    );
+    // And no other. `config init` picks the dialect from the installed drivers when it is not told one, and with
+    // several it refuses rather than guess — which is right for an application that added a driver, and wrong for
+    // one that has just been created. A template shipping extra drivers makes the documented `pnpm nocobase config init`
+    // fail in every non-interactive run, and puts drivers nothing uses into every deployment.
+    const drivers = Object.keys(dependencies).filter(
+      (name) =>
+        /^@nocobase\/db-/u.test(name) && name !== '@nocobase/db-testkit',
+    );
+    assert.deepEqual(
+      drivers,
+      ['@nocobase/db-sqlite'],
+      `${template.kind}: declare only the driver for the default dialect`,
     );
     assert.equal(dependencies.hono, 'catalog:');
     assert.equal(devDependencies.hono, undefined);

@@ -21,7 +21,7 @@ export function createOrderRoutes(
 
   router.get('/sales/orders/:id/relations', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'composite', id: 'example.sales.orders' },
       action: 'view',
     });
     if (decision.effect === 'deny' || !decision.conditions?.database)
@@ -35,14 +35,16 @@ export function createOrderRoutes(
         select: (select) =>
           select
             .fields('id', 'title', 'status')
-            .include('deliveryTeam', (team) => team.fields('id', 'title'))
+            .include('carrier', (carrier) => carrier.fields('id', 'title'))
             .include('checks', (checks) => checks.fields('id', 'title', 'done'))
-            .include('collaborators', (team) => team.fields('id', 'title')),
+            .include('collaborators', (carrier) =>
+              carrier.fields('id', 'title'),
+            ),
       });
     if (!order) return c.json({ code: 'FORBIDDEN' }, 403);
 
     const manage = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'composite', id: 'example.sales.orders' },
       action: 'manageRelations',
     });
 
@@ -62,7 +64,7 @@ export function createOrderRoutes(
 
     const operations: Record<string, string[]> = {};
     const options: Record<string, RepositoryRecord[]> = {};
-    for (const name of ['deliveryTeam', 'checks', 'collaborators']) {
+    for (const name of ['carrier', 'checks', 'collaborators']) {
       const node = write === true ? true : relations && relations[name];
       if (node === true) {
         operations[name] = [
@@ -86,7 +88,7 @@ export function createOrderRoutes(
         (node === true || node.connect || node.set)
       ) {
         options[name] = await database
-          .repository('authorizationExampleTeams')
+          .repository('authorizationExampleCarriers')
           .withPolicy({
             read: {
               scope: node === true ? true : (node.scope ?? true),
@@ -121,7 +123,7 @@ export function createOrderRoutes(
 
   router.post('/sales/orders/:id/relations', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'composite', id: 'example.sales.orders' },
       action: 'manageRelations',
     });
     if (decision.effect === 'deny' || !decision.conditions?.database)
@@ -160,7 +162,7 @@ export function createOrderRoutes(
 
   router.post('/sales/orders/:id/deliver', async (c) => {
     const decision = await c.var.authz.authorize({
-      resource: { type: 'resource', id: 'example.sales.orders' },
+      resource: { type: 'composite', id: 'example.sales.orders' },
       action: 'deliver',
     });
 

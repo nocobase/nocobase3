@@ -1,5 +1,5 @@
 ---
-'@nocobase/nb3-cli': patch
+'@nocobase/app-cli': patch
 '@nocobase/app-skills': patch
 ---
 

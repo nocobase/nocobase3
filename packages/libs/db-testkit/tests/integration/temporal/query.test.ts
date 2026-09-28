@@ -74,6 +74,58 @@ describeIntegrationDatabases('Temporal query values', (context) => {
     });
   });
 
+  it('preserves undefined temporal fields for insert defaults and skipped updates', async () => {
+    await createCollection('temporalQueryUndefined');
+    await context.database
+      .query()
+      .insertInto('temporalQueryUndefined')
+      .values([
+        {
+          id: 'empty',
+          day: undefined,
+          clock: undefined,
+          local: undefined,
+          instant: undefined,
+        },
+        { id: 'full', ...values },
+      ])
+      .execute();
+    await expect(
+      context.database
+        .query()
+        .selectFrom('temporalQueryUndefined')
+        .selectAll()
+        .where('id', '=', 'empty')
+        .executeTakeFirst(),
+    ).resolves.toEqual({
+      id: 'empty',
+      day: null,
+      clock: null,
+      local: null,
+      instant: null,
+    });
+    await context.database
+      .query()
+      .updateTable('temporalQueryUndefined')
+      .set({
+        id: 'updated',
+        day: undefined,
+        clock: undefined,
+        local: undefined,
+        instant: undefined,
+      })
+      .where('id', '=', 'full')
+      .execute();
+    await expect(
+      context.database
+        .query()
+        .selectFrom('temporalQueryUndefined')
+        .selectAll()
+        .where('id', '=', 'updated')
+        .executeTakeFirst(),
+    ).resolves.toEqual({ id: 'updated', ...values });
+  });
+
   it('preserves null temporal values through Query mutations', async () => {
     await createCollection('temporalQueryNulls');
 

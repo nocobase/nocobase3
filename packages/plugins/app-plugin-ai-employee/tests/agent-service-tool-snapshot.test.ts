@@ -56,6 +56,7 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
         },
       })),
       getSystemPrompt: vi.fn(async () => undefined),
+      agentContext: { state: { sessionId: 'snapshot' } },
       currentConversation: vi.fn(() => ({ sessionId: 'snapshot' })),
       discoveredTools,
     },
