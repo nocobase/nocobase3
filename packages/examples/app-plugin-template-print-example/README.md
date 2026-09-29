@@ -14,6 +14,6 @@ If PDF conversion returns `PDF_CONVERTER_UNAVAILABLE`, install LibreOffice in th
 
 This example depends on Carbone Community Edition. If you redistribute an application that includes it, notify its users and link to the current [Carbone Community License Agreement](https://github.com/carboneio/carbone/blob/master/LICENSE.md), as required by that license.
 
-The Examples application registers this plugin in both `client/plugins.ts` and `server/plugins.ts`, and the Examples home page includes a **Template printing example** card. After database tasks run, open the page as a user with access to Sales Quotes; `sales_manager` can print both seeded invoices in a fresh Examples database.
+The Examples application registers this plugin in both `client/plugins.ts` and `server/plugins.ts`, and the Examples home page includes a **Template printing** card. After database tasks run, open the page as a user with access to Sales Quotes; `sales_manager` can print both seeded invoices in a fresh Examples database.
 
 Run `pnpm --filter @nocobase/app-plugin-template-print-example check` to validate the package. The built package copies `templates/invoice.docx` into `dist/templates/` so the Server can resolve it from the compiled plugin directory.
