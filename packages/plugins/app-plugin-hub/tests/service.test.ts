@@ -319,6 +319,109 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect((await service.listDeployments('customer')).total).toBe(1);
   });
 
+  it('summarizes Releases with their build target and deployment history', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await service.createApp({ id: 'other', name: 'Other' });
+    const target = {
+      ...host.runtime,
+      libc: host.runtime.platform === 'linux' ? undefined : 'glibc',
+    };
+    const first = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0', {
+        nocobase: { buildTarget: target },
+      }),
+    });
+    const firstDeployment = await service.deploy('customer', {
+      releaseId: first.id,
+    });
+    await waitForDeployment(service, 'customer', firstDeployment.id);
+    const second = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0'),
+    });
+    const secondDeployment = await service.deploy('customer', {
+      releaseId: second.id,
+    });
+    await waitForDeployment(service, 'customer', secondDeployment.id);
+    const third = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '3.0.0', {
+        // Accepted by the upload check, which ignores the ABI, but not a complete target.
+        nocobase: {
+          buildTarget: {
+            platform: host.runtime.platform,
+            arch: host.runtime.arch,
+            nodeMajor: host.runtime.nodeMajor,
+          },
+        },
+      }),
+    });
+    host.nextApplyError = new Error('Simulated failure');
+    const failed = await service.deploy('customer', { releaseId: third.id });
+    expect(
+      (await waitForDeployment(service, 'customer', failed.id)).status,
+    ).toBe('failed');
+    // Another App's successful deployment never marks this App's Releases.
+    const foreign = await service.createRelease('other', {
+      bytes: await createArtifact(rootDir, '9.0.0'),
+    });
+    await waitForDeployment(
+      service,
+      'other',
+      (await service.deploy('other', { releaseId: foreign.id })).id,
+    );
+
+    const expectedTarget = {
+      ...host.runtime,
+      libc: host.runtime.platform === 'linux' ? 'glibc' : null,
+    };
+    const releases = await service.listReleases('customer');
+    expect(
+      releases.map(({ id, buildTarget, running, everDeployed }) => ({
+        id,
+        buildTarget,
+        running,
+        everDeployed,
+      })),
+    ).toEqual([
+      // Its only deployment failed, and its build target is incomplete.
+      { id: third.id, buildTarget: null, running: false, everDeployed: false },
+      { id: second.id, buildTarget: null, running: true, everDeployed: true },
+      // Deployed once, then superseded.
+      {
+        id: first.id,
+        buildTarget: expectedTarget,
+        running: false,
+        everDeployed: true,
+      },
+    ]);
+    expect(
+      (await service.listReleases('customer', { limit: 2 })).map(
+        ({ id }) => id,
+      ),
+    ).toEqual([third.id, second.id]);
+    expect(await service.getReleaseSummary('customer', first.id)).toMatchObject(
+      {
+        id: first.id,
+        version: '1.0.0',
+        buildTarget: expectedTarget,
+        running: false,
+        everDeployed: true,
+      },
+    );
+    await expect(
+      service.getReleaseSummary('other', first.id),
+    ).rejects.toMatchObject({ code: 'RELEASE_NOT_FOUND', status: 404 });
+  });
+
+  it.each([0, 101, 1.5, Number.NaN])(
+    'rejects the Release list limit %s',
+    async (limit) => {
+      await service.createApp({ id: 'customer', name: 'Customer' });
+      await expect(
+        service.listReleases('customer', { limit }),
+      ).rejects.toMatchObject({ code: 'INVALID_LIMIT', status: 400 });
+    },
+  );
+
   it('accepts an archive whose build target matches the Host or that records none', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const { libc, ...matching } = host.runtime;

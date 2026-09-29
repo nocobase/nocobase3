@@ -24,7 +24,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { parseRemoteUrl, publish } from '@nocobase/hub-cli';
+import { HubClient, parseRemoteUrl, publish } from '@nocobase/hub-cli';
 import { AppHostSupervisor } from '@nocobase/app-host/supervisor';
 import { ApiKeyService } from '@nocobase/app-plugin-api-keys/server';
 import {
@@ -309,6 +309,27 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
       'rollback',
       'deploy',
       'deploy',
+    ]);
+
+    // `hub releases` and `hub status`: the same key reads what runs and what ran.
+    const client = new HubClient({ target, apiKey, timeout: 30 });
+    const releases = await client.listReleases(10);
+    expect(releases.map((release) => release.releaseId)).toEqual([
+      secondReleaseId,
+      firstReleaseId,
+    ]);
+    expect(releases).toMatchObject([
+      { version: '2.0.0', running: false, everDeployed: true },
+      { version: '1.0.0', running: true, everDeployed: true },
+    ]);
+    const app = await client.getApp();
+    expect(app).toMatchObject({
+      currentVersion: '1.0.0',
+      runningReleaseId: firstReleaseId,
+    });
+    expect(app.buildTarget).toMatchObject({ platform: process.platform });
+    expect(await client.listDeployments(1)).toMatchObject([
+      { kind: 'rollback', status: 'succeeded', releaseId: firstReleaseId },
     ]);
   }, 240_000);
 

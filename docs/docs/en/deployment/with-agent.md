@@ -136,7 +136,7 @@ Use the original source project:
 ```text
 Update the application on Hub. Hub remote: <name>; its API key is saved with hub auth login.
 Keep Hub's current configuration, database and uploaded files; do not replace them with local development configuration.
-Read the deployment and Hub CLI Skills, record the current Release, and review source, configuration and migration changes; hub deploy builds for the platform Hub reports. If existing credentials cannot query the current deployment, ask me to obtain the Release ID from Hub; do not expand permissions or invent query commands.
+Read the deployment and Hub CLI Skills, record the running Release with hub status, and review source, configuration and migration changes; hub deploy builds for the platform Hub reports.
 Explain downtime, backup and recovery requirements when preparation is complete. Wait for me to confirm the switch window and backup status before publishing. Verify an unconfirmed result before retrying and reuse the same idempotency key for the same request. Finally verify the actual running Release, health and business access, and retain rollback information.
 ```
 
@@ -155,8 +155,8 @@ Wait for my confirmation before executing. Confirm external database backups bef
 
 ```text
 Roll back the Hub application to a specified Release.
-Hub remote: <name>; target Release ID: <ID selected from Hub history>.
-The API key is saved with hub auth login. Check the target Release, current configuration and database compatibility, explain downtime and data recovery risks, and wait for my confirmation. If history is inaccessible, ask me to verify it in Hub rather than guessing the previous version.
+Hub remote: <name>; target Release ID: <ID selected from hub releases or Hub history>.
+The API key is saved with hub auth login. Check the target Release, current configuration and database compatibility, explain downtime and data recovery risks, and wait for my confirmation. Check the target with hub releases rather than guessing the previous version.
 Use a new idempotency key for a new rollback; reuse it only when retrying that request. Do not treat a historical success as a new version switch. Code rollback is not database restoration: do not restore or clear data without authorization. Verify the actual running version, health and business access afterward.
 ```
 

@@ -72,8 +72,11 @@ import type {
   HubDeploymentListItem,
   HubDeploymentPage,
   HubRuntimeStatus,
+  HubBuildTarget,
   HubReleaseRecord,
+  HubReleaseSummary,
   ListHubAppsOptions,
+  ListHubReleasesOptions,
   RollbackHubAppInput,
   HubService,
   SaveHubConfigInput,
@@ -596,15 +599,81 @@ export class DefaultHubService implements HubService {
 
   public async listReleases(
     appId: string,
-  ): Promise<readonly HubReleaseRecord[]> {
-    await this.requireApp(appId);
-    const rows = await this.query()
+    options: ListHubReleasesOptions = {},
+  ): Promise<readonly HubReleaseSummary[]> {
+    const { limit } = options;
+    if (
+      limit !== undefined &&
+      (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+    )
+      throw new HubError(
+        'Limit must be an integer between 1 and 100.',
+        'INVALID_LIMIT',
+        400,
+      );
+    const app = await this.requireApp(appId);
+    let query = this.query()
       .selectFrom('hubAppReleases')
       .selectAll()
       .where('appId', '=', appId)
-      .orderBy('createdAt', 'desc')
-      .execute<Row>();
-    return rows.map(decodeRelease);
+      .orderBy('createdAt', 'desc');
+    if (limit !== undefined) query = query.limit(limit);
+    const rows = await query.execute<Row>();
+    return await this.summarizeReleases(app, rows.map(decodeRelease));
+  }
+
+  public async getReleaseSummary(
+    appId: string,
+    releaseId: string,
+  ): Promise<HubReleaseSummary> {
+    const app = await this.requireApp(appId);
+    const [summary] = await this.summarizeReleases(app, [
+      await this.getRelease(appId, releaseId),
+    ]);
+    if (!summary)
+      throw new HubError('Release not found.', 'RELEASE_NOT_FOUND', 404);
+    return summary;
+  }
+
+  /**
+   * Adds each Release's build target and deployment history with two queries for the whole set: the current
+   * deployment's Release, and the App's Releases that have ever deployed successfully.
+   */
+  private async summarizeReleases(
+    app: HubAppRecord,
+    releases: readonly HubReleaseRecord[],
+  ): Promise<HubReleaseSummary[]> {
+    if (releases.length === 0) return [];
+    const [current, succeeded] = await Promise.all([
+      app.currentDeploymentId
+        ? this.query()
+            .selectFrom('hubAppDeployments')
+            .select('releaseId')
+            .where('appId', '=', app.id)
+            .where('id', '=', app.currentDeploymentId)
+            .executeTakeFirst<Row>()
+        : undefined,
+      this.query()
+        .selectFrom('hubAppDeployments')
+        .select('releaseId')
+        .distinct()
+        .where('appId', '=', app.id)
+        .where('status', '=', 'succeeded')
+        .execute<Row>(),
+    ]);
+    const runningId =
+      typeof current?.releaseId === 'string' ? current.releaseId : null;
+    const deployed = new Set(
+      succeeded.flatMap((row) =>
+        typeof row.releaseId === 'string' ? [row.releaseId] : [],
+      ),
+    );
+    return releases.map((release) => ({
+      ...release,
+      buildTarget: readBuildTarget(release.manifest),
+      running: release.id === runningId,
+      everDeployed: deployed.has(release.id),
+    }));
   }
 
   public async getRelease(
@@ -1899,6 +1968,42 @@ function assertMountableAt(
  * `dist/package.json`. An archive without one predates the field and is accepted, as is any archive while the
  * Host's own platform cannot be read; the Host still refuses a binary it cannot load when it deploys.
  */
+/**
+ * The build target an archive's `dist/package.json` records, normalized to the Host runtime's shape, or `null` when
+ * it records none or one missing a platform, architecture, or Node version. On Linux a missing C library means
+ * glibc, as it does when uploads are checked; elsewhere there is none.
+ */
+function readBuildTarget(
+  manifest: Record<string, unknown> | null,
+): HubBuildTarget | null {
+  const nocobase = isRecord(manifest?.nocobase) ? manifest.nocobase : undefined;
+  const target = isRecord(nocobase?.buildTarget)
+    ? nocobase.buildTarget
+    : undefined;
+  if (
+    !target ||
+    typeof target.platform !== 'string' ||
+    !target.platform ||
+    typeof target.arch !== 'string' ||
+    !target.arch ||
+    !Number.isSafeInteger(target.nodeAbi) ||
+    !Number.isSafeInteger(target.nodeMajor)
+  )
+    return null;
+  return {
+    platform: target.platform,
+    arch: target.arch,
+    libc:
+      target.platform === 'linux'
+        ? target.libc === 'musl'
+          ? 'musl'
+          : 'glibc'
+        : null,
+    nodeAbi: Number(target.nodeAbi),
+    nodeMajor: Number(target.nodeMajor),
+  };
+}
+
 function assertBuildTargetMatches(
   manifest: Record<string, unknown>,
   host: HostRuntime | null,

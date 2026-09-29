@@ -89,3 +89,42 @@ export function fakeHub(overrides: Record<string, Handler | undefined> = {}): {
   vi.stubGlobal('fetch', fetch);
   return { requests, fetch };
 }
+
+export const RELEASES = [
+  {
+    id: 'r2',
+    version: '2.0.0',
+    checksum: 'b'.repeat(64),
+    size: 20,
+    createdAt: '2026-09-29T10:00:00.000Z',
+    hasConfigTemplate: false,
+    buildTarget: HOST_TARGET,
+    running: true,
+    everDeployed: true,
+  },
+  {
+    id: 'r1',
+    version: '1.0.0',
+    checksum: 'a'.repeat(64),
+    size: 10,
+    createdAt: '2026-09-28T10:00:00.000Z',
+    hasConfigTemplate: false,
+    buildTarget: null,
+    running: false,
+    everDeployed: true,
+  },
+];
+
+export const DEPLOYMENT = {
+  id: 'op-2',
+  releaseId: 'r2',
+  kind: 'deploy',
+  status: 'succeeded',
+  phase: 'completed',
+  cacheHit: false,
+  error: null,
+  createdAt: '2026-09-29T10:01:00.000Z',
+  finishedAt: '2026-09-29T10:02:00.000Z',
+  config: { mode: 'reuse' },
+  release: { version: '2.0.0', checksum: 'b'.repeat(64) },
+};

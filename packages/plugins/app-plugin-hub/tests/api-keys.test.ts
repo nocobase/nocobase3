@@ -934,9 +934,53 @@ describe('Hub API Key HTTP boundary', () => {
     }
     container.instance(authorizationToken, authz);
     container.instance(hubApiKeyServiceToken, service);
+    const summary = {
+      id: 'r1',
+      appId: 'crm',
+      artifactKey: 'crm/r1.tar.gz',
+      version: '1.0.0',
+      checksum: 'a'.repeat(64),
+      size: 1,
+      configTemplate: 'auth:\n  secret: sensitive\n',
+      manifest: { nocobase: { buildTarget: HOST_BUILD_TARGET } },
+      createdAt: new Date('2026-09-29T00:00:00.000Z'),
+      buildTarget: HOST_BUILD_TARGET,
+      running: true,
+      everDeployed: true,
+    };
     const listReleases = vi
       .fn<HubService['listReleases']>()
-      .mockResolvedValue([]);
+      .mockResolvedValue([summary]);
+    const getReleaseSummary = vi
+      .fn<HubService['getReleaseSummary']>()
+      .mockResolvedValue(summary);
+    const listDeployments = vi
+      .fn<HubService['listDeployments']>()
+      .mockResolvedValue({
+        items: [
+          {
+            id: 'op-1',
+            appId: 'crm',
+            releaseId: 'r1',
+            kind: 'deploy',
+            rollbackTargetDeploymentId: null,
+            previousDeploymentId: null,
+            status: 'succeeded',
+            phase: 'completed',
+            config: { mode: 'file', path: '/private/config' },
+            cacheHit: false,
+            hostRevision: 3,
+            error: null,
+            createdAt: new Date('2026-09-29T00:01:00.000Z'),
+            startedAt: new Date('2026-09-29T00:01:01.000Z'),
+            finishedAt: new Date('2026-09-29T00:02:00.000Z'),
+            release: { version: '1.0.0', checksum: 'a'.repeat(64) },
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      });
     const deploy = vi
       .fn<HubService['deploy']>()
       .mockRejectedValue(new HubError('Deploy reached', 'DEPLOY_REACHED', 409));
@@ -997,6 +1041,8 @@ describe('Hub API Key HTTP boundary', () => {
       realHub ??
         ({
           listReleases,
+          getReleaseSummary,
+          listDeployments,
           getDeployment: vi.fn().mockResolvedValue({
             id: 'op-1',
             releaseId: 'r1',
@@ -1015,6 +1061,8 @@ describe('Hub API Key HTTP boundary', () => {
         container,
       } as AppPluginApplication),
       listReleases,
+      getReleaseSummary,
+      listDeployments,
       createRelease,
       getApp,
     };
@@ -1342,6 +1390,105 @@ describe('Hub API Key HTTP boundary', () => {
     });
   });
 
+  it('lets upload-only and deploy-only keys read Releases and deployments of their App', async () => {
+    const uploadOnly = await service.create('admin', {
+      name: 'Upload',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    const deployOnly = await service.create('admin', {
+      name: 'Deploy',
+      appIds: ['crm'],
+      scopes: ['deploy'],
+    });
+    const otherApp = await service.create('admin', {
+      name: 'Other App',
+      appIds: ['erp'],
+      scopes: ['upload-release', 'deploy'],
+    });
+    const {
+      router: api,
+      listReleases,
+      getReleaseSummary,
+      listDeployments,
+    } = await router();
+    const release = {
+      id: 'r1',
+      version: '1.0.0',
+      checksum: 'a'.repeat(64),
+      size: 1,
+      createdAt: '2026-09-29T00:00:00.000Z',
+      hasConfigTemplate: true,
+      buildTarget: HOST_BUILD_TARGET,
+      running: true,
+      everDeployed: true,
+    };
+    for (const secret of [uploadOnly.secret, deployOnly.secret]) {
+      const headers = { authorization: `Bearer ${secret}` };
+      const list = await api.request('/hub/apps/crm/releases?limit=5', {
+        headers,
+      });
+      expect(list.status).toBe(200);
+      expect(await list.json()).toEqual({ data: [release] });
+      const single = await api.request('/hub/apps/crm/releases/r1', {
+        headers,
+      });
+      expect(single.status).toBe(200);
+      expect(await single.json()).toEqual({ data: release });
+      const deployments = await api.request(
+        '/hub/apps/crm/deployments?page=1&pageSize=10',
+        { headers },
+      );
+      expect(deployments.status).toBe(200);
+      expect(await deployments.json()).toEqual({
+        data: {
+          items: [
+            {
+              id: 'op-1',
+              releaseId: 'r1',
+              kind: 'deploy',
+              status: 'succeeded',
+              phase: 'completed',
+              cacheHit: false,
+              error: null,
+              createdAt: '2026-09-29T00:01:00.000Z',
+              finishedAt: '2026-09-29T00:02:00.000Z',
+              config: { mode: 'file' },
+              release: { version: '1.0.0', checksum: 'a'.repeat(64) },
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+        },
+      });
+      expect(
+        (await api.request('/hub/apps/crm/releases?limit=0', { headers }))
+          .status,
+      ).toBe(400);
+    }
+    expect(listReleases).toHaveBeenCalledTimes(2);
+    expect(listReleases).toHaveBeenCalledWith('crm', { limit: 5 });
+    expect(getReleaseSummary).toHaveBeenCalledWith('crm', 'r1');
+    expect(listDeployments).toHaveBeenCalledWith('crm', {
+      page: 1,
+      pageSize: 10,
+    });
+    const foreign = { authorization: `Bearer ${otherApp.secret}` };
+    for (const url of [
+      '/hub/apps/crm/releases',
+      '/hub/apps/crm/releases/r1',
+      '/hub/apps/crm/deployments',
+    ]) {
+      const response = await api.request(url, { headers: foreign });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'API_KEY_FORBIDDEN' },
+      });
+    }
+    expect(listReleases).toHaveBeenCalledTimes(2);
+  });
+
   it('accepts any-scope reads under whichever granted scope the creator still holds', async () => {
     await authz.permissionSets.create({
       key: 'crm-publisher',
@@ -1487,15 +1634,15 @@ describe('Hub API Key HTTP boundary', () => {
       appIds: ['crm'],
       scopes: ['upload-release', 'deploy'],
     });
-    const { router: api, listReleases } = await router();
+    const { router: api } = await router();
     const headers = {
       authorization: `Bearer ${publishing.secret}`,
       'content-type': 'application/json',
     };
     for (const [method, url] of [
-      ['GET', '/hub/apps/crm/releases'],
-      ['GET', '/hub/apps/crm/releases/r1'],
       ['GET', '/hub/apps/crm/releases/r1/config-template'],
+      ['GET', '/hub/apps/crm/deployments/op-1'],
+      ['GET', '/hub/apps/crm/config'],
       ['PUT', '/hub/apps/crm/config'],
       ['PUT', '/hub/apps/crm/settings'],
       ['POST', '/hub/apps/crm/rollback'],
@@ -1515,7 +1662,6 @@ describe('Hub API Key HTTP boundary', () => {
         error: { code: 'API_KEY_FORBIDDEN' },
       });
     }
-    expect(listReleases).not.toHaveBeenCalled();
   });
 
   it('allows an Operator session to manage only its own keys through HTTP', async () => {
@@ -1641,7 +1787,7 @@ describe('Hub API Key HTTP boundary', () => {
     ).toBe(200);
     expect(await service.list('admin')).toEqual([]);
   });
-  it('accepts existing deploy permission and rejects reads, unselected Apps and cookie fallback', async () => {
+  it('accepts existing deploy permission and rejects undeclared reads, unselected Apps and cookie fallback', async () => {
     const { key, secret } = await service.create('admin', {
       name: 'Deploy',
       appIds: ['crm'],
@@ -1664,8 +1810,7 @@ describe('Hub API Key HTTP boundary', () => {
       '/hub/apps',
       '/hub/apps/crm/config',
       '/hub/api-keys',
-      '/hub/apps/crm/releases',
-      '/hub/apps/crm/deployments',
+      '/hub/apps/crm/deployments/op-1',
       '/hub/apps/crm/logs',
       '/hub/apps/crm/deployments/op-1/logs',
     ])

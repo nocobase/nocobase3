@@ -26,6 +26,7 @@ import {
   appSummaryResponse,
   appDetailResponse,
   releaseResponse,
+  releaseSummaryResponse,
   deploymentResponse,
   deploymentListResponse,
 } from './responses.js';
@@ -277,33 +278,34 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           appDetailResponse(await hub.getApp(context.req.param('appId'))),
         ),
     );
-    routes.get('/apps/:appId/releases', async (context) => {
-      await requireHubAction(
-        context,
-        context.req.param('appId'),
-        'read-release',
-      );
-      return respond(context, async () =>
-        (await hub.listReleases(context.req.param('appId'))).map(
-          releaseResponse,
-        ),
-      );
-    });
-    routes.get('/apps/:appId/releases/:releaseId', async (context) => {
-      await requireHubAction(
-        context,
-        context.req.param('appId'),
-        'read-release',
-      );
-      return respond(context, async () =>
-        releaseResponse(
-          await hub.getRelease(
-            context.req.param('appId'),
-            context.req.param('releaseId'),
+    appRoutes.get(
+      '/apps/:appId/releases',
+      { action: 'read-release', apiKey: 'any' },
+      async (context) => {
+        const limit = context.req.query('limit');
+        return respond(context, async () =>
+          (
+            await hub.listReleases(
+              context.req.param('appId'),
+              limit === undefined ? {} : { limit: parseLimit(limit) },
+            )
+          ).map(releaseSummaryResponse),
+        );
+      },
+    );
+    appRoutes.get(
+      '/apps/:appId/releases/:releaseId',
+      { action: 'read-release', apiKey: 'any' },
+      async (context) =>
+        respond(context, async () =>
+          releaseSummaryResponse(
+            await hub.getReleaseSummary(
+              context.req.param('appId'),
+              context.req.param('releaseId'),
+            ),
           ),
         ),
-      );
-    });
+    );
     routes.get(
       '/apps/:appId/releases/:releaseId/config-template',
       async (context) => {
@@ -503,20 +505,21 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         );
       });
     }
-    routes.get('/apps/:appId/deployments', async (context) => {
-      await requireHubAction(
-        context,
-        context.req.param('appId'),
-        'read-deployment',
-      );
-      return respond(context, async () => {
-        const result = await hub.listDeployments(context.req.param('appId'), {
-          page: Number(context.req.query('page') ?? 1),
-          pageSize: Number(context.req.query('pageSize') ?? 20),
-        });
-        return { ...result, items: result.items.map(deploymentListResponse) };
-      });
-    });
+    appRoutes.get(
+      '/apps/:appId/deployments',
+      { action: 'read-deployment', apiKey: 'any' },
+      async (context) =>
+        respond(context, async () => {
+          const result = await hub.listDeployments(context.req.param('appId'), {
+            page: Number(context.req.query('page') ?? 1),
+            pageSize: Number(context.req.query('pageSize') ?? 20),
+          });
+          return {
+            ...result,
+            items: result.items.map(deploymentListResponse),
+          };
+        }),
+    );
     routes.get('/apps/:appId/deployments/:deploymentId', async (context) => {
       await requireHubAction(
         context,
@@ -671,6 +674,17 @@ async function respond<T>(
     }
     throw error;
   }
+}
+
+/** Reads a `limit` query parameter: an integer from 1 to 100. */
+function parseLimit(value: string): number {
+  if (!/^(?:[1-9]\d?|100)$/.test(value))
+    throw new HubError(
+      'Limit must be an integer between 1 and 100.',
+      'INVALID_LIMIT',
+      400,
+    );
+  return Number(value);
 }
 
 function preventSensitiveResponseCaching(context: Context): void {

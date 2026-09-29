@@ -13,7 +13,9 @@ export { HubClient } from './hub-client.ts';
 export type {
   AppInfo,
   BuildTarget,
+  DeploymentInfo,
   HubClientOptions,
+  ReleaseInfo,
   StartedDeployment,
   UploadedRelease,
 } from './hub-client.ts';

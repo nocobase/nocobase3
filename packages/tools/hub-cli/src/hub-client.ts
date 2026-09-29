@@ -22,6 +22,37 @@ export interface BuildTarget {
 export interface AppInfo {
   /** What the Hub's Host runs Apps on; `null` when the Hub could not tell. */
   readonly buildTarget: BuildTarget | null;
+  /** The version of the Release the App's current deployment runs; `null` before the first deployment. */
+  readonly currentVersion: string | null;
+  /** The Release the Host reports running, `null` when none is. */
+  readonly runningReleaseId: string | null;
+  /** What the Host reports for the App, such as `running` or `stopped`; `null` when the Hub could not tell. */
+  readonly state: string | null;
+}
+
+/** A Release as `hub releases` reports it. */
+export interface ReleaseInfo {
+  readonly releaseId: string;
+  readonly version: string;
+  readonly checksum: string;
+  readonly size: number;
+  readonly uploadedAt: string;
+  readonly buildTarget: BuildTarget | null;
+  /** This Release is what the App's current deployment runs. */
+  readonly running: boolean;
+  /** Some deployment of this Release succeeded. */
+  readonly everDeployed: boolean;
+}
+
+/** A deployment as `hub status` reports it. */
+export interface DeploymentInfo {
+  readonly operationId: string;
+  readonly releaseId: string;
+  readonly version: string | null;
+  readonly kind: string;
+  readonly status: DeploymentStatus;
+  readonly createdAt: string;
+  readonly finishedAt: string | null;
 }
 
 export interface UploadedRelease {
@@ -71,7 +102,110 @@ export class HubClient {
 
   async getApp(): Promise<AppInfo> {
     const data = await this.#request('', { method: 'GET' }, false);
-    return { buildTarget: parseBuildTarget(data.buildTarget) };
+    const deployment = isRecord(data.deployment) ? data.deployment : {};
+    const runtime = isRecord(data.runtime) ? data.runtime : {};
+    return {
+      buildTarget: parseBuildTarget(data.buildTarget),
+      currentVersion: optionalString(data.currentVersion),
+      runningReleaseId: optionalString(deployment.observedReleaseId),
+      state:
+        optionalString(deployment.observedState) ??
+        optionalString(runtime.state),
+    };
+  }
+
+  /** The App's Releases, newest first. */
+  async listReleases(limit: number): Promise<ReleaseInfo[]> {
+    const data = await this.#requestAny(
+      `releases?limit=${String(limit)}`,
+      { method: 'GET' },
+      false,
+    );
+    if (!Array.isArray(data))
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an unreadable Release list.',
+        3,
+      );
+    return data.map((item) => this.#release(item));
+  }
+
+  async getRelease(releaseId: string): Promise<ReleaseInfo> {
+    return this.#release(
+      await this.#request(
+        `releases/${encodeURIComponent(releaseId)}`,
+        { method: 'GET' },
+        false,
+      ),
+    );
+  }
+
+  /** The App's most recent deployments, newest first. */
+  async listDeployments(pageSize: number): Promise<DeploymentInfo[]> {
+    const data = await this.#request(
+      `deployments?page=1&pageSize=${String(pageSize)}`,
+      { method: 'GET' },
+      false,
+    );
+    if (!Array.isArray(data.items))
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an unreadable deployment list.',
+        3,
+      );
+    return data.items.map((item: unknown) => this.#deployment(item));
+  }
+
+  #release(value: unknown): ReleaseInfo {
+    if (
+      !isRecord(value) ||
+      !isIdentifier(value.id) ||
+      typeof value.version !== 'string' ||
+      typeof value.checksum !== 'string' ||
+      typeof value.size !== 'number' ||
+      typeof value.createdAt !== 'string'
+    )
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an unreadable Release.',
+        3,
+      );
+    return {
+      releaseId: value.id,
+      version: value.version,
+      checksum: value.checksum,
+      size: value.size,
+      uploadedAt: value.createdAt,
+      buildTarget: parseBuildTarget(value.buildTarget),
+      running: value.running === true,
+      everDeployed: value.everDeployed === true,
+    };
+  }
+
+  #deployment(value: unknown): DeploymentInfo {
+    if (
+      !isRecord(value) ||
+      !isIdentifier(value.id) ||
+      !isIdentifier(value.releaseId) ||
+      !isDeploymentStatus(value.status) ||
+      typeof value.createdAt !== 'string'
+    )
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an unreadable deployment.',
+        3,
+      );
+    return {
+      operationId: value.id,
+      releaseId: value.releaseId,
+      version: isRecord(value.release)
+        ? optionalString(value.release.version)
+        : null,
+      kind: typeof value.kind === 'string' ? value.kind : 'deploy',
+      status: value.status,
+      createdAt: value.createdAt,
+      finishedAt: optionalString(value.finishedAt),
+    };
   }
 
   async uploadRelease(input: {
@@ -181,6 +315,21 @@ export class HubClient {
     init: RequestInit,
     changes: boolean,
   ): Promise<Record<string, unknown>> {
+    const data = await this.#requestAny(relative, init, changes);
+    if (!isRecord(data))
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub response is missing its result; the outcome is unknown. Check Hub before retrying with the same idempotency key.',
+        3,
+      );
+    return data;
+  }
+
+  async #requestAny(
+    relative: string,
+    init: RequestInit,
+    changes: boolean,
+  ): Promise<unknown> {
     let response: Response;
     try {
       response = await fetch(
@@ -231,7 +380,7 @@ export class HubClient {
         1,
       );
     }
-    if (!isRecord(payload) || !isRecord(payload.data))
+    if (!isRecord(payload) || payload.data === undefined)
       throw this.failure(
         'INVALID_HUB_RESPONSE',
         'Hub response is missing its result; the outcome is unknown. Check Hub before retrying with the same idempotency key.',
@@ -259,6 +408,10 @@ export function parseBuildTarget(value: unknown): BuildTarget | null {
     nodeAbi: typeof value.nodeAbi === 'number' ? value.nodeAbi : 0,
     nodeMajor: value.nodeMajor,
   };
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null;
 }
 
 function isIdentifier(value: unknown): value is string {

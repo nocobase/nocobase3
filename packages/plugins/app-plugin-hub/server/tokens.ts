@@ -52,6 +52,21 @@ export interface HubReleaseRecord {
   readonly createdAt: Date;
 }
 
+/** A Release as it is listed: its stored record plus what it targets and how it has been deployed. */
+export interface HubReleaseSummary extends HubReleaseRecord {
+  /** The archive's `nocobase.buildTarget`, or `null` when it records none or an unreadable one. */
+  readonly buildTarget: HubBuildTarget | null;
+  /** Whether this is the Release of the App's current deployment. */
+  readonly running: boolean;
+  /** Whether a deployment of this Release has ever succeeded. */
+  readonly everDeployed: boolean;
+}
+
+export interface ListHubReleasesOptions {
+  /** The number of newest Releases to return, from 1 to 100; every Release when omitted. */
+  readonly limit?: number;
+}
+
 export type HubConfigMode = 'file' | 'external';
 
 export interface HubConfigBinding {
@@ -208,8 +223,15 @@ export interface HubService {
     input: CreateHubAppInput,
     createdBy?: string,
   ): Promise<HubAppDetail>;
-  listReleases(appId: string): Promise<readonly HubReleaseRecord[]>;
+  listReleases(
+    appId: string,
+    options?: ListHubReleasesOptions,
+  ): Promise<readonly HubReleaseSummary[]>;
   getRelease(appId: string, releaseId: string): Promise<HubReleaseRecord>;
+  getReleaseSummary(
+    appId: string,
+    releaseId: string,
+  ): Promise<HubReleaseSummary>;
   createRelease(
     appId: string,
     input: CreateHubReleaseInput,

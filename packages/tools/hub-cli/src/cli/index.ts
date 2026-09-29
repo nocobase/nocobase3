@@ -9,9 +9,11 @@ import HubAuthLogin from './auth/login.ts';
 import HubAuthLogout from './auth/logout.ts';
 import HubAuthStatus from './auth/status.ts';
 import HubDeploy from './deploy.ts';
+import HubReleases from './releases.ts';
 import HubRemoteAdd from './remote/add.ts';
 import HubRemoteList from './remote/list.ts';
 import HubRemoteRemove from './remote/remove.ts';
+import HubStatus from './status.ts';
 import HubUpload from './upload.ts';
 
 const cliPlugin: AppCliPlugin = defineCliPlugin({
@@ -20,6 +22,8 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
   devCommands: {
     deploy: HubDeploy,
     upload: HubUpload,
+    releases: HubReleases,
+    status: HubStatus,
     'remote:add': HubRemoteAdd,
     'remote:list': HubRemoteList,
     'remote:remove': HubRemoteRemove,

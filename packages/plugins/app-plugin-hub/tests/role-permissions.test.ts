@@ -614,6 +614,12 @@ function createHubService(): HubService {
     manifest: null,
     createdAt: now,
   } as const;
+  const summary = {
+    ...release,
+    buildTarget: null,
+    running: false,
+    everDeployed: false,
+  } as const;
   const deployment = {
     id: 'deployment-1',
     appId: 'customer',
@@ -643,8 +649,9 @@ function createHubService(): HubService {
     ),
     getApp: vi.fn(() => Promise.resolve(detail)),
     createApp: vi.fn(() => Promise.resolve(detail)),
-    listReleases: vi.fn(() => Promise.resolve([release])),
+    listReleases: vi.fn(() => Promise.resolve([summary])),
     getRelease: vi.fn(() => Promise.resolve(release)),
+    getReleaseSummary: vi.fn(() => Promise.resolve(summary)),
     createRelease: vi.fn(() => Promise.resolve(release)),
     readConfig: vi.fn(() =>
       Promise.resolve({ mode: 'file', content: 'feature: true\n' }),

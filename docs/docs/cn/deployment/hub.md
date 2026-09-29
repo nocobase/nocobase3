@@ -175,7 +175,7 @@ ARM64 服务器使用 `linux-arm64`。参数与运行环境不一致时，上传
 ## 更新、回滚与启停
 
 - **更新**：再次执行 `pnpm nocobase hub deploy`，或在管理界面上传新构建的部署包并部署。涉及数据库变更时先完成备份。版本替换期间应用服务中断。
-- **回滚**：在部署历史中选择一次成功的部署发起回滚，或通过 CLI `pnpm nocobase hub deploy --release-id <RELEASE_ID> --idempotency-key <NEW_ROLLBACK_KEY> --json` 部署较早的 Release。每次新发起的回滚使用一个新的幂等键；同一次回滚因网络错误或结果未确认而重试时，复用该键。不指定新键可能复用历史部署记录，只返回之前的结果而不切换当前版本。回滚不会撤销数据库变更；旧版本与当前数据库不兼容时，需要恢复部署前的配套备份。
+- **回滚**：在部署历史中选择一次成功的部署发起回滚，或通过 CLI 部署较早的 Release：`pnpm nocobase hub releases` 列出各个 Release 并标出正在运行的一个，`pnpm nocobase hub deploy --release-id <RELEASE_ID> --idempotency-key <NEW_ROLLBACK_KEY> --json` 部署选定的 Release，`pnpm nocobase hub status` 查看当前运行的版本和最近一次部署。每次新发起的回滚使用一个新的幂等键；同一次回滚因网络错误或结果未确认而重试时，复用该键。不指定新键可能复用历史部署记录，只返回之前的结果而不切换当前版本。回滚不会撤销数据库变更；旧版本与当前数据库不兼容时，需要恢复部署前的配套备份。
 - **停止与启动**：在应用详情中操作。停止后保留部署、配置和数据。
 - **移除**：删除应用记录、全部 Release、配置和应用数据卷。执行前先完成备份。
 

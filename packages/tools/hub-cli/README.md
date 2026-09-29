@@ -89,6 +89,16 @@ A supplied configuration replaces the whole configuration document through Hub's
 
 Builds and uploads the archive as a new Release without deploying it, and reports the Release ID. The Release is immutable: uploading the same archive again returns the existing Release. It takes `--build`/`--no-build`, `--file`, `--idempotency-key` (defaulting to the archive SHA-256) and `--timeout`. Use it when a key may only upload, such as in CI that leaves deployment to a person, who then runs `hub deploy --release-id`.
 
+## `hub releases`
+
+Lists the App's Releases, newest first: ID, version, checksum, size, `uploadedAt`, the `buildTarget` the archive records, whether it is what the App runs now (`running`) and whether a deployment of it ever succeeded (`everDeployed`). `--limit` sets how many (1–100, default 20), and `--release-id` reports one. Roll back by deploying an earlier one with `hub deploy --release-id`.
+
+## `hub status`
+
+Reports what the App runs: the remote (`connection`), the platform the Hub builds it for (`buildTarget`), the Release and version it runs and the Host's state for it (`running`, `null` before the first deployment), and its most recent deployment (`lastDeployment`). `--deployment <id>` reports only that deployment's status. It is about the App on the Hub, not the Hub itself; `hub auth status` checks the saved keys.
+
+Both read with a key holding either publishing permission.
+
 ## Output and exit codes
 
 With `--json`, each run prints one JSON document on stdout, success or failure. Its `command` is the command run, such as `hub deploy`, the result is in `result`, and a failure's `error.details` carries the idempotency key and any Release or deployment ID already known. Progress and build output go to stderr. A run the Hub answered with an earlier Release or deployment reports `status: "success-noop"`: nothing was done now.

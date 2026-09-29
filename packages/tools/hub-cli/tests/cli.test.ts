@@ -6,9 +6,11 @@ import HubAuthLogin from '../src/cli/auth/login.ts';
 import HubAuthLogout from '../src/cli/auth/logout.ts';
 import HubAuthStatus from '../src/cli/auth/status.ts';
 import HubDeploy from '../src/cli/deploy.ts';
+import HubReleases from '../src/cli/releases.ts';
 import HubRemoteAdd from '../src/cli/remote/add.ts';
 import HubRemoteList from '../src/cli/remote/list.ts';
 import HubRemoteRemove from '../src/cli/remote/remove.ts';
+import HubStatus from '../src/cli/status.ts';
 import HubUpload from '../src/cli/upload.ts';
 import packageMetadata from '../package.json' with { type: 'json' };
 
@@ -25,6 +27,8 @@ describe('the commands an application gets from this package', () => {
     expect(cliPlugin.devCommands).toEqual({
       deploy: HubDeploy,
       upload: HubUpload,
+      releases: HubReleases,
+      status: HubStatus,
       'remote:add': HubRemoteAdd,
       'remote:list': HubRemoteList,
       'remote:remove': HubRemoteRemove,

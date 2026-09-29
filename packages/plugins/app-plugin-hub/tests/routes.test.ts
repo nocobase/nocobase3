@@ -233,12 +233,15 @@ describe('@nocobase/app-plugin-hub API routes', () => {
       manifest: null,
       createdAt: new Date('2026-09-04T00:00:00Z'),
     } as const;
+    const listReleases = vi
+      .fn<HubService['listReleases']>()
+      .mockResolvedValue([
+        { ...release, buildTarget: null, running: true, everDeployed: true },
+      ]);
     const router = await apiRoutes.createRouter(
       createApplication('administrator', {
         listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
-        listReleases: vi
-          .fn<HubService['listReleases']>()
-          .mockResolvedValue([release]),
+        listReleases,
         getRelease: vi
           .fn<HubService['getRelease']>()
           .mockResolvedValue(release),
@@ -255,13 +258,18 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     });
     expect(listBody.data[0]).not.toHaveProperty('configTemplate');
     expect(Object.keys(listBody.data[0] ?? {}).sort()).toEqual([
+      'buildTarget',
       'checksum',
       'createdAt',
+      'everDeployed',
       'hasConfigTemplate',
       'id',
+      'running',
       'size',
       'version',
     ]);
+    // Without a limit the web UI keeps receiving every Release.
+    expect(listReleases).toHaveBeenCalledWith('customer', {});
 
     const configResponse = await router.request(
       '/hub/apps/customer/releases/release-1/config-template',
@@ -271,6 +279,49 @@ describe('@nocobase/app-plugin-hub API routes', () => {
       data: { content: 'auth:\n  secret: sensitive\n' },
     });
   });
+
+  it.each(['0', '101', '-1', '1.5', 'abc', '', '01'])(
+    'rejects the Release list limit %j',
+    async (limit) => {
+      const listReleases = vi.fn<HubService['listReleases']>();
+      const router = await apiRoutes.createRouter(
+        createApplication('administrator', {
+          listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+          listReleases,
+        }),
+      );
+      const response = await router.request(
+        `/hub/apps/customer/releases?limit=${limit}`,
+      );
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'INVALID_LIMIT' },
+      });
+      expect(listReleases).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['1', '20', '100'])(
+    'passes the Release list limit %s',
+    async (limit) => {
+      const listReleases = vi
+        .fn<HubService['listReleases']>()
+        .mockResolvedValue([]);
+      const router = await apiRoutes.createRouter(
+        createApplication('administrator', {
+          listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+          listReleases,
+        }),
+      );
+      const response = await router.request(
+        `/hub/apps/customer/releases?limit=${limit}`,
+      );
+      expect(response.status).toBe(200);
+      expect(listReleases).toHaveBeenCalledWith('customer', {
+        limit: Number(limit),
+      });
+    },
+  );
 
   it('rejects oversized Release bodies before reading them', async () => {
     const router = await apiRoutes.createRouter(

@@ -4,6 +4,7 @@ import type {
   HubDeploymentRecord,
   HubDeploymentListItem,
   HubReleaseRecord,
+  HubReleaseSummary,
 } from '../tokens.js';
 
 type AppIdentity = Pick<
@@ -37,6 +38,8 @@ type ReleaseResponse = Pick<
   HubReleaseRecord,
   'id' | 'version' | 'checksum' | 'size' | 'createdAt'
 > & { hasConfigTemplate: boolean };
+type ReleaseSummaryResponse = ReleaseResponse &
+  Pick<HubReleaseSummary, 'buildTarget' | 'running' | 'everDeployed'>;
 type DeploymentResponse = Pick<
   HubDeploymentRecord,
   | 'id'
@@ -102,6 +105,17 @@ export function releaseResponse(value: HubReleaseRecord): ReleaseResponse {
   };
 }
 
+export function releaseSummaryResponse(
+  value: HubReleaseSummary,
+): ReleaseSummaryResponse {
+  return {
+    ...releaseResponse(value),
+    buildTarget: value.buildTarget,
+    running: value.running,
+    everDeployed: value.everDeployed,
+  };
+}
+
 export function deploymentResponse(
   value: HubDeploymentRecord,
 ): DeploymentResponse {
@@ -120,6 +134,10 @@ export function deploymentResponse(
 
 export function deploymentListResponse(
   value: HubDeploymentListItem,
-): DeploymentResponse & Pick<HubDeploymentListItem, 'release'> {
-  return { ...deploymentResponse(value), release: value.release };
+): DeploymentResponse & Pick<HubDeploymentListItem, 'finishedAt' | 'release'> {
+  return {
+    ...deploymentResponse(value),
+    finishedAt: value.finishedAt,
+    release: value.release,
+  };
 }
