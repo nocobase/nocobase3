@@ -22,8 +22,12 @@ export const RELEASE_UPLOAD_CHUNK_SIZE: number = 8 * 1024 * 1024;
 /** How long an upload session lives after its last activity, in milliseconds: 24 hours. */
 export const RELEASE_UPLOAD_TTL_MS: number = 24 * 60 * 60 * 1000;
 
+/** How often the expired sessions of every App are swept, in milliseconds: once an hour. */
+export const RELEASE_UPLOAD_SWEEP_INTERVAL_MS: number = 60 * 60 * 1000;
+
 const UPLOAD_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const APP_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const META_FILE = 'meta.json';
 const DATA_FILE = 'data';
@@ -92,7 +96,8 @@ export function isReleaseUploadExpired(
 }
 
 /**
- * Upload sessions on local disk, one directory per session holding `meta.json` and the staged bytes in `data`.
+ * Upload sessions on local disk: one directory per App, holding one directory per session with `meta.json` and the
+ * staged bytes in `data`. Grouping by App keeps finding an App's sessions to reading that App's directory.
  *
  * The store only reads and writes files. Callers serialize the operations of one session, and `meta.json` is replaced
  * by rename, so a reader without the lock sees either the old record or the new one.
@@ -104,8 +109,8 @@ export class ReleaseUploadStore {
     this.#directory = directory;
   }
 
-  dataPath(uploadId: string): string {
-    return path.join(this.#sessionDir(uploadId), DATA_FILE);
+  dataPath(appId: string, uploadId: string): string {
+    return path.join(this.#sessionDir(appId, uploadId), DATA_FILE);
   }
 
   async create(input: {
@@ -124,9 +129,9 @@ export class ReleaseUploadStore {
       createdAt: now,
       updatedAt: now,
     };
-    await mkdir(this.#directory, { recursive: true, mode: 0o700 });
-    await mkdir(this.#sessionDir(uploadId), { mode: 0o700 });
-    await writeFile(this.dataPath(uploadId), new Uint8Array(0), {
+    await mkdir(this.#appDir(input.appId), { recursive: true, mode: 0o700 });
+    await mkdir(this.#sessionDir(input.appId, uploadId), { mode: 0o700 });
+    await writeFile(this.dataPath(input.appId, uploadId), new Uint8Array(0), {
       flag: 'wx',
       mode: 0o600,
     });
@@ -134,34 +139,45 @@ export class ReleaseUploadStore {
     return session;
   }
 
-  /** The session with this ID, or `null` when it does not exist or its record cannot be read. */
-  async read(uploadId: string): Promise<ReleaseUploadSession | null> {
-    if (!isReleaseUploadId(uploadId)) return null;
+  /** The App's session with this ID, or `null` when it does not exist or its record cannot be read. */
+  async read(
+    appId: string,
+    uploadId: string,
+  ): Promise<ReleaseUploadSession | null> {
+    if (!APP_ID_PATTERN.test(appId) || !isReleaseUploadId(uploadId))
+      return null;
     let content: string;
     try {
       content = await readFile(
-        path.join(this.#sessionDir(uploadId), META_FILE),
+        path.join(this.#sessionDir(appId, uploadId), META_FILE),
         'utf8',
       );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
       throw error;
     }
-    return parseSession(content, uploadId);
+    const session = parseSession(content, uploadId);
+    return session?.appId === appId ? session : null;
   }
 
-  /** Every session ID on disk, whether or not its record is readable. */
-  async ids(): Promise<readonly string[]> {
-    try {
-      return (await readdir(this.#directory)).filter(isReleaseUploadId);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-      throw error;
-    }
+  /** Every App with a session directory on disk. */
+  async apps(): Promise<readonly string[]> {
+    return await this.#entries(this.#directory, (name) =>
+      APP_ID_PATTERN.test(name),
+    );
+  }
+
+  /** Every session ID of the App on disk, whether or not its record is readable. */
+  async ids(appId: string): Promise<readonly string[]> {
+    if (!APP_ID_PATTERN.test(appId)) return [];
+    return await this.#entries(this.#appDir(appId), isReleaseUploadId);
   }
 
   async write(session: ReleaseUploadSession): Promise<void> {
-    const target = path.join(this.#sessionDir(session.uploadId), META_FILE);
+    const target = path.join(
+      this.#sessionDir(session.appId, session.uploadId),
+      META_FILE,
+    );
     const temporary = `${target}.${randomUUID()}.tmp`;
     try {
       await writeFile(temporary, `${JSON.stringify(session)}\n`, {
@@ -174,13 +190,22 @@ export class ReleaseUploadStore {
     }
   }
 
-  async remove(uploadId: string): Promise<void> {
-    if (!isReleaseUploadId(uploadId)) return;
-    await rm(this.#sessionDir(uploadId), { recursive: true, force: true });
+  async remove(appId: string, uploadId: string): Promise<void> {
+    if (!APP_ID_PATTERN.test(appId) || !isReleaseUploadId(uploadId)) return;
+    await rm(this.#sessionDir(appId, uploadId), {
+      recursive: true,
+      force: true,
+    });
   }
 
-  async removeData(uploadId: string): Promise<void> {
-    await rm(this.dataPath(uploadId), { force: true });
+  /** Removes every session of the App. */
+  async removeApp(appId: string): Promise<void> {
+    if (!APP_ID_PATTERN.test(appId)) return;
+    await rm(this.#appDir(appId), { recursive: true, force: true });
+  }
+
+  async removeData(appId: string, uploadId: string): Promise<void> {
+    await rm(this.dataPath(appId, uploadId), { force: true });
   }
 
   /**
@@ -190,12 +215,13 @@ export class ReleaseUploadStore {
    * the file is cut back to `start`, so the recorded offset always equals the bytes safely on disk.
    */
   async append(
+    appId: string,
     uploadId: string,
     start: number,
     length: number,
     chunks: AsyncIterable<Uint8Array>,
   ): Promise<void> {
-    const file = await open(this.dataPath(uploadId), 'r+');
+    const file = await open(this.dataPath(appId, uploadId), 'r+');
     try {
       await file.truncate(start);
       let position = start;
@@ -236,17 +262,35 @@ export class ReleaseUploadStore {
   }
 
   /** The SHA-256 hex digest of the staged bytes. */
-  async digest(uploadId: string): Promise<string> {
+  async digest(appId: string, uploadId: string): Promise<string> {
     const hash = createHash('sha256');
-    for await (const chunk of createReadStream(this.dataPath(uploadId)))
+    for await (const chunk of createReadStream(this.dataPath(appId, uploadId)))
       hash.update(chunk as Buffer);
     return hash.digest('hex');
   }
 
-  #sessionDir(uploadId: string): string {
+  async #entries(
+    directory: string,
+    accept: (name: string) => boolean,
+  ): Promise<readonly string[]> {
+    try {
+      return (await readdir(directory)).filter(accept);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+  }
+
+  #appDir(appId: string): string {
+    if (!APP_ID_PATTERN.test(appId))
+      throw new HubError('Upload not found.', 'UPLOAD_NOT_FOUND', 404);
+    return path.join(this.#directory, appId);
+  }
+
+  #sessionDir(appId: string, uploadId: string): string {
     if (!isReleaseUploadId(uploadId))
       throw new HubError('Upload not found.', 'UPLOAD_NOT_FOUND', 404);
-    return path.join(this.#directory, uploadId);
+    return path.join(this.#appDir(appId), uploadId);
   }
 }
 

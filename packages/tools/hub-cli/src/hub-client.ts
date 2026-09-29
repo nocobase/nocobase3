@@ -81,40 +81,56 @@ const RESUMABLE = new Set([
   'RESULT_UNKNOWN',
   'HUB_UNREACHABLE',
   'INVALID_HUB_RESPONSE',
+  'TIMEOUT',
   'UPLOAD_OFFSET_MISMATCH',
 ]);
 
 /** Consecutive failed chunks after which the upload gives up; the session stays for the next run to resume. */
 const MAX_CHUNK_FAILURES = 5;
 
+/** A request the Hub answered with an error. `offset` is what an upload error reports as the offset to go on from. */
+class HubRejection extends HubCliError {
+  constructor(
+    code: string,
+    message: string,
+    exitCode: number,
+    details: HubCliErrorDetails | undefined,
+    readonly offset: number | undefined,
+  ) {
+    super(code, message, exitCode, details);
+  }
+}
+
 export interface HubClientOptions {
   readonly target: RemoteTarget;
   readonly apiKey: string;
-  /** Deadline for everything the client does, in seconds. */
+  /**
+   * Deadline for each request to the Hub, in seconds. An upload of many chunks may take longer as a whole; each
+   * chunk is one request.
+   */
   readonly timeout: number;
 }
 
 export class HubClient {
   /** What the run has established so far. Every failure carries it. */
   readonly known: HubCliErrorDetails = {};
-  readonly signal: AbortSignal;
   /** `<Hub URL>/api/hub/apps/<App ID>`, without a trailing slash: the Hub routes the App itself there. */
   readonly #base: string;
   readonly #apiKey: string;
+  readonly #timeout: number;
 
   constructor(options: HubClientOptions) {
     this.#apiKey = options.apiKey;
-    this.signal = AbortSignal.timeout(options.timeout * 1000);
+    this.#timeout = options.timeout;
     this.#base = `${options.target.hub}/api/hub/apps/${encodeURIComponent(options.target.appId)}`;
   }
 
   failure(code: string, message: string, exitCode: number): HubCliError {
-    return new HubCliError(
-      code,
-      message,
-      exitCode,
-      Object.keys(this.known).length > 0 ? { ...this.known } : undefined,
-    );
+    return new HubCliError(code, message, exitCode, this.#details());
+  }
+
+  #details(): HubCliErrorDetails | undefined {
+    return Object.keys(this.known).length > 0 ? { ...this.known } : undefined;
   }
 
   async getApp(): Promise<AppInfo> {
@@ -254,24 +270,47 @@ export class HubClient {
       );
     const handle = await open(input.file, 'r');
     try {
+      // Consecutive failures, of a chunk or of the read that finds where to go on after one. Only a chunk that
+      // arrives resets it, so a chunk the Hub keeps refusing is not retried for as long as the reads succeed.
       let failures = 0;
+      // Whether the Hub's offset has to be read before the next chunk: after a failure that did not report it.
+      let stale = false;
       let reported = Math.floor((session.offset / input.size) * 10);
       while (session.offset < input.size) {
-        const length = Math.min(session.chunkSize, input.size - session.offset);
-        const chunk = Buffer.alloc(length);
-        const { bytesRead } = await handle.read(
-          chunk,
-          0,
-          length,
-          session.offset,
-        );
-        if (bytesRead !== length)
-          throw this.failure(
-            'INVALID_ARTIFACT',
-            'The archive changed while it was being uploaded.',
-            2,
-          );
         try {
+          if (stale) {
+            // The Hub keeps only whole chunks, so its offset says where to go on.
+            session = {
+              ...session,
+              offset: this.#session(
+                await this.#request(
+                  `releases/uploads/${session.uploadId}`,
+                  { method: 'GET' },
+                  false,
+                ),
+                session,
+              ).offset,
+            };
+            stale = false;
+            continue;
+          }
+          const length = Math.min(
+            session.chunkSize,
+            input.size - session.offset,
+          );
+          const chunk = Buffer.alloc(length);
+          const { bytesRead } = await handle.read(
+            chunk,
+            0,
+            length,
+            session.offset,
+          );
+          if (bytesRead !== length)
+            throw this.failure(
+              'INVALID_ARTIFACT',
+              'The archive changed while it was being uploaded.',
+              2,
+            );
           const next = await this.#request(
             `releases/uploads/${session.uploadId}`,
             {
@@ -291,23 +330,15 @@ export class HubClient {
           if (!(error instanceof HubCliError) || !RESUMABLE.has(error.code))
             throw error;
           failures += 1;
-          if (failures > MAX_CHUNK_FAILURES || this.signal.aborted) throw error;
-          if (error.code !== 'UPLOAD_OFFSET_MISMATCH')
-            await delay(1000 * failures, undefined, {
-              signal: this.signal,
-            }).catch(() => undefined);
-          // The Hub keeps only whole chunks, so its offset says where to go on.
-          session = {
-            ...session,
-            offset: this.#session(
-              await this.#request(
-                `releases/uploads/${session.uploadId}`,
-                { method: 'GET' },
-                false,
-              ),
-              session,
-            ).offset,
-          };
+          if (failures > MAX_CHUNK_FAILURES) throw error;
+          if (error instanceof HubRejection && error.offset !== undefined) {
+            // An offset mismatch says where the Hub is; go on from there without asking again.
+            session = { ...session, offset: error.offset };
+            stale = false;
+          } else {
+            await delay(1000 * failures);
+            stale = true;
+          }
         }
         const tenth = Math.floor((session.offset / input.size) * 10);
         if (tenth > reported && session.offset < input.size) {
@@ -318,7 +349,8 @@ export class HubClient {
     } finally {
       await handle.close();
     }
-    // A completion whose answer is lost is sent again: the Hub answers a completed session with its Release.
+    // A completion whose answer is lost, or that outlasts one request's deadline while the Hub verifies a large
+    // archive, is sent again: the Hub answers a completed session with its Release.
     for (let attempt = 1; ; attempt += 1) {
       try {
         return this.#uploaded(
@@ -334,9 +366,8 @@ export class HubClient {
       } catch (error) {
         if (
           !(error instanceof HubCliError) ||
-          error.code !== 'RESULT_UNKNOWN' ||
-          attempt >= 3 ||
-          this.signal.aborted
+          (error.code !== 'RESULT_UNKNOWN' && error.code !== 'TIMEOUT') ||
+          attempt >= 3
         )
           throw error;
       }
@@ -442,7 +473,7 @@ export class HubClient {
 
   /**
    * `changes` says whether the request changes something on the Hub. A connection failure on one that does leaves its
-   * outcome unknown; on a read it only means the Hub was not reached.
+   * outcome unknown; on a read it only means the Hub was not reached. Each request has its own deadline.
    */
   async #request(
     relative: string,
@@ -465,17 +496,24 @@ export class HubClient {
     changes: boolean,
   ): Promise<unknown> {
     let response: Response;
+    const signal = AbortSignal.timeout(this.#timeout * 1000);
     try {
       response = await fetch(
         relative ? `${this.#base}/${relative}` : this.#base,
         {
           ...init,
-          signal: this.signal,
+          signal,
           redirect: 'error',
           headers: { ...init.headers, authorization: `Bearer ${this.#apiKey}` },
         },
       );
     } catch {
+      if (signal.aborted)
+        throw this.failure(
+          'TIMEOUT',
+          `The Hub did not answer within ${String(this.#timeout)} seconds${changes ? '; the outcome is unknown. Check Hub before retrying with the same idempotency key, or raise --timeout' : '. Check the remote URL and the network, or raise --timeout'}.`,
+          3,
+        );
       throw changes
         ? this.failure(
             'RESULT_UNKNOWN',
@@ -507,11 +545,18 @@ export class HubClient {
         typeof error?.code === 'string' && /^[A-Z0-9_]+$/.test(error.code)
           ? error.code
           : 'HUB_REQUEST_FAILED';
+      const offset = error?.offset;
       // Do not echo raw response text: proxies and remote exceptions can contain credentials.
-      throw this.failure(
+      throw new HubRejection(
         code,
         `Hub rejected the request (${response.status}, ${code}).`,
         1,
+        this.#details(),
+        typeof offset === 'number' &&
+          Number.isSafeInteger(offset) &&
+          offset >= 0
+          ? offset
+          : undefined,
       );
     }
     if (!isRecord(payload) || payload.data === undefined)

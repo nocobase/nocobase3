@@ -205,6 +205,30 @@ describe('hub auth', () => {
       },
     });
 
+    // A Hub that cannot answer, or a proxy answering in its place, says nothing about the key.
+    fakeHub({
+      'GET ': () =>
+        new Response('<html>Bad gateway</html>', {
+          status: 502,
+          headers: { 'content-type': 'text/html' },
+        }),
+    });
+    const unchecked = await run(HubAuthStatus, 'hub:auth:status', []);
+    expect(unchecked.json()).toMatchObject({
+      ok: true,
+      result: {
+        credentials: [
+          {
+            remote: 'origin',
+            loggedIn: true,
+            valid: null,
+            error: 'INVALID_HUB_RESPONSE',
+          },
+          { remote: 'staging', loggedIn: false, valid: null },
+        ],
+      },
+    });
+
     fakeHub({ 'GET ': () => failure('INVALID_API_KEY', 401) });
     const rejected = await run(HubAuthStatus, 'hub:auth:status', []);
     expect(rejected.exitCode).toBe(1);

@@ -118,7 +118,7 @@ npx --registry=https://npm.nocobase.ai @nocobase/app-installer status --dir /srv
 pnpm nocobase hub remote add origin https://apps.example.com/hub/apps/crm
 ```
 
-远程保存在项目根目录的 `.nocobase/hub.json` 中。该文件只包含地址，应提交到代码仓库，使参与项目的每个人都部署到同一目标。第一个添加的远程为默认远程；部署到其他 Hub 或应用时再添加一个远程，例如 `staging`，并通过 `--remote <名称>` 选择。`hub remote list` 列出所有远程。
+远程保存在项目根目录的 `.nocobase/hub.json` 中。该文件只包含地址，应提交到代码仓库，使参与项目的每个人都部署到同一目标。早期版本的 `create-app` 生成的项目会在 `.gitignore` 中忽略 `.nocobase/`；`hub remote add` 会对此给出警告，需要删除该行，文件才能被提交。第一个添加的远程为默认远程；部署到其他 Hub 或应用时再添加一个远程，例如 `staging`，并通过 `--remote <名称>` 选择。`hub remote list` 列出所有远程。
 
 CLI 使用 Hub 的 API Key 认证。在 Hub 导航的「API Key」页面创建：选择目标应用，勾选「上传版本」和「部署版本」权限。密钥明文仅在创建时显示；绑定的应用和权限在创建后不可修改。在执行部署的机器上保存该密钥：
 
@@ -143,7 +143,7 @@ pnpm nocobase hub deploy --release-id <RELEASE_ID> --json
 
 `--no-build` 不构建，直接上传已有的 `storage/exports/dist.tar.gz`；`--file <路径>` 上传其他部署包。两种情况都会在上传前核对部署包与 Hub 平台是否一致，为其他平台构建的部署包以 `BUILD_TARGET_MISMATCH` 失败。
 
-`hub deploy` 默认等待最终结果，超时时间为 600 秒，不含构建时间。退出码 `0` 表示成功，`1` 表示被 Hub 拒绝、构建失败或部署失败，`2` 表示本地参数错误，`3` 表示网络错误或结果未确认。退出码 `3` 不代表部署失败，应先查看 Hub 的部署记录，再使用相同的 `--idempotency-key` 重试。
+`hub deploy` 默认等待最终结果，超时时间为 600 秒，约束的是对 Hub 的每个请求和等待部署的时间，不含构建和整个上传过程。退出码 `0` 表示成功，`1` 表示被 Hub 拒绝、构建失败或部署失败，`2` 表示本地参数错误，`3` 表示网络错误或结果未确认。退出码 `3` 不代表部署失败，应先查看 Hub 的部署记录，再使用相同的 `--idempotency-key` 重试。
 
 ### 3. 通过 CI 部署
 

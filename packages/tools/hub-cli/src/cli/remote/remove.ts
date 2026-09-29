@@ -33,7 +33,9 @@ export default class HubRemoteRemove extends HubCommand {
     const { args } = await this.parse(HubRemoteRemove);
     return await this.report(async () => {
       const file = await readRemotes(this.rootDir);
-      const url = file.remotes[args.name];
+      const url = Object.hasOwn(file.remotes, args.name)
+        ? file.remotes[args.name]
+        : undefined;
       if (url === undefined)
         throw new HubCliError(
           'NO_REMOTE',

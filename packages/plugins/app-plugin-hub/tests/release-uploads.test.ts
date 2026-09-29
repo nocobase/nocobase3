@@ -30,7 +30,7 @@ import {
 import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { c as createTar } from 'tar';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   hubApiKeyAuthentication,
@@ -49,6 +49,7 @@ import {
 import {
   MAX_RESUMABLE_ARTIFACT_SIZE,
   RELEASE_UPLOAD_CHUNK_SIZE,
+  RELEASE_UPLOAD_SWEEP_INTERVAL_MS,
   RELEASE_UPLOAD_TTL_MS,
 } from '../server/services/release-uploads.js';
 import { hubServiceToken } from '../server/tokens.js';
@@ -178,12 +179,16 @@ async function errorOf(response: Response) {
   return ((await response.json()) as { error: Record<string, unknown> }).error;
 }
 
-async function sessionDirs(): Promise<readonly string[]> {
+async function sessionDirs(app = 'crm'): Promise<readonly string[]> {
   try {
-    return await readdir(uploadsDir);
+    return await readdir(path.join(uploadsDir, app));
   } catch {
     return [];
   }
+}
+
+function sessionDir(uploadId: string, app = 'crm'): string {
+  return path.join(uploadsDir, app, uploadId);
 }
 
 beforeEach(async () => {
@@ -353,9 +358,7 @@ describe('resumable Release uploads', () => {
     const releaseId = (release as { releaseId: string }).releaseId;
     expect(await hub.listReleases('crm')).toHaveLength(1);
     // The staged bytes are gone; only the tombstone record remains.
-    expect(await readdir(path.join(uploadsDir, upload.uploadId))).toEqual([
-      'meta.json',
-    ]);
+    expect(await readdir(sessionDir(upload.uploadId))).toEqual(['meta.json']);
 
     // A retried completion answers with the same Release.
     const retried = await complete(upload.uploadId);
@@ -469,7 +472,7 @@ describe('resumable Release uploads', () => {
       data: { offset: 10 },
     });
     expect(
-      (await readFile(path.join(uploadsDir, upload.uploadId, 'data'))).length,
+      (await readFile(path.join(sessionDir(upload.uploadId), 'data'))).length,
     ).toBe(10);
     await put(upload.uploadId, 10, archive.subarray(10));
     expect((await complete(upload.uploadId)).status).toBe(200);
@@ -513,7 +516,7 @@ describe('resumable Release uploads', () => {
     const expired = await startUpload();
     const other = await startUpload(archive.subarray(0, 50));
     for (const uploadId of [expired.uploadId, other.uploadId]) {
-      const file = path.join(uploadsDir, uploadId, 'meta.json');
+      const file = path.join(sessionDir(uploadId), 'meta.json');
       const meta = JSON.parse(await readFile(file, 'utf8')) as object;
       await writeFile(
         file,
@@ -540,6 +543,41 @@ describe('resumable Release uploads', () => {
     const fresh = await startUpload();
     expect(fresh.uploadId).not.toBe(expired.uploadId);
     expect(await sessionDirs()).toEqual([fresh.uploadId]);
+  });
+
+  it('sweeps the expired sessions of other Apps once per interval', async () => {
+    const before = Date.now();
+    const other = await start(
+      { size: archive.byteLength, sha256: checksum },
+      { app: 'erp' },
+    );
+    expect(other.status).toBe(201);
+    const { uploadId } = (
+      (await other.json()) as { data: { upload: UploadBody } }
+    ).data.upload;
+    const file = path.join(sessionDir(uploadId, 'erp'), 'meta.json');
+    const meta = JSON.parse(await readFile(file, 'utf8')) as object;
+    await writeFile(
+      file,
+      JSON.stringify({
+        ...meta,
+        updatedAt: new Date(
+          before - RELEASE_UPLOAD_TTL_MS - 1000,
+        ).toISOString(),
+      }),
+    );
+    // Starting an upload for another App leaves it alone until the sweep interval has passed.
+    await startUpload();
+    expect(await sessionDirs('erp')).toEqual([uploadId]);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(before + RELEASE_UPLOAD_SWEEP_INTERVAL_MS + 1000);
+      await startUpload(archive.subarray(0, 50));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await sessionDirs('erp')).toEqual([]);
+    expect(await sessionDirs()).toHaveLength(2);
   });
 
   it('keeps each session to its own App', async () => {

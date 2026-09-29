@@ -35,9 +35,15 @@ export function data(value: object, status = 200): Response {
   });
 }
 
-export function failure(code: string, status: number): Response {
+export function failure(
+  code: string,
+  status: number,
+  details: Record<string, unknown> = {},
+): Response {
   return new Response(
-    JSON.stringify({ error: { code, message: 'secret-bearing text' } }),
+    JSON.stringify({
+      error: { ...details, code, message: 'secret-bearing text' },
+    }),
     { status, headers: { 'content-type': 'application/json' } },
   );
 }
@@ -69,8 +75,11 @@ export function defaultRoutes(state: UploadState): Record<string, Handler> {
       return data({ upload: session() }, 201);
     },
     'PUT releases/uploads/u1': (request) => {
+      // Like the Hub, the mismatch reports the offset to go on from.
       if (Number(request.headers['upload-offset']) !== state.received.length)
-        return failure('UPLOAD_OFFSET_MISMATCH', 409);
+        return failure('UPLOAD_OFFSET_MISMATCH', 409, {
+          offset: state.received.length,
+        });
       state.received = Buffer.concat([state.received, request.bytes]);
       return data(session());
     },

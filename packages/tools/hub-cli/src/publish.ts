@@ -46,7 +46,10 @@ export interface PublishOptions {
   /** Wait for the deployment to finish. Defaults to true. */
   readonly wait?: boolean;
   readonly idempotencyKey?: string;
-  /** Deadline for the whole run after the build, in seconds. Defaults to 600. */
+  /**
+   * Deadline for each request to the Hub and for the wait for a deployment, in seconds. Defaults to 600. The build
+   * is not counted, nor is the archive transfer as a whole: each chunk is one request.
+   */
   readonly timeout?: number;
   /** Called with one line at each step worth telling a person or an agent about. */
   readonly onProgress?: (message: string) => void;
@@ -130,7 +133,7 @@ export async function publish(
     });
   }
 
-  // The build runs before the deadline starts: it can take minutes, and the deadline is for the Hub.
+  // The build is not under the deadline: it can take minutes, and the deadline is for each request to the Hub.
   let builtFor: BuildTarget | undefined;
   if (options.build !== undefined) {
     const hubTarget = await new HubClient({
@@ -256,6 +259,8 @@ async function deployRelease(
       options.onProgress?.(
         `Waiting for deployment ${started.operationId} (up to ${String(input.timeout)}s)…`,
       );
+    // The wait as a whole has the deadline; each status request has its own.
+    const deadline = AbortSignal.timeout(input.timeout * 1000);
     let reported: DeploymentStatus | undefined;
     for (;;) {
       const status: DeploymentStatus = await client.deploymentStatus(
@@ -276,7 +281,7 @@ async function deployRelease(
         );
       if (!wait) break;
       try {
-        await delay(1000, undefined, { signal: client.signal });
+        await delay(1000, undefined, { signal: deadline });
       } catch {
         throw client.failure(
           'WAIT_TIMEOUT',

@@ -7,8 +7,8 @@ export interface HubPluginConfig {
   readonly publicHostUrl?: string;
   readonly desiredConfigsDir?: string;
   /**
-   * Where resumable Release uploads are staged, one directory per session. Defaults to `uploads` next to
-   * `host.configPath`.
+   * Where resumable Release uploads are staged, one directory per App holding one per session. Defaults to `uploads`
+   * next to `host.configPath`.
    */
   readonly uploadsDir?: string;
   readonly logging?: {

@@ -11,7 +11,10 @@ export interface AuthStatusEntry {
   remote: string;
   url: string;
   loggedIn: boolean;
-  /** Whether the Hub accepted the key for the App; `null` when there is no key or the Hub could not be reached. */
+  /**
+   * Whether the Hub accepted the key for the App; `null` when there is no key, or when the check failed for another
+   * reason than the key, such as a Hub that could not be reached or answered something else.
+   */
   valid: boolean | null;
   /** Why the key was not accepted, or why it could not be checked. */
   error?: string;
@@ -20,6 +23,9 @@ export interface AuthStatusEntry {
 export interface AuthStatusResult {
   credentials: AuthStatusEntry[];
 }
+
+/** The codes with which the Hub rejects the key itself. */
+const REJECTED_KEY = new Set(['INVALID_API_KEY', 'API_KEY_FORBIDDEN']);
 
 export default class HubAuthStatus extends HubCommand {
   static override summary = 'Check the API keys saved for the remotes.';
@@ -73,10 +79,12 @@ export default class HubAuthStatus extends HubCommand {
             return { ...entry, loggedIn: true, valid: true };
           } catch (error) {
             if (!(error instanceof HubCliError)) throw error;
+            // Only the Hub's own verdict on the key counts as a rejection; a wrong URL, a proxy's page or a Hub
+            // failure says nothing about the key, and logging in again would not help.
             return {
               ...entry,
               loggedIn: true,
-              valid: error.code === 'HUB_UNREACHABLE' ? null : false,
+              valid: REJECTED_KEY.has(error.code) ? false : null,
               error: error.code,
             };
           }

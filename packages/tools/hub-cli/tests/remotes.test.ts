@@ -8,6 +8,7 @@ import {
   parseRemoteUrl,
   readRemotes,
   REMOTES_FILE,
+  remotesIgnoredByGit,
   resolveRemote,
   writeRemotes,
 } from '../src/remotes.ts';
@@ -106,6 +107,10 @@ describe('the remotes file', () => {
     await expect(resolveRemote(root, 'eu')).rejects.toMatchObject({
       code: 'NO_REMOTE',
     });
+    // A name that is a property of every object is still not a remote.
+    await expect(resolveRemote(root, 'constructor')).rejects.toMatchObject({
+      code: 'NO_REMOTE',
+    });
     expect(await resolveRemote(root, 'us')).toEqual({
       name: 'us',
       url: 'https://hub-us.example/apps/xyz',
@@ -117,5 +122,18 @@ describe('the remotes file', () => {
       remotes: { origin: 'https://hub.example/apps/crm' },
     });
     expect((await resolveRemote(root, undefined)).name).toBe('origin');
+  });
+
+  it('tells when .gitignore keeps the remotes file out of version control', async () => {
+    expect(await remotesIgnoredByGit(root)).toBe(false);
+    await writeFile(path.join(root, '.gitignore'), 'node_modules/\n/.env\n');
+    expect(await remotesIgnoredByGit(root)).toBe(false);
+    for (const line of ['/.nocobase/', '.nocobase', '/.nocobase/hub.json']) {
+      await writeFile(
+        path.join(root, '.gitignore'),
+        `node_modules/\n${line}\n`,
+      );
+      expect(await remotesIgnoredByGit(root)).toBe(true);
+    }
   });
 });

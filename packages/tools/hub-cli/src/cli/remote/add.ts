@@ -6,6 +6,7 @@ import {
   parseRemoteUrl,
   readRemotes,
   REMOTES_FILE,
+  remotesIgnoredByGit,
   writeRemotes,
 } from '../../remotes.ts';
 import { HubCommand } from '../hub-command.ts';
@@ -50,7 +51,7 @@ export default class HubRemoteAdd extends HubCommand {
       assertRemoteName(args.name);
       const target = parseRemoteUrl(args.url);
       const file = await readRemotes(this.rootDir);
-      if (file.remotes[args.name] !== undefined)
+      if (Object.hasOwn(file.remotes, args.name))
         throw new HubCliError(
           'REMOTE_EXISTS',
           `Remote "${args.name}" already exists. Remove it with hub remote remove ${args.name} first.`,
@@ -63,6 +64,10 @@ export default class HubRemoteAdd extends HubCommand {
       this.log(
         `Remote ${args.name} added: App ${target.appId} on ${target.hub}${isDefault ? ' (default)' : ''}.`,
       );
+      if (await remotesIgnoredByGit(this.rootDir))
+        this.warn(
+          `.gitignore keeps ${REMOTES_FILE} out of version control, so the remote stays on this machine. Remove the .nocobase/ line from .gitignore and commit the file.`,
+        );
       return { name: args.name, ...target, default: isDefault };
     });
   }

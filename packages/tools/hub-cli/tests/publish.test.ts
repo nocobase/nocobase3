@@ -332,6 +332,95 @@ describe('hub upload', () => {
     ).toContain('GET -1');
   });
 
+  it('goes on from the offset a mismatch reports, without asking for it', async () => {
+    const hub = fakeHub();
+    // The Hub is already past the first chunk, as after a run whose answer to it was lost.
+    hub.state.received = Buffer.from('abcd');
+    const routes = hub.fetch.getMockImplementation();
+    hub.fetch.mockImplementation(
+      async (input: URL | string, init?: RequestInit) => {
+        const response = await routes?.(input, init);
+        // The session is reported at offset 0, so the first chunk is sent again and mismatches.
+        return init?.method === 'POST' &&
+          String(input).endsWith('/releases/uploads')
+          ? data(
+              {
+                upload: {
+                  uploadId: 'u1',
+                  offset: 0,
+                  size: 10,
+                  chunkSize: 4,
+                  expiresAt: '2026-09-30T00:00:00.000Z',
+                },
+              },
+              201,
+            )
+          : response;
+      },
+    );
+    await writeFile(path.join(root, 'other.tar.gz'), 'abcdefghij');
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      cwd: root,
+      file: 'other.tar.gz',
+      deploy: false,
+    });
+    expect(result.releaseId).toBe('r1');
+    expect(hub.uploaded()).toBe('abcdefghij');
+    expect(
+      hub.requests.map((request) => `${request.method} ${request.route}`),
+    ).toEqual([
+      'GET ',
+      'POST releases/uploads',
+      'PUT releases/uploads/u1',
+      'PUT releases/uploads/u1',
+      'PUT releases/uploads/u1',
+      'POST releases/uploads/u1/complete',
+    ]);
+  });
+
+  it('keeps retrying when the read that finds the offset fails too', async () => {
+    const hub = fakeHub();
+    const routes = hub.fetch.getMockImplementation();
+    let lostChunk = false;
+    let lostRead = false;
+    hub.fetch.mockImplementation(
+      async (input: URL | string, init?: RequestInit) => {
+        const headers = (init?.headers ?? {}) as Record<string, string>;
+        // The second chunk reaches the Hub, but its answer is lost, and so is the read that follows.
+        if (!lostChunk && headers['upload-offset'] === '4') {
+          lostChunk = true;
+          await routes?.(input, init);
+          throw new TypeError('socket hang up');
+        }
+        if (
+          lostChunk &&
+          !lostRead &&
+          init?.method === 'GET' &&
+          String(input).endsWith('/releases/uploads/u1')
+        ) {
+          lostRead = true;
+          throw new TypeError('connect ECONNREFUSED');
+        }
+        return routes?.(input, init);
+      },
+    );
+    await writeFile(path.join(root, 'other.tar.gz'), 'abcdefghij');
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      cwd: root,
+      file: 'other.tar.gz',
+      deploy: false,
+    });
+    expect(result.releaseId).toBe('r1');
+    expect(hub.uploaded()).toBe('abcdefghij');
+    expect(lostRead).toBe(true);
+  }, 15_000);
+
   it('resumes a session an earlier run left unfinished', async () => {
     const hub = fakeHub();
     hub.state.received = Buffer.from('abcd');
@@ -422,6 +511,36 @@ describe('failures', () => {
     ).rejects.toMatchObject({ code: 'HUB_UNREACHABLE', exitCode: 1 });
   });
 
+  it('reports a request that outlasts the deadline as a timeout', async () => {
+    const hub = fakeHub();
+    const routes = hub.fetch.getMockImplementation();
+    hub.fetch.mockImplementation((input: URL | string, init?: RequestInit) =>
+      // The deployment request never answers until the client gives up on it.
+      init?.method === 'POST' && String(input).endsWith('/deploy')
+        ? new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => {
+              reject(init.signal?.reason as Error);
+            });
+          })
+        : (routes?.(input, init) as Promise<Response>),
+    );
+    await expect(
+      publish({
+        target,
+        apiKey,
+        root,
+        deploy: true,
+        releaseId: 'r1',
+        timeout: 1,
+      }),
+    ).rejects.toMatchObject({
+      code: 'TIMEOUT',
+      exitCode: 3,
+      message: expect.stringContaining('within 1 seconds'),
+      details: { releaseId: 'r1' },
+    });
+  });
+
   it('never reports an unknown status as success', async () => {
     fakeHub({
       'GET deployments/op-1/status': () => data({ status: 'weird' }),
@@ -445,7 +564,7 @@ describe('failures', () => {
         timeout: 1,
       }),
     ).rejects.toMatchObject({
-      code: expect.stringMatching(/^(WAIT_TIMEOUT|RESULT_UNKNOWN)$/u),
+      code: expect.stringMatching(/^(WAIT_TIMEOUT|TIMEOUT|RESULT_UNKNOWN)$/u),
       exitCode: 3,
       details: { operationId: 'op-1' },
     });

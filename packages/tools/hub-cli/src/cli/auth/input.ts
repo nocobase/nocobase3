@@ -10,19 +10,32 @@ export async function readStdin(): Promise<string> {
 
 /**
  * Asks on stderr and reads one line from the terminal with echo off. Stderr, so a `--json` document on stdout stays
- * the only thing there.
+ * the only thing there. Input that ends without a line break, such as a terminal that hangs up, answers with what
+ * was typed so far, which the caller rejects when it is empty.
  */
 export function promptHidden(question: string): Promise<string> {
   const stdin = process.stdin;
   return new Promise((resolve, reject) => {
     let value = '';
+    let settled = false;
     const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
       stdin.off('data', onData);
-      stdin.setRawMode(false);
+      stdin.off('end', onEnd);
+      stdin.off('close', onEnd);
+      stdin.off('error', onError);
+      if (stdin.isTTY) stdin.setRawMode(false);
       stdin.pause();
       process.stderr.write('\n');
       if (error) reject(error);
       else resolve(value);
+    };
+    const onEnd = (): void => {
+      finish();
+    };
+    const onError = (error: Error): void => {
+      finish(error);
     };
     const onData = (chunk: Buffer): void => {
       for (const character of chunk.toString('utf8')) {
@@ -47,5 +60,8 @@ export function promptHidden(question: string): Promise<string> {
     stdin.setRawMode(true);
     stdin.resume();
     stdin.on('data', onData);
+    stdin.once('end', onEnd);
+    stdin.once('close', onEnd);
+    stdin.once('error', onError);
   });
 }

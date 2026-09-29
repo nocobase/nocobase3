@@ -5,6 +5,7 @@ import { receiveArtifact, validateIdempotencyKey } from './artifact-upload.js';
 import {
   isReleaseUploadExpired,
   RELEASE_UPLOAD_CHUNK_SIZE,
+  RELEASE_UPLOAD_SWEEP_INTERVAL_MS,
   releaseUploadExpiresAt,
   ReleaseUploadStore,
   validateReleaseUploadInput,
@@ -166,6 +167,7 @@ export class DefaultHubService implements HubService {
   private readonly disk: NocoBaseDriveDisk;
   private readonly hostController: HubHostController;
   private uploadStore: ReleaseUploadStore | undefined;
+  private lastUploadSweep = 0;
   private readonly locks = new Map<string, Promise<unknown>>();
   private revision = 0;
   private currentHostUrl: string | null = null;
@@ -643,23 +645,24 @@ export class DefaultHubService implements HubService {
     releaseId: string,
   ): Promise<HubReleaseSummary> {
     const app = await this.requireApp(appId);
-    const [summary] = await this.summarizeReleases(app, [
-      await this.getRelease(appId, releaseId),
-    ]);
-    if (!summary)
-      throw new HubError('Release not found.', 'RELEASE_NOT_FOUND', 404);
-    return summary;
+    const release = await this.getRelease(appId, releaseId);
+    return summarizeRelease(release, await this.deploymentHistory(app));
   }
 
-  /**
-   * Adds each Release's build target and deployment history with two queries for the whole set: the current
-   * deployment's Release, and the App's Releases that have ever deployed successfully.
-   */
+  /** Adds each Release's build target and deployment history, with two queries for the whole set. */
   private async summarizeReleases(
     app: HubAppRecord,
     releases: readonly HubReleaseRecord[],
   ): Promise<HubReleaseSummary[]> {
     if (releases.length === 0) return [];
+    const history = await this.deploymentHistory(app);
+    return releases.map((release) => summarizeRelease(release, history));
+  }
+
+  /** The Release the App's current deployment runs, and the Releases a deployment of which ever succeeded. */
+  private async deploymentHistory(
+    app: HubAppRecord,
+  ): Promise<ReleaseDeploymentHistory> {
     const [current, succeeded] = await Promise.all([
       app.currentDeploymentId
         ? this.query()
@@ -677,19 +680,15 @@ export class DefaultHubService implements HubService {
         .where('status', '=', 'succeeded')
         .execute<Row>(),
     ]);
-    const runningId =
-      typeof current?.releaseId === 'string' ? current.releaseId : null;
-    const deployed = new Set(
-      succeeded.flatMap((row) =>
-        typeof row.releaseId === 'string' ? [row.releaseId] : [],
+    return {
+      runningId:
+        typeof current?.releaseId === 'string' ? current.releaseId : null,
+      deployed: new Set(
+        succeeded.flatMap((row) =>
+          typeof row.releaseId === 'string' ? [row.releaseId] : [],
+        ),
       ),
-    );
-    return releases.map((release) => ({
-      ...release,
-      buildTarget: readBuildTarget(release.manifest),
-      running: release.id === runningId,
-      everDeployed: deployed.has(release.id),
-    }));
+    };
   }
 
   public async getRelease(
@@ -825,30 +824,19 @@ export class DefaultHubService implements HubService {
     await this.requireApp(appId);
     const existing = await this.existingRelease(appId, sha256);
     if (existing) return { kind: 'release', release: existing };
-    // One lock for every creation: the sweep removes directories without a readable record, which is also what a
-    // session looks like while it is being created.
-    return await this.withLock('uploads', async () => {
+    await this.sweepReleaseUploads();
+    // One lock per App for every creation: the sweep removes directories without a readable record, which is also
+    // what a session looks like while it is being created.
+    return await this.withLock(`uploads:${appId}`, async () => {
       const now = Date.now();
       let resumable: ReleaseUploadSession | null = null;
-      for (const uploadId of await this.uploads.ids()) {
-        let session = await this.uploads.read(uploadId);
-        // A session another request is working on is in use, so it is never swept from under that request.
-        if (
-          (!session || isReleaseUploadExpired(session, now)) &&
-          !this.locks.has(`upload:${uploadId}`)
-        )
-          session = await this.withLock(`upload:${uploadId}`, async () => {
-            const current = await this.uploads.read(uploadId);
-            if (current && !isReleaseUploadExpired(current, now))
-              return current;
-            await this.uploads.remove(uploadId);
-            return null;
-          });
+      for (const uploadId of await this.uploads.ids(appId)) {
+        let session = await this.uploads.read(appId, uploadId);
+        if (!session || isReleaseUploadExpired(session, now))
+          session = await this.forgetReleaseUpload(appId, uploadId, now);
         if (
           session &&
-          !isReleaseUploadExpired(session, now) &&
           !resumable &&
-          session.appId === appId &&
           session.sha256 === sha256 &&
           session.size === size &&
           session.releaseId === undefined
@@ -861,12 +849,49 @@ export class DefaultHubService implements HubService {
     });
   }
 
+  /**
+   * Removes the expired sessions of every App, at most once per sweep interval. An App's own sessions are checked
+   * whenever one of its uploads starts, so this only bounds what an App that stopped uploading leaves behind.
+   */
+  private async sweepReleaseUploads(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastUploadSweep < RELEASE_UPLOAD_SWEEP_INTERVAL_MS) return;
+    this.lastUploadSweep = now;
+    for (const appId of await this.uploads.apps())
+      await this.withLock(`uploads:${appId}`, async () => {
+        for (const uploadId of await this.uploads.ids(appId))
+          await this.forgetReleaseUpload(appId, uploadId, now);
+      });
+  }
+
+  /**
+   * Removes the session unless it is still live, and answers what is left: the live session, or `null`. A session
+   * another request is working on is in use, so it is never removed from under that request. Call it under the
+   * App's creation lock.
+   */
+  private async forgetReleaseUpload(
+    appId: string,
+    uploadId: string,
+    now: number,
+  ): Promise<ReleaseUploadSession | null> {
+    if (this.locks.has(`upload:${uploadId}`)) {
+      const session = await this.uploads.read(appId, uploadId);
+      return session && !isReleaseUploadExpired(session, now) ? session : null;
+    }
+    return await this.withLock(`upload:${uploadId}`, async () => {
+      const current = await this.uploads.read(appId, uploadId);
+      if (current && !isReleaseUploadExpired(current, now)) return current;
+      await this.uploads.remove(appId, uploadId);
+      return null;
+    });
+  }
+
   public async getReleaseUpload(
     appId: string,
     uploadId: string,
   ): Promise<HubReleaseUploadState> {
     // `meta.json` is replaced by rename, so a read needs no lock and never waits behind a chunk still arriving.
-    const session = await this.uploads.read(uploadId);
+    const session = await this.uploads.read(appId, uploadId);
     if (session && isReleaseUploadExpired(session))
       return uploadState(
         await this.withLock(`upload:${uploadId}`, () =>
@@ -904,6 +929,7 @@ export class DefaultHubService implements HubService {
           400,
         );
       await this.uploads.append(
+        appId,
         uploadId,
         session.offset,
         input.length,
@@ -940,9 +966,9 @@ export class DefaultHubService implements HubService {
           { offset: session.offset },
         );
       await this.requireApp(appId);
-      const checksum = await this.uploads.digest(uploadId);
+      const checksum = await this.uploads.digest(appId, uploadId);
       if (checksum !== session.sha256) {
-        await this.uploads.remove(uploadId);
+        await this.uploads.remove(appId, uploadId);
         throw new HubError(
           'Artifact checksum does not match.',
           'CHECKSUM_MISMATCH',
@@ -954,7 +980,7 @@ export class DefaultHubService implements HubService {
         release = await this.publishStagedArtifact(
           appId,
           {
-            path: this.uploads.dataPath(uploadId),
+            path: this.uploads.dataPath(appId, uploadId),
             size: session.size,
             checksum,
           },
@@ -964,7 +990,7 @@ export class DefaultHubService implements HubService {
         // An archive the Hub refuses stays refused; anything else, such as a storage failure or an idempotency
         // conflict, keeps the staged bytes so the client can complete again.
         if (error instanceof HubError && error.status === 422)
-          await this.uploads.remove(uploadId);
+          await this.uploads.remove(appId, uploadId);
         throw error;
       }
       await this.uploads.write({
@@ -973,7 +999,7 @@ export class DefaultHubService implements HubService {
         reused: release.reused ?? false,
         updatedAt: new Date().toISOString(),
       });
-      await this.uploads.removeData(uploadId);
+      await this.uploads.removeData(appId, uploadId);
       return release;
     });
   }
@@ -983,20 +1009,22 @@ export class DefaultHubService implements HubService {
     appId: string,
     uploadId: string,
   ): Promise<ReleaseUploadSession> {
-    const session = await this.uploads.read(uploadId);
+    const session = await this.uploads.read(appId, uploadId);
     if (session && isReleaseUploadExpired(session)) {
-      await this.uploads.remove(uploadId);
+      await this.uploads.remove(appId, uploadId);
       return requireUploadSession(null, appId);
     }
     return requireUploadSession(session, appId);
   }
 
   private async removeAppUploads(appId: string): Promise<void> {
-    for (const uploadId of await this.uploads.ids())
-      await this.withLock(`upload:${uploadId}`, async () => {
-        const session = await this.uploads.read(uploadId);
-        if (session?.appId === appId) await this.uploads.remove(uploadId);
-      });
+    await this.withLock(`uploads:${appId}`, async () => {
+      for (const uploadId of await this.uploads.ids(appId))
+        await this.withLock(`upload:${uploadId}`, () =>
+          this.uploads.remove(appId, uploadId),
+        );
+      await this.uploads.removeApp(appId);
+    });
   }
 
   private async existingRelease(
@@ -2156,6 +2184,23 @@ export class DefaultHubService implements HubService {
       if (this.locks.get(appId) === current) this.locks.delete(appId);
     }
   }
+}
+
+interface ReleaseDeploymentHistory {
+  readonly runningId: string | null;
+  readonly deployed: ReadonlySet<string>;
+}
+
+function summarizeRelease(
+  release: HubReleaseRecord,
+  history: ReleaseDeploymentHistory,
+): HubReleaseSummary {
+  return {
+    ...release,
+    buildTarget: readBuildTarget(release.manifest),
+    running: release.id === history.runningId,
+    everDeployed: history.deployed.has(release.id),
+  };
 }
 
 function uploadState(session: ReleaseUploadSession): HubReleaseUploadState {

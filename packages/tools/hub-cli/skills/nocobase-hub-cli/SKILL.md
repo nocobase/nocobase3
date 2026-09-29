@@ -9,7 +9,7 @@ description: Publish a NocoBase application to a NocoBase Hub with pnpm nocobase
 
 ## Before the first deployment
 
-1. The target App exists on the Hub. Its URL, `<Hub URL>/apps/<App ID>`, is the remote: `pnpm nocobase hub remote add origin <url>`. It is saved in `.nocobase/hub.json`, which is committed; the first remote is the default. Check with `hub remote list`.
+1. The target App exists on the Hub. Its URL, `<Hub URL>/apps/<App ID>`, is the remote: `pnpm nocobase hub remote add origin <url>`. It is saved in `.nocobase/hub.json`, which is committed; the first remote is the default. If `hub remote add` warns that `.gitignore` ignores `.nocobase/`, remove that line, or the remote never reaches another checkout. Check with `hub remote list`.
 2. The user creates an API key on the Hub's **API Keys** page, bound to the App and granted **Upload release** and **Deploy release** (`hub upload` alone needs only Upload release). A key's Apps and permissions cannot be edited after creation, so a key with the wrong scope is deleted and recreated.
 3. The key is saved with `pnpm nocobase hub auth login`, which asks for it without echoing it. Ask the user to run it themselves rather than handling the key; never print it or put it in a file in the project. In CI, pipe the secret in: `echo "$HUB_KEY" | pnpm nocobase hub auth login --remote <name> --with-token`.
 
@@ -25,7 +25,7 @@ description: Publish a NocoBase application to a NocoBase Hub with pnpm nocobase
 
 ## Read the result and retry
 
-`hub deploy` waits for the final result by default; `--no-wait` returns after acceptance, which does not mean the deployment succeeded. `--timeout` (600 seconds by default, not counting the build) bounds the Hub requests, and a timeout leaves the deployment unconfirmed rather than cancelled.
+`hub deploy` waits for the final result by default; `--no-wait` returns after acceptance, which does not mean the deployment succeeded. `--timeout` (600 seconds by default) bounds each request to the Hub and the wait, not the build or the archive transfer as a whole, and a timeout (`TIMEOUT`, exit `3`) leaves the deployment unconfirmed rather than cancelled.
 
 With `--json` every run prints one JSON document on stdout, success or failure; build output and progress go to stderr. A failure's `error.code` says what to do, and `error.suggestions` carries the command to run: `NO_REMOTE` → `hub remote add`; `NOT_LOGGED_IN`, `INVALID_API_KEY` or `API_KEY_FORBIDDEN` → a key bound to this App with the right permission, saved with `hub auth login`; `BUILD_FAILED` → the build output above it. `error.details` carries the idempotency key and any Release or deployment ID already known. Exit codes are `0` on success, `1` for a Hub rejection, failed build or failed deployment, `2` for invalid arguments or local input, and `3` when the outcome could not be confirmed.
 
