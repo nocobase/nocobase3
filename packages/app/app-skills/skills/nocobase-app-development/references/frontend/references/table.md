@@ -116,7 +116,37 @@ Check them in the order "failed → first load → empty → data or no results"
 - **Show an empty value as "—"**, with `text-muted-foreground`.
 - **Format times in the current language** (guideline T1.6): get `locale` from `useLocale()` and create the `Intl.DateTimeFormat` with `useMemo`, so it updates when the language switches.
 - **Right-align numbers** (guideline T1.6): `DataTable` has no per-column alignment option, so align inside the header and the cell: `header: () => <div className='text-right'>{t('projects.fields.budget')}</div>` and `cell: ({ row }) => <div className='text-right tabular-nums'>{amountFormat.format(row.original.budget)}</div>`, with `amountFormat` an `Intl.NumberFormat` created in `useMemo` from `locale`. For a sortable number column, pass the alignment to the header itself, with no wrapper: `<DataTableColumnHeader column={column} title={…} className='justify-end text-right' />` (its root is a flex row when the column sorts and a plain `div` when it does not, so both classes are needed). The sort button keeps its padding, so the title sits slightly left of the numbers.
-- **Show a cut-off cell's full content on hover** (guideline T1.11): a cell does not wrap and the table widens to fit it, so content is cut off only where a column limits its width. Such a column wraps its content in a `Popover` that opens on hover and shows the full value: `<Popover><PopoverTrigger openOnHover delay={0} nativeButton={false} render={<span className='block max-w-60 truncate' />}>{value}</PopoverTrigger><PopoverContent>{value}</PopoverContent></Popover>`. Use `Popover`, not `Tooltip`.
+- **Show a cut-off cell's full content on hover** (guideline T1.11): a cell does not wrap and the table widens to fit it, so content is cut off only where a column limits its width. There it ends in an ellipsis, and hovering shows the full value, but only when it is cut off:
+  - Text, or a link such as the name column, uses a `Tooltip` whose trigger is the truncated element; `TooltipTrigger` leaves a `Link` a link. `onOpenChange` cancels the tooltip when the value fits:
+
+    ```tsx
+    <Tooltip
+      onOpenChange={(open, details) => {
+        // A value that fits needs no tooltip.
+        const trigger = details.trigger;
+        if (open && trigger && trigger.scrollWidth <= trigger.clientWidth) {
+          details.cancel();
+        }
+      }}
+    >
+      <TooltipTrigger
+        render={
+          <Link
+            to={{ pathname: String(row.original.id), search: location.search }}
+            className='block max-w-60 truncate'
+          />
+        }
+      >
+        {value}
+      </TooltipTrigger>
+      <TooltipContent>{value}</TooltipContent>
+    </Tooltip>
+    ```
+
+    For plain text, render `<span className='block max-w-60 truncate' />` in place of the `Link`.
+
+  - A `Badge` or other styled content goes in a `Popover` that opens on hover (`openOnHover delay={0}` on the trigger) instead: the tooltip surface is inverted, so a badge on it is unreadable.
+  - `truncate` shows the ellipsis only on a block element. On a flex element such as `Badge` it clips without one, and the centered text loses both ends, so put the text in a `<span className='truncate'>` inside the badge and give the badge `min-w-0 shrink`. Do not use `line-clamp` in a cell: it needs text that wraps, which the cell prevents, so it only clips.
 - **Put row actions in a "More" menu** (guideline T1.5):
   - The trigger is a ghost button with `size='icon-sm'` whose `aria-label` names the record; a button that opens a menu needs no tooltip (guideline A1).
   - "Edit" is a child route, so the menu item renders as a link: pass ``<Link to={{ pathname: `edit/${id}`, search: location.search }} />`` to `render` on `DropdownMenuItem`. `edit/:projectId` is the list's own edit route, so the dialog opens alone over the list and closing returns to it; the drawer's "Edit" uses the route stacked on the drawer instead ([section 2.1 of `overlay.md`](overlay.md#21-declare-the-child-routes)).
