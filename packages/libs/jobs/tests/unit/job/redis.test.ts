@@ -1,7 +1,7 @@
 import { UnrecoverableError, WaitingError, type JobsOptions } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedRedisScheduleExecutorConfig } from '../../../src/config.js';
+import type { ResolvedRedisJobsConfig } from '../../../src/config.js';
 import type { JobRun } from '../../../src/job/backend.js';
 import {
   JobHandlerNotRegisteredError,
@@ -17,7 +17,7 @@ import {
   type RedisProcessingJob,
 } from '../../../src/job/redis/backend.js';
 
-const config: ResolvedRedisScheduleExecutorConfig = {
+const config: ResolvedRedisJobsConfig = {
   adapter: 'redis',
   key: 'primary',
   builtIn: false,
@@ -57,7 +57,7 @@ class FakeWorker implements RedisJobWorker {
   }
 }
 
-function harness(overrides: Partial<ResolvedRedisScheduleExecutorConfig> = {}) {
+function harness(overrides: Partial<ResolvedRedisJobsConfig> = {}) {
   const queue = new FakeQueue();
   const worker = new FakeWorker();
   const processors: JobProcessor[] = [];

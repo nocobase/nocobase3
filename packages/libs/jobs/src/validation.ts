@@ -17,7 +17,7 @@ export function assertValidScope(scope: string): void {
     )
   ) {
     throw new Error(
-      `Invalid schedule scope ${JSON.stringify(scope)}: use a package name without ":", whitespace or path separators other than the one in "@scope/name".`,
+      `Invalid jobs scope ${JSON.stringify(scope)}: use a package name without ":", whitespace or path separators other than the one in "@scope/name".`,
     );
   }
 }

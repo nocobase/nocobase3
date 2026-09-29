@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createJobExecutorService,
   type ManagedJobExecutorService,
-  type RedisScheduleAdapterConfig,
+  type RedisJobsAdapterConfig,
   type ScheduleEvent,
   type ScheduleExecutionContext,
   type ScheduleExecutor,
@@ -31,7 +31,7 @@ afterEach(async () => {
 /** One application instance: its own service, and so its own Queue and Worker connections. */
 function instance(
   namespace: string,
-  overrides: Partial<RedisScheduleAdapterConfig> = {},
+  overrides: Partial<RedisJobsAdapterConfig> = {},
 ): ScheduleExecutor {
   const service = createJobExecutorService(
     {

@@ -1,13 +1,13 @@
 import {
-  resolveScheduleExecutorConfig,
-  selectScheduleConfig,
-  type ResolvedMemoryScheduleExecutorConfig,
-  type ResolvedRedisScheduleExecutorConfig,
-  type ResolvedScheduleExecutorConfig,
-  type ScheduleConfig,
+  resolveJobsConfig,
+  selectJobsConfig,
+  type ResolvedMemoryJobsConfig,
+  type ResolvedRedisJobsConfig,
+  type ResolvedJobsConfig,
+  type JobsConfig,
 } from './config.js';
 import type { ScheduleExecutor } from './schedule/types.js';
-import type { JobExecutorService, ScheduleLogger } from './types.js';
+import type { JobExecutorService, JobsLogger } from './types.js';
 import { assertValidScope } from './validation.js';
 import type { JobExecutor } from './job/types.js';
 import { BackendJobExecutor } from './job/executor.js';
@@ -16,7 +16,7 @@ import { jobStateFilePath } from './job/memory/state-file.js';
 import { RedisJobBackend } from './job/redis/backend.js';
 
 /** Reports that an executor runs on the built-in memory configuration. */
-export interface ScheduleFallbackEvent {
+export interface JobsFallbackEvent {
   readonly scope: string;
   /** The configuration key the consumer asked for, when it named one. */
   readonly name?: string;
@@ -31,12 +31,12 @@ export interface JobExecutorServiceDependencies {
   readonly appName: string;
   /** Where memory configurations without `persistence.path` keep their state. */
   readonly storagePath: string;
-  readonly logger?: ScheduleLogger;
+  readonly logger?: JobsLogger;
   /**
    * Called once for each executor created on the built-in memory
    * configuration, which runs on one host only.
    */
-  readonly onFallback?: (event: ScheduleFallbackEvent) => void;
+  readonly onFallback?: (event: JobsFallbackEvent) => void;
 }
 
 /** The service as its owner holds it: consumers see `JobExecutorService`. */
@@ -46,25 +46,24 @@ export interface ManagedJobExecutorService extends JobExecutorService {
 }
 
 export type ScheduleExecutorFactory<
-  TConfig extends ResolvedScheduleExecutorConfig =
-    ResolvedScheduleExecutorConfig,
+  TConfig extends ResolvedJobsConfig = ResolvedJobsConfig,
 > = (
   config: TConfig,
   dependencies: JobExecutorServiceDependencies,
 ) => ScheduleExecutor;
 
 export interface ScheduleExecutorFactories {
-  readonly memory: ScheduleExecutorFactory<ResolvedMemoryScheduleExecutorConfig>;
-  readonly redis: ScheduleExecutorFactory<ResolvedRedisScheduleExecutorConfig>;
+  readonly memory: ScheduleExecutorFactory<ResolvedMemoryJobsConfig>;
+  readonly redis: ScheduleExecutorFactory<ResolvedRedisJobsConfig>;
 }
 
 export interface JobExecutorFactories {
   readonly memory: (
-    config: ResolvedMemoryScheduleExecutorConfig,
+    config: ResolvedMemoryJobsConfig,
     dependencies: JobExecutorServiceDependencies,
   ) => JobExecutor;
   readonly redis: (
-    config: ResolvedRedisScheduleExecutorConfig,
+    config: ResolvedRedisJobsConfig,
     dependencies: JobExecutorServiceDependencies,
   ) => JobExecutor;
 }
@@ -77,7 +76,7 @@ const defaultJobFactories: JobExecutorFactories = {
 };
 
 export function createJobExecutorServiceWith(
-  config: ScheduleConfig | undefined,
+  config: JobsConfig | undefined,
   dependencies: JobExecutorServiceDependencies,
   factories: ScheduleExecutorFactories,
   jobFactories: JobExecutorFactories = defaultJobFactories,
@@ -86,27 +85,23 @@ export function createJobExecutorServiceWith(
   const jobs = new Map<string, JobExecutor>();
   const memoryJobs = new Map<
     string,
-    { config: ResolvedScheduleExecutorConfig; executor: JobExecutor }
+    { config: ResolvedJobsConfig; executor: JobExecutor }
   >();
   let shutdownPromise: Promise<void> | undefined;
 
   return {
     getScheduleExecutor(scope: string, name?: string): ScheduleExecutor {
       if (shutdownPromise) {
-        throw new Error('The schedule service has been shut down.');
+        throw new Error('The jobs service has been shut down.');
       }
       assertValidScope(scope);
-      const selection = selectScheduleConfig(config, name);
+      const selection = selectJobsConfig(config, name);
       // Cache identity includes the selected key. Existing Schedule queues do
       // not: equal connections, namespaces and scopes share physical firings.
       const identity = JSON.stringify([selection.key, scope]);
       const existing = executors.get(identity);
       if (existing) return existing;
-      const resolved = resolveScheduleExecutorConfig(
-        selection,
-        scope,
-        dependencies,
-      );
+      const resolved = resolveJobsConfig(selection, scope, dependencies);
       const executor =
         resolved.adapter === 'memory'
           ? factories.memory(resolved, dependencies)
@@ -125,15 +120,11 @@ export function createJobExecutorServiceWith(
       if (shutdownPromise)
         throw new Error('The jobs service has been shut down.');
       assertValidScope(scope);
-      const selection = selectScheduleConfig(config, name);
+      const selection = selectJobsConfig(config, name);
       const identity = JSON.stringify([selection.key, scope]);
       const existing = jobs.get(identity);
       if (existing) return existing;
-      const resolved = resolveScheduleExecutorConfig(
-        selection,
-        scope,
-        dependencies,
-      );
+      const resolved = resolveJobsConfig(selection, scope, dependencies);
       // Memory keys naming the same file share one executor: two in-process
       // writers would overwrite each other's pending snapshot at shutdown.
       const file =
@@ -178,7 +169,7 @@ export function createJobExecutorServiceWith(
         if (failures.length > 0) {
           throw new AggregateError(
             failures,
-            'Some schedule executors failed to shut down.',
+            'Some jobs executors failed to shut down.',
           );
         }
       });

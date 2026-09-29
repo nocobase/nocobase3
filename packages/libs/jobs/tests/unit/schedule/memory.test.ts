@@ -11,7 +11,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../../../src/config.js';
+import type { ResolvedMemoryJobsConfig } from '../../../src/config.js';
 import { createMemoryScheduleExecutor } from '../../../src/schedule/memory/index.js';
 import type {
   ScheduleEvent,
@@ -35,8 +35,8 @@ afterEach(async () => {
 });
 
 function config(
-  overrides: Partial<ResolvedMemoryScheduleExecutorConfig> = {},
-): ResolvedMemoryScheduleExecutorConfig {
+  overrides: Partial<ResolvedMemoryJobsConfig> = {},
+): ResolvedMemoryJobsConfig {
   return {
     adapter: 'memory',
     key: 'memory',
@@ -55,7 +55,7 @@ function fakeLogger() {
 }
 
 function create(
-  overrides: Partial<ResolvedMemoryScheduleExecutorConfig> = {},
+  overrides: Partial<ResolvedMemoryJobsConfig> = {},
   options: { logger?: ReturnType<typeof fakeLogger> } = {},
 ): ScheduleExecutor {
   const executor = createMemoryScheduleExecutor(config(overrides), {

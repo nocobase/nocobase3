@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  ResolvedScheduleExecutorConfig,
-  ScheduleConfig,
-} from '../../../src/config.js';
+import type { ResolvedJobsConfig, JobsConfig } from '../../../src/config.js';
 import type { JobExecutor } from '../../../src/job/types.js';
 import type { ScheduleExecutor } from '../../../src/schedule/types.js';
 import { createJobExecutorServiceWith } from '../../../src/service.js';
@@ -28,11 +25,11 @@ function schedule(): ScheduleExecutor {
     shutdown: vi.fn(async () => undefined),
   };
 }
-function harness(config?: ScheduleConfig) {
-  const configs: ResolvedScheduleExecutorConfig[] = [];
+function harness(config?: JobsConfig) {
+  const configs: ResolvedJobsConfig[] = [];
   const jobs: JobExecutor[] = [];
   const schedules: ScheduleExecutor[] = [];
-  const create = (resolved: ResolvedScheduleExecutorConfig): JobExecutor => {
+  const create = (resolved: ResolvedJobsConfig): JobExecutor => {
     configs.push(resolved);
     const executor = ordinary();
     jobs.push(executor);

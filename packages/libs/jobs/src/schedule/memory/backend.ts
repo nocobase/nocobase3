@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import { CronJob } from 'cron';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
+import type { ResolvedMemoryJobsConfig } from '../../config.js';
 import {
   ScheduleHandlerNotRegisteredError,
   type ScheduleBackend,
@@ -11,7 +11,7 @@ import {
   type ScheduleRunner,
   type StoredScheduleRule,
 } from '../executor.js';
-import type { ScheduleLogger } from '../../types.js';
+import type { JobsLogger } from '../../types.js';
 import type { JobScheduler } from '../types.js';
 import {
   memoryStateFileBase,
@@ -48,8 +48,8 @@ export class InMemoryScheduleBackend implements ScheduleBackend {
   private abort = new AbortController();
 
   public constructor(
-    private readonly config: ResolvedMemoryScheduleExecutorConfig,
-    private readonly logger: ScheduleLogger | undefined,
+    private readonly config: ResolvedMemoryJobsConfig,
+    private readonly logger: JobsLogger | undefined,
   ) {
     this.settings = Object.freeze({ attempts: config.attempts });
     this.file = new MemoryStateFile(

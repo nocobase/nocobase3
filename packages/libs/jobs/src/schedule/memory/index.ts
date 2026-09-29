@@ -1,11 +1,11 @@
-import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
+import type { ResolvedMemoryJobsConfig } from '../../config.js';
 import { BackendScheduleExecutor } from '../executor.js';
 import type { JobExecutorServiceDependencies } from '../../service.js';
 import type { ScheduleExecutor } from '../types.js';
 import { InMemoryScheduleBackend } from './backend.js';
 
 export function createMemoryScheduleExecutor(
-  config: ResolvedMemoryScheduleExecutorConfig,
+  config: ResolvedMemoryJobsConfig,
   dependencies: Pick<JobExecutorServiceDependencies, 'logger'>,
 ): ScheduleExecutor {
   return new BackendScheduleExecutor(

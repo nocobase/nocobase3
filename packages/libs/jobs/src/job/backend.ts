@@ -1,4 +1,4 @@
-import type { ResolvedScheduleExecutorConfig } from '../config.js';
+import type { ResolvedJobsConfig } from '../config.js';
 import type { JobExecutionContext, JobReceipt } from './types.js';
 
 export interface JobSubmission {
@@ -29,7 +29,7 @@ export interface JobBackend {
  * built-in default to an explicit one, must not strand waiting tasks.
  */
 export function jobQueueName(
-  config: Pick<ResolvedScheduleExecutorConfig, 'scope'>,
+  config: Pick<ResolvedJobsConfig, 'scope'>,
 ): string {
   return `jobs/${Buffer.from(JSON.stringify([config.scope])).toString('base64url')}`;
 }

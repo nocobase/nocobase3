@@ -12,7 +12,7 @@ import {
   JobInterruptedError,
   type ManagedJobExecutorService,
 } from '../../../src/index.js';
-import type { ResolvedRedisScheduleExecutorConfig } from '../../../src/config.js';
+import type { ResolvedRedisJobsConfig } from '../../../src/config.js';
 import { jobQueueName } from '../../../src/job/backend.js';
 import { BackendJobExecutor } from '../../../src/job/executor.js';
 import {
@@ -221,7 +221,7 @@ describe('ordinary jobs against a real Redis', { timeout: 60_000 }, () => {
   // A crashed worker needs a second stalled scan: the first marks active jobs,
   // and the next scan moves an expired lock back to waiting.
   it('recovers the same job after the owning process dies and its lock expires', async () => {
-    const config: ResolvedRedisScheduleExecutorConfig = {
+    const config: ResolvedRedisJobsConfig = {
       adapter: 'redis',
       key: 'primary',
       builtIn: false,

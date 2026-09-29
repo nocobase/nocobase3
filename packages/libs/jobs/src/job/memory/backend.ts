@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
+import type { ResolvedMemoryJobsConfig } from '../../config.js';
 import type { JobBackend, JobRunner, JobSubmission } from '../backend.js';
 import {
   JobHandlerNotRegisteredError,
@@ -21,9 +21,7 @@ export class MemoryJobBackend implements JobBackend {
   private pumpQueued = false;
   private failures: unknown[] = [];
 
-  public constructor(
-    private readonly config: ResolvedMemoryScheduleExecutorConfig,
-  ) {
+  public constructor(private readonly config: ResolvedMemoryJobsConfig) {
     this.file = new JobStateFile(config);
   }
 

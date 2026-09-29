@@ -11,7 +11,7 @@ import {
   type JobSubscriber,
 } from './types.js';
 import { assertJobClass, copyJobPayload } from './validation.js';
-import type { ScheduleLogger, Unsubscribe } from '../types.js';
+import type { JobsLogger, Unsubscribe } from '../types.js';
 
 type State = 'created' | 'setting-up' | 'ready' | 'closed';
 
@@ -29,7 +29,7 @@ export class BackendJobExecutor implements JobExecutor {
 
   public constructor(
     private readonly backend: JobBackend,
-    private readonly logger: ScheduleLogger | undefined,
+    private readonly logger: JobsLogger | undefined,
   ) {}
 
   public registerJob<TPayload>(jobClass: JobClass<TPayload>): void {

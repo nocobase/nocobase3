@@ -1,8 +1,8 @@
 import {
   createJobExecutorService,
   type ManagedJobExecutorService,
-  type ScheduleFallbackEvent,
-  type ScheduleLogger,
+  type JobsFallbackEvent,
+  type JobsLogger,
 } from '@nocobase/jobs';
 import {
   ServiceProvider,
@@ -53,7 +53,7 @@ export class JobExecutorServiceProvider extends ServiceProvider<AppPluginApplica
   }
 
   private create(container: ServiceResolver): ManagedJobExecutorService {
-    const logger: ScheduleLogger | undefined = container.has(loggingToken)
+    const logger: JobsLogger | undefined = container.has(loggingToken)
       ? container
           .resolve(loggingToken)
           .getLogger('jobs')
@@ -68,7 +68,7 @@ export class JobExecutorServiceProvider extends ServiceProvider<AppPluginApplica
         appName: this.app.appName,
         storagePath: this.app.paths.storage('jobs'),
         ...(logger ? { logger } : {}),
-        onFallback: (event: ScheduleFallbackEvent) => {
+        onFallback: (event: JobsFallbackEvent) => {
           if (!reportFallback) return;
           const message = `Scope "${event.scope}" runs on the built-in memory jobs configuration: its jobs live in this process and reach storage only when it shuts down, and every other process or instance would run its own copy. Set jobs.default to a redis configuration to run more than one.`;
           if (logger) logger.warn({ scope: event.scope }, message);

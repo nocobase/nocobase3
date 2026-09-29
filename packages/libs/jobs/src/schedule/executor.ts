@@ -10,7 +10,7 @@ import {
   type ScheduleSetupOptions,
   type Subscriber,
 } from './types.js';
-import type { ScheduleLogger, Unsubscribe } from '../types.js';
+import type { JobsLogger, Unsubscribe } from '../types.js';
 import {
   assertValidJobName,
   normalizeScheduleJob,
@@ -116,7 +116,7 @@ export class BackendScheduleExecutor implements ScheduleExecutor {
 
   public constructor(
     private readonly backend: ScheduleBackend,
-    private readonly logger: ScheduleLogger | undefined,
+    private readonly logger: JobsLogger | undefined,
   ) {}
 
   public async addJob<TPayload = unknown>(

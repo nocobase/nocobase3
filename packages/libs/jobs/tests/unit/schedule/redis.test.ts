@@ -1,7 +1,7 @@
 import { UnrecoverableError, type Job, type JobSchedulerJson } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedRedisScheduleExecutorConfig } from '../../../src/config.js';
+import type { ResolvedRedisJobsConfig } from '../../../src/config.js';
 import { ScheduleHandlerNotRegisteredError } from '../../../src/schedule/executor.js';
 import type {
   RedisScheduleBackendFactories,
@@ -121,7 +121,7 @@ class FakeWorker {
   }
 }
 
-const config: ResolvedRedisScheduleExecutorConfig = {
+const config: ResolvedRedisJobsConfig = {
   adapter: 'redis',
   key: 'redis-1',
   builtIn: false,
@@ -134,11 +134,11 @@ const config: ResolvedRedisScheduleExecutorConfig = {
   removeOnFail: { age: 604_800 },
 };
 
-function harness(overrides: Partial<ResolvedRedisScheduleExecutorConfig> = {}) {
+function harness(overrides: Partial<ResolvedRedisJobsConfig> = {}) {
   const queue = new FakeQueue();
   let worker: FakeWorker | undefined;
-  const queueConfigs: ResolvedRedisScheduleExecutorConfig[] = [];
-  const workerConfigs: ResolvedRedisScheduleExecutorConfig[] = [];
+  const queueConfigs: ResolvedRedisJobsConfig[] = [];
+  const workerConfigs: ResolvedRedisJobsConfig[] = [];
   const factories: RedisScheduleBackendFactories = {
     queue: (resolved) => {
       queueConfigs.push(resolved);

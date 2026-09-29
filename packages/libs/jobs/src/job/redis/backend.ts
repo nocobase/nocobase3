@@ -10,8 +10,8 @@ import {
 } from 'bullmq';
 
 import type {
-  ResolvedRedisScheduleExecutorConfig,
-  ScheduleRetentionPolicy,
+  ResolvedRedisJobsConfig,
+  JobsRetentionPolicy,
 } from '../../config.js';
 import {
   jobQueueName,
@@ -24,7 +24,7 @@ import {
   JobInterruptedError,
   type JobReceipt,
 } from '../types.js';
-import type { ScheduleLogger } from '../../types.js';
+import type { JobsLogger } from '../../types.js';
 
 /** Immutable submission metadata stored by BullMQ, not execution-local state. */
 export interface RedisJobData {
@@ -65,17 +65,15 @@ export type JobProcessor = (
 ) => Promise<void>;
 
 export interface RedisJobBackendFactories {
-  readonly queue: (
-    config: ResolvedRedisScheduleExecutorConfig,
-  ) => RedisJobQueue;
+  readonly queue: (config: ResolvedRedisJobsConfig) => RedisJobQueue;
   readonly worker: (
-    config: ResolvedRedisScheduleExecutorConfig,
+    config: ResolvedRedisJobsConfig,
     processor: JobProcessor,
   ) => RedisJobWorker;
 }
 
 function retentionOptions(
-  policy: ScheduleRetentionPolicy,
+  policy: JobsRetentionPolicy,
 ): JobsOptions['removeOnComplete'] {
   if (typeof policy !== 'object') return policy;
   if (policy.count !== undefined) {
@@ -116,8 +114,8 @@ export class RedisJobBackend implements JobBackend {
   private closePromise: Promise<void> | undefined;
 
   public constructor(
-    private readonly config: ResolvedRedisScheduleExecutorConfig,
-    private readonly logger: ScheduleLogger | undefined,
+    private readonly config: ResolvedRedisJobsConfig,
+    private readonly logger: JobsLogger | undefined,
     private readonly factories: RedisJobBackendFactories = defaultRedisJobFactories,
   ) {}
 

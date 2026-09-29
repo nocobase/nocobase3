@@ -7,7 +7,7 @@ import {
   type RepeatOptions,
 } from 'bullmq';
 
-import type { ResolvedRedisScheduleExecutorConfig } from '../../config.js';
+import type { ResolvedRedisJobsConfig } from '../../config.js';
 import {
   ScheduleHandlerNotRegisteredError,
   type ScheduleBackend,
@@ -16,7 +16,7 @@ import {
   type ScheduleRunner,
   type StoredScheduleRule,
 } from '../executor.js';
-import type { ScheduleLogger } from '../../types.js';
+import type { JobsLogger } from '../../types.js';
 import type {
   JobScheduler,
   ScheduleEvent,
@@ -51,11 +51,9 @@ export type ScheduleProcessor = (
 
 /** Creates the BullMQ objects; tests replace them with doubles of the same public API. */
 export interface RedisScheduleBackendFactories {
-  readonly queue: (
-    config: ResolvedRedisScheduleExecutorConfig,
-  ) => ScheduleQueue;
+  readonly queue: (config: ResolvedRedisJobsConfig) => ScheduleQueue;
   readonly worker: (
-    config: ResolvedRedisScheduleExecutorConfig,
+    config: ResolvedRedisJobsConfig,
     processor: ScheduleProcessor,
   ) => ScheduleWorker;
 }
@@ -100,8 +98,8 @@ export class RedisScheduleBackend implements ScheduleBackend {
   private events: Promise<void> = Promise.resolve();
 
   public constructor(
-    private readonly config: ResolvedRedisScheduleExecutorConfig,
-    private readonly logger: ScheduleLogger | undefined,
+    private readonly config: ResolvedRedisJobsConfig,
+    private readonly logger: JobsLogger | undefined,
     private readonly factories: RedisScheduleBackendFactories = defaultRedisFactories,
   ) {
     this.settings = Object.freeze({

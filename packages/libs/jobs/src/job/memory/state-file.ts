@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
+import type { ResolvedMemoryJobsConfig } from '../../config.js';
 import { assertJobName, copyJobPayload } from '../validation.js';
 
 export interface PendingJobState {
@@ -22,7 +22,7 @@ export interface PendingJobState {
  */
 export function jobStateFilePath(
   config: Pick<
-    ResolvedMemoryScheduleExecutorConfig,
+    ResolvedMemoryJobsConfig,
     'persistencePath' | 'namespace' | 'scope'
   >,
 ): string {
@@ -34,9 +34,7 @@ export function jobStateFilePath(
 
 export class JobStateFile {
   public readonly filePath: string;
-  public constructor(
-    private readonly config: ResolvedMemoryScheduleExecutorConfig,
-  ) {
+  public constructor(private readonly config: ResolvedMemoryJobsConfig) {
     this.filePath = jobStateFilePath(config);
   }
 
