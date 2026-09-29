@@ -19,6 +19,10 @@ import HubUpload from './upload.ts';
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: '@nocobase/hub-cli',
   description: 'Publish this application to a NocoBase Hub.',
+  topics: {
+    remote: 'Manage the Hub Apps this application deploys to.',
+    auth: 'Save, remove and check the API keys for the remotes.',
+  },
   devCommands: {
     deploy: HubDeploy,
     upload: HubUpload,

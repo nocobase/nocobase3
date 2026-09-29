@@ -38,6 +38,13 @@ describe('the commands an application gets from this package', () => {
     });
   });
 
+  it('describes its nested topics, so help does not borrow a command summary', () => {
+    expect(cliPlugin.topics).toEqual({
+      remote: expect.any(String),
+      auth: expect.any(String),
+    });
+  });
+
   it('declares no hooks, which a package found through package.json may not contribute', () => {
     expect(cliPlugin.buildHooks).toEqual({});
     expect(cliPlugin.devHooks).toEqual({});
