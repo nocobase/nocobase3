@@ -56,6 +56,7 @@ Structure, top to bottom: PageHeader (primary action "New X") → toolbar (searc
 - **T1.8 [Must]** Columns of dates and times (created, updated, due) and of numbers (amounts, quantities, counts) are sortable by default, and so is the name column when it sorts in the current language's order (pinyin for Chinese). Statuses, types, tags, people, long text and yes/no values are not, unless the business asks for it and the order means something (a priority by its rank, not alphabetically). The default order is by last update time, newest first, and a sorted column shows its direction in the header.
 - **T1.9 [Must]** A list page must have a design for all four states S1–S4.
 - **T1.10 [Must]** When the endpoint caps the number of results and does not return a total, show a notice when the results reach the cap ("Only the first N records are shown. Use search or filters to narrow the results."); records beyond the cap must not silently disappear.
+- **T1.11 [Must]** When a table cell is too narrow for its content and cuts it off, hovering over the cell shows the full content.
 
 ### T2 Detail view
 
@@ -183,7 +184,7 @@ The design review and the acceptance review both go through this checklist item 
 - [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places, a back button on a page below another one (L1, L2, L5, L6)
 - [ ] Navigation is consistent: entries in one group all carry an icon or none does, and a group's own icon does not repeat its first child's (`page.md` §6)
 - [ ] All states are covered: loading, empty, no results, load failed, submitting, a block the user may not see; whether a failure offers a retry follows S4 (S1–S6)
-- [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, date and number columns sortable, all four states, result cap notice (T1.1–T1.6, T1.8–T1.10)
+- [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, date and number columns sortable, all four states, result cap notice, full content of a cut-off cell on hover (T1.1–T1.6, T1.8–T1.11)
 - [ ] Detail view: drawer or page, record name and grouped actions, opens by URL, label–value layout with "—" for empty values (T2.1–T2.4)
 - [ ] Form: container, labels and required marks, validation timing, button order and copy, submitting, failure, success, loading the latest data before editing (T3.1–T3.8)
 - [ ] Settings page: one Card per topic, each saved on its own, toggles that apply at once (T4.1–T4.3)
