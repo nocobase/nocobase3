@@ -37,6 +37,7 @@ class Backend implements JobBackend {
       attempt: 1,
       payload: 1,
       signal: new AbortController().signal,
+      reportProgress: async () => undefined,
       ...input,
     });
   }
@@ -364,4 +365,66 @@ describe('ordinary executor lifecycle and class boundary', () => {
       );
     },
   );
+
+  it('reports progress through the backend and as local events between start and end', async () => {
+    const stored: number[] = [];
+    class Progressing extends Job<number> {
+      static readonly jobName: string = 'task';
+      async execute({ reportProgress }: JobExecutionContext): Promise<void> {
+        await reportProgress(50);
+        await reportProgress(100);
+      }
+    }
+    const { executor, backend } = harness();
+    const events: JobEvent[] = [];
+    executor.subscribe((event) => {
+      events.push(event);
+    });
+    executor.registerJob(Progressing);
+    await executor.setup();
+    await backend.run({
+      reportProgress: async (progress) => {
+        stored.push(progress);
+      },
+    });
+    await executor.shutdown();
+    expect(stored).toEqual([50, 100]);
+    expect(
+      events.map((event) =>
+        event.name === 'JobProgress'
+          ? `${event.name}:${event.progress}`
+          : event.name,
+      ),
+    ).toEqual(['JobStart', 'JobProgress:50', 'JobProgress:100', 'JobEnd']);
+  });
+
+  it('rejects invalid progress and progress reported after the attempt ended', async () => {
+    let late: JobExecutionContext['reportProgress'] | undefined;
+    const invalid: unknown[] = [];
+    class Reporter extends Job<number> {
+      static readonly jobName: string = 'task';
+      async execute({ reportProgress }: JobExecutionContext): Promise<void> {
+        for (const value of [-1, 101, Number.NaN, '50'])
+          await reportProgress(value as number).catch((error: unknown) => {
+            invalid.push(error);
+          });
+        late = reportProgress;
+      }
+    }
+    const stored = vi.fn(async () => undefined);
+    const { executor, backend } = harness();
+    const events: JobEvent[] = [];
+    executor.subscribe((event) => {
+      events.push(event);
+    });
+    executor.registerJob(Reporter);
+    await executor.setup();
+    await backend.run({ reportProgress: stored });
+    await expect(late!(10)).rejects.toThrow(/already finished/u);
+    await executor.shutdown();
+    expect(invalid).toHaveLength(4);
+    for (const error of invalid) expect(error).toBeInstanceOf(RangeError);
+    expect(stored).not.toHaveBeenCalled();
+    expect(events.map((event) => event.name)).toEqual(['JobStart', 'JobEnd']);
+  });
 });

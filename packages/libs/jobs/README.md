@@ -58,7 +58,7 @@ export default jobs;
 
 `package.json` declares `@nocobase/jobs` in `dependencies`: `@nocobase/app-server` and every plugin that schedules declare it as a peer, and the application is what provides it.
 
-`@nocobase/app-plugin-schedule-example` demonstrates `ScheduleExecutor`: a provider runs a heartbeat on its own scope, removes its orphan rules, and exposes the runs through a route.
+`@nocobase/app-plugin-jobs-example` demonstrates both executors on one scope. Its `ScheduleExecutor` holds a fixed set of rules whose handlers it registers before `setup()`, so a rule started from its page keeps running across restarts; it removes its orphan rules, and its page starts, stops and replans rules and shows their runs. Its `JobExecutor` registers a payload-only `ProgressJob` before setup; the job reports 10% of progress each second through `reportProgress`, the provider turns the executor's events into task records, and a page shows each task's progress live over a realtime topic. A task interrupted by shutdown runs again on the next start.
 
 ## Configuring it
 
@@ -159,7 +159,9 @@ Validate any caller-supplied URL against application policy before submitting th
 
 `addJob` returns `{ jobId, jobName, enqueuedAt }` after backend acceptance, not after execution. `execute` also receives `runAt`, a one-based `attempt`, and an `AbortSignal`. `attempt` counts execution starts, including starts after interruption or stalled recovery; it is not the failure count charged against configured `attempts`. Use `jobId` or a stable business key to make effects idempotent because a task can run again after failure or recovery.
 
-`subscribe` reports only attempts this executor runs: `JobStart`, then `JobEnd` or `JobError`. The event contracts are in `src/job/types.ts`; `JobError` carries `reason` (`handler-not-registered`, `execute-failed` or `interrupted`) and an `Error`. A `JobError` describes a local attempt, not necessarily final task failure. Events are asynchronous local notifications, not durable delivery, backend acknowledgement, or a global completion history. Do not use `JobEnd` as proof that the backend has acknowledged completion, and do not assume `JobStart` subscribers have run before the handler starts. Subscriber failures are logged without failing the task.
+`subscribe` reports only attempts this executor runs: `JobStart`, any number of `JobProgress`, then `JobEnd` or `JobError`. The event contracts are in `src/job/types.ts`; `JobError` carries `reason` (`handler-not-registered`, `execute-failed` or `interrupted`) and an `Error`. A `JobError` describes a local attempt, not necessarily final task failure. Events are asynchronous local notifications, not durable delivery, backend acknowledgement, or a global completion history. Do not use `JobEnd` as proof that the backend has acknowledged completion, and do not assume `JobStart` subscribers have run before the handler starts. Subscriber failures are logged without failing the task.
+
+`execute` reports how far an attempt has come with `await reportProgress(percent)`, a number from 0 to 100; anything else rejects with a `RangeError`. It resolves once the backend has stored the value — on Redis, BullMQ's job progress, which other processes can read — and then emits `JobProgress` with `progress`. Memory does not persist progress. Progress belongs to one attempt: a retry or a recovered start begins again and reports from scratch, and a report made after the attempt settled rejects instead of arriving after its `JobEnd` or `JobError`. `reportProgress` is a property, so it can be destructured from the context. To show progress elsewhere, subscribe on the executing instance and forward `JobProgress` to where it is read, such as a realtime topic.
 
 ### Shutdown and recovery
 

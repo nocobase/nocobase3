@@ -29,6 +29,17 @@ export function assertJobClass(value: unknown): asserts value is JobClass {
   assertJobName(value.jobName);
 }
 
+export function assertJobProgress(value: unknown): asserts value is number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > 100
+  ) {
+    throw new RangeError('Job progress must be a number from 0 to 100.');
+  }
+}
+
 /** Only JSON data is accepted; JSON.stringify must not silently erase or transform input. */
 export function copyJobPayload(value: unknown): unknown {
   validateJson(value, new Set());

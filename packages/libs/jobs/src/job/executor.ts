@@ -10,7 +10,11 @@ import {
   type JobSetupOptions,
   type JobSubscriber,
 } from './types.js';
-import { assertJobClass, copyJobPayload } from './validation.js';
+import {
+  assertJobClass,
+  assertJobProgress,
+  copyJobPayload,
+} from './validation.js';
 import type { JobsLogger, Unsubscribe } from '../types.js';
 
 type State = 'created' | 'setting-up' | 'ready' | 'closed';
@@ -199,6 +203,7 @@ export class BackendJobExecutor implements JobExecutor {
       runAt: new Date(run.runAt),
       attempt: run.attempt,
     };
+    let settled = false;
     this.emit({ name: 'JobStart', ...base });
     try {
       const jobClass = this.classes.get(run.jobName);
@@ -226,9 +231,19 @@ export class BackendJobExecutor implements JobExecutor {
         enqueuedAt: new Date(base.enqueuedAt),
         runAt: new Date(base.runAt),
         signal: run.signal,
+        reportProgress: async (progress: number): Promise<void> => {
+          assertJobProgress(progress);
+          // A report after the attempt settled would reach subscribers after
+          // its JobEnd or JobError, describing work that is already over.
+          if (settled) throw new Error('The job attempt has already finished.');
+          await run.reportProgress(progress);
+          if (!settled) this.emit({ name: 'JobProgress', ...base, progress });
+        },
       });
+      settled = true;
       this.emit({ name: 'JobEnd', ...base });
     } catch (caught) {
+      settled = true;
       const interrupted =
         run.signal.aborted &&
         (caught instanceof JobInterruptedError || caught === run.signal.reason);

@@ -40,9 +40,15 @@ export interface JobExecutionContext extends JobReceipt {
   /** One-based execution starts, including starts after interruption or stalled recovery. */
   readonly attempt: number;
   readonly signal: AbortSignal;
+  /**
+   * Reports how far this attempt has come, from 0 to 100. Resolves once the
+   * backend has stored it and emits a local `JobProgress` event. Progress
+   * belongs to one attempt: a retry or recovered start reports from scratch.
+   */
+  readonly reportProgress: (progress: number) => Promise<void>;
 }
 
-export type JobEventName = 'JobStart' | 'JobEnd' | 'JobError';
+export type JobEventName = 'JobStart' | 'JobProgress' | 'JobEnd' | 'JobError';
 export type JobErrorReason =
   'handler-not-registered' | 'execute-failed' | 'interrupted';
 
@@ -53,7 +59,9 @@ interface JobEventBase extends JobReceipt {
 
 /** Local execution notifications, not durable backend acknowledgements or final task state. */
 export type JobEvent =
-  | (JobEventBase & { readonly name: 'JobStart' | 'JobEnd' })
+  | (JobEventBase & { readonly name: 'JobStart' })
+  | (JobEventBase & { readonly name: 'JobProgress'; readonly progress: number })
+  | (JobEventBase & { readonly name: 'JobEnd' })
   | (JobEventBase & {
       readonly name: 'JobError';
       readonly reason: JobErrorReason;

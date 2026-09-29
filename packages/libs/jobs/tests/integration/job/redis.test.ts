@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
 
-import { Worker } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createJobExecutorService,
@@ -163,6 +163,49 @@ describe('ordinary jobs against a real Redis', { timeout: 60_000 }, () => {
     );
     await until(() => expect(IsolatedJob.markers).toHaveLength(3));
     expect(consumed).toEqual(receipts.map((receipt) => [receipt.jobId]));
+  });
+
+  it('stores reported progress on the queued job and emits it locally', async () => {
+    const namespace = `ordinary-${randomUUID()}`;
+    const release = Promise.withResolvers<void>();
+    const reported = Promise.withResolvers<void>();
+    class Progressing extends Job<{ value: number }> {
+      static readonly jobName: string = 'progressing';
+      async execute({
+        reportProgress,
+      }: import('../../../src/index.js').JobExecutionContext): Promise<void> {
+        await reportProgress(this.payload.value);
+        reported.resolve();
+        await release.promise;
+      }
+    }
+    const executor = service(namespace).getJobExecutor('progress', 'primary');
+    const events: JobEvent[] = [];
+    executor.subscribe((event) => {
+      events.push(event);
+    });
+    executor.registerJob(Progressing);
+    await executor.setup();
+    const receipt = await executor.addJob(new Progressing({ value: 40 }));
+    await reported.promise;
+    const queue = new Queue(jobQueueName({ scope: 'progress' }), {
+      connection,
+      prefix: namespace,
+    });
+    try {
+      expect((await queue.getJob(receipt.jobId))?.progress).toBe(40);
+    } finally {
+      release.resolve();
+      await queue.close();
+    }
+    await until(() =>
+      expect(events.map((event) => event.name)).toEqual([
+        'JobStart',
+        'JobProgress',
+        'JobEnd',
+      ]),
+    );
+    expect(events[1]).toMatchObject({ progress: 40, jobId: receipt.jobId });
   });
 
   it('preserves an explicitly interrupted attempt across graceful shutdown', async () => {

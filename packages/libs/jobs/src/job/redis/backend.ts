@@ -55,7 +55,12 @@ export interface RedisJobWorker {
 
 export type RedisProcessingJob = Pick<
   Job<RedisJobData, void, string>,
-  'id' | 'data' | 'processedOn' | 'attemptsStarted' | 'moveToWait'
+  | 'id'
+  | 'data'
+  | 'processedOn'
+  | 'attemptsStarted'
+  | 'moveToWait'
+  | 'updateProgress'
 >;
 
 export type JobProcessor = (
@@ -236,6 +241,8 @@ export class RedisJobBackend implements JobBackend {
         runAt: new Date(job.processedOn ?? Date.now()),
         attempt: job.attemptsStarted,
         signal,
+        // Stored on the BullMQ job, where other processes can read it.
+        reportProgress: (progress) => job.updateProgress(progress),
       });
     } catch (error) {
       if (error instanceof JobHandlerNotRegisteredError) {

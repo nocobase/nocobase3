@@ -110,6 +110,7 @@ function firing(
     processedOn: Date.parse('2030-01-01T00:00:01Z'),
     attemptsStarted: 4,
     moveToWait: vi.fn(async (_token?: string) => 0),
+    updateProgress: vi.fn(async (_progress: unknown) => undefined),
     ...overrides,
   };
 }
@@ -202,11 +203,26 @@ describe('Redis job backend', () => {
         runAt: new Date(job.processedOn!),
         attempt: 4,
         signal: expect.any(AbortSignal),
+        reportProgress: expect.any(Function),
       },
     ]);
     expect(processors[0]?.length).toBe(3);
     expect(factories.worker).toHaveBeenCalledWith(config, processors[0]);
     expect(job.moveToWait).not.toHaveBeenCalled();
+    await backend.close();
+  });
+
+  it('stores reported progress on the BullMQ job', async () => {
+    const { backend, process } = harness();
+    await backend.open();
+    await backend.consume({
+      run: async (run) => {
+        await run.reportProgress(40);
+      },
+    });
+    const job = firing();
+    await process(job);
+    expect(job.updateProgress).toHaveBeenCalledExactlyOnceWith(40);
     await backend.close();
   });
 

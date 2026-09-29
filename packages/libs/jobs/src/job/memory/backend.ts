@@ -129,6 +129,8 @@ export class MemoryJobBackend implements JobBackend {
         runAt: new Date(),
         attempt: job.started,
         signal: this.abort.signal,
+        // Progress is not persisted: a pending task always restarts from 0.
+        reportProgress: () => Promise.resolve(),
       });
       this.pending.delete(job.jobId);
     } catch (error) {
