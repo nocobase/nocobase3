@@ -53,6 +53,18 @@ export interface DataTableProps<TData, TValue = unknown> {
 }
 
 /**
+ * Inside a card's content the table drops its own frame and reaches the card's
+ * edges, while its first and last cells take the card's padding, so the text
+ * lines up with the card's title and the row lines span the whole card.
+ * `Card` sets `--card-spacing`. A `CardContent` already given `px-0` needs no
+ * negative margin, which would otherwise push the outer cells out of the card.
+ */
+const IN_CARD_FRAME =
+  'in-data-[slot=card-content]:-mx-(--card-spacing) in-data-[slot=card-content]:rounded-none in-data-[slot=card-content]:border-0 [[data-slot=card-content].px-0_&]:mx-0';
+const IN_CARD_CELLS =
+  'in-data-[slot=card-content]:[&_tr>*:first-child]:pl-(--card-spacing) in-data-[slot=card-content]:[&_tr>*:last-child]:pr-(--card-spacing)';
+
+/**
  * A table driven by TanStack Table with client-side sorting, filtering, column
  * visibility, row selection and pagination, composed from the shadcn `Table`
  * primitive the way the shadcn Data Table guide describes.
@@ -108,8 +120,8 @@ export function DataTable<TData, TValue = unknown>({
       {toolbar ? (
         <div className='flex items-center gap-2'>{toolbar(table)}</div>
       ) : null}
-      <div className='overflow-hidden rounded-lg border'>
-        <Table>
+      <div className={cn('overflow-hidden rounded-lg border', IN_CARD_FRAME)}>
+        <Table className={IN_CARD_CELLS}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

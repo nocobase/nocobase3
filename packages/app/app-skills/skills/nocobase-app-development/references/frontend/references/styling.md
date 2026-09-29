@@ -214,7 +214,7 @@ Using `bg-background` because it "looks right" puts a page-colored block inside 
 | Limiting form width                    | `max-w-2xl`                                         |
 | Table in a card                        | See below                                           |
 
-**Table in a card.** A table inside a `Card` runs to the card's edges, and its first and last cells take the card's padding, so the text lines up with the card's title while the row lines and the hover color span the whole card. Give the `CardContent` around it `className='px-0'` and the `Table` `className='[&_tr>*:first-child]:pl-(--card-spacing) [&_tr>*:last-child]:pr-(--card-spacing)'`. `Card` sets `--card-spacing` (`size='sm'` makes it smaller), and these classes follow it. `px-0` alone leaves the cells' own 8px padding, which puts the text to the left of the title. The recent projects of [`example/project-dashboard.md`](example/project-dashboard.md) are a complete one.
+**Table in a card.** Put a `DataTable` in the card's `CardContent` as it is. There it drops its own frame and reaches the card's edges, and its first and last cells take the card's `--card-spacing` (`size='sm'` makes it smaller), so the text lines up with the card's title while the row lines and the hover color span the whole card. Do not give that `CardContent` `px-0` or write the table from `Table` by hand. A list in a card has plain headers and `pagination={false}` (guideline T5.3). The recent projects of [`example/project-dashboard.md`](example/project-dashboard.md) are a complete one.
 
 Merge class names with `cn()` (`@/lib/utils`), for example `cn('flex gap-2', className)`.
 

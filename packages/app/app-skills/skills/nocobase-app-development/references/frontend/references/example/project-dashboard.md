@@ -16,6 +16,7 @@ The endpoint contract this assumes: `GET /api/projects/dashboard` returns `{ dat
 // client/pages/project-dashboard/index.tsx
 import { ApiClientError, useApiClient } from '@nocobase/app-client';
 import { useLocale, useTranslation } from '@nocobase/i18n/client';
+import type { ColumnDef } from '@tanstack/react-table';
 import { AlertCircleIcon, FolderKanbanIcon, RefreshCwIcon } from 'lucide-react';
 import {
   type ReactElement,
@@ -29,6 +30,7 @@ import {
 import { Link, Outlet, useLocation } from 'react-router';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
+import { DataTable } from '@/components/data-table';
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
 import { SessionExpiredAlert } from '@/components/session-expired-alert';
@@ -62,14 +64,6 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 import { ProjectStatusBadge } from '../projects/status-badge.js';
 import {
@@ -92,7 +86,7 @@ interface ProjectDashboard {
     readonly count: number;
   }[];
   /** The five most recently updated projects, newest first. */
-  readonly recent: readonly Project[];
+  readonly recent: Project[];
 }
 
 /**
@@ -339,7 +333,7 @@ function RecentProjects({
   projects,
   viewAllRef,
 }: {
-  readonly projects: readonly Project[];
+  readonly projects: Project[];
   readonly viewAllRef: RefObject<HTMLAnchorElement | null>;
 }): ReactElement {
   const { t } = useTranslation();
@@ -352,6 +346,42 @@ function RecentProjects({
         timeStyle: 'short',
       }),
     [locale],
+  );
+  // A short list in a card: plain headers, no sorting or pagination (guideline T5.3).
+  const columns = useMemo<ColumnDef<Project>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: t('projects.fields.name'),
+        cell: ({ row }) => (
+          // Relative, so /project-dashboard/12 opens the drawer over this page, not over the list.
+          <Link
+            className='font-medium hover:underline'
+            to={{
+              pathname: String(row.original.id),
+              search: location.search,
+            }}
+          >
+            {row.original.name}
+          </Link>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: t('projects.fields.status'),
+        cell: ({ row }) => <ProjectStatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'updatedAt',
+        header: t('projects.fields.updatedAt'),
+        cell: ({ row }) => (
+          <span className='text-muted-foreground'>
+            {dateFormat.format(new Date(row.original.updatedAt))}
+          </span>
+        ),
+      },
+    ],
+    [dateFormat, location.search, t],
   );
 
   return (
@@ -372,48 +402,20 @@ function RecentProjects({
           </Link>
         </CardAction>
       </CardHeader>
-      {projects.length === 0 ? (
-        <CardContent>
+      <CardContent>
+        {projects.length === 0 ? (
           <NoProjects />
-        </CardContent>
-      ) : (
-        // Edge to edge, with the outer cells padded to the card's spacing: the names line up with the title (F3).
-        <CardContent className='px-0'>
-          <Table className='[&_tr>*:first-child]:pl-(--card-spacing) [&_tr>*:last-child]:pr-(--card-spacing)'>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('projects.fields.name')}</TableHead>
-                <TableHead>{t('projects.fields.status')}</TableHead>
-                <TableHead>{t('projects.fields.updatedAt')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell>
-                    {/* Relative, so /project-dashboard/12 opens the drawer over this page, not over the list. */}
-                    <Link
-                      className='font-medium hover:underline'
-                      to={{
-                        pathname: String(project.id),
-                        search: location.search,
-                      }}
-                    >
-                      {project.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <ProjectStatusBadge status={project.status} />
-                  </TableCell>
-                  <TableCell className='text-muted-foreground'>
-                    {dateFormat.format(new Date(project.updatedAt))}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      )}
+        ) : (
+          // In a card's content the table reaches the card's edges and its text lines up with the title (F3).
+          <DataTable
+            columns={columns}
+            data={projects}
+            getRowId={(project) => String(project.id)}
+            pagination={false}
+            showSelectedCount={false}
+          />
+        )}
+      </CardContent>
     </Card>
   );
 }
@@ -479,7 +481,7 @@ function DashboardSkeleton({
 ```
 
 - **The drawer opens over the dashboard** (guideline I9): a recent project links to `String(project.id)`, relative to this page, and `projectDetailRoutes('project-dashboard')` declares the drawer and its edit dialog under it. The page passes the drawer `ProjectsOutletContext`, so an edit or a delete there refreshes the numbers and the list here. The same drawer on the list is declared by `projectDetailRoutes('project')`.
-- **A short list in a card** (guideline T5.3): the endpoint returns the five most recently updated projects, so the table has no sorting or pagination; "View all" leads to the list. `CardContent` has no side padding and the outer cells take the card's, so the names line up with "Recently updated".
+- **A short list in a card** (guideline T5.3): the endpoint returns the five most recently updated projects, so the table has plain headers and `pagination={false}`; "View all" leads to the list. `DataTable` sits in an ordinary `CardContent`: there it drops its frame, reaches the card's edges and pads its outer cells with the card's spacing, so the names line up with "Recently updated".
 - **Metrics** (guideline T5.1): the label is `CardDescription`, the value `CardTitle` at `text-3xl` with `tabular-nums`, formatted with `Intl.NumberFormat` for the current language.
 - **The chart** (guideline T5.2): its one series takes `--chart-1` through the `ChartConfig`, the status names and the tooltip label go through `t`, and the container has the fixed height styling.md describes.
 - **States** (guideline T5.4): the skeleton has the page's shape; a failure shows an `Alert`, with "Retry" unless the request was denied; with no projects yet, the chart and the list each say so in their card. A reload, from "Refresh" or after the drawer changed a project, keeps the numbers on screen and shows a `Spinner` in the button.

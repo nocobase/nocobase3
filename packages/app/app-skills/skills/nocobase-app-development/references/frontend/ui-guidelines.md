@@ -16,7 +16,7 @@ These are this application's UI design guidelines: foundations, page structure, 
 
 **F2 [Must] Font sizes come from the scale**: PageHeader provides the page title; section titles use `text-base font-medium`; body text, tables and forms use the components' default size (`text-sm`); helper text uses `text-sm text-muted-foreground` or `text-xs`. Do not use arbitrary values such as `text-[13px]`.
 
-**F3 [Must] Spacing comes from the scale**: PageContainer spaces the sections of a page, and blocks you stack yourself use `flex flex-col` with `gap-4` or `gap-6` rather than `space-y-*`; cards keep the `Card` component's own padding, and whatever sits in a card lines up with its title: a table that runs to the card's edges pads its first and last cells to the card's spacing instead ("Table in a card" in ["Common layouts" of `references/styling.md`](references/styling.md#common-layouts)); a panel you build yourself uses `p-4` or `p-6`; `gap-2` between related controls; FieldGroup's default spacing between form fields. Do not use arbitrary values such as `mt-[7px]`.
+**F3 [Must] Spacing comes from the scale**: PageContainer spaces the sections of a page, and blocks you stack yourself use `flex flex-col` with `gap-4` or `gap-6` rather than `space-y-*`; cards keep the `Card` component's own padding, and whatever sits in a card lines up with its title: a `DataTable` in a card runs to the card's edges and pads its first and last cells to the card's spacing by itself ("Table in a card" in ["Common layouts" of `references/styling.md`](references/styling.md#common-layouts)); a panel you build yourself uses `p-4` or `p-6`; `gap-2` between related controls; FieldGroup's default spacing between form fields. Do not use arbitrary values such as `mt-[7px]`.
 
 **F4 [Must] Radius and shadow use the component defaults**; when you need a custom one, use only utility classes such as `rounded-lg` and `shadow-sm`.
 
@@ -43,6 +43,8 @@ These are this application's UI design guidelines: foundations, page structure, 
 ## T Page templates
 
 ### T1 List page: browse, find and manage one kind of record
+
+The T1 guidelines apply to a list page. A short list of records inside a card, such as a dashboard's, follows T5.3 instead: no search, filters, sorting or pagination.
 
 Structure, top to bottom: PageHeader (primary action "New X") → toolbar (search box and filters on the left, secondary actions on the right) → table → pagination.
 

@@ -68,7 +68,7 @@ Each is explained where the pointer leads:
 - A row menu's "Edit" linking to the route stacked on the drawer (`` `${id}/edit` ``), which opens the drawer as well ([section 8 of `references/table.md`](references/table.md#8-column-definitions-and-row-actions)).
 - Breadcrumbs, or a "Back to list" button in `actions`, on a page below another one instead of `BackButton` ([section 7 of `references/page.md`](references/page.md#7-back-button-and-breadcrumbs)).
 - A date, time or number column without sorting ([section 8 of `references/table.md`](references/table.md#8-column-definitions-and-row-actions)).
-- A table in a card with `CardContent className='px-0'` alone, which leaves its text to the left of the card's title ("Table in a card" in ["Common layouts" of `references/styling.md`](references/styling.md#common-layouts)).
+- A list in a card written with `Table` by hand or given sortable headers: a `DataTable` with plain headers and `pagination={false}` in an ordinary `CardContent` lines up with the card by itself (guideline T5.3; "Table in a card" in ["Common layouts" of `references/styling.md`](references/styling.md#common-layouts)).
 - `useRouteOverlay()` called in the component that renders the overlay ([section 2.4 of `references/overlay.md`](references/overlay.md#24-close-with-userouteoverlay)).
 - `client/routes.ts` rewritten instead of appended to, which drops the home and sign-in pages ([section 1 of `references/page.md`](references/page.md#1-declare-the-route)).
 - A new App page missing from the route test's page grant list ([section 12 of `references/page.md`](references/page.md#12-update-the-route-test)).
