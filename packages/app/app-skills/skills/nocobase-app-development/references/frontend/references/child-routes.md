@@ -465,6 +465,42 @@ The list page's `<Outlet />` is already at the end of `PageContainer` (see [sect
 - Use it only for child pages that cover their parent page, never on a top-level page.
 - A form too long for a dialog uses the same frame; `create.tsx` ([`example/create-page.md`](example/create-page.md)) is the complete page.
 
+### The same detail page over another page
+
+A page that shows a record whose detail is a page of its own — an orders list's customer column, a payment list's expense number — opens that page over itself, the way a dashboard opens a project's drawer ([section 2.1 of `overlay.md`](overlay.md#the-same-drawer-over-another-page)). Declare the same page module under this page's route as well, with the page's own children, and give every route a unique name:
+
+```ts
+// /orders/:customerId: the same module the customers list uses, over the orders page,
+// with the page's own children re-declared under unique names.
+children: [
+  {
+    name: 'order-customer',
+    path: ':customerId',
+    authz: 'skip',
+    componentLoader: () => import('./pages/customers/detail/index.js'),
+    children: [
+      {
+        name: 'order-customer-overview',
+        path: 'overview',
+        authz: 'skip',
+        componentLoader: () => import('./pages/customers/detail/overview.js'),
+      },
+      {
+        name: 'order-customer-orders',
+        path: 'orders',
+        authz: 'skip',
+        componentLoader: () => import('./pages/customers/detail/orders.js'),
+      },
+    ],
+  },
+],
+```
+
+- The link is relative — `{ pathname: String(row.customerId), search: location.search }` — never the other module's path (`/customers/12`). Keep the query string only for parameters that mean the same thing on both pages; a filter of the current page (`?status=paid`) usually does not.
+- **`BackButton` on the shared page must not name one parent.** Omit `to` so it follows the parent route it was opened from ([section 7 of `page.md`](page.md#7-back-button-and-breadcrumbs)); a hard-coded `to` sends the user who came from `/orders` to `/customers`, a page they were not on (I9). The page's Cancel, close and redirect paths follow the same rule.
+- Route names are unique across the application, so when several pages open the same record, a helper that returns the record's routes parameterized by an owner name keeps them unique — the trick `projectDetailRoutes(owner)` uses for drawers ([section 2.1 of `overlay.md`](overlay.md#21-declare-the-child-routes)).
+- The added routes join the route test's page-grant list for their own path ([section 12 of `page.md`](page.md#12-update-the-route-test)).
+
 ## 6. Navigation groups and clickable parents
 
 - **Group**: only `name`, `navigation` and `children`, with no `componentLoader`. `path` is optional; when present, it becomes the prefix of the child routes' paths; when absent, the group is only a set of entries in the menu.

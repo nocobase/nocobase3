@@ -334,9 +334,9 @@ A page that sits below another one — a covering child page, a record's own pag
 
 `BackButton` (`@/components/back-button`) is a component of its own: the page places it inside `PageContainer`, above `PageHeader`, and it needs nothing from the header. [Section 5 of `child-routes.md`](child-routes.md#5-covering-child-pages-routechildpage) has the complete example, a covering child page.
 
-- It is a link styled as a ghost button, with an arrow and "Back" (`navigation.back`).
+- It is a muted text link with an arrow and "Back" (`navigation.back`), turning to the foreground on hover.
 - By default it leads to the parent route and keeps the query string, as closing an overlay does: from `/projects/import?status=active` it returns to `/projects?status=active`, and the list keeps its search and filters. The parent is found by route, not by path segment, so a child route with a two-segment path returns to its parent too.
-- `to` sends it elsewhere, for a page that is not a child of the page it belongs to, such as a record page declared beside its list: `<BackButton to={{ pathname: '/customers', search: location.search }} />`. `children` replaces the label; keep "Back" unless the destination needs naming.
+- `to` sends it elsewhere, for a page that belongs to exactly one parent, such as a record page declared beside its list: `<BackButton to={{ pathname: '/customers', search: location.search }} />`. Omit it for a module reused under several parents — a record's page opened from another page as well (["The same detail page over another page" in `child-routes.md`](child-routes.md#the-same-detail-page-over-another-page)) — so the back button follows the parent route it was opened from; a hard-coded path sends a user who came from elsewhere to a page they were not on. `children` replaces the label; keep "Back" unless the destination needs naming.
 - It navigates rather than going back in the browser history, which a page opened from a link or a refresh does not have, and it replaces the history entry, as closing an overlay does: the browser's Back then does not reopen the page just left, such as a form that would come back empty.
 
 ### Breadcrumbs, when the user asks for them

@@ -67,6 +67,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
 - The drawer's route inherits the page's `authz`. When opening a project must require the projects page's grant rather than this page's, declare it on the drawer's route in the function, as `{ resource: { type: 'page', id: 'projects' }, action: 'access' }`.
 - The new route names join the route test's grant list ([section 12 of `page.md`](page.md#12-update-the-route-test)).
 - [`example/project-dashboard.md`](example/project-dashboard.md) is the complete page that does this.
+- A detail that needs a page rather than a drawer follows the same rule: declare the page module under this page as a covering child route and link to it relatively — ["The same detail page over another page" in `child-routes.md`](child-routes.md#the-same-detail-page-over-another-page).
 
 ### 2.2 Place the Outlet in the parent page
 

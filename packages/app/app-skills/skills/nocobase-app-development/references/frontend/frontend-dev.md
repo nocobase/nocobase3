@@ -62,7 +62,7 @@ Each is explained where the pointer leads:
 
 - A hook called outside a component or custom hook, in a handler, a condition or a loop.
 - A create, edit or detail view opened from component state instead of a child route ([`references/overlay.md`](references/overlay.md)).
-- A link from a dashboard, a board or another page to the list's overlay URL (`/projects/12`) instead of the drawer declared under that page ([section 2.1 of `references/overlay.md`](references/overlay.md#21-declare-the-child-routes)).
+- A link from a dashboard, a board or another page to a record under the record's own module — the list's overlay URL (`/projects/12`) or the detail page (`/expenses/12`) — instead of the drawer or page declared under the current page ([section 2.1 of `references/overlay.md`](references/overlay.md#21-declare-the-child-routes), ["The same detail page over another page" in `references/child-routes.md`](references/child-routes.md#the-same-detail-page-over-another-page)).
 - A row menu's "Edit" linking to the route stacked on the drawer (`` `${id}/edit` ``), which opens the drawer as well ([section 8 of `references/table.md`](references/table.md#8-column-definitions-and-row-actions)).
 - Breadcrumbs, or a "Back to list" button in `actions`, on a page below another one instead of `BackButton` ([section 7 of `references/page.md`](references/page.md#7-back-button-and-breadcrumbs)).
 - A date, time or number column without sorting ([section 8 of `references/table.md`](references/table.md#8-column-definitions-and-row-actions)).

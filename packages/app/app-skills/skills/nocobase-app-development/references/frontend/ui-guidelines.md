@@ -133,7 +133,7 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 
 **I8 [Must]** Every action can be completed with the keyboard: when a dialog opens, focus moves into it, Esc closes it, and Enter submits the form. The components have these behaviors built in; do not break them.
 
-**I9 [Must] Records open where the user is**: a record opened from a list, a dashboard, a board or another record's tab shows its drawer or dialog over the page the user is on, at a URL under that page, and closing returns there. Never send the user to another page's overlay URL to show a record: the page they were on disappears, the menu highlight moves to another entry, and closing lands them on a page they did not come from.
+**I9 [Must] Records open where the user is**: a record opened from a list, a dashboard, a board or another record's tab opens over the page the user is on — a drawer or dialog for a short detail view, a covering child page (`RouteChildPage`) when the detail needs a page of its own (T2.1) — at a URL under that page, and closing or going back returns there. Declare the detail, with its edit, tab and print children, under every page that opens it, reusing the same modules. Never send the user to another page's route for a record, whether its overlay URL or its detail page: the page they were on disappears, the menu highlight moves to another entry, and closing lands them on a page they did not come from.
 
 ## R Data freshness
 
@@ -191,7 +191,7 @@ The design review and the acceptance review both go through this checklist item 
 - [ ] Data freshness: writes are based on the latest data, the UI updates immediately after success, a missing record is handled (R1–R3)
 - [ ] Destructive actions are confirmed, and the confirmation dialog names the object and the consequence (I2)
 - [ ] Feedback and loading indicators are correct, and raw backend errors are not exposed (I3, I4)
-- [ ] Overlays and their state have URLs, and a record opens over the page the user is on; actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I6–I9)
+- [ ] Overlays and their state have URLs, and a record (its drawer or its page) opens over the page the user is on; actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I6–I9)
 - [ ] Color, font size, spacing, radius and icons use only tokens, scales and lucide-react, and fixed sizes are explained (F1–F5, F7)
 - [ ] Copy exists in every language `client/locales/index.ts` offers, wording is consistent, and button and title copy follows the rules (C1–C4, C6, C7)
 - [ ] Icon buttons are accessible, focus is visible and goes somewhere sensible, information is not conveyed by color alone, and custom colors meet AA contrast (A1–A3, A5, A6)
