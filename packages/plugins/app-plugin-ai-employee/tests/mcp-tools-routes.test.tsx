@@ -155,6 +155,10 @@ function permissionMenu(): HTMLElement {
 async function choosePermission(name: 'Ask' | 'Allow'): Promise<void> {
   fireEvent.click(permissionMenu());
   fireEvent.click(await screen.findByRole('menuitemradio', { name }));
+  // Let the menu finish closing, so a following choice opens it again instead of toggling it shut.
+  await waitFor(() =>
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+  );
 }
 
 it('retains the old permission on request failure and updates selection only after retry succeeds', async () => {
