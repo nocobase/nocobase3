@@ -6,7 +6,7 @@ The UI is composed of shadcn/ui primitives (the Base UI version) and styled with
 
 How to use a primitive comes from the shadcn/ui skill. Read [`shadcn.md`](shadcn.md) first: it lists the primitives the template ships and how to add the others, says which of the skill's files to open, and where this application departs from the skill. For one primitive's API and examples, run `pnpm exec shadcn docs <name>` and fetch the URLs it prints; they point at the Base UI version. Do not infer an API from memory or from Radix-based examples on the web.
 
-This document adds what the skill does not cover: the Base UI details it leaves out, the compositions this template ships, and the styling rules that keep the pages of this application consistent. For a whole feature, start from the worked example ([`example.md`](example.md)).
+This document adds what the skill does not cover: the Base UI details it leaves out, the compositions this template ships, and the styling rules that keep the pages of this application consistent. For how a whole feature fits together, read the worked example ([`example.md`](example.md)).
 
 ## 2. Components are built on Base UI, not Radix
 

@@ -4,6 +4,8 @@ When you write or change code under `client/`, first decide the workflow with [`
 
 All code examples use the example "projects" domain. The topic references hold the rules with focused snippets, none longer than a small component; [`references/example.md`](references/example.md) indexes the complete files of the feature, one document per file, by task. Every example is complete: hooks are called at the top level of a component, a snippet comes with the component or function it belongs to, and omitted parts are marked with `// …`.
 
+**The examples show the rules, not your feature.** Take from an example the rule it illustrates, then write the code for the current requirement: its fields, data volume, permissions and interactions. Values that belong to the projects domain — field names, copy keys, the columns and filters, widths such as `max-w-60` — are placeholders; decide each one again. Copy a file unchanged only where a document says it is shared infrastructure, such as `session-expired-alert.tsx`.
+
 ## Basic conventions
 
 **Directories**
