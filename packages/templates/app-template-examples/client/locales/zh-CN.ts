@@ -254,10 +254,6 @@ const zhCN: AppResource = {
       description:
         '体验复数形式、缺失翻译回退，以及数字、金额和日期的多区域格式。',
     },
-    notifications: {
-      title: '通知中心',
-      description: '查看发给你的站内通知，筛选未读消息并管理已读状态。',
-    },
     notificationTasks: {
       title: '任务通知',
       description: '将任务分配给不同用户，收件人可以从通知进入详情并调整任务。',

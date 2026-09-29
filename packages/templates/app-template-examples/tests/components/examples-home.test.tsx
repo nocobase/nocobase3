@@ -45,8 +45,6 @@ it.each(['en-US', 'zh-CN'])(
     expect(
       screen.getAllByRole('link').map((link) => link.getAttribute('href')),
     ).toEqual([
-      '/demo/notifications',
-      '/demo/notification-example',
       '/demo/route-overlays',
       '/demo/articles',
       '/demo/numeric-examples',
@@ -60,6 +58,7 @@ it.each(['en-US', 'zh-CN'])(
       '/demo/template-print-example',
       '/demo/routes-example',
       '/demo/settings/workflow/workflows',
+      '/demo/notification-example',
     ]);
   },
 );

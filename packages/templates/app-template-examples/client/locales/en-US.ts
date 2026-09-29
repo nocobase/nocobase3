@@ -267,11 +267,6 @@ const enUS = {
       description:
         'Try plural forms, missing-translation fallbacks and regional number, currency and date formats.',
     },
-    notifications: {
-      title: 'Notifications',
-      description:
-        'View your in-app notifications, filter unread messages, and manage their read state.',
-    },
     notificationTasks: {
       title: 'Task notifications',
       description:
