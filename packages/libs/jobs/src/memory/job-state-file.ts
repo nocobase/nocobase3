@@ -16,18 +16,28 @@ export interface PendingJobState {
   failures: number;
 }
 
+/**
+ * Like Schedule, the file is named by namespace and scope only, so renaming
+ * the configuration key keeps reading the same pending tasks.
+ */
+export function jobStateFilePath(
+  config: Pick<
+    ResolvedMemoryScheduleExecutorConfig,
+    'persistencePath' | 'namespace' | 'scope'
+  >,
+): string {
+  const identity = Buffer.from(
+    JSON.stringify([config.namespace, config.scope]),
+  ).toString('base64url');
+  return path.join(config.persistencePath, `jobs.${identity}.state.json`);
+}
+
 export class JobStateFile {
   public readonly filePath: string;
   public constructor(
     private readonly config: ResolvedMemoryScheduleExecutorConfig,
   ) {
-    const identity = Buffer.from(
-      JSON.stringify([config.namespace, config.key, config.scope]),
-    ).toString('base64url');
-    this.filePath = path.join(
-      config.persistencePath,
-      `jobs.${identity}.state.json`,
-    );
+    this.filePath = jobStateFilePath(config);
   }
 
   public async read(): Promise<PendingJobState[]> {
@@ -45,7 +55,6 @@ export class JobStateFile {
         !record(data) ||
         data.version !== 1 ||
         data.namespace !== this.config.namespace ||
-        data.key !== this.config.key ||
         data.scope !== this.config.scope ||
         !Array.isArray(data.jobs)
       ) {
@@ -94,7 +103,6 @@ export class JobStateFile {
     const data = {
       version: 1,
       namespace: this.config.namespace,
-      key: this.config.key,
       scope: this.config.scope,
       jobs,
     };

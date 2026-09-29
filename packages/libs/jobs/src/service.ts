@@ -15,6 +15,7 @@ import { assertValidScope } from './validation.js';
 import type { JobExecutor } from './job-types.js';
 import { BackendJobExecutor } from './job-executor.js';
 import { MemoryJobBackend } from './memory/job-backend.js';
+import { jobStateFilePath } from './memory/job-state-file.js';
 import { RedisJobBackend } from './redis/job-backend.js';
 
 /** Reports that an executor runs on the built-in memory configuration. */
@@ -86,6 +87,10 @@ export function createJobExecutorServiceWith(
 ): ManagedJobExecutorService {
   const executors = new Map<string, ScheduleExecutor>();
   const jobs = new Map<string, JobExecutor>();
+  const memoryJobs = new Map<
+    string,
+    { config: ResolvedScheduleExecutorConfig; executor: JobExecutor }
+  >();
   let shutdownPromise: Promise<void> | undefined;
 
   return {
@@ -132,11 +137,30 @@ export function createJobExecutorServiceWith(
         scope,
         dependencies,
       );
+      // Memory keys naming the same file share one executor: two in-process
+      // writers would overwrite each other's pending snapshot at shutdown.
+      const file =
+        resolved.adapter === 'memory' ? jobStateFilePath(resolved) : undefined;
+      const shared = file === undefined ? undefined : memoryJobs.get(file);
+      if (shared) {
+        if (
+          shared.config.concurrency !== resolved.concurrency ||
+          shared.config.attempts !== resolved.attempts
+        ) {
+          throw new Error(
+            `Jobs configurations "${shared.config.key}" and "${resolved.key}" share the memory task file ${file} for scope "${scope}" but set different concurrency or attempts.`,
+          );
+        }
+        jobs.set(identity, shared.executor);
+        return shared.executor;
+      }
       const executor =
         resolved.adapter === 'memory'
           ? jobFactories.memory(resolved, dependencies)
           : jobFactories.redis(resolved, dependencies);
       jobs.set(identity, executor);
+      if (file !== undefined)
+        memoryJobs.set(file, { config: resolved, executor });
       if (resolved.builtIn)
         dependencies.onFallback?.({
           scope,
@@ -147,7 +171,7 @@ export function createJobExecutorServiceWith(
 
     shutdown(): Promise<void> {
       shutdownPromise ??= Promise.allSettled(
-        [...executors.values(), ...jobs.values()].map((executor) =>
+        [...executors.values(), ...new Set(jobs.values())].map((executor) =>
           Promise.resolve().then(() => executor.shutdown()),
         ),
       ).then((results) => {

@@ -147,37 +147,69 @@ describe('ordinary memory queue', () => {
     ).toMatchObject({ jobs: [] });
   });
 
-  it('isolates ordinary memory files by configuration key', async () => {
+  it('keeps pending tasks when the configuration key changes', async () => {
     class Task extends Job<number> {
       static readonly jobName: string = 'task';
       async execute(): Promise<void> {}
     }
-    const service = create();
-    for (const key of ['m', 'other']) {
-      const executor = service.getJobExecutor('scope', key);
-      await executor.setup({ consume: false });
-      await executor.addJob(new Task(key === 'm' ? 1 : 2));
+    // The built-in default, then the explicit `jobs.default: memory` the
+    // README recommends, then a renamed key: all read the same pending tasks.
+    const builtIn = createJobExecutorService(undefined, {
+      appName: 'app',
+      storagePath: directory,
+    });
+    services.push(builtIn);
+    const producer = builtIn.getJobExecutor('scope');
+    await producer.setup({ consume: false });
+    const receipt = await producer.addJob(new Task(1));
+    await builtIn.shutdown();
+
+    const executed = Promise.withResolvers<string>();
+    class Recovered extends Job<number> {
+      static readonly jobName: string = 'task';
+      async execute({ jobId }: JobExecutionContext): Promise<void> {
+        executed.resolve(jobId);
+      }
     }
+    const explicit = createJobExecutorService(
+      { default: 'memory', memory: { adapter: 'memory' } },
+      { appName: 'app', storagePath: directory },
+    );
+    services.push(explicit);
+    const consumer = explicit.getJobExecutor('scope');
+    consumer.registerJob(Recovered);
+    await consumer.setup();
+    await expect(executed.promise).resolves.toBe(receipt.jobId);
+    await explicit.shutdown();
+    expect(await readdir(directory)).toHaveLength(1);
+  });
+
+  it('shares one executor between memory keys naming the same file', async () => {
+    const service = create();
+    const executor = service.getJobExecutor('scope', 'm');
+    expect(service.getJobExecutor('scope', 'other')).toBe(executor);
+    expect(service.getJobExecutor('other-scope', 'other')).not.toBe(executor);
+    await executor.setup({ consume: false });
     await service.shutdown();
-    const files = await readdir(directory);
-    expect(files).toHaveLength(2);
-    const content = await Promise.all(
-      files.map(async (file) =>
-        JSON.parse(await readFile(path.join(directory, file), 'utf8')),
-      ),
+    expect(await readdir(directory)).toHaveLength(1);
+  });
+
+  it('rejects memory keys that share a file with different settings', () => {
+    const service = createJobExecutorService(
+      {
+        default: 'm',
+        m: { adapter: 'memory', attempts: 1 },
+        other: { adapter: 'memory', attempts: 3 },
+        elsewhere: { adapter: 'memory', attempts: 3, namespace: 'second' },
+      },
+      { appName: 'app', storagePath: directory },
     );
-    expect(content).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          key: 'm',
-          jobs: [expect.objectContaining({ payload: 1 })],
-        }),
-        expect.objectContaining({
-          key: 'other',
-          jobs: [expect.objectContaining({ payload: 2 })],
-        }),
-      ]),
+    services.push(service);
+    service.getJobExecutor('scope', 'm');
+    expect(() => service.getJobExecutor('scope', 'other')).toThrow(
+      /"m" and "other" share the memory task file/u,
     );
+    expect(() => service.getJobExecutor('scope', 'elsewhere')).not.toThrow();
   });
 
   it('rejects malformed metadata and mismatched identities without overwriting the snapshot', async () => {
@@ -190,7 +222,7 @@ describe('ordinary memory queue', () => {
       throw new Error('Expected a state object');
     for (const data of [
       { ...valid, version: 99 },
-      { ...valid, key: 'other' },
+      { ...valid, scope: 'other' },
       { ...valid, jobs: [{}] },
       {
         ...valid,

@@ -54,7 +54,7 @@ function harness(config?: ScheduleConfig) {
 }
 
 describe('ordinary service selection', () => {
-  it('keeps different selected keys separate even for the same Redis configuration', () => {
+  it('caches Redis executors by selected key; equal identities share a physical queue', () => {
     const redis = {
       adapter: 'redis' as const,
       connection: { host: 'localhost' },

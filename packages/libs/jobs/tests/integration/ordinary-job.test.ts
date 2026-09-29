@@ -126,17 +126,43 @@ describe('ordinary jobs against a real Redis', { timeout: 60_000 }, () => {
     ).toMatchObject({ reason: 'execute-failed' });
   });
 
-  it('keeps ordinary queues separate when configuration keys differ', async () => {
+  it('consumes under one configuration key what another key with the same identity submitted', async () => {
     const namespace = `ordinary-${randomUUID()}`;
-    const executor = service(namespace);
-    const primary = executor.getJobExecutor('same-scope', 'primary');
-    const secondary = executor.getJobExecutor('same-scope', 'secondary');
-    expect(primary).not.toBe(secondary);
-    await Promise.all([primary.setup(), secondary.setup()]);
-    await primary.addJob(new IsolatedJob({ marker: 'primary' }));
-    await secondary.addJob(new IsolatedJob({ marker: 'secondary' }));
-    await until(() => expect(IsolatedJob.markers).toHaveLength(2));
-    expect(IsolatedJob.markers.sort()).toEqual(['primary', 'secondary']);
+    const producer = service(namespace).getJobExecutor('same-scope', 'primary');
+    const consumer = service(namespace).getJobExecutor(
+      'same-scope',
+      'secondary',
+    );
+    consumer.registerJob(IsolatedJob);
+    await producer.setup({ consume: false });
+    await producer.addJob(new IsolatedJob({ marker: 'renamed' }));
+    await consumer.setup();
+    await until(() => expect(IsolatedJob.markers).toEqual(['renamed']));
+  });
+
+  it('keeps ordinary queues separate across namespaces and scopes', async () => {
+    const created = service(`ordinary-${randomUUID()}`);
+    const other = service(`ordinary-${randomUUID()}`);
+    const executors = [
+      created.getJobExecutor('same-scope', 'primary'),
+      created.getJobExecutor('other-scope', 'primary'),
+      other.getJobExecutor('same-scope', 'primary'),
+    ];
+    const consumed = executors.map(() => [] as string[]);
+    executors.forEach((executor, index) => {
+      executor.registerJob(IsolatedJob);
+      executor.subscribe((event) => {
+        if (event.name === 'JobEnd') consumed[index]!.push(event.jobId);
+      });
+    });
+    await Promise.all(executors.map((executor) => executor.setup()));
+    const receipts = await Promise.all(
+      executors.map((executor, index) =>
+        executor.addJob(new IsolatedJob({ marker: String(index) })),
+      ),
+    );
+    await until(() => expect(IsolatedJob.markers).toHaveLength(3));
+    expect(consumed).toEqual(receipts.map((receipt) => [receipt.jobId]));
   });
 
   it('preserves an explicitly interrupted attempt across graceful shutdown', async () => {

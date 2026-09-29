@@ -26,14 +26,10 @@ class PendingJob extends Job<{ value: string }> {
   async execute(): Promise<void> {}
 }
 
-function ordinaryStateFile(
-  namespace: string,
-  key: string,
-  scope: string,
-): string {
-  const identity = Buffer.from(
-    JSON.stringify([namespace, key, scope]),
-  ).toString('base64url');
+function ordinaryStateFile(namespace: string, scope: string): string {
+  const identity = Buffer.from(JSON.stringify([namespace, scope])).toString(
+    'base64url',
+  );
   return `jobs.${identity}.state.json`;
 }
 
@@ -155,12 +151,12 @@ describe('JobExecutorServiceProvider', () => {
     }
 
     expect(await readdir(path.join(rootDir, 'custom'))).toEqual([
-      ordinaryStateFile('crm-legacy', 'memory', SCOPE),
+      ordinaryStateFile('crm-legacy', SCOPE),
     ]);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('isolates ordinary configuration keys sharing a namespace and storage directory', async () => {
+  it('shares one ordinary memory executor between keys naming the same file', async () => {
     const { app, container } = await application({
       default: 'first',
       first: { adapter: 'memory' },
@@ -170,28 +166,18 @@ describe('JobExecutorServiceProvider', () => {
     provider.register();
     const service = container.resolve(jobExecutorServiceToken);
     const first = service.getJobExecutor(SCOPE, 'first');
-    const second = service.getJobExecutor(SCOPE, 'second');
-    expect(first).not.toBe(second);
+    expect(service.getJobExecutor(SCOPE, 'second')).toBe(first);
 
     try {
-      await Promise.all([
-        first.setup({ consume: false }),
-        second.setup({ consume: false }),
-      ]);
+      await first.setup({ consume: false });
       await first.addJob(new PendingJob({ value: 'first' }));
-      await second.addJob(new PendingJob({ value: 'second' }));
     } finally {
       await provider.shutdown();
     }
 
-    expect(
-      (await readdir(path.join(rootDir, 'storage', 'jobs'))).sort(),
-    ).toEqual(
-      [
-        ordinaryStateFile('crm', 'first', SCOPE),
-        ordinaryStateFile('crm', 'second', SCOPE),
-      ].sort(),
-    );
+    expect(await readdir(path.join(rootDir, 'storage', 'jobs'))).toEqual([
+      ordinaryStateFile('crm', SCOPE),
+    ]);
   });
 
   it('uses one built-in ordinary fallback and warns once for the selected executor', async () => {
@@ -219,7 +205,7 @@ describe('JobExecutorServiceProvider', () => {
     }
 
     expect(await readdir(path.join(rootDir, 'storage', 'jobs'))).toEqual([
-      ordinaryStateFile('crm', '\0built-in-memory', SCOPE),
+      ordinaryStateFile('crm', SCOPE),
     ]);
   });
 
@@ -292,8 +278,8 @@ describe('JobExecutorServiceProvider', () => {
     ).toEqual(
       [
         'crm.%40nocobase%2Fapp-plugin-scheduler.json',
-        ordinaryStateFile('crm', 'memory', SCOPE),
-        ordinaryStateFile('crm', 'memory', otherScope),
+        ordinaryStateFile('crm', SCOPE),
+        ordinaryStateFile('crm', otherScope),
       ].sort(),
     );
   });

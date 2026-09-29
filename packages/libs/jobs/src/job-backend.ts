@@ -23,9 +23,13 @@ export interface JobBackend {
   close(): Promise<void>;
 }
 
-/** The slash excludes this name from the valid Schedule scope domain. */
+/**
+ * The slash excludes this name from the valid Schedule scope domain. The
+ * configuration key is deliberately absent: renaming a key, or moving from the
+ * built-in default to an explicit one, must not strand waiting tasks.
+ */
 export function jobQueueName(
-  config: Pick<ResolvedScheduleExecutorConfig, 'key' | 'scope'>,
+  config: Pick<ResolvedScheduleExecutorConfig, 'scope'>,
 ): string {
-  return `jobs/${Buffer.from(JSON.stringify([config.key, config.scope])).toString('base64url')}`;
+  return `jobs/${Buffer.from(JSON.stringify([config.scope])).toString('base64url')}`;
 }
