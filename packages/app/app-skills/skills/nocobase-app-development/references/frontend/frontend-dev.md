@@ -80,6 +80,7 @@ Each is explained where the pointer leads:
 - A search box whose `value` comes straight from the URL, which breaks Chinese input ([section 5 of `references/table.md`](references/table.md#5-writing-search-and-filters-to-the-url)).
 - `setState` called synchronously in an effect, which fails lint (`react-hooks/set-state-in-effect`, with `--max-warnings 0`); set state in request callbacks, or compare with the previous value during render ([`references/api.md`](references/api.md)).
 - A confirmation dialog that clears its target when closing, so its title flickers ([section 4 of `references/overlay.md`](references/overlay.md#4-delete-confirmation-alertdialog)).
+- A form whose dirty flag is not cleared before `close()` after a successful save, so the close asks to discard the changes that were just saved ([section 2.5 of `references/overlay.md`](references/overlay.md#25-beforeclose-checks-before-closing)).
 
 ## Self-check before finishing
 

@@ -163,9 +163,11 @@ export default function NewProjectPage(): ReactElement {
 
 ```tsx
 import { useTranslation } from '@nocobase/i18n/client';
-import { type ReactElement, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useRef, useState } from 'react';
+import { useOutletContext } from 'react-router';
 
 import { RouteDialog } from '@/components/route-dialog';
+import { useRouteOverlay } from '@/components/use-route-overlay';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -177,11 +179,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+import { ProjectForm } from '../project-form.js';
+import type { ProjectEditOutletContext } from '../types.js';
+
 export default function EditProjectPage(): ReactElement {
   const { t } = useTranslation();
   const submittingRef = useRef(false);
-  // Whether there are unsaved changes: ProjectForm reports it through onDirtyChange; set it back to false after a successful save, before calling close().
+  // Whether there are unsaved changes: the form reports it through onDirtyChange. The callback is stable, so the
+  // form's report effect does not run again when this page re-renders (a save updates the view behind it), which
+  // would write the just-saved form's still-dirty state back into the ref.
   const dirtyRef = useRef(false);
+  const handleDirtyChange = useCallback((dirty: boolean): void => {
+    dirtyRef.current = dirty;
+  }, []);
   // While asking "Discard changes?", holds the function that answers beforeClose.
   const [discardPrompt, setDiscardPrompt] = useState<{
     readonly answer: (discard: boolean) => void;
@@ -204,7 +214,9 @@ export default function EditProjectPage(): ReactElement {
         });
       }}
     >
-      {/* … the form: <ProjectForm … onDirtyChange={(dirty) => { dirtyRef.current = dirty; }} /> inside a body component, as `detail/edit.tsx` in example/edit-dialog.md does */}
+      {/* The form's body (`EditProjectBody` below) extends `detail/edit.tsx` in example/edit-dialog.md with the
+          dirty reporting this pattern needs. */}
+      <EditProjectBody onDirtyChange={handleDirtyChange} />
       {/* The confirmation dialog sits inside the dialog, so Esc closes only the confirmation dialog. */}
       <AlertDialog
         open={discardPrompt !== undefined}
@@ -234,6 +246,30 @@ export default function EditProjectPage(): ReactElement {
         </AlertDialogContent>
       </AlertDialog>
     </RouteDialog>
+  );
+}
+
+/** The form's body: it reports unsaved changes, and the success path clears the flag before closing. */
+function EditProjectBody({
+  onDirtyChange,
+}: {
+  readonly onDirtyChange: (dirty: boolean) => void;
+}): ReactElement {
+  const { close } = useRouteOverlay();
+  const { onSaved } = useOutletContext<ProjectEditOutletContext>();
+  return (
+    <ProjectForm
+      formId='project-edit-form'
+      // … project, onSubmittingChange and onNotFound as in example/edit-dialog.md
+      onDirtyChange={onDirtyChange}
+      onSubmitted={(saved) => {
+        // The save succeeded, so no unsaved changes remain: clear the flag before closing, or beforeClose would ask
+        // to discard the changes that were just saved.
+        onDirtyChange(false);
+        onSaved(saved);
+        void close();
+      }}
+    />
   );
 }
 ```
