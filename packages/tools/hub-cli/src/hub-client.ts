@@ -1,7 +1,7 @@
 // The Hub's HTTP API, as hub-cli uses it. Every call is scoped to one App: `<Hub URL>/api/hub/apps/<App ID>/…`, with the
 // API key as a bearer token.
-import { createReadStream } from 'node:fs';
-import { finished } from 'node:stream/promises';
+import { open } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   HubCliError,
@@ -69,6 +69,23 @@ export interface StartedDeployment {
   readonly reused: boolean;
   readonly createdAt: string | undefined;
 }
+
+interface UploadSession {
+  readonly uploadId: string;
+  readonly offset: number;
+  readonly chunkSize: number;
+}
+
+/** Failures after which a chunk is sent again from the offset the Hub reports. */
+const RESUMABLE = new Set([
+  'RESULT_UNKNOWN',
+  'HUB_UNREACHABLE',
+  'INVALID_HUB_RESPONSE',
+  'UPLOAD_OFFSET_MISMATCH',
+]);
+
+/** Consecutive failed chunks after which the upload gives up; the session stays for the next run to resume. */
+const MAX_CHUNK_FAILURES = 5;
 
 export interface HubClientOptions {
   readonly target: RemoteTarget;
@@ -208,36 +225,125 @@ export class HubClient {
     };
   }
 
+  /**
+   * Uploads an archive through the Hub's resumable upload: a session, then the archive in order, chunk by chunk, then
+   * completion. A lost chunk is resent from the offset the Hub reports, and a session left unfinished by an earlier run
+   * for the same archive is resumed. The Hub answers at once, without a session, when it already has the archive.
+   */
   async uploadRelease(input: {
     file: string;
     size: number;
     checksum: string;
     idempotencyKey: string;
+    onProgress?: ((message: string) => void) | undefined;
   }): Promise<UploadedRelease> {
-    const stream = createReadStream(input.file);
-    // Observed before fetch starts, so an error on a stream fetch never read is still handled.
-    const streamFinished = finished(stream, { cleanup: true }).catch(
-      () => undefined,
-    );
-    let data: Record<string, unknown>;
-    try {
-      const init: RequestInit & { duplex: 'half' } = {
+    const started = await this.#request(
+      'releases/uploads',
+      {
         method: 'POST',
-        duplex: 'half',
-        body: stream,
-        headers: {
-          'content-type': 'application/gzip',
-          'content-length': String(input.size),
-          'x-artifact-sha256': input.checksum,
-          'idempotency-key': input.idempotencyKey,
-        },
-      };
-      data = await this.#request('releases', init, true);
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ size: input.size, sha256: input.checksum }),
+      },
+      false,
+    );
+    if (isRecord(started.release)) return this.#uploaded(started.release);
+    let session = this.#session(started.upload);
+    if (session.offset > 0)
+      input.onProgress?.(
+        `Resuming an earlier upload at ${String(Math.floor((session.offset / input.size) * 100))}%.`,
+      );
+    const handle = await open(input.file, 'r');
+    try {
+      let failures = 0;
+      let reported = Math.floor((session.offset / input.size) * 10);
+      while (session.offset < input.size) {
+        const length = Math.min(session.chunkSize, input.size - session.offset);
+        const chunk = Buffer.alloc(length);
+        const { bytesRead } = await handle.read(
+          chunk,
+          0,
+          length,
+          session.offset,
+        );
+        if (bytesRead !== length)
+          throw this.failure(
+            'INVALID_ARTIFACT',
+            'The archive changed while it was being uploaded.',
+            2,
+          );
+        try {
+          const next = await this.#request(
+            `releases/uploads/${session.uploadId}`,
+            {
+              method: 'PUT',
+              headers: {
+                'content-type': 'application/octet-stream',
+                'content-length': String(length),
+                'upload-offset': String(session.offset),
+              },
+              body: chunk,
+            },
+            true,
+          );
+          session = { ...session, offset: this.#session(next, session).offset };
+          failures = 0;
+        } catch (error) {
+          if (!(error instanceof HubCliError) || !RESUMABLE.has(error.code))
+            throw error;
+          failures += 1;
+          if (failures > MAX_CHUNK_FAILURES || this.signal.aborted) throw error;
+          if (error.code !== 'UPLOAD_OFFSET_MISMATCH')
+            await delay(1000 * failures, undefined, {
+              signal: this.signal,
+            }).catch(() => undefined);
+          // The Hub keeps only whole chunks, so its offset says where to go on.
+          session = {
+            ...session,
+            offset: this.#session(
+              await this.#request(
+                `releases/uploads/${session.uploadId}`,
+                { method: 'GET' },
+                false,
+              ),
+              session,
+            ).offset,
+          };
+        }
+        const tenth = Math.floor((session.offset / input.size) * 10);
+        if (tenth > reported && session.offset < input.size) {
+          reported = tenth;
+          input.onProgress?.(`Uploaded ${String(tenth * 10)}%…`);
+        }
+      }
     } finally {
-      stream.destroy();
-      // destroy() can return before the pending file open and close complete.
-      await streamFinished;
+      await handle.close();
     }
+    // A completion whose answer is lost is sent again: the Hub answers a completed session with its Release.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return this.#uploaded(
+          await this.#request(
+            `releases/uploads/${session.uploadId}/complete`,
+            {
+              method: 'POST',
+              headers: { 'idempotency-key': input.idempotencyKey },
+            },
+            true,
+          ),
+        );
+      } catch (error) {
+        if (
+          !(error instanceof HubCliError) ||
+          error.code !== 'RESULT_UNKNOWN' ||
+          attempt >= 3 ||
+          this.signal.aborted
+        )
+          throw error;
+      }
+    }
+  }
+
+  #uploaded(data: Record<string, unknown>): UploadedRelease {
     const releaseId = data.releaseId;
     if (!isIdentifier(releaseId))
       throw this.failure(
@@ -250,6 +356,34 @@ export class HubClient {
       version: typeof data.version === 'string' ? data.version : undefined,
       reused: data.reused === true,
     };
+  }
+
+  #session(value: unknown, previous?: UploadSession): UploadSession {
+    if (
+      !isRecord(value) ||
+      typeof value.offset !== 'number' ||
+      !Number.isSafeInteger(value.offset) ||
+      value.offset < 0
+    )
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an unreadable upload session.',
+        3,
+      );
+    const uploadId = previous?.uploadId ?? value.uploadId;
+    const chunkSize = previous?.chunkSize ?? value.chunkSize;
+    if (
+      !isIdentifier(uploadId) ||
+      typeof chunkSize !== 'number' ||
+      !Number.isSafeInteger(chunkSize) ||
+      chunkSize < 1
+    )
+      throw this.failure(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an unreadable upload session.',
+        3,
+      );
+    return { uploadId, offset: value.offset, chunkSize };
   }
 
   async deploy(input: {

@@ -96,7 +96,7 @@ A Hub with modified source is an ordinary application project: build its archive
 
 ### Reverse proxy and first sign-in
 
-Forward the entire domain to `http://127.0.0.1:13000` as described in [HTTPS and reverse proxy](./configuration#https-and-reverse-proxy), and add `client_max_body_size 260m;` to the Nginx `server` block. Hub accepts Releases of up to 256 MiB.
+Forward the entire domain to `http://127.0.0.1:13000` as described in [HTTPS and reverse proxy](./configuration#https-and-reverse-proxy), and add `client_max_body_size 260m;` to the Nginx `server` block. That limit is for the management console, which uploads a whole archive of up to 256 MiB in one request; `hub deploy` and `hub upload` send an archive of up to 2 GiB in resumable 8 MiB chunks and need the proxy to allow only 8 MiB.
 
 Open `https://apps.example.com/hub/` and sign in with the account configured under `users.initialAdmin` in `config.yml`. The template default is the user `nocobase` with the password `admin123`; change it immediately after signing in.
 

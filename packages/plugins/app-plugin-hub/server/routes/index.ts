@@ -14,10 +14,13 @@ import type { Logger } from '@nocobase/logging';
 import { hubApiKeyServiceToken } from '../services/api-keys.js';
 import type { CreateHubApiKeyInput } from '../../shared/api-keys.js';
 import { HubError } from '../services/hub.js';
+import { MAX_ARTIFACT_SIZE } from '../services/artifact-upload.js';
+import { RELEASE_UPLOAD_CHUNK_SIZE } from '../services/release-uploads.js';
 import {
   hubServiceToken,
   type CreateHubAppInput,
   type DeployHubAppInput,
+  type HubReleaseRecord,
   type RollbackHubAppInput,
   type UpdateHubConfigInput,
   type UpdateHubSettingsInput,
@@ -36,8 +39,6 @@ import {
   publishingKeySecret,
   type HubRouteEnv,
 } from './api-key-access.js';
-
-const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
@@ -380,11 +381,122 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
               releaseId: release.id,
             },
           );
-          return {
-            ...releaseResponse(release),
-            releaseId: release.id,
-            reused: release.reused ?? false,
-          };
+          return uploadedReleaseResponse(release);
+        });
+      },
+    );
+    // Resumable uploads: declare the archive, send it in chunks of at most `chunkSize`, then complete it. The
+    // completed upload becomes a Release through the same checks and storage as the single upload above.
+    const uploadAccess = {
+      action: HUB_RELEASE_ACTIONS.upload,
+      apiKey: HUB_RELEASE_ACTIONS.upload,
+    } as const;
+    appRoutes.post(
+      '/apps/:appId/releases/uploads',
+      uploadAccess,
+      async (context) => {
+        const appId = context.req.param('appId');
+        let body: unknown;
+        try {
+          body = await context.req.json<unknown>();
+        } catch {
+          body = undefined;
+        }
+        try {
+          const started = await hub.createReleaseUpload(
+            appId,
+            body as { size: number; sha256: string },
+          );
+          if (started.kind === 'release')
+            return context.json(
+              { data: { release: uploadedReleaseResponse(started.release) } },
+              200,
+            );
+          return context.json(
+            { data: { upload: started.upload } },
+            started.kind === 'created' ? 201 : 200,
+          );
+        } catch (error) {
+          return hubErrorResponse(context, error);
+        }
+      },
+    );
+    appRoutes.get(
+      '/apps/:appId/releases/uploads/:uploadId',
+      uploadAccess,
+      async (context) =>
+        respond(context, () =>
+          hub.getReleaseUpload(
+            context.req.param('appId'),
+            context.req.param('uploadId'),
+          ),
+        ),
+    );
+    appRoutes.put(
+      '/apps/:appId/releases/uploads/:uploadId',
+      uploadAccess,
+      async (context) =>
+        respond(context, async () => {
+          const contentType = context.req
+            .header('content-type')
+            ?.split(';')[0]
+            ?.trim();
+          if (contentType !== 'application/octet-stream')
+            throw new HubError(
+              'Use application/octet-stream for upload chunks.',
+              'INVALID_CONTENT_TYPE',
+              400,
+            );
+          const length = context.req.header('content-length');
+          if (length === undefined || !/^[1-9]\d{0,15}$/.test(length))
+            throw new HubError(
+              'A chunk needs a positive Content-Length.',
+              'INVALID_CHUNK',
+              400,
+            );
+          if (Number(length) > RELEASE_UPLOAD_CHUNK_SIZE)
+            throw new HubError(
+              `A chunk may carry at most ${RELEASE_UPLOAD_CHUNK_SIZE} bytes.`,
+              'CHUNK_TOO_LARGE',
+              413,
+            );
+          const offset = context.req.header('upload-offset');
+          if (offset === undefined || !/^(?:0|[1-9]\d{0,15})$/.test(offset))
+            throw new HubError(
+              'A chunk needs an Upload-Offset header.',
+              'INVALID_CHUNK',
+              400,
+            );
+          const chunks = requestChunks(context.req.raw);
+          try {
+            return await hub.appendReleaseUpload(
+              context.req.param('appId'),
+              context.req.param('uploadId'),
+              { offset: Number(offset), length: Number(length), chunks },
+            );
+          } finally {
+            await chunks.return(undefined);
+          }
+        }),
+    );
+    appRoutes.post(
+      '/apps/:appId/releases/uploads/:uploadId/complete',
+      uploadAccess,
+      async (context) => {
+        const appId = context.req.param('appId');
+        const uploadId = context.req.param('uploadId');
+        return respond(context, async () => {
+          const release = await hub.completeReleaseUpload(appId, uploadId, {
+            idempotencyKey: context.req.header('idempotency-key'),
+          });
+          logSecurityEvent(
+            securityLogger,
+            context,
+            'hub.release.upload',
+            appId,
+            { releaseId: release.id, uploadId },
+          );
+          return uploadedReleaseResponse(release);
         });
       },
     );
@@ -666,14 +778,38 @@ async function respond<T>(
     const data = await work();
     return context.json({ data }, status);
   } catch (error) {
-    if (error instanceof HubError) {
-      return context.json(
-        { error: { code: error.code, message: error.message } },
-        error.status,
-      );
-    }
-    throw error;
+    return hubErrorResponse(context, error);
   }
+}
+
+/** The error body for a `HubError`, carrying its extra members next to `code` and `message`; rethrows anything else. */
+function hubErrorResponse(context: Context, error: unknown): Response {
+  if (error instanceof HubError)
+    return context.json(
+      {
+        error: {
+          ...error.details,
+          code: error.code,
+          message: error.message,
+        },
+      },
+      error.status,
+    );
+  throw error;
+}
+
+/** What a finished upload answers with, whether it arrived in one request or in chunks. */
+function uploadedReleaseResponse(release: HubReleaseRecord): ReturnType<
+  typeof releaseResponse
+> & {
+  readonly releaseId: string;
+  readonly reused: boolean;
+} {
+  return {
+    ...releaseResponse(release),
+    releaseId: release.id,
+    reused: release.reused ?? false,
+  };
 }
 
 /** Reads a `limit` query parameter: an integer from 1 to 100. */

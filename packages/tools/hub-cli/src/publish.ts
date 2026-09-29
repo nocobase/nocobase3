@@ -20,8 +20,8 @@ import type { RemoteTarget } from './remotes.ts';
 /** The archive `nocobase build --tar` writes, relative to the App root. */
 export const DEFAULT_ARTIFACT: string = 'storage/exports/dist.tar.gz';
 
-/** The largest archive the Hub accepts in one request. */
-export const MAX_ARTIFACT_SIZE: number = 256 * 1024 * 1024;
+/** The largest archive the Hub's resumable upload accepts. */
+export const MAX_ARTIFACT_SIZE: number = 2 * 1024 * 1024 * 1024;
 
 export interface PublishOptions {
   readonly target: RemoteTarget;
@@ -185,6 +185,7 @@ export async function publish(
     size,
     checksum,
     idempotencyKey: uploadKey,
+    onProgress: options.onProgress,
   });
   client.known.releaseId = uploaded.releaseId;
   if (!options.deploy) {
@@ -306,7 +307,7 @@ async function describeArchive(
   } catch {
     throw new HubCliError(
       'INVALID_ARTIFACT',
-      'The archive must be a readable file between 1 byte and 256 MiB. Deploy without --no-build to build it, or pass --file.',
+      'The archive must be a readable file between 1 byte and 2 GiB. Deploy without --no-build to build it, or pass --file.',
       2,
     );
   }

@@ -51,7 +51,7 @@ export interface HubAppRoutesOptions {
   readonly securityLogger?: Logger;
 }
 
-type Method = 'GET' | 'POST';
+type Method = 'GET' | 'POST' | 'PUT';
 
 const PUBLISHING_KEY_PATTERN = /^Bearer (hub_app_[A-Za-z0-9_-]+)$/i;
 
@@ -102,6 +102,14 @@ export class HubAppRoutes {
       this.#authorize('POST', path, access),
       handler,
     );
+  }
+
+  put<P extends HubAppRoutePath>(
+    path: P,
+    access: HubAppRouteAccess,
+    handler: Handler<HubRouteEnv, P>,
+  ): void {
+    this.#options.app.put(path, this.#authorize('PUT', path, access), handler);
   }
 
   /**

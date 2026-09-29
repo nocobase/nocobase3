@@ -281,7 +281,7 @@ describe('hub deploy and hub upload', () => {
       result: { releaseId: 'r1' },
     });
     expect(runBuild).not.toHaveBeenCalled();
-    expect(hub.requests.at(-1)?.body).toBe('artifact');
+    expect(hub.uploaded()).toBe('artifact');
   });
 
   it('says how to log in when no key is saved', async () => {

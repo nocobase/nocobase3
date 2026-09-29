@@ -2,6 +2,14 @@ import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { receiveArtifact, validateIdempotencyKey } from './artifact-upload.js';
+import {
+  isReleaseUploadExpired,
+  RELEASE_UPLOAD_CHUNK_SIZE,
+  releaseUploadExpiresAt,
+  ReleaseUploadStore,
+  validateReleaseUploadInput,
+  type ReleaseUploadSession,
+} from './release-uploads.js';
 import { isPlaceholderSecret } from '@nocobase/app-server/config';
 import type { HubApiKeyService } from './api-keys.js';
 
@@ -58,8 +66,13 @@ import {
 
 import type { HubPluginConfig } from '../config.js';
 import type {
+  AppendHubReleaseUploadInput,
+  CompleteHubReleaseUploadInput,
   CreateHubAppInput,
   CreateHubReleaseInput,
+  CreateHubReleaseUploadInput,
+  HubReleaseUploadStart,
+  HubReleaseUploadState,
   DeployHubAppInput,
   HubAppDetail,
   HubAppSummary,
@@ -140,6 +153,8 @@ export class HubError extends Error {
     message: string,
     public readonly code: string,
     public readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 503,
+    /** Extra members the error body carries next to `code` and `message`, such as an upload's current offset. */
+    public readonly details?: Readonly<Record<string, unknown>> | undefined,
   ) {
     super(message);
     this.name = 'HubError';
@@ -150,6 +165,7 @@ export class DefaultHubService implements HubService {
   private readonly diagnostic: ReturnType<typeof createDiagnosticLogger>;
   private readonly disk: NocoBaseDriveDisk;
   private readonly hostController: HubHostController;
+  private uploadStore: ReleaseUploadStore | undefined;
   private readonly locks = new Map<string, Promise<unknown>>();
   private revision = 0;
   private currentHostUrl: string | null = null;
@@ -703,74 +719,284 @@ export class DefaultHubService implements HubService {
       input.checksum,
     );
     try {
-      const metadata = await inspectArtifact(staged.path);
-      assertMountableAt(metadata.manifest, `/${appId}`);
-      assertBuildTargetMatches(metadata.manifest, await this.hostRuntime());
-      return await this.withLock(`publish:${appId}`, async () => {
-        const existing = await this.existingRelease(
-          appId,
-          staged.checksum,
-          input.idempotencyKey,
-        );
-        if (existing) return existing;
-        const id = randomUUID();
-        const artifactKey = `${appId}/${id}.tar.gz`;
-        const release: HubReleaseRecord = {
-          id,
-          appId,
-          artifactKey,
-          ...metadata,
-          checksum: staged.checksum,
-          size: staged.size,
-          createdAt: new Date(),
-        };
-        try {
-          await this.disk.putStream(
-            artifactKey,
-            createReadStream(staged.path),
-            { visibility: 'private', contentType: 'application/gzip' },
-          );
-          await this.options.database.transaction(async (connection) => {
-            await connection.query
-              .updateTable('hubApps')
-              .set({ updatedAt: new Date() })
-              .where('id', '=', appId)
-              .execute();
-            await connection.query
-              .insertInto('hubAppReleases')
-              .values(encodeRelease(release))
-              .execute();
-            await connection.query
-              .insertInto('hubReleaseChecksums')
-              .values({ appId, checksum: staged.checksum, releaseId: id })
-              .execute();
-            if (input.idempotencyKey)
-              await connection.query
-                .insertInto('hubReleaseRequests')
-                .values({
-                  appId,
-                  requestKey: input.idempotencyKey,
-                  checksum: staged.checksum,
-                  releaseId: id,
-                })
-                .execute();
-          });
-        } catch (error) {
-          await this.disk.delete(artifactKey);
-          // A second Hub writer may have won the database uniqueness race.
-          const winner = await this.existingRelease(
-            appId,
-            staged.checksum,
-            input.idempotencyKey,
-          );
-          if (winner) return winner;
-          throw error;
-        }
-        return { ...release, reused: false };
-      });
+      return await this.publishStagedArtifact(
+        appId,
+        staged,
+        input.idempotencyKey,
+      );
     } finally {
       await staged.dispose();
     }
+  }
+
+  /**
+   * Turns an archive already staged on local disk into a Release: the one path both the single upload and a
+   * completed resumable upload take. The caller owns the staged file and removes it afterwards.
+   */
+  private async publishStagedArtifact(
+    appId: string,
+    staged: {
+      readonly path: string;
+      readonly size: number;
+      readonly checksum: string;
+    },
+    idempotencyKey: string | undefined,
+  ): Promise<HubReleaseRecord> {
+    const metadata = await inspectArtifact(staged.path);
+    assertMountableAt(metadata.manifest, `/${appId}`);
+    assertBuildTargetMatches(metadata.manifest, await this.hostRuntime());
+    return await this.withLock(`publish:${appId}`, async () => {
+      const existing = await this.existingRelease(
+        appId,
+        staged.checksum,
+        idempotencyKey,
+      );
+      if (existing) return existing;
+      const id = randomUUID();
+      const artifactKey = `${appId}/${id}.tar.gz`;
+      const release: HubReleaseRecord = {
+        id,
+        appId,
+        artifactKey,
+        ...metadata,
+        checksum: staged.checksum,
+        size: staged.size,
+        createdAt: new Date(),
+      };
+      try {
+        await this.disk.putStream(artifactKey, createReadStream(staged.path), {
+          visibility: 'private',
+          contentType: 'application/gzip',
+        });
+        await this.options.database.transaction(async (connection) => {
+          await connection.query
+            .updateTable('hubApps')
+            .set({ updatedAt: new Date() })
+            .where('id', '=', appId)
+            .execute();
+          await connection.query
+            .insertInto('hubAppReleases')
+            .values(encodeRelease(release))
+            .execute();
+          await connection.query
+            .insertInto('hubReleaseChecksums')
+            .values({ appId, checksum: staged.checksum, releaseId: id })
+            .execute();
+          if (idempotencyKey)
+            await connection.query
+              .insertInto('hubReleaseRequests')
+              .values({
+                appId,
+                requestKey: idempotencyKey,
+                checksum: staged.checksum,
+                releaseId: id,
+              })
+              .execute();
+        });
+      } catch (error) {
+        await this.disk.delete(artifactKey);
+        // A second Hub writer may have won the database uniqueness race.
+        const winner = await this.existingRelease(
+          appId,
+          staged.checksum,
+          idempotencyKey,
+        );
+        if (winner) return winner;
+        throw error;
+      }
+      return { ...release, reused: false };
+    });
+  }
+
+  /** Created on first use, so a Hub that never receives a resumable upload never reads where they would go. */
+  private get uploads(): ReleaseUploadStore {
+    this.uploadStore ??= new ReleaseUploadStore(
+      this.options.config.uploadsDir ??
+        path.join(path.dirname(this.options.config.host.configPath), 'uploads'),
+    );
+    return this.uploadStore;
+  }
+
+  public async createReleaseUpload(
+    appId: string,
+    input: CreateHubReleaseUploadInput,
+  ): Promise<HubReleaseUploadStart> {
+    const { size, sha256 } = validateReleaseUploadInput(input);
+    await this.requireApp(appId);
+    const existing = await this.existingRelease(appId, sha256);
+    if (existing) return { kind: 'release', release: existing };
+    // One lock for every creation: the sweep removes directories without a readable record, which is also what a
+    // session looks like while it is being created.
+    return await this.withLock('uploads', async () => {
+      const now = Date.now();
+      let resumable: ReleaseUploadSession | null = null;
+      for (const uploadId of await this.uploads.ids()) {
+        let session = await this.uploads.read(uploadId);
+        // A session another request is working on is in use, so it is never swept from under that request.
+        if (
+          (!session || isReleaseUploadExpired(session, now)) &&
+          !this.locks.has(`upload:${uploadId}`)
+        )
+          session = await this.withLock(`upload:${uploadId}`, async () => {
+            const current = await this.uploads.read(uploadId);
+            if (current && !isReleaseUploadExpired(current, now))
+              return current;
+            await this.uploads.remove(uploadId);
+            return null;
+          });
+        if (
+          session &&
+          !isReleaseUploadExpired(session, now) &&
+          !resumable &&
+          session.appId === appId &&
+          session.sha256 === sha256 &&
+          session.size === size &&
+          session.releaseId === undefined
+        )
+          resumable = session;
+      }
+      if (resumable) return { kind: 'resumed', upload: uploadStart(resumable) };
+      const created = await this.uploads.create({ appId, size, sha256 });
+      return { kind: 'created', upload: uploadStart(created) };
+    });
+  }
+
+  public async getReleaseUpload(
+    appId: string,
+    uploadId: string,
+  ): Promise<HubReleaseUploadState> {
+    // `meta.json` is replaced by rename, so a read needs no lock and never waits behind a chunk still arriving.
+    const session = await this.uploads.read(uploadId);
+    if (session && isReleaseUploadExpired(session))
+      return uploadState(
+        await this.withLock(`upload:${uploadId}`, () =>
+          this.releaseUploadSession(appId, uploadId),
+        ),
+      );
+    return uploadState(requireUploadSession(session, appId));
+  }
+
+  public async appendReleaseUpload(
+    appId: string,
+    uploadId: string,
+    input: AppendHubReleaseUploadInput,
+  ): Promise<HubReleaseUploadState> {
+    return await this.withLock(`upload:${uploadId}`, async () => {
+      const session = await this.releaseUploadSession(appId, uploadId);
+      if (session.releaseId !== undefined)
+        throw new HubError(
+          'This upload has already been completed.',
+          'UPLOAD_COMPLETED',
+          409,
+          { offset: session.offset },
+        );
+      if (input.offset !== session.offset)
+        throw new HubError(
+          `The upload is at offset ${session.offset}, not ${input.offset}.`,
+          'UPLOAD_OFFSET_MISMATCH',
+          409,
+          { offset: session.offset },
+        );
+      if (session.offset + input.length > session.size)
+        throw new HubError(
+          'The chunk extends past the declared upload size.',
+          'UPLOAD_TOO_LARGE',
+          400,
+        );
+      await this.uploads.append(
+        uploadId,
+        session.offset,
+        input.length,
+        input.chunks,
+      );
+      const updated: ReleaseUploadSession = {
+        ...session,
+        offset: session.offset + input.length,
+        updatedAt: new Date().toISOString(),
+      };
+      await this.uploads.write(updated);
+      return uploadState(updated);
+    });
+  }
+
+  public async completeReleaseUpload(
+    appId: string,
+    uploadId: string,
+    input: CompleteHubReleaseUploadInput = {},
+  ): Promise<HubReleaseRecord> {
+    validateIdempotencyKey(input.idempotencyKey);
+    return await this.withLock(`upload:${uploadId}`, async () => {
+      const session = await this.releaseUploadSession(appId, uploadId);
+      if (session.releaseId !== undefined)
+        return {
+          ...(await this.getRelease(appId, session.releaseId)),
+          reused: session.reused ?? false,
+        };
+      if (session.offset !== session.size)
+        throw new HubError(
+          `The upload has ${session.offset} of ${session.size} bytes.`,
+          'UPLOAD_INCOMPLETE',
+          409,
+          { offset: session.offset },
+        );
+      await this.requireApp(appId);
+      const checksum = await this.uploads.digest(uploadId);
+      if (checksum !== session.sha256) {
+        await this.uploads.remove(uploadId);
+        throw new HubError(
+          'Artifact checksum does not match.',
+          'CHECKSUM_MISMATCH',
+          422,
+        );
+      }
+      let release: HubReleaseRecord;
+      try {
+        release = await this.publishStagedArtifact(
+          appId,
+          {
+            path: this.uploads.dataPath(uploadId),
+            size: session.size,
+            checksum,
+          },
+          input.idempotencyKey,
+        );
+      } catch (error) {
+        // An archive the Hub refuses stays refused; anything else, such as a storage failure or an idempotency
+        // conflict, keeps the staged bytes so the client can complete again.
+        if (error instanceof HubError && error.status === 422)
+          await this.uploads.remove(uploadId);
+        throw error;
+      }
+      await this.uploads.write({
+        ...session,
+        releaseId: release.id,
+        reused: release.reused ?? false,
+        updatedAt: new Date().toISOString(),
+      });
+      await this.uploads.removeData(uploadId);
+      return release;
+    });
+  }
+
+  /** The session for this App, removing it and answering 404 once it has expired. Call it under the session lock. */
+  private async releaseUploadSession(
+    appId: string,
+    uploadId: string,
+  ): Promise<ReleaseUploadSession> {
+    const session = await this.uploads.read(uploadId);
+    if (session && isReleaseUploadExpired(session)) {
+      await this.uploads.remove(uploadId);
+      return requireUploadSession(null, appId);
+    }
+    return requireUploadSession(session, appId);
+  }
+
+  private async removeAppUploads(appId: string): Promise<void> {
+    for (const uploadId of await this.uploads.ids())
+      await this.withLock(`upload:${uploadId}`, async () => {
+        const session = await this.uploads.read(uploadId);
+        if (session?.appId === appId) await this.uploads.remove(uploadId);
+      });
   }
 
   private async existingRelease(
@@ -1234,6 +1460,7 @@ export class DefaultHubService implements HubService {
             recursive: true,
             force: true,
           }),
+          this.removeAppUploads(appId),
         ]);
       }),
     );
@@ -1929,6 +2156,34 @@ export class DefaultHubService implements HubService {
       if (this.locks.get(appId) === current) this.locks.delete(appId);
     }
   }
+}
+
+function uploadState(session: ReleaseUploadSession): HubReleaseUploadState {
+  return {
+    uploadId: session.uploadId,
+    offset: session.offset,
+    size: session.size,
+    expiresAt: releaseUploadExpiresAt(session),
+    ...(session.releaseId === undefined
+      ? {}
+      : { releaseId: session.releaseId }),
+  };
+}
+
+function uploadStart(
+  session: ReleaseUploadSession,
+): HubReleaseUploadState & { readonly chunkSize: number } {
+  return { ...uploadState(session), chunkSize: RELEASE_UPLOAD_CHUNK_SIZE };
+}
+
+/** A session belongs to its App: another App's ID in the path answers exactly as an unknown upload does. */
+function requireUploadSession(
+  session: ReleaseUploadSession | null,
+  appId: string,
+): ReleaseUploadSession {
+  if (!session || session.appId !== appId)
+    throw new HubError('Upload not found.', 'UPLOAD_NOT_FOUND', 404);
+  return session;
 }
 
 function normalizeArtifactConfig(

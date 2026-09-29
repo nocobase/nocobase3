@@ -7,8 +7,9 @@ export interface RecordedRequest {
   readonly route: string;
   readonly url: string;
   readonly headers: Record<string, string>;
-  /** The body as text: JSON for the JSON requests, the archive's bytes for an upload. */
+  /** The body as text: JSON for the JSON requests, a chunk of the archive for an upload. */
   readonly body: string;
+  readonly bytes: Buffer;
 }
 
 export type Handler = (
@@ -41,11 +42,40 @@ export function failure(code: string, status: number): Response {
   );
 }
 
-/** The routes a Hub answers by default: an App on linux-x64 Node 24, a fresh Release, a deployment that succeeds. */
-export function defaultRoutes(): Record<string, Handler> {
+/** What the fake Hub's upload session has received. */
+export interface UploadState {
+  size: number;
+  received: Buffer;
+  /** How many bytes the fake Hub takes per chunk: small, so a test archive spans several. */
+  chunkSize: number;
+}
+
+/**
+ * The routes a Hub answers by default: an App on linux-x64 Node 24, a resumable upload that keeps what it receives and
+ * completes as a fresh Release, and a deployment that succeeds.
+ */
+export function defaultRoutes(state: UploadState): Record<string, Handler> {
+  const session = (): object => ({
+    uploadId: 'u1',
+    offset: state.received.length,
+    size: state.size,
+    chunkSize: state.chunkSize,
+    expiresAt: '2026-09-30T00:00:00.000Z',
+  });
   return {
     'GET ': () => data({ id: APP_ID, buildTarget: HOST_TARGET }),
-    'POST releases': () =>
+    'POST releases/uploads': (request) => {
+      state.size = (JSON.parse(request.body) as { size: number }).size;
+      return data({ upload: session() }, 201);
+    },
+    'PUT releases/uploads/u1': (request) => {
+      if (Number(request.headers['upload-offset']) !== state.received.length)
+        return failure('UPLOAD_OFFSET_MISMATCH', 409);
+      state.received = Buffer.concat([state.received, request.bytes]);
+      return data(session());
+    },
+    'GET releases/uploads/u1': () => data(session()),
+    'POST releases/uploads/u1/complete': () =>
       data({ releaseId: 'r1', version: '1.0.0', reused: false }),
     'POST deploy': () =>
       data({ operationId: 'op-1', status: 'queued', reused: false }),
@@ -56,8 +86,16 @@ export function defaultRoutes(): Record<string, Handler> {
 export function fakeHub(overrides: Record<string, Handler | undefined> = {}): {
   requests: RecordedRequest[];
   fetch: ReturnType<typeof vi.fn>;
+  /** The bytes the upload session received, as text. */
+  uploaded: () => string;
+  state: UploadState;
 } {
-  const routes = { ...defaultRoutes(), ...overrides };
+  const state: UploadState = {
+    size: 0,
+    received: Buffer.alloc(0),
+    chunkSize: 4,
+  };
+  const routes = { ...defaultRoutes(state), ...overrides };
   const requests: RecordedRequest[] = [];
   const base = `${HUB}/api/hub/apps/${APP_ID}`;
   const fetch = vi.fn(async (input: URL | string, init: RequestInit = {}) => {
@@ -66,20 +104,16 @@ export function fakeHub(overrides: Record<string, Handler | undefined> = {}): {
     if (url !== base && !url.startsWith(`${base}/`))
       throw new Error(`Unexpected URL ${url}`);
     const route = url === base ? '' : url.slice(base.length + 1);
-    let body = '';
-    if (typeof init.body === 'string') body = init.body;
-    else if (init.body) {
-      const chunks: Buffer[] = [];
-      for await (const chunk of init.body as unknown as AsyncIterable<Uint8Array>)
-        chunks.push(Buffer.from(chunk));
-      body = Buffer.concat(chunks).toString();
-    }
+    let bytes = Buffer.alloc(0);
+    if (typeof init.body === 'string') bytes = Buffer.from(init.body);
+    else if (init.body instanceof Uint8Array) bytes = Buffer.from(init.body);
     const request: RecordedRequest = {
       method: init.method ?? 'GET',
       route,
       url,
       headers: { ...(init.headers as Record<string, string>) },
-      body,
+      body: bytes.toString(),
+      bytes,
     };
     requests.push(request);
     const handler = routes[`${request.method} ${route}`];
@@ -87,7 +121,12 @@ export function fakeHub(overrides: Record<string, Handler | undefined> = {}): {
     return await handler(request);
   });
   vi.stubGlobal('fetch', fetch);
-  return { requests, fetch };
+  return {
+    requests,
+    fetch,
+    uploaded: () => state.received.toString(),
+    state,
+  };
 }
 
 export const RELEASES = [

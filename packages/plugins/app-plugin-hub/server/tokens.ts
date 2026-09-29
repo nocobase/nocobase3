@@ -164,6 +164,50 @@ export interface CreateHubReleaseInput {
   readonly idempotencyKey?: string;
 }
 
+/** What a client declares when it starts a resumable Release upload. */
+export interface CreateHubReleaseUploadInput {
+  /** The archive's size in bytes. */
+  readonly size: number;
+  /** The archive's lowercase SHA-256 hex digest. */
+  readonly sha256: string;
+}
+
+/** Where a resumable Release upload stands. */
+export interface HubReleaseUploadState {
+  readonly uploadId: string;
+  /** Bytes received and durably stored; the next chunk starts here. */
+  readonly offset: number;
+  readonly size: number;
+  /** Last activity plus the session lifetime. */
+  readonly expiresAt: Date;
+  /** The Release the upload became, once it has been completed. */
+  readonly releaseId?: string;
+}
+
+/**
+ * The answer to starting a resumable upload: the App's existing Release with that checksum, or the session to send
+ * the bytes to, `created` when it is new and `resumed` when an unfinished one already existed.
+ */
+export type HubReleaseUploadStart =
+  | { readonly kind: 'release'; readonly release: HubReleaseRecord }
+  | {
+      readonly kind: 'created' | 'resumed';
+      readonly upload: HubReleaseUploadState & { readonly chunkSize: number };
+    };
+
+/** One chunk of a resumable upload. */
+export interface AppendHubReleaseUploadInput {
+  /** The offset the client believes the upload is at; it must equal the stored offset. */
+  readonly offset: number;
+  /** The chunk's declared length in bytes. */
+  readonly length: number;
+  readonly chunks: AsyncIterable<Uint8Array>;
+}
+
+export interface CompleteHubReleaseUploadInput {
+  readonly idempotencyKey?: string;
+}
+
 export interface HubConfigDocument {
   readonly mode: HubConfigMode;
   readonly content: string | null;
@@ -235,6 +279,24 @@ export interface HubService {
   createRelease(
     appId: string,
     input: CreateHubReleaseInput,
+  ): Promise<HubReleaseRecord>;
+  createReleaseUpload(
+    appId: string,
+    input: CreateHubReleaseUploadInput,
+  ): Promise<HubReleaseUploadStart>;
+  appendReleaseUpload(
+    appId: string,
+    uploadId: string,
+    input: AppendHubReleaseUploadInput,
+  ): Promise<HubReleaseUploadState>;
+  getReleaseUpload(
+    appId: string,
+    uploadId: string,
+  ): Promise<HubReleaseUploadState>;
+  completeReleaseUpload(
+    appId: string,
+    uploadId: string,
+    input?: CompleteHubReleaseUploadInput,
   ): Promise<HubReleaseRecord>;
   readConfig(appId: string): Promise<HubConfigDocument>;
   updateConfig(

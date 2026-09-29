@@ -96,7 +96,7 @@ npx --registry=https://npm.nocobase.ai @nocobase/app-installer status --dir /srv
 
 ### 反向代理与首次登录
 
-按[HTTPS 与反向代理](./configuration#https-与反向代理)将整个域名转发至 `http://127.0.0.1:13000`，并在 Nginx 的 `server` 配置中增加 `client_max_body_size 260m;`。Hub 允许上传的 Release 最大为 256 MiB。
+按[HTTPS 与反向代理](./configuration#https-与反向代理)将整个域名转发至 `http://127.0.0.1:13000`，并在 Nginx 的 `server` 配置中增加 `client_max_body_size 260m;`。这个上限只为管理界面的上传：管理界面一次上传整个归档，最大 256 MiB；`hub deploy` 和 `hub upload` 按 8 MiB 分段续传，归档最大 2 GiB，只要求反向代理放行 8 MiB 的请求。
 
 打开 `https://apps.example.com/hub/`，使用 `config.yml` 中 `users.initialAdmin` 配置的账号登录。模板默认用户名为 `nocobase`、密码为 `admin123`，登录后应立即修改。
 

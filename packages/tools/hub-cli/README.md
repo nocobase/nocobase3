@@ -89,6 +89,10 @@ A supplied configuration replaces the whole configuration document through Hub's
 
 Builds and uploads the archive as a new Release without deploying it, and reports the Release ID. The Release is immutable: uploading the same archive again returns the existing Release. It takes `--build`/`--no-build`, `--file`, `--idempotency-key` (defaulting to the archive SHA-256) and `--timeout`. Use it when a key may only upload, such as in CI that leaves deployment to a person, who then runs `hub deploy --release-id`.
 
+## Uploads
+
+An archive of up to 2 GiB goes to the Hub through its resumable upload, in the chunk size the Hub sets. A chunk whose answer is lost is sent again from the offset the Hub reports, and a run that gives up leaves its session on the Hub for 24 hours: running the same command again resumes where it stopped. When the Hub already has the archive, nothing is sent and its Release is used. A reverse proxy in front of the Hub only needs to allow a request the size of one chunk.
+
 ## `hub releases`
 
 Lists the App's Releases, newest first: ID, version, checksum, size, `uploadedAt`, the `buildTarget` the archive records, whether it is what the App runs now (`running`) and whether a deployment of it ever succeeded (`everDeployed`). `--limit` sets how many (1–100, default 20), and `--release-id` reports one. Roll back by deploying an earlier one with `hub deploy --release-id`.

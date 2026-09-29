@@ -653,6 +653,12 @@ function createHubService(): HubService {
     getRelease: vi.fn(() => Promise.resolve(release)),
     getReleaseSummary: vi.fn(() => Promise.resolve(summary)),
     createRelease: vi.fn(() => Promise.resolve(release)),
+    createReleaseUpload: vi.fn(() =>
+      Promise.resolve({ kind: 'release', release } as const),
+    ),
+    appendReleaseUpload: vi.fn(() => Promise.reject(new Error('unused'))),
+    getReleaseUpload: vi.fn(() => Promise.reject(new Error('unused'))),
+    completeReleaseUpload: vi.fn(() => Promise.resolve(release)),
     readConfig: vi.fn(() =>
       Promise.resolve({ mode: 'file', content: 'feature: true\n' }),
     ),

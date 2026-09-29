@@ -73,25 +73,39 @@ describe('hub deploy', () => {
       '24',
       '--tar',
     ]);
-    expect(
-      hub.requests.map((request) => `${request.method} ${request.route}`),
-    ).toEqual([
+    const routes = hub.requests.map(
+      (request) => `${request.method} ${request.route}`,
+    );
+    const chunks = Math.ceil(hub.state.size / hub.state.chunkSize);
+    expect(routes).toEqual([
       'GET ',
-      'POST releases',
+      'POST releases/uploads',
+      ...Array<string>(chunks).fill('PUT releases/uploads/u1'),
+      'POST releases/uploads/u1/complete',
       'POST deploy',
       'GET deployments/op-1/status',
     ]);
     for (const request of hub.requests)
       expect(request.headers.authorization).toBe(`Bearer ${apiKey}`);
-    const upload = hub.requests[1];
-    expect(upload?.headers['content-type']).toBe('application/gzip');
-    expect(upload?.headers['x-artifact-sha256']).toBe(result.checksum);
+    expect(JSON.parse(hub.requests[1]?.body ?? '')).toEqual({
+      size: result.size,
+      sha256: result.checksum,
+    });
+    // The archive arrives whole and in order, each chunk at the offset the Hub has reached.
+    expect(hub.state.received.length).toBe(result.size);
+    expect(
+      hub.requests
+        .filter((request) => request.method === 'PUT')
+        .map((request) => Number(request.headers['upload-offset'])),
+    ).toEqual(Array.from({ length: chunks }, (_, index) => index * 4));
+    const complete = hub.requests.at(-3);
     // The upload is retried by its content, the deployment by what it deploys.
-    expect(upload?.headers['idempotency-key']).toBe(result.checksum);
-    expect(hub.requests[2]?.headers['idempotency-key']).toBe(
+    expect(complete?.headers['idempotency-key']).toBe(result.checksum);
+    const deployRequest = hub.requests.at(-2);
+    expect(deployRequest?.headers['idempotency-key']).toBe(
       sha256(`${APP_ID}:r1`),
     );
-    expect(JSON.parse(hub.requests[2]?.body ?? '')).toEqual({
+    expect(JSON.parse(deployRequest?.body ?? '')).toEqual({
       releaseId: 'r1',
     });
     expect(result).toMatchObject({
@@ -103,19 +117,25 @@ describe('hub deploy', () => {
       buildTarget: HOST_TARGET,
     });
     expect(warning).toBeUndefined();
-    expect(progress).toEqual([
+    expect(progress.slice(0, 2)).toEqual([
       'Building for linux-x64 Node 24…',
       expect.stringMatching(/^Uploading dist\.tar\.gz/u),
+    ]);
+    expect(progress.slice(-2)).toEqual([
       'Waiting for deployment op-1 (up to 600s)…',
       'Deployment op-1: succeeded',
     ]);
+    // Progress is reported by the tenth, each tenth once.
+    const tenths = progress.filter((line) => line.startsWith('Uploaded '));
+    expect(tenths.length).toBeGreaterThan(0);
+    expect(new Set(tenths).size).toBe(tenths.length);
     expect(JSON.stringify({ result, progress })).not.toContain(apiKey);
   });
 
   it('deploys the Release the Hub already has for the archive instead of failing', async () => {
     const hub = fakeHub({
-      'POST releases': () =>
-        data({ releaseId: 'r0', version: '0.9.0', reused: true }),
+      'POST releases/uploads': () =>
+        data({ release: { releaseId: 'r0', version: '0.9.0', reused: true } }),
     });
     await writeArchive();
     const progress: string[] = [];
@@ -250,11 +270,8 @@ describe('hub upload', () => {
       deploy: false,
       idempotencyKey: 'ci-42',
     });
-    expect(hub.requests.map((request) => request.route)).toEqual([
-      '',
-      'releases',
-    ]);
-    expect(hub.requests[1]?.headers['idempotency-key']).toBe('ci-42');
+    expect(hub.requests.at(-1)?.route).toBe('releases/uploads/u1/complete');
+    expect(hub.requests.at(-1)?.headers['idempotency-key']).toBe('ci-42');
     expect(result).toMatchObject({
       releaseId: 'r1',
       reused: false,
@@ -274,7 +291,66 @@ describe('hub upload', () => {
       file: 'other.tar.gz',
       deploy: false,
     });
-    expect(hub.requests.at(-1)?.body).toBe('other');
+    expect(hub.uploaded()).toBe('other');
+  });
+
+  it('resends a lost chunk from the offset the Hub reports', async () => {
+    let failed = false;
+    const hub = fakeHub();
+    const put = hub.fetch.getMockImplementation();
+    hub.fetch.mockImplementation(
+      async (input: URL | string, init?: RequestInit) => {
+        // The second chunk reaches the Hub, but its answer is lost.
+        if (
+          !failed &&
+          init?.headers &&
+          (init.headers as Record<string, string>)['upload-offset'] === '4'
+        ) {
+          failed = true;
+          await put?.(input, init);
+          throw new TypeError('socket hang up');
+        }
+        return put?.(input, init);
+      },
+    );
+    await writeFile(path.join(root, 'other.tar.gz'), 'abcdefghij');
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      cwd: root,
+      file: 'other.tar.gz',
+      deploy: false,
+    });
+    expect(result.releaseId).toBe('r1');
+    expect(hub.uploaded()).toBe('abcdefghij');
+    expect(
+      hub.requests.map(
+        (request) =>
+          `${request.method} ${Number(request.headers['upload-offset'] ?? -1)}`,
+      ),
+    ).toContain('GET -1');
+  });
+
+  it('resumes a session an earlier run left unfinished', async () => {
+    const hub = fakeHub();
+    hub.state.received = Buffer.from('abcd');
+    await writeFile(path.join(root, 'other.tar.gz'), 'abcdefghij');
+    const progress: string[] = [];
+    await publish({
+      target,
+      apiKey,
+      root,
+      cwd: root,
+      file: 'other.tar.gz',
+      deploy: false,
+      onProgress: (line) => progress.push(line),
+    });
+    expect(hub.uploaded()).toBe('abcdefghij');
+    expect(progress).toContain('Resuming an earlier upload at 40%.');
+    expect(
+      hub.requests.filter((request) => request.method === 'PUT'),
+    ).toHaveLength(2);
   });
 });
 
