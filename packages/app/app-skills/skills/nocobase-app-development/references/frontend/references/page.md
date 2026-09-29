@@ -313,11 +313,11 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
 
 Write `navigation` on the route. The application sidebar, the settings menu and the dev menu all read their menu entries from route declarations.
 
-| Field   | Description                                                                                               |
-| ------- | --------------------------------------------------------------------------------------------------------- |
-| `title` | Translation key, resolved in the namespace that owns the route (`client/locales/` for application routes) |
-| `icon`  | Optional. An icon component that accepts `className`; use `lucide-react` icons directly                   |
-| `order` | Optional. Lower numbers come first among siblings; defaults to 0. Equal values keep registration order    |
+| Field   | Description                                                                                                                                                                                                                                                                                                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title` | Translation key, resolved in the namespace that owns the route (`client/locales/` for application routes)                                                                                                                                                                                                                            |
+| `icon`  | Optional. An icon component that accepts `className`; use `lucide-react` icons directly. Give the entries of one group icons together or not at all — the collapsed icon-mode sidebar shows the label of an entry that has no icon, so a mixed group reads as inconsistent — and do not repeat a group's own icon on its first child |
+| `order` | Optional. Lower numbers come first among siblings; defaults to 0. Equal values keep registration order                                                                                                                                                                                                                               |
 
 - Add the translations to the existing `navigation` group in `client/locales/en-US.ts` and `zh-CN.ts`, for example `projects: 'Projects'` and `projects: '项目'`.
 - Pages that should not appear in the menu (details, tab content and so on) have no `navigation`. When such a page is open, the menu highlights the nearest ancestor that has a menu entry.

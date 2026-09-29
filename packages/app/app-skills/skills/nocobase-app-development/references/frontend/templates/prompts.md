@@ -43,7 +43,7 @@ Additional verification: when the screenshots and records are not enough to deci
 
 Check each point:
 1. B Blocking: judge from the run record and the code whether the core flow works. Console errors (except those already in the baseline), failed requests (except those the check caused on purpose), actions without feedback, missing error handling and unreliable input all count.
-2. D Design conformance: go through the acceptance criteria in design.md one by one, and give each one "Pass / Fail / Not verified" with evidence (a screenshot file name or a code location).
+2. D Design conformance: compare the whole design file with the code — go through the acceptance criteria in design.md one by one, and also check the routes, navigation entries (including their icons), permissions, component list and states it declares against `client/routes.ts` and the page modules — and give each one "Pass / Fail / Not verified" with evidence (a screenshot file name or a code location).
 3. G Guidelines: check the Must guidelines against the "Review checklist" at the end of the guidelines.
 4. S Suggestions: anything else that could be improved.
 

@@ -181,6 +181,7 @@ The design review and the acceptance review both go through this checklist item 
 
 - [ ] The page template and overlay choices are correct, and stacking follows the rules (T1–T5, I1)
 - [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places, a back button on a page below another one (L1, L2, L5, L6)
+- [ ] Navigation is consistent: entries in one group all carry an icon or none does, and a group's own icon does not repeat its first child's (`page.md` §6)
 - [ ] All states are covered: loading, empty, no results, load failed, submitting, a block the user may not see; whether a failure offers a retry follows S4 (S1–S6)
 - [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, date and number columns sortable, all four states, result cap notice (T1.1–T1.6, T1.8–T1.10)
 - [ ] Detail view: drawer or page, record name and grouped actions, opens by URL, label–value layout with "—" for empty values (T2.1–T2.4)

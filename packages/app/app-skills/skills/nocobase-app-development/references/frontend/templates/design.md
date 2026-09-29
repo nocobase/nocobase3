@@ -96,6 +96,8 @@ Each one must be checkable by an action or a screenshot:
 
 When the design changes, keep existing numbers unchanged and append new criteria at the end.
 
+Every route, navigation entry (including its icon), permission, component and state declared in sections 2–4 must map to one criterion above, or be marked explicitly as not a criterion. A declaration with no criterion is not compared with the code at acceptance time.
+
 ## 10. Open questions
 
 Points the user needs to decide; if there are none, write "None".
