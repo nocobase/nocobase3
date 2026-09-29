@@ -9,7 +9,7 @@ import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import core from '@nocobase/app-plugin-file/server';
+import core, { FILE_COLUMNS } from '@nocobase/app-plugin-file/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import example from '../server/index.js';
 
@@ -39,19 +39,7 @@ it('owns the explicit attachments migration and reverses physical schema and met
     (await db.connection().collections.get('attachments'))?.fields?.map(
       (field) => field.name,
     ),
-  ).toEqual(
-    expect.arrayContaining([
-      'id',
-      'disk',
-      'key',
-      'filename',
-      'ext',
-      'mimeType',
-      'size',
-      'createdAt',
-      'updatedAt',
-    ]),
-  );
+  ).toEqual(expect.arrayContaining([...FILE_COLUMNS]));
   expect(
     await db.connection().collections.getPhysical('attachments'),
   ).toBeDefined();
