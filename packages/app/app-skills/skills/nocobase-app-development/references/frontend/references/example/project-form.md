@@ -86,7 +86,6 @@ export function ProjectForm({
   // No generic: the types are inferred from zodResolver(schema).
   const form = useForm({
     resolver: zodResolver(schema),
-    mode: 'onTouched',
     defaultValues: {
       name: project?.name ?? '',
       owner: project?.owner ?? '',

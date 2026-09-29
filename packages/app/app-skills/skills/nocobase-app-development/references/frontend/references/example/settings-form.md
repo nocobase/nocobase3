@@ -79,7 +79,6 @@ export function ProjectSettingsForm({
 
   const form = useForm({
     resolver: zodResolver(schema),
-    mode: 'onTouched',
     defaultValues: {
       description: settings?.description ?? '',
       priority: settings?.priority ?? 'medium',

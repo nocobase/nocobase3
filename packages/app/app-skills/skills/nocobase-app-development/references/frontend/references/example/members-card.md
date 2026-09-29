@@ -83,7 +83,6 @@ export function ProjectMembersCard({
 
   const form = useForm({
     resolver: zodResolver(schema),
-    mode: 'onTouched',
     defaultValues: {
       members:
         members.length > 0

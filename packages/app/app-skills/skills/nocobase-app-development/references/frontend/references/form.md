@@ -107,7 +107,7 @@ The demo form `client/pages/projects/project-settings-form.tsx` ([`example/setti
 
 - They are built on Base UI: the controlled prop is `checked`, not `value`, and the callback is `onCheckedChange(checked: boolean, eventDetails)`. Write `(checked) => field.onChange(checked)` to take only the first argument.
 - They render a `span` with `role='checkbox'` (or `role='switch'`) plus a hidden `input`, and the `id` lands on the hidden `input`, so `FieldLabel htmlFor` works as usual and clicking the label toggles the control.
-- `ref={field.ref}` goes on the component (it can take focus); `onBlur={field.onBlur}` makes "validate on blur" work.
+- `ref={field.ref}` goes on the component, so a failed submission can move focus to it; `onBlur={field.onBlur}` marks the field touched.
 - For a boolean submitted with the form, either `Checkbox` or `Switch` works. A switch on a settings page that "takes effect as soon as it is toggled" (guideline T4.3) is not part of a form: call the endpoint directly in `onCheckedChange`, without going through react-hook-form. `project-public-switch.tsx` ([`example/public-switch.md`](example/public-switch.md)) does this: the switch shows the value being saved and is disabled while the request runs, a success toast confirms the change, and on failure an error toast explains it and the switch returns to the saved value.
 
 ### Checkbox group
@@ -208,14 +208,14 @@ How a date travels to and from the endpoint depends on what it is:
 
 | `mode`        | When it validates                                                                       |
 | ------------- | --------------------------------------------------------------------------------------- |
-| `'onTouched'` | When a field first loses focus, then on every change (recommended, guideline T3.3)      |
+| `'onTouched'` | When a field first loses focus, then on every change                                    |
 | `'onBlur'`    | Every time a field loses focus                                                          |
 | `'onChange'`  | On every change; an error can appear at the first character typed, so it is rarely used |
-| `'onSubmit'`  | Only on submit (default)                                                                |
+| `'onSubmit'`  | Only on submit (the default, guideline T3.3)                                            |
 | `'all'`       | Both on blur and on change                                                              |
 
 - Submitting always validates every field. After the first submission, a field is revalidated on every change (`reValidateMode` defaults to `'onChange'`), so the error disappears as soon as the value is corrected.
-- `onTouched` and `onBlur` depend on `field.onBlur`: `Input` and `Textarea` already get it when they spread `field`; `SelectTrigger`, `Checkbox`, `Switch` and `RadioGroup` need `onBlur={field.onBlur}`, or they validate only on submit.
+- Leave `mode` out of `useForm`: the default `'onSubmit'` is what guideline T3.3 asks for. `'onTouched'`, `'onBlur'` and `'all'` validate a field as it loses focus, and closing a dialog takes the focus off its field, so an error flashes while the dialog closes; `'onChange'` shows an error before the user has finished typing.
 
 ### Array fields
 
@@ -279,7 +279,6 @@ export function ProjectReminderForm({
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: { remind: false, email: '' },
-    mode: 'onTouched',
   });
   const remind = useWatch({ control: form.control, name: 'remind' });
 
