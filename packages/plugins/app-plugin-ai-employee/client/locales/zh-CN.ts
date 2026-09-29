@@ -471,7 +471,6 @@ export default {
 
   AI: 'AI',
   'AI Conversations': 'AI 会话',
-  'AI Employee': 'AI 员工',
   'AI Employees': 'AI 员工',
   'Expand employee list': '展开员工列表',
   'Collapse employee list': '收起员工列表',

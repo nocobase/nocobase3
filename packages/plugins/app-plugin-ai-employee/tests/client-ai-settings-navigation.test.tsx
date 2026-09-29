@@ -16,10 +16,7 @@ import {
   type RouteObject,
 } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createAISettings,
-  registerAISettingsTabs,
-} from '../client/ai-settings.js';
+import { createAISettings } from '../client/ai-settings.js';
 import { withAISettingsShell } from '../client/ai-settings-shell.js';
 import settings from '../client/settings.js';
 
@@ -88,19 +85,6 @@ function PageProbe({ name }: { name: string }) {
     </>
   );
 }
-
-registerAISettingsTabs([
-  {
-    key: 'knowledge-base',
-    labelKey: 'Knowledge Base',
-    pageLoader: async () => ({ default: () => <div>Knowledge content</div> }),
-  },
-  {
-    key: 'vector-database',
-    labelKey: 'Vector Database',
-    pageLoader: async () => ({ default: () => <div>Vector content</div> }),
-  },
-]);
 
 const { settingsRouteTree } = resolveAppClientContributions([
   { packageName: '@nocobase/app-plugin-ai-employee', routes: settings },

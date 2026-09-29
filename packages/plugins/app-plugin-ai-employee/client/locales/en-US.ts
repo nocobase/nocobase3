@@ -518,7 +518,6 @@ export default {
 
   AI: 'AI',
   'AI Conversations': 'AI Conversations',
-  'AI Employee': 'AI Employee',
   'AI Employees': 'AI Employees',
   'Expand employee list': 'Expand employee list',
   'Collapse employee list': 'Collapse employee list',

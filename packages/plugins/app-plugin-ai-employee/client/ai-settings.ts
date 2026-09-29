@@ -1,7 +1,4 @@
-import type {
-  AppClientRouteComponentLoader,
-  AppClientSettingsRouteGroupDefinition,
-} from '@nocobase/app-client/plugins';
+import type { AppClientSettingsRouteGroupDefinition } from '@nocobase/app-client/plugins';
 import {
   Bot,
   BrainCircuit,
@@ -10,36 +7,6 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react';
-
-export interface AISettingsTabDefinition {
-  readonly key: string;
-  readonly labelKey: string;
-  readonly pageLoader: AppClientRouteComponentLoader;
-}
-
-const coreTabs: readonly AISettingsTabDefinition[] = [
-  {
-    key: 'ai-employee',
-    labelKey: 'AI Employee',
-    pageLoader: () => import('./pages/ai-employee-page.js'),
-  },
-];
-const contributedTabs = new Map<string, AISettingsTabDefinition>();
-let cachedTabs: readonly AISettingsTabDefinition[] = coreTabs;
-/** @deprecated Contribute Settings routes with parent: 'aiGroup' instead. No longer rendered by the employee page. */
-export function registerAISettingsTabs(
-  tabs: readonly AISettingsTabDefinition[],
-): void {
-  for (const tab of tabs) {
-    contributedTabs.set(tab.key, tab);
-  }
-  cachedTabs = [...coreTabs, ...contributedTabs.values()];
-}
-
-/** @deprecated Legacy registry only; the employee shell no longer renders these tabs. */
-export function getAISettingsTabs(): readonly AISettingsTabDefinition[] {
-  return cachedTabs;
-}
 
 export function createAISettings(): AppClientSettingsRouteGroupDefinition {
   return {
