@@ -180,7 +180,7 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 
 ## Review checklist
 
-The design review and the acceptance review both go through this checklist item by item; record each unmet item in the review record and cite its IDs. The checklist covers every Must rule; a rule the page cannot trigger (no detail view, no settings page) is marked "Not applicable" rather than skipped silently.
+The design review and the acceptance review both go through this checklist item by item: the review record's "Review checklist" section gets one row per item, and each unmet item is also an issue that cites its IDs. The checklist covers every Must rule; a rule the page cannot trigger (no detail view, no settings page) is marked "Not applicable" rather than skipped silently.
 
 - [ ] The page template and overlay choices are correct, and stacking follows the rules (T1–T5, I1)
 - [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places, a back button on a page below another one (L1, L2, L5, L6)
