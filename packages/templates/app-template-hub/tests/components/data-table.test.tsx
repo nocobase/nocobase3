@@ -16,7 +16,7 @@ vi.mock('@nocobase/i18n/client', () => ({
 }));
 
 import { DataTable } from '../../client/components/data-table';
-import { DataTableColumnHeader } from '../../client/components/data-table-column-header';
+import { DataTableColumnHeader } from '../../client/components/data-table/column-header';
 
 interface Payment {
   id: string;

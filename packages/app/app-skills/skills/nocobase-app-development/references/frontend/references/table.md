@@ -6,7 +6,7 @@ This document uses `client/pages/projects/index.tsx` as its example; the complet
 
 ## 1. Choosing a table component
 
-Build every list with `DataTable` (`@/components/data-table`, built on TanStack Table) and its companions in the same directory: `DataTableColumnHeader` (a sortable column header), `DataTablePagination` (the pagination bar) and `DataTableViewOptions` (the "Toggle columns" menu). Do not write a list from scratch with `Table`. Two exceptions: server-side pagination below, and a short list of records inside a card, such as a dashboard's (guideline T5.3), which renders `Table` directly and lines up with the card's title ("Table in a card" in ["Common layouts" of `styling.md`](styling.md#common-layouts); [`example/project-dashboard.md`](example/project-dashboard.md)).
+Build every list with `DataTable` (`@/components/data-table`, built on TanStack Table) and its companions in `client/components/data-table/`: `DataTableColumnHeader` (a sortable column header), `DataTablePagination` (the pagination bar) and `DataTableViewOptions` (the "Toggle columns" menu). Do not write a list from scratch with `Table`. Two exceptions: server-side pagination below, and a short list of records inside a card, such as a dashboard's (guideline T5.3), which renders `Table` directly and lines up with the card's title ("Table in a card" in ["Common layouts" of `styling.md`](styling.md#common-layouts); [`example/project-dashboard.md`](example/project-dashboard.md)).
 
 | Scenario                                                                                                 | What to use                                                                                   |
 | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -41,7 +41,7 @@ Server-side pagination, when the endpoint takes `page` and `pageSize` and return
 
 ## 3. Known DataTable behavior
 
-The following has been checked against the template's `client/components/data-table.tsx` and `data-table-pagination.tsx`. Know these points before you use it, and handle them as needed in the design and the implementation:
+The following has been checked against the template's `client/components/data-table/`. Know these points before you use it, and handle them as needed in the design and the implementation:
 
 | Behavior                                                             | Impact                                                                                                                                                                         | What to do                                                                                                                                                                                                                                                                                 |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

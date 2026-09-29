@@ -37,7 +37,7 @@ import {
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { DataTable } from '@/components/data-table';
-import { DataTableColumnHeader } from '@/components/data-table-column-header';
+import { DataTableColumnHeader } from '@/components/data-table/column-header';
 import { useUrlSearch } from '@/hooks/use-url-search';
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';

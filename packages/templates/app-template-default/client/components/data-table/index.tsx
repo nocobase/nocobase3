@@ -16,7 +16,7 @@ import {
 } from '@tanstack/react-table';
 import { type ReactElement, type ReactNode, useState } from 'react';
 
-import { DataTablePagination } from '@/components/data-table-pagination';
+import { DataTablePagination } from './pagination.js';
 import {
   Table,
   TableBody,
