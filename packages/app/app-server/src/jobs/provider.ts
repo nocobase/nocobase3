@@ -25,8 +25,8 @@ const DEVELOPMENT_ENVIRONMENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Composes the schedule service from the `jobs` section, filling in what
- * only the application knows: its name as the default namespace and its
+ * Composes ordinary and schedule executors from the `jobs` section, filling in
+ * what only the application knows: its name as the default namespace and its
  * storage directory for the built-in memory configuration. Executors belong
  * to the consumers that ask for them, which set them up and shut them down;
  * this provider shuts down whatever they left running.
