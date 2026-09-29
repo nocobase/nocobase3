@@ -165,6 +165,8 @@ Relations are `belongsTo`, `hasOne`, `hasMany` and `belongsToMany`. Constraints 
 
 Change an existing table with explicit alter, rename and drop operations in a safe dependency order. Do not drop and recreate — that destroys data and is not what `down()` should undo.
 
+`alterField` applies the changes it is given as the column definition, so for fields other than `enum` and `char` restate the field's `type` and storage options such as `length` even when only `nullable` or `defaultValue` changes. `c.alterField('objectId', { nullable: true })` fails on PostgreSQL with `type "undefined" does not exist`; write `c.alterField('objectId', { type: 'integer', nullable: true })`, and restate the type the same way in `down()`.
+
 Builder arguments are **logical names**. Physical table and column names are generated deterministically from `underscored` and `tablePrefix`; never store or concatenate `tableName` and `columnName` yourself. The exception is a raw index or constraint name such as `fk_order_items_order`, which is passed through unconverted and must be spelled the same way when dropped.
 
 `db.builder()` is a method on the manager; `connection.builder` is a property. Getting that backwards is the most common typo in this area.
