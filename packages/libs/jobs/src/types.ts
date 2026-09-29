@@ -5,6 +5,10 @@
  */
 export interface JobExecutorService {
   getScheduleExecutor(scope: string, name?: string): ScheduleExecutor;
+  getJobExecutor(
+    scope: string,
+    name?: string,
+  ): import('./job-types.js').JobExecutor;
 }
 
 export interface ScheduleExecutor {

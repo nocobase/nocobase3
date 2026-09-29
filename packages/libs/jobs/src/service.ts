@@ -12,6 +12,10 @@ import type {
   ScheduleLogger,
 } from './types.js';
 import { assertValidScope } from './validation.js';
+import type { JobExecutor } from './job-types.js';
+import { BackendJobExecutor } from './job-executor.js';
+import { MemoryJobBackend } from './memory/job-backend.js';
+import { RedisJobBackend } from './redis/job-backend.js';
 
 /** Reports that an executor runs on the built-in memory configuration. */
 export interface ScheduleFallbackEvent {
@@ -56,12 +60,32 @@ export interface ScheduleExecutorFactories {
   readonly redis: ScheduleExecutorFactory<ResolvedRedisScheduleExecutorConfig>;
 }
 
+export interface JobExecutorFactories {
+  readonly memory: (
+    config: ResolvedMemoryScheduleExecutorConfig,
+    dependencies: JobExecutorServiceDependencies,
+  ) => JobExecutor;
+  readonly redis: (
+    config: ResolvedRedisScheduleExecutorConfig,
+    dependencies: JobExecutorServiceDependencies,
+  ) => JobExecutor;
+}
+
+const defaultJobFactories: JobExecutorFactories = {
+  memory: (config, { logger }) =>
+    new BackendJobExecutor(new MemoryJobBackend(config), logger),
+  redis: (config, { logger }) =>
+    new BackendJobExecutor(new RedisJobBackend(config, logger), logger),
+};
+
 export function createJobExecutorServiceWith(
   config: ScheduleConfig | undefined,
   dependencies: JobExecutorServiceDependencies,
   factories: ScheduleExecutorFactories,
+  jobFactories: JobExecutorFactories = defaultJobFactories,
 ): ManagedJobExecutorService {
   const executors = new Map<string, ScheduleExecutor>();
+  const jobs = new Map<string, JobExecutor>();
   let shutdownPromise: Promise<void> | undefined;
 
   return {
@@ -71,8 +95,8 @@ export function createJobExecutorServiceWith(
       }
       assertValidScope(scope);
       const selection = selectScheduleConfig(config, name);
-      // A scope and a configuration key identify one queue, so they identify
-      // one executor: two would compete for the same firings.
+      // Cache identity includes the selected key. Existing Schedule queues do
+      // not: equal connections, namespaces and scopes share physical firings.
       const identity = JSON.stringify([selection.key, scope]);
       const existing = executors.get(identity);
       if (existing) return existing;
@@ -95,9 +119,37 @@ export function createJobExecutorServiceWith(
       return executor;
     },
 
+    getJobExecutor(scope: string, name?: string): JobExecutor {
+      if (shutdownPromise)
+        throw new Error('The jobs service has been shut down.');
+      assertValidScope(scope);
+      const selection = selectScheduleConfig(config, name);
+      const identity = JSON.stringify([selection.key, scope]);
+      const existing = jobs.get(identity);
+      if (existing) return existing;
+      const resolved = resolveScheduleExecutorConfig(
+        selection,
+        scope,
+        dependencies,
+      );
+      const executor =
+        resolved.adapter === 'memory'
+          ? jobFactories.memory(resolved, dependencies)
+          : jobFactories.redis(resolved, dependencies);
+      jobs.set(identity, executor);
+      if (resolved.builtIn)
+        dependencies.onFallback?.({
+          scope,
+          ...(name !== undefined ? { name } : {}),
+        });
+      return executor;
+    },
+
     shutdown(): Promise<void> {
       shutdownPromise ??= Promise.allSettled(
-        [...executors.values()].map((executor) => executor.shutdown()),
+        [...executors.values(), ...jobs.values()].map((executor) =>
+          Promise.resolve().then(() => executor.shutdown()),
+        ),
       ).then((results) => {
         const failures = results.flatMap((result) =>
           result.status === 'rejected' ? [result.reason as unknown] : [],

@@ -1,3 +1,17 @@
+export {
+  Job,
+  JobHandlerNotRegisteredError,
+  JobInterruptedError,
+  type JobClass,
+  type JobExecutor,
+  type JobExecutionContext,
+  type JobReceipt,
+  type JobSetupOptions,
+  type JobSubscriber,
+  type JobEvent,
+  type JobEventName,
+  type JobErrorReason,
+} from './job-types.js';
 export type {
   MemoryScheduleAdapterConfig,
   RedisScheduleAdapterConfig,
