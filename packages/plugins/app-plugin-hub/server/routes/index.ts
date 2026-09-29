@@ -1,14 +1,6 @@
-import {
-  CONFIG_UPLOAD_TYPE,
-  MAX_CONFIG_SIZE,
-  readUploadConfig,
-} from './release-upload.js';
 import { HUB_RELEASE_ACTIONS } from '../../shared/permissions.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import {
-  authorizationToken,
-  type AuthorizationEnv,
-} from '@nocobase/app-plugin-authorization';
+import { authorizationToken } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
@@ -20,10 +12,7 @@ import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import type { Logger } from '@nocobase/logging';
 
 import { hubApiKeyServiceToken } from '../services/api-keys.js';
-import type {
-  HubApiKeyScope,
-  CreateHubApiKeyInput,
-} from '../../shared/api-keys.js';
+import type { CreateHubApiKeyInput } from '../../shared/api-keys.js';
 import { HubError } from '../services/hub.js';
 import {
   hubServiceToken,
@@ -41,13 +30,18 @@ import {
   deploymentListResponse,
 } from './responses.js';
 import { HUB_PERMISSION_SET_KEYS } from '../authorization.js';
+import {
+  HubAppRoutes,
+  publishingKeySecret,
+  type HubRouteEnv,
+} from './api-key-access.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
-    const routes = new Hono<AuthorizationEnv>();
+    const routes = new Hono<HubRouteEnv>();
     const authentication = container.resolve(authenticationToken);
     const authorization = container.resolve(authorizationToken);
     const { permissionSets } = authorization;
@@ -56,9 +50,21 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       ? container.resolve(loggingToken).getLogger('security')
       : undefined;
 
-    // Publishing credentials never enter the Session authentication pipeline.
-    // Resolve the exact method and route before accepting a scoped credential.
-    routes.use('*', async (context, next) => {
+    // App routes that declare their own access, including whether a publishing key may call them.
+    const appRoutes = new HubAppRoutes({
+      app: routes,
+      apiKeys: () => container.resolve(hubApiKeyServiceToken),
+      authorizationFor: (userId) =>
+        authorization.for({
+          principal: { type: 'user', id: userId },
+          subjects: [{ type: 'authenticated', id: '*' }],
+        }),
+      ...(securityLogger ? { securityLogger } : {}),
+    });
+
+    // Publishing credentials never enter the Session authentication pipeline. A route accepts one only when it
+    // declared a requirement through `appRoutes`, which then verifies the key against the App in its path.
+    routes.use('*', async (context: Context<HubRouteEnv, string>, next) => {
       const credential = context.req.header('authorization');
       if (!credential) {
         if (
@@ -77,12 +83,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         }
         return next();
       }
-      const match =
-        /\/apps\/([^/]+)\/(releases(?:\/[^/]+)?|deploy|deployments(?:\/[^/]+(?:\/status)?)?)$/.exec(
-          context.req.path,
-        );
-      const token = /^Bearer (hub_app_[A-Za-z0-9_-]+)$/i.exec(credential)?.[1];
-      if (!token)
+      if (!publishingKeySecret(credential))
         return context.json(
           {
             error: {
@@ -92,17 +93,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           },
           401,
         );
-      const endpoint = match?.[2];
-      const scope: HubApiKeyScope | undefined =
-        context.req.method === 'POST' && endpoint === 'releases'
-          ? HUB_RELEASE_ACTIONS.upload
-          : context.req.method === 'POST' && endpoint === 'deploy'
-            ? HUB_RELEASE_ACTIONS.deploy
-            : context.req.method === 'GET' &&
-                /^deployments\/[^/]+\/status$/.test(endpoint ?? '')
-              ? HUB_RELEASE_ACTIONS.deploy
-              : undefined;
-      if (!scope || !match)
+      if (!appRoutes.acceptsApiKey(context))
         return context.json(
           {
             error: {
@@ -112,37 +103,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           },
           403,
         );
-      try {
-        const appId = decodeURIComponent(match[1]);
-        const key = await container
-          .resolve(hubApiKeyServiceToken)
-          .verify(token, appId, scope);
-        context.set(
-          'authz',
-          authorization.for({
-            principal: { type: 'user', id: key.createdBy },
-            subjects: [{ type: 'authenticated', id: '*' }],
-          }),
-        );
-        securityLogger?.info(
-          {
-            event: 'hub.api-key.use',
-            keyId: key.id,
-            actorId: key.createdBy,
-            appId,
-            scope,
-          },
-          'hub.api-key.use',
-        );
-        await next();
-      } catch (error) {
-        if (error instanceof HubError)
-          return context.json(
-            { error: { code: error.code, message: error.message } },
-            error.status,
-          );
-        throw error;
-      }
+      return next();
     });
     routes.use(
       '*',
@@ -150,13 +111,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         skip: (context) => Boolean(context.req.header('authorization')),
       }),
     );
-    routes.use(
-      '*',
-      async (context: Context<AuthorizationEnv, string>, next) => {
-        if (context.req.header('authorization')) return next();
-        return authorization.middleware()(context, next);
-      },
-    );
+    routes.use('*', async (context: Context<HubRouteEnv, string>, next) => {
+      if (context.req.header('authorization')) return next();
+      return authorization.middleware()(context, next);
+    });
     routes.onError((error, context) => {
       if (error instanceof AuthorizationDeniedError) {
         return context.json(
@@ -311,12 +269,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return { id: app.app.id };
       });
     });
-    routes.get('/apps/:appId', async (context) => {
-      await requireHubAction(context, context.req.param('appId'), 'read');
-      return respond(context, async () =>
-        appDetailResponse(await hub.getApp(context.req.param('appId'))),
-      );
-    });
+    appRoutes.get(
+      '/apps/:appId',
+      { action: 'read', apiKey: 'any' },
+      async (context) =>
+        respond(context, async () =>
+          appDetailResponse(await hub.getApp(context.req.param('appId'))),
+        ),
+    );
     routes.get('/apps/:appId/releases', async (context) => {
       await requireHubAction(
         context,
@@ -363,44 +323,26 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         }));
       },
     );
-    routes.post('/apps/:appId/releases', async (context) => {
-      const appId = context.req.param('appId');
-      await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.upload);
-      return respond(
-        context,
-        async () => {
+    appRoutes.post(
+      '/apps/:appId/releases',
+      {
+        action: HUB_RELEASE_ACTIONS.upload,
+        apiKey: HUB_RELEASE_ACTIONS.upload,
+      },
+      async (context) => {
+        const appId = context.req.param('appId');
+        return respond(context, async () => {
           const contentType = context.req
             .header('content-type')
             ?.split(';')[0]
             ?.trim();
           if (
             contentType !== 'application/gzip' &&
-            contentType !== 'application/octet-stream' &&
-            contentType !== CONFIG_UPLOAD_TYPE
+            contentType !== 'application/octet-stream'
           )
             throw new HubError(
               'Use application/gzip for release uploads.',
               'INVALID_CONTENT_TYPE',
-              400,
-            );
-          const framed = contentType === CONFIG_UPLOAD_TYPE;
-          const configLengthHeader = context.req.header('x-hub-config-length');
-          const configLength = Number(configLengthHeader);
-          if (
-            framed &&
-            (!configLengthHeader ||
-              !/^[1-9]\d*$/.test(configLengthHeader) ||
-              configLength > MAX_CONFIG_SIZE)
-          )
-            throw new HubError(
-              'Invalid configuration length (maximum 1 MiB).',
-              'INVALID_CONFIG_UPLOAD',
-              400,
-            );
-          if (!framed && configLengthHeader !== undefined)
-            throw new HubError(
-              'Configuration requires the versioned release upload content type.',
-              'INVALID_CONFIG_UPLOAD',
               400,
             );
           const length = context.req.header('content-length');
@@ -410,57 +352,19 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
               'INVALID_CONTENT_LENGTH',
               400,
             );
-          if (
-            length !== undefined &&
-            Number(length) > MAX_ARTIFACT_SIZE + (framed ? configLength : 0)
-          )
+          if (length !== undefined && Number(length) > MAX_ARTIFACT_SIZE)
             throw new HubError(
               'Invalid or excessive artifact length.',
               'ARTIFACT_TOO_LARGE',
               413,
             );
-          const intent = context.req.header('x-hub-deployment-intent');
-          if (intent !== undefined && intent !== 'explicit')
-            throw new HubError(
-              'Invalid deployment intent.',
-              'INVALID_DEPLOYMENT_INTENT',
-              400,
-            );
-          const authorizeDeployment = async () => {
-            await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.deploy);
-            const credential = context.req.header('authorization');
-            if (credential)
-              await container
-                .resolve(hubApiKeyServiceToken)
-                .verify(credential.slice(7), appId, HUB_RELEASE_ACTIONS.deploy);
-          };
-          if (framed && intent !== 'explicit')
-            throw new HubError(
-              'Configuration requires deployment.',
-              'CONFIG_REQUIRES_DEPLOY',
-              400,
-            );
-          if (intent === 'explicit') await authorizeDeployment();
           const chunks = requestChunks(context.req.raw);
           let release;
           try {
-            const prefix = framed
-              ? await readUploadConfig(chunks, configLength)
-              : undefined;
-            async function* artifact() {
-              if (prefix?.remainder.byteLength) yield prefix.remainder;
-              yield* chunks;
-            }
             release = await hub.createRelease(appId, {
-              stream: artifact(),
-              ...(prefix
-                ? { config: { mode: 'file', content: prefix.content } }
-                : {}),
+              stream: chunks,
               checksum: context.req.header('x-artifact-sha256'),
               idempotencyKey: context.req.header('idempotency-key'),
-              deploymentIntent: intent,
-              waitForDeployment: context.req.header('x-hub-wait') === 'true',
-              authorizeDeployment,
             });
           } finally {
             await chunks.return(undefined);
@@ -477,13 +381,11 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           return {
             ...releaseResponse(release),
             releaseId: release.id,
-            operationId: release.operationId ?? null,
             reused: release.reused ?? false,
           };
-        },
-        (value) => (value.operationId && !value.reused ? 202 : 200),
-      );
-    });
+        });
+      },
+    );
     routes.get('/apps/:appId/config', async (context) => {
       await requireHubAction(
         context,
@@ -516,39 +418,45 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return { success: true };
       });
     });
-    routes.post('/apps/:appId/deploy', async (context) => {
-      const appId = context.req.param('appId');
-      await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.deploy);
-      const input = await context.req.json<DeployHubAppInput>();
-      return await respond(
-        context,
-        async () => {
-          const deployment = await hub.deploy(appId, {
-            ...input,
-            idempotencyKey: context.req.header('idempotency-key'),
-          });
-          logSecurityEvent(securityLogger, context, 'hub.app.deploy', appId, {
-            deploymentId: deployment.id,
-          });
-          return {
-            id: deployment.id,
-            operationId: deployment.id,
-            status: deployment.status,
-            // A reused operation was created by an earlier request, so the App may be running
-            // another Release by now. Clients must not read it as "this Release is live".
-            reused: deployment.reused === true,
-            createdAt: deployment.createdAt,
-          };
-        },
-        202,
-      );
-    });
-    // Deploy credentials may observe a minimal result, never configuration or logs.
-    routes.get(
-      '/apps/:appId/deployments/:deploymentId/status',
+    appRoutes.post(
+      '/apps/:appId/deploy',
+      {
+        action: HUB_RELEASE_ACTIONS.deploy,
+        apiKey: HUB_RELEASE_ACTIONS.deploy,
+      },
       async (context) => {
         const appId = context.req.param('appId');
-        await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.deploy);
+        const input = await context.req.json<DeployHubAppInput>();
+        return await respond(
+          context,
+          async () => {
+            const deployment = await hub.deploy(appId, {
+              ...input,
+              idempotencyKey: context.req.header('idempotency-key'),
+            });
+            logSecurityEvent(securityLogger, context, 'hub.app.deploy', appId, {
+              deploymentId: deployment.id,
+            });
+            return {
+              id: deployment.id,
+              operationId: deployment.id,
+              status: deployment.status,
+              // A reused operation was created by an earlier request, so the App may be running
+              // another Release by now. Clients must not read it as "this Release is live".
+              reused: deployment.reused === true,
+              createdAt: deployment.createdAt,
+            };
+          },
+          202,
+        );
+      },
+    );
+    // Any publishing key for the App may observe a minimal result, never configuration or logs.
+    appRoutes.get(
+      '/apps/:appId/deployments/:deploymentId/status',
+      { action: HUB_RELEASE_ACTIONS.deploy, apiKey: 'any' },
+      async (context) => {
+        const appId = context.req.param('appId');
         preventSensitiveResponseCaching(context);
         return respond(context, async () => {
           const deployment = await hub.getDeployment(
@@ -718,7 +626,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   });
 
 async function requireHubAction(
-  context: Pick<Context<AuthorizationEnv>, 'get'>,
+  context: Pick<Context<HubRouteEnv>, 'get'>,
   appId: string,
   action: string,
 ): Promise<void> {
@@ -730,7 +638,7 @@ async function requireHubAction(
 
 function logSecurityEvent(
   logger: Logger | undefined,
-  context: Pick<Context<AuthorizationEnv>, 'get'>,
+  context: Pick<Context<HubRouteEnv>, 'get'>,
   event: string,
   appId: string,
   details: Readonly<Record<string, unknown>> = {},
@@ -749,14 +657,11 @@ function logSecurityEvent(
 async function respond<T>(
   context: Context,
   work: () => Promise<T>,
-  status: 200 | 202 | ((data: T) => 200 | 202) = 200,
+  status: 200 | 202 = 200,
 ): Promise<Response> {
   try {
     const data = await work();
-    return context.json(
-      { data },
-      typeof status === 'function' ? status(data) : status,
-    );
+    return context.json({ data }, status);
   } catch (error) {
     if (error instanceof HubError) {
       return context.json(

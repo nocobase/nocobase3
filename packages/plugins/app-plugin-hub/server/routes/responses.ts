@@ -31,6 +31,7 @@ interface AppDetailResponse extends AppSummaryResponse {
     | 'updatedAt'
   >;
   hostUrl: string | null;
+  buildTarget: HubAppDetail['buildTarget'];
 }
 type ReleaseResponse = Pick<
   HubReleaseRecord,
@@ -86,6 +87,7 @@ export function appDetailResponse(value: HubAppDetail): AppDetailResponse {
       updatedAt: deployment.updatedAt,
     },
     hostUrl: value.hostUrl,
+    buildTarget: value.buildTarget,
   };
 }
 

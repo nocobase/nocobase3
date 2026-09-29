@@ -37,6 +37,7 @@ import type {
   HostDeploymentSet,
   HostDeploymentSpec,
   HostManagementService,
+  HostRuntime,
   HostStatus,
 } from '@nocobase/app-host/management';
 import type { DatabaseConnection, DatabaseManager, Row } from '@nocobase/db';
@@ -628,37 +629,6 @@ export class DefaultHubService implements HubService {
   ): Promise<HubReleaseRecord> {
     validateIdempotencyKey(input.idempotencyKey);
     await this.requireApp(appId);
-    const shouldDeploy = input.deploymentIntent === 'explicit';
-    if (input.config !== undefined) {
-      if (!shouldDeploy)
-        throw new HubError(
-          'Configuration requires deployment.',
-          'CONFIG_REQUIRES_DEPLOY',
-          400,
-        );
-      if (
-        !input.config ||
-        input.config.mode !== 'file' ||
-        typeof input.config.content !== 'string' ||
-        !input.config.content.trim() ||
-        Buffer.byteLength(input.config.content) > 1024 * 1024
-      )
-        throw new HubError(
-          'A non-empty file configuration of at most 1 MiB is required.',
-          'INVALID_DEPLOYMENT_INPUT',
-          400,
-        );
-    }
-    const configFingerprint = input.config
-      ? sha256(new TextEncoder().encode(input.config.content))
-      : null;
-    if (input.waitForDeployment && !shouldDeploy)
-      throw new HubError(
-        'Waiting requires a deployment. Use --deploy with --wait.',
-        'WAIT_REQUIRES_DEPLOY',
-        400,
-      );
-    if (shouldDeploy) await input.authorizeDeployment?.();
     const staged = await receiveArtifact(
       input.stream ?? Readable.from(input.bytes ? [input.bytes] : []),
       input.checksum,
@@ -666,14 +636,12 @@ export class DefaultHubService implements HubService {
     try {
       const metadata = await inspectArtifact(staged.path);
       assertMountableAt(metadata.manifest, `/${appId}`);
+      assertBuildTargetMatches(metadata.manifest, await this.hostRuntime());
       return await this.withLock(`publish:${appId}`, async () => {
-        const current = await this.requireApp(appId);
         const existing = await this.existingRelease(
           appId,
           staged.checksum,
           input.idempotencyKey,
-          configFingerprint,
-          shouldDeploy,
         );
         if (existing) return existing;
         const id = randomUUID();
@@ -687,16 +655,6 @@ export class DefaultHubService implements HubService {
           size: staged.size,
           createdAt: new Date(),
         };
-        if (shouldDeploy) await this.requireNoPendingDeployment(appId);
-        const deployment = shouldDeploy
-          ? await this.buildDeploymentRecord(
-              current,
-              release,
-              'deploy',
-              null,
-              input.config,
-            )
-          : null;
         try {
           await this.disk.putStream(
             artifactKey,
@@ -709,21 +667,13 @@ export class DefaultHubService implements HubService {
               .set({ updatedAt: new Date() })
               .where('id', '=', appId)
               .execute();
-            if (deployment)
-              await this.requireNoPendingDeployment(appId, connection);
             await connection.query
               .insertInto('hubAppReleases')
               .values(encodeRelease(release))
               .execute();
             await connection.query
               .insertInto('hubReleaseChecksums')
-              .values({
-                appId,
-                checksum: staged.checksum,
-                releaseId: id,
-                operationId: deployment?.id ?? null,
-                configFingerprint,
-              })
+              .values({ appId, checksum: staged.checksum, releaseId: id })
               .execute();
             if (input.idempotencyKey)
               await connection.query
@@ -735,33 +685,19 @@ export class DefaultHubService implements HubService {
                   releaseId: id,
                 })
                 .execute();
-            if (deployment)
-              await connection.query
-                .insertInto('hubAppDeployments')
-                .values(encodeDeployment(deployment))
-                .execute();
           });
         } catch (error) {
           await this.disk.delete(artifactKey);
-          if (deployment?.config.path)
-            await rm(deployment.config.path, { force: true });
           // A second Hub writer may have won the database uniqueness race.
           const winner = await this.existingRelease(
             appId,
             staged.checksum,
             input.idempotencyKey,
-            configFingerprint,
-            shouldDeploy,
           );
           if (winner) return winner;
           throw error;
         }
-        if (deployment) this.schedule(deployment);
-        return {
-          ...release,
-          reused: false,
-          operationId: deployment?.id ?? null,
-        };
+        return { ...release, reused: false };
       });
     } finally {
       await staged.dispose();
@@ -772,8 +708,6 @@ export class DefaultHubService implements HubService {
     appId: string,
     checksum: string,
     requestKey?: string,
-    configFingerprint: string | null = null,
-    requiresDeployment: boolean = false,
   ): Promise<HubReleaseRecord | null> {
     const request = requestKey
       ? await this.query()
@@ -796,18 +730,6 @@ export class DefaultHubService implements HubService {
       .where('checksum', '=', checksum)
       .executeTakeFirst();
     if (!canonical) return null;
-    if (requiresDeployment && !canonical.operationId)
-      throw new HubError(
-        `Release ${String(canonical.releaseId)} already exists without a publishing deployment. Use hub deploy --release-id ${String(canonical.releaseId)} to deploy it.`,
-        'NO_DEPLOYMENT',
-        409,
-      );
-    if (requiresDeployment && canonical.configFingerprint !== configFingerprint)
-      throw new HubError(
-        'This artifact was already uploaded with different configuration. Use hub deploy --release-id to change configuration.',
-        'IDEMPOTENCY_CONFLICT',
-        409,
-      );
     if (requestKey && !request) {
       try {
         await this.query()
@@ -838,10 +760,6 @@ export class DefaultHubService implements HubService {
     return {
       ...(await this.getRelease(appId, String(canonical.releaseId))),
       reused: true,
-      operationId:
-        typeof canonical.operationId === 'string'
-          ? canonical.operationId
-          : null,
     };
   }
 
@@ -1262,6 +1180,15 @@ export class DefaultHubService implements HubService {
     return await (await this.hostController.getManagementClient()).getStatus();
   }
 
+  /** The platform the Host runs applications on, or `null` while its status cannot be read. */
+  private async hostRuntime(): Promise<HostRuntime | null> {
+    try {
+      return (await this.hostStatus()).runtime;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Wait for startup restoration, but only up to the configured bound.
    *
@@ -1440,9 +1367,18 @@ export class DefaultHubService implements HubService {
             .executeTakeFirst<Row>()
         : undefined,
     ]);
-    const runtime = await this.runtimeStatus(app.id);
+    // One Host status answers both the App's runtime and the build target it accepts.
+    const status = this.hostStatus();
+    const [runtime, buildTarget] = await Promise.all([
+      this.runtimeStatus(app.id, status),
+      status.then(
+        (snapshot) => snapshot.runtime,
+        () => null,
+      ),
+    ]);
     return {
       app,
+      buildTarget,
       hasReleases: Boolean(release),
       hasPendingDeployment: Boolean(pending),
       currentVersion:
@@ -1954,6 +1890,47 @@ function assertMountableAt(
     'BASE_PATH_MISMATCH',
     422,
   );
+}
+
+/**
+ * Rejects an archive built for a platform other than the Host's.
+ *
+ * `pnpm build` records the target its native binaries were built for as `nocobase.buildTarget` in
+ * `dist/package.json`. An archive without one predates the field and is accepted, as is any archive while the
+ * Host's own platform cannot be read; the Host still refuses a binary it cannot load when it deploys.
+ */
+function assertBuildTargetMatches(
+  manifest: Record<string, unknown>,
+  host: HostRuntime | null,
+): void {
+  const nocobase = isRecord(manifest.nocobase) ? manifest.nocobase : undefined;
+  const target = isRecord(nocobase?.buildTarget)
+    ? nocobase.buildTarget
+    : undefined;
+  if (!target || !host) return;
+  const libc = (value: unknown) => (value === 'musl' ? 'musl' : 'glibc');
+  const matches =
+    target.platform === host.platform &&
+    target.arch === host.arch &&
+    target.nodeMajor === host.nodeMajor &&
+    (host.platform !== 'linux' || libc(target.libc) === libc(host.libc));
+  if (matches) return;
+  throw new HubError(
+    `Archive targets ${describeTarget(target)}; this Hub runs ${describeTarget(host)}. Rebuild with pnpm build --target ${host.platform}-${host.arch}${host.platform === 'linux' && host.libc === 'musl' ? '-musl' : ''} --node-version ${host.nodeMajor}.`,
+    'BUILD_TARGET_MISMATCH',
+    422,
+  );
+}
+
+function describeTarget(target: {
+  readonly platform?: unknown;
+  readonly arch?: unknown;
+  readonly libc?: unknown;
+  readonly nodeMajor?: unknown;
+}): string {
+  const platform = String(target.platform);
+  const libc = platform === 'linux' && target.libc === 'musl' ? '-musl' : '';
+  return `${platform}-${String(target.arch)}${libc} Node ${String(target.nodeMajor)}`;
 }
 
 async function inspectArtifact(archivePath: string): Promise<{

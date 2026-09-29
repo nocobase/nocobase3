@@ -1,0 +1,377 @@
+// @vitest-environment node
+import { createHash } from 'node:crypto';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { c as createArchive } from 'tar';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { parseRemoteUrl } from '../src/remotes.ts';
+import { DEFAULT_ARTIFACT, publish } from '../src/publish.ts';
+import {
+  APP_ID,
+  data,
+  failure,
+  fakeHub,
+  HOST_TARGET,
+  REMOTE_URL,
+} from './fake-hub.ts';
+
+let root: string;
+const apiKey = 'test-only-api-key';
+const target = parseRemoteUrl(REMOTE_URL);
+
+beforeEach(async () => {
+  root = await mkdtemp(path.join(os.tmpdir(), 'hub-publish-'));
+});
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  await rm(root, { recursive: true, force: true });
+});
+
+/** Writes the default archive, recording `buildTarget` in its dist/package.json when given. */
+async function writeArchive(buildTarget?: object): Promise<string> {
+  const dist = path.join(root, 'staging', 'dist');
+  await mkdir(dist, { recursive: true });
+  await writeFile(
+    path.join(dist, 'package.json'),
+    JSON.stringify(buildTarget ? { nocobase: { buildTarget } } : {}),
+  );
+  const file = path.join(root, DEFAULT_ARTIFACT);
+  await mkdir(path.dirname(file), { recursive: true });
+  await createArchive({ gzip: true, file, cwd: path.join(root, 'staging') }, [
+    'dist',
+  ]);
+  return file;
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+describe('hub deploy', () => {
+  it('builds for the platform the Hub reports, uploads, deploys and waits', async () => {
+    const hub = fakeHub();
+    const build = vi.fn(async () => {
+      await writeArchive(HOST_TARGET);
+    });
+    const progress: string[] = [];
+    const { result, warning } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      build,
+      onProgress: (line) => progress.push(line),
+    });
+
+    expect(build).toHaveBeenCalledWith([
+      '--target',
+      'linux-x64',
+      '--node-version',
+      '24',
+      '--tar',
+    ]);
+    expect(
+      hub.requests.map((request) => `${request.method} ${request.route}`),
+    ).toEqual([
+      'GET ',
+      'POST releases',
+      'POST deploy',
+      'GET deployments/op-1/status',
+    ]);
+    for (const request of hub.requests)
+      expect(request.headers.authorization).toBe(`Bearer ${apiKey}`);
+    const upload = hub.requests[1];
+    expect(upload?.headers['content-type']).toBe('application/gzip');
+    expect(upload?.headers['x-artifact-sha256']).toBe(result.checksum);
+    // The upload is retried by its content, the deployment by what it deploys.
+    expect(upload?.headers['idempotency-key']).toBe(result.checksum);
+    expect(hub.requests[2]?.headers['idempotency-key']).toBe(
+      sha256(`${APP_ID}:r1`),
+    );
+    expect(JSON.parse(hub.requests[2]?.body ?? '')).toEqual({
+      releaseId: 'r1',
+    });
+    expect(result).toMatchObject({
+      releaseId: 'r1',
+      version: '1.0.0',
+      reused: false,
+      operationId: 'op-1',
+      operationStatus: 'succeeded',
+      buildTarget: HOST_TARGET,
+    });
+    expect(warning).toBeUndefined();
+    expect(progress).toEqual([
+      'Building for linux-x64 Node 24…',
+      expect.stringMatching(/^Uploading dist\.tar\.gz/u),
+      'Waiting for deployment op-1 (up to 600s)…',
+      'Deployment op-1: succeeded',
+    ]);
+    expect(JSON.stringify({ result, progress })).not.toContain(apiKey);
+  });
+
+  it('deploys the Release the Hub already has for the archive instead of failing', async () => {
+    const hub = fakeHub({
+      'POST releases': () =>
+        data({ releaseId: 'r0', version: '0.9.0', reused: true }),
+    });
+    await writeArchive();
+    const progress: string[] = [];
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      onProgress: (line) => progress.push(line),
+    });
+    expect(result).toMatchObject({ releaseId: 'r0', reused: false });
+    expect(JSON.parse(hub.requests.at(-2)?.body ?? '')).toEqual({
+      releaseId: 'r0',
+    });
+    expect(progress).toContain(
+      'The Hub already has this archive as Release r0; deploying it.',
+    );
+  });
+
+  it('reports a reused deployment as history, after checking it succeeded', async () => {
+    fakeHub({
+      'POST deploy': () =>
+        data({ operationId: 'op-1', status: 'succeeded', reused: true }),
+    });
+    const { result, warning } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      releaseId: 'r1',
+      wait: false,
+    });
+    expect(result.reused).toBe(true);
+    expect(warning).toMatch(/nothing was deployed now/u);
+  });
+
+  it('deploys a named Release without building or uploading, keyed by its configuration', async () => {
+    const hub = fakeHub();
+    await writeFile(path.join(root, 'runtime.yml'), 'feature: on\n');
+    const build = vi.fn();
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      cwd: root,
+      deploy: true,
+      releaseId: 'r1',
+      config: 'runtime.yml',
+      build,
+    });
+    expect(build).not.toHaveBeenCalled();
+    expect(hub.requests.map((request) => request.route)).toEqual([
+      'deploy',
+      'deployments/op-1/status',
+    ]);
+    expect(JSON.parse(hub.requests[0]?.body ?? '')).toEqual({
+      releaseId: 'r1',
+      config: { mode: 'file', content: 'feature: on\n' },
+    });
+    expect(result.idempotencyKey).toBe(
+      sha256(`${APP_ID}:r1:${sha256('feature: on\n')}`),
+    );
+    expect(result).not.toHaveProperty('checksum');
+  });
+
+  it('refuses an archive built for another platform before uploading it', async () => {
+    const hub = fakeHub();
+    await writeArchive({ ...HOST_TARGET, arch: 'arm64', nodeMajor: 22 });
+    await expect(
+      publish({ target, apiKey, root, deploy: true }),
+    ).rejects.toMatchObject({
+      code: 'BUILD_TARGET_MISMATCH',
+      exitCode: 2,
+      message:
+        'The archive targets linux-arm64 Node 22; the Hub runs linux-x64 Node 24. Rebuild it, or deploy without --no-build or --file to build for the Hub.',
+    });
+    expect(hub.requests.map((request) => request.route)).toEqual(['']);
+  });
+
+  it('cannot build when the Hub does not report its platform', async () => {
+    fakeHub({ 'GET ': () => data({ id: APP_ID, buildTarget: null }) });
+    const build = vi.fn();
+    await expect(
+      publish({ target, apiKey, root, deploy: true, build }),
+    ).rejects.toMatchObject({ code: 'BUILD_TARGET_UNAVAILABLE' });
+    expect(build).not.toHaveBeenCalled();
+  });
+
+  it.each(['failed', 'cancelled'])(
+    'fails when the deployment ends %s, naming the Release and deployment',
+    async (status) => {
+      fakeHub({
+        'GET deployments/op-1/status': () => data({ status }),
+      });
+      await expect(
+        publish({ target, apiKey, root, deploy: true, releaseId: 'r1' }),
+      ).rejects.toMatchObject({
+        code: 'DEPLOYMENT_FAILED',
+        exitCode: 1,
+        details: {
+          releaseId: 'r1',
+          operationId: 'op-1',
+          operationStatus: status,
+        },
+      });
+    },
+  );
+
+  it('returns the accepted deployment with --no-wait', async () => {
+    const hub = fakeHub();
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      releaseId: 'r1',
+      wait: false,
+    });
+    expect(result.operationStatus).toBe('queued');
+    expect(hub.requests.map((request) => request.route)).toEqual(['deploy']);
+  });
+});
+
+describe('hub upload', () => {
+  it('uploads without deploying, keyed by the given idempotency key', async () => {
+    const hub = fakeHub();
+    await writeArchive(HOST_TARGET);
+    const { result } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: false,
+      idempotencyKey: 'ci-42',
+    });
+    expect(hub.requests.map((request) => request.route)).toEqual([
+      '',
+      'releases',
+    ]);
+    expect(hub.requests[1]?.headers['idempotency-key']).toBe('ci-42');
+    expect(result).toMatchObject({
+      releaseId: 'r1',
+      reused: false,
+      idempotencyKey: 'ci-42',
+    });
+    expect(result).not.toHaveProperty('operationId');
+  });
+
+  it('uploads a --file from the current directory', async () => {
+    const hub = fakeHub();
+    await writeFile(path.join(root, 'other.tar.gz'), 'other');
+    await publish({
+      target,
+      apiKey,
+      root,
+      cwd: root,
+      file: 'other.tar.gz',
+      deploy: false,
+    });
+    expect(hub.requests.at(-1)?.body).toBe('other');
+  });
+});
+
+describe('failures', () => {
+  it('reports invalid local input before calling the Hub', async () => {
+    const hub = fakeHub();
+    await expect(
+      publish({ target, apiKey, root, deploy: true }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARTIFACT', exitCode: 2 });
+    await expect(
+      publish({ target, apiKey, root, deploy: true, timeout: 0 }),
+    ).rejects.toMatchObject({ code: 'INVALID_TIMEOUT' });
+    await expect(
+      publish({
+        target,
+        apiKey,
+        root,
+        deploy: true,
+        idempotencyKey: 'has space',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_IDEMPOTENCY_KEY' });
+    await expect(
+      publish({
+        target,
+        apiKey,
+        root,
+        cwd: root,
+        deploy: true,
+        releaseId: 'r1',
+        config: 'missing.yml',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_CONFIG_FILE' });
+    expect(hub.requests).toEqual([]);
+  });
+
+  it("passes the Hub's error code through without its message", async () => {
+    fakeHub({ 'POST deploy': () => failure('RELEASE_NOT_FOUND', 404) });
+    const error: unknown = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      releaseId: 'r1',
+    }).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      code: 'RELEASE_NOT_FOUND',
+      exitCode: 1,
+      message: 'Hub rejected the request (404, RELEASE_NOT_FOUND).',
+    });
+    expect(JSON.stringify(error)).not.toContain('secret-bearing');
+  });
+
+  it('calls a lost request that changes the Hub unknown, and a lost read unreachable', async () => {
+    fakeHub({
+      'POST deploy': () => {
+        throw new TypeError('socket hang up');
+      },
+    });
+    await expect(
+      publish({ target, apiKey, root, deploy: true, releaseId: 'r1' }),
+    ).rejects.toMatchObject({ code: 'RESULT_UNKNOWN', exitCode: 3 });
+    fakeHub({
+      'GET ': () => {
+        throw new TypeError('connect ECONNREFUSED');
+      },
+    });
+    await expect(
+      publish({ target, apiKey, root, deploy: true, build: vi.fn() }),
+    ).rejects.toMatchObject({ code: 'HUB_UNREACHABLE', exitCode: 1 });
+  });
+
+  it('never reports an unknown status as success', async () => {
+    fakeHub({
+      'GET deployments/op-1/status': () => data({ status: 'weird' }),
+    });
+    await expect(
+      publish({ target, apiKey, root, deploy: true, releaseId: 'r1' }),
+    ).rejects.toMatchObject({ code: 'RESULT_UNKNOWN', exitCode: 3 });
+  });
+
+  it('times out waiting and names the deployment still running', async () => {
+    fakeHub({
+      'GET deployments/op-1/status': () => data({ status: 'deploying' }),
+    });
+    await expect(
+      publish({
+        target,
+        apiKey,
+        root,
+        deploy: true,
+        releaseId: 'r1',
+        timeout: 1,
+      }),
+    ).rejects.toMatchObject({
+      code: expect.stringMatching(/^(WAIT_TIMEOUT|RESULT_UNKNOWN)$/u),
+      exitCode: 3,
+      details: { operationId: 'op-1' },
+    });
+  });
+});

@@ -295,6 +295,90 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     });
   });
 
+  it.each([
+    'application/vnd.nocobase.release-upload.v1',
+    'application/json',
+    undefined,
+  ])(
+    'rejects Release uploads of type %s without reading them',
+    async (contentType) => {
+      const createRelease = vi.fn<HubService['createRelease']>();
+      const router = await apiRoutes.createRouter(
+        createApplication('administrator', {
+          listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+          createRelease,
+        }),
+      );
+
+      const response = await router.request('/hub/apps/customer/releases', {
+        method: 'POST',
+        headers: {
+          ...(contentType ? { 'content-type': contentType } : {}),
+          'x-hub-config-length': '4',
+        },
+        body: 'not-read',
+      });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'INVALID_CONTENT_TYPE' },
+      });
+      expect(createRelease).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns an upload result without a deployment', async () => {
+    const createRelease = vi
+      .fn<HubService['createRelease']>()
+      .mockResolvedValue({
+        id: 'release-1',
+        appId: 'customer',
+        artifactKey: 'customer/release-1.tar.gz',
+        version: '1.0.0',
+        checksum: 'a'.repeat(64),
+        size: 3,
+        configTemplate: 'name: example',
+        manifest: null,
+        createdAt: new Date('2026-09-29T00:00:00.000Z'),
+        reused: true,
+      });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        createRelease,
+      }),
+    );
+
+    const response = await router.request('/hub/apps/customer/releases', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'idempotency-key': 'ci-1',
+        'x-artifact-sha256': 'a'.repeat(64),
+      },
+      body: 'abc',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        id: 'release-1',
+        releaseId: 'release-1',
+        version: '1.0.0',
+        checksum: 'a'.repeat(64),
+        size: 3,
+        createdAt: '2026-09-29T00:00:00.000Z',
+        hasConfigTemplate: true,
+        reused: true,
+      },
+    });
+    expect(createRelease).toHaveBeenCalledWith('customer', {
+      stream: expect.anything(),
+      checksum: 'a'.repeat(64),
+      idempotencyKey: 'ci-1',
+    });
+  });
+
   it('refreshes one application from the Host status', async () => {
     const refresh = vi.fn<HubService['refresh']>().mockResolvedValue({
       app: { id: 'customer' },

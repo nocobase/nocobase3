@@ -601,6 +601,7 @@ function createHubService(): HubService {
       updatedAt: now,
     },
     hostUrl: 'http://127.0.0.1:13000',
+    buildTarget: null,
   } as const;
   const release = {
     id: 'release-1',

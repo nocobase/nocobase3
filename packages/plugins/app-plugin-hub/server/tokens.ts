@@ -1,6 +1,7 @@
 import type { JournalPage, JournalQuery } from '@nocobase/logging';
 import type {
   HostDeploymentSet,
+  HostRuntime,
   HostStatus,
 } from '@nocobase/app-host/management';
 import {
@@ -38,8 +39,8 @@ export interface HubAppRecord {
 }
 
 export interface HubReleaseRecord {
+  /** Set when an upload was answered with a Release stored by an earlier request. */
   readonly reused?: boolean;
-  readonly operationId?: string | null;
   readonly id: string;
   readonly appId: string;
   readonly version: string;
@@ -103,7 +104,12 @@ export interface HubAppSummary {
   readonly startupMode: 'lazy' | 'eager';
 }
 
+/** The platform an uploaded archive must be built for, in the shape of `nocobase.buildTarget`. */
+export type HubBuildTarget = HostRuntime;
+
 export interface HubAppDetail {
+  /** The Host's platform, which uploads must target; `null` while the Host status cannot be read. */
+  readonly buildTarget: HubBuildTarget | null;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;
   readonly currentVersion: string | null;
@@ -141,11 +147,6 @@ export interface CreateHubReleaseInput {
   readonly stream?: AsyncIterable<Uint8Array>;
   readonly checksum?: string;
   readonly idempotencyKey?: string;
-  readonly deploymentIntent?: 'explicit';
-  readonly config?: SaveHubConfigInput;
-  readonly waitForDeployment?: boolean;
-  /** Authorization supplied by the HTTP boundary when publishing also deploys. */
-  readonly authorizeDeployment?: () => Promise<void>;
 }
 
 export interface HubConfigDocument {

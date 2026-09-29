@@ -2,7 +2,13 @@ import { pluginTopicFor } from '@nocobase/app-cli';
 import { describe, expect, it } from 'vitest';
 
 import cliPlugin from '../src/cli/index.ts';
+import HubAuthLogin from '../src/cli/auth/login.ts';
+import HubAuthLogout from '../src/cli/auth/logout.ts';
+import HubAuthStatus from '../src/cli/auth/status.ts';
 import HubDeploy from '../src/cli/deploy.ts';
+import HubRemoteAdd from '../src/cli/remote/add.ts';
+import HubRemoteList from '../src/cli/remote/list.ts';
+import HubRemoteRemove from '../src/cli/remote/remove.ts';
 import HubUpload from '../src/cli/upload.ts';
 import packageMetadata from '../package.json' with { type: 'json' };
 
@@ -19,6 +25,12 @@ describe('the commands an application gets from this package', () => {
     expect(cliPlugin.devCommands).toEqual({
       deploy: HubDeploy,
       upload: HubUpload,
+      'remote:add': HubRemoteAdd,
+      'remote:list': HubRemoteList,
+      'remote:remove': HubRemoteRemove,
+      'auth:login': HubAuthLogin,
+      'auth:logout': HubAuthLogout,
+      'auth:status': HubAuthStatus,
     });
   });
 
@@ -56,6 +68,12 @@ describe('the commands an application gets from this package', () => {
         expect(
           definition.description,
           `${name} --${flag} has no description`,
+        ).toBeTruthy();
+      }
+      for (const [arg, definition] of Object.entries(command.args ?? {})) {
+        expect(
+          definition.description,
+          `${name} <${arg}> has no description`,
         ).toBeTruthy();
       }
     }
