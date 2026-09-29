@@ -1,4 +1,15 @@
 export default {
+  'routeOverlay.close': '关闭',
+  'AI employee not found.': '未找到 AI 员工。',
+  'Employee settings': '员工设置',
+  'Employee settings tab not found.': '未找到员工设置标签页。',
+  'LLM service not found.': '未找到 LLM 服务。',
+  'MCP server not found.': '未找到 MCP 服务器。',
+  'Failed to update tool permission.': '更新工具权限失败。',
+  'Model source': '模型来源',
+  'Your changes have not been saved.': '你的更改尚未保存。',
+  'skills.detailsNotFound': '未找到技能。',
+  'tools.detailsNotFound': '未找到工具。',
   // Tool and Skill display metadata uses exact English source text as flat keys.
   'Chart generator': '图表生成器',
   'Generates ECharts options (JSON) based on user input or data context.':
@@ -525,6 +536,7 @@ export default {
   MCP: 'MCP',
   'mcp.toolsTitle': 'MCP 工具',
   'mcp.toolsEmpty': '暂无可用的 MCP 工具。',
+  'mcp.toolsTotal_other': '共 {{count}} 个工具',
   'mcp.transportHttp': 'HTTP（流式）',
   'mcp.transportSse': 'HTTP + SSE（旧版）',
   'MCP servers': 'MCP 服务',
@@ -548,8 +560,6 @@ export default {
   Actions: '操作',
   Edit: '编辑',
   Delete: '删除',
-  Total: '总计',
-  items: '项',
   'Previous page': '上一页',
   'Next page': '下一页',
   View: '查看',

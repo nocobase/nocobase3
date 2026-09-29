@@ -3,6 +3,7 @@ import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import locales from '../client/locales/index.js';
 import { listLLMServices } from '../client/llm-service-service.js';
 import LLMServicePage from '../client/pages/llm-service-page.js';
@@ -36,9 +37,13 @@ async function renderPage() {
   });
   runtime.registerNamespace('@nocobase/app-plugin-ai-employee', locales);
   await runtime.init('en-US');
+  const router = createMemoryRouter(
+    [{ path: '/settings/ai/llm-services', element: <LLMServicePage /> }],
+    { initialEntries: ['/settings/ai/llm-services'] },
+  );
   render(
     <I18nProvider runtime={runtime}>
-      <LLMServicePage />
+      <RouterProvider router={router} />
     </I18nProvider>,
   );
   return runtime;
@@ -84,6 +89,7 @@ it('renders configured services without an empty state', async () => {
       title: 'Test service',
       provider: 'openai',
       enabled: true,
+      enabledModels: { mode: 'provider', models: [] },
     },
   ]);
   await renderPage();

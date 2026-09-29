@@ -1,4 +1,15 @@
 export default {
+  'routeOverlay.close': 'Close',
+  'AI employee not found.': 'AI employee not found.',
+  'Employee settings': 'Employee settings',
+  'Employee settings tab not found.': 'Employee settings tab not found.',
+  'LLM service not found.': 'LLM service not found.',
+  'MCP server not found.': 'MCP server not found.',
+  'Failed to update tool permission.': 'Failed to update tool permission.',
+  'Model source': 'Model source',
+  'Your changes have not been saved.': 'Your changes have not been saved.',
+  'skills.detailsNotFound': 'Skill not found.',
+  'tools.detailsNotFound': 'Tool not found.',
   // Tool and Skill display metadata uses exact English source text as flat keys.
   'Chart generator': 'Chart generator',
   'Generates ECharts options (JSON) based on user input or data context.':
@@ -575,6 +586,8 @@ export default {
   MCP: 'MCP',
   'mcp.toolsTitle': 'MCP tools',
   'mcp.toolsEmpty': 'No MCP tools available.',
+  'mcp.toolsTotal_one': '{{count}} tool in total',
+  'mcp.toolsTotal_other': '{{count}} tools in total',
   'mcp.transportHttp': 'HTTP (Streamable)',
   'mcp.transportSse': 'HTTP + SSE (Legacy)',
   'MCP servers': 'MCP servers',
@@ -599,8 +612,6 @@ export default {
   Edit: 'Edit',
   Delete: 'Delete',
   Disabled: 'Disabled',
-  Total: 'Total',
-  items: 'items',
   'Previous page': 'Previous page',
   'Next page': 'Next page',
   View: 'View',

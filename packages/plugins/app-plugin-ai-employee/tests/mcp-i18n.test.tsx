@@ -3,6 +3,8 @@ import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
 import { act, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
+import { createMemoryRouter, RouterProvider } from 'react-router';
+import ToolsPage from '../client/pages/mcp-services/tools.js';
 import locales from '../client/locales/index.js';
 import MCPServiceSettingsPage from '../client/pages/mcp-service-settings-page.js';
 
@@ -28,9 +30,19 @@ it('translates the MCP configuration notice and updates it when language changes
   });
   runtime.registerNamespace('@nocobase/app-plugin-ai-employee', locales);
   await runtime.init('zh-CN');
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/settings/ai/mcp-services',
+        element: <MCPServiceSettingsPage />,
+        children: [{ path: ':serverName/tools', element: <ToolsPage /> }],
+      },
+    ],
+    { initialEntries: ['/settings/ai/mcp-services'] },
+  );
   render(
     <I18nProvider runtime={runtime}>
-      <MCPServiceSettingsPage />
+      <RouterProvider router={router} />
     </I18nProvider>,
   );
   expect(
