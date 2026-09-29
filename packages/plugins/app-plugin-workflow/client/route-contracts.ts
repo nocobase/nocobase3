@@ -1,11 +1,9 @@
 export interface WorkflowRouteIds {
-  readonly workflowSource: string;
   readonly workflowDetail: string;
   readonly workflowRunDetail: string;
 }
 
 export const WORKFLOW_ROUTE_IDS: WorkflowRouteIds = Object.freeze({
-  workflowSource: '@nocobase/app-plugin-workflow:workflow-source',
   workflowDetail: '@nocobase/app-plugin-workflow:workflow-detail',
   workflowRunDetail: '@nocobase/app-plugin-workflow:workflow-run-detail',
 });

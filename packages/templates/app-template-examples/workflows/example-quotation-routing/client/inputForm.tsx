@@ -11,7 +11,7 @@ export default function QuotationInputForm({
 }: WorkflowParameterFormProps): ReactElement {
   return (
     <div className='space-y-4'>
-      <p className='text-sm font-medium'>Quotation details 123</p>
+      <p className='text-sm font-medium'>Quotation details</p>
       <label className='block space-y-1 text-sm'>
         <span>{schema.quotationId?.title ?? 'Quotation reference'}</span>
         <Input

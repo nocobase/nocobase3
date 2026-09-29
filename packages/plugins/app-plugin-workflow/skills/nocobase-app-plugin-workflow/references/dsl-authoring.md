@@ -253,7 +253,7 @@ export function run({ nodeResults, parameters }: FlowContext): boolean {
 
 Decisions are code rather than a serialized expression language, so the comparison is typechecked with the rest of the package, can be unit tested on its own, and has no operator, depth, or arity limits to work around. The cost is that reading a condition means opening its module: the definition records which module decides, not the rule itself.
 
-Prefer `.yes([...])` and `.no([...])` for condition nodes. Either or both may be omitted, their order is unrestricted, and an empty array creates no branch. `.check(handler)` already returns a node that can be passed to `addNode()`. Each branch call returns a new node without changing the previous one. The dedicated methods check that branch contents are workflow nodes. Declaring the same branch twice throws, including empty declarations and mixed calls such as `.branch({ yes: [] }).yes([])`. The generic `.branch({ yes: [...], no: [...] })` remains available without eager branch-name validation; source validation checks surviving branches against the instruction contract. Prefer dedicated methods for fixed branch names and `.branch()` for instructions with dynamic branch names. A condition contributes a boolean result, so a later handler reads it as `context.nodeResults.<conditionKey>`.
+Prefer `.yes([...])` and `.no([...])` for condition nodes. Either or both may be omitted, their order is unrestricted, and an empty array creates no branch. `.check(handler)` already returns a node that can be passed to `addNode()`. Each branch call returns a new node without changing the previous one. The dedicated methods check that branch contents are workflow nodes. Declaring the same branch twice throws, including empty declarations and mixed calls such as `.branch({ yes: [] }).yes([])`. The generic `.branch({ yes: [...], no: [...] })` remains available without eager branch-name validation; source validation checks surviving branches against the condition contract. Custom Instructions declare branch blocks through `createNode()` rather than these condition methods. A condition contributes a boolean result, so a later handler reads it as `context.nodeResults.<conditionKey>`.
 
 ## Terminate nodes
 
@@ -359,7 +359,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 ## Error-prevention checklist
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
-- `workflow.ts` binds `flow.finalize()` to a const annotated with the exported `WorkflowSourceAst` type and default-exports that binding; it never default-exports the builder or a bare call expression, which fails the application's `isolatedDeclarations` typecheck (`TS9037`).
+- `workflow.ts` default-exports the AST from `flow.finalize()`, never the builder. A `WorkflowSourceAst`-annotated const makes the source shape explicit, as in the example above; the current application templates set `isolatedDeclarations: false`, so a bare `export default flow.finalize()` is also valid.
 - Import Instruction classes through installed plugins' public exports or application-owned modules, and register them with the application.
 - No invented nodes/operators/config fields.
 - A node never carries an argument mapping: a handler reads `context.input`, `context.parameters` and `context.nodeResults`, and a `{{...}}` template belongs only to a hand-written `defineWorkflow()` AST.
@@ -378,9 +378,9 @@ Workflow diagnostics use the application logging service with source `workflow` 
 
 ## Source preview during development
 
-Use the current source entry from the workflow list when iterating with `pnpm dev`. Its `/settings/workflow/workflows/source/<key>` URL follows the latest definition for that key, survives source edits and server restarts, and refreshes the definition after Vite updates the workflow module index. Refreshing a source preview does not materialize a database revision. Parameter settings and manual run remain visible for an unmaterialized version, but opening either shows an enable-first prompt without loading custom forms. Enable the version to materialize it and navigate to its id page; parameter configuration is optional when the workflow provides defaults.
+Use the candidate entry from the workflow list when iterating with `pnpm dev`. Its `/settings/workflow/workflows/<hash>` URL identifies the discovered artifact exactly. Source edits produce a new hash, so reopen the candidate from the refreshed list to inspect the new definition; an old unpublished hash may become unavailable. Viewing a candidate does not materialize a database revision. Parameter settings and manual run remain visible for an unmaterialized version, but opening either shows an enable-first prompt without loading custom forms. Enable the version to materialize it and navigate to its id page; parameter configuration is optional when the workflow provides defaults.
 
-An `id` URL remains pinned to its materialized revision. A `hash` request still identifies exact content: an unpublished hash can disappear after an edit, so reopen an expired hash link from the list instead of reusing it. Enable uses the displayed revision identifier; parameter settings and manual run use the materialized id, including for previously enabled versions that are now disabled; they must not silently fall back to newer source when that revision is unavailable.
+An `id` URL remains pinned to its materialized revision. Enable uses the displayed revision identifier; parameter settings and manual run use the materialized id, including for previously enabled versions that are now disabled; they must not silently fall back to newer source when that revision is unavailable.
 
 ## Materialized resource snapshots
 

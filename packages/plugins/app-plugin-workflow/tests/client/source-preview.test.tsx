@@ -41,10 +41,6 @@ function open(path: string): ReturnType<typeof render> {
           <Location />
           <Routes>
             <Route
-              path={`${WORKFLOW_SETTING_PATHS.workflows}/source/:sourceKey`}
-              element={<WorkflowDetailPage />}
-            />
-            <Route
               path={`${WORKFLOW_SETTING_PATHS.workflows}/:id`}
               element={<WorkflowDetailPage />}
             />
@@ -59,37 +55,32 @@ function open(path: string): ReturnType<typeof render> {
   );
 }
 it.each(['Parameter settings', 'Run manually'])(
-  'prompts before %s on an unmaterialized detail, including after HMR',
+  'prompts before %s on an unmaterialized hash detail, including after HMR',
   async (action) => {
     const first = version({
       id: null,
       hash: 'a'.repeat(64),
       title: 'First source',
     });
-    const second = version({
-      ...first,
-      hash: 'b'.repeat(64),
-      title: 'Second source',
-    });
-    const source = vi.spyOn(workflowApi, 'source').mockResolvedValue(first);
-    vi.spyOn(workflowApi, 'sourceRevisions').mockResolvedValue([first]);
-    const fixed = vi.spyOn(workflowApi, 'workflow');
+    const fixed = vi.spyOn(workflowApi, 'workflow').mockResolvedValue(first);
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([first]);
     const execute = vi.spyOn(workflowApi, 'execute');
     const loader = vi.spyOn(parameterForm, 'loadWorkflowParameterForm');
-    open(`${WORKFLOW_SETTING_PATHS.workflows}/source/flow`);
+    open(`${WORKFLOW_SETTING_PATHS.workflows}/${first.hash}`);
     await screen.findByRole('heading', { name: 'First source' });
     await openMenu('More actions');
     fireEvent.click(await screen.findByRole('menuitem', { name: action }));
     await screen.findByRole('dialog', { name: 'Enable this version first' });
-    source.mockResolvedValue(second);
     act(() =>
       window.dispatchEvent(new CustomEvent('nocobase:workflow-source-updated')),
     );
-    await screen.findByRole('heading', { name: 'Second source' });
+    expect(screen.getByTestId('location').textContent).toBe(
+      `${WORKFLOW_SETTING_PATHS.workflows}/${first.hash}`,
+    );
     await screen.findByRole('dialog', { name: 'Enable this version first' });
     expect(execute).not.toHaveBeenCalled();
     expect(loader).not.toHaveBeenCalled();
-    expect(fixed).not.toHaveBeenCalled();
+    expect(fixed).toHaveBeenCalledTimes(1);
   },
 );
 it.each(['Parameter settings', 'Run'])(
@@ -99,7 +90,6 @@ it.each(['Parameter settings', 'Run'])(
       data: [version({ id: null, hash: 'a'.repeat(64) })],
       meta: { page: 1, pageSize: 20, total: 1 },
     });
-    const source = vi.spyOn(workflowApi, 'source');
     const fixed = vi.spyOn(workflowApi, 'workflow');
     const execute = vi.spyOn(workflowApi, 'execute');
     const loader = vi.spyOn(parameterForm, 'loadWorkflowParameterForm');
@@ -108,38 +98,63 @@ it.each(['Parameter settings', 'Run'])(
     await openMenu('More actions');
     fireEvent.click(await screen.findByRole('menuitem', { name: action }));
     await screen.findByRole('dialog', { name: 'Enable this version first' });
-    expect(source).not.toHaveBeenCalled();
     expect(fixed).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
     expect(loader).not.toHaveBeenCalled();
   },
 );
-it('canonicalizes a valid unpublished hash URL before subsequent edits', async () => {
+it('keeps an unpublished hash URL pinned to its candidate', async () => {
   const candidate = version({ id: null, version: null, hash: 'a'.repeat(64) });
-  vi.spyOn(workflowApi, 'workflow').mockResolvedValue(candidate);
-  vi.spyOn(workflowApi, 'revisions').mockResolvedValue([candidate]);
-  vi.spyOn(workflowApi, 'source').mockResolvedValue(candidate);
-  vi.spyOn(workflowApi, 'sourceRevisions').mockResolvedValue([candidate]);
-  open(`${WORKFLOW_SETTING_PATHS.workflows}/${candidate.hash}`);
+  const fixed = vi.spyOn(workflowApi, 'workflow').mockResolvedValue(candidate);
+  const revisions = vi
+    .spyOn(workflowApi, 'revisions')
+    .mockResolvedValue([candidate]);
+  const path = `${WORKFLOW_SETTING_PATHS.workflows}/${candidate.hash}`;
+  open(path);
+  await screen.findByRole('heading', { name: 'Flow' });
+  act(() =>
+    window.dispatchEvent(new CustomEvent('nocobase:workflow-source-updated')),
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('location').textContent).toBe(path),
+  );
+  expect(fixed).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(revisions).toHaveBeenCalledTimes(2));
+});
+it('keeps candidate revisions with the same key addressable by distinct hashes', async () => {
+  const first = version({ id: null, version: null, hash: 'a'.repeat(64) });
+  const second = version({ id: null, version: null, hash: 'b'.repeat(64) });
+  const fixed = vi
+    .spyOn(workflowApi, 'workflow')
+    .mockImplementation(async (id) => (id === second.hash ? second : first));
+  vi.spyOn(workflowApi, 'revisions').mockResolvedValue([first, second]);
+  open(`${WORKFLOW_SETTING_PATHS.workflows}/${first.hash}`);
+  await screen.findByRole('heading', { name: 'Flow' });
+  await openMenu('Version');
+  const versions = screen
+    .getAllByRole('menuitem')
+    .filter(
+      (item) => !item.classList.contains('workflow-version-compare-action'),
+    );
+  fireEvent.click(versions[1]);
   await waitFor(() =>
     expect(screen.getByTestId('location').textContent).toBe(
-      `${WORKFLOW_SETTING_PATHS.workflows}/source/flow`,
+      `${WORKFLOW_SETTING_PATHS.workflows}/${second.hash}`,
     ),
   );
+  expect(fixed).toHaveBeenCalledWith(second.hash);
 });
 it('keeps materialized detail URLs pinned during source updates', async () => {
   const published = version({ id: '42' });
   const fixed = vi.spyOn(workflowApi, 'workflow').mockResolvedValue(published);
   vi.spyOn(workflowApi, 'revisions').mockResolvedValue([published]);
-  const source = vi.spyOn(workflowApi, 'source');
   const path = `${WORKFLOW_SETTING_PATHS.workflows}/42`;
   open(path);
   await screen.findByRole('heading', { name: 'Flow' });
   act(() =>
     window.dispatchEvent(new CustomEvent('nocobase:workflow-source-updated')),
   );
-  await waitFor(() => expect(fixed).toHaveBeenCalledTimes(2));
-  expect(source).not.toHaveBeenCalled();
+  expect(fixed).toHaveBeenCalledTimes(1);
   expect(screen.getByTestId('location').textContent).toBe(path);
 });
 it('provides a route back to the list for an expired hash without guessing another workflow', async () => {
@@ -147,7 +162,6 @@ it('provides a route back to the list for an expired hash without guessing anoth
     new Error('The workflow request is invalid.'),
   );
   vi.spyOn(workflowApi, 'revisions').mockResolvedValue([]);
-  const source = vi.spyOn(workflowApi, 'source');
   open(`${WORKFLOW_SETTING_PATHS.workflows}/${'a'.repeat(64)}`);
   expect((await screen.findByRole('alert')).textContent).toContain(
     'source has changed',
@@ -157,7 +171,6 @@ it('provides a route back to the list for an expired hash without guessing anoth
       .getByRole('link', { name: 'Back to workflows' })
       .getAttribute('href'),
   ).toBe(WORKFLOW_SETTING_PATHS.workflows);
-  expect(source).not.toHaveBeenCalled();
 });
 
 it('navigates to the materialized id after enabling the displayed revision', async () => {
@@ -169,12 +182,12 @@ it('navigates to the materialized id after enabling the displayed revision', asy
     current: true,
     enabled: true,
   });
-  vi.spyOn(workflowApi, 'source').mockResolvedValue(candidate);
-  vi.spyOn(workflowApi, 'workflow').mockResolvedValue(published);
+  vi.spyOn(workflowApi, 'workflow').mockImplementation(async (id) =>
+    id === candidate.hash ? candidate : published,
+  );
   vi.spyOn(workflowApi, 'revisions').mockResolvedValue([published]);
-  vi.spyOn(workflowApi, 'sourceRevisions').mockResolvedValue([candidate]);
   const enable = vi.spyOn(workflowApi, 'enable').mockResolvedValue(published);
-  const path = `${WORKFLOW_SETTING_PATHS.workflows}/source/flow`;
+  const path = `${WORKFLOW_SETTING_PATHS.workflows}/${candidate.hash}`;
   open(path);
   fireEvent.click(await screen.findByRole('switch', { name: 'Enable Flow' }));
   await waitFor(() =>
@@ -184,7 +197,7 @@ it('navigates to the materialized id after enabling the displayed revision', asy
   );
   expect(enable).toHaveBeenCalledWith(candidate.hash);
 });
-it('links unpublished rows and pending revisions to source previews while keeping published rows pinned', async () => {
+it('links unpublished rows and pending revisions by hash while keeping published rows pinned', async () => {
   vi.spyOn(workflowApi, 'workflowPage').mockResolvedValue({
     data: [
       version({ id: null, key: 'draft', title: 'Draft', hash: 'a'.repeat(64) }),
@@ -200,7 +213,7 @@ it('links unpublished rows and pending revisions to source previews while keepin
   open(WORKFLOW_SETTING_PATHS.workflows);
   expect(
     (await screen.findByRole('link', { name: 'Draft' })).getAttribute('href'),
-  ).toBe(`${WORKFLOW_SETTING_PATHS.workflows}/source/draft`);
+  ).toBe(`${WORKFLOW_SETTING_PATHS.workflows}/${'a'.repeat(64)}`);
   expect(
     screen.getByRole('link', { name: 'Published' }).getAttribute('href'),
   ).toBe(`${WORKFLOW_SETTING_PATHS.workflows}/42`);
@@ -208,7 +221,7 @@ it('links unpublished rows and pending revisions to source previews while keepin
     screen
       .getByRole('link', { name: 'New version available' })
       .getAttribute('href'),
-  ).toBe(`${WORKFLOW_SETTING_PATHS.workflows}/source/published`);
+  ).toBe(`${WORKFLOW_SETTING_PATHS.workflows}/${'b'.repeat(64)}`);
 });
 
 it('runs a previously materialized disabled version without requiring parameter configuration', async () => {

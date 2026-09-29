@@ -105,7 +105,7 @@ In `server/providers/index.ts`, import `WorkflowInstructionsProvider` from `./wo
 
 The Instruction class above is the server half: it validates configuration and executes the node. A definition still has to be able to place that node, and the builder resolves nothing by type name — it reads the node's own type, configuration and branch structure — so an extension supplies a small factory beside its class and needs no registration on the authoring side.
 
-Create `server/workflow-instructions/label-node.ts`:
+Create `server/workflow-instructions/label-node.ts`. Use the same literal type as `LabelInstruction.type` without importing the server Instruction into definition evaluation:
 
 ```ts
 import {
@@ -114,14 +114,12 @@ import {
 } from '@nocobase/app-plugin-workflow/dsl';
 import type { NodeMeta } from '@nocobase/app-plugin-workflow/dsl';
 
-import { LabelInstruction } from './label.js';
-
 /** `TOutput` is what the node resolves with; downstream handlers read it from `context.nodeResults`. */
 export function labelNode<const TKey extends string>(
   meta: NodeMeta<TKey>,
   label: string,
 ): WorkflowNode<string, unknown, TKey> {
-  return createNode<string, unknown, TKey>(LabelInstruction.type, meta, {
+  return createNode<string, unknown, TKey>('example-label', meta, {
     label,
   });
 }
@@ -132,7 +130,10 @@ Give `createNode` a fourth argument for a branching node: `{ branches: { approve
 Create `workflows/label-example/workflow.ts`:
 
 ```ts
-import { workflow } from '@nocobase/app-plugin-workflow/dsl';
+import {
+  workflow,
+  type WorkflowSourceAst,
+} from '@nocobase/app-plugin-workflow/dsl';
 import { labelNode } from '../../server/workflow-instructions/label-node.js';
 
 const flow = workflow({
@@ -152,7 +153,8 @@ const flow = workflow({
   ),
 );
 
-export default flow.finalize();
+const definition: WorkflowSourceAst = flow.finalize();
+export default definition;
 ```
 
 `addNode()` returns the workflow containing the node; the receiver keeps the list it already had. Keep the returned builder — finalizing one that a later `addNode()` moved past fails rather than compiling a definition missing the node.

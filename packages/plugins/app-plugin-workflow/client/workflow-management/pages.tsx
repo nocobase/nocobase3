@@ -86,16 +86,13 @@ import type {
 } from '../types.js';
 import { loadWorkflowParameterForm } from './parameter-form.js';
 
-function workflowSourcePath(key: string): string {
-  return `${WORKFLOW_SETTING_PATHS.workflows}/source/${encodeURIComponent(key)}`;
-}
 function workflowRecordPath(workflow: {
   id: string | null;
-  key: string;
+  hash?: string | null;
 }): string {
-  return workflow.id
-    ? workflowPath(workflow.id)
-    : workflowSourcePath(workflow.key);
+  const identifier = workflow.id ?? workflow.hash;
+  if (!identifier) throw new Error('Workflow has no revision identifier.');
+  return workflowPath(identifier);
 }
 function workflowPath(workflowId: string): string {
   return `${WORKFLOW_SETTING_PATHS.workflows}/${encodeURIComponent(workflowId)}`;
@@ -940,7 +937,7 @@ function WorkflowRow({
               {pendingArtifact ? (
                 <Link
                   className='workflow-pending-version-link'
-                  to={workflowSourcePath(item.key)}
+                  to={workflowPath(pendingArtifact.hash)}
                 >
                   <Badge className='bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'>
                     {t('workflows.newVersionAvailable')}
@@ -1163,24 +1160,18 @@ export function WorkflowListPage(): React.ReactElement {
 
 export function WorkflowDetailPage(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
-  const { id: workflowId = '', sourceKey } = useParams();
+  const { id: workflowId = '' } = useParams();
   const sourceUpdate = useWorkflowSourceUpdate();
   const navigate = useNavigate();
   const toaster = useToaster();
   const [running, setRunning] = useState(false);
   const loadWorkflow = useCallback(
-    () =>
-      sourceKey
-        ? workflowApi.source(sourceKey, sourceUpdate)
-        : workflowApi.workflow(workflowId),
-    [workflowId, sourceKey, sourceUpdate],
+    () => workflowApi.workflow(workflowId),
+    [workflowId],
   );
   const loadRevisions = useCallback(
-    () =>
-      sourceKey
-        ? workflowApi.sourceRevisions(sourceKey, sourceUpdate)
-        : workflowApi.revisions(workflowId),
-    [workflowId, sourceKey, sourceUpdate],
+    () => workflowApi.revisions(workflowId, sourceUpdate),
+    [workflowId, sourceUpdate],
   );
   const loaded = useAsync(loadWorkflow);
   // Load revisions alongside the definition so navigation and comparison are ready when the menu opens.
@@ -1194,11 +1185,6 @@ export function WorkflowDetailPage(): React.ReactElement {
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
   const canvasCardRef = useRef<HTMLElement>(null);
   const workflow = loaded.value;
-  useEffect(() => {
-    // A successfully opened candidate must survive future edits and hard reloads.
-    if (!sourceKey && workflow && !workflow.id)
-      void navigate(workflowSourcePath(workflow.key), { replace: true });
-  }, [sourceKey, workflow, navigate]);
   const source = useMemo(
     () => (workflow ? definition(workflow) : null),
     [workflow],
@@ -1282,7 +1268,8 @@ export function WorkflowDetailPage(): React.ReactElement {
                   className='min-w-64'
                 >
                   {(revisions ?? [workflow]).map((item) => {
-                    const target = item.id ?? item.hash ?? item.key;
+                    const target = item.id ?? item.hash;
+                    if (!target) return null;
                     const selected = target === identifier;
                     return (
                       <div key={target} className='workflow-version-menu-row'>
@@ -1350,7 +1337,7 @@ export function WorkflowDetailPage(): React.ReactElement {
             {pendingArtifact ? (
               <Link
                 className='workflow-pending-version-link'
-                to={workflowSourcePath(workflow.key)}
+                to={workflowPath(pendingArtifact.hash)}
               >
                 <Badge className='bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'>
                   {t('workflows.newVersionAvailable')}

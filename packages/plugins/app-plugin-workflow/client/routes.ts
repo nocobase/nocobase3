@@ -8,15 +8,6 @@ import settings from './settings.js';
 
 const appRoutes: AppClientAppRoutesContribution = defineAppRoutes([
   {
-    name: 'workflow-source',
-    path: `${WORKFLOW_SETTING_PATHS.workflows}/source/:sourceKey`,
-    authz: { resource: { type: 'settings', id: 'workflow' }, action: 'manage' },
-    componentLoader: () =>
-      import('./workflow-management/pages.js').then(
-        ({ WorkflowDetailPage }) => ({ default: WorkflowDetailPage }),
-      ),
-  },
-  {
     name: 'workflow-detail',
     path: `${WORKFLOW_SETTING_PATHS.workflows}/:id`,
     authz: { resource: { type: 'settings', id: 'workflow' }, action: 'manage' },

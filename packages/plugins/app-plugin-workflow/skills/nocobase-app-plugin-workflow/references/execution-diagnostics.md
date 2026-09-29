@@ -137,9 +137,7 @@ Report at least:
 - Root-cause category: source/compile, activation/config, invocation contract, queue/worker, artifact/module, business script, timeout/cancellation, or authorization/observability.
 - Safest recovery: source revision, configuration correction, idempotent retry, new invocation, or explicit compensation.
 
-The current management routes enforce authentication only. Do not attribute a
-response or missing log to per-action ACL or audit behavior that is not
-implemented.
+The current management routes require authentication and the `manage` action on `{ type: 'settings', id: 'workflow' }`. A 403 response can indicate a missing Workflow Manage grant; the routes do not provide separate per-workflow permissions or audit hooks.
 
 ## Installed implementation discovery
 
