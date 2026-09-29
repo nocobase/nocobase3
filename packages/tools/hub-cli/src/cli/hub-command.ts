@@ -85,7 +85,7 @@ export abstract class HubCommand extends AppCommand {
       if (error.code === 'NO_REMOTE' && suggestions.length === 0)
         suggestions.push({
           message:
-            'Add the App as a remote, with the URL of its page on the Hub (<Hub URL>/apps/<App ID>):',
+            'Add the App as a remote with its URL on the Hub: pnpm nocobase hub remote add origin <Hub URL>/apps/<App ID>',
         });
       return new CommandError(error.message, {
         code: error.code,
