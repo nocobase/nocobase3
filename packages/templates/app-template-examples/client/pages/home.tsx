@@ -12,6 +12,7 @@ import {
   FolderOpen,
   ShoppingCart,
   PanelsTopLeft,
+  Printer,
   Plug,
   ShieldCheck,
   Users,
@@ -38,6 +39,11 @@ const examples = [
   { key: 'orders', path: '/repository-example/orders', icon: ShoppingCart },
   { key: 'authorization', path: '/authorization-example', icon: ShieldCheck },
   { key: 'files', path: '/file-repository', icon: FolderOpen },
+  {
+    key: 'templatePrint',
+    path: '/template-print-example',
+    icon: Printer,
+  },
   { key: 'routes', path: '/routes-example', icon: BookOpen },
   { key: 'workflows', path: '/settings/workflow/workflows', icon: Workflow },
 ] as const;

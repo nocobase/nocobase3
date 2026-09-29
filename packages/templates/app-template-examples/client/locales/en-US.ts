@@ -330,6 +330,11 @@ const enUS = {
       description:
         'Explore the file repository example and its upload and file management interface.',
     },
+    templatePrint: {
+      title: 'Template printing',
+      description:
+        'Generate DOCX or PDF invoices from authorized quote data; PDF requires LibreOffice on the application server.',
+    },
     workflows: {
       title: 'Workflow examples',
       description:

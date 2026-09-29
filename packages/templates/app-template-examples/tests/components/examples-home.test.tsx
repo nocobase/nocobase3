@@ -38,6 +38,11 @@ it.each(['en-US', 'zh-CN'])(
       }),
     ).toHaveAttribute('href', '/demo/i18n-examples');
     expect(
+      screen.getByRole('link', {
+        name: locale === 'zh-CN' ? /^模板打印/u : /^Template printing/u,
+      }),
+    ).toHaveAttribute('href', '/demo/template-print-example');
+    expect(
       screen.getAllByRole('link').map((link) => link.getAttribute('href')),
     ).toEqual([
       '/demo/notifications',
@@ -52,6 +57,7 @@ it.each(['en-US', 'zh-CN'])(
       '/demo/repository-example/orders',
       '/demo/authorization-example',
       '/demo/file-repository',
+      '/demo/template-print-example',
       '/demo/routes-example',
       '/demo/settings/workflow/workflows',
     ]);

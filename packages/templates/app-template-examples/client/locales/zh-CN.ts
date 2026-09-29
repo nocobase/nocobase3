@@ -310,6 +310,11 @@ const zhCN: AppResource = {
       title: '文件管理',
       description: '体验文件仓库示例中的上传入口和文件管理界面。',
     },
+    templatePrint: {
+      title: '模板打印',
+      description:
+        '从授权报价数据生成 DOCX 或 PDF 发票；PDF 转换需要在应用服务器安装 LibreOffice。',
+    },
     workflows: {
       title: '工作流示例',
       description:
