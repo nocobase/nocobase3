@@ -70,6 +70,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -213,6 +214,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
 
       - name: Download release source state
         uses: actions/download-artifact@v4
@@ -315,6 +317,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
 
       - name: Download release source state
         uses: actions/download-artifact@v4
@@ -457,6 +460,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
 
       - name: Download release source state
         uses: actions/download-artifact@v4
