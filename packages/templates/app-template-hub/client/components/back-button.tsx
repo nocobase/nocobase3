@@ -3,7 +3,6 @@ import { ArrowLeftIcon } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { Link, type To, useLocation } from 'react-router';
 
-import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export interface BackButtonProps {
@@ -22,10 +21,9 @@ export interface BackButtonProps {
  * for a dialog.
  *
  * It stands on its own, above the page's heading where breadcrumbs would otherwise be, and needs no `PageHeader`.
- * Going back is navigation, so it is a link wearing the ghost button's styles; the negative margin lines its arrow up
- * with the content below, and `flex w-fit` keeps it a block of its own width wherever it is placed. It replaces the
- * history entry, as closing a route overlay does, so the browser's Back does not return to the page just left, such
- * as a form that would reopen empty.
+ * Going back is navigation, so it is a muted text link with an arrow, turning to the foreground on hover: no button
+ * chrome, so it reads as a way out rather than an action. It replaces the history entry, as closing a route overlay
+ * does, so the browser's Back does not return to the page just left, such as a form that would reopen empty.
  */
 export function BackButton({
   children,
@@ -39,13 +37,12 @@ export function BackButton({
     <Link
       replace
       className={cn(
-        buttonVariants({ variant: 'ghost', size: 'sm' }),
-        'flex w-fit -ml-1.5 text-muted-foreground',
+        'inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground',
         className,
       )}
       to={to ?? { pathname: '..', search: location.search }}
     >
-      <ArrowLeftIcon data-icon='inline-start' />
+      <ArrowLeftIcon className='size-4' />
       {children ?? t('navigation.back', { defaultValue: 'Back' })}
     </Link>
   );
