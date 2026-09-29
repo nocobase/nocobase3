@@ -546,7 +546,27 @@ export default {
   'Add MCP server': '添加 MCP 服务',
   'Edit MCP server': '编辑 MCP 服务',
   'No MCP servers configured.': '暂无 MCP 服务配置。',
-  'No LLM services configured.': '暂无 LLM 服务配置。',
+  'agentPrompt.label': '提示词',
+  'agentPrompt.copy': '复制提示词',
+  'agentPrompt.copied': '已复制',
+  'agentPrompt.copyFailed': '已选中提示词，请按 Ctrl+C（macOS 上为 ⌘C）复制。',
+  'llmServices.emptyTitle': '还没有配置 LLM 服务',
+  'llmServices.emptyDescription':
+    'LLM 服务在应用配置文件中声明，无法在此页面添加。可以让 AI 编程助手帮你完成配置。',
+  'llmServices.emptyStepOpen':
+    '在应用目录（包含 config.yml 的目录）打开 AI 编程助手，例如 Codex 或 Claude Code。',
+  'llmServices.emptyStepSend':
+    '把提示词发给它。助手会添加服务配置、列出可用模型供你选择，并告诉你如何设置 API Key。',
+  'llmServices.emptyStepFinish':
+    '按助手的提示自行设置 API Key。完成后重启应用并刷新本页，再在这里启用服务、选择模型。',
+  'llmServices.emptyNote': '已部署的生产环境请在部署配置中添加 LLM 服务。',
+  'llmServices.agentPrompt': `请为这个 NocoBase 应用配置一个 LLM 服务：
+1. 按应用中 nocobase-app-plugin-ai-employee Skill 的 LLM 配置说明操作。
+2. 先问我要用哪个模型提供商（例如 DeepSeek、OpenAI、Kimi），不要替我决定。
+3. 除 API Key 外的字段由你配置。API Key 由我自己设置：只告诉我要运行的命令，不要读取、询问或输出密钥。
+4. 用 \`pnpm nocobase ai-employee models\` 列出可用模型，让我选择后写入 enabledModels。
+5. 运行 \`pnpm nocobase config check --no-connect\` 检查配置；经我同意后测试一个模型。
+6. 最后总结你改了哪些配置，并告诉我还需要我做什么（例如设置 API Key、重启应用）。`,
   Transport: '传输方式',
   Stdio: 'Stdio',
   HTTP: 'HTTP',

@@ -597,7 +597,29 @@ export default {
   'Add MCP server': 'Add MCP server',
   'Edit MCP server': 'Edit MCP server',
   'No MCP servers configured.': 'No MCP servers configured.',
-  'No LLM services configured.': 'No LLM services configured.',
+  'agentPrompt.label': 'Prompt',
+  'agentPrompt.copy': 'Copy prompt',
+  'agentPrompt.copied': 'Copied',
+  'agentPrompt.copyFailed':
+    'The prompt is selected. Press Ctrl+C (⌘C on macOS) to copy it.',
+  'llmServices.emptyTitle': 'No LLM services configured yet',
+  'llmServices.emptyDescription':
+    'LLM services are declared in the application configuration and cannot be added on this page. A coding agent can set one up for you.',
+  'llmServices.emptyStepOpen':
+    'Open your coding agent, such as Codex or Claude Code, in the application directory: the one that contains config.yml.',
+  'llmServices.emptyStepSend':
+    'Send it the prompt. The agent adds the service configuration, lists the available models for you to choose from, and tells you how to set the API key.',
+  'llmServices.emptyStepFinish':
+    'Set the API key yourself as the agent instructs. Then restart the application and refresh this page to enable the service and choose its models here.',
+  'llmServices.emptyNote':
+    'For a deployed production application, add the service to its deployment configuration instead.',
+  'llmServices.agentPrompt': `Configure an LLM service for this NocoBase application:
+1. Follow the LLM configuration guide in the application's nocobase-app-plugin-ai-employee Skill.
+2. Ask me which model provider to use (for example DeepSeek, OpenAI or Kimi); do not choose one for me.
+3. Configure every field except the API key. I will set the API key myself: only tell me the command to run, and do not read, ask for or print the key.
+4. List the available models with \`pnpm nocobase ai-employee models\` and write the ones I choose to enabledModels.
+5. Check the configuration with \`pnpm nocobase config check --no-connect\`, and test one model once I agree.
+6. Finish by summarizing what you changed and telling me what I still need to do, such as setting the API key or restarting the application.`,
   Transport: 'Transport',
   Stdio: 'Stdio',
   HTTP: 'HTTP',

@@ -83,6 +83,14 @@ describe('settings UI ownership', () => {
       'Your changes have not been saved.',
       'skills.detailsNotFound',
       'tools.detailsNotFound',
+      'agentPrompt.copy',
+      'agentPrompt.copied',
+      'agentPrompt.copyFailed',
+      'llmServices.emptyTitle',
+      'llmServices.emptyStepOpen',
+      'llmServices.emptyStepSend',
+      'llmServices.emptyStepFinish',
+      'llmServices.agentPrompt',
     ] as const;
     for (const key of keys) {
       expect(enUS[key], key).toBeTruthy();

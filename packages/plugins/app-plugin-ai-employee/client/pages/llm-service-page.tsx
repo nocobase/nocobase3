@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '../components/ui/table.js';
 import { useAIEmployeeClient } from '../ai-employee-client.js';
+import { AgentPromptEmptyState } from '../components/agent-prompt-empty-state.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { useHistoryGuard } from '../components/use-history-guard.js';
 import type {
@@ -125,74 +126,89 @@ export default function LLMServicePage(): ReactElement {
           <AlertDescription>{loadError || error}</AlertDescription>
         </Alert>
       )}
-      <div className='overflow-hidden rounded-xl border bg-card'>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className='w-12 text-center'>#</TableHead>
-              <TableHead>{t('UID')}</TableHead>
-              <TableHead>{t('Title')}</TableHead>
-              <TableHead>{t('Provider')}</TableHead>
-              <TableHead>{t('Models')}</TableHead>
-              <TableHead>{t('Enabled')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading || (!loadError && !services.length) ? (
+      {!loading && !loadError && !services.length ? (
+        // Services come from config.yml, so the empty state hands the work to a coding agent in the app directory.
+        <AgentPromptEmptyState
+          title={t('llmServices.emptyTitle')}
+          description={t('llmServices.emptyDescription')}
+          openStep={t('llmServices.emptyStepOpen')}
+          sendStep={t('llmServices.emptyStepSend')}
+          finishStep={t('llmServices.emptyStepFinish')}
+          prompt={t('llmServices.agentPrompt')}
+          note={t('llmServices.emptyNote')}
+        />
+      ) : (
+        <div className='overflow-hidden rounded-xl border bg-card'>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  className='px-3 py-10 text-center text-muted-foreground'
-                  colSpan={6}
-                >
-                  {loading ? t('Loading…') : t('No LLM services configured.')}
-                </TableCell>
+                <TableHead className='w-12 text-center'>#</TableHead>
+                <TableHead>{t('UID')}</TableHead>
+                <TableHead>{t('Title')}</TableHead>
+                <TableHead>{t('Provider')}</TableHead>
+                <TableHead>{t('Models')}</TableHead>
+                <TableHead>{t('Enabled')}</TableHead>
               </TableRow>
-            ) : null}
-            {!loading &&
-              !loadError &&
-              services.map((service, index) => (
-                <TableRow key={service.name}>
-                  <TableCell className='text-center text-muted-foreground'>
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className='font-mono text-xs'>
-                    {service.name}
-                  </TableCell>
-                  <TableCell>{service.title}</TableCell>
-                  <TableCell>
-                    <ProviderCell
-                      name={service.provider}
-                      provider={providers.find(
-                        (item) => item.name === service.provider,
-                      )}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <ModelsCell
-                      service={service}
-                      onEdit={() => {
-                        void navigate({
-                          pathname: `${encodeURIComponent(service.name)}/models`,
-                          search: location.search,
-                        });
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={service.enabled}
-                      disabled={pending.has(service.name)}
-                      aria-label={t('Enable {{name}}', { name: service.name })}
-                      onCheckedChange={(enabled) =>
-                        void toggle(service, enabled)
-                      }
-                    />
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    className='px-3 py-10 text-center text-muted-foreground'
+                    colSpan={6}
+                  >
+                    {t('Loading…')}
                   </TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-      </div>
+              ) : null}
+              {!loading &&
+                !loadError &&
+                services.map((service, index) => (
+                  <TableRow key={service.name}>
+                    <TableCell className='text-center text-muted-foreground'>
+                      {index + 1}
+                    </TableCell>
+                    <TableCell className='font-mono text-xs'>
+                      {service.name}
+                    </TableCell>
+                    <TableCell>{service.title}</TableCell>
+                    <TableCell>
+                      <ProviderCell
+                        name={service.provider}
+                        provider={providers.find(
+                          (item) => item.name === service.provider,
+                        )}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <ModelsCell
+                        service={service}
+                        onEdit={() => {
+                          void navigate({
+                            pathname: `${encodeURIComponent(service.name)}/models`,
+                            search: location.search,
+                          });
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={service.enabled}
+                        disabled={pending.has(service.name)}
+                        aria-label={t('Enable {{name}}', {
+                          name: service.name,
+                        })}
+                        onCheckedChange={(enabled) =>
+                          void toggle(service, enabled)
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       {historyGuard.holding ? heldOutlet : outlet}
       <ConfirmDialog
         open={historyGuard.confirming}
