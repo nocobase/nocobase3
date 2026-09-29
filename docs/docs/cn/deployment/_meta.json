@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "部署"
+    "label": "部署概览"
   },
   {
     "type": "file",
@@ -10,23 +10,37 @@
     "label": "用 AI Agent 部署"
   },
   {
-    "type": "file",
-    "name": "hub",
-    "label": "手动部署：Hub"
+    "type": "custom-link",
+    "label": "手动部署",
+    "collapsed": true,
+    "items": [
+      {
+        "type": "custom-link",
+        "label": "Hub",
+        "link": "hub"
+      },
+      {
+        "type": "custom-link",
+        "label": "独立运行",
+        "link": "standalone"
+      }
+    ]
   },
   {
-    "type": "file",
-    "name": "standalone",
-    "label": "手动部署：独立运行"
-  },
-  {
-    "type": "file",
-    "name": "configuration",
-    "label": "运行配置"
-  },
-  {
-    "type": "file",
-    "name": "troubleshooting",
-    "label": "排障"
+    "type": "custom-link",
+    "label": "配置与排障",
+    "collapsed": true,
+    "items": [
+      {
+        "type": "custom-link",
+        "label": "运行配置",
+        "link": "configuration"
+      },
+      {
+        "type": "custom-link",
+        "label": "排障",
+        "link": "troubleshooting"
+      }
+    ]
   }
 ]
