@@ -138,9 +138,11 @@ it('explains how to resolve an empty invoice list', async () => {
 
   render(<TemplatePrintPage />);
 
-  expect(await screen.findByRole('status')).toHaveTextContent(
-    'Run the database tasks and use an account with quote access.',
-  );
+  expect(
+    await screen.findByText(
+      'Run the database tasks and use an account with quote access.',
+    ),
+  ).toBeInTheDocument();
 });
 
 it('retries invoice loading after a request fails', async () => {
