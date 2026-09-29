@@ -71,11 +71,7 @@ export function FilePreviewContent(
   switch (kind) {
     case 'image':
       return (
-        <img
-          src={url}
-          alt={file.filename}
-          className='max-h-[70vh] max-w-full object-contain'
-        />
+        <ImagePreview key={url} file={file} url={url} onDownload={onDownload} />
       );
     case 'pdf':
       return (
@@ -125,6 +121,38 @@ function MarkdownPreview(inputProps: { readonly text?: string }): ReactElement {
         {text}
       </ReactMarkdown>
     </article>
+  );
+}
+
+function ImagePreview(inputProps: {
+  readonly file: FileRecord;
+  readonly url?: string;
+  readonly onDownload?: () => void;
+}): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-file');
+  const { file, url, onDownload } = inputProps;
+
+  // The browser decodes the image itself, so its error event is the only signal
+  // that a corrupt or mislabelled file would otherwise leave as a broken icon.
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <DownloadFallback
+        file={file}
+        message={t('files.imageFailed', {
+          defaultValue:
+            'This image could not be displayed. It may be corrupted or in an unsupported format.',
+        })}
+        onDownload={onDownload}
+      />
+    );
+  return (
+    <img
+      src={url}
+      alt={file.filename}
+      className='max-h-[70vh] max-w-full object-contain'
+      onError={() => setFailed(true)}
+    />
   );
 }
 

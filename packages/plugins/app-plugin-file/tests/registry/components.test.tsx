@@ -215,6 +215,36 @@ it('previews a Repository record as text and shows safe image thumbnails', async
   );
 });
 
+it('replaces an image that fails to decode with a download fallback', async () => {
+  const onDownload = vi.fn();
+  const { FilePreviewContent } =
+    await import('../../registry/component-ui/components/previewers/file-preview-content.js');
+  render(
+    <FilePreviewContent
+      file={record({ filename: 'corrupt.png', mimeType: 'image/png' })}
+      kind='image'
+      url='/main/uploads/invoices/corrupt.png'
+      onDownload={onDownload}
+    />,
+  );
+  fireEvent.error(screen.getByAltText('corrupt.png'));
+  expect(
+    await screen.findByText(
+      'This image could not be displayed. It may be corrupted or in an unsupported format.',
+    ),
+  ).toBeInTheDocument();
+  // The fallback's thumbnail loads the same bytes, so it fails the same way and
+  // must drop to the type icon instead of a second broken image.
+  fireEvent.error(screen.getByAltText('corrupt.png'));
+  expect(screen.queryByAltText('corrupt.png')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('corrupt.png')).toHaveAttribute(
+    'data-slot',
+    'file-thumbnail',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Download file' }));
+  expect(onDownload).toHaveBeenCalledOnce();
+});
+
 it.each([
   ['/main/uploads/invoices/test.pdf', 'same-origin'],
   ['https://cdn.example.test/invoice.pdf', 'omit'],
