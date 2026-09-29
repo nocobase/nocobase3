@@ -6,12 +6,11 @@ import {
   type ScheduleExecutionContext,
   type ScheduleExecutor,
   type ScheduleJob,
-  type ScheduleLogger,
   type ScheduleReceipt,
   type ScheduleSetupOptions,
   type Subscriber,
-  type Unsubscribe,
 } from './types.js';
+import type { ScheduleLogger, Unsubscribe } from '../types.js';
 import {
   assertValidJobName,
   normalizeScheduleJob,

@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   ResolvedScheduleExecutorConfig,
   ScheduleConfig,
-} from '../../src/config.js';
-import type { JobExecutor } from '../../src/job-types.js';
-import type { ScheduleExecutor } from '../../src/types.js';
-import { createJobExecutorServiceWith } from '../../src/service.js';
+} from '../../../src/config.js';
+import type { JobExecutor } from '../../../src/job/types.js';
+import type { ScheduleExecutor } from '../../../src/schedule/types.js';
+import { createJobExecutorServiceWith } from '../../../src/service.js';
 
 function ordinary(): JobExecutor {
   return {

@@ -12,19 +12,19 @@ import {
 import type {
   ResolvedRedisScheduleExecutorConfig,
   ScheduleRetentionPolicy,
-} from '../config.js';
+} from '../../config.js';
 import {
   jobQueueName,
   type JobBackend,
   type JobRunner,
   type JobSubmission,
-} from '../job-backend.js';
+} from '../backend.js';
 import {
   JobHandlerNotRegisteredError,
   JobInterruptedError,
   type JobReceipt,
-} from '../job-types.js';
-import type { ScheduleLogger } from '../types.js';
+} from '../types.js';
+import type { ScheduleLogger } from '../../types.js';
 
 /** Immutable submission metadata stored by BullMQ, not execution-local state. */
 export interface RedisJobData {

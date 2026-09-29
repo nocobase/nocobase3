@@ -7,7 +7,7 @@ import {
   type RepeatOptions,
 } from 'bullmq';
 
-import type { ResolvedRedisScheduleExecutorConfig } from '../config.js';
+import type { ResolvedRedisScheduleExecutorConfig } from '../../config.js';
 import {
   ScheduleHandlerNotRegisteredError,
   type ScheduleBackend,
@@ -16,11 +16,11 @@ import {
   type ScheduleRunner,
   type StoredScheduleRule,
 } from '../executor.js';
+import type { ScheduleLogger } from '../../types.js';
 import type {
   JobScheduler,
   ScheduleEvent,
   ScheduleEventName,
-  ScheduleLogger,
 } from '../types.js';
 import type { ScheduleRule } from '../validation.js';
 

@@ -11,7 +11,7 @@ export {
   type JobEvent,
   type JobEventName,
   type JobErrorReason,
-} from './job-types.js';
+} from './job/types.js';
 export type {
   MemoryScheduleAdapterConfig,
   RedisScheduleAdapterConfig,
@@ -21,7 +21,7 @@ export type {
   ScheduleRetentionPolicy,
 } from './config.js';
 export { createJobExecutorService } from './create.js';
-export { ScheduleHandlerNotRegisteredError } from './executor.js';
+export { ScheduleHandlerNotRegisteredError } from './schedule/executor.js';
 export type {
   ManagedJobExecutorService,
   JobExecutorServiceDependencies,
@@ -33,15 +33,17 @@ export {
   type ScheduleErrorReason,
   type ScheduleEvent,
   type ScheduleEventName,
-  type JobExecutorService,
   type ScheduleExecutionContext,
   type ScheduleExecutor,
   type ScheduleJob,
   type ScheduleJobOption,
-  type ScheduleLogger,
   type ScheduleReceipt,
   type ScheduleReceiptMessage,
   type ScheduleSetupOptions,
   type Subscriber,
-  type Unsubscribe,
+} from './schedule/types.js';
+export type {
+  JobExecutorService,
+  ScheduleLogger,
+  Unsubscribe,
 } from './types.js';

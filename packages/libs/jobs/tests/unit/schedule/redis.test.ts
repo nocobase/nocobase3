@@ -1,20 +1,20 @@
 import { UnrecoverableError, type Job, type JobSchedulerJson } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedRedisScheduleExecutorConfig } from '../../src/config.js';
-import { ScheduleHandlerNotRegisteredError } from '../../src/executor.js';
+import type { ResolvedRedisScheduleExecutorConfig } from '../../../src/config.js';
+import { ScheduleHandlerNotRegisteredError } from '../../../src/schedule/executor.js';
 import type {
   RedisScheduleBackendFactories,
   ScheduleProcessor,
   ScheduleQueue,
   ScheduleWorker,
-} from '../../src/redis/backend.js';
-import { createRedisScheduleExecutor } from '../../src/redis/index.js';
+} from '../../../src/schedule/redis/backend.js';
+import { createRedisScheduleExecutor } from '../../../src/schedule/redis/index.js';
 import type {
   ScheduleEvent,
   ScheduleExecutionContext,
   ScheduleJob,
-} from '../../src/types.js';
+} from '../../../src/schedule/types.js';
 
 type Listener = (...args: unknown[]) => void;
 

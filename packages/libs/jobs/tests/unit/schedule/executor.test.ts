@@ -7,8 +7,11 @@ import {
   type ScheduleRuleWrite,
   type ScheduleRunner,
   type StoredScheduleRule,
-} from '../../src/executor.js';
-import type { ScheduleEvent, ScheduleJob } from '../../src/types.js';
+} from '../../../src/schedule/executor.js';
+import type {
+  ScheduleEvent,
+  ScheduleJob,
+} from '../../../src/schedule/types.js';
 
 class FakeBackend implements ScheduleBackend {
   public settings = { attempts: 1 };

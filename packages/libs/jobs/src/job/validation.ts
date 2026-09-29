@@ -1,4 +1,4 @@
-import { Job, type JobClass } from './job-types.js';
+import { Job, type JobClass } from './types.js';
 
 export function assertJobName(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !value || /[:\s]/u.test(value)) {

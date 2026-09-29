@@ -6,17 +6,14 @@ import {
   type ResolvedScheduleExecutorConfig,
   type ScheduleConfig,
 } from './config.js';
-import type {
-  JobExecutorService,
-  ScheduleExecutor,
-  ScheduleLogger,
-} from './types.js';
+import type { ScheduleExecutor } from './schedule/types.js';
+import type { JobExecutorService, ScheduleLogger } from './types.js';
 import { assertValidScope } from './validation.js';
-import type { JobExecutor } from './job-types.js';
-import { BackendJobExecutor } from './job-executor.js';
-import { MemoryJobBackend } from './memory/job-backend.js';
-import { jobStateFilePath } from './memory/job-state-file.js';
-import { RedisJobBackend } from './redis/job-backend.js';
+import type { JobExecutor } from './job/types.js';
+import { BackendJobExecutor } from './job/executor.js';
+import { MemoryJobBackend } from './job/memory/backend.js';
+import { jobStateFilePath } from './job/memory/state-file.js';
+import { RedisJobBackend } from './job/redis/backend.js';
 
 /** Reports that an executor runs on the built-in memory configuration. */
 export interface ScheduleFallbackEvent {

@@ -1,12 +1,12 @@
 import { UnrecoverableError, WaitingError, type JobsOptions } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedRedisScheduleExecutorConfig } from '../../src/config.js';
-import type { JobRun } from '../../src/job-backend.js';
+import type { ResolvedRedisScheduleExecutorConfig } from '../../../src/config.js';
+import type { JobRun } from '../../../src/job/backend.js';
 import {
   JobHandlerNotRegisteredError,
   JobInterruptedError,
-} from '../../src/job-types.js';
+} from '../../../src/job/types.js';
 import {
   RedisJobBackend,
   type JobProcessor,
@@ -15,7 +15,7 @@ import {
   type RedisJobQueue,
   type RedisJobWorker,
   type RedisProcessingJob,
-} from '../../src/redis/job-backend.js';
+} from '../../../src/job/redis/backend.js';
 
 const config: ResolvedRedisScheduleExecutorConfig = {
   adapter: 'redis',

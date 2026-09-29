@@ -1,4 +1,4 @@
-import type { JobBackend, JobRun, JobRunner } from './job-backend.js';
+import type { JobBackend, JobRun, JobRunner } from './backend.js';
 import {
   Job,
   JobHandlerNotRegisteredError,
@@ -9,9 +9,9 @@ import {
   type JobReceipt,
   type JobSetupOptions,
   type JobSubscriber,
-} from './job-types.js';
-import { assertJobClass, copyJobPayload } from './job-validation.js';
-import type { ScheduleLogger, Unsubscribe } from './types.js';
+} from './types.js';
+import { assertJobClass, copyJobPayload } from './validation.js';
+import type { ScheduleLogger, Unsubscribe } from '../types.js';
 
 type State = 'created' | 'setting-up' | 'ready' | 'closed';
 

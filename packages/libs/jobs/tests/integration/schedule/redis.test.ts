@@ -12,7 +12,7 @@ import {
   type ScheduleExecutionContext,
   type ScheduleExecutor,
   type ScheduleJob,
-} from '../../src/index.js';
+} from '../../../src/index.js';
 
 const connection = {
   host: process.env.REDIS_HOST ?? '127.0.0.1',

@@ -3,8 +3,8 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../config.js';
-import { assertJobName, copyJobPayload } from '../job-validation.js';
+import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
+import { assertJobName, copyJobPayload } from '../validation.js';
 
 export interface PendingJobState {
   readonly jobId: string;

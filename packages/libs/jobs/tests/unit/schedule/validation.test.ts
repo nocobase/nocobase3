@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeScheduleJob } from '../../src/validation.js';
-import type { ScheduleJob, ScheduleJobOption } from '../../src/types.js';
+import { normalizeScheduleJob } from '../../../src/schedule/validation.js';
+import type {
+  ScheduleJob,
+  ScheduleJobOption,
+} from '../../../src/schedule/types.js';
 
 function job(options: ScheduleJobOption, name = 'job-1'): ScheduleJob {
   return { name, options, payload: {}, execute: async () => undefined };

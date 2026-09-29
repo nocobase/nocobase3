@@ -1,6 +1,6 @@
-import type { ResolvedRedisScheduleExecutorConfig } from '../config.js';
+import type { ResolvedRedisScheduleExecutorConfig } from '../../config.js';
 import { BackendScheduleExecutor } from '../executor.js';
-import type { JobExecutorServiceDependencies } from '../service.js';
+import type { JobExecutorServiceDependencies } from '../../service.js';
 import type { ScheduleExecutor } from '../types.js';
 import {
   defaultRedisFactories,

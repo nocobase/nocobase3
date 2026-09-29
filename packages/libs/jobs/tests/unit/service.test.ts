@@ -12,7 +12,7 @@ import {
   type ScheduleExecutorFactory,
 } from '../../src/service.js';
 import type { ResolvedScheduleExecutorConfig } from '../../src/config.js';
-import type { ScheduleExecutor } from '../../src/types.js';
+import type { ScheduleExecutor } from '../../src/schedule/types.js';
 
 function fakeExecutor(): ScheduleExecutor {
   return {

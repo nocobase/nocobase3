@@ -1,4 +1,4 @@
-import type { Unsubscribe } from './types.js';
+import type { Unsubscribe } from '../types.js';
 
 /** A payload-only job. Subclasses declare their own stable static jobName. */
 export abstract class Job<TPayload = unknown> {

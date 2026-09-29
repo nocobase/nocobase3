@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import { CronJob } from 'cron';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../config.js';
+import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
 import {
   ScheduleHandlerNotRegisteredError,
   type ScheduleBackend,
@@ -11,7 +11,8 @@ import {
   type ScheduleRunner,
   type StoredScheduleRule,
 } from '../executor.js';
-import type { JobScheduler, ScheduleLogger } from '../types.js';
+import type { ScheduleLogger } from '../../types.js';
+import type { JobScheduler } from '../types.js';
 import {
   memoryStateFileBase,
   MemoryStateFile,

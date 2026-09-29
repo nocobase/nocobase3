@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../config.js';
-import type { JobBackend, JobRunner, JobSubmission } from '../job-backend.js';
+import type { ResolvedMemoryScheduleExecutorConfig } from '../../config.js';
+import type { JobBackend, JobRunner, JobSubmission } from '../backend.js';
 import {
   JobHandlerNotRegisteredError,
   JobInterruptedError,
   type JobReceipt,
-} from '../job-types.js';
-import { copyJobPayload } from '../job-validation.js';
-import { JobStateFile, type PendingJobState } from './job-state-file.js';
+} from '../types.js';
+import { copyJobPayload } from '../validation.js';
+import { JobStateFile, type PendingJobState } from './state-file.js';
 
 export class MemoryJobBackend implements JobBackend {
   private readonly file: JobStateFile;

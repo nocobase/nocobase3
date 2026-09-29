@@ -8,7 +8,7 @@ import {
   type JobEvent,
   type JobExecutionContext,
   type ManagedJobExecutorService,
-} from '../../src/index.js';
+} from '../../../src/index.js';
 
 let directory: string;
 const services: ManagedJobExecutorService[] = [];

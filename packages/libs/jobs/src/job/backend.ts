@@ -1,5 +1,5 @@
-import type { ResolvedScheduleExecutorConfig } from './config.js';
-import type { JobExecutionContext, JobReceipt } from './job-types.js';
+import type { ResolvedScheduleExecutorConfig } from '../config.js';
+import type { JobExecutionContext, JobReceipt } from './types.js';
 
 export interface JobSubmission {
   readonly jobName: string;

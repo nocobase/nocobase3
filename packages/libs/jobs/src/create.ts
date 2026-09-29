@@ -1,6 +1,6 @@
 import type { ScheduleConfig } from './config.js';
-import { createMemoryScheduleExecutor } from './memory/index.js';
-import { createRedisScheduleExecutor } from './redis/index.js';
+import { createMemoryScheduleExecutor } from './schedule/memory/index.js';
+import { createRedisScheduleExecutor } from './schedule/redis/index.js';
 import {
   createJobExecutorServiceWith,
   type ManagedJobExecutorService,

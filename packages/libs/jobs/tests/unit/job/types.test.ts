@@ -2,7 +2,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-const root = path.resolve(import.meta.dirname, '../..');
+const root = path.resolve(import.meta.dirname, '../../..');
 const filename = path.join(root, 'tests', 'job-contract.ts');
 const prelude = `
 import { Job, type JobClass, type JobEvent, type JobExecutor, type JobExecutorService } from '../src/index.js';

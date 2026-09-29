@@ -11,14 +11,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedMemoryScheduleExecutorConfig } from '../../src/config.js';
-import { createMemoryScheduleExecutor } from '../../src/memory/index.js';
+import type { ResolvedMemoryScheduleExecutorConfig } from '../../../src/config.js';
+import { createMemoryScheduleExecutor } from '../../../src/schedule/memory/index.js';
 import type {
   ScheduleEvent,
   ScheduleExecutionContext,
   ScheduleExecutor,
   ScheduleJob,
-} from '../../src/types.js';
+} from '../../../src/schedule/types.js';
 
 let directory: string;
 const executors: ScheduleExecutor[] = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { copyJobPayload } from '../../src/job-validation.js';
+import { copyJobPayload } from '../../../src/job/validation.js';
 
 describe('ordinary job JSON snapshots', () => {
   it.each([

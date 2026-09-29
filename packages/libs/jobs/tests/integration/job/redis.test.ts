@@ -11,14 +11,14 @@ import {
   type JobEvent,
   JobInterruptedError,
   type ManagedJobExecutorService,
-} from '../../src/index.js';
-import type { ResolvedRedisScheduleExecutorConfig } from '../../src/config.js';
-import { jobQueueName } from '../../src/job-backend.js';
-import { BackendJobExecutor } from '../../src/job-executor.js';
+} from '../../../src/index.js';
+import type { ResolvedRedisScheduleExecutorConfig } from '../../../src/config.js';
+import { jobQueueName } from '../../../src/job/backend.js';
+import { BackendJobExecutor } from '../../../src/job/executor.js';
 import {
   RedisJobBackend,
   defaultRedisJobFactories,
-} from '../../src/redis/job-backend.js';
+} from '../../../src/job/redis/backend.js';
 
 const connection = {
   host: process.env.REDIS_HOST ?? '127.0.0.1',
@@ -174,7 +174,7 @@ describe('ordinary jobs against a real Redis', { timeout: 60_000 }, () => {
       async execute({
         attempt,
         signal,
-      }: import('../../src/index.js').JobExecutionContext): Promise<void> {
+      }: import('../../../src/index.js').JobExecutionContext): Promise<void> {
         attempts.push(attempt);
         expect(this.payload).toEqual({ value: 7 });
         if (attempt === 1) {

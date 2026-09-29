@@ -4,8 +4,8 @@ import type {
   JobRun,
   JobRunner,
   JobSubmission,
-} from '../../src/job-backend.js';
-import { BackendJobExecutor } from '../../src/job-executor.js';
+} from '../../../src/job/backend.js';
+import { BackendJobExecutor } from '../../../src/job/executor.js';
 import {
   Job,
   JobHandlerNotRegisteredError,
@@ -13,7 +13,7 @@ import {
   type JobEvent,
   type JobExecutionContext,
   type JobReceipt,
-} from '../../src/job-types.js';
+} from '../../../src/job/types.js';
 
 class Backend implements JobBackend {
   runner: JobRunner | undefined;
