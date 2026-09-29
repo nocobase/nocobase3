@@ -131,6 +131,7 @@ export interface WorkflowEventOptions {
 export interface WorkflowExecutionQueueTask {
   executionId: WorkflowId;
   nodeRunId?: WorkflowId;
+  waitRequestId?: string;
   rerun?: ProcessorRerunOptions;
 }
 

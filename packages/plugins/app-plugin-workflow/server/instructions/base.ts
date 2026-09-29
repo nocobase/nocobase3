@@ -66,6 +66,13 @@ export interface WorkflowInstructionClass<
   readonly result?: NodeResultSchema | null;
   create(source: WorkflowNodeSourceInput<TConfig>): NodeExpression<TBranch>;
   validateConfig(config: unknown): ConfigIssue[];
+  createApi?: (context: {
+    database: import('@nocobase/db').DatabaseManager;
+    connectionName?: string;
+    enqueue: (
+      task: import('../engine/types.js').WorkflowQueueTask,
+    ) => Promise<void>;
+  }) => unknown;
   new (
     context: WorkflowInstructionContext<TConfig>,
   ): WorkflowInstruction<TConfig>;

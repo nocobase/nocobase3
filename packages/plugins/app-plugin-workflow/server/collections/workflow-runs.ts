@@ -40,6 +40,8 @@ export function defineWorkflowRuns(
   collection.string('reason');
   collection.string('sourceType');
   collection.string('sourceId');
+  collection.string('waitLockToken');
+  collection.datetimeTz('waitLockAt');
 
   collection.index(['dispatched', 'id']);
   collection.index(['status', 'expiresAt']);

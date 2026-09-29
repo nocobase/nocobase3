@@ -21,11 +21,13 @@ const createMigrationName = '202608200001_create_workflow_collections';
 const sourceMigrationName = '202609090001_add_workflow_run_source';
 const instantMigrationName = '202609110001_workflow_instant_columns';
 const clientMigrationName = '202609130001_add_workflow_client';
+const waitMigrationName = '202609300001_workflow_wait_requests';
 const migrationNames = [
   createMigrationName,
   sourceMigrationName,
   instantMigrationName,
   clientMigrationName,
+  waitMigrationName,
 ];
 /** Columns that hold an instant and therefore must resolve as `datetimeTz`. */
 const instantFields = {
@@ -39,6 +41,7 @@ const collectionNames = [
   'workflowNodeRuns',
   'workflowStats',
   'workflowVersionStats',
+  'workflowWaitRequests',
 ] as const;
 
 describe('@nocobase/app-plugin-workflow database', () => {
@@ -111,7 +114,7 @@ describe('@nocobase/app-plugin-workflow database', () => {
       const workflows = database.repository('workflows');
       await workflows.createOne({ values: { key: 'existing-workflow' } });
       await expect(migrator.latest()).resolves.toMatchObject({
-        executed: [clientMigrationName],
+        executed: [clientMigrationName, waitMigrationName],
         skipped: [
           createMigrationName,
           sourceMigrationName,
@@ -158,6 +161,29 @@ describe('@nocobase/app-plugin-workflow database', () => {
           }),
         ]),
       );
+      expect(collections[6]?.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'nodeRunId', nullable: false }),
+          expect.objectContaining({ name: 'idempotencyKey', nullable: false }),
+          expect.objectContaining({ name: 'slot' }),
+        ]),
+      );
+      expect(
+        (await connection.collections.getPhysical('workflowWaitRequests'))
+          ?.columns,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            columnName: 'node_run_id',
+            nullable: false,
+          }),
+          expect.objectContaining({
+            columnName: 'idempotency_key',
+            nullable: false,
+          }),
+          expect.objectContaining({ columnName: 'slot' }),
+        ]),
+      );
 
       // Every run timestamp is an instant. Declared zone-free, PostgreSQL
       // stored it without its offset and its driver rebuilt it in the host's
@@ -192,8 +218,11 @@ describe('@nocobase/app-plugin-workflow database', () => {
       ).toMatchObject({ client: {} });
 
       await expect(migrator.rollback()).resolves.toMatchObject({
-        rolledBack: [clientMigrationName],
+        rolledBack: [waitMigrationName, clientMigrationName],
       });
+      await expect(
+        connection.builder.hasCollection('workflowWaitRequests'),
+      ).resolves.toBe(false);
       expect(
         (await connection.collections.getPhysical('workflows'))?.columns.some(
           (column) => column.columnName === 'client',

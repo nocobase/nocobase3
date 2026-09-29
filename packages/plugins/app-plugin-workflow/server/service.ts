@@ -28,6 +28,7 @@ import type { FsDriveDiskConfig } from '@nocobase/drive';
 import { anyOfIds } from './collections/filters.js';
 import { workflowStore, type WorkflowStore } from './collections/store.js';
 import { createWorkflowRunServices } from './engine/run-services.js';
+import type { WaitInstructionApi } from './instructions/wait/api.js';
 
 export interface WorkflowServiceOptions {
   logger?: WorkflowLogger;
@@ -103,6 +104,12 @@ export class WorkflowService {
 
   registerInstruction(instruction: WorkflowInstructionClass): void {
     this.engine.registerInstruction(instruction);
+  }
+
+  getInstruction(type: 'wait'): WaitInstructionApi;
+  getInstruction<T = unknown>(type: string): T;
+  getInstruction<T = unknown>(type: string): T {
+    return this.engine.getInstruction<T>(type);
   }
 
   async trigger(

@@ -64,6 +64,10 @@ describe('WorkflowProvider', () => {
     provider.register();
     const workflow = container.resolve(workflowServiceToken);
     expectTypeOf(workflow).toEqualTypeOf<WorkflowServiceContract>();
+    expect(workflow.getInstruction('wait')).toMatchObject({
+      getPending: expect.any(Function),
+      resume: expect.any(Function),
+    });
 
     expect(() => workflow.registerInstruction(echoInstruction)).not.toThrow();
     expect(() => workflow.registerInstruction(echoInstruction)).toThrow(

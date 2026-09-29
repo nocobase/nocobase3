@@ -9,7 +9,7 @@ import {
   workflowStoreOf,
   type WorkflowStore,
 } from '../collections/store.js';
-import { EXECUTION_STATUS } from './constants.js';
+import { EXECUTION_STATUS, NODE_RUN_STATUS } from './constants.js';
 import Processor from './processor.js';
 import type {
   ProcessorRerunOptions,
@@ -25,6 +25,7 @@ import type {
   WorkflowNodeRun,
 } from './types.js';
 import {
+  asId,
   asIdFilter,
   hydrateRun,
   loadNodeRun,
@@ -62,6 +63,8 @@ type ExecutionPlan = {
   workflow: WorkflowDefinition;
   nodeRun?: WorkflowNodeRun;
   rerun?: ProcessorRerunOptions;
+  waitRequestId?: string;
+  continueAfter?: true;
 };
 
 const RECOVERY_BATCH_SIZE = 100;
@@ -198,6 +201,46 @@ export default class Dispatcher {
       await this.enqueue({ executionId: execution.id });
       recovered += 1;
     }
+    recovered += await this.recoverWaitRequests();
+    return recovered;
+  }
+
+  /** Re-publish durable decisions after a publish failure or process restart. */
+  async recoverWaitRequests(): Promise<number> {
+    const staleBefore = new Date(Date.now() - 300_000).toISOString();
+    const requests = await this.store.waitRequests.findMany({
+      filter: (filter) =>
+        filter.or([
+          filter.string('state').eq('queued'),
+          filter.and([
+            filter.string('state').eq('processing'),
+            filter.date('claimedAt').before(staleBefore),
+          ]),
+        ]),
+      sort: (sort) => sort.field('createdAt').asc(),
+      limit: RECOVERY_BATCH_SIZE,
+    });
+    let recovered = 0;
+    for (const request of requests) {
+      if (request.state === 'processing') {
+        const reset = await this.store.waitRequests.updateMany({
+          filter: (filter) =>
+            filter.and([
+              filter.string('id').eq(request.id as string),
+              filter.string('state').eq('processing'),
+              filter.date('claimedAt').before(staleBefore),
+            ]),
+          values: { state: 'queued', claimedAt: null },
+        });
+        if (!reset.updatedCount) continue;
+      }
+      await this.enqueue({
+        executionId: request.workflowRunId as WorkflowId,
+        nodeRunId: request.nodeRunId as WorkflowId,
+        waitRequestId: request.id as string,
+      });
+      recovered += 1;
+    }
     return recovered;
   }
 
@@ -257,15 +300,128 @@ export default class Dispatcher {
       }
     }
 
+    if (task.waitRequestId) {
+      return this.processWaitTask(task, execution, workflow, nodeRun);
+    }
+
     const entered = await this.acquireExecution(execution, workflow);
-    if (!entered) {
+    return entered
+      ? this.process({
+          execution: entered,
+          workflow,
+          nodeRun,
+          rerun: task.rerun,
+        })
+      : null;
+  }
+
+  private async processWaitTask(
+    task: WorkflowExecutionQueueTask,
+    execution: WorkflowRun,
+    workflow: WorkflowDefinition,
+    nodeRun: WorkflowNodeRun | undefined,
+  ): Promise<Processor | null> {
+    const requestId = task.waitRequestId;
+    if (!requestId) return null;
+    const store = this.store;
+    const request = await store.waitRequests.findOne({
+      filter: { id: requestId },
+    });
+    if (
+      !request ||
+      String(asId(request.workflowRunId)) !== String(execution.id) ||
+      String(asId(request.nodeRunId)) !== String(task.nodeRunId) ||
+      request.state !== 'queued'
+    )
+      return null;
+    if (
+      execution.status !== EXECUTION_STATUS.STARTED ||
+      (execution.expiresAt && Date.parse(execution.expiresAt) <= Date.now()) ||
+      !nodeRun
+    ) {
+      await this.consumeWaitRequest(requestId);
       return null;
     }
-    return this.process({
-      execution: entered,
-      workflow,
-      nodeRun,
-      rerun: task.rerun,
+    const continuation = nodeRun.status !== NODE_RUN_STATUS.PENDING;
+    if (
+      continuation &&
+      nodeRun.status !== NODE_RUN_STATUS.RESOLVED &&
+      nodeRun.status !== NODE_RUN_STATUS.FAILED &&
+      nodeRun.status !== NODE_RUN_STATUS.ERROR
+    ) {
+      await this.consumeWaitRequest(requestId);
+      return null;
+    }
+    const token = randomUUID();
+    const staleBefore = new Date(Date.now() - 300_000).toISOString();
+    const lock = await store.runs.updateMany({
+      filter: (filter) =>
+        filter.and([
+          filter.number('id').eq(asIdFilter(execution.id)),
+          filter.number('status').eq(EXECUTION_STATUS.STARTED),
+          filter.or([
+            filter.string('waitLockToken').empty(),
+            filter.date('waitLockAt').before(staleBefore),
+          ]),
+        ]),
+      values: { waitLockToken: token, waitLockAt: nowInstant() },
+    });
+    if (!lock.updatedCount) return null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    try {
+      const claim = await store.waitRequests.updateMany({
+        filter: { id: requestId, state: 'queued' },
+        values: { state: 'processing', claimedAt: nowInstant() },
+      });
+      if (!claim.updatedCount) return null;
+      heartbeat = setInterval(() => {
+        const instant = nowInstant();
+        void Promise.all([
+          store.runs.updateMany({
+            filter: { id: asIdFilter(execution.id), waitLockToken: token },
+            values: { waitLockAt: instant },
+          }),
+          store.waitRequests.updateMany({
+            filter: { id: requestId, state: 'processing' },
+            values: { claimedAt: instant },
+          }),
+        ]).catch((error: unknown) =>
+          this.getLogger(execution.workflowId).error(
+            'Wait claim heartbeat failed',
+            { error },
+          ),
+        );
+      }, 30_000);
+      heartbeat.unref();
+      const entered = await this.acquireExecution(execution, workflow);
+      if (!entered) {
+        await this.consumeWaitRequest(requestId);
+        return null;
+      }
+      const processor = await this.process({
+        execution: entered,
+        workflow,
+        nodeRun,
+        waitRequestId: requestId,
+        ...(continuation ? { continueAfter: true as const } : {}),
+      });
+      await this.consumeWaitRequest(requestId);
+      return processor;
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+      await store.runs.updateMany({
+        filter: { id: asIdFilter(execution.id), waitLockToken: token },
+        values: { waitLockToken: null, waitLockAt: null },
+      });
+      // A different branch may have queued its decision while this run was claimed.
+      await this.recoverWaitRequests();
+    }
+  }
+
+  private async consumeWaitRequest(id: string): Promise<void> {
+    await this.store.waitRequests.updateMany({
+      filter: { id },
+      values: { state: 'consumed', slot: null, claimedAt: null },
     });
   }
 
@@ -404,12 +560,15 @@ export default class Dispatcher {
           environment: this.options.environment,
           functions: this.options.functions,
           terminalObserver: this.options.terminalObserver,
+          waitRequestId: plan.waitRequestId,
           resumeNode: async (nodeRunId) => {
             await this.enqueue({ executionId: plan.execution.id, nodeRunId });
           },
         });
         try {
-          if (plan.rerun) {
+          if (plan.continueAfter && plan.nodeRun) {
+            await processor.continueAfter(plan.nodeRun);
+          } else if (plan.rerun) {
             await processor.rerun(plan.rerun);
           } else if (plan.nodeRun) {
             await processor.resume(plan.nodeRun);

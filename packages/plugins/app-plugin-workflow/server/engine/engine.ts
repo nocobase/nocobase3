@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import Dispatcher from './dispatcher.js';
 import { coreInstructions } from '../instructions/index.js';
+import type { WaitInstructionApi } from '../instructions/wait/api.js';
 import type Processor from './processor.js';
 import {
   createWorkflowQueueAdapter,
@@ -40,6 +41,7 @@ export default class WorkflowEngine {
   private readonly options: WorkflowEngineOptions;
   private readonly queueAdapter: WorkflowQueueAdapter | null;
   private readonly reaper: TimeoutReaper | null;
+  private waitRecoveryTimer: ReturnType<typeof setInterval> | null = null;
   constructor(options: WorkflowEngineOptions) {
     this.options = options;
     this.database = options.database;
@@ -121,6 +123,19 @@ export default class WorkflowEngine {
     this.instructions.set(instruction.type, instruction);
   }
 
+  getInstruction(type: 'wait'): WaitInstructionApi;
+  getInstruction<T = unknown>(type: string): T;
+  getInstruction<T = unknown>(type: string): T {
+    const instruction = this.instructions.get(type);
+    if (!instruction?.createApi)
+      throw new Error(`Workflow instruction "${type}" has no runtime API`);
+    return instruction.createApi({
+      database: this.database,
+      connectionName: this.options.connectionName,
+      enqueue: (task) => this.enqueue(task),
+    }) as T;
+  }
+
   /**
    * Order matters: the worker and the reaper have to be able to run before
    * `recover()` re-publishes what a previous process left behind.
@@ -135,8 +150,16 @@ export default class WorkflowEngine {
     );
     if (recovered) {
       this.logger.info(
-        `Workflow runtime re-published ${recovered} undispatched run(s)`,
+        `Workflow runtime re-published ${recovered} run or wait task(s)`,
       );
+    }
+    if (!this.waitRecoveryTimer) {
+      this.waitRecoveryTimer = setInterval(() => {
+        void this.dispatcher.recoverWaitRequests().catch((error: unknown) => {
+          this.logger.error('Workflow wait recovery failed', { error });
+        });
+      }, 30_000);
+      this.waitRecoveryTimer.unref();
     }
   }
 
@@ -161,6 +184,10 @@ export default class WorkflowEngine {
    * Let in-flight work finish before releasing the queue name.
    */
   async dispose(): Promise<void> {
+    if (this.waitRecoveryTimer) {
+      clearInterval(this.waitRecoveryTimer);
+      this.waitRecoveryTimer = null;
+    }
     this.reaper?.stop();
     await this.dispatcher.drain();
     await this.queueAdapter?.stop();

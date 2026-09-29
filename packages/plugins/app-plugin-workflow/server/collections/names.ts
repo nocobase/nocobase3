@@ -3,6 +3,7 @@ export const WORKFLOW_COLLECTIONS = {
   nodes: 'workflowNodes',
   runs: 'workflowRuns',
   nodeRuns: 'workflowNodeRuns',
+  waitRequests: 'workflowWaitRequests',
   stats: 'workflowStats',
   versionStats: 'workflowVersionStats',
 } as const;

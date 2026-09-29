@@ -52,6 +52,7 @@ export interface ProcessorOptions {
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
   resumeNode?: (nodeRunId: WorkflowId) => Promise<void>;
+  waitRequestId?: string;
   terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
@@ -101,6 +102,7 @@ export default class Processor {
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
   readonly resumeNode: ProcessorOptions['resumeNode'];
+  readonly waitRequestId: string | undefined;
   readonly abortController: AbortController = new AbortController();
 
   lastSavedNodeRun: WorkflowNodeRun | null = null;
@@ -130,6 +132,7 @@ export default class Processor {
 
   constructor(options: ProcessorOptions) {
     this.resumeNode = options.resumeNode;
+    this.waitRequestId = options.waitRequestId;
     this.database = options.database;
     this.connectionName = options.connectionName;
     this.workflow = options.workflow;
@@ -290,6 +293,38 @@ export default class Processor {
         );
       }
       await this.recall(node, nodeRun);
+      return this.execution;
+    } finally {
+      this.leaveRunningState();
+    }
+  }
+
+  /** Finish a wait decision saved before its worker could schedule the successor. */
+  async continueAfter(nodeRun: WorkflowNodeRun): Promise<WorkflowRun> {
+    if (!(await this.shouldContinueExecution())) return this.execution;
+    this.enterRunningState();
+    try {
+      await this.prepare();
+      const node = this.nodesMap.get(nodeRun.nodeKey);
+      if (!node) throw new Error(`Node "${nodeRun.nodeKey}" was not found`);
+      if (nodeRun.status === NODE_RUN_STATUS.RESOLVED && node.downstream) {
+        const successorStarted = this.execution.nodeRuns?.some(
+          (candidate) =>
+            candidate.nodeKey === node.downstream?.key &&
+            asIdFilter(candidate.id) > asIdFilter(nodeRun.id),
+        );
+        if (!successorStarted) await this.run(node.downstream, nodeRun);
+      } else {
+        const parent = this.findBranchParentNode(node);
+        const parentSuccessorStarted = parent?.downstream
+          ? this.execution.nodeRuns?.some(
+              (candidate) =>
+                candidate.nodeKey === parent.downstream?.key &&
+                asIdFilter(candidate.id) > asIdFilter(nodeRun.id),
+            )
+          : false;
+        if (!parentSuccessorStarted) await this.end(node, nodeRun);
+      }
       return this.execution;
     } finally {
       this.leaveRunningState();

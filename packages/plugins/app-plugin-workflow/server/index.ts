@@ -15,6 +15,14 @@ export {
   type WorkflowInstructionContext,
   type WorkflowInstructionResult,
 } from './instructions/base.js';
+export { WaitInstruction } from './instructions/wait/instruction.js';
+export type {
+  WaitInstructionApi,
+  WaitDecision,
+  WaitLookup,
+  WaitResumeReceipt,
+} from './instructions/wait/api.js';
+export { NODE_RUN_STATUS } from './engine/constants.js';
 
 export {
   resolveWorkflowRuntimeConfig,
@@ -26,6 +34,7 @@ export {
   createRunInstruction,
   createConditionInstruction,
   createTerminateInstruction,
+  createWaitInstruction,
 } from '../dsl/index.js';
 export { createReference, isReference, lowerBindings } from '../dsl/index.js';
 export type {

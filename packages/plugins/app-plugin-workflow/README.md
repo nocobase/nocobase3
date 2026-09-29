@@ -2,12 +2,7 @@
 
 Provides the complete optional Workflow capability. The typed authoring API lives in `dsl/`, browser-safe graph helpers live in `client/`, and server code is organized by responsibility under `server/collections`, `server/engine`, `server/instructions`, `server/loader`, `server/repositories`, and `server/routes`, with `server/service.ts` as the domain service entry. TypeScript source loading, checking, package scanning, and Artifact generation live behind the build boundary and are not loaded by the production server runtime.
 
-The package root is the workflow authoring entry (`defineWorkflow`, `condition`,
-`terminate`, and `run`). Application integration uses the deliberately small `./server`
-entry, application build tooling uses the contributed `workflow` CLI topic, and browser
-management UI uses `./client`. Runtime loading and synchronization modules are
-package-internal; `./build` remains public for applications that need to supply
-custom Instruction contracts.
+The package root is the workflow authoring entry (`defineWorkflow`, `condition`, `terminate`, `run`, and `wait`). Application integration uses the deliberately small `./server` entry, application build tooling uses the contributed `workflow` CLI topic, and browser management UI uses `./client`. Runtime loading and synchronization modules are package-internal; `./build` remains public for applications that need to supply custom Instruction contracts.
 
 Applications build their source-owned workflow packages through the installed
 command:
