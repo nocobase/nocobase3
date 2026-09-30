@@ -31,6 +31,8 @@ Collection 名可自定义，以下字段必须存在，不支持映射，也不
 
 `contentUrl` 是响应派生字段，不需要建列。
 
+运行时代码需要引用完整字段清单时（例如 `select: (s) => s.fields(...FILE_COLUMNS)`，或在测试中核对迁移结果），从 `@nocobase/app-plugin-file/server` 导入 `FILE_COLUMNS` 和元素类型 `FileColumn`，不要自行复制。迁移仍需逐列写明字段：迁移是不可变的历史记录，引用这份清单会让后续版本悄悄改变已执行迁移的内容。
+
 ## 1. 服务端定义路由
 
 在应用或业务插件的 `server/routes/index.ts` 中声明：
