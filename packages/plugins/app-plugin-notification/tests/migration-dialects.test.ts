@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
+  type DatabaseDriverRegistration,
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
@@ -51,9 +52,16 @@ describe.skipIf(!dialect)(
   () => {
     let database: DatabaseManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
+      const drivers: Record<string, DatabaseDriverRegistration> = {};
+      if (dialect === 'mysql') {
+        drivers.mysql = (await import('@nocobase/db-mysql')).mysqlDriver;
+      } else {
+        drivers.oracle = (await import('@nocobase/db-oracle')).oracleDriver;
+      }
       database = createDatabaseManager({
         default: 'main',
+        drivers,
         metadataStore: new InMemoryCollectionMetadataStore(),
         connections: { main: connectionConfig(dialect!) },
       });

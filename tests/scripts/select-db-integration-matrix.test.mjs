@@ -14,8 +14,10 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   databases,
+  notificationMigrationDialects,
   planDbIntegration,
   selectDatabases,
+  selectNotificationMigrationDialects,
 } from '../../scripts/select-db-integration-matrix.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
@@ -115,6 +117,7 @@ test('shared database code and dependency or CI inputs select every database', (
 
 test('unrelated paths and empty changes skip the matrix', () => {
   assert.deepEqual(selectDatabases([]), []);
+  assert.deepEqual(selectNotificationMigrationDialects([]), []);
   assert.deepEqual(
     selectDatabases([
       'docs/db.md',
@@ -124,6 +127,54 @@ test('unrelated paths and empty changes skip the matrix', () => {
       '.github/workflows/release-beta.yml',
     ]),
     [],
+  );
+  assert.deepEqual(
+    selectNotificationMigrationDialects([
+      'docs/db.md',
+      'packages/plugins/app-plugin-notification/tests/manager.test.ts',
+      'packages/libs/db-postgres-extra/src/index.ts',
+    ]),
+    [],
+  );
+});
+
+test('notification migration changes select their affected SQL dialects', () => {
+  for (const file of [
+    'packages/plugins/app-plugin-notification/database/migrations/example.ts',
+    'packages/plugins/app-plugin-notification-in-app/database/migrations/example.ts',
+    'packages/plugins/app-plugin-notification/tests/migration-dialects.test.ts',
+    'packages/plugins/app-plugin-notification-in-app/tests/migration.test.ts',
+  ]) {
+    assert.deepEqual(
+      selectNotificationMigrationDialects([file]),
+      notificationMigrationDialects,
+      file,
+    );
+  }
+  assert.deepEqual(
+    selectNotificationMigrationDialects([
+      'packages/libs/db-mysql/src/index.ts',
+      'packages/libs/db-oracle/tests/integration.test.ts',
+    ]),
+    ['mysql', 'oracle'],
+  );
+  assert.deepEqual(
+    selectNotificationMigrationDialects([
+      'packages/libs/db-mysql/src/index.ts',
+    ]),
+    ['mysql'],
+  );
+  assert.deepEqual(
+    selectNotificationMigrationDialects([
+      'packages/libs/db-oracle/src/index.ts',
+    ]),
+    ['oracle'],
+  );
+  assert.deepEqual(
+    selectNotificationMigrationDialects([
+      'packages/libs/db/src/migration/index.ts',
+    ]),
+    notificationMigrationDialects,
   );
 });
 
@@ -207,8 +258,14 @@ test('the CLI publishes matrix outputs for selected and skipped runs', (t) => {
   const headSha = repo.commit();
   const output = path.join(repo.cwd, 'github-output');
   for (const [base, expected] of [
-    [baseSha, 'databases=["mssql"]\nshould_run=true\n'],
-    [headSha, 'databases=[]\nshould_run=false\n'],
+    [
+      baseSha,
+      'databases=["mssql"]\nshould_run=true\nnotification_dialects=[]\nnotification_should_run=false\n',
+    ],
+    [
+      headSha,
+      'databases=[]\nshould_run=false\nnotification_dialects=[]\nnotification_should_run=false\n',
+    ],
   ]) {
     writeFileSync(output, '');
     execFileSync(process.execPath, [script], {
@@ -246,6 +303,9 @@ test('the actual Quality gate only accepts successful tests or an explicitly pla
     DB_PLAN_RESULT: 'success',
     DB_SHOULD_RUN: 'true',
     DB_INTEGRATION_RESULT: 'success',
+    NOTIFICATION_DB_PLAN_RESULT: 'success',
+    NOTIFICATION_DB_SHOULD_RUN: 'true',
+    NOTIFICATION_DB_INTEGRATION_RESULT: 'success',
   };
   const run = (overrides) =>
     spawnSync('bash', ['-e', '-c', shell], {
@@ -254,6 +314,13 @@ test('the actual Quality gate only accepts successful tests or an explicitly pla
   assert.equal(run({}), 0);
   assert.equal(
     run({ DB_SHOULD_RUN: 'false', DB_INTEGRATION_RESULT: 'skipped' }),
+    0,
+  );
+  assert.equal(
+    run({
+      NOTIFICATION_DB_SHOULD_RUN: 'false',
+      NOTIFICATION_DB_INTEGRATION_RESULT: 'skipped',
+    }),
     0,
   );
   for (const result of ['failure', 'cancelled', 'skipped', '']) {
@@ -266,6 +333,7 @@ test('the actual Quality gate only accepts successful tests or an explicitly pla
       0,
     );
     assert.notEqual(run({ DB_INTEGRATION_RESULT: result }), 0);
+    assert.notEqual(run({ NOTIFICATION_DB_INTEGRATION_RESULT: result }), 0);
   }
   for (const result of ['success', 'failure', 'cancelled']) {
     assert.notEqual(
@@ -275,6 +343,13 @@ test('the actual Quality gate only accepts successful tests or an explicitly pla
   }
   assert.notEqual(
     run({ DB_SHOULD_RUN: '', DB_INTEGRATION_RESULT: 'skipped' }),
+    0,
+  );
+  assert.notEqual(
+    run({
+      NOTIFICATION_DB_SHOULD_RUN: '',
+      NOTIFICATION_DB_INTEGRATION_RESULT: 'skipped',
+    }),
     0,
   );
   for (const job of [

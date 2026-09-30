@@ -25,7 +25,7 @@ The Skill package installs none of these dependencies. The target App or runtime
 
 In a target App, server render libraries belong in `dependencies`, while browser and build libraries belong in `devDependencies`. In a runtime business plugin, ordinary server imports are dependencies and browser imports resolved by consumers are peers. Types needed only for development remain development dependencies.
 
-The [official embedded Node API](https://carbone.io/documentation/developer/embedding/embedding-in-node.html) documents `render`, `addFormatters`, buffer/path return modes, and LibreOffice requirements. [verified: 2026-09-22] Check the selected version's source and types before implementing extensions; do not infer embedded capabilities from unrelated SDK or edition documentation.
+The [official embedded Node API](https://carbone.io/documentation/developer/embedding/embedding-in-node.html) documents `render`, `addFormatters`, buffer/path return modes, and LibreOffice requirements. [verified: 2026-09-22] Check the selected version's source and types before implementing extensions; do not infer embedded capabilities from unrelated SDK or edition documentation. Carbone Community Edition uses the Carbone Community License (CCL), which restricts providing the engine itself as a hosted document-generator service and separately grants use as part of qualifying value-added products or services. Review the current [license](https://github.com/carboneio/carbone/blob/master/LICENSE.md) and [licensing guide](https://carbone.io/documentation/developer/on-premise-installation/licensing.html) against the deployment model before shipping.
 
 Keep the external interface small so Routes and business data loaders do not depend on a particular Renderer:
 
@@ -92,7 +92,7 @@ export function renderOffice(
 }
 ```
 
-Omitting `renderPrefix` keeps the buffer contract. If choosing a file-return mode for large documents, change the return type, stream the actual file bytes, and clean it up after completion or failure; returning its path as an HTTP body does not download the document. Set process-level renderer configuration at startup, not from request-specific values.
+Omitting `renderPrefix` keeps the buffer contract. If choosing a file-return mode for large documents, change the return type, stream the actual file bytes, and clean it up after completion or failure; returning its path as an HTTP body does not download the document. Set process-level renderer configuration at startup, not from request-specific values. Carbone's embedded API consumes a template filesystem path, while an App-level `RenderRequest` may carry template bytes. Bridge them with a unique per-job temporary directory: write the authorized template bytes to a private temporary file, render from that path, return the resulting bytes, and remove the directory in `finally` without masking the render error. Never use a shared filename or caller-supplied path.
 
 ## Data and tag examples
 

@@ -1,11 +1,11 @@
 ---
 name: nocobase-app-plugin-notification
-description: 'Use when agents need to integrate, configure, send, inspect, or diagnose NocoBase notifications based on app-plugin-notification.'
+description: "Use when configuring or sending application notifications through email, SMTP, Resend, Feishu, DingTalk, or Webhook channels, or inspecting delivery logs and retries. Use nocobase-app-plugin-notification-in-app for inbox pages, unread counts, and browser notification UI."
 argument-hint: '[action: explain|integrate|configure|send|inspect|diagnose] [channel-or-notification-id]'
-allowed-tools: Bash, Read, Write, Grep, Glob
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 owner: notification
-version: 1.0.1
-last-reviewed: 2026-09-21
+version: 1.0.2
+last-reviewed: 2026-09-30
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-notification'
@@ -14,19 +14,15 @@ metadata:
 
 # Notification development
 
-Inspect the application's registered plugins and effective notification configuration before changing integration code. Missing required input blocks an actual send; use the recipient and Channel scope already authorized in the conversation and ask only for missing information.
+Inspect the target application's registered plugins and effective notification configuration before changing integration code. A send is an external effect; use only the recipient and Channel scope already authorized in the conversation, and resolve missing details before sending.
 
 1. Read [Notification concepts](references/notification-concepts.md) for package ownership and delivery status semantics.
-2. For plugin registration, configuration, migrations, or test APIs, read [Integration and configuration](references/integration-and-configuration.md). Configure a Channel name mapped to one flat Provider configuration.
-3. For sending or typed consumers, read [Sending notifications](references/sending-notifications.md). Resolve `notificationServiceToken`; construct complete messages keyed by Channel name and use native recipient addresses. Validate the intended external effect before sending.
-4. For failures and retries, read [Delivery diagnostics](references/delivery-diagnostics.md). Preserve Notification, Delivery, Attempt, and retry-audit history; distinguish accepted submission from final delivery.
-5. For custom transports, read [Channel and Provider extensions](references/channel-and-provider-extensions.md). Register globally unique Provider definitions through `notificationExtensionRegistryToken` and retain the queue/lease/retry lifecycle.
-6. Verify changed packages and consumers with lint, typecheck, tests, and build. Cover atomic validation, independent delivery, recipient rules, and retries bound to original identities.
+2. For registration, configuration, migrations, or test sends, read [Integration and configuration](references/integration-and-configuration.md).
+3. For service calls and message shapes, read [Sending notifications](references/sending-notifications.md).
+4. For failures and retries, read [Delivery diagnostics](references/delivery-diagnostics.md). Preserve Notification, Delivery, Attempt, and retry-audit history; distinguish Provider acceptance from final delivery.
+5. For custom transports, read [Channel and Provider extensions](references/channel-and-provider-extensions.md). Register globally unique definitions before the first send and retain the lease and retry lifecycle.
+6. Verify changed packages and their consumers with the checks required by the repository.
 
-The test API requires authentication and its test header; submission additionally requires `notification:test` `send`. A test notification is a real send. Select only the Channel and provide the fields required by its message type. Credentials stay on the server.
+The test API requires authentication and its test header; submission also requires `notification:test` `send`. Test sends reach real recipients. Keep credentials, Webhook URLs, message bodies, and recipient snapshots out of logs and reports.
 
-## High-impact actions and rollback
-
-For bulk sends and live configuration changes, establish the intended recipients, Channels, and external effect from the user's authorization. An unknown result may already have reached its recipient; confirm the external effect before creating a new logical send.
-
-Rollback source/configuration through the application's normal deployment process. A submitted notification cannot be recalled by this plugin. Preserve its history and report the observed status. Keep message bodies, recipient snapshots, credentials, and Webhook URLs out of logs and reports.
+An unknown Delivery may already have reached its recipient. Check external Provider evidence before creating a replacement send. A submitted notification cannot be recalled; preserve its history and report whether the outcome is Provider-accepted, failed, or unknown.

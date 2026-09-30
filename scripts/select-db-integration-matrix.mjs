@@ -12,6 +12,8 @@ export const databases = [
   'kingbase',
 ];
 
+export const notificationMigrationDialects = ['mysql', 'oracle'];
+
 // Keep whole packages covered, including their tests, manifests, and local configuration.
 const sharedDirectories = [
   'packages/libs/db/',
@@ -34,6 +36,21 @@ const sharedFiles = new Set([
   'tests/scripts/select-db-integration-matrix.test.mjs',
 ]);
 
+const notificationMigrationDirectories = [
+  'packages/plugins/app-plugin-notification/database/',
+  'packages/plugins/app-plugin-notification-in-app/database/',
+];
+
+const notificationMigrationFiles = new Set([
+  'packages/plugins/app-plugin-notification/package.json',
+  'packages/plugins/app-plugin-notification/tests/helpers/database.ts',
+  'packages/plugins/app-plugin-notification/tests/migration.test.ts',
+  'packages/plugins/app-plugin-notification/tests/migration-dialects.test.ts',
+  'packages/plugins/app-plugin-notification-in-app/package.json',
+  'packages/plugins/app-plugin-notification-in-app/tests/migration.test.ts',
+  'packages/plugins/app-plugin-notification-in-app/tests/migration-dialects.test.ts',
+]);
+
 export function selectDatabases(changedPaths) {
   const selected = new Set();
   for (const file of changedPaths) {
@@ -52,6 +69,33 @@ export function selectDatabases(changedPaths) {
   return databases.filter((database) => selected.has(database));
 }
 
+export function selectNotificationMigrationDialects(changedPaths) {
+  const selected = new Set();
+  for (const file of changedPaths) {
+    if (
+      sharedFiles.has(file) ||
+      sharedDirectories.some((directory) => file.startsWith(directory))
+    ) {
+      return [...notificationMigrationDialects];
+    }
+    if (
+      notificationMigrationFiles.has(file) ||
+      notificationMigrationDirectories.some((directory) =>
+        file.startsWith(directory),
+      )
+    ) {
+      return [...notificationMigrationDialects];
+    }
+    for (const dialect of notificationMigrationDialects) {
+      if (file.startsWith(`packages/libs/db-${dialect}/`))
+        selected.add(dialect);
+    }
+  }
+  return notificationMigrationDialects.filter((dialect) =>
+    selected.has(dialect),
+  );
+}
+
 export function planDbIntegration({ baseSha, headSha, cwd = process.cwd() }) {
   const git = (args) =>
     execFileSync('git', args, {
@@ -65,6 +109,7 @@ export function planDbIntegration({ baseSha, headSha, cwd = process.cwd() }) {
   if (!baseSha || /^0+$/.test(baseSha) || !headSha) {
     return {
       databases: [...databases],
+      notificationMigrationDialects: [...notificationMigrationDialects],
       reason: 'No comparison range; running every database.',
     };
   }
@@ -87,6 +132,7 @@ export function planDbIntegration({ baseSha, headSha, cwd = process.cwd() }) {
   } catch {
     return {
       databases: [...databases],
+      notificationMigrationDialects: [...notificationMigrationDialects],
       reason: 'Comparison commits unavailable; running every database.',
     };
   }
@@ -106,8 +152,11 @@ export function planDbIntegration({ baseSha, headSha, cwd = process.cwd() }) {
     .split('\0')
     .filter(Boolean);
   const selected = selectDatabases(changedPaths);
+  const selectedNotificationDialects =
+    selectNotificationMigrationDialects(changedPaths);
   return {
     databases: selected,
+    notificationMigrationDialects: selectedNotificationDialects,
     reason: selected.length
       ? `Selected databases: ${selected.join(', ')}.`
       : 'No database-related changes.',
@@ -119,10 +168,19 @@ if (import.meta.main) {
     baseSha: process.env.BASE_SHA,
     headSha: process.env.HEAD_SHA,
   });
-  const output = `databases=${JSON.stringify(plan.databases)}\nshould_run=${plan.databases.length > 0}\n`;
+  const output =
+    `databases=${JSON.stringify(plan.databases)}\n` +
+    `should_run=${plan.databases.length > 0}\n` +
+    `notification_dialects=${JSON.stringify(plan.notificationMigrationDialects)}\n` +
+    `notification_should_run=${plan.notificationMigrationDialects.length > 0}\n`;
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, output);
   }
   console.log(plan.reason);
+  console.log(
+    plan.notificationMigrationDialects.length
+      ? `Selected notification migration dialects: ${plan.notificationMigrationDialects.join(', ')}.`
+      : 'No notification migration tests required.',
+  );
   process.stdout.write(output);
 }
