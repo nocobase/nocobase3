@@ -1,15 +1,27 @@
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
-
-// Keys stand in for the wording, so the assertions show which key names the link.
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+import { describe, expect, it } from 'vitest';
 
 import { BackButton } from '@/components/back-button';
+
+import enUS from '../../client/locales/en-US.js';
+
+const runtime = await createTestI18nRuntime({
+  application: {
+    namespace: '@nocobase/app-template-examples',
+    resources: enUS,
+  },
+});
+
+function I18n({ children }: { readonly children: ReactNode }): ReactElement {
+  return <TestI18nProvider runtime={runtime}>{children}</TestI18nProvider>;
+}
 
 function renderAt(url: string, child: ReactElement) {
   const router = createMemoryRouter(
@@ -32,7 +44,7 @@ function renderAt(url: string, child: ReactElement) {
     ],
     { initialEntries: [url] },
   );
-  render(<RouterProvider router={router} />);
+  render(<RouterProvider router={router} />, { wrapper: I18n });
   return router;
 }
 
@@ -40,7 +52,7 @@ describe('BackButton', () => {
   it('leads to the parent route and keeps the query string', async () => {
     const router = renderAt('/projects/12?q=alpha&page=2', <BackButton />);
 
-    const link = screen.getByRole('link', { name: 'navigation.back' });
+    const link = screen.getByRole('link', { name: enUS.navigation.back });
     expect(link).toHaveAttribute('href', '/projects?q=alpha&page=2');
 
     await userEvent.click(link);
@@ -54,7 +66,7 @@ describe('BackButton', () => {
     renderAt('/projects/import/7', <BackButton />);
 
     expect(
-      screen.getByRole('link', { name: 'navigation.back' }),
+      screen.getByRole('link', { name: enUS.navigation.back }),
     ).toHaveAttribute('href', '/projects');
   });
 

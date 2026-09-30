@@ -6,15 +6,21 @@ import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 import { useLocale, useTranslation } from '@nocobase/i18n/client';
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type ReactElement, useEffect, useState } from 'react';
+import { type ReactElement, type ReactNode, useEffect, useState } from 'react';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RouteDialog } from '@/components/route-dialog';
 import { Button } from '@/components/ui/button';
 import { useRouteOverlay } from '@/components/use-route-overlay';
+
+import enUS from '../../client/locales/en-US.js';
 
 // `vi.mock` factories run before this file's imports and code, so everything a factory uses is created here.
 const { api, toaster, permission, refresh } = vi.hoisted(() => ({
@@ -48,21 +54,37 @@ vi.mock('@nocobase/app-plugin-authorization/client', () => ({
     retry: vi.fn(),
   }),
 }));
-vi.mock('@nocobase/i18n/client', () => ({
-  // Keys stand in for the wording; interpolated values are appended so assertions can see them.
-  useTranslation: () => ({
-    t: (key: string, options?: { readonly name?: string }) =>
-      options?.name ? `${key} ${options.name}` : key,
-  }),
-  // Without a runtime `locale` would be '', and `new Intl.DateTimeFormat('')` throws.
-  useLocale: () => ({
-    locale: 'en-US',
-    locales: [],
-    setLocale: () => Promise.resolve(),
-    switching: false,
-    error: undefined,
-  }),
-}));
+
+// The inline page's own copy. A real page finds its keys in `client/locales/`; this one brings them, merged over the
+// application's so the dialog's close button and the shared `status.*` keys resolve as they would there.
+const copy = {
+  'status.sessionExpired': 'Your session has ended.',
+  actions: { ...enUS.actions, create: 'Create', signInAgain: 'Sign in again' },
+  items: {
+    create: {
+      action: 'New item',
+      title: 'Create an item',
+      success: 'Created the item',
+    },
+    form: { description: 'Name the item.' },
+    error: {
+      forbidden: 'You cannot view items.',
+      failed: 'Items could not be loaded.',
+    },
+  },
+};
+
+// The real runtime, strict: a key the resources lack fails the test instead of rendering as text.
+const runtime = await createTestI18nRuntime({
+  application: {
+    namespace: '@nocobase/app-template-examples',
+    resources: { ...enUS, ...copy },
+  },
+});
+
+function I18n({ children }: { readonly children: ReactNode }): ReactElement {
+  return <TestI18nProvider runtime={runtime}>{children}</TestI18nProvider>;
+}
 
 interface Item {
   readonly id: number;
@@ -185,7 +207,7 @@ function renderAt(url: string) {
     ],
     { initialEntries: [url] },
   );
-  render(<RouterProvider router={router} />);
+  render(<RouterProvider router={router} />, { wrapper: I18n });
   return router;
 }
 
@@ -205,7 +227,9 @@ describe('page test harness', () => {
     });
     renderAt('/items');
 
-    expect(screen.getByRole('status')).toHaveTextContent('status.loading');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      enUS['status.loading'],
+    );
     expect(await screen.findByText(/Alpha/)).toBeInTheDocument();
     expect(api.request).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'items' }),
@@ -223,10 +247,10 @@ describe('page test harness', () => {
     renderAt('/items');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'items.error.forbidden',
+      copy.items.error.forbidden,
     );
     expect(
-      screen.queryByRole('button', { name: 'status.retry' }),
+      screen.queryByRole('button', { name: enUS['status.retry'] }),
     ).not.toBeInTheDocument();
   });
 
@@ -241,13 +265,13 @@ describe('page test harness', () => {
     renderAt('/items');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'status.sessionExpired',
+      copy['status.sessionExpired'],
     );
     expect(
-      screen.queryByRole('button', { name: 'status.retry' }),
+      screen.queryByRole('button', { name: enUS['status.retry'] }),
     ).not.toBeInTheDocument();
     await userEvent.click(
-      screen.getByRole('button', { name: 'actions.signInAgain' }),
+      screen.getByRole('button', { name: copy.actions.signInAgain }),
     );
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -258,7 +282,7 @@ describe('page test harness', () => {
 
     // A Button rendered as a Link (nativeButton={false}) is announced as a button, so query it by that role.
     expect(
-      await screen.findByRole('button', { name: 'items.create.action' }),
+      await screen.findByRole('button', { name: copy.items.create.action }),
     ).toHaveAttribute('href', '/items/new');
   });
 
@@ -269,7 +293,7 @@ describe('page test harness', () => {
 
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
     expect(
-      screen.queryByRole('button', { name: 'items.create.action' }),
+      screen.queryByRole('button', { name: copy.items.create.action }),
     ).not.toBeInTheDocument();
   });
 
@@ -278,15 +302,15 @@ describe('page test harness', () => {
     const router = renderAt('/items/new');
 
     expect(
-      await screen.findByRole('dialog', { name: 'items.create.title' }),
+      await screen.findByRole('dialog', { name: copy.items.create.title }),
     ).toBeInTheDocument();
     await userEvent.click(
-      screen.getByRole('button', { name: 'actions.create' }),
+      screen.getByRole('button', { name: copy.actions.create }),
     );
 
     expect(toaster.show).toHaveBeenCalledWith({
       type: 'success',
-      title: 'items.create.success',
+      title: copy.items.create.success,
     });
     await waitFor(() => expect(router.state.location.pathname).toBe('/items'));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
