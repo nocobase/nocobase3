@@ -71,7 +71,7 @@ it('sends the mapped message through the Resend SDK to a local HTTP service', as
           to: 'alice@example.com',
           subject: 'Approval complete',
           text: 'Review the result.',
-          replyTo: 'support@example.com',
+          reply_to: 'support@example.com',
         },
       },
     ]);
