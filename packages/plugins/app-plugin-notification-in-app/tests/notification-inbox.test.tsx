@@ -24,19 +24,20 @@ interface ClientRequest {
   readonly json?: Readonly<Record<string, unknown>>;
 }
 
-const mocks = vi.hoisted(() => ({
-  request: vi.fn(),
-  stream: vi.fn(),
-  repository: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const request = vi.fn();
+  const stream = vi.fn();
+  const repository = vi.fn();
+  return {
+    request,
+    stream,
+    repository,
+    apiClient: { request, stream, repository },
+  };
+});
 
 vi.mock('@nocobase/app-client', () => ({
-  useApiClient: () =>
-    ({
-      request: mocks.request,
-      stream: mocks.stream,
-      repository: mocks.repository,
-    }) satisfies ApiClient,
+  useApiClient: () => mocks.apiClient satisfies ApiClient,
 }));
 
 vi.mock('@nocobase/i18n/client', () => ({
@@ -108,11 +109,13 @@ describe('NotificationInAppInbox', () => {
   it('loads the next page and removes duplicate records', async () => {
     const first = inboxItem('notice-1', 'First notice');
     const second = inboxItem('notice-2', 'Second notice');
-    mocks.request.mockImplementation(async ({ path }: ClientRequest) =>
-      path.includes('cursor=next-page')
+    const requestedPaths: string[] = [];
+    mocks.request.mockImplementation(async ({ path }: ClientRequest) => {
+      requestedPaths.push(path);
+      return path.includes('cursor=next-page')
         ? { data: [first, second] }
-        : { data: [first], nextCursor: 'next-page' },
-    );
+        : { data: [first], nextCursor: 'next-page' };
+    });
 
     renderInbox();
     expect(
@@ -123,6 +126,10 @@ describe('NotificationInAppInbox', () => {
     expect(
       await screen.findByRole('heading', { name: 'Second notice' }),
     ).toBeInTheDocument();
+    expect(requestedPaths).toEqual([
+      'notifications/in-app?limit=25',
+      'notifications/in-app?limit=25&cursor=next-page',
+    ]);
     expect(
       screen.getAllByRole('heading', { name: 'First notice' }),
     ).toHaveLength(1);
