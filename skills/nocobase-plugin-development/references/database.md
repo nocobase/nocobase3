@@ -60,6 +60,8 @@ const migration: MigrationDefinition = defineMigration({
 export default migration;
 ```
 
+A Collection has exactly the fields the callback declares, and each field builder passes its options through unchanged. `increments` is the only builder that makes the database produce the value, so `createdAt` above is an ordinary NOT NULL column rather than a framework-maintained timestamp: a Repository write fills in neither audit timestamps nor a primary key the database does not generate. A missing `createdAt` fails the insert with the database's NOT NULL error, and a missing non-generated primary key fails with `INVALID_UNIQUE_SELECTOR`, because a create identifies the record it has just written by a complete, non-null primary or unique selector. Supply the value from the writing code, or declare a `defaultValue` in this Migration.
+
 Use explicit alter, field, index, constraint, and metadata operations for an existing Collection. Reverse `up()` in a safe dependency order in `down()`. If a change is genuinely irreversible, make that limitation visible in the implementation, test, and change description.
 
 The filename and exported `name` should match and remain globally stable. Task sources from all packages are merged and ordered by name; `packageName` records provenance but does not participate in ordering, identity, or checksum, so names must be unique across all participating sources.
