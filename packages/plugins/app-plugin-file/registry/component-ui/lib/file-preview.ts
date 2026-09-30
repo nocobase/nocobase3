@@ -80,6 +80,12 @@ export function fileExtension(filename: string): string {
   return dot < 0 ? '' : filename.slice(dot).toLowerCase();
 }
 
+// Active markup runs script when a browser treats it as a document.
+export function isActiveMarkupMimeType(value: string): boolean {
+  const mimeType = value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return ACTIVE_MIME_TYPES.has(mimeType) || mimeType.endsWith('+xml');
+}
+
 export function isSafeImagePreview(file: FileRecord): boolean {
   const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
   return (
@@ -95,8 +101,7 @@ export function resolveOfficeOpenXmlFormat(
   const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
   const extension = fileExtension(file.filename);
   if (
-    ACTIVE_MIME_TYPES.has(mimeType) ||
-    mimeType.endsWith('+xml') ||
+    isActiveMarkupMimeType(mimeType) ||
     ACTIVE_EXTENSIONS.has(extension) ||
     OFFICE_EXTENSIONS.has(extension)
   ) {
@@ -111,11 +116,7 @@ export function resolveOfficeOpenXmlFormat(
 export function resolveFilePreviewKind(file: FileRecord): FilePreviewKind {
   const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
   const extension = fileExtension(file.filename);
-  if (
-    ACTIVE_MIME_TYPES.has(mimeType) ||
-    mimeType.endsWith('+xml') ||
-    ACTIVE_EXTENSIONS.has(extension)
-  ) {
+  if (isActiveMarkupMimeType(mimeType) || ACTIVE_EXTENSIONS.has(extension)) {
     return 'unsupported';
   }
   if (mimeType === 'text/markdown' || extension === '.md') return 'markdown';
