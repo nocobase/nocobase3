@@ -18,8 +18,5 @@ describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
       migrations: './database/migrations',
       seeds: './database/seeds',
     });
-    expect(__NOCOBASE_MODULE_NAME__Plugin.queue).toEqual({
-      jobs: ['./server/jobs'],
-    });
   });
 });

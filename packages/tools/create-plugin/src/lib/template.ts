@@ -53,7 +53,6 @@ function hasClientPlugin(capabilities: PluginCapabilities): boolean {
 function hasServerPlugin(capabilities: PluginCapabilities): boolean {
   return (
     capabilities.database ||
-    capabilities.server.jobs ||
     capabilities.server.locales ||
     capabilities.server.serviceProviders ||
     capabilities.server.routes
@@ -135,12 +134,6 @@ function includeTemplateFile(
     relativePath === 'tests/routes.test.ts'
   ) {
     return capabilities.server.routes;
-  }
-  if (
-    relativePath.startsWith('server/jobs/') ||
-    relativePath === 'tests/jobs.test.ts'
-  ) {
-    return capabilities.server.jobs;
   }
   if (
     relativePath.startsWith('database/') ||
@@ -415,7 +408,7 @@ async function renderManifest(
   };
 
   // A plugin is loaded into an application that already provides the runtime, so anything carrying process-wide state
-  // — service tokens, React contexts, the queue's job registry — is declared as a peer and never installed by the
+  // — service tokens, React contexts, host-owned services such as the queue — is declared as a peer and never installed by the
   // plugin itself. The matching devDependency pins this repository's copy for development and tests, which the wide
   // peer range deliberately does not. See AGENTS.md, "Depending on Identity-Sensitive Packages".
   // Declared once. pnpm resolves a `workspace:` peer to this repository's copy without a devDependency, so the
@@ -433,7 +426,6 @@ async function renderManifest(
     capabilities.client.serviceProviders
   )
     addRuntimePeer('@nocobase/service-provider');
-  if (capabilities.server.jobs) addRuntimePeer('@nocobase/queue');
   if (clientPlugin) addRuntimePeer('@nocobase/app-client');
   if (capabilities.cli) {
     addRuntimePeer('@nocobase/app-cli');
@@ -602,9 +594,6 @@ function renderServerPlugin(
     capabilities.database
       ? "  database: {\n    migrations: './database/migrations',\n    seeds: './database/seeds',\n  },"
       : undefined,
-    capabilities.server.jobs
-      ? "  queue: { jobs: ['./server/jobs'] },"
-      : undefined,
   ]
     .filter(Boolean)
     .join('\n');
@@ -626,9 +615,6 @@ function renderPluginTest(
     capabilities.database
       ? "      database: { migrations: './database/migrations', seeds: './database/seeds' },"
       : undefined,
-    capabilities.server.jobs
-      ? "      queue: { jobs: ['./server/jobs'] },"
-      : undefined,
   ]
     .filter(Boolean)
     .join('\n');
@@ -643,7 +629,6 @@ function renderReadme(
     capabilities.database && 'database',
     capabilities.server.serviceProviders && 'server.service-providers',
     capabilities.server.routes && 'server.routes',
-    capabilities.server.jobs && 'server.jobs',
     capabilities.server.locales && 'server.locales',
     capabilities.client.routes && 'client.routes',
     capabilities.client.components && 'client.components',
@@ -678,8 +663,6 @@ function renderSkill(
       '- Server ServiceProviders: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
     capabilities.server.routes &&
       '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
-    capabilities.server.jobs &&
-      '- Server jobs: document how each job is triggered, required payloads, retry behavior, and observable results.',
     capabilities.database &&
       '- Database: document only App-visible schema prerequisites and lifecycle constraints; do not copy migration implementation details.',
     capabilities.registry &&

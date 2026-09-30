@@ -51,13 +51,6 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
     'tests/plugin.test.ts',
     'tests/routes.test.ts',
   ],
-  'server.jobs': [
-    'server/index.ts',
-    'server/jobs/__NOCOBASE_SHORT_NAME__.ts',
-    'server/plugin.ts',
-    'tests/jobs.test.ts',
-    'tests/plugin.test.ts',
-  ],
   'server.locales': [
     'server/index.ts',
     'server/locales/en-US.ts',

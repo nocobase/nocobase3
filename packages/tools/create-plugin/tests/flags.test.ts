@@ -82,6 +82,10 @@ describe('parseCreatePluginArgs', () => {
     expect(() =>
       parseCreatePluginArgs(['audit-log', '--with', 'server.service']),
     ).toThrow('Unknown plugin capability: server.service');
+    // Queue Job discovery was removed; queue handlers are registered from a provider.
+    expect(() =>
+      parseCreatePluginArgs(['audit-log', '--with', 'server.jobs']),
+    ).toThrow('Unknown plugin capability: server.jobs');
     expect(() => parseCreatePluginArgs(['audit-log', '--with'])).toThrow(
       '--with requires a capability value',
     );

@@ -49,43 +49,40 @@ Use target `{ type: 'app.scheduled-log', config: { message: 'Time report' } }`. 
 
 Namespace the type so it cannot collide with another plugin's: `app.` for an application's own tasks, the plugin name for a plugin's. Two registrations of the same type throw at boot.
 
-Short operations may complete inside `start()`, but occupy the schedule worker. Dispatch lengthy work to a business queue and return `accepted`, as the next section shows. Do not let config select arbitrary module paths or unregistered Queue Job names.
+Short operations may complete inside `start()`, but occupy the schedule worker. Publish lengthy work to a business queue and return `accepted`, as the next section shows. Do not let config select arbitrary module paths, queue names or channels.
 
-## Dispatch a Queue Job and Track Its Completion
+## Publish to a Queue and Track Its Completion
 
-A target whose work runs elsewhere returns `accepted` with a reference, and the schedule occurrence waits until that run reaches a terminal state. Business Queue Jobs extend `Job<TPayload>` from `@nocobase/queue`, implement `execute(): Promise<void>`, and declare a stable `static options.name` and business queue. Plugins contribute discovery locations through `queue: { jobs: ['./server/jobs'] }`. Applications follow their existing Queue registration pattern. Ensure the build includes Job modules and a real worker consumes the selected connection/queue.
+A target whose work runs elsewhere returns `accepted` with a reference, and the schedule occurrence waits until that run reaches a terminal state. To run the work on the application's queue, the Provider that registers the target also registers the queue handler: it resolves `queueServiceToken` from `@nocobase/app-server/queue`, calls `consumer(queue).consume()` in `boot()`, and awaits the unregister function in `shutdown()`. Nothing is discovered from a directory.
 
-The target resolves `queueManagerToken` from `@nocobase/app-server/queue` and dispatches the actual Job class from its `start()`:
+The target publishes from its `start()`, deriving the job ID from the occurrence so a recovered dispatch of the same occurrence reaches the same job:
 
 ```ts
-// queue and MaintenanceJob are actual objects resolved/imported by the Provider.
-const queued = await queue.dispatch(
-  MaintenanceJob,
-  {
-    ...payload,
-    occurrenceId: context.occurrenceId,
-  },
-  {
-    dedup: { id: context.occurrenceId },
-  },
-);
+// queue is the QueueService the Provider resolved.
+const { jobId } = await queue
+  .producer('app.maintenance')
+  .publish(
+    'run',
+    { ...payload, occurrenceId: context.occurrenceId },
+    { jobIdProducer: () => `maintenance-${context.occurrenceId}` },
+  );
 return {
   state: 'accepted',
-  reference: { type: 'queue-job', id: queued.jobId },
+  reference: { type: 'queue-job', id: jobId },
 };
 ```
 
-This fragment requires a business Job implementation; MaintenanceJob is not built in. Carry occurrenceId through retries as the idempotency key. Recovering dispatch of the same occurrence must recover the same execution reference. Queue deduplication does not replace business idempotency for external effects.
+Carry occurrenceId through retries as the idempotency key. A job ID that still exists is not published again, but once the finished job leaves the queue's history the same ID can be published again, so queue deduplication does not replace business idempotency for external effects.
 
-Review the complete execution chain: dispatch → business worker consumption → terminal notification → persisted-state recovery. Scheduler runs its `schedule` worker only; the actual business worker must also be running on the selected connection/queue. Reconciliation observes execution state and cannot consume or execute the business Job.
+Review the complete execution chain: publish → handler execution → terminal notification → persisted-state recovery. Scheduler runs its `schedule` executor only; the queue's handler must be registered on an instance that consumes the queue, and a deployment of more than one instance needs `queue.default` on Redis. Reconciliation observes execution state and cannot consume or execute the queued job.
 
-In addition to dispatch and consumption, an asynchronous target needs all of the following:
+In addition to publishing and consumption, an asynchronous target needs all of the following:
 
-1. **Terminal notification:** `registerTarget()` returns a handle; call `handle.reportCompletion(occurrenceId, reference, completion)` after actual success or exhausted retries. A failed attempt that will retry is not terminal failure. The handle only completes occurrences its own target started, so keep it on the Provider rather than re-deriving it. Queue Jobs are constructed through the application queue provider's Job factory, which supplies shared infrastructure such as database and logger rather than the application container; pass the handle through an explicit factory or service you own and do not assume a Job has `this.app`.
+1. **Terminal notification:** `registerTarget()` returns a handle; call `handle.reportCompletion(occurrenceId, reference, completion)` after actual success or exhausted retries. A failed attempt that will retry is not terminal failure. The handle only completes occurrences its own target started, so keep it on the Provider rather than re-deriving it; the queue handler that Provider registers can close over it.
 2. **Recovery queries:** implement `inspect(reference)` on the target and query persisted execution state. Reconciliation routes by the target type the occurrence recorded when it started, so a definition later retargeted elsewhere still inspects through the target that began the run.
 3. **Reliable references:** notifications and inspection use the same `{ type, id }`, recoverable across processes. Do not use an in-process Map as the authoritative terminal state. Other execution systems use their own stable, non-conflicting reference types.
 
-Queue Job success does not automatically mark Scheduler success. Returning `accepted` alone is incomplete. A notification can be lost or arrive before acceptance is persisted; inspection compensates for these cases. Nothing observes a Queue Job for you.
+A queue job's success does not automatically mark Scheduler success. Returning `accepted` alone is incomplete. A notification can be lost or arrive before acceptance is persisted; inspection compensates for these cases. Nothing observes a queue job for you.
 
 ## Historical Occurrences After Retargeting
 

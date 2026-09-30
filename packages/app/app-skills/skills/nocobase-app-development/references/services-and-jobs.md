@@ -74,7 +74,7 @@ const realtime = useService(realtimeClientToken);
 
 ## Ordinary one-off tasks
 
-Use `JobExecutor` from `@nocobase/jobs` for immediate one-off tasks with payload-only classes. Resolve the existing `jobExecutorServiceToken` from `@nocobase/app-server/jobs` and call `getJobExecutor(scope, name?)`; do not add another provider, token, global registry or service container. Keep these classes outside the automatically discovered `server/jobs/` directory, which belongs to the separate `@nocobase/queue` contract below.
+Use `JobExecutor` from `@nocobase/jobs` for immediate one-off tasks with payload-only classes. Resolve the existing `jobExecutorServiceToken` from `@nocobase/app-server/jobs` and call `getJobExecutor(scope, name?)`; do not add another provider, token, global registry or service container.
 
 ```ts
 import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
@@ -118,59 +118,48 @@ The selected `jobs` configuration supplies concurrency, attempts and retention; 
 
 Call `executor.shutdown()` in the owning provider's shutdown hook; the application's existing jobs provider also closes every ordinary and Schedule executor left open. Shutdown aborts running signals and waits for handlers. A successful handler return completes the task even if its signal was aborted. Only `signal.throwIfAborted()` or `JobInterruptedError` while the signal is aborted marks unfinished work for recovery without spending the ordinary failure budget; any other exception is a normal failure. Do not throw an interruption after committing a completed effect.
 
-## Queue jobs
+## Queues
 
-Existing `@nocobase/queue` integrations and capabilities such as delayed dispatch use a different `Job` contract under `server/jobs/`:
+Use a queue for messages rather than job classes: a producer publishes `(channel, message)` to a named queue, and any number of handlers consume it. It adds what `JobExecutor` does not have — delays, priorities, job IDs that deduplicate, batches, a global rate limit, and cancelling a running job. Resolve the existing `queueServiceToken` from `@nocobase/app-server/queue`; do not create a service or token of your own. Nothing is discovered from a directory.
 
 ```ts
-// server/jobs/rebuild-index.ts
-import { Job, type JobOptions } from '@nocobase/queue';
+import { queueServiceToken } from '@nocobase/app-server/queue';
+import { withChannel, type UnregisterHandler } from '@nocobase/queue';
 
-export interface RebuildIndexPayload {
-  readonly collection: string;
-  readonly requestedAt: string;
-}
+export class SearchIndexProvider extends ServiceProvider<Application> {
+  public readonly name: string = 'search-index';
+  private unregister: UnregisterHandler | undefined;
 
-export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
-  public static options: JobOptions = {
-    name: 'app/rebuild-index',
-    queue: 'default',
-  };
+  public override boot(): void {
+    const queue = this.app.container.resolve(queueServiceToken);
+    this.unregister = queue.consumer('search-index').consume(
+      withChannel('rebuild', async (_channel, message, signal) => {
+        const { collection } = message as { collection: string };
+        await rebuildIndex(collection, signal);
+      }),
+    );
+  }
 
-  public async execute(): Promise<void> {
-    // Validate the payload, then call a reusable domain operation.
+  public override async shutdown(): Promise<void> {
+    await this.unregister?.();
   }
 }
+
+// After the application started, for example in a route:
+await app.container
+  .resolve(queueServiceToken)
+  .producer('search-index')
+  .publish('rebuild', { collection: 'orders' }, { delay: 5000 });
 ```
 
-Jobs in `server/jobs/` are discovered automatically. Review `server/plugins.ts` and each registered plugin’s job declarations when checking contributions.
+- **Lifecycle.** Register handlers in `boot()`; the queue provider sets the service up in its `start()`, so publishing before the application has started rejects. In `shutdown()`, await every unregister function before releasing what the handlers use, and never await a handler's own unregistration inside it.
+- **Handlers.** Every handler of a queue runs for every job, in parallel; the job completes only when all succeed, and a retry runs all of them again. Filter with `withChannel()`; a job every handler skips completes. Handlers must be idempotent.
+- **Messages.** JSON only, serialized once when published: pass IDs, not services, connections or request contexts. A `Date` arrives as a string.
+- **IDs and batches.** A `jobIdProducer` in publish options or configuration gives stable IDs, and publishing an ID that still exists adds nothing. `publishMany()` prepares every entry before writing any.
+- **Retries and cancellation.** `attempts` and `backoff` (`fixed` or `exponential`) come from the configuration key, `manager(queue).configure()`, or publish options. `manager(queue).cancelJob(jobId)` fails a job running on this instance without a retry.
+- **Configuration.** `server/config/queue.ts` declares keys such as `memory` and `redis`; `queue.default` picks one, and a queue can name another as the second argument of `producer()`, `consumer()` and `manager()`. Without a default, queues run on the built-in memory configuration, which serves one process and writes pending jobs under `storage/queue` at shutdown. Set `queue.default: redis` before running more than one instance.
 
-Dispatch by resolving the queue manager:
-
-```ts
-const queue = app.container.resolve(queueManagerToken);
-
-await queue.dispatch(RebuildIndexJob, {
-  collection: 'orders',
-  requestedAt: new Date().toISOString(),
-});
-```
-
-### What a payload may contain
-
-Only serializable data. A worker may run in another process and rebuilds the payload from storage, so a service instance, a database connection, a request context, a function, or a secret cannot survive the trip. Pass an ID and resolve the object inside `execute()`.
-
-`options.name` is the stable identity of queued work. Do not rely on the class name — a rename would orphan everything already queued.
-
-### Retries and idempotency
-
-A job may run more than once: a retry after a transient failure, or a duplicate delivery. Anything with an external side effect — mail, payment, a file write — needs a stable business key or persisted execution state so a second run is harmless.
-
-Distinguish a transient failure worth retrying from a bad-input failure that never will be. Do not keep completion state in a module-level variable; another process will not see it.
-
-By default the job factory supplies `database` and `logger`, not the service container. Do not assume `container.resolve()` inside a job. Extract shared logic into a function taking explicit dependencies, and construct it from what the job has.
-
-The default queue connection is `sync`, which runs jobs inline — convenient in development, and the reason a job that appears to work locally may behave differently against a real queue.
+See the `@nocobase/queue` README for the full contract.
 
 ## Work that runs on a schedule
 
@@ -221,7 +210,8 @@ Two things to decide before shipping one:
 
 - The service resolves from the token and behaves correctly in isolation.
 - Provider lifecycle releases in `shutdown()` what `start()` acquired, including ordinary and schedule executors.
-- Ordinary job classes are registered before consumption, accept only strict JSON payloads, and reconstruct a fresh instance for each attempt; do not rely on queue-job dependency injection.
+- Ordinary job classes are registered before consumption, accept only strict JSON payloads, and reconstruct a fresh instance for each attempt.
+- Queue handlers are registered in `boot()` and awaited on unregister in `shutdown()`, and every handler of a queue tolerates running again.
 - The job runs with a realistic payload, and running it twice is harmless.
 - A failure retries or terminates as intended.
 - A scheduled job's work is tested directly, and a deployment of more than one instance runs it on the `redis` jobs adapter.

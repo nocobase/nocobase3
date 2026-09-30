@@ -92,8 +92,6 @@ function capabilityReason(file: string): string {
     return 'server.service-providers';
   if (file.startsWith('server/routes/') || file === 'tests/routes.test.ts')
     return 'server.routes';
-  if (file.startsWith('server/jobs/') || file === 'tests/jobs.test.ts')
-    return 'server.jobs';
   if (file.startsWith('client/locales/')) return 'client.locales';
   if (file === 'client/routes.ts' || file === 'tests/client.test.ts')
     return 'client.routes';
@@ -182,7 +180,6 @@ export async function runCreatePluginCli(
                 result.capabilities.client.routes,
               serverPlugin:
                 result.capabilities.database ||
-                result.capabilities.server.jobs ||
                 result.capabilities.server.locales ||
                 result.capabilities.server.serviceProviders ||
                 result.capabilities.server.routes,

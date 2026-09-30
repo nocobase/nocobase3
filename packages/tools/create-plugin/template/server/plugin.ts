@@ -17,9 +17,6 @@ const __NOCOBASE_MODULE_NAME__Plugin: AppServerPlugin = defineServerPlugin({
     migrations: './database/migrations',
     seeds: './database/seeds',
   },
-  queue: {
-    jobs: ['./server/jobs'],
-  },
 });
 
 export default __NOCOBASE_MODULE_NAME__Plugin;

@@ -22,7 +22,6 @@ CAPABILITIES
   database
   server.service-providers
   server.routes
-  server.jobs
   server.locales
   client.routes
   client.components

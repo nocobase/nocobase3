@@ -69,7 +69,6 @@ describe('createPlugin', () => {
     ['database', 'database/README.md', 'client/'],
     ['server.service-providers', 'server/providers/index.ts', 'server/routes/'],
     ['server.routes', 'server/routes/index.ts', 'server/providers/'],
-    ['server.jobs', 'server/jobs/audit-log.ts', 'client/'],
     ['server.locales', 'server/locales/index.ts', 'client/'],
     ['client.routes', 'client/routes.ts', 'server/'],
     ['client.components', 'client/components/plugin-component.tsx', 'server/'],
@@ -109,12 +108,6 @@ describe('createPlugin', () => {
       ['./package.json', './server'],
       ['hono'],
       ['@nocobase/app-server'],
-    ],
-    [
-      'server.jobs',
-      ['./package.json', './server'],
-      [],
-      ['@nocobase/app-server', '@nocobase/queue'],
     ],
     [
       'server.locales',
@@ -204,7 +197,6 @@ describe('createPlugin', () => {
   it.each([
     // Compiled plugins resolve database resources from baseDir inside dist.
     ['database', ['dist', 'README.md', 'CHANGELOG.md']],
-    ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
     ['client.react-providers', ['dist', 'README.md', 'CHANGELOG.md']],
     ['skills', ['dist', 'README.md', 'CHANGELOG.md', 'skills']],
   ] as const)(
@@ -433,22 +425,6 @@ describe('createPlugin', () => {
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 
-  it('generates a stable package-scoped Queue Job identity', async () => {
-    const result = await createWith(['server.jobs']);
-    const job = await readFile(
-      path.join(result.targetDirectory, 'server/jobs/audit-log.ts'),
-      'utf8',
-    );
-    const test = await readFile(
-      path.join(result.targetDirectory, 'tests/jobs.test.ts'),
-      'utf8',
-    );
-
-    expect(job).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
-    expect(job).not.toContain('AuditLogJob.name');
-    expect(test).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
-  });
-
   it('maps selected Client entries without inventing routes or providers', async () => {
     const result = await createWith([
       'client.service-providers',
@@ -473,7 +449,6 @@ describe('createPlugin', () => {
       'database',
       'server.service-providers',
       'server.routes',
-      'server.jobs',
       'server.locales',
       'client.routes',
       'client.components',
@@ -494,7 +469,9 @@ describe('createPlugin', () => {
     expect(result.files).toContain(
       'database/migrations/202608220001_audit_log_create_records.ts.example',
     );
-    expect(result.files).toContain('server/jobs/audit-log.ts');
+    expect(result.files.some((file) => file.startsWith('server/jobs/'))).toBe(
+      false,
+    );
     expect(result.files).toContain(
       'skills/nocobase-app-plugin-audit-log/SKILL.md',
     );
@@ -504,7 +481,6 @@ describe('createPlugin', () => {
       '@nocobase/app-server': 'workspace:^',
       '@nocobase/db': 'workspace:^',
       '@nocobase/i18n': 'workspace:^',
-      '@nocobase/queue': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',
     });
     expect(manifest.files).toEqual(

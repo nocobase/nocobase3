@@ -168,14 +168,17 @@ const handle = scheduler.registerTarget({
   title: 'Customer sync',
   validate: validateCustomerSyncConfig,
   async start(config, context) {
-    const queued = await queue.dispatch(
-      CustomerSyncJob,
-      { ...config, occurrenceId: context.occurrenceId },
-      { dedup: { id: context.occurrenceId } },
-    );
+    // queue is the application's QueueService, resolved from queueServiceToken.
+    const { jobId } = await queue
+      .producer('app.customer-sync')
+      .publish(
+        'sync',
+        { ...config, occurrenceId: context.occurrenceId },
+        { jobIdProducer: () => `customer-sync-${context.occurrenceId}` },
+      );
     return {
       state: 'accepted',
-      reference: { type: 'queue-job', id: queued.jobId },
+      reference: { type: 'queue-job', id: jobId },
     };
   },
   async inspect(reference) {
