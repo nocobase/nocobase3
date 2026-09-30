@@ -554,12 +554,16 @@ describe('InMemoryScheduler', () => {
     );
     await executor.setup();
 
-    // 2^31 ms is about 24.8 days; this firing is 45 days away.
-    await vi.advanceTimersByTimeAsync(44 * 86_400_000);
+    // 2^31 ms is about 24.8 days; this firing is 45 days away, so it waits in
+    // two steps and must not start even a millisecond early.
+    await vi.advanceTimersByTimeAsync(startDate.getTime() - Date.now() - 1);
     expect(runs).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(86_400_000);
+    await vi.advanceTimersByTimeAsync(1);
     await vi.waitFor(() => expect(runs).toHaveLength(1));
     expect(runs[0]!.scheduledAt).toEqual(startDate);
+    expect(runs[0]!.runAt.getTime()).toBeGreaterThanOrEqual(
+      startDate.getTime(),
+    );
   });
 
   it('waits again when its timer wakes before the planned firing', async () => {
