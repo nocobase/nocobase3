@@ -4,7 +4,7 @@ The UI Library is a [shadcn registry](https://ui.shadcn.com/docs/registry) of No
 
 ## Where an item belongs
 
-Put a component here when the applications and plugins that use it should own and edit it after installation, and it builds on a plugin's public exports rather than its internals. `auth-ui` is the model: pages, forms, and layout that an application reshapes freely, over the headless actions that `@nocobase/app-plugin-authentication/client/actions` keeps stable.
+Put a component here when the applications and plugins that use it should own and edit it after installation, and it builds on a plugin's public exports rather than its internals. `auth-ui` is the model: pages, forms, and layout that an application reshapes freely, over the headless actions that `@nocobase/app-plugin-authentication/client/actions` keeps stable and the `useSignUpAvailable()` its `client` export provides.
 
 An item is one of two kinds, and its kind decides where it installs:
 
@@ -70,7 +70,7 @@ These rules follow from where the files end up: in an application, compiled by V
      "title": "Example UI",
      "description": "One sentence, shown on the index page and by shadcn search.",
      "meta": { "group": "Authentication", "iframeHeight": 720 },
-     "dependencies": ["@nocobase/app-plugin-authentication@^0.1.0-beta.20"],
+     "dependencies": ["@nocobase/app-plugin-authentication@^1.0.0-beta.23"],
      "registryDependencies": ["button"],
      "docs": "Requires @nocobase/app-plugin-authentication.",
      "files": [

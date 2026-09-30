@@ -61,6 +61,30 @@ for (const kind of templates) {
         );
       }
 
+      // A block owns its directory, so that directory holds the item's files and nothing else. A file the item does
+      // not install, such as an old copy of its README, would otherwise ship in every generated application unchecked.
+      if (item.type === 'registry:block') {
+        const blockDirectory = `client/extensions/nocobase-${name}`;
+        const present = fs
+          .readdirSync(path.join(templateRoot, blockDirectory), {
+            recursive: true,
+            withFileTypes: true,
+          })
+          .filter((entry) => entry.isFile())
+          .map((entry) =>
+            path
+              .relative(templateRoot, path.join(entry.parentPath, entry.name))
+              .split(path.sep)
+              .join('/'),
+          )
+          .sort();
+        assert.deepEqual(
+          present,
+          item.files.map((file) => file.target).sort(),
+          `${kind}: ${blockDirectory}/ holds exactly the files ${name} installs`,
+        );
+      }
+
       for (const dependency of item.registryDependencies ?? []) {
         // `utils` is the `cn` helper at `@/lib/utils`; every other registry dependency is a shadcn primitive.
         if (dependency === 'utils') {
