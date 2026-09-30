@@ -27,11 +27,12 @@ afterEach(async () => {
 function harness(
   send: (input: NotificationProviderSendInput) => Promise<ProviderSendResult>,
   close: () => Promise<void> = async () => undefined,
-) {
-  const service = createJobExecutorService(undefined, {
+  application: { appName: string; storagePath: string } = {
     appName: 'notification-test',
     storagePath,
-  });
+  },
+) {
+  const service = createJobExecutorService(undefined, application);
   const manager = createNotificationManager({
     database: {} as DatabaseManager,
     executor: service.getJobExecutor('@nocobase/app-plugin-notification'),
@@ -118,4 +119,55 @@ it('lets a running Delivery finish before closing its Channel', async () => {
   await expect(
     h.manager.getNotification(result.notificationId),
   ).resolves.toMatchObject({ status: 'completed', summary: { accepted: 1 } });
+});
+
+it("runs each application's Deliveries through its own Channels", async () => {
+  const firstSend = vi.fn(
+    async (_input: NotificationProviderSendInput) =>
+      ({ status: 'accepted' }) as const,
+  );
+  const secondSend = vi.fn(
+    async (_input: NotificationProviderSendInput) =>
+      ({ status: 'accepted' }) as const,
+  );
+  // Two applications in one process share the job name and scope, but each
+  // has its own jobs service, as it has its own storage directory.
+  const first = harness(firstSend, undefined, {
+    appName: 'notification-first',
+    storagePath: path.join(storagePath, 'first'),
+  });
+  const second = harness(secondSend, undefined, {
+    appName: 'notification-second',
+    storagePath: path.join(storagePath, 'second'),
+  });
+  try {
+    const [one, two] = await Promise.all([
+      first.manager.send({
+        idempotencyKey: 'first-app',
+        messages: { email: { body: 'First' } },
+      }),
+      second.manager.send({
+        idempotencyKey: 'second-app',
+        messages: { email: { body: 'Second' } },
+      }),
+    ]);
+    await vi.waitFor(async () => {
+      expect(
+        await first.manager.getNotification(one.notificationId),
+      ).toMatchObject({ status: 'completed' });
+      expect(
+        await second.manager.getNotification(two.notificationId),
+      ).toMatchObject({ status: 'completed' });
+    });
+    expect(firstSend).toHaveBeenCalledOnce();
+    expect(firstSend.mock.calls[0]![0]).toMatchObject({
+      message: { body: 'First' },
+    });
+    expect(secondSend).toHaveBeenCalledOnce();
+    expect(secondSend.mock.calls[0]![0]).toMatchObject({
+      message: { body: 'Second' },
+    });
+  } finally {
+    await Promise.all([first.close(), second.close()]);
+  }
 });
