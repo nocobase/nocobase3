@@ -74,7 +74,7 @@ const realtime = useService(realtimeClientToken);
 
 ## Ordinary one-off tasks
 
-Use `JobExecutor` from `@nocobase/jobs` for immediate one-off tasks with payload-only classes. Resolve the existing `jobExecutorServiceToken` from `@nocobase/app-server/jobs` and call `getJobExecutor(scope, name?)`; do not add another provider, token, global registry or service container. Keep these classes outside `server/jobs/`, which holds the separate `@nocobase/queue` handlers described below.
+Use `JobExecutor` from `@nocobase/jobs` for immediate one-off tasks with payload-only classes. Resolve the existing `jobExecutorServiceToken` from `@nocobase/app-server/jobs` and call `getJobExecutor(scope, name?)`; do not add another provider, token, global registry or service container. Import job classes explicitly: nothing discovers `server/jobs/` or any other directory, and this `Job` is unrelated to the `@nocobase/queue` handlers described below.
 
 ```ts
 import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
