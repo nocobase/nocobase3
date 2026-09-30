@@ -213,6 +213,19 @@ const enUS = {
         'Your permissions could not be checked. Please try again.',
     },
   },
+  customers: {
+    detail: { title: 'Customer' },
+    tabs: { label: 'Customer views', overview: 'Overview', orders: 'Orders' },
+    actions: { edit: 'Edit' },
+    overview: { title: 'Details' },
+    fields: { email: 'Email', updatedAt: 'Updated' },
+    edit: { title: 'Edit customer', success: 'Saved customer "{{name}}"' },
+    error: {
+      notFound: 'This customer does not exist or has been deleted.',
+      forbidden: 'You do not have permission to view this customer.',
+      requestFailed: 'The request failed. Please try again.',
+    },
+  },
 };
 ```
 
@@ -409,6 +422,19 @@ const zhCN: AppResource = {
       forbidden: '你没有查看项目设置的权限。',
       requestFailed: '请求失败，请重试。',
       permissionCheckFailed: '无法确认你的权限，请重试。',
+    },
+  },
+  customers: {
+    detail: { title: '客户' },
+    tabs: { label: '客户视图', overview: '概览', orders: '订单' },
+    actions: { edit: '编辑' },
+    overview: { title: '详细信息' },
+    fields: { email: '邮箱', updatedAt: '更新时间' },
+    edit: { title: '编辑客户', success: '已保存客户“{{name}}”' },
+    error: {
+      notFound: '该客户不存在或已被删除。',
+      forbidden: '你没有查看该客户的权限。',
+      requestFailed: '请求失败，请重试。',
     },
   },
 };

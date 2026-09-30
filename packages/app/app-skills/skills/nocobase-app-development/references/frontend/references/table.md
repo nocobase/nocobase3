@@ -65,6 +65,14 @@ The search term and filter values live in URL query parameters (`?q=…&status=�
 
 - The search box's `placeholder` says which fields can be searched (guideline T1.1), for example "Search by name or owner". Both the search box and the filter controls need an `aria-label`.
 
+### Parameter names below another page
+
+A list rendered below another page — a tab of a record's page, a list in a drawer — shares the query string with the pages it sits on. Those pages keep their own search and filters there, and links carry them down so that going back restores them (guideline L6), so a list below them owns only the names it adds:
+
+- Name its parameters after what it lists (`ordersQ`, `ordersStatus`; `useUrlSearch({ param: 'ordersQ' })`), never the `q` or `status` of a page above it.
+- Read and change only those. A customers list's `?status=vip` must not filter the customer's orders, and clearing the orders' filters leaves it in place.
+- Add them to the list of parameters the page that owns the list removes when the user leaves ([section 7 of `page.md`](page.md#7-back-button-and-breadcrumbs)).
+
 ### Do not bind the search box directly to the URL
 
 Do not write `value={searchParams.get('q')}` together with a `setSearchParams` call in `onChange`. React Router changes the URL inside a transition, and between two keystrokes React resets the input to the old URL value: a Chinese input method leaves a string of raw pinyin in the box, the cursor jumps to the end when you edit in the middle, and fast typing drops characters (violating guideline A7). `tsc`, ESLint and tests that fill in a value in one step (such as Playwright's `fill()`) cannot catch this; verify with real character-by-character typing and an input method.

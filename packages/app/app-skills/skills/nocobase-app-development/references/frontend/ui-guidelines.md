@@ -38,7 +38,7 @@ These are this application's UI design guidelines: foundations, page structure, 
 
 **L5 [Must]** Page-level actions go on the right of the PageHeader; actions on a single record go in that record's row or detail view; bulk actions appear only after records are selected.
 
-**L6 [Must] Back button**: a page that sits below another one — a covering child page, a record's own page, a form too long for a dialog — has a back button above its title (`BackButton`). It returns to the page it belongs to and keeps that page's search and filters. Use breadcrumbs instead only when the user asks for them. Do not put a "Back" or "Back to list" button among the page actions.
+**L6 [Must] Back button**: a page that sits below another one — a covering child page, a record's own page, a form too long for a dialog — has a back button above its title (`BackButton`). It returns to the page it belongs to with that page's search and filters exactly as they were: the links on the way down carry them, and the way back removes whatever this page added to the URL. Use breadcrumbs instead only when the user asks for them. Do not put a "Back" or "Back to list" button among the page actions.
 
 ## T Page templates
 
@@ -62,7 +62,7 @@ Structure, top to bottom: PageHeader (primary action "New X") → toolbar (searc
 
 ### T2 Detail view
 
-- **T2.1 [Must]** With few fields (about 15 or fewer) and no sub-tables, show the details in a right-side drawer; with multiple sections, sub-tables or a need for tabs, use a separate page.
+- **T2.1 [Must]** With few fields (about 15 or fewer) and no sub-tables, show the details in a right-side drawer; with multiple sections, sub-tables or a need for tabs, use a separate page. On a page with tabs, the tab being shown is the view the user is on: what the page's header opens stacks on that tab (I9).
 - **T2.2 [Must]** The top of the drawer or detail page shows the record name. Actions on the record (edit, delete) sit in a fixed position at the top or the bottom, grouped together, not one on the left and one on the right.
 - **T2.3 [Must]** The detail view can be opened directly by URL, and a refresh still shows the same record (see I6).
 - **T2.4 [Must]** Fields are laid out in two columns, "label — value", and an empty value shows "—"; multi-line text keeps its line breaks; very long values (emails, URLs) may wrap and must not break the layout.
@@ -110,7 +110,7 @@ Kanban boards, calendars and similar pages have no template yet. When designing 
 | Long form, multiple steps, complex details      | Separate page (a covering child page when the user returns to the list) |
 | A few options, filter conditions, quick actions | DropdownMenu or Popover                                                 |
 
-Stacking rules: a drawer can open a dialog (for example, to edit from the detail view) and a confirmation dialog; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer. Edit opened from a list row's menu is the dialog alone over the list; edit opened from the detail drawer stacks the dialog on the drawer, and closing it returns to the drawer.
+Stacking rules: a drawer can open a dialog (for example, to edit from the detail view) and a confirmation dialog; a dialog can open only a confirmation dialog on top of it. Esc and clicking the backdrop close only the topmost layer. Edit opened from a list row's menu is the dialog alone over the list; edit opened from the detail drawer stacks the dialog on the drawer, and closing it returns to the drawer; edit opened from the header of a record page with tabs stacks the dialog on the tab being shown, and closing it returns to that tab.
 
 **I2 [Must] Confirm destructive actions first**: deleting, disabling, clearing, revoking access and similar actions open an AlertDialog first. The title names the object (`Delete customer "Zhang San"?`), the description states the consequence ("This cannot be undone"), and the confirm button uses the destructive style, with a label naming the specific action ("Delete").
 
@@ -130,13 +130,13 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 
 **I5 [Should]** The search box searches automatically as the user types (debounced by about 300ms), without the user pressing Enter.
 
-**I6 [Must] URL-addressable state**: create and edit dialogs and detail drawers each have their own URL, so a link opens them directly, a refresh restores them, and the browser's back and forward buttons open and close them. Only a confirmation dialog for a single action and a temporary panel stay out of the URL.
+**I6 [Must] URL-addressable state**: create and edit dialogs and detail drawers each have their own URL, so a link opens them directly, a refresh restores them, and the browser's back and forward buttons open and close them. The URL also carries the view behind the overlay — the list's search and filters, the tab of a record page — so a link or a refresh restores the overlay over that same view (I9). Only a confirmation dialog for a single action and a temporary panel stay out of the URL.
 
 **I7 [Must]** Actions the user has no permission for are not shown; actions that are temporarily unavailable are disabled, with a tooltip explaining why. When the reason is visible next to the action, it needs no tooltip: a submission or save in progress, a form with no changes, or a limit the view states ("Up to 10 member emails").
 
 **I8 [Must]** Every action can be completed with the keyboard: when a dialog opens, focus moves into it, Esc closes it, and Enter submits the form. The components have these behaviors built in; do not break them.
 
-**I9 [Must] Records open where the user is**: a record opened from a list, a dashboard, a board or another record's tab opens over the page the user is on — a drawer or dialog for a short detail view, a covering child page (`RouteChildPage`) when the detail needs a page of its own (T2.1) — at a URL under that page, and closing or going back returns there. Declare the detail, with its edit, tab and print children, under every page that opens it, reusing the same modules. Never send the user to another page's route for a record, whether its overlay URL or its detail page: the page they were on disappears, the menu highlight moves to another entry, and closing lands them on a page they did not come from.
+**I9 [Must] Records and overlays open where the user is**: the view the user is on is the deepest thing they are looking at — a list with its search and filters, a dashboard, a board, a drawer, or the tab being shown on a page with tabs. A record opened from a view (a list, a dashboard, a board or another record's tab), and any overlay opened from a view, open over that view — a drawer or dialog for a short detail view or form, a covering child page (`RouteChildPage`) when the detail needs a page of its own (T2.1) — at the view's URL followed by the overlay's own segments, so the view stays rendered behind it, and closing or going back returns to exactly that URL, with no redirect in between. To check, remove the overlay's own segments from its URL: what remains is the URL the user opened it from. Declare the detail, with its edit, tab and print children, under every view that opens it, reusing the same modules; on a page with tabs, the overlays its header opens are declared under every tab, since the header sits above all of them. Never send the user to another page's route for a record, whether its overlay URL or its detail page: the page they were on disappears, the menu highlight moves to another entry, and closing lands them on a page they did not come from. Never open an overlay beside a page's tabs either: the tab unmounts behind it, and closing lands on the default tab.
 
 ## R Data freshness
 
@@ -183,7 +183,7 @@ Do not show raw backend error messages (untranslated exception messages, stack t
 The design review and the acceptance review both go through this checklist item by item: the review record's "Review checklist" section gets one row per item, and each unmet item is also an issue that cites its IDs. The checklist covers every Must rule; a rule the page cannot trigger (no detail view, no settings page) is marked "Not applicable" rather than skipped silently.
 
 - [ ] The page template and overlay choices are correct, and stacking follows the rules (T1–T5, I1)
-- [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places, a back button on a page below another one (L1, L2, L5, L6)
+- [ ] Page structure: PageContainer, PageHeader, one primary button per view, actions in the right places, a back button on a page below another one, which returns to that other page with its search and filters unchanged (L1, L2, L5, L6)
 - [ ] Navigation is consistent: entries in one group all carry an icon or none does, and a group's own icon does not repeat its first child's (`page.md` §6)
 - [ ] All states are covered: loading, empty, no results, load failed, submitting, a block the user may not see; whether a failure offers a retry follows S4 (S1–S6)
 - [ ] List: search placeholder, filters and clearing them, first column, enum Badges, row actions, formatting, date and number columns sortable, all four states, result cap notice, a cut-off cell ending in an ellipsis with its full content on hover (T1.1–T1.6, T1.8–T1.11)
@@ -194,7 +194,8 @@ The design review and the acceptance review both go through this checklist item 
 - [ ] Data freshness: writes are based on the latest data, the UI updates immediately after success, a missing record is handled (R1–R3)
 - [ ] Destructive actions are confirmed, and the confirmation dialog names the object and the consequence (I2)
 - [ ] Feedback and loading indicators are correct, and raw backend errors are not exposed (I3, I4)
-- [ ] Overlays and their state have URLs, and a record (its drawer or its page) opens over the page the user is on; actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I6–I9)
+- [ ] Overlays and their state have URLs; every record and overlay opens over the view the user is on — a filtered list, a dashboard, a board, a drawer, the tab being shown — at that view's URL plus its own segments, and closing returns to exactly that URL, checked from a view other than the first one too: a tab other than the default, a list with a filter applied (I6, I9)
+- [ ] Actions without permission are hidden and unavailable ones disabled with a reason; everything works with the keyboard (I7, I8)
 - [ ] Color, font size, spacing, radius and icons use only tokens, scales and lucide-react, and fixed sizes are explained (F1–F5, F7)
 - [ ] Copy exists in every language `client/locales/index.ts` offers, wording is consistent, and button and title copy follows the rules (C1–C4, C6, C7)
 - [ ] Icon buttons are accessible, focus is visible and goes somewhere sensible, information is not conveyed by color alone, and custom colors meet AA contrast (A1–A3, A5, A6)

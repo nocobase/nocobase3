@@ -143,4 +143,20 @@ export function useUrlSearch({
     clear,
   };
 }
+
+/**
+ * `search` without the parameters a view owns, for the way back to the view it covers: that view gets its search and
+ * filters back unchanged, and nothing the view being left wrote stays behind in its URL.
+ */
+export function withoutParams(
+  search: string,
+  names: readonly string[],
+): string {
+  const params = new URLSearchParams(search);
+  for (const name of names) params.delete(name);
+  const rest = params.toString();
+  return rest ? `?${rest}` : '';
+}
 ```
+
+`withoutParams` is for leaving a view that writes parameters of its own, such as a record page whose tab has a search box: the way back removes them, so the page it covers gets exactly its own search and filters back ([section 7 of `page.md`](../page.md#7-back-button-and-breadcrumbs)).
