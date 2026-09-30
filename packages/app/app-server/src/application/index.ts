@@ -31,6 +31,8 @@ import {
   type AppServerPluginLocales,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
+import { legacyQueueContributionWarning } from '../plugins/queue-contribution.js';
+import { loggingToken } from '../logging/token.js';
 import type { AppDatabaseTaskContributions } from '../database/types.js';
 import { resolveLocalesContribution } from '@nocobase/i18n';
 import { i18nToken, registerAppLocales } from '../i18n/index.js';
@@ -127,6 +129,10 @@ export class Application<
     locales: AppServerPluginLocales;
   }[] = [];
   private applicationLocales: AppServerPluginLocales | undefined;
+  private readonly legacyQueueWarnings: {
+    packageName: string;
+    message: string;
+  }[] = [];
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.strictStartup = options.strictStartup ?? false;
@@ -186,6 +192,13 @@ export class Application<
     this.databaseTaskContributionsValue =
       createAppDatabaseTaskContributions(serverPlugins);
     for (const plugin of serverPlugins.plugins) {
+      const legacyQueue = legacyQueueContributionWarning(plugin.definition);
+      if (legacyQueue) {
+        this.legacyQueueWarnings.push({
+          packageName: plugin.definition.packageName,
+          message: legacyQueue,
+        });
+      }
       for (const Provider of plugin.definition.serviceProviders) {
         this.addServiceProvider(Provider);
       }
@@ -258,11 +271,28 @@ export class Application<
   private async startServiceProviders(): Promise<void> {
     await this.validateConfig();
     this.registerProviders();
+    this.reportLegacyQueueContributions();
     await this.registerLocales();
     await this.providerRegistry.bootAll();
     await this.registerRoutes();
     await this.providerRegistry.startAll();
     await this.providerRegistry.readyAll();
+  }
+
+  /**
+   * A plugin built against the retired `queue.jobs` contract still starts; its jobs simply no longer run, which is
+   * what the warning says. Logging needs registered providers, so this runs after registration rather than when the
+   * plugins are added.
+   */
+  private reportLegacyQueueContributions(): void {
+    if (this.legacyQueueWarnings.length === 0) return;
+    const logger = this.container.has(loggingToken)
+      ? this.container.resolve(loggingToken).getLogger('plugins')
+      : undefined;
+    for (const { packageName, message } of this.legacyQueueWarnings) {
+      if (logger) logger.warn({ packageName }, message);
+      else console.warn(message);
+    }
   }
 
   /**

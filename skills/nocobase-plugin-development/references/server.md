@@ -47,7 +47,7 @@ const plugin: AppServerPlugin = defineServerPlugin({
 export default plugin;
 ```
 
-Declare only capabilities the plugin implements. Provider constructors and Route definitions are direct contributions. Migrations and seeds are filesystem locations relative to `baseDir`. Job classes and queue handlers are imported explicitly by their Provider; nothing discovers a directory, and the retired `queue` contribution is rejected. The target App must import the plugin's `./server` export and include the definition in its explicit `server/plugins.ts` composition; installing the package alone does not activate it.
+Declare only capabilities the plugin implements. Provider constructors and Route definitions are direct contributions. Migrations and seeds are filesystem locations relative to `baseDir`. Job classes and queue handlers are imported explicitly by their Provider; nothing discovers a directory. The retired `queue` contribution is ignored with a warning at startup, so its jobs no longer run. The target App must import the plugin's `./server` export and include the definition in its explicit `server/plugins.ts` composition; installing the package alone does not activate it.
 
 ### `baseDir` is part of the runtime contract
 

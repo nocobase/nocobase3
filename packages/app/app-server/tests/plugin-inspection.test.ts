@@ -151,29 +151,34 @@ describe('Server plugin inspection', () => {
     expect(inspection.locales).toHaveLength(1);
   });
 
-  it('rejects legacy declarations passed directly to inspection', () => {
-    expect(() =>
-      inspectResolvedAppServerPlugins({
-        appPackageName: 'app',
-        plugins: [
-          {
-            definition: {
-              packageName: '@nocobase/legacy',
-              baseDir: '/unused',
-              serviceProviders: [],
-              routes: [],
-              queue: { jobs: ['./jobs'] },
-            },
-            metadata: {
-              packageName: '@nocobase/legacy',
-              baseDir: '/unused',
-              version: '1.0.0',
-              rootDir: '/unused',
-            },
+  it('reports a legacy queue declaration passed directly to inspection as a warning', () => {
+    const inspection = inspectResolvedAppServerPlugins({
+      appPackageName: 'app',
+      plugins: [
+        {
+          definition: {
+            packageName: '@nocobase/legacy',
+            baseDir: '/unused',
+            serviceProviders: [],
+            routes: [],
+            queue: { jobs: ['./jobs'] },
           },
-        ],
+          metadata: {
+            packageName: '@nocobase/legacy',
+            baseDir: '/unused',
+            version: '1.0.0',
+            rootDir: '/unused',
+          },
+        },
+      ],
+    });
+    expect(inspection.issues).toEqual([
+      expect.objectContaining({
+        code: 'SERVER_QUEUE_JOBS_RETIRED',
+        severity: 'warning',
+        packageName: '@nocobase/legacy',
       }),
-    ).toThrow('queue.jobs is retired');
+    ]);
   });
 
   it('reports configured contribution locations that did not resolve', () => {

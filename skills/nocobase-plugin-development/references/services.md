@@ -167,7 +167,7 @@ The owner of a resource closes it. A plugin must not close a database, logger, q
 
 ## Configuration and database dependencies
 
-Read configuration through definitions already owned by the App or capability and through `this.app.config`; do not invent string paths or assume `defineServerPlugin()` accepts a `config` contribution. Its current declaration fields are `baseDir`, `packageName`, `serviceProviders`, `routes`, `database`, and `locales`; the retired `queue` field is rejected.
+Read configuration through definitions already owned by the App or capability and through `this.app.config`; do not invent string paths or assume `defineServerPlugin()` accepts a `config` contribution. Its current declaration fields are `baseDir`, `packageName`, `serviceProviders`, `routes`, `database`, and `locales`; the retired `queue` field is ignored with a startup warning.
 
 Resolve database access through the owner-exported `databaseManagerToken`. Use `manager.repository(collection)` for logical Collection-aware operations and `manager.query(connectionName?)` for lower-level database queries that do not apply Collection metadata or table-prefix resolution. Structural changes belong in migrations, never Provider startup.
 

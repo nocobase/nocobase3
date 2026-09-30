@@ -1,14 +1,16 @@
 import path from 'node:path';
 
-import { assertNoQueueContribution } from './queue-contribution.js';
+import { legacyQueueContributionWarning } from './queue-contribution.js';
 import type { ResolvedAppServerPlugins } from './types.js';
 
 export interface AppServerInspectionIssue {
   readonly code:
-    'SERVER_MIGRATIONS_DIRECTORY_MISSING' | 'SERVER_SEEDS_DIRECTORY_MISSING';
+    | 'SERVER_MIGRATIONS_DIRECTORY_MISSING'
+    | 'SERVER_SEEDS_DIRECTORY_MISSING'
+    | 'SERVER_QUEUE_JOBS_RETIRED';
   readonly message: string;
   readonly packageName: string;
-  readonly severity: 'error';
+  readonly severity: 'error' | 'warning';
 }
 
 export interface AppServerProviderSnapshot {
@@ -88,7 +90,15 @@ export function inspectResolvedAppServerPlugins(
   let providerOrder = 0;
   let routeOrder = 0;
   const plugins = resolved.plugins.map((plugin, index) => {
-    assertNoQueueContribution(plugin.definition);
+    const legacyQueue = legacyQueueContributionWarning(plugin.definition);
+    if (legacyQueue) {
+      issues.push({
+        code: 'SERVER_QUEUE_JOBS_RETIRED',
+        severity: 'warning',
+        packageName: plugin.metadata.packageName,
+        message: legacyQueue,
+      });
+    }
     const pluginOrder = index + 1;
     if (plugin.definition.locales) {
       locales.push({

@@ -1,4 +1,3 @@
-import { assertNoQueueContribution } from './queue-contribution.js';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -40,11 +39,7 @@ export function resolveAppServerPlugins(
 export function createAppDatabaseTaskContributions(
   resolved: ResolvedAppServerPlugins,
 ): AppDatabaseTaskContributions {
-  const plugins = resolved.plugins.map((plugin) => {
-    // Direct Application.addServerPlugins callers may supply legacy JavaScript descriptors.
-    assertNoQueueContribution(plugin.definition);
-    return plugin.metadata;
-  });
+  const plugins = resolved.plugins.map((plugin) => plugin.metadata);
   return {
     appPackageName: resolved.appPackageName,
     migrations: createPluginMigrationSources(plugins),
@@ -83,7 +78,6 @@ export function createPluginSeedSources(
 }
 
 function resolvePlugin(definition: AppServerPlugin): ResolvedAppPlugin {
-  assertNoQueueContribution(definition);
   if (
     typeof definition.baseDir !== 'string' ||
     !path.isAbsolute(definition.baseDir)

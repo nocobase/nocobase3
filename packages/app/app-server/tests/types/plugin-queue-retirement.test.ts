@@ -28,12 +28,9 @@ it('exposes only supported plugin metadata', () => {
     ]
   ): void => {};
   void retiredImports;
-  expectTypeOf<
-    Extract<'queue', keyof AppServerPluginDefinition>
-  >().toEqualTypeOf<never>();
-  expectTypeOf<
-    Extract<'queue', keyof AppServerPlugin>
-  >().toEqualTypeOf<never>();
+  // A retired declaration still compiles, so a plugin built against it keeps building; it carries no typed shape.
+  expectTypeOf<AppServerPluginDefinition['queue']>().toEqualTypeOf<unknown>();
+  expectTypeOf<AppServerPlugin['queue']>().toEqualTypeOf<unknown>();
   expectTypeOf<
     Extract<'jobLocations', keyof ResolvedAppPlugin>
   >().toEqualTypeOf<never>();
@@ -44,28 +41,25 @@ it('exposes only supported plugin metadata', () => {
     Extract<'jobLocations', keyof AppServerPluginSnapshot['contributions']>
   >().toEqualTypeOf<never>();
   expectTypeOf<AppServerInspectionIssue['code']>().toEqualTypeOf<
-    'SERVER_MIGRATIONS_DIRECTORY_MISSING' | 'SERVER_SEEDS_DIRECTORY_MISSING'
+    | 'SERVER_MIGRATIONS_DIRECTORY_MISSING'
+    | 'SERVER_SEEDS_DIRECTORY_MISSING'
+    | 'SERVER_QUEUE_JOBS_RETIRED'
   >();
 
-  const invalid = () => {
+  const legacy = () => {
     defineServerPlugin({
       packageName: '@nocobase/test',
-      // @ts-expect-error register queue handlers through serviceProviders instead
+      baseDir: '/unused',
       queue: { jobs: ['./jobs'] },
     });
-    const definition: AppServerPluginDefinition = {
-      packageName: '@nocobase/test',
-      // @ts-expect-error even an empty legacy contribution is unsupported
-      queue: {},
-    };
     const plugin: AppServerPlugin = {
       packageName: '@nocobase/test',
+      baseDir: '/unused',
       serviceProviders: [],
       routes: [],
-      // @ts-expect-error normalized plugins no longer expose queue metadata
       queue: { jobs: [] },
     };
-    void [definition, plugin];
+    void plugin;
   };
-  void invalid;
+  void legacy;
 });

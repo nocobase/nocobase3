@@ -53,6 +53,11 @@ export interface AppServerPluginDefinition<TConfig = object> {
   readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly locales?: AppServerPluginLocales;
+  /**
+   * @deprecated Retired and ignored: the jobs it lists are no longer discovered, and the Application logs a warning
+   * when it starts. Register jobs or queue handlers in a service provider instead.
+   */
+  readonly queue?: unknown;
 }
 
 export interface AppServerPlugin<TConfig = object> {
@@ -63,6 +68,11 @@ export interface AppServerPlugin<TConfig = object> {
   readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
   readonly locales?: AppServerPluginLocales;
+  /**
+   * @deprecated Retired and ignored: the jobs it lists are no longer discovered, and the Application logs a warning
+   * when it starts. Register jobs or queue handlers in a service provider instead.
+   */
+  readonly queue?: unknown;
   readonly __config?: TConfig;
 }
 

@@ -90,29 +90,7 @@ describe('server plugin definitions', () => {
     expect(Object.isFrozen(plugin.routes)).toBe(true);
   });
 
-  it('rejects retired queue job contributions rather than silently ignoring them', () => {
-    expect(() =>
-      defineServerPlugin({
-        packageName: '@nocobase/app-plugin-example',
-        queue: { jobs: ['./jobs'] },
-      }),
-    ).toThrow('queue.jobs is retired');
-  });
-
-  it('rejects a direct legacy declaration before resolving package files', () => {
-    const plugin = {
-      packageName: '@nocobase/uninstalled',
-      serviceProviders: [],
-      routes: [],
-      queue: { jobs: ['./jobs'] },
-    };
-    expect(() => defineServerPlugins([plugin])).toThrow(
-      'queue.jobs is retired',
-    );
-    expect(() =>
-      resolveAppServerPlugins('/unused', { plugins: [plugin] }),
-    ).toThrow('queue.jobs is retired');
-  });
+  // `tests/plugin-queue-retirement.test.ts` covers the retired `queue` declaration, which is ignored with a warning.
 
   // Resolved from `app-template-examples`, which is where the example plugins are installed. They used to live in
   // `app-template-default` and were moved out; a test naming the wrong template fails with "could not be resolved",
