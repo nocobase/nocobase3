@@ -117,7 +117,7 @@
         "iframeHeight": 560
       },
       "registryDependencies": ["utils"],
-      "docs": "Return RouteChildPage from the component of a child route. It covers the nearest positioned ancestor, so render its outlet beside the parent page's container rather than inside it.",
+      "docs": "Return RouteChildPage from the component of a child route. It covers the nearest positioned ancestor, so render a page's own outlet beside its container rather than inside it. A child page that can only render inside another one, such as the child page of a tab, covers that one whole.",
       "files": [
         {
           "path": "route-child-page.tsx",
