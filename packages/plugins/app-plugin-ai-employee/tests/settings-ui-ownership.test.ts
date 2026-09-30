@@ -87,10 +87,14 @@ describe('settings UI ownership', () => {
       'agentPrompt.copied',
       'agentPrompt.copyFailed',
       'llmServices.emptyTitle',
-      'llmServices.emptyStepOpen',
+      'agentPrompt.stepOpen',
       'llmServices.emptyStepSend',
       'llmServices.emptyStepFinish',
       'llmServices.agentPrompt',
+      'mcp.emptyTitle',
+      'mcp.emptyStepSend',
+      'mcp.emptyStepFinish',
+      'mcp.agentPrompt',
     ] as const;
     for (const key of keys) {
       expect(enUS[key], key).toBeTruthy();

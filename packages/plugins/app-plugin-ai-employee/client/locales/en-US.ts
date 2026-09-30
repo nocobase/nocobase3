@@ -596,7 +596,21 @@ export default {
     'Connect AI employees to external tools through Model Context Protocol servers.',
   'Add MCP server': 'Add MCP server',
   'Edit MCP server': 'Edit MCP server',
-  'No MCP servers configured.': 'No MCP servers configured.',
+  'mcp.emptyTitle': 'No MCP services configured yet',
+  'mcp.emptyDescription':
+    'MCP services are declared in the application configuration and cannot be added on this page. A coding agent can set one up for you.',
+  'mcp.emptyStepSend':
+    'Send it the prompt. The agent adds the MCP service configuration and tells you how to set any credential it needs.',
+  'mcp.emptyStepFinish':
+    'Set the credential yourself as the agent instructs, if the service needs one. Then restart the application and refresh this page to enable the service, review the tools it provides and set their permissions here.',
+  'mcp.emptyNote':
+    'For a deployed production application, add the service to its deployment configuration instead.',
+  'mcp.agentPrompt': `Configure an MCP service for this NocoBase application:
+1. Follow the MCP service guide in the application's nocobase-app-plugin-ai-employee Skill.
+2. Ask me which MCP service to connect and how it connects (stdio, http or sse); do not choose for me.
+3. Configure every field except credentials. I will set credentials myself: put them in headers for http and sse, or in env for stdio, never in url or args. Only tell me the command to run, and do not read, ask for or print a credential.
+4. Check the configuration with \`pnpm nocobase config check --no-connect\`.
+5. Finish by summarizing what you changed and telling me what I still need to do, such as setting a credential or restarting the application.`,
   'agentPrompt.label': 'Prompt',
   'agentPrompt.copy': 'Copy prompt',
   'agentPrompt.copied': 'Copied',
@@ -605,7 +619,7 @@ export default {
   'llmServices.emptyTitle': 'No LLM services configured yet',
   'llmServices.emptyDescription':
     'LLM services are declared in the application configuration and cannot be added on this page. A coding agent can set one up for you.',
-  'llmServices.emptyStepOpen':
+  'agentPrompt.stepOpen':
     'Open your coding agent, such as Codex or Claude Code, in the application directory: the one that contains config.yml.',
   'llmServices.emptyStepSend':
     'Send it the prompt. The agent adds the service configuration, lists the available models for you to choose from, and tells you how to set the API key.',

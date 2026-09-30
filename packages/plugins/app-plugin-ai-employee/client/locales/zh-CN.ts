@@ -545,7 +545,20 @@ export default {
     '通过模型上下文协议服务器将 AI 员工连接到外部工具。',
   'Add MCP server': '添加 MCP 服务',
   'Edit MCP server': '编辑 MCP 服务',
-  'No MCP servers configured.': '暂无 MCP 服务配置。',
+  'mcp.emptyTitle': '还没有配置 MCP 服务',
+  'mcp.emptyDescription':
+    'MCP 服务在应用配置文件中声明，无法在此页面添加。可以让 AI 编程助手帮你完成配置。',
+  'mcp.emptyStepSend':
+    '把提示词发给它。助手会添加 MCP 服务配置，并告诉你如何设置它需要的凭据。',
+  'mcp.emptyStepFinish':
+    '如果服务需要凭据，按助手的提示自行设置。完成后重启应用并刷新本页，再在这里启用服务、检查它提供的工具并设置调用权限。',
+  'mcp.emptyNote': '已部署的生产环境请在部署配置中添加 MCP 服务。',
+  'mcp.agentPrompt': `请为这个 NocoBase 应用配置一个 MCP 服务：
+1. 按应用中 nocobase-app-plugin-ai-employee Skill 里 MCP 服务的配置说明操作。
+2. 先问我要接入哪个 MCP 服务，以及它的连接方式（stdio、http 或 sse），不要替我决定。
+3. 除凭据外的字段由你配置。凭据由我自己设置：http 和 sse 放在 headers，stdio 放在 env，不要写进 url 或 args；只告诉我要运行的命令，不要读取、询问或输出凭据。
+4. 运行 \`pnpm nocobase config check --no-connect\` 检查配置。
+5. 最后总结你改了哪些配置，并告诉我还需要我做什么（例如设置凭据、重启应用）。`,
   'agentPrompt.label': '提示词',
   'agentPrompt.copy': '复制提示词',
   'agentPrompt.copied': '已复制',
@@ -553,7 +566,7 @@ export default {
   'llmServices.emptyTitle': '还没有配置 LLM 服务',
   'llmServices.emptyDescription':
     'LLM 服务在应用配置文件中声明，无法在此页面添加。可以让 AI 编程助手帮你完成配置。',
-  'llmServices.emptyStepOpen':
+  'agentPrompt.stepOpen':
     '在应用目录（包含 config.yml 的目录）打开 AI 编程助手，例如 Codex 或 Claude Code。',
   'llmServices.emptyStepSend':
     '把提示词发给它。助手会添加服务配置、列出可用模型供你选择，并告诉你如何设置 API Key。',

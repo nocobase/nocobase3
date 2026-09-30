@@ -131,7 +131,7 @@ export default function LLMServicePage(): ReactElement {
         <AgentPromptEmptyState
           title={t('llmServices.emptyTitle')}
           description={t('llmServices.emptyDescription')}
-          openStep={t('llmServices.emptyStepOpen')}
+          openStep={t('agentPrompt.stepOpen')}
           sendStep={t('llmServices.emptyStepSend')}
           finishStep={t('llmServices.emptyStepFinish')}
           prompt={t('llmServices.agentPrompt')}

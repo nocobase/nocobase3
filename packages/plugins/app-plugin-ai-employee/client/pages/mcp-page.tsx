@@ -4,6 +4,7 @@ import type { MCPRecord, MCPToolEntry } from '../mcp-service.js';
 import { useT } from '../locales/index.js';
 import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
+import { AgentPromptEmptyState } from '../components/agent-prompt-empty-state.js';
 import { Alert, AlertDescription } from '../components/ui/alert.js';
 import {
   Table,
@@ -104,75 +105,88 @@ export default function MCPPage(): ReactElement {
           <AlertDescription>{loadError || error}</AlertDescription>
         </Alert>
       )}
-      <div className='overflow-hidden rounded-xl border bg-card'>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className='w-12 text-center'>#</TableHead>
-              <TableHead>{t('UID')}</TableHead>
-              <TableHead>{t('Title')}</TableHead>
-              <TableHead>{t('Transport')}</TableHead>
-              <TableHead>{t('Enabled')}</TableHead>
-              <TableHead>{t('Actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading || (!loadError && !servers.length) ? (
+      {!loading && !loadError && !servers.length ? (
+        // Servers come from config.yml, so the empty state hands the work to a coding agent in the app directory.
+        <AgentPromptEmptyState
+          title={t('mcp.emptyTitle')}
+          description={t('mcp.emptyDescription')}
+          openStep={t('agentPrompt.stepOpen')}
+          sendStep={t('mcp.emptyStepSend')}
+          finishStep={t('mcp.emptyStepFinish')}
+          prompt={t('mcp.agentPrompt')}
+          note={t('mcp.emptyNote')}
+        />
+      ) : (
+        <div className='overflow-hidden rounded-xl border bg-card'>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  className='h-32 text-center text-muted-foreground'
-                  colSpan={6}
-                >
-                  {loading ? t('Loading…') : t('No MCP servers configured.')}
-                </TableCell>
+                <TableHead className='w-12 text-center'>#</TableHead>
+                <TableHead>{t('UID')}</TableHead>
+                <TableHead>{t('Title')}</TableHead>
+                <TableHead>{t('Transport')}</TableHead>
+                <TableHead>{t('Enabled')}</TableHead>
+                <TableHead>{t('Actions')}</TableHead>
               </TableRow>
-            ) : null}
-            {!loading &&
-              !loadError &&
-              servers.map((server, index) => (
-                <TableRow key={server.name}>
-                  <TableCell className='text-center text-muted-foreground'>
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className='font-mono text-xs'>
-                    {server.name}
-                  </TableCell>
-                  <TableCell>{server.title || '—'}</TableCell>
-                  <TableCell>
-                    <Badge variant='outline'>
-                      {t(transportLabels[server.transport])}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={server.enabled}
-                      disabled={pending.has(server.name)}
-                      onCheckedChange={(enabled) =>
-                        void toggleEnabled(server, enabled)
-                      }
-                      aria-label={`${t('Enabled')}: ${server.name}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='ghost'
-                      onClick={() => {
-                        void navigate({
-                          pathname: `${encodeURIComponent(server.name)}/tools`,
-                          search: location.search,
-                        });
-                      }}
-                    >
-                      {t('View')}
-                    </Button>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    className='h-32 text-center text-muted-foreground'
+                    colSpan={6}
+                  >
+                    {t('Loading…')}
                   </TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-      </div>
+              ) : null}
+              {!loading &&
+                !loadError &&
+                servers.map((server, index) => (
+                  <TableRow key={server.name}>
+                    <TableCell className='text-center text-muted-foreground'>
+                      {index + 1}
+                    </TableCell>
+                    <TableCell className='font-mono text-xs'>
+                      {server.name}
+                    </TableCell>
+                    <TableCell>{server.title || '—'}</TableCell>
+                    <TableCell>
+                      <Badge variant='outline'>
+                        {t(transportLabels[server.transport])}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={server.enabled}
+                        disabled={pending.has(server.name)}
+                        onCheckedChange={(enabled) =>
+                          void toggleEnabled(server, enabled)
+                        }
+                        aria-label={`${t('Enabled')}: ${server.name}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => {
+                          void navigate({
+                            pathname: `${encodeURIComponent(server.name)}/tools`,
+                            search: location.search,
+                          });
+                        }}
+                      >
+                        {t('View')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       <Outlet context={context} />
     </div>
   );
