@@ -5,6 +5,7 @@ import { useT } from '../locales/index.js';
 import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
 import { AgentPromptEmptyState } from '../components/agent-prompt-empty-state.js';
+import { DelayedLoading } from '../components/delayed-loading.js';
 import { Alert, AlertDescription } from '../components/ui/alert.js';
 import {
   Table,
@@ -105,7 +106,9 @@ export default function MCPPage(): ReactElement {
           <AlertDescription>{loadError || error}</AlertDescription>
         </Alert>
       )}
-      {!loading && !loadError && !servers.length ? (
+      {loading ? (
+        <DelayedLoading label={t('Loading…')} />
+      ) : !loadError && !servers.length ? (
         // Servers come from config.yml, so the empty state hands the work to a coding agent in the app directory.
         <AgentPromptEmptyState
           title={t('mcp.emptyTitle')}
@@ -130,18 +133,7 @@ export default function MCPPage(): ReactElement {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    className='h-32 text-center text-muted-foreground'
-                    colSpan={6}
-                  >
-                    {t('Loading…')}
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {!loading &&
-                !loadError &&
+              {!loadError &&
                 servers.map((server, index) => (
                   <TableRow key={server.name}>
                     <TableCell className='text-center text-muted-foreground'>

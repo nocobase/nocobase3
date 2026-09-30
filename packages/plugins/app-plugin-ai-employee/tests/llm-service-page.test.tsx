@@ -56,7 +56,7 @@ async function renderPage() {
   return runtime;
 }
 
-it('shows loading before an empty state that guides configuration through a coding agent', async () => {
+it('shows a delayed loading status, never a table, before the empty state that guides configuration', async () => {
   let resolve!: (value: []) => void;
   vi.mocked(listLLMServices).mockReturnValue(
     new Promise<[]>((done) => {
@@ -64,7 +64,11 @@ it('shows loading before an empty state that guides configuration through a codi
     }),
   );
   const runtime = await renderPage();
-  expect(screen.getByText('Loading…')).toBeVisible();
+  // Loading renders no table the empty state would then replace, and stays silent while the response is quick.
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
   expect(emptyHeading()).not.toBeInTheDocument();
   await act(async () => resolve([]));
   expect(emptyHeading()).toBeVisible();

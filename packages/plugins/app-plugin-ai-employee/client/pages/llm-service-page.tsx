@@ -21,6 +21,7 @@ import {
 } from '../components/ui/table.js';
 import { useAIEmployeeClient } from '../ai-employee-client.js';
 import { AgentPromptEmptyState } from '../components/agent-prompt-empty-state.js';
+import { DelayedLoading } from '../components/delayed-loading.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { useHistoryGuard } from '../components/use-history-guard.js';
 import type {
@@ -126,7 +127,9 @@ export default function LLMServicePage(): ReactElement {
           <AlertDescription>{loadError || error}</AlertDescription>
         </Alert>
       )}
-      {!loading && !loadError && !services.length ? (
+      {loading ? (
+        <DelayedLoading label={t('Loading…')} />
+      ) : !loadError && !services.length ? (
         // Services come from config.yml, so the empty state hands the work to a coding agent in the app directory.
         <AgentPromptEmptyState
           title={t('llmServices.emptyTitle')}
@@ -151,18 +154,7 @@ export default function LLMServicePage(): ReactElement {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    className='px-3 py-10 text-center text-muted-foreground'
-                    colSpan={6}
-                  >
-                    {t('Loading…')}
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {!loading &&
-                !loadError &&
+              {!loadError &&
                 services.map((service, index) => (
                   <TableRow key={service.name}>
                     <TableCell className='text-center text-muted-foreground'>
