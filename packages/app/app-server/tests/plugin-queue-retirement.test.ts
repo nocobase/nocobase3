@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Application } from '../src/application/index.js';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import * as plugins from '../src/plugins/index.js';
 import * as appServer from '../src/index.js';
 
@@ -10,7 +10,7 @@ await config.loadAll();
 function createApp(): Application {
   return new Application({
     config,
-    paths: createConfigPaths({ rootDir: '/unused' }),
+    paths: createAppPaths({ rootDir: '/unused' }),
   });
 }
 
@@ -74,6 +74,7 @@ describe('retired plugin queue metadata', () => {
     (extra) => {
       const definition = {
         packageName: '@nocobase/test',
+        baseDir: import.meta.dirname,
         serviceProviders: [],
         routes: [],
         ...extra,
@@ -116,6 +117,7 @@ describe('retired plugin queue metadata', () => {
     }
     const definition = plugins.defineServerPlugin({
       packageName: '@nocobase/valid',
+      baseDir: import.meta.dirname,
       serviceProviders: [Provider],
     });
     const legacy = {

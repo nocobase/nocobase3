@@ -46,7 +46,6 @@
     "ioredis": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
@@ -54,8 +53,5 @@
     "redis": "5.12.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "peerDependencies": {
-    "@nocobase/db": "workspace:^"
   }
 }

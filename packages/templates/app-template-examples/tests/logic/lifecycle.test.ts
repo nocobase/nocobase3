@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
 import type { Application } from '@nocobase/app-server/application';
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import {
   defineServerPlugin,
@@ -352,7 +352,7 @@ function createProviderApplication(
   container: ServiceContainer;
   appName: string;
   publicBasePath: string;
-  paths: ReturnType<typeof createConfigPaths>;
+  paths: ReturnType<typeof createAppPaths>;
   router: Hono;
 } {
   return {
@@ -361,7 +361,7 @@ function createProviderApplication(
     container,
     appName: 'provider-test',
     publicBasePath: '/provider-test',
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     router: new Hono(),
   };
 }

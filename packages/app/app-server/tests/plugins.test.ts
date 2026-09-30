@@ -2,7 +2,6 @@
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { glob } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -183,11 +182,7 @@ describe('server plugin definitions', () => {
         packageName,
       );
       const baseDir = compiled ? path.join(packageRoot, 'dist') : packageRoot;
-      for (const directory of [
-        'database/migrations',
-        'database/seeds',
-        'server/jobs',
-      ]) {
+      for (const directory of ['database/migrations', 'database/seeds']) {
         mkdirSync(path.join(packageRoot, directory), { recursive: true });
         mkdirSync(path.join(packageRoot, 'dist', directory), {
           recursive: true,
@@ -200,7 +195,6 @@ describe('server plugin definitions', () => {
           migrations: './database/migrations',
           seeds: './database/seeds',
         },
-        queue: { jobs: ['./server/jobs'] },
       });
       const resolved = resolveAppServerPlugins(
         rootDir,
@@ -212,33 +206,8 @@ describe('server plugin definitions', () => {
         baseDir,
         migrationsDirectory: path.join(baseDir, 'database/migrations'),
         seedsDirectory: path.join(baseDir, 'database/seeds'),
-        jobLocations: [
-          path.join(baseDir, 'server/jobs/**/!(*.d).{ts,js,mts,mjs}'),
-        ],
       });
-      const jobs = path.join(baseDir, 'server/jobs');
-      mkdirSync(path.join(jobs, 'nested'));
-      for (const file of [
-        'dispatch.js',
-        'dispatch.d.ts',
-        'source.ts',
-        'module.mts',
-        'module.d.mts',
-        'nested/task.mjs',
-        'nested/task.d.ts',
-        'dispatch.js.map',
-      ]) {
-        writeFileSync(path.join(jobs, file), '');
-      }
-      const matched: string[] = [];
-      for await (const file of glob(resolved?.jobLocations ?? []))
-        matched.push(path.relative(jobs, file));
-      expect(matched.sort()).toEqual([
-        'dispatch.js',
-        'module.mts',
-        'nested/task.mjs',
-        'source.ts',
-      ]);
+      expect(resolved).not.toHaveProperty('jobLocations');
       rmSync(path.join(baseDir, 'database/migrations'), { recursive: true });
       expect(
         resolveAppServerPlugins(rootDir, defineServerPlugins([plugin]))

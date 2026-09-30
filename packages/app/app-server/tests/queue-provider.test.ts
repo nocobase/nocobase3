@@ -4,7 +4,7 @@ import { Application } from '../src/application/index.js';
 import { Hono } from 'hono';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createLogging } from '@nocobase/logging';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import { loggingToken } from '../src/logging/index.js';
 import {
   QueueServiceProvider,
@@ -32,7 +32,7 @@ it('warns by default only after a requested memory queue initializes at start', 
   });
   const app = new Application({
     config,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
   });
   const logging = createLogging({ level: 'silent' });
   const logger = logging.getLogger();
@@ -71,7 +71,7 @@ it('rejects queue.environment instead of treating it as provider context', async
     appName: 'invalid-config-app',
     publicBasePath: '',
     config,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     router: new Hono(),
     container,
   });
@@ -93,7 +93,7 @@ it('registers one lazy service and activates handlers only at start', async () =
     appName: 'queue-provider-test',
     publicBasePath: '',
     config,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     router: new Hono(),
     container,
   });
@@ -130,7 +130,7 @@ it('keeps same-name queue handlers isolated between application containers', asy
       appName: name,
       publicBasePath: '',
       config,
-      paths: createConfigPaths({ rootDir: process.cwd() }),
+      paths: createAppPaths({ rootDir: process.cwd() }),
       router: new Hono(),
       container,
     });
@@ -180,7 +180,7 @@ it.each(['production', 'test', '', undefined, 'develop', 'development'])(
     });
     const app = new Application({
       config,
-      paths: createConfigPaths({ rootDir: process.cwd() }),
+      paths: createAppPaths({ rootDir: process.cwd() }),
     });
     const container = app.container;
     const logging = createLogging({ level: 'silent' });

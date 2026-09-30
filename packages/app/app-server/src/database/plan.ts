@@ -1,7 +1,3 @@
-import {
-  resolveQueueMigrationSources,
-  type AppQueueConfig,
-} from '@nocobase/queue';
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -220,16 +216,5 @@ export function planAppRuntimeDatabaseTasks(
   kinds: readonly AppDatabaseTaskKind[],
   options: AppRuntimeDatabaseTaskPlanOptions,
 ): AppDatabaseTask[] {
-  const queueSources: readonly AppDatabaseMigrationSource[] = kinds.includes(
-    'migrations',
-  )
-    ? resolveQueueMigrationSources(
-        options.runtimeConfig?.get<AppQueueConfig>('queue'),
-        { defaultDatabaseConnection: defaultConnectionName(config) },
-      )
-    : [];
-  return planAppDatabaseTasks(config, kinds, {
-    ...options,
-    migrationSources: [...queueSources, ...(options.migrationSources ?? [])],
-  });
+  return planAppDatabaseTasks(config, kinds, options);
 }

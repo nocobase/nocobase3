@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { Application } from '@nocobase/app-server';
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { LoggingProvider } from '@nocobase/app-server/logging';
 import {
   QueueServiceProvider,
@@ -73,7 +73,7 @@ it(`competes across actual Host applications on the same ${backend} target and p
       });
       const app = new Application({
         config,
-        paths: createConfigPaths({ rootDir: process.cwd() }),
+        paths: createAppPaths({ rootDir: process.cwd() }),
       });
       app.addServiceProvider(LoggingProvider);
       app.addServiceProvider(QueueServiceProvider, { nodeEnv: 'develop' });

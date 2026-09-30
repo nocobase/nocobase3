@@ -31,13 +31,12 @@ import {
   resolveAppServerPlugins,
   type AppServerPlugin,
 } from '@nocobase/app-server/plugins';
-import { QueueProvider } from '@nocobase/app-server/queue';
+import { QueueServiceProvider } from '@nocobase/app-server/queue';
 import { SessionProvider } from '@nocobase/app-server/session';
 import { createDefaultCachingConfig } from '@nocobase/caching';
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { createSilentLoggingConfig } from '@nocobase/logging';
-import { createSyncQueueConfig } from '@nocobase/queue';
 import { createNullSessionConfig } from '@nocobase/session';
 
 import {
@@ -130,7 +129,7 @@ export async function createTestApp(
       },
     },
     logging: createSilentLoggingConfig(),
-    queue: createSyncQueueConfig(),
+    queue: { queueBackend: 'inMemory' },
     session: createNullSessionConfig(),
     snowflake: { workerId: 0 },
   };
@@ -149,7 +148,7 @@ export async function createTestApp(
   app.addServiceProvider(CachingProvider);
   app.addServiceProvider(IdGeneratorProvider);
   app.addServiceProvider(SessionProvider);
-  app.addServiceProvider(QueueProvider);
+  app.addServiceProvider(QueueServiceProvider);
   app.addServerPlugins(
     resolveAppServerPlugins(
       directory,

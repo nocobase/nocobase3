@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppConfig } from '@nocobase/app-server/config';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import { Application } from '@nocobase/app-server';
 import { LoggingProvider } from '@nocobase/app-server/logging';
 import {
@@ -61,7 +61,7 @@ describe('AppRuntimeRegistry runtime replacement', () => {
         });
         const app = new Application({
           config,
-          paths: createConfigPaths({ rootDir: '/tmp/queue-host-test' }),
+          paths: createAppPaths({ rootDir: '/tmp/queue-host-test' }),
         });
         app.addServiceProvider(LoggingProvider);
         app.addServiceProvider(QueueServiceProvider, { nodeEnv: 'develop' });
