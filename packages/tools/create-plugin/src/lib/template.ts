@@ -53,6 +53,7 @@ function hasClientPlugin(capabilities: PluginCapabilities): boolean {
 function hasServerPlugin(capabilities: PluginCapabilities): boolean {
   return (
     capabilities.database ||
+    capabilities.server.jobs ||
     capabilities.server.locales ||
     capabilities.server.serviceProviders ||
     capabilities.server.routes
@@ -136,6 +137,12 @@ function includeTemplateFile(
     return capabilities.server.routes;
   }
   if (
+    relativePath.startsWith('server/jobs/') ||
+    relativePath === 'tests/jobs.test.ts'
+  ) {
+    return capabilities.server.jobs;
+  }
+  if (
     relativePath.startsWith('database/') ||
     relativePath === 'tests/database.test.ts'
   ) {
@@ -202,6 +209,10 @@ function replacementEntries(
     [
       '__NOCOBASE_JOB_NAME_LITERAL__',
       literal(`${context.packageName}/${context.shortName}`),
+    ],
+    [
+      '__NOCOBASE_JOBS_PROVIDER_NAME_LITERAL__',
+      literal(`${context.packageName}/jobs`),
     ],
     ['__NOCOBASE_MIGRATION_NAME_LITERAL__', literal(context.migrationName)],
     ['__NOCOBASE_MIGRATION_NAME__', context.migrationName],
@@ -423,9 +434,11 @@ async function renderManifest(
   if (capabilities.database) addRuntimePeer('@nocobase/db');
   if (
     capabilities.server.serviceProviders ||
+    capabilities.server.jobs ||
     capabilities.client.serviceProviders
   )
     addRuntimePeer('@nocobase/service-provider');
+  if (capabilities.server.jobs) addRuntimePeer('@nocobase/jobs');
   if (clientPlugin) addRuntimePeer('@nocobase/app-client');
   if (capabilities.cli) {
     addRuntimePeer('@nocobase/app-cli');
@@ -584,12 +597,22 @@ function renderServerPlugin(
     capabilities.server.routes
       ? "import routes from './routes/index.js';"
       : undefined,
+    capabilities.server.jobs
+      ? `import { ${context.symbolName}JobsProvider } from './jobs/provider.js';`
+      : undefined,
   ]
     .filter(Boolean)
     .join('\n');
+  const providers = capabilities.server.jobs
+    ? capabilities.server.serviceProviders
+      ? `  serviceProviders: [...serviceProviders, ${context.symbolName}JobsProvider],`
+      : `  serviceProviders: [${context.symbolName}JobsProvider],`
+    : capabilities.server.serviceProviders
+      ? '  serviceProviders,'
+      : undefined;
   const entries = [
     capabilities.server.locales ? '  locales,' : undefined,
-    capabilities.server.serviceProviders ? '  serviceProviders,' : undefined,
+    providers,
     capabilities.server.routes ? '  routes,' : undefined,
     capabilities.database
       ? "  database: {\n    migrations: './database/migrations',\n    seeds: './database/seeds',\n  },"
@@ -608,7 +631,7 @@ function renderPluginTest(
     capabilities.server.locales
       ? "      locales: expect.objectContaining({ 'en-US': expect.any(Function) }),"
       : undefined,
-    capabilities.server.serviceProviders
+    capabilities.server.serviceProviders || capabilities.server.jobs
       ? '      serviceProviders: expect.any(Array),'
       : undefined,
     capabilities.server.routes ? '      routes: expect.any(Array),' : undefined,
@@ -629,6 +652,7 @@ function renderReadme(
     capabilities.database && 'database',
     capabilities.server.serviceProviders && 'server.service-providers',
     capabilities.server.routes && 'server.routes',
+    capabilities.server.jobs && 'server.jobs',
     capabilities.server.locales && 'server.locales',
     capabilities.client.routes && 'client.routes',
     capabilities.client.components && 'client.components',
@@ -663,6 +687,8 @@ function renderSkill(
       '- Server ServiceProviders: document any public `ServiceToken` export and the supported Server-to-Server workflow.',
     capabilities.server.routes &&
       '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
+    capabilities.server.jobs &&
+      '- Server jobs: document what submits each job, its payload, its retry and idempotency behavior, and its observable results.',
     capabilities.database &&
       '- Database: document only App-visible schema prerequisites and lifecycle constraints; do not copy migration implementation details.',
     capabilities.registry &&

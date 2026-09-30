@@ -49,40 +49,129 @@ Use target `{ type: 'app.scheduled-log', config: { message: 'Time report' } }`. 
 
 Namespace the type so it cannot collide with another plugin's: `app.` for an application's own tasks, the plugin name for a plugin's. Two registrations of the same type throw at boot.
 
-Short operations may complete inside `start()`, but occupy the schedule worker. Publish lengthy work to a business queue and return `accepted`, as the next section shows. Do not let config select arbitrary module paths, queue names or channels.
+Short operations may complete inside `start()`, but occupy the schedule worker. Hand lengthy work to a `JobExecutor` and return `accepted`, as the next section shows. Do not let config select arbitrary module paths, job names, queue names or channels.
 
-## Publish to a Queue and Track Its Completion
+## Run Lengthy Work on a JobExecutor and Track Its Completion
 
-A target whose work runs elsewhere returns `accepted` with a reference, and the schedule occurrence waits until that run reaches a terminal state. To run the work on the application's queue, the Provider that registers the target also registers the queue handler: it resolves `queueServiceToken` from `@nocobase/app-server/queue`, calls `consumer(queue).consume()` in `boot()`, and awaits the unregister function in `shutdown()`. Nothing is discovered from a directory.
-
-The target publishes from its `start()`, deriving the job ID from the occurrence so a recovered dispatch of the same occurrence reaches the same job:
+A target whose work runs elsewhere returns `accepted` with a reference, and the schedule occurrence waits until that run reaches a terminal state. For work the application runs itself, hand it to a `JobExecutor` of the Provider that registers the target — from `jobExecutorServiceToken` in `@nocobase/app-server/jobs`, under the application's or plugin's package name as the scope — and make the reference the occurrence's own execution record: `{ type: '<target type>', id: occurrenceId }`. A recovered `start()` of the same occurrence then returns the same reference without depending on the executor, which assigns every submission a new `jobId` and cannot look one up.
 
 ```ts
-// queue is the QueueService the Provider resolved.
-const { jobId } = await queue
-  .producer('app.maintenance')
-  .publish(
-    'run',
-    { ...payload, occurrenceId: context.occurrenceId },
-    { jobIdProducer: () => `maintenance-${context.occurrenceId}` },
-  );
-return {
-  state: 'accepted',
-  reference: { type: 'queue-job', id: jobId },
-};
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { schedulerServiceToken } from '@nocobase/app-plugin-scheduler/server/tokens';
+import {
+  Job,
+  JobInterruptedError,
+  type JobClass,
+  type JobExecutionContext,
+  type JobExecutor,
+} from '@nocobase/jobs';
+import { ServiceProvider } from '@nocobase/service-provider';
+
+import { maintenanceServiceToken } from './maintenance.js';
+
+interface MaintenancePayload {
+  readonly occurrenceId: string;
+  readonly area: string;
+}
+
+const reference = (occurrenceId: string) => ({
+  type: 'app.maintenance',
+  id: occurrenceId,
+});
+
+export default class MaintenanceProvider extends ServiceProvider<AppPluginApplication> {
+  public readonly name = 'app/maintenance';
+  private jobClass: JobClass<MaintenancePayload> | undefined;
+  private ready: Promise<JobExecutor> | undefined;
+
+  public override boot(): void {
+    const maintenance = this.app.container.resolve(maintenanceServiceToken);
+    const handle = this.app.container
+      .resolve(schedulerServiceToken)
+      .registerTarget({
+        type: 'app.maintenance',
+        title: 'Maintenance',
+        validate: validateMaintenanceConfig,
+        start: async (config, { occurrenceId }) => {
+          const executor = await this.executor();
+          await executor.addJob(
+            new this.jobClass!({ ...config, occurrenceId }),
+          );
+          return { state: 'accepted', reference: reference(occurrenceId) };
+        },
+        // Reads the execution record maintenance.run() keeps per occurrence.
+        inspect: (ref) => maintenance.observe(ref.id),
+      });
+
+    // The job reaches the Service and the handle by closure: a job receives only its payload.
+    this.jobClass = class MaintenanceJob extends Job<MaintenancePayload> {
+      public static readonly jobName = 'app.maintenance';
+
+      public async execute({ signal }: JobExecutionContext): Promise<void> {
+        let completion;
+        try {
+          // Idempotent per occurrence: returns the recorded outcome when it already ran.
+          await maintenance.run(this.payload, signal);
+          completion = { status: 'succeeded' as const };
+        } catch (error) {
+          // Shutdown: the task returns to waiting and runs again after the restart.
+          if (signal.aborted) throw new JobInterruptedError();
+          completion = {
+            status: 'failed' as const,
+            reason: 'maintenance-failed',
+          };
+        }
+        const { occurrenceId } = this.payload;
+        await handle.reportCompletion(
+          occurrenceId,
+          reference(occurrenceId),
+          completion,
+        );
+      }
+    };
+  }
+
+  public override async start(): Promise<void> {
+    await this.executor();
+  }
+
+  public override async shutdown(): Promise<void> {
+    const executor = await this.ready?.catch(() => undefined);
+    this.ready = undefined;
+    await executor?.shutdown();
+  }
+
+  // Scheduler may fire before this Provider's start(): both share one setup.
+  private executor(): Promise<JobExecutor> {
+    this.ready ??= (async () => {
+      const executor = this.app.container
+        .resolve(jobExecutorServiceToken)
+        .getJobExecutor('@acme/crm');
+      executor.registerJob(this.jobClass!);
+      await executor.setup();
+      return executor;
+    })();
+    return this.ready;
+  }
+}
 ```
 
-Carry occurrenceId through retries as the idempotency key. A job ID that still exists is not published again, but once the finished job leaves the queue's history the same ID can be published again, so queue deduplication does not replace business idempotency for external effects.
+The business Service, not Scheduler or the executor, is the authority on the run: `maintenance.run()` records the occurrence's execution state in the application's database — started, succeeded, failed — and returns early when the occurrence already finished, and `maintenance.observe()` maps that record to `pending`, `running` or `completed` for `inspect()`. A repeated `start()` of the same occurrence may submit a second task; the record makes it harmless. Carry `occurrenceId` in the payload for exactly this reason.
 
-Review the complete execution chain: publish → handler execution → terminal notification → persisted-state recovery. Scheduler runs its `schedule` executor only; the queue's handler must be registered on an instance that consumes the queue, and a deployment of more than one instance needs `queue.default` on Redis. Reconciliation observes execution state and cannot consume or execute the queued job.
+Decide the terminal outcome inside the job, as above, and complete the task rather than throwing: the executor's `attempts` belongs to the application's `jobs` configuration, and a job cannot tell which attempt is the last, so a thrown failure never tells you when retries are exhausted. Retry transient failures inside `maintenance.run()` when the business needs it. Throw only `JobInterruptedError`, and only when the shutdown signal aborted unfinished work.
 
-In addition to publishing and consumption, an asynchronous target needs all of the following:
+Review the complete execution chain: submission → job execution → terminal notification → persisted-state recovery. Scheduler runs its own schedule executor only; the target's executor must be consuming on an instance, and a deployment of more than one instance needs `jobs.default` on Redis. Reconciliation observes execution state and cannot run the job.
 
-1. **Terminal notification:** `registerTarget()` returns a handle; call `handle.reportCompletion(occurrenceId, reference, completion)` after actual success or exhausted retries. A failed attempt that will retry is not terminal failure. The handle only completes occurrences its own target started, so keep it on the Provider rather than re-deriving it; the queue handler that Provider registers can close over it.
+In addition to submission and execution, an asynchronous target needs all of the following:
+
+1. **Terminal notification:** `registerTarget()` returns a handle; call `handle.reportCompletion(occurrenceId, reference, completion)` once the run reaches its real terminal outcome, never for an attempt that will be retried. The handle only completes occurrences its own target started, so keep it with the Provider and pass it to the job by closure rather than re-deriving it.
 2. **Recovery queries:** implement `inspect(reference)` on the target and query persisted execution state. Reconciliation routes by the target type the occurrence recorded when it started, so a definition later retargeted elsewhere still inspects through the target that began the run.
-3. **Reliable references:** notifications and inspection use the same `{ type, id }`, recoverable across processes. Do not use an in-process Map as the authoritative terminal state. Other execution systems use their own stable, non-conflicting reference types.
+3. **Reliable references:** notifications and inspection use the same `{ type, id }`, recoverable across processes. Do not use an in-process Map as the authoritative terminal state. Another execution system with its own identifiers uses its own stable, non-conflicting reference type.
 
-A queue job's success does not automatically mark Scheduler success. Returning `accepted` alone is incomplete. A notification can be lost or arrive before acceptance is persisted; inspection compensates for these cases. Nothing observes a queue job for you.
+A job's success does not automatically mark Scheduler success. Returning `accepted` alone is incomplete. A notification can be lost or arrive before acceptance is persisted; inspection compensates for these cases. Nothing observes a job for you.
+
+Work that must wait before it starts, such as a follow-up an hour after the firing, is the one case for `@nocobase/queue` instead: publish with `delay` and a job ID derived from the occurrence. The same reference, idempotency, terminal-notification and inspection rules apply.
 
 ## Historical Occurrences After Retargeting
 

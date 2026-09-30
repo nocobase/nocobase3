@@ -2,6 +2,8 @@
 '@nocobase/jobs': patch
 '@nocobase/app-host': patch
 '@nocobase/app-plugin-scheduler': patch
+'@nocobase/app-plugin-notification': patch
+'@nocobase/app-plugin-i18n': patch
 '@nocobase/app-plugin-users': patch
 '@nocobase/app-plugin-api-keys': patch
 '@nocobase/app-plugin-authz-default-access': patch
@@ -15,6 +17,8 @@
 '@nocobase/app-plugin-repository-example': patch
 ---
 
-Describe the rebuilt `@nocobase/queue` in plugin guidance
+Point plugin guidance at `@nocobase/jobs` for background work, and at the rebuilt `@nocobase/queue` only for what jobs cannot do
 
-The plugins' `AGENTS.md` now list `@nocobase/queue` as a host-owned contract — the application's queue service — rather than a job registry. The Scheduler Skill publishes asynchronous target work with `producer(queue).publish()` and a job ID derived from the occurrence instead of dispatching a Queue Job class. The jobs README and the jobs example compare themselves with the new queue API, and the departments example no longer composes the removed `QueueProvider` in its tests.
+The Scheduler Skill now hands a target's lengthy work to a `JobExecutor` owned by the target's Provider, with the occurrence's own execution record as the reference, so a repeated start of the same occurrence returns the same reference; the job decides and reports its terminal outcome itself, because it cannot tell which executor attempt is the last. Recurring work without administrator visibility goes to a `ScheduleExecutor`, and only a one-time delay goes to a queue. Its description of Scheduler's own backend now names the jobs service and `scheduler.jobs` instead of the removed `queue.queues.schedule` connection. The Notification Skill's diagnostics check the jobs configuration Deliveries run on instead of a queue manager.
+
+The plugins' `AGENTS.md` list `@nocobase/queue` as a host-owned contract rather than a job registry. The jobs README states that background work goes there by default, the i18n Skill speaks of background jobs rather than queue jobs, and the departments example no longer composes the removed `QueueProvider` in its tests.

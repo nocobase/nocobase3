@@ -15,7 +15,7 @@ Use `getJobExecutor(scope, name?)` for one-off work submitted as `new JobClass(p
 
 Use the Scheduler plugin (`@nocobase/app-plugin-scheduler`) instead when administrators should see the task, enable or disable it, and track each run. Scheduler continues to use `ScheduleExecutor`; its contract is unchanged.
 
-`@nocobase/queue` is the separate tool for messages: a producer publishes on a channel of a named queue, and any number of handlers consume it, with delays, priorities, deduplicating job IDs, batches and a global rate limit. Use it when work is a message rather than a job class; its jobs are not `Job` classes and nothing is discovered from a directory.
+This package is where background work goes by default. `@nocobase/queue` covers only what it does not: a delay before a job may start, a priority, a job ID that deduplicates, an atomic batch, a global rate limit, cancelling a running job, or several handlers consuming each message. Its jobs are messages on channels, not `Job` classes, and nothing is discovered from a directory.
 
 ## Composing it in an application
 

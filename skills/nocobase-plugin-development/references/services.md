@@ -171,7 +171,7 @@ Read configuration through definitions already owned by the App or capability an
 
 Resolve database access through the owner-exported `databaseManagerToken`. Use `manager.repository(collection)` for logical Collection-aware operations and `manager.query(connectionName?)` for lower-level database queries that do not apply Collection metadata or table-prefix resolution. Structural changes belong in migrations, never Provider startup.
 
-A queue handler is a closure a Provider registers in `boot()`, so it reaches Services through that Provider's container; do not store a global container. Await its unregister function in `shutdown()` before releasing those Services.
+A `JobExecutor` job never resolves the container: the Provider that owns the executor creates the job class with a factory that closes over the Services it needs, then registers that class. A queue handler is likewise a closure the Provider registers in `boot()`; await its unregister function in `shutdown()` before releasing those Services. Do not store a global container for either.
 
 ## Test the contract and lifecycle
 

@@ -89,7 +89,7 @@ Say what you ran, what passed, and what you did not run. If you could not verify
 
 Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.
 
-In application tests that start queues, select a `queue` configuration key whose `persistence.path` is a temporary directory, so memory state files stay out of the working tree.
+In application tests that start jobs or queues, select a `jobs` or `queue` configuration key whose `persistence.path` is a temporary directory, so memory state files stay out of the working tree.
 
 ## Vite cache isolation
 

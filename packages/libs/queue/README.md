@@ -11,9 +11,9 @@ The package holds no module-level service or registry and reads neither applicat
 
 ## Queue or jobs
 
-Use a queue for messages: work one part of the application hands to another, with a channel, a delay, a priority, retries with backoff, deduplication by job ID, batches, a global rate limit and cancellation of running jobs. Several handlers can consume one queue, and `withChannel()` picks the channels each one handles.
+Background work belongs to `@nocobase/jobs` by default: a `JobExecutor` for one-off tasks that run outside the request and retry on failure, a `ScheduleExecutor` for recurring rules, and the Scheduler plugin when administrators should see and control a recurring task. Most of what the former `@nocobase/queue` Job classes did is a `JobExecutor` job now.
 
-Use `@nocobase/jobs` for work identified by a job class, and for recurring rules; use the Scheduler plugin when administrators should see and control a recurring task. `Job` classes, `server/jobs` discovery and the `queue: { jobs }` plugin field belong to the former queue design and are not part of this package.
+Use a queue only for what the executors do not have: a delay before a job may start, a priority, a job ID that deduplicates, a batch prepared and written as a whole, a global rate limit, cancelling a job that is running, or several handlers consuming each message, with `withChannel()` picking the channels each one handles. `Job` classes, `server/jobs` discovery and the `queue: { jobs }` plugin field belong to the former queue design and are not part of this package.
 
 ## Composing it in an application
 

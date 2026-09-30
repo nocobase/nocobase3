@@ -3,6 +3,7 @@ export const PLUGIN_CAPABILITIES = [
   'database',
   'server.service-providers',
   'server.routes',
+  'server.jobs',
   'server.locales',
   'client.routes',
   'client.components',
@@ -30,6 +31,7 @@ export interface PluginCapabilities {
   readonly server: {
     readonly serviceProviders: boolean;
     readonly routes: boolean;
+    readonly jobs: boolean;
     readonly locales: boolean;
   };
   readonly client: {
@@ -53,6 +55,7 @@ export function normalizePluginCapabilities(
     server: {
       serviceProviders: selected.has('server.service-providers'),
       routes: selected.has('server.routes'),
+      jobs: selected.has('server.jobs'),
       locales: selected.has('server.locales'),
     },
     client: {

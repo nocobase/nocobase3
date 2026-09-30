@@ -69,6 +69,7 @@ describe('createPlugin', () => {
     ['database', 'database/README.md', 'client/'],
     ['server.service-providers', 'server/providers/index.ts', 'server/routes/'],
     ['server.routes', 'server/routes/index.ts', 'server/providers/'],
+    ['server.jobs', 'server/jobs/audit-log.ts', 'client/'],
     ['server.locales', 'server/locales/index.ts', 'client/'],
     ['client.routes', 'client/routes.ts', 'server/'],
     ['client.components', 'client/components/plugin-component.tsx', 'server/'],
@@ -108,6 +109,12 @@ describe('createPlugin', () => {
       ['./package.json', './server'],
       ['hono'],
       ['@nocobase/app-server'],
+    ],
+    [
+      'server.jobs',
+      ['./package.json', './server'],
+      [],
+      ['@nocobase/app-server', '@nocobase/jobs', '@nocobase/service-provider'],
     ],
     [
       'server.locales',
@@ -197,6 +204,7 @@ describe('createPlugin', () => {
   it.each([
     // Compiled plugins resolve database resources from baseDir inside dist.
     ['database', ['dist', 'README.md', 'CHANGELOG.md']],
+    ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
     ['client.react-providers', ['dist', 'README.md', 'CHANGELOG.md']],
     ['skills', ['dist', 'README.md', 'CHANGELOG.md', 'skills']],
   ] as const)(
@@ -425,6 +433,43 @@ describe('createPlugin', () => {
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 
+  it('generates a JobExecutor job with a stable name and the provider that owns it', async () => {
+    const jobsOnly = await createWith(['server.jobs']);
+    const job = await readFile(
+      path.join(jobsOnly.targetDirectory, 'server/jobs/audit-log.ts'),
+      'utf8',
+    );
+    const provider = await readFile(
+      path.join(jobsOnly.targetDirectory, 'server/jobs/provider.ts'),
+      'utf8',
+    );
+    const plugin = await readFile(
+      path.join(jobsOnly.targetDirectory, 'server/plugin.ts'),
+      'utf8',
+    );
+    expect(job).toContain("from '@nocobase/jobs'");
+    expect(job).toContain('public static readonly jobName: string');
+    expect(job).toContain("'@nocobase/app-plugin-audit-log/audit-log'");
+    expect(provider).toContain(
+      "getJobExecutor('@nocobase/app-plugin-audit-log')",
+    );
+    expect(plugin).toContain('serviceProviders: [AuditLogJobsProvider],');
+    expect(plugin).not.toContain('queue');
+
+    const withServices = await createWith([
+      'server.service-providers',
+      'server.jobs',
+    ]);
+    expect(
+      await readFile(
+        path.join(withServices.targetDirectory, 'server/plugin.ts'),
+        'utf8',
+      ),
+    ).toContain(
+      'serviceProviders: [...serviceProviders, AuditLogJobsProvider],',
+    );
+  });
+
   it('maps selected Client entries without inventing routes or providers', async () => {
     const result = await createWith([
       'client.service-providers',
@@ -449,6 +494,7 @@ describe('createPlugin', () => {
       'database',
       'server.service-providers',
       'server.routes',
+      'server.jobs',
       'server.locales',
       'client.routes',
       'client.components',
@@ -469,9 +515,7 @@ describe('createPlugin', () => {
     expect(result.files).toContain(
       'database/migrations/202608220001_audit_log_create_records.ts.example',
     );
-    expect(result.files.some((file) => file.startsWith('server/jobs/'))).toBe(
-      false,
-    );
+    expect(result.files).toContain('server/jobs/audit-log.ts');
     expect(result.files).toContain(
       'skills/nocobase-app-plugin-audit-log/SKILL.md',
     );
@@ -481,6 +525,7 @@ describe('createPlugin', () => {
       '@nocobase/app-server': 'workspace:^',
       '@nocobase/db': 'workspace:^',
       '@nocobase/i18n': 'workspace:^',
+      '@nocobase/jobs': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',
     });
     expect(manifest.files).toEqual(
