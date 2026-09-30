@@ -1,65 +1,113 @@
-# Inbox Integration Contract
+# Inbox integration
 
-## Required packages
+## Registration and package surfaces
 
-- `@nocobase/app-plugin-authentication` supplies the authenticated user and session.
-- `@nocobase/app-plugin-notification-in-app/server` supplies inbox persistence and HTTP routes.
-- `@nocobase/app-plugin-notification/server` is required when the application needs the registered `in-app` Channel and Provider contribution.
-- `@nocobase/app-client` supplies the application-scoped HTTP and realtime clients used by the Client inbox page.
+The plugin contributes durable inbox storage and authenticated routes. Register `@nocobase/app-plugin-notification-in-app/server` in the Server composition root. Register `@nocobase/app-plugin-notification/server` first if messages are sent through the core `in-app` Channel; inbox reads and mutations can operate without the core delivery plugin. Run pending migrations with `pnpm nocobase db apply` when automatic migrations are disabled or the deployment requires an explicit step.
 
-Register the core notification Server plugin before the in-app Server plugin. The in-app routes can operate without the core plugin, but notification delivery through the `in-app` Channel cannot.
-
-## Public surfaces
-
-The package root and `/server` export the Server plugin and supported Server contracts. Browser or shared code imports only the topic and event types from:
+Register `@nocobase/app-plugin-notification-in-app/client` in the Client composition root. It contributes locales and the `/dev/notification-in-app` development route; that route is not a production inbox page. The package's public `/client` entry exports `fetchInbox`, `fetchUnreadCount`, `mutateInboxItem`, `markInboxRead`, `NotificationInAppInbox`, `NotificationInAppProvider`, `useNotificationInAppRuntime`, and route/plugin exports. Import only that public entry from application code.
 
 ```ts
 import {
-  IN_APP_NOTIFICATION_REALTIME_TOPIC,
-  type InAppNotificationRealtimeEvent,
-} from '@nocobase/app-plugin-notification-in-app/realtime';
+  NotificationInAppInbox,
+  NotificationInAppProvider,
+  fetchInbox,
+  fetchUnreadCount,
+  mutateInboxItem,
+  markInboxRead,
+  useNotificationInAppRuntime,
+} from '@nocobase/app-plugin-notification-in-app/client';
 ```
 
-Do not import `server/realtime`, store implementations, or other internal implementation paths from application code.
+The `/realtime` entry exports `IN_APP_NOTIFICATION_REALTIME_TOPIC` and `InAppNotificationRealtimeEvent` for consumers that implement their own subscription. Browser code does not need to import that entry when it uses `NotificationInAppProvider`.
 
-The package's Client plugin contributes this development-only App-relative route:
+## Production inbox page
 
-```text
-/dev/notification-in-app
+The built-in page component owns list, unread filtering, pagination, read/unread/delete actions, and read-all UI. Mount it under the application's authenticated App route and wrap it with the Provider:
+
+```tsx
+import {
+  NotificationInAppInbox,
+  NotificationInAppProvider,
+} from '@nocobase/app-plugin-notification-in-app/client';
+
+export function NotificationsPage() {
+  return (
+    <NotificationInAppProvider>
+      <NotificationInAppInbox />
+    </NotificationInAppProvider>
+  );
+}
 ```
 
-Register `@nocobase/app-plugin-notification-in-app/client` in the application Client composition root. The page mounts `NotificationInAppProvider` locally and cleans up its realtime and focus listeners when navigation leaves the page. The Dev Route and its exclusive dependencies are absent from production builds.
+Register the containing page through the target App's normal route/navigation composition. Do not expose the development route as the production inbox surface. `NotificationInAppProvider` uses the injected `ApiClient` and `realtimeClientToken`; it refreshes durable HTTP state after focus, connection open, or a valid inbox invalidation.
 
-## Final delivery validation
+## Unread bell
 
-The database Provider checks the recipient through Authentication’s user administration service immediately before writing the inbox item. A missing user returns a non-retryable `recipient` failure and creates no inbox item or realtime event. A lookup failure remains a retryable storage failure. Custom hosts calling `createDatabaseProviderDefinition` must supply `recipientExists(userId)` backed by their authoritative user directory; do not use a permissive fallback.
+The Provider must be keyed to the authenticated user so its count and listeners reset when accounts change. Follow the app's auth hook and navigation conventions; this example uses the template's public APIs:
 
-## HTTP and realtime behavior
+```tsx
+import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
+import {
+  NotificationInAppProvider,
+  useNotificationInAppRuntime,
+} from '@nocobase/app-plugin-notification-in-app/client';
+import { Link } from 'react-router';
 
-The authenticated inbox API is rooted at `notifications/in-app` relative to the injected `ApiClient` API base. Reads include list and unread-count. Writes include read/unread/delete and read-all, each preceded by an authenticated CSRF-token request.
+export function NotificationButton() {
+  const { session, isPending } = useAuthentication();
+  if (isPending || !session?.user) return null;
+  return (
+    <NotificationInAppProvider key={session.user.id}>
+      <NotificationLink />
+    </NotificationInAppProvider>
+  );
+}
 
-For a custom host, register the exported `IN_APP_NOTIFICATION_NAMESPACE` and `inAppNotificationServerLocales` with its `I18nRuntime`, initialize the runtime, then mount its request i18n middleware before the inbox router. Notification-owned failures return a stable `error.code/message/ns/key/params` envelope; branch on `code`, display `message`, and use `ns`, `key`, and `params` only when the Client needs to retranslate it. Authentication middleware retains its owning plugin's error contract.
+function NotificationLink() {
+  const { unreadCount } = useNotificationInAppRuntime();
+  return (
+    <Link
+      to='/notifications'
+      aria-label={`Notifications, ${unreadCount} unread`}
+    />
+  );
+}
+```
 
-The WebSocket topic is user-scoped by the Server. An `inbox.changed` event does not carry authoritative inbox contents; it tells the UI to refetch HTTP state. The UI also refetches when the realtime connection opens so events missed during disconnection are recovered. Window focus is a fallback invalidation.
+If the application already has a per-user authenticated shell, place one keyed Provider there and consume `useNotificationInAppRuntime()` within its descendants instead of mounting duplicate providers.
 
-When an application configures `api.baseURL` or `api.realtimeURL`, both transports must use those injected client settings. Never derive the HTTP endpoint from `window.location`, a Portal base, or the WebSocket URL.
+## HTTP API and error contract
 
-#### Ownership and upgrades
+Endpoints are rooted at `/api/notifications/in-app` on the app API host. Within React, use the injected `ApiClient` and package helpers so a custom API base is respected. `fetchInbox(client, filters, signal?)` accepts `unreadOnly`, `limit` (default 25, maximum 100), and an opaque `cursor`; `fetchUnreadCount(client, signal?)` reads the durable count. A list response is `{ data, nextCursor? }`; pass `nextCursor` back unchanged.
 
-The plugin owns the inbox components, Provider, Dev Route, authentication enforcement, per-user isolation, CSRF, persistence, and event publication. Applications receive UI changes by upgrading the plugin. A production inbox surface requires a separate product decision and must use an authenticated App or Settings Route rather than exposing the Dev Route.
+- `GET /api/notifications/in-app?limit=25&unreadOnly=true&cursor=...` returns a stable `(createdAt, id)` page.
+- `GET /api/notifications/in-app/unread-count` returns `{ count }`.
+- `GET /api/notifications/in-app/csrf` returns `{ token }` and sets the `notification_in_app_csrf` cookie.
+- `POST /api/notifications/in-app/:id` accepts `{ action: 'read' | 'unread' | 'delete' }`; omitted action defaults to `read`.
+- `POST /api/notifications/in-app/read-all` accepts `{}` and returns `{ updated }`.
 
-## Diagnosis order
+`mutateInboxItem(client, id, action)` and `markInboxRead(client)` fetch the CSRF token, then send `x-csrf-token` and the matching `notification_in_app_csrf` cookie. If implementing raw requests, preserve this double-submit check. Do not put tokens in logs or persistent browser storage.
 
-1. Confirm the authenticated list and unread-count endpoints return the expected durable state.
-2. Confirm mutations fetch a CSRF token and return the changed item/count.
-3. Confirm the application client points HTTP and realtime transports at the intended backend.
-4. Confirm the realtime connection subscribes to the public topic.
-5. Confirm a valid invalidation increments the UI revision and triggers an HTTP refetch.
-6. Confirm reopening the realtime connection refetches even when no event was received.
-7. Confirm cleanup removes the topic, connection-open, and window-focus listeners.
+Every route derives the user from the authenticated session and scopes reads and writes to that user. A client-supplied user id is never an identity. Stable plugin errors use `{ error: { code, message, ns, key, params? } }`; branch on `code` and display `message`.
 
-Do not diagnose a missing UI update by manually changing the inbox table or publishing synthetic production events. Reproduce with an isolated test notification or inspect the durable route and subscription logs.
+| Response                                          | Typical cause                                  |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `401 IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED` | No authenticated user could be resolved        |
+| `400 IN_APP_NOTIFICATION_INVALID_LIMIT`           | Limit is not an integer from 1 through 100     |
+| `400 IN_APP_NOTIFICATION_INVALID_CURSOR`          | Cursor is malformed or not canonical           |
+| `400 IN_APP_NOTIFICATION_INVALID_BODY`            | Mutation body is not a JSON object             |
+| `400 IN_APP_NOTIFICATION_INVALID_ACTION`          | Action is not `read`, `unread`, or `delete`    |
+| `403 IN_APP_NOTIFICATION_INVALID_CSRF`            | Header and cookie are missing or do not match  |
+| `404 IN_APP_NOTIFICATION_NOT_FOUND`               | Item does not exist for the authenticated user |
 
-Configure `notification.channels.inbox: { provider: 'in-app' }` and send `messages: { inbox: { to: 'user-id', title: 'Title', body: 'Body' } }`. Channel keys are names; multiple names using `in-app` are independent targets. `to` requires an application user ID or a non-empty readonly array, with one Delivery per user. No current user is inferred. The test form requires an explicit recipient.
+## Custom clients and hosts
 
-Use `target: { type: 'route', path: '/topics/123' }` for an internal route without the deployment prefix, or `target: { type: 'url', url: 'https://example.com/main/topics/123' }` for a complete HTTP(S) URL. The inbox adds the Router basename only for routes. Without a target, no Open link is shown. Legacy `actionUrl` is ignored; run the new target-column migration without converting old links.
+In a React component, `useApiClient()` supplies the app-scoped client. Outside React, pass an `ApiClient` explicitly to the exported fetch and mutation helpers. `ApiClient.request()` parses response text as JSON or plain text and is not a binary download API; use a binary-capable client path for document attachments.
+
+A custom host that uses `createInAppRouter` must supply `resolveUserId(request)` from trusted authentication state or provide the expected session. Never accept a user id from query, body, or headers controlled by the caller. Register `IN_APP_NOTIFICATION_NAMESPACE` and `inAppNotificationServerLocales` with the host `I18nRuntime`, initialize it, and mount request i18n middleware before the router. Use the database provider's real `recipientExists(userId)` check backed by the authoritative user directory.
+
+## Realtime and diagnosis
+
+Realtime is an optimization; the HTTP list and unread-count endpoints remain authoritative. `NotificationInAppProvider` subscribes to the public topic, refreshes after a validated `inbox.changed` invalidation, when the connection opens, and on window focus. Its listener does not render event payload as inbox content. Reconnection refetch recovers missed events. A production inbox still works when realtime is unavailable, though updates may wait for focus or a manual refresh.
+
+When implementing your own subscription, import `IN_APP_NOTIFICATION_REALTIME_TOPIC` and `InAppNotificationRealtimeEvent` from `@nocobase/app-plugin-notification-in-app/realtime`, validate payloads, and trigger an HTTP refetch. Remove topic, open, and focus listeners on unmount. Do not publish synthetic production events or edit inbox tables to diagnose UI refresh.

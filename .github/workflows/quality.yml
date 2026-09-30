@@ -298,6 +298,8 @@ jobs:
     outputs:
       databases: ${{ steps.select.outputs.databases }}
       should_run: ${{ steps.select.outputs.should_run }}
+      notification_dialects: ${{ steps.select.outputs.notification_dialects }}
+      notification_should_run: ${{ steps.select.outputs.notification_should_run }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -351,6 +353,84 @@ jobs:
       - name: Test ${{ matrix.database }}
         run: pnpm --filter @nocobase/db-${{ matrix.database }} test:integration
 
+  notification-migration-integration:
+    name: Notification migrations (${{ matrix.dialect }})
+    needs: db-integration-plan
+    if: ${{ needs.db-integration-plan.outputs.notification_should_run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        dialect: ${{ fromJSON(needs.db-integration-plan.outputs.notification_dialects) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
+      - name: Start disposable ${{ matrix.dialect }} database
+        id: database
+        env:
+          COMPOSE_PROJECT: nocobase-notification-${{ matrix.dialect }}-${{ github.run_id }}-${{ github.run_attempt }}
+          COMPOSE_FILE: packages/libs/db-${{ matrix.dialect }}/docker-compose.yml
+          DIALECT: ${{ matrix.dialect }}
+        run: |
+          set -euo pipefail
+          case "$DIALECT" in
+            mysql)
+              service=mysql
+              container_port=3306
+              ;;
+            oracle)
+              service=oracle
+              container_port=1521
+              ;;
+            *)
+              echo "Unsupported notification migration dialect: $DIALECT" >&2
+              exit 1
+              ;;
+          esac
+
+          compose=(docker compose --project-name "$COMPOSE_PROJECT" --file "$COMPOSE_FILE")
+          "${compose[@]}" up --detach --wait "$service"
+          published_port=$("${compose[@]}" port "$service" "$container_port")
+          echo "port=${published_port##*:}" >> "$GITHUB_OUTPUT"
+
+      - name: Run notification plugin migration tests
+        env:
+          NOTIFICATION_MIGRATION_DIALECT: ${{ matrix.dialect }}
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: ${{ steps.database.outputs.port }}
+          ORACLE_HOST: 127.0.0.1
+          ORACLE_PORT: ${{ steps.database.outputs.port }}
+        run: |
+          pnpm --filter @nocobase/app-plugin-notification exec vitest run tests/migration-dialects.test.ts
+          pnpm --filter @nocobase/app-plugin-notification-in-app exec vitest run tests/migration-dialects.test.ts
+
+      - name: Stop disposable database
+        if: always()
+        env:
+          COMPOSE_PROJECT: nocobase-notification-${{ matrix.dialect }}-${{ github.run_id }}-${{ github.run_attempt }}
+          COMPOSE_FILE: packages/libs/db-${{ matrix.dialect }}/docker-compose.yml
+        run: docker compose --project-name "$COMPOSE_PROJECT" --file "$COMPOSE_FILE" down --volumes --remove-orphans || true
+
   quality:
     name: quality
     if: ${{ always() }}
@@ -362,6 +442,7 @@ jobs:
       - app-installer-smoke
       - db-integration-plan
       - db-integration
+      - notification-migration-integration
     runs-on: ubuntu-latest
     steps:
       - name: Verify parallel jobs
@@ -374,8 +455,11 @@ jobs:
           DB_PLAN_RESULT: ${{ needs['db-integration-plan'].result }}
           DB_SHOULD_RUN: ${{ needs['db-integration-plan'].outputs.should_run }}
           DB_INTEGRATION_RESULT: ${{ needs['db-integration'].result }}
+          NOTIFICATION_DB_PLAN_RESULT: ${{ needs['db-integration-plan'].result }}
+          NOTIFICATION_DB_SHOULD_RUN: ${{ needs['db-integration-plan'].outputs.notification_should_run }}
+          NOTIFICATION_DB_INTEGRATION_RESULT: ${{ needs['notification-migration-integration'].result }}
         run: |
-          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" ]]; then
+          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$BUILD_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$APP_INSTALLER_SMOKE_RESULT" != "success" || "$DB_PLAN_RESULT" != "success" || "$NOTIFICATION_DB_PLAN_RESULT" != "success" ]]; then
             echo "One or more quality jobs failed or were cancelled."
             exit 1
           fi
@@ -385,5 +469,12 @@ jobs:
             echo "No database integration tests required."
           elif [[ "$DB_SHOULD_RUN" != "true" || "$DB_INTEGRATION_RESULT" != "success" ]]; then
             echo "Database integration tests failed, were cancelled, or were unexpectedly skipped."
+            exit 1
+          fi
+
+          if [[ "$NOTIFICATION_DB_SHOULD_RUN" == "false" && "$NOTIFICATION_DB_INTEGRATION_RESULT" == "skipped" ]]; then
+            echo "No notification migration integration tests required."
+          elif [[ "$NOTIFICATION_DB_SHOULD_RUN" != "true" || "$NOTIFICATION_DB_INTEGRATION_RESULT" != "success" ]]; then
+            echo "Notification migration integration tests failed, were cancelled, or were unexpectedly skipped."
             exit 1
           fi

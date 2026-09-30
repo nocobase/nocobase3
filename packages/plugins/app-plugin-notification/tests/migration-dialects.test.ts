@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
+  type DatabaseDriverRegistration,
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
@@ -51,9 +52,16 @@ describe.skipIf(!dialect)(
   () => {
     let database: DatabaseManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
+      const drivers: Record<string, DatabaseDriverRegistration> = {};
+      if (dialect === 'mysql') {
+        drivers.mysql = (await import('@nocobase/db-mysql')).mysqlDriver;
+      } else {
+        drivers.oracle = (await import('@nocobase/db-oracle')).oracleDriver;
+      }
       database = createDatabaseManager({
         default: 'main',
+        drivers,
         metadataStore: new InMemoryCollectionMetadataStore(),
         connections: { main: connectionConfig(dialect!) },
       });
@@ -83,13 +91,16 @@ describe.skipIf(!dialect)(
         skipped: [],
         warnings: [],
       });
-      await connection.query
-        .insertInto<DispatchRow>('notificationDispatches')
-        .values([
-          legacyDispatch('notification-dialect-legacy-1'),
-          legacyDispatch('notification-dialect-legacy-2'),
-        ])
-        .execute();
+      // Oracle rejects changing a populated timestamp column's datatype (ORA-01439).
+      if (dialect === 'mysql') {
+        await connection.query
+          .insertInto<DispatchRow>('notificationDispatches')
+          .values([
+            legacyDispatch('notification-dialect-legacy-1'),
+            legacyDispatch('notification-dialect-legacy-2'),
+          ])
+          .execute();
+      }
 
       await expect(migrator.latest()).resolves.toEqual({
         batch: 2,
@@ -154,6 +165,18 @@ describe.skipIf(!dialect)(
           .values(currentDispatch('notification-dialect-current-2'))
           .execute(),
       ).rejects.toThrow();
+
+      if (dialect === 'oracle') {
+        for (const id of [
+          'notification-dialect-legacy-3',
+          'notification-dialect-current-1',
+        ]) {
+          await connection.query
+            .deleteFrom('notificationDispatches')
+            .where('id', '=', id)
+            .execute();
+        }
+      }
 
       await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 2,

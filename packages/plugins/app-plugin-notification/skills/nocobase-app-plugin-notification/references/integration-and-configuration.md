@@ -1,10 +1,46 @@
 # Integration and Configuration
 
-Register the core Server plugin before the in-app and built-in Provider plugins. Register their Client plugins for the desired logs and inbox UI. Apply plugin migrations. Hub does not register end-user notification plugins by default; add them explicitly only when the product needs them.
+## Register the plugins
 
-Delivery tasks run on the application's jobs service (`JobExecutorServiceProvider` from `@nocobase/app-server/jobs`) under the `@nocobase/app-plugin-notification` scope; the plugin sets its executor up on start and shuts it down with the application. `notification.jobs` names the `jobs` configuration they run on; left out, they follow `jobs.default`, and a name that `jobs` does not define stops the application from starting. The memory adapter serves one process, so run more than one instance on a `redis` jobs configuration. Deliveries are persisted before they are submitted, so the reconciler resubmits any task a stopped process lost.
+The core Server plugin depends on the application's authentication, authorization, database, jobs, and logging services. Keep Authentication and Authorization registered before the notification plugins.
 
-`notification.channels` is a name-to-configuration map. Keys must be non-empty trimmed names of at most 100 characters. Each entry has a `provider`, optional `enabled` (default true), and flat Provider-specific settings. Duplicate YAML keys are configuration errors. Provider identifiers are globally unique; the Provider definition supplies the message type. `name`, `type`, and `providers` are not Channel configuration fields.
+In `packages/templates/app-template-default/server/plugins.ts`, the Server contribution order is Authentication, Authorization, core notification, in-app notification when needed, and built-in Providers when needed:
+
+```ts
+import notification from '@nocobase/app-plugin-notification/server';
+import notificationInApp from '@nocobase/app-plugin-notification-in-app/server';
+import notificationProviders from '@nocobase/app-plugin-notification-providers/server';
+
+const serverPlugins = defineServerPlugins([
+  authentication,
+  authorization,
+  // Other application plugins.
+  notification,
+  notificationInApp,
+  notificationProviders,
+]);
+```
+
+Register only packages the application installs. The core plugin contributes its delivery runtime and routes; `@nocobase/app-plugin-notification-in-app` contributes the `in-app` Channel; `@nocobase/app-plugin-notification-providers` contributes `smtp`, `resend`, `feishu-webhook`, and `dingtalk-webhook`.
+
+In `packages/templates/app-template-default/client/plugins.ts`, register the notification Client contribution to provide its settings route and logs page:
+
+```ts
+import notification from '@nocobase/app-plugin-notification/client';
+
+const clientPlugins = defineClientPlugins([
+  // Other application plugins.
+  notification(),
+]);
+```
+
+The logs page is at `/settings/notifications/logs` relative to the App base path, and it is protected by the `page:notification.logs` `access` permission. The `logs-ui` Registry item is also published by the core package for applications that need its customizable UI components.
+
+## Configure Channels and secrets
+
+`notification.channels` maps stable Channel names to one flat Provider configuration. A Channel has one `provider`, optional `enabled` (default `true`), and Provider-specific fields; `name`, `type`, and `providers` are not Channel configuration fields. Channel names must be non-empty, trimmed strings of at most 100 characters. Duplicate YAML keys are rejected.
+
+The application config file is `config.yml`; its `notification` defaults and environment mapping live in `server/config/notification.ts`. YAML does not expand shell-style environment placeholders. Leave secrets out of the YAML example and use one of these supported paths.
 
 ```yaml
 notification:
@@ -13,45 +49,66 @@ notification:
       provider: smtp
       host: smtp.example.com
       port: 587
-      auth: { user: '${SMTP_USER}', pass: '${SMTP_PASSWORD}' }
       from: notifications@example.com
     marketing-email:
       provider: resend
-      apiKey: '${RESEND_API_KEY}'
       from: marketing@example.com
     ops-feishu:
       provider: feishu-webhook
-      webhookUrl: '${FEISHU_WEBHOOK_URL}'
+    ops-dingtalk:
+      provider: dingtalk-webhook
     inbox:
       provider: in-app
-
-  retry:
-    maxAttempts: 1
-    intervalMs: 5000
 ```
 
-`notification.retry.maxAttempts` is the maximum number of automatic attempts for one Delivery, including the first attempt; it defaults to `1`, so automatic retries are disabled by default. `notification.retry.intervalMs` is the fixed wait between automatic attempts and defaults to `5000` milliseconds. A validated Provider `Retry-After` hint takes precedence over this interval.
+For a one-time config update, pass environment-variable names to `config set --from-env`. The command reads the secret from the environment and writes its value into `config.yml`, so treat that file as secret-bearing:
 
-The application owns secret interpolation. SMTP supports `host`, `port`, `secure`, `auth`, `from`, and `replyTo`; Resend uses `apiKey`, `from`, and optional `replyTo`. Webhook Providers use `webhookUrl` and optional signing `secret`. Feishu requires HTTPS on `open.feishu.cn` or `open.larksuite.com`; DingTalk requires HTTPS on `oapi.dingtalk.com`. Redirects are rejected. Keep credentials out of public descriptors and logs.
+```bash
+pnpm nocobase config set --from-env \
+  notification.channels.system-email.auth.pass=SMTP_PASSWORD \
+  notification.channels.marketing-email.apiKey=RESEND_API_KEY \
+  notification.channels.ops-feishu.webhookUrl=FEISHU_WEBHOOK_URL
+```
 
-Keep Channel names and Provider identifiers stable while deliveries remain pending or retryable. Removing, disabling, or changing a Channel's Provider prevents the old Delivery from being retried elsewhere.
+For deployment-time injection, map environment variables in `server/config/notification.ts` with `envString`; this keeps the secret out of `config.yml`:
 
-## Registration without plugin discovery
+```ts
+import {
+  defineAppConfig,
+  envString,
+  type AppConfigFactory,
+} from '@nocobase/app-server/config';
+import type { NotificationConfig } from '@nocobase/app-plugin-notification/server';
 
-Custom hosts can create a registry, register Channel and Provider definitions, create one manager with the host database/queue/logger, then mount routes and own lifecycle. Register definitions before `start()` or the first `send()` for that Channel.
+const notification: AppConfigFactory<NotificationConfig> = defineAppConfig({
+  defaults: { channels: {} },
+  env: {
+    SMTP_PASSWORD: envString('channels.system-email.auth.pass'),
+    RESEND_API_KEY: envString('channels.marketing-email.apiKey'),
+    FEISHU_WEBHOOK_URL: envString('channels.ops-feishu.webhookUrl'),
+  },
+});
 
-The core `manager.router` exposes `GET /logs` and `GET /logs/:id` without adding authentication itself. The plugin's normal route contribution mounts it at `/api/notifications` with required authentication, authorization middleware, and `page:notification.logs` `access` checks. Custom hosts must provide equivalent protection.
+export default notification;
+```
 
-For a custom host, register the exported `NOTIFICATION_NAMESPACE` / `notificationServerLocales` and `IN_APP_NOTIFICATION_NAMESPACE` / `inAppNotificationServerLocales` pairs with the host `I18nRuntime`, initialize it, then mount its request i18n middleware before the core logs and in-app routers. Notification-owned failures use a stable `error.code/message/ns/key/params` envelope; clients should branch on `code`, display `message`, and may retranslate with `ns`, `key`, and `params`. Authentication middleware retains its owning plugin's error contract.
+The Provider packages validate their own fields. SMTP supports `host`, `port`, `secure`, `auth`, `from`, and `replyTo`; Resend supports `apiKey`, `from`, and optional `replyTo`; both Webhook Providers support `webhookUrl` and optional signing `secret`. Feishu URLs must use HTTPS on `open.feishu.cn` or `open.larksuite.com` or their subdomains; DingTalk URLs must use HTTPS on `oapi.dingtalk.com` or its subdomains. Webhook URLs cannot contain embedded username/password credentials, and redirects are rejected.
 
-The in-app router must derive the current user from trusted authentication state. Never accept a client-supplied user id as the current identity. Its write endpoints use a CSRF token/cookie pair.
+After changing startup configuration or registering a plugin, restart the application. Run pending migrations with `pnpm nocobase db apply` when automatic migrations are disabled or when the deployment process requires an explicit migration step. The example template enables automatic migrations in its default database configuration.
 
-List the current user's inbox with `GET /api/notifications/in-app`. `limit` must be an integer from 1 through 100. When the response includes `nextCursor`, pass that opaque base64url value back as `cursor`; do not parse, edit, or manufacture cursors. Write requests accept only `read`, `unread`, and `delete`, require a JSON object body, and reject malformed JSON or unknown actions.
+`notification.retry.maxAttempts` counts the first Provider attempt and defaults to `1`, so automatic retries are disabled by default. `notification.retry.intervalMs` defaults to `5000`; a validated Provider `Retry-After` hint takes precedence. Runtime defaults are a 30-second Delivery lease, a 20-second Provider timeout, and reconciliation every 30 seconds in batches of 100.
 
-## Notification test surface
+## Inspect logs and test a Channel
 
-The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status`. All three require authentication and `x-nocobase-notification-test: 1`; only `POST /send` requires the `notification:test` `send` permission. Logs remain separately protected by `page:notification.logs` `access`.
+The logs API requires an authenticated session and the `page:notification.logs` `access` permission. Use the logs page or call these endpoints with the App's authenticated session:
 
-Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel names, Provider identifiers, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
+```bash
+curl --cookie "$NOTIFICATION_SESSION_COOKIE" http://localhost:13000/api/notifications/logs
+curl --cookie "$NOTIFICATION_SESSION_COOKIE" http://localhost:13000/api/notifications/logs/NOTIFICATION_ID
+```
 
-A production test is a real external send and requires explicit scope, the recipient or recipientless mode, Channel, permission, and follow-up verification.
+`GET /api/notifications/logs` returns `{ data: [...] }` with the most recent 100 Notifications; it has no pagination or filters. `GET /api/notifications/logs/:id` returns `{ data: { log, deliveries } }`; each Delivery includes its attempts and retry audits. Message and recipient snapshots, lease tokens, and lease expiration are redacted. A missing id returns `404` with `NOTIFICATION_LOG_NOT_FOUND`; unauthenticated requests return `401`, and a missing logs permission returns `403`.
+
+The test API is `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status`. Every request requires authentication and `x-nocobase-notification-test: 1`; only send additionally requires `notification:test` `send`. A missing header or permission returns `403`; invalid requests return `400`; a test status visible to another user or an unknown id returns `404`. Each test send creates ordinary persistent logs and performs a real external send.
+
+A production test send requires an explicit Channel and recipient (or a Provider-supported recipientless mode), permission, and follow-up verification. Test target descriptors contain Channel and Provider labels plus safe form fields, never secrets or Webhook URLs.
