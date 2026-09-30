@@ -9,9 +9,9 @@ const templates = ['default', 'examples', 'hub'];
 
 // The UI Library items every template preinstalls. The library is the source of truth, so each template carries
 // exactly the files `shadcn add` would install today, at their targets; a change to one of these items is carried into
-// all three templates in the same pull request. `auth-ui` is not listed: its template copies diverged from the
-// library before this check existed and are due to be resynchronized.
+// all three templates in the same pull request.
 const preinstalled = [
+  { group: 'auth', item: 'auth-ui' },
   { group: 'components', item: 'page-container' },
   { group: 'components', item: 'page-header' },
   { group: 'components', item: 'route-dialog' },
