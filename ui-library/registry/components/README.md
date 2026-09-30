@@ -1,6 +1,6 @@
 # NocoBase business components
 
-Single components that pages are built from. Each is its own item, installs into the consumer's `client/components/` beside the components it already owns, and belongs to the consumer from then on. The application templates ship the page-layout and route-overlay components preinstalled there; the date pickers and the data table are installed when a page needs one.
+Single components that pages are built from. Each is its own item, installs into the consumer's `client/components/` beside the components it already owns, and belongs to the consumer from then on. The application templates ship the page-layout, route-overlay and back-button components preinstalled there; the date pickers and the data table are installed when a page needs one.
 
 | Item               | Installs                                                                          | Exports                                                                             |
 | ------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -9,6 +9,7 @@ Single components that pages are built from. Each is its own item, installs into
 | `route-dialog`     | `route-dialog.tsx`, with `route-overlay.tsx` and `use-route-overlay.ts`           | `RouteDialog`, `useRouteOverlay`                                                    |
 | `route-drawer`     | `route-drawer.tsx`, with `route-overlay.tsx` and `use-route-overlay.ts`           | `RouteDrawer`, `useRouteOverlay`                                                    |
 | `route-child-page` | `route-child-page.tsx`                                                            | `RouteChildPage`                                                                    |
+| `back-button`      | `back-button.tsx`                                                                 | `BackButton`                                                                        |
 | `date-picker`      | `date-picker.tsx`                                                                 | `DatePicker`, `DateRangePicker`                                                     |
 | `date-time-picker` | `date-time-picker.tsx`, with `date-picker.tsx`                                    | `DateTimePicker`                                                                    |
 | `data-table`       | `data-table/index.tsx`, `column-header.tsx`, `pagination.tsx`, `view-options.tsx` | `DataTable`, `DataTableColumnHeader`, `DataTablePagination`, `DataTableViewOptions` |
@@ -69,7 +70,32 @@ export default function NewOrderDialog() {
 
 Call `useRouteOverlay()` from a component rendered inside the overlay, such as a footer button. The page component that returns `<RouteDialog>` sits outside the overlay's provider, and the hook throws there.
 
-`RouteChildPage` is not modal. It positions itself with `absolute inset-0`, so the element that contains it must be positioned; an application's content area is. Render its `Outlet` beside the page's `PageContainer` rather than inside it, and give the child page a `PageContainer` of its own. A child page that can only render inside another one — the child page of a tab, reached through the tab's outlet — covers the enclosing child page whole, because a `RouteChildPage` is two elements: the outer one positions and never scrolls, the inner one scrolls. While it is mounted, the siblings it covers are `inert`, and inside another child page so is everything around it up to that page's scrolling element. It has no close button: a back link above its heading — the application templates' `BackButton` — or the browser's back button returns to the page beneath.
+`RouteChildPage` is not modal. It positions itself with `absolute inset-0`, so the element that contains it must be positioned; an application's content area is. Render its `Outlet` beside the page's `PageContainer` rather than inside it, and give the child page a `PageContainer` of its own. A child page that can only render inside another one — the child page of a tab, reached through the tab's outlet — covers the enclosing child page whole, because a `RouteChildPage` is two elements: the outer one positions and never scrolls, the inner one scrolls. While it is mounted, the siblings it covers are `inert`, and inside another child page so is everything around it up to that page's scrolling element. It has no close button: a [`BackButton`](#back-button) above its heading, or the browser's back button, returns to the page beneath.
+
+## Back button
+
+`BackButton` is the way back from a page that sits below another one: a covering `RouteChildPage`, a record's own page, a form too long for a dialog. The page places it inside its `PageContainer`, above its `PageHeader`, where breadcrumbs would otherwise be, and it needs nothing from the header. It is a muted text link with an arrow and "Back", turning to the foreground on hover, so it reads as a way out rather than an action.
+
+```tsx
+import { BackButton } from '@/components/back-button';
+import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
+import { RouteChildPage } from '@/components/route-child-page';
+
+export default function OrderPage() {
+  return (
+    <RouteChildPage>
+      <PageContainer>
+        <BackButton />
+        <PageHeader title='SO-1042' description='Acme Corp' />
+        {/* sections */}
+      </PageContainer>
+    </RouteChildPage>
+  );
+}
+```
+
+By default it leads to the parent route and keeps the current query string, as closing a route overlay does, so the list a child page covers gets its search and filters back. The parent is found by route, not by path segment: a child route with a two-segment path, such as `import/:batchId`, returns to its parent too. It navigates rather than going back in the browser history, which a page opened from a link or a refresh does not have, and it replaces the history entry, so the browser's Back does not reopen the page just left. `to` sends it elsewhere, such as a record page declared beside its list (`to={{ pathname: '/orders', search: location.search }}`); `children` replaces the label, and `className` is merged with `cn`.
 
 ## Date pickers
 
@@ -121,11 +147,12 @@ const columns: ColumnDef<Order>[] = [
 
 ## Translations
 
-The overlays' close button names itself with `useTranslation()` from `@nocobase/i18n/client` under `routeOverlay.close`, falling back to `Close`, and the date pickers and the data table look up their keys the same way. A component ships no locale file, so add the keys to the locale resources of the namespace that renders them:
+The overlays' close button names itself with `useTranslation()` from `@nocobase/i18n/client` under `routeOverlay.close`, falling back to `Close`, and the back button, the date pickers and the data table look up their keys the same way. A component ships no locale file, so add the keys to the locale resources of the namespace that renders them:
 
 | Key                           | `en-US`                                    | `zh-CN`                              |
 | ----------------------------- | ------------------------------------------ | ------------------------------------ |
 | `routeOverlay.close`          | Close                                      | 关闭                                 |
+| `navigation.back`             | Back                                       | 返回                                 |
 | `datePicker.placeholder`      | Pick a date                                | 选择日期                             |
 | `datePicker.rangePlaceholder` | Pick a date range                          | 选择日期范围                         |
 | `dateTimePicker.time`         | Time                                       | 时间                                 |

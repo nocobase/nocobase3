@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  ArrowLeft,
   Blocks,
   CalendarClock,
   CalendarDays,
@@ -54,6 +55,7 @@ import {
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
 import { AuthenticationUiDemo } from './demo/auth/auth-ui';
+import { BackButtonDemo } from './demo/components/back-button';
 import { DataTableDemo } from './demo/components/data-table';
 import { DatePickerDemo } from './demo/components/date-picker';
 import { DateTimePickerDemo } from './demo/components/date-time-picker';
@@ -110,6 +112,10 @@ const itemPreviews: Record<string, ItemPreview> = {
     path: '/demo/components/route-overlays/report',
     icon: Layers,
   },
+  'back-button': {
+    path: '/demo/components/back-button/SO-1042',
+    icon: ArrowLeft,
+  },
   'date-picker': { path: '/demo/components/date-picker', icon: CalendarDays },
   'date-time-picker': {
     path: '/demo/components/date-time-picker',
@@ -159,6 +165,9 @@ function AppContent(): ReactElement {
   const { pathname } = window.location;
   if (pathname.startsWith('/demo/auth/auth-ui')) {
     return <AuthenticationUiDemo />;
+  }
+  if (pathname.startsWith('/demo/components/back-button')) {
+    return <BackButtonDemo />;
   }
   if (pathname.startsWith('/demo/components/data-table')) {
     return <DataTableDemo />;

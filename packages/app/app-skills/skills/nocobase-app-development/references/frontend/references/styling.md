@@ -126,17 +126,22 @@ Also:
 
 `client/components/ui/` holds the primitives. Build your own components by composing them: components shared across the application go in `client/components/`, and components only one page uses go in that page's directory, until several pages use them.
 
-`client/components/` already has a few composed components (shadcn treats them only as patterns in its documentation and does not publish them to the registry, so the CLI cannot add them). Use them first instead of writing from scratch:
+`client/components/` already has a few composed components. Use them first instead of writing from scratch. Most come from the NocoBase UI Library, preinstalled so that a new page can use them at once; like the rest of the source, they belong to the application:
 
-| Component                                      | Purpose                                                                                                                                                                 |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PageContainer`, `PageHeader`                  | Page frame: padding, title, description, actions area                                                                                                                   |
-| `BackButton`                                   | The way back from a page below another one, above its title; leads to the parent route with the query string ([`page.md`](page.md#7-back-button-and-breadcrumbs))       |
-| `Breadcrumbs`                                  | Breadcrumbs generated from routes' `breadcrumb` declarations, in place of `BackButton` when the user asks for them ([`page.md`](page.md#7-back-button-and-breadcrumbs)) |
-| `RouteDialog`, `RouteDrawer`, `RouteChildPage` | Dialogs, drawers, and covering child pages opened by URL ([`overlay.md`](overlay.md), [`child-routes.md`](child-routes.md))                                             |
-| `Loading`                                      | The shared loading indicator                                                                                                                                            |
+| Item                                                                             | Components                                     | Purpose                                                                                                                                                           |
+| -------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/page-container`, `@nocobase/page-header`                              | `PageContainer`, `PageHeader`                  | Page frame: padding, title, description, actions area                                                                                                             |
+| `@nocobase/back-button`                                                          | `BackButton`                                   | The way back from a page below another one, above its title; leads to the parent route with the query string ([`page.md`](page.md#7-back-button-and-breadcrumbs)) |
+| `@nocobase/route-dialog`, `@nocobase/route-drawer`, `@nocobase/route-child-page` | `RouteDialog`, `RouteDrawer`, `RouteChildPage` | Dialogs, drawers, and covering child pages opened by URL ([`overlay.md`](overlay.md), [`child-routes.md`](child-routes.md))                                       |
 
-Lists and date fields come from the NocoBase UI Library instead. Add the item before the first file that imports it, as [section 1 of `shadcn.md`](shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest) describes; from then on it belongs to the application like the components above:
+Two are the template's own, because they depend on the shell:
+
+| Component     | Purpose                                                                                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Breadcrumbs` | Breadcrumbs generated from routes' `breadcrumb` declarations, in place of `BackButton` when the user asks for them ([`page.md`](page.md#7-back-button-and-breadcrumbs)) |
+| `Loading`     | The shared loading indicator                                                                                                                                            |
+
+Lists and date fields come from the UI Library too, but the template does not preinstall them. Add the item before the first file that imports it, as [section 1 of `shadcn.md`](shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest) describes; from then on it belongs to the application like the components above:
 
 | Item                         | Components                                                                                          | Purpose                                                                                |
 | ---------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |

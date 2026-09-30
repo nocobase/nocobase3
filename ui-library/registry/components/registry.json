@@ -127,6 +127,30 @@
       ]
     },
     {
+      "name": "back-button",
+      "type": "registry:component",
+      "title": "Back Button",
+      "description": "The way back from a page below another one: a muted link above its heading that returns to the parent route with the query string.",
+      "meta": {
+        "group": "Navigation",
+        "iframeHeight": 420
+      },
+      "dependencies": [
+        "@nocobase/i18n@^1.0.0-beta.4",
+        "lucide-react@^0.487.0",
+        "react-router@^7.0.2"
+      ],
+      "registryDependencies": ["utils"],
+      "docs": "Render BackButton above the PageHeader of a page below another one, such as a covering child page or a record's own page. It leads to the parent route with the current query string and replaces the history entry; to sends it elsewhere and children replaces the label. The label is translated under navigation.back; add it to your locale resources (Back, 返回), or it reads Back in every language.",
+      "files": [
+        {
+          "path": "back-button.tsx",
+          "type": "registry:component",
+          "target": "client/components/back-button.tsx"
+        }
+      ]
+    },
+    {
       "name": "date-picker",
       "type": "registry:component",
       "title": "Date Picker",
