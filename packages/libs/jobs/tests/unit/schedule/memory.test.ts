@@ -562,6 +562,37 @@ describe('InMemoryScheduler', () => {
     expect(runs[0]!.scheduledAt).toEqual(startDate);
   });
 
+  it('waits again when its timer wakes before the planned firing', async () => {
+    // Only Date is faked, so the clock stands still while real timers run and
+    // every timer wakes before the planned time, the way one running slightly
+    // ahead of Date.now() does.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const now = Date.parse('2030-01-01T00:00:00Z');
+    vi.setSystemTime(now);
+    const runs: ScheduleExecutionContext[] = [];
+    const executor = create();
+    const startDate = new Date(now + 20);
+    await executor.addJob(
+      everyJob(
+        async (context) => {
+          runs.push(context);
+        },
+        { options: { every: 3_600_000, startDate } },
+      ),
+    );
+    await executor.setup();
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(runs).toHaveLength(0);
+
+    vi.setSystemTime(startDate);
+    await vi.waitFor(() => expect(runs).toHaveLength(1));
+    expect(runs[0]!.scheduledAt).toEqual(startDate);
+    expect(runs[0]!.runAt.getTime()).toBeGreaterThanOrEqual(
+      startDate.getTime(),
+    );
+  });
+
   it('keeps rules across shutdown and setup', async () => {
     const first = create();
     await first.addJob(
