@@ -9,7 +9,6 @@ import {
   within,
 } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
-import { Toast } from '@base-ui/react/toast';
 import { I18nProvider } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,9 +28,7 @@ import { openMenu } from './menu.js';
 const i18n = await createWorkflowI18nRuntime(clientLocales);
 
 function renderWithI18n(element: ReactElement): ReturnType<typeof render> {
-  return render(<I18nProvider runtime={i18n}>{element}</I18nProvider>, {
-    wrapper: Toast.Provider,
-  });
+  return render(<I18nProvider runtime={i18n}>{element}</I18nProvider>);
 }
 
 const canvasDefinitions = vi.hoisted(() => [] as WorkflowNestedDefinition[]);
@@ -489,6 +486,10 @@ describe('workflow node descriptions', () => {
         <CurrentLocation />
         <Routes>
           <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
+          <Route
+            path='/settings/workflow/workflows/:id'
+            element={<WorkflowDetailPage />}
+          />
         </Routes>
       </MemoryRouter>,
     );
@@ -538,10 +539,15 @@ describe('workflow node descriptions', () => {
       .mockResolvedValue(workflow({ id: 'workflow-42' }));
 
     renderWithI18n(
-      <MemoryRouter initialEntries={['/workflows/candidate-hash']}>
+      <MemoryRouter
+        initialEntries={['/settings/workflow/workflows/candidate-hash']}
+      >
         <CurrentLocation />
         <Routes>
-          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
+          <Route
+            path='/settings/workflow/workflows/:id'
+            element={<WorkflowDetailPage />}
+          />
         </Routes>
       </MemoryRouter>,
     );

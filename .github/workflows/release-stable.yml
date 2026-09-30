@@ -39,11 +39,14 @@ concurrency:
 permissions:
   contents: read
 
+# prepare versions the release and saves it as release-source-state. build and test both restore that state and run in
+# parallel: tests read workspace packages from source, so they never needed the build output, and running them after
+# the build only added their duration to every release.
 jobs:
   prepare:
     name: Prepare stable release
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: release-source
@@ -83,6 +86,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -212,29 +216,101 @@ jobs:
             node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build
-        run: pnpm build
-
-      - name: Test without template packages
-        if: '!inputs.skip_smoke_test'
+      - name: Save prepared release source
+        id: state
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          BATCH_TAG: ${{ steps.batch.outputs.name }}
+          BATCH: ${{ steps.batch.outputs.value }}
         run: |
-          pnpm scripts:test
-          pnpm --filter '!@nocobase/app-template-default' --filter '!@nocobase/app-template-examples' --filter '!@nocobase/app-template-hub' -r --if-present test
-          pnpm db:test
+          TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-default/package.json').version")
+          RELEASE_MESSAGE=$(printf 'chore: release %s [skip ci]\n\ncurrent app-template-default version: %s' "$BATCH" "$TEMPLATE_VERSION")
+          node ../scripts/release-state.mjs save \
+            --directory "$RUNNER_TEMP/release-state" \
+            --base "$BASE_SHA" \
+            --branch "$BATCH_TAG" \
+            --message "$RELEASE_MESSAGE"
 
-      - name: Test all packages
-        if: inputs.skip_smoke_test
-        run: pnpm test
+      - name: Upload prepared release source
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source-state
+          path: ${{ runner.temp }}/release-state
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
+  build:
+    name: Build and pack stable release
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: release-source
+    steps:
+      - name: Check out workflow code
+        uses: actions/checkout@v4
+
+      - name: Check out the release base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: release-source
+          fetch-depth: 0
+
+      - name: Download prepared release source
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source-state
+          path: ${{ runner.temp }}/release-state
+
+      - name: Restore prepared release source
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          node ../scripts/release-state.mjs restore \
+            --directory "$RUNNER_TEMP/release-state" \
+            --base "$BASE_SHA" \
+            --expected "$SOURCE_SHA" \
+            --branch "$BATCH_TAG"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+          registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Templates publish their sources rather than a dist, and the smoke jobs build applications generated from the
+      # packed templates, so building the templates here produced nothing a release uses. They were half the build.
+      - name: Build
+        run: NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD=1 pnpm -r --if-present --filter '!./packages/templates/**' build
+
+      # The build above already produced every dist, so pack:check skips the build half of each prepack script.
       - name: Pack packages for create-app smoke tests
         env:
           PACK_DIR: ${{ runner.temp }}/release-smoke-packages
+          PACK_CHECK_PREBUILT: '1'
         run: pnpm pack:check
 
       - name: Create publish plan
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DIST_TAG: ${{ steps.disttag.outputs.value }}
+          DIST_TAG: ${{ needs.prepare.outputs.dist_tag }}
         run: |
           PLAN="$RUNNER_TEMP/release-pack/publish-plan.json"
           pnpm changeset publish-plan --output "$PLAN"
@@ -249,28 +325,6 @@ jobs:
             ARGS+=(--tag "$DIST_TAG")
           fi
           node ../scripts/prepare-release-pack.mjs "${ARGS[@]}"
-
-      - name: Save prepared release source
-        id: state
-        env:
-          BASE_SHA: ${{ steps.base.outputs.sha }}
-          BATCH_TAG: ${{ steps.batch.outputs.name }}
-          BATCH: ${{ steps.batch.outputs.value }}
-        run: |
-          node ../scripts/release-state.mjs save \
-            --directory "$RUNNER_TEMP/release-state" \
-            --base "$BASE_SHA" \
-            --branch "$BATCH_TAG" \
-            --message "chore: release $BATCH [skip ci]"
-
-      - name: Upload prepared release source
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-source-state
-          path: ${{ runner.temp }}/release-state
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
 
       - name: Upload smoke-test packages
         uses: actions/upload-artifact@v4
@@ -290,10 +344,77 @@ jobs:
           compression-level: 0
           retention-days: 1
 
+  test:
+    name: Test stable release (${{ matrix.shard }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: release-source
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [plugins, others]
+    steps:
+      - name: Check out workflow code
+        uses: actions/checkout@v4
+
+      - name: Check out the release base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: release-source
+          fetch-depth: 0
+
+      - name: Download prepared release source
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source-state
+          path: ${{ runner.temp }}/release-state
+
+      - name: Restore prepared release source
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          node ../scripts/release-state.mjs restore \
+            --directory "$RUNNER_TEMP/release-state" \
+            --base "$BASE_SHA" \
+            --expected "$SOURCE_SHA" \
+            --branch "$BATCH_TAG"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+          registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Generated applications run the three template suites again against packed packages, so those suites run here
+      # only when the smoke test is skipped.
+      - name: Test
+        env:
+          SHARD: ${{ matrix.shard }}
+          INCLUDE_TEMPLATES: ${{ inputs.skip_smoke_test }}
+        run: ../scripts/release-test-shard.sh "$SHARD" "$INCLUDE_TEMPLATES"
+
   smoke:
     name: Create-app smoke (${{ matrix.template }})
     if: '!inputs.skip_smoke_test'
-    needs: prepare
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -361,10 +482,11 @@ jobs:
 
   release:
     name: Publish from ${{ inputs.branch }}
-    needs: [prepare, smoke]
+    needs: [prepare, build, test, smoke]
     if: >-
       !cancelled()
       && needs.prepare.result == 'success'
+      && needs.build.result == 'success' && needs.test.result == 'success'
       && (needs.smoke.result == 'success' || (inputs.skip_smoke_test && needs.smoke.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -420,6 +542,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
+          scope: '@nocobase'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -553,6 +676,7 @@ jobs:
           DIST_TAG: ${{ needs.prepare.outputs.dist_tag }}
         run: |
           PUBLISH_TAG="${DIST_TAG:-latest}"
+          TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-default/package.json').version")
           PR_URL=$(gh pr create \
             --title "chore: release $BATCH [skip ci]" \
             --body "Stable release \`$BATCH\` published to npm under the \`$PUBLISH_TAG\` dist-tag. Per-package versions are in the GitHub Release." \
@@ -561,7 +685,8 @@ jobs:
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch --subject "chore: merge release $BATCH into $RELEASE_BASE [skip ci]"
+          gh pr merge "$PR_URL" --merge --delete-branch --subject "chore: merge release $BATCH into $RELEASE_BASE [skip ci]" \
+            --body "current app-template-default version: $TEMPLATE_VERSION"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -700,10 +825,11 @@ jobs:
 
   notify-validation-failure:
     name: Notify stable validation failure
-    needs: [prepare, smoke]
+    needs: [prepare, build, test, smoke]
     if: >-
       always() && !cancelled() && !inputs.dry_run
-      && (needs.prepare.result == 'failure' || needs.smoke.result == 'failure')
+      && (needs.prepare.result == 'failure' || needs.build.result == 'failure' || needs.test.result == 'failure'
+        || needs.smoke.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: Check out workflow code

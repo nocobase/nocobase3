@@ -10,6 +10,12 @@ Do not add content to the repository root `README.md`. Record repository develop
 
 Write each prose paragraph in Markdown source on a single physical line, including in README, AGENTS.md, Skills, and other documentation. Do not insert manual line breaks to fit a column width or put each sentence on its own line; let the editor or renderer wrap the text visually. Separate paragraphs with blank lines. Preserve line breaks required by Markdown structure, such as headings, list items, tables, blockquotes, and code blocks.
 
+## Branches, Commits and Pull Requests
+
+Name a branch after the kind of change it carries: `feat/<name>` for a feature and `fix/<name>` for a bug fix, where `<name>` is a short kebab-case description such as `feat/hub-cli`. A change that is neither takes its Conventional Commits type the same way, such as `docs/<name>`, `refactor/<name>` or `chore/<name>`. Never push a branch under a tool's own prefix, such as the `claude/` or `codex/` branch an agent's worktree starts on: rename it with `git branch -m` before its first push. Renaming it once a pull request is open does not carry the pull request along: GitHub closes the pull request as if its head branch had been deleted, and a pull request's head branch cannot be changed afterwards, so the change has to be reopened as a new pull request from the renamed branch, and the review on the old one stays there.
+
+Commit messages and pull request descriptions carry no attribution to an AI tool: no `Co-Authored-By` trailer naming a model or an agent, and no "Generated with …" line. A trailer naming a human co-author is unaffected. The repository's `.claude/settings.json` turns Claude Code's own attribution off for everyone working here; the rule holds whichever tool writes the commit, so a tool that adds such lines by default has to be told not to.
+
 ## Before Creating or Updating a Pull Request
 
 Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing.
@@ -281,7 +287,7 @@ The current entries:
 | `@nocobase/service-provider` | `ServiceContainer` keys its `Map` by the token object itself, so two `createServiceToken` calls with the same name produce two keys that never match                     |
 | `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueManagerToken` and `driveManagerToken`                                                             |
 | `@nocobase/db`               | Exports `databaseManagerToken` and migration identity                                                                                                                    |
-| `@nocobase/app-client`       | Exports React contexts plus the identity-keyed `apiClientToken` and `realtimeClientToken`                                                                                |
+| `@nocobase/app-client`       | Exports React contexts plus the identity-keyed `apiClientToken`, `realtimeClientToken` and `toasterToken`                                                                |
 | `@nocobase/app-cli`          | `AppCommand` reads the application the runner located and the runtimes it tracks, so a plugin command built on a second copy runs under another version of that contract |
 | `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                                      |
 | `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                                                   |
@@ -348,6 +354,14 @@ This rule changed once, and the reason is worth recording. Client imports used t
 When the check reports something, inspect ownership and usage: declare an ordinary server dependency, declare a shared peer and its application provider, or remove a client or build-time import that leaked into server code. Adding a declaration only to silence the check can leave either a duplicate shared module or an unnecessary deployment dependency.
 
 `pnpm plugin:create` emits a generated plugin's `AGENTS.md` carrying this rule, so a plugin created tomorrow is told where a dependency goes before anyone adds one. When the rule changes here, change `packages/tools/create-plugin/template/AGENTS.md` in the same commit — the two are kept in step by a test, but only for the files' existence, not their content.
+
+## JSON Output of Command-Line Tools
+
+Every command-line tool this repository publishes answers `--json` with exactly one document on stdout, success or failure, in the application CLI's envelope, `{ schemaVersion: 1, ok, command, status, result | error, warnings }`, which `packages/libs/cli-envelope` defines and builds. `AppCommand` prints it for every `pnpm nocobase` command; a tool that runs before an application exists, such as `create-app`, depends on the package directly, builds its documents with `commandSuccessJson` and `commandFailureJson`, and runs the package's `node-guard` from its `bin/run.js` before loading anything else. When `ok` is true, `status` is `success`, `success-noop` — what every `--dry-run` answers — or `partial-success`; otherwise it is `failure`, and `error` carries a stable `code`, a `message`, `suggestions`, and `details` where there is anything to add. Progress and diagnostics go to stderr. A suggestion is `{ message, run? }`, and `run` is `{ command, args }`, an executable and its arguments rather than a shell line: a step that takes two commands is two suggestions, and a command that would not run as given, such as one holding a placeholder, goes in the message instead.
+
+A command that extends `AppCommand` gets the envelope without writing it. `create-app`, `create-plugin` and `app-installer` cannot: they run before any application exists and do not depend on `@nocobase/app-cli`, so each depends on `@nocobase/cli-envelope` directly and keeps a thin `output.ts` that names its command and turns its own error type into the envelope's. `tests/scripts/json-envelope-parity.test.mjs` builds the same outcomes through each of those wrappers and through the application CLI and compares the printed documents. A new standalone tool that takes `--json` adds itself to that test. Before the shared package each tool kept a copy of the envelope, and the copies drifted: `app-installer` reported a failure as `error` with a shell-line `run`, `create-plugin` printed its failures on stderr under `operation`, and `create-app` had a flat result of its own.
+
+Changing the envelope, or the members a command puts in it, breaks every script that parses the output, so the changeset says so. A global Skill that describes the output ships when it merges, before the release that changes the output does, so it describes the published shape alongside the new one.
 
 ## Documentation Site
 
@@ -431,6 +445,7 @@ Library packages that emit `.d.ts` files (`declaration: true`) enable both `isol
 | `packages/libs/snowflake/tsconfig.json`                    | Snowflake ID library       |
 | `packages/libs/logging/tsconfig.json`                      | Logging library            |
 | `packages/libs/queue/tsconfig.json`                        | Queue library              |
+| `packages/libs/jobs/tsconfig.json`                         | Jobs library               |
 | `packages/libs/session/tsconfig.json`                      | Session library            |
 
 Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.

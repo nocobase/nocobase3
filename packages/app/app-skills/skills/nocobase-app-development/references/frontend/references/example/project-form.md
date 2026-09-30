@@ -11,7 +11,7 @@ Rules: [`form.md`](../form.md). The fields are name (required), owner (optional)
 ```tsx
 // client/pages/projects/project-form.tsx
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ApiClientError, useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { AlertCircleIcon } from 'lucide-react';
 import { type ReactElement, useEffect, useMemo } from 'react';
@@ -35,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from '@/components/ui/toast';
 
 import { PROJECT_STATUSES, type Project } from './types.js';
 
@@ -64,6 +63,7 @@ export function ProjectForm({
 }: ProjectFormProps): ReactElement {
   const { t } = useTranslation();
   const api = useApiClient();
+  const toaster = useToaster();
 
   // The schema lives in the component so validation messages can be built with t and follow the current language.
   const schema = useMemo(
@@ -154,7 +154,7 @@ export function ProjectForm({
     } finally {
       onSubmittingChange?.(false);
     }
-    toast.add({
+    toaster.show({
       type: 'success',
       title: project
         ? t('projects.edit.success', { name: saved.name })

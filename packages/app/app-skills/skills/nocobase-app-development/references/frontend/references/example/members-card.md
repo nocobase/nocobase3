@@ -11,7 +11,7 @@ Rules: ["Array fields" in `form.md`](../form.md#array-fields).
 ```tsx
 // client/pages/settings/projects/members-card.tsx
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ApiClientError } from '@nocobase/app-client';
+import { ApiClientError, useToaster } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { AlertCircleIcon, PlusIcon, XIcon } from 'lucide-react';
 import { type ReactElement, useMemo } from 'react';
@@ -37,7 +37,6 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
-import { toast } from '@/components/ui/toast';
 import {
   Tooltip,
   TooltipContent,
@@ -58,6 +57,7 @@ export function ProjectMembersCard({
   onSave,
 }: ProjectMembersCardProps): ReactElement {
   const { t } = useTranslation();
+  const toaster = useToaster();
 
   const schema = useMemo(
     () =>
@@ -115,7 +115,7 @@ export function ProjectMembersCard({
     }
     // After saving, make the submitted values the new defaults: isDirty goes back to false, and "Discard changes" returns to them too.
     form.reset(values);
-    toast.add({ type: 'success', title: t('projects.members.saved') });
+    toaster.show({ type: 'success', title: t('projects.members.saved') });
   });
 
   return (

@@ -64,15 +64,16 @@ notification:
     #   provider: dingtalk-webhook
     #   webhookUrl: ${DINGTALK_WEBHOOK_URL}
 
-# Declarative LLM services are loaded from application config.
-# Reload application config after editing; no process restart or AI resource rescan is required.
+# Declarative LLM services are loaded from application config, keyed by service name.
+# The server reads this when it starts: restart it after editing, which `pnpm dev` does on its own.
+# Keep the key out of this file. Write it into config.yml with
+# `pnpm nocobase config set --from-env ai.llmServices.openai.options.apiKey=OPENAI_API_KEY`,
+# or map an injected environment variable onto that path in server/config/ai.ts.
 # ai:
 #   llmServices:
-#     - name: openai
+#     openai:
 #       title: OpenAI
 #       provider: openai
-#       options:
-#         apiKey: ${OPENAI_API_KEY}
 #       enabledModels:
 #         - label: GPT-4.1
 #           value: gpt-4.1
@@ -123,6 +124,23 @@ snowflake:
   # Assign a unique worker ID to each concurrently running instance.
   workerId: 0
   epoch: 1605024000
+
+# Scheduled jobs, such as the Scheduler plugin's. Without jobs.default they run on the built-in memory adapter:
+# state kept in the process, read from storage/jobs at startup and written back when the application stops, so a
+# process that is killed loses what changed since it started. It serves one process: every other process or instance
+# would run its own copy. Set default to memory to keep that without the startup warning, or to redis to run several.
+# Redis must persist its data (AOF or RDB) and use maxmemory-policy noeviction, or schedules can be lost.
+# jobs:
+#   default: redis
+#   redis:
+#     connection:
+#       host: 127.0.0.1
+#       port: 6379
+#     # namespace: my-app # defaults to the application name; set it when deployments share one Redis
+
+# The jobs configuration the Scheduler plugin's schedules run on, by name. Left out, they follow jobs.default.
+# scheduler:
+#   jobs: redis
 
 # File logging is independent of terminal formatting.
 logging:

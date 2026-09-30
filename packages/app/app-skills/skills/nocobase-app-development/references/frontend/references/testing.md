@@ -22,7 +22,7 @@ Tests never go beside the source. Vitest discovers `tests/**/*.test.{ts,tsx}` (`
 
 ## Building the test harness
 
-**For a page, copy `tests/components/page-harness.test.tsx`.** It renders a small list page with a child-route `RouteDialog` in a memory router, and mocks exactly what a page needs: `useApiClient` (keeping the real `ApiClientError`), `useCan`, `useTranslation` with `useLocale`, and `toast`, all created with `vi.hoisted`. Its tests are the shapes to repeat: the request the page sends, a 403 without "Retry", a 401 that offers "Sign in again", an action shown with permission and hidden without it, and a child route opened from its URL and closed back to the list. It also mocks `useAuthentication` for the 401 case. Replace its inline page with your page and its child routes, keep the setup, and put the file in `tests/components/` (the template's own overlay test happens to sit in `tests/logic/`).
+**For a page, copy `tests/components/page-harness.test.tsx`.** It renders a small list page with a child-route `RouteDialog` in a memory router, and mocks exactly what a page needs: `useApiClient` (keeping the real `ApiClientError`), `useCan`, `useTranslation` with `useLocale`, and `useToaster`, all created with `vi.hoisted`. Its tests are the shapes to repeat: the request the page sends, a 403 without "Retry", a 401 that offers "Sign in again", an action shown with permission and hidden without it, and a child route opened from its URL and closed back to the list. It also mocks `useAuthentication` for the 401 case. Replace its inline page with your page and its child routes, keep the setup, and put the file in `tests/components/` (the template's own overlay test happens to sit in `tests/logic/`).
 
 For anything else, start from the test that already sets it up:
 
@@ -31,6 +31,7 @@ For anything else, start from the test that already sets it up:
 - **An existing component with `defaultValue` copy**: `tests/components/data-table.test.tsx`, whose `t` mock fills `{{name}}` placeholders into the default value.
 
 - Assert what the user can see: text, roles and accessible names, the result of a click (`@testing-library/react`, `@testing-library/user-event` and the jest-dom assertions are set up). Do not assert internal state.
+- To assert a toast, mock `useToaster` as the harness does, returning one shared `{ show: vi.fn(), close: vi.fn() }`, and assert what `show` was called with: its `type`, `title` and `description`, not how Base UI renders them. A component rendered without a registered toaster still renders; its toasts are logged to the console instead of shown.
 - When a button contains a `Spinner`, the spinner's "Loading" label becomes part of the button's name, so use a regular expression when you query by name.
 - An open `RouteDialog` or `RouteDrawer` hides the page behind it from the accessibility tree, so a role query for something behind it, such as the selected tab, passes `hidden: true`: `getByRole('link', { name: 'Orders', hidden: true })`.
 - A `Button` rendered as a `Link` (`nativeButton={false}`) has the `button` role, not `link`; query "New project" with `getByRole('button', …)`. Test an absence together with the presence case, as the harness does, so the assertion can fail.

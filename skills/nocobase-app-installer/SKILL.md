@@ -17,7 +17,7 @@ npx --yes --registry="${NOCOBASE_REGISTRY:-https://npm.nocobase.ai}" @nocobase/a
 
 NocoBase 3 publishes to `https://npm.nocobase.ai`, not to the public npm, so a bare `npx @nocobase/app-installer` answers 404. `NOCOBASE_REGISTRY` is set only when someone points the shell at another registry, such as an unreleased snapshot; the installer reads the same variable for the Hub template, records the registry in `installer.json`, and suggests commands from it. The `--yes` before the package is npx's own: it downloads the installer without asking. The installer's `--yes`, after the command, is a separate answer that only the user gives.
 
-`--json` prints one document on stdout and progress on stderr. Read the document, not the exit code alone: `ok`, `status` (`success`, `success-noop` or `error`), `result`, and on failure `error.code`, `error.message`, `error.suggestions` (each a `message` and, where there is one, a `run` command that runs as printed) and `error.details`.
+`--json` prints one document on stdout and progress on stderr, in the same envelope as `pnpm nocobase … --json`. Read the document, not the exit code alone: `ok`, `status` (`success`, `success-noop` or `failure`), `result`, and on failure `error.code`, `error.message`, `error.suggestions` and `error.details`. Each suggestion has a `message` and, where there is one, a `run` of `{ command, args }`: an executable and its arguments, run as given without a shell. app-installer 0.1.0-beta.1 and earlier, which a suggested command pinned to that version still runs, print `status` `error` and `run` as one shell line that runs as printed, so tell success from failure by `ok`.
 
 | Exit | Meaning                                                                                  |
 | ---- | ---------------------------------------------------------------------------------------- |
@@ -37,8 +37,8 @@ A project is source code someone changes, created by `nocobase-create-app` and d
 | Install a NocoBase Hub                                   | This Skill, `--template hub`                                                                                |
 | Deploy an application to production or a server          | This Skill, `--archive`, from the application's deployment archive                                          |
 | Develop the Hub's own code                               | The `nocobase-create-app` Skill with `--template=hub`; its archive later deploys here with `--archive`      |
-| Publish an application to an existing Hub                | The application's own `nocobase-deployment` Skill (`release upload`), not this one                         |
-| Run it with Docker                                       | The deployment documentation, https://github.com/nocobase/nocobase3/tree/develop/docs/docs/en/app/deployment |
+| Publish an application to an existing Hub                | The `nocobase-hub-cli` Skill that `@nocobase/hub-cli` ships into the application (`hub deploy`), not this one |
+| Run it with Docker                                       | The deployment documentation, https://github.com/nocobase/nocobase3/tree/develop/docs/docs/en/deployment     |
 
 - A Hub is installed, not created: a request to install one is `--template hub`, on a laptop as much as on a server, unless the user says they will develop the Hub's own code.
 - "Install NocoBase on this server" with no project and no archive is not settled yet. Ask what it is for. Running the user's own application means creating it locally with `nocobase-create-app`, building its archive, and installing that here with `--archive`. A platform that hosts several applications is a Hub. Do not create a project on the server and run it with `pnpm dev`: that is development mode, not a deployment.

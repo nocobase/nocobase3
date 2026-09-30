@@ -355,18 +355,19 @@ Handling the outcome:
 
 ## Toasts
 
-`import { toast } from '@/components/ui/toast'`, and call `toast.add({ type, title })` in event handlers:
+Get the toaster with `const toaster = useToaster()` from `@nocobase/app-client` at the top of the component, and call `toaster.show({ type, title })` in event handlers:
 
-| `type`      | Use                                                                                                                               |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `'success'` | The action succeeded; one sentence stating the result                                                                             |
-| `'info'`    | Information, for example that the record to delete has already been deleted by someone else                                       |
-| `'error'`   | A single-click action without a dialog, or a background operation, failed; add `priority: 'high'`                                 |
-| `'warning'` | Something succeeded with a caveat the user should know about                                                                      |
-| `'loading'` | A background operation is running: `toast.add` returns an id, and `toast.update(id, { type, title })` replaces it with the result |
+| `type`      | Use                                                                                                                                                |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'success'` | The action succeeded; one sentence stating the result                                                                                              |
+| `'info'`    | Information, for example that the record to delete has already been deleted by someone else                                                        |
+| `'error'`   | A single-click action without a dialog, or a background operation, failed                                                                          |
+| `'warning'` | Something succeeded with a caveat the user should know about                                                                                       |
+| `'loading'` | A background operation is running and never closes by itself: `show` returns an id, and a second `show` with that `id` replaces it with the result |
 
-- `description` adds a second line; `priority: 'high'` makes screen readers announce the toast at once.
-- `client/react-providers.ts` mounts the application's one `Toaster`. Call `toast.add` directly; do not mount another Toaster yourself ([section 6 of `styling.md`](styling.md#6-toasts) explains the shell's part).
+- `description` adds a second line, `action: { label, onClick }` a button that leaves the toast open when clicked, and `duration` how long the toast stays in milliseconds (`0` keeps it open). `show` returns the toast's id, and `toaster.close(id)` closes it.
+- The call says what happened, not how it is presented. `client/lib/toaster.ts` decides that for every toast in the application, plugins' included — for example, that a plain-text error is announced to screen readers at once. Call the Base UI `toast` manager in `@/components/ui/toast` directly only for what `show` cannot express, such as `toast.promise`.
+- `client/service-provider.ts` registers the toaster service and `client/react-providers.ts` mounts the one `Toaster` component that renders it. Do not mount another `Toaster` yourself ([section 6 of `styling.md`](styling.md#6-toasts) explains the shell's part).
 - Copy goes through translation; when a specific record is involved, include its name (guideline C6), for example `t('projects.complete.success', { name: project.name })`.
 - Form validation failures and failed requests inside a dialog do not use a toast; show them in the form or dialog (guideline I3).
 

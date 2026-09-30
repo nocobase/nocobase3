@@ -26,16 +26,20 @@ Read these App-local files when present, before writing anything:
 
 - `README.MD` — setup and development notes; the templates spell the extension in capitals.
 - `AGENTS.md` — App-specific coding rules; they outrank this Skill's defaults.
-- `package.json` — dependencies and scripts. Plugin registration is in `server/plugins.ts` and `client/plugins.ts`, not here.
-- `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml). It is written by `pnpm nocobase config init`, so its absence means that has not run yet, not that the App needs no configuration.
-- `.gitignore` — confirm `config.yml` and `.env` are ignored and untracked before a key goes near either; see [capabilities.md § Where the key lives](capabilities.md#where-the-key-lives).
+- `package.json` — dependencies and scripts. Runtime plugin registration is in `server/plugins.ts` and `client/plugins.ts`, and CLI registration in `cli/plugins.ts`, not here.
+
+For configuration diagnostics and safe model-list updates without exposing secrets, follow [Configure LLM services](llm-configuration.md).
+
+Also read these App-local files:
+
+- `.gitignore` — confirm it keeps `config.yml` out of the repository; follow [Configure LLM services](llm-configuration.md) for safe key setup and model configuration.
 - `client/extensions/nocobase-ai/README.md` — the installed AI frontend. Its absence means the Registry item is not installed yet, not that the App cannot have AI UI.
 
 ## App AI resources
 
 | Path                                  | Holds                                                           |
 | ------------------------------------- | --------------------------------------------------------------- |
-| `config.yml` `ai.llmServices`         | LLM services, with `${NAME}` environment placeholders           |
+| `config.yml` `ai.llmServices`         | LLM services, keyed by service name                             |
 | `config.yml` `ai.mcpServers`          | MCP connections — the only place they can be configured         |
 | `config.yml` `ai.aiEmployee.storage`  | the disk chat attachments are written to                        |
 | `config.yml` `ai.skills.paths`        | extra Skill directories beyond the App root's `ai/skills`       |
@@ -105,7 +109,7 @@ When a demo and this Skill disagree, the Skill is the contract; the demo shows t
 
 ## App server
 
-`server/` holds the App's own services, routes, runtime, and plugin integration. `server/plugins.ts` and `client/plugins.ts` are where a plugin is registered. The App runtime owns one `AIManager`, created by the AI Employee plugin.
+`server/` holds the App's own services, routes, runtime, and plugin integration. `server/plugins.ts` and `client/plugins.ts` register runtime contributions; `cli/plugins.ts` separately registers `@nocobase/app-plugin-ai-employee/cli` for `pnpm nocobase ai-employee models` and `test`. Importing tokens from the server entry does not register these contributions. The App runtime owns one `AIManager`, created by the AI Employee plugin.
 
 Use the plugin runtime for authenticated conversations, persistence, `/api/ai`, SSE, and settings. Direct `AgentService` use is for isolated App-owned server integrations only — see [server-runs.md](server-runs.md#when-to-drive-an-agent-directly).
 

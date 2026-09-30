@@ -66,6 +66,7 @@ Prepare the complete runtime configuration before starting the service. At minim
 - `APP_PUBLIC_ORIGIN` as the external scheme and host without the application path, and `APP_BASE_PATH` as the public mount path, read when the server starts; it defaults to `/main`.
 - `APP_SERVER_HOST` and `APP_SERVER_PORT`, with containers normally listening on `0.0.0.0` and the proxy controlling external exposure.
 - Persistent storage paths, file permissions, service identity, and any external database, object storage, mail, or callback settings.
+- The `jobs` backend for scheduled jobs. Without `jobs.default` they run on the built-in memory adapter, which keeps its state in the process, reads it from `storage/jobs` at startup and writes it back when the service stops: it serves one process, every other process or instance would fire its own copy, and a process that is killed rather than stopped loses what changed since it started. For more than one instance set `jobs.default` to the `redis` configuration and its `connection`; that Redis must persist its data (AOF or RDB) and use `maxmemory-policy noeviction`, and it opens connections per scheduling plugin. Set `jobs.default: memory` to keep a single-instance deployment on memory without the startup warning.
 
 The reverse proxy must preserve the public `Host` and protocol headers, forward cookies, and support WebSocket `Upgrade` and `Connection` headers. For Hub, proxy the entire site to Hub; do not expose a separate Host port or proxy only `/hub`.
 
@@ -98,17 +99,9 @@ A Hub project created from the Hub template, whose source changes, deploys like 
 
 ### Publish an App to an existing Hub
 
-Only a Default application, whose `package.json` sets `nocobase.cli.publishing: true`, has `release upload` and `release deploy`; Examples and Hub applications do not. Run them in the source checkout or in CI. A built `dist/` does not register them, because what they send is the archive `pnpm build --tar` writes beside the sources.
+Publishing to a Hub uses `pnpm nocobase hub deploy` and `hub upload`, which an application has for as long as its `package.json` lists `@nocobase/hub-cli`. The Default template declares it; any other application gets the commands with `pnpm add -D @nocobase/hub-cli`. They run in the source checkout or in CI, never in a built `dist/`, because what they send is the archive `pnpm build --tar` writes beside the sources.
 
-`HUB_API_KEY` is created in Hub, not in the application: the **API Keys** page (`<HUB_URL>/api-keys`, requiring `hub.app / manage-api-keys`) binds a key to selected applications and grants **Upload release**, **Deploy release**, or both. Uploading needs `upload-release`; anything that deploys needs `deploy` as well. Bindings and permissions cannot be edited after creation, and a key never exceeds its creator's current permissions, so a key with the wrong scope is deleted and recreated. Tell the user to create the key before the first upload rather than guessing its value. Never print an API key or put it in committed configuration.
-
-Create or select the target App, build for the Host platform with `pnpm build --tar`, then run `pnpm nocobase release upload`. `HUB_URL` includes the Hub application's mount path. `HUB_URL`, `HUB_APP_ID` and `HUB_API_KEY` are resolved per value: command flags, then the terminal or CI environment, then the App root `.env`, which stays gitignored; no `.env.local` or mode-specific file is loaded. Uploading a Release does not switch the running version. `release upload --deploy` uploads and deploys in one request; `release deploy --release-id <id>` deploys a Release already uploaded, and re-uploading that archive with `upload --deploy` fails with `NO_DEPLOYMENT` instead. Automation belongs in the caller's script; Hub has no deployment-mode setting.
-
-`--config ./runtime.yml` on `release deploy` or `release upload --deploy` supplies the runtime configuration, a non-empty UTF-8 YAML file of at most 1 MiB. `--config` and `--file` resolve from the current directory; without `--file`, upload reads `storage/exports/dist.tar.gz` in the App root. Omitting `--config` reuses the current Hub configuration, and a first deployment uses Release-template initialization. A supplied document replaces the complete configuration through Hub's secret handling and YAML validation rather than merging with existing fields, so submit every required field rather than a partial patch. `release upload --config` without `--deploy` is rejected. Configuration content is never printed.
-
-Deploying commands wait for the final result by default; `--no-wait` returns after acceptance, which does not mean the deployment succeeded. `--timeout` defaults to 600 seconds, and a timeout leaves the deployment unconfirmed rather than cancelled. Add `--json` in CI: every run prints one JSON document on stdout, success or failure, and exits `0` on success, `1` for a Hub rejection or failed deployment, `2` for invalid arguments or local input, and `3` when the outcome could not be confirmed. The Default application's `README.MD` has the full argument and limit reference.
-
-Exit `3` does not mean the deployment failed. Inspect the Hub record before retrying, and retry with the same idempotency key and request. Use a new key only for an intentional new deployment of the same Release or after a confirmed failed deployment; the default deployment key includes the supplied configuration content, and a configured upload retry reuses only the configuration it was first given.
+Read `.agents/skills/nocobase-hub-cli/SKILL.md`, which that package ships, before publishing: it covers the API key, the build, `--config`, waiting, exit codes and retries. `HUB_API_KEY` is created in Hub, not in the application; tell the user to create the key before the first upload rather than guessing its value. Never print an API key or put it in committed configuration.
 
 ## Handle workflow artifacts after production build
 
@@ -126,7 +119,7 @@ Collect evidence for each item:
 4. The application can read and write a known record in the intended database; the database is not an unexpected empty instance.
 5. Upload and download a file if the application uses file storage.
 6. Trigger one representative workflow and confirm its run completes with the expected business result.
-7. Restart the service or recreate the container and confirm records, files, configuration, and enabled runtime behavior remain available.
+7. Restart the service or recreate the container and confirm records, files, configuration, and enabled runtime behavior remain available, including that scheduled jobs keep firing.
 8. In Hub mode, verify every hosted App separately; Hub readiness does not mean every eager App is ready.
 
 Record the exact artifact or image digest, configuration revision, database migration result, workflow artifact hashes, logs checked, and verification time.

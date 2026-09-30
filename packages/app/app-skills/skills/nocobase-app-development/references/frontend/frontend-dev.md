@@ -31,7 +31,7 @@ Conventions every page follows, each explained in its home:
 - Create, edit and detail as child-route overlays; of the overlays, only a confirmation (`AlertDialog`) and a temporary panel (`Sheet`) use component state ([`references/overlay.md`](references/overlay.md)). A record, and every overlay, opens over the view the user is on: every page that opens a record declares its drawer ([section 2.1 of `references/overlay.md`](references/overlay.md#21-declare-the-child-routes)), and on a page with tabs every tab declares what the header opens (["Overlays opened from the header of a page with tabs" in `references/child-routes.md`](references/child-routes.md#overlays-opened-from-the-header-of-a-page-with-tabs)).
 - `BackButton` above the title of a page below another one; breadcrumbs only when the user asks for them ([section 7 of `references/page.md`](references/page.md#7-back-button-and-breadcrumbs)).
 - Icons from `lucide-react` ([section 10 of `references/styling.md`](references/styling.md#10-icons)).
-- `toast.add` from `@/components/ui/toast`, never a second `Toaster` (["Toasts" in `references/api.md`](references/api.md#toasts)).
+- Toasts with `useToaster()` from `@nocobase/app-client`, never a second `Toaster` (["Toasts" in `references/api.md`](references/api.md#toasts)).
 - Every user-visible string through a translation key ([`references/i18n.md`](references/i18n.md)).
 
 ## Look up by task

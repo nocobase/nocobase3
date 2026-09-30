@@ -1,3 +1,5 @@
+import type { CommandLine, CommandSuggestion } from '@nocobase/cli-envelope';
+
 /**
  * Exit codes are part of the contract: CI and agents branch on them.
  *
@@ -13,10 +15,9 @@ export const EXIT_INVALID = 2;
 export const EXIT_ROLLED_BACK = 3;
 export const EXIT_ROLLBACK_FAILED = 4;
 
-export interface Suggestion {
-  message: string;
-  run?: string;
-}
+export type { CommandLine };
+/** A step the reader can take next: a sentence, and optionally the exact command that takes it. */
+export type Suggestion = CommandSuggestion;
 
 export interface InstallerErrorOptions {
   exitCode?: number;

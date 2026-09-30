@@ -10,7 +10,7 @@ Rules: [section 4 of `overlay.md`](../overlay.md#4-delete-confirmation-alertdial
 
 ```tsx
 // client/pages/projects/project-delete-dialog.tsx
-import { ApiClientError, useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, type RefObject, useRef, useState } from 'react';
 
@@ -26,7 +26,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/ui/spinner';
-import { toast } from '@/components/ui/toast';
 
 import type { Project } from './types.js';
 
@@ -50,6 +49,7 @@ export function ProjectDeleteDialog({
 }: ProjectDeleteDialogProps): ReactElement {
   const { t } = useTranslation();
   const api = useApiClient();
+  const toaster = useToaster();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<
     'sessionExpired' | 'forbidden' | 'requestFailed'
@@ -63,7 +63,7 @@ export function ProjectDeleteDialog({
     setError(undefined);
     try {
       await api.request({ path: `projects/${target.id}`, method: 'DELETE' });
-      toast.add({
+      toaster.show({
         type: 'success',
         title: t('projects.delete.success', { name: target.name }),
       });
@@ -82,7 +82,7 @@ export function ProjectDeleteDialog({
         return;
       }
       // 404: someone else already deleted the record. What the user wanted has already happened, so explain that and treat it as a successful delete (guideline R3).
-      toast.add({
+      toaster.show({
         type: 'info',
         title: t('projects.delete.notFound', { name: target.name }),
       });

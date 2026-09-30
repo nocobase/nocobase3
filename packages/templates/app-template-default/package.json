@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "1.0.0-beta.49",
+  "version": "1.0.0-beta.51",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,10 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.49",
-    "cli": {
-      "publishing": true
-    }
+    "defaultTemplateVersion": "1.0.0-beta.51"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -26,9 +23,9 @@
     "@nocobase/app-plugin-template-print": "workspace:*",
     "@nocobase/app-skills": "workspace:*",
     "@nocobase/app-websocket": "workspace:^",
-    "@nocobase/cron": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/hub-cli": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@playwright/test": "catalog:",
@@ -100,6 +97,7 @@
     "cli",
     "client",
     "server",
+    "workflows",
     "database/tsconfig.json",
     "database/*/migrations/**",
     "database/*/seeds/**",
@@ -189,6 +187,7 @@
     "@nocobase/app-plugin-authz-restriction-rules": "workspace:^",
     "@nocobase/authorization": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/jobs": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/ai-employee": "workspace:^",

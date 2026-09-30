@@ -1,5 +1,61 @@
 # @nocobase/app-plugin-ai-employee
 
+## 1.0.0-beta.27
+
+### Minor Changes
+
+- 64cf25a: Check `ai.llmServices` in `config check`, and warn about a service with no key
+
+  `defineAIConfig`, exported from `@nocobase/app-plugin-ai-employee/server/config`, declares the `ai` section with the plugin's validation, the way `defineAuthConfig` does for `auth`. With it, `pnpm nocobase config check` reports a structural problem in `ai.llmServices` — the list form, a `name` field, a wrong field type or an empty `provider` — as an error by path, instead of the start failing on it later. A service whose built-in provider sends `options.apiKey` and has none is reported as a warning naming that path, with the `config set --from-env` command that sets it; `ollama` and providers an application registers are not checked. An application that keeps a plain `defineAppConfig` for `ai` still starts, with the section unchecked until then; switch `server/config/ai.ts` to `defineAIConfig` to get the checks.
+
+- 414956d: Add runtime `ai-employee models` and `ai-employee test` commands to discover built-in provider model IDs and verify model access before application startup, without connecting to the database or exposing credentials or completion content. Both commands support the standard CLI JSON envelope.
+
+  Register the commands in the Default and Examples templates and document selecting initial enabled models before the first startup. Existing applications must register `@nocobase/app-plugin-ai-employee/cli` in `cli/plugins.ts` and provide the plugin's `@nocobase/app-cli` and `@oclif/core` peers as production dependencies. Model selection for already initialized services remains in the management UI; these commands do not modify database model lists.
+
+- 64cf25a: Key `ai.llmServices` by service name, and stop expanding `${NAME}` in AI configuration
+
+  **Breaking.** `ai.llmServices` is now a map keyed by service name, like `ai.mcpServers`, instead of a list of entries that each carry a `name`. The list form, and a `name` field inside an entry, are rejected at startup with a message naming the path. Each service therefore has a stable configuration path, such as `ai.llmServices.openai.options.apiKey`, which `pnpm nocobase config set` can write and an `env` mapping can target; neither can address an item of a list.
+
+  **Breaking.** `${NAME}` in `ai.llmServices` and `ai.mcpServers` is no longer expanded, and `expandEnvironmentReferences` is no longer exported. The plugin read those values from `process.env`, which a built server started with `pnpm start` does not merge `.env` into, so a key kept in `.env` became an empty string there. A key is now written into `config.yml` with `pnpm nocobase config set --from-env`, like a database password. Where a service manager, container or CI injects it instead, the application maps the variable in `env` of `server/config/ai.ts`, which reads the process environment together with `.env` and `.env.local` in development and in a built server alike, and `pnpm nocobase config env` lists it.
+
+  The plugin's Skill follows: an agent writes the service entry without the key and without invented model ids, tells the user the key's path to set rather than asking for the key or building a command that reads one, and has the models picked on the LLM services page, which fetches them from the provider with the configured key.
+
+  To upgrade an application:
+
+  1. In `config.yml`, and in `config.example.yml` if it lists services, move each `ai.llmServices` entry under its name and delete its `name` field — `- name: openai` followed by its fields becomes `openai:` followed by the same fields.
+  2. For each `${NAME}` under `ai.llmServices` or `ai.mcpServers`, write the value into the untracked `config.yml` with `pnpm nocobase config set --from-env <path>=<VARIABLE>`, such as `ai.llmServices.openai.options.apiKey=OPENAI_API_KEY`. Where the environment injects the key instead, remove the value and map the variable in `server/config/ai.ts`, declaring the section with `defineAIConfig` from `@nocobase/app-plugin-ai-employee/server/config` in place of `defineAppConfig`: `env: { OPENAI_API_KEY: envString('llmServices.openai.options.apiKey') }`, with `envString` from `@nocobase/app-server/config`. Either way the value is the whole field, so a header such as `Authorization: Bearer ${TOKEN}` needs `Bearer <token>`.
+  3. Run `pnpm nocobase config check`, which now warns about any `${NAME}` left in either section, and `pnpm nocobase config env` when a variable is mapped.
+
+### Patch Changes
+
+- 64cf25a: Remove the SQL identifier quoting and `DB_UNDERSCORED` naming rules from the AI employee system prompt. AI employees read data only through the Repository-backed data tools, which take Collection and field names and apply the Connection naming strategy themselves, so the instructions to write SQL and convert names to snake_case described a capability they do not have.
+- 64cf25a: Remove the unused `knownRoles` option and getter from the AI employee service, together with the `AI_DEFAULT_ROLES` environment variable it read. Nothing passed the option or read the getter, so setting the variable had no effect; AI employees take roles from the requesting actor.
+- Updated dependencies [64cf25a]
+- Updated dependencies [aeff80a]
+- Updated dependencies [aeff80a]
+  - @nocobase/app-cli@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.30
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+
+## 1.0.0-beta.26
+
+### Major Changes
+
+- db16945: Toasts go through a toaster that `@nocobase/app-client` defines and the application implements, so code that reports a result no longer depends on how toasts are rendered.
+
+  - **App client.** `useToaster()` returns the application's `Toaster`. Its `show({ type, title, description, action, duration, id, onClose })` returns an id that `close(id)` takes, and `resolveToaster(app.services)` returns the same toaster outside React. The application registers the implementation under `toasterToken`; `@nocobase/app-client` registers none. Without one, nothing throws: each toast is logged to the console instead, an error toast as an error, and the first says how to register a toaster. Clicking a toast's action runs its `onClick` and leaves the toast open.
+  - **Templates.** `client/lib/toaster.ts` forwards toasts to the Base UI `toast` manager that the mounted `Toaster` renders, and decides their presentation for the whole application: an error written as plain text is announced at once, while one with an action, or with an element for its title or description, keeps the default priority. `client/service-provider.ts` registers it in `register()`. The account menu, the language switcher and the Examples route overlay demo show their toasts through `useToaster()`.
+  - **Plugins (breaking).** Hub, Users, Workflow and AI employee pages report through `useToaster()` instead of `Toast.useToastManager()` from `@base-ui/react/toast`, and no longer choose a toast's priority. They need the `@nocobase/app-client` that exports it, and the application has to register a toaster: without one nothing throws, but their toasts only reach the console, and a Hub page whose only content is an error shows nothing. They no longer require a Base UI `Toast.Provider`.
+  - **Skills.** The frontend references and each affected plugin's Skill describe `useToaster()`, and the `nocobase-app-upgrade` edge case "Notifications and the application toaster" replaces "Notifications and the Base UI toast".
+
+  Upgrade an existing application with the `nocobase-app-upgrade` Skill, which brings `client/lib/toaster.ts` and its registration together with the new `@nocobase/app-client` and plugin ranges; follow the same steps when upgrading by hand. `pnpm nocobase plugin update` is not enough on its own: the plugins stay inside the application's `^1.0.0-beta` ranges, so it installs them, but it leaves `@nocobase/app-client` where it is, and their pages then fail to load for want of `useToaster`.
+
+### Patch Changes
+
+- Updated dependencies [db16945]
+  - @nocobase/app-client@1.0.0-beta.23
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+
 ## 1.0.0-beta.25
 
 ### Major Changes

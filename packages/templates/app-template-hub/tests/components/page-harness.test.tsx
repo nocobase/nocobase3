@@ -2,7 +2,7 @@
 // `useCan`, formats with `useLocale`, raises a toast and opens a child-route `RouteDialog`. The page under test is
 // defined in this file so the template has one to run; in an application, import the real page and its child routes
 // instead and keep the setup below.
-import { ApiClientError, useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { useCan } from '@nocobase/app-plugin-authorization/client';
 import { useLocale, useTranslation } from '@nocobase/i18n/client';
@@ -14,14 +14,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RouteDialog } from '@/components/route-dialog';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/toast';
 import { useRouteOverlay } from '@/components/use-route-overlay';
 
 // `vi.mock` factories run before this file's imports and code, so everything a factory uses is created here.
-const { api, addToast, permission, refresh } = vi.hoisted(() => ({
+const { api, toaster, permission, refresh } = vi.hoisted(() => ({
   // One object for the whole file: a new one per call would restart every effect that depends on `api`.
   api: { request: vi.fn() },
-  addToast: vi.fn(),
+  // One toaster too, so a test asserts what `show` was called with rather than how Base UI renders it.
+  toaster: { show: vi.fn(), close: vi.fn() },
   // What `useCan` returns; a test sets `can`, `isPending` or `error` before rendering.
   permission: {
     can: true,
@@ -35,6 +35,7 @@ vi.mock('@nocobase/app-client', async (original) => ({
   // Keep the real module, so `ApiClientError` stays the class the page checks with `instanceof`.
   ...(await original<typeof import('@nocobase/app-client')>()),
   useApiClient: () => api,
+  useToaster: () => toaster,
 }));
 vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   useAuthentication: () => ({ refresh }),
@@ -62,7 +63,6 @@ vi.mock('@nocobase/i18n/client', () => ({
     error: undefined,
   }),
 }));
-vi.mock('@/components/ui/toast', () => ({ toast: { add: addToast } }));
 
 interface Item {
   readonly id: number;
@@ -151,10 +151,11 @@ function ItemsPage(): ReactElement {
 function NewItemFooter(): ReactElement {
   const { t } = useTranslation();
   const { close } = useRouteOverlay();
+  const toaster = useToaster();
   return (
     <Button
       onClick={() => {
-        toast.add({ type: 'success', title: t('items.create.success') });
+        toaster.show({ type: 'success', title: t('items.create.success') });
         void close();
       }}
     >
@@ -191,7 +192,7 @@ function renderAt(url: string) {
 describe('page test harness', () => {
   beforeEach(() => {
     api.request.mockReset();
-    addToast.mockReset();
+    toaster.show.mockReset();
     permission.can = true;
     permission.isPending = false;
     permission.error = undefined;
@@ -283,7 +284,7 @@ describe('page test harness', () => {
       screen.getByRole('button', { name: 'actions.create' }),
     );
 
-    expect(addToast).toHaveBeenCalledWith({
+    expect(toaster.show).toHaveBeenCalledWith({
       type: 'success',
       title: 'items.create.success',
     });

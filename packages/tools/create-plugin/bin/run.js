@@ -5,13 +5,21 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  formatUnsupportedNodeVersionMessage,
+  exitWhenFlushed,
   isSupportedNodeVersion,
-} from './node-version.js';
+  unsupportedNodeVersionOutput,
+} from '@nocobase/cli-envelope/node-guard';
 
 if (!isSupportedNodeVersion()) {
-  console.error(formatUnsupportedNodeVersionMessage(process.version));
-  process.exit(1);
+  const { stream, text } = unsupportedNodeVersionOutput({
+    name: 'create-plugin',
+    command: 'create-plugin',
+    argv: process.argv.slice(2),
+    // create-plugin prints its documents indented, so the guard's matches.
+    indent: 2,
+  });
+  process[stream].write(`${text}\n`);
+  await exitWhenFlushed(1);
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,4 +38,4 @@ const exitCode = await runCreatePluginCli({
   version: manifest.version,
 });
 
-process.exit(exitCode);
+await exitWhenFlushed(exitCode);

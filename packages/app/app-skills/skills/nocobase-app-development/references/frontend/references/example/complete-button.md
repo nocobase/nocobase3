@@ -8,7 +8,7 @@ Rules: ["Write operations" in `api.md`](../api.md#write-operations).
 
 ```tsx
 // client/pages/projects/complete-project-button.tsx
-import { ApiClientError, useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { CheckIcon } from 'lucide-react';
@@ -16,7 +16,6 @@ import { type ReactElement, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { toast } from '@/components/ui/toast';
 
 import type { Project } from './types.js';
 
@@ -37,6 +36,7 @@ export function CompleteProjectButton({
   const { t } = useTranslation();
   // Hooks can only be called at the top level of a component or custom hook, never inside event handlers, conditions or loops.
   const api = useApiClient();
+  const toaster = useToaster();
   const { refresh } = useAuthentication();
   const [pending, setPending] = useState(false);
 
@@ -48,7 +48,7 @@ export function CompleteProjectButton({
         method: 'PATCH',
         json: { status: 'done' },
       });
-      toast.add({
+      toaster.show({
         type: 'success',
         title: t('projects.complete.success', { name: project.name }),
       });
@@ -57,9 +57,8 @@ export function CompleteProjectButton({
       // This action has no dialog, so errors have no fixed place to appear; use a toast.
       if (error instanceof ApiClientError && error.status === 401) {
         // The session ended: offer to sign in again; the user chooses when, since refresh() blanks the signed-in pages.
-        toast.add({
+        toaster.show({
           type: 'error',
-          priority: 'high',
           title: t('status.sessionExpired'),
           actionProps: {
             children: t('actions.signInAgain'),
@@ -67,24 +66,21 @@ export function CompleteProjectButton({
           },
         });
       } else if (error instanceof ApiClientError && error.status === 404) {
-        toast.add({
+        toaster.show({
           type: 'error',
-          priority: 'high',
           // A toast is short (guideline C5): the record's name, not the inline alert's longer sentence.
           title: t('projects.complete.notFound', { name: project.name }),
         });
         onGone();
       } else if (error instanceof ApiClientError && error.status === 403) {
-        toast.add({
+        toaster.show({
           type: 'error',
-          priority: 'high',
           title: t('projects.error.forbidden'),
         });
       } else {
         // Network errors are not ApiClientError and end up here too. Do not show error.message.
-        toast.add({
+        toaster.show({
           type: 'error',
-          priority: 'high',
           title: t('projects.error.requestFailed'),
         });
       }

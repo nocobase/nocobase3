@@ -151,11 +151,12 @@ Charts use `recharts` through the `chart` primitive, which the template does not
 
 ## 6. Toasts
 
-How to call `toast.add` and which type fits which situation is in ["Toasts" in `api.md`](api.md#toasts). What the shell provides, and must keep providing:
+How to call `toaster.show` and which type fits which situation is in ["Toasts" in `api.md`](api.md#toasts). What the shell provides, and must keep providing:
 
-- `client/react-providers.ts` mounts the application's `Toaster` once, in the `application` layer: toasts appear in the bottom-right corner and take their colors from `--popover`, `--popover-foreground`, and `--border`, so they follow the theme. Mounting another one renders every toast twice, because both listen to the same `toast` manager.
+- How a toast is presented is decided once, in `client/lib/toaster.ts`, for the application's toasts and the plugins' alike: it forwards to the Base UI `toast` manager and announces an error written as plain text to screen readers at once. Any other error — one with an action, or whose title or description is an element rather than text — keeps the default priority, because it may hold a control, and Base UI hides a high-priority toast's controls from assistive technology until its viewport is focused. Clicking an action runs its `onClick` and leaves the toast open.
+- `client/react-providers.ts` mounts the application's `Toaster` once, in the `application` layer, and `client/service-provider.ts` registers the toaster service that feeds it: toasts appear in the bottom-right corner and take their colors from `--popover`, `--popover-foreground`, and `--border`, so they follow the theme. Mounting another one renders every toast twice, because both listen to the same `toast` manager.
 - Toasts stay above dialogs, sheets and popovers because a `[data-slot='toast-viewport']` rule at the end of `client/styles.css` lifts the viewport to `z-index: 100`. Every overlay in `client/components/ui/` uses `z-50`, and the toaster, mounted first, would otherwise paint under a dialog opened later. Keep that rule, and leave the generated component's `z-50` alone.
-- Plugin pages report through the same host with Base UI's `Toast.useToastManager()`, which throws when no provider is mounted. Keep the `toaster` entry when you customize `client/react-providers.ts`.
+- Plugin pages report through the same `useToaster()`. Keep the toaster service's registration in `client/service-provider.ts` and the `toaster` entry that mounts the `Toaster` component in `client/react-providers.ts` when you customize them: without the registration nothing throws, but every toast is only logged to the browser console.
 
 ## 7. Semantic tokens
 

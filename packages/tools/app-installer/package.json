@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-installer",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Install, upgrade and roll back a NocoBase 3 application on a server, from a deployment archive or the published Hub template.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -29,6 +29,7 @@
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-installer.tgz\" && pnpm exec publint ."
   },
   "dependencies": {
+    "@nocobase/cli-envelope": "workspace:^",
     "@oclif/core": "catalog:",
     "tar": "catalog:",
     "yaml": "catalog:"

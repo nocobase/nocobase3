@@ -7,12 +7,16 @@ import packageMetadata from '../package.json' with { type: 'json' };
 import {
   unsupportedNodeVersionEnvelope,
   unsupportedNodeVersionOutput,
-} from '../bin/node-version.js';
+} from '@nocobase/cli-envelope/node-guard';
 import { pendingTaskCount, toSuggestion } from '../src/lib/app-cli.ts';
-import { installerCommand, shellQuote } from '../src/lib/invocation.ts';
+import { formatCommandLine, quoteForShell } from '@nocobase/cli-envelope';
+import {
+  installerCommand,
+  installerCommandLine,
+} from '../src/lib/invocation.ts';
 import { waitForHealthy } from '../src/lib/health.ts';
 import { createPm2, parseJlist, type Pm2 } from '../src/lib/pm2.ts';
-import { checkPm2 } from '../src/lib/prechecks.ts';
+import { checkPm2, checkPnpm } from '../src/lib/prechecks.ts';
 import { InstallerError } from '../src/lib/errors.ts';
 import { resolveTemplateVersion, type FetchLike } from '../src/lib/registry.ts';
 import {
@@ -103,14 +107,51 @@ describe('create-app result', () => {
   it('reads the last JSON line among pnpm notices', () => {
     const stdout = [
       'Progress: resolved 1, reused 0, downloaded 1, added 1, done',
-      '{"status":"success","stage":"complete","nextCommands":[]}',
+      JSON.stringify({
+        schemaVersion: 1,
+        ok: true,
+        command: 'create-app',
+        status: 'success',
+        result: { nextCommands: [] },
+        warnings: [],
+      }),
       '',
     ].join('\n');
-    expect(parseCreateResult(stdout)).toMatchObject({
-      status: 'success',
-      stage: 'complete',
-    });
-    expect(parseCreateResult('no json here')).toEqual({});
+    expect(parseCreateResult(stdout)).toMatchObject({ ok: true });
+    expect(parseCreateResult('no json here')).toEqual({ ok: false });
+  });
+
+  it('reads the stage and message a failure reports', () => {
+    expect(
+      parseCreateResult(
+        JSON.stringify({
+          schemaVersion: 1,
+          ok: false,
+          command: 'create-app',
+          status: 'failure',
+          error: {
+            code: 'INSTALL_FAILED',
+            message: 'installation failed',
+            suggestions: [],
+            details: { stage: 'install', projectCreated: true },
+          },
+          warnings: [],
+        }),
+      ),
+    ).toEqual({ ok: false, stage: 'install', message: 'installation failed' });
+  });
+
+  it('reads the flat result a create-app from before the envelope prints', () => {
+    expect(
+      parseCreateResult(
+        '{"status":"success","stage":"complete","nextCommands":[]}',
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      parseCreateResult(
+        '{"status":"error","stage":"install","message":"installation failed"}',
+      ),
+    ).toEqual({ ok: false, stage: 'install', message: 'installation failed' });
   });
 });
 
@@ -269,11 +310,38 @@ describe('suggested commands', () => {
     );
   });
 
+  it("names app-installer in a suggestion's run as an executable and its arguments", () => {
+    expect(
+      installerCommandLine(['rollback', '--dir', '/srv/my hub'], {
+        registry: 'http://127.0.0.1:4873/',
+      }),
+    ).toEqual({
+      command: 'npx',
+      args: [
+        '--yes',
+        '--registry=http://127.0.0.1:4873',
+        `@nocobase/app-installer@${packageMetadata.version}`,
+        'rollback',
+        '--dir',
+        '/srv/my hub',
+      ],
+    });
+  });
+
+  it('writes a command out for a person with only the arguments that need it quoted', () => {
+    expect(
+      formatCommandLine({
+        command: 'tail',
+        args: ['-n', '100', "/srv/it's here/logs/error.log"],
+      }),
+    ).toBe("tail -n 100 '/srv/it'\\''s here/logs/error.log'");
+  });
+
   it('quotes a path only when a shell would split or expand it', () => {
-    expect(shellQuote('/srv/nocobase/hub')).toBe('/srv/nocobase/hub');
-    expect(shellQuote('/srv/my hub')).toBe("'/srv/my hub'");
-    expect(shellQuote("/srv/it's")).toBe("'/srv/it'\\''s'");
-    expect(shellQuote('/srv/$HOME')).toBe("'/srv/$HOME'");
+    expect(quoteForShell('/srv/nocobase/hub')).toBe('/srv/nocobase/hub');
+    expect(quoteForShell('/srv/my hub')).toBe("'/srv/my hub'");
+    expect(quoteForShell("/srv/it's")).toBe("'/srv/it'\\''s'");
+    expect(quoteForShell('/srv/$HOME')).toBe("'/srv/$HOME'");
   });
 
   it("folds the release CLI's commands into the message, since none of them runs as-is from a Hub root", () => {
@@ -311,19 +379,26 @@ describe('suggested commands', () => {
 
 describe('unsupported Node.js', () => {
   it('prints the envelope on stdout under --json, and text on stderr otherwise', () => {
-    const json = unsupportedNodeVersionOutput(
-      ['upgrade', '--dir', '/srv/hub', '--json'],
-      'v22.1.0',
-    ) as { stream: string; text: string };
+    const guard = { name: 'app-installer', version: 'v22.1.0' };
+    const json = unsupportedNodeVersionOutput({
+      ...guard,
+      argv: ['upgrade', '--dir', '/srv/hub', '--json'],
+    });
     expect(json.stream).toBe('stdout');
     expect(JSON.parse(json.text)).toMatchObject({
       command: 'upgrade',
       error: { code: 'NODE_UNSUPPORTED' },
     });
-    const text = unsupportedNodeVersionOutput(['upgrade'], 'v22.1.0') as {
-      stream: string;
-      text: string;
-    };
+    // A flag's value is never taken for the command: with a flag first, the document names no command.
+    expect(
+      JSON.parse(
+        unsupportedNodeVersionOutput({
+          ...guard,
+          argv: ['--dir', '/srv/hub', 'status', '--json'],
+        }).text,
+      ),
+    ).toMatchObject({ command: '' });
+    const text = unsupportedNodeVersionOutput({ ...guard, argv: ['upgrade'] });
     expect(text.stream).toBe('stderr');
     expect(text.text).toContain('Node.js 24 or later is required');
   });
@@ -334,13 +409,36 @@ describe('unsupported Node.js', () => {
         schemaVersion: 1,
         ok: false,
         command: 'install',
-        status: 'error',
+        status: 'failure',
         error: {
           code: 'NODE_UNSUPPORTED',
           message: expect.stringContaining('v20.11.0') as unknown,
         },
       },
     );
+  });
+});
+
+describe('pnpm version', () => {
+  it('names corepack enable and corepack prepare as two commands, since a suggestion runs one', async () => {
+    const corepack = [
+      { run: { command: 'corepack', args: ['enable'] } },
+      {
+        run: {
+          command: 'corepack',
+          args: ['prepare', 'pnpm@11', '--activate'],
+        },
+      },
+    ];
+    await expect(
+      checkPnpm(() => Promise.reject(new Error('ENOENT'))),
+    ).rejects.toMatchObject({ code: 'PNPM_MISSING', suggestions: corepack });
+    await expect(
+      checkPnpm(async () => ({ stdout: '10.4.1\n', stderr: '' })),
+    ).rejects.toMatchObject({
+      code: 'PNPM_UNSUPPORTED',
+      suggestions: corepack,
+    });
   });
 });
 
@@ -360,6 +458,11 @@ describe('pm2 version', () => {
     await expect(checkPm2(pm2Printing('4.2.3\n'))).rejects.toMatchObject({
       code: 'PM2_UNSUPPORTED',
       message: expect.stringContaining('found 4.2.3') as unknown,
+      // One command per suggestion: the update, then the daemon swap.
+      suggestions: [
+        { run: { command: 'npm', args: ['install', '-g', 'pm2@latest'] } },
+        { run: { command: 'pm2', args: ['update'] } },
+      ],
     });
     await expect(checkPm2(pm2Printing('4.3.0\n'))).resolves.toBe('4.3.0');
   });

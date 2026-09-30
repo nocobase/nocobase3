@@ -6,10 +6,12 @@ import aiEmployee from '@nocobase/app-plugin-ai-employee/server/plugin';
 import authorization from '@nocobase/app-plugin-authorization/server';
 import users from '@nocobase/app-plugin-users/server';
 import authorizationExample from '@nocobase/app-plugin-authorization-example/server';
+import templatePrintExample from '@nocobase/app-plugin-template-print-example/server';
 import departmentsExample from '@nocobase/app-plugin-departments-example/server';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
+import jobsExample from '@nocobase/app-plugin-jobs-example/server';
 import notification from '@nocobase/app-plugin-notification/server';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/server';
 import notificationProviders from '@nocobase/app-plugin-notification-providers/server';
@@ -38,6 +40,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   sharingRules,
   restrictionRules,
   authorizationExample,
+  templatePrintExample,
   departmentsExample,
   users,
   databaseExplorer,
@@ -50,6 +53,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   notificationExample,
   queueExample,
   realtimeExample,
+  jobsExample,
   routesExample,
   serviceProviderExample,
   workflow,

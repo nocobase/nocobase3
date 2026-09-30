@@ -83,7 +83,7 @@ After adding a primitive, look through the created files for English this table 
 2. **Themes are this application's presets.** Never run `shadcn apply`, `shadcn init` or any command with `--preset`: they rewrite `components.json`, `client/styles.css` and the installed primitives. Do not add variables to `:root` and `.dark` in `client/styles.css` as the skill's `customization.md` does, and do not set up `next-themes`, which `client/theme/` already wires. Change tokens in `client/theme/themes/*.css` as [`theme.md`](theme.md) describes.
 3. **Overlays follow the URL.** The skill gives a side panel with details or filters to `Sheet`. Here create and edit are a `RouteDialog` and record details a `RouteDrawer`, both child routes, and `Sheet` is only for a temporary panel that represents no record ([`overlay.md`](overlay.md)). The skill's `Drawer` is a bottom sheet, not `RouteDrawer`.
 4. **Labels go above inputs.** Ignore the skill's `Field orientation="horizontal"` for settings pages: ordinary fields keep the default vertical layout everywhere, and only a Checkbox, a Switch or a radio option sits beside its label (guideline T3.2 in [`../ui-guidelines.md`](../ui-guidelines.md)).
-5. **Toasts have one host.** Call `toast.add` from `@/components/ui/toast`; the application mounts the only `Toaster` ([section 6 of `styling.md`](styling.md#6-toasts)).
+5. **Toasts have one host.** Show them with `useToaster()` from `@nocobase/app-client`, not the skill's `toast()` call; the application mounts the only `Toaster` ([section 6 of `styling.md`](styling.md#6-toasts)).
 6. **No MCP server.** Do not run `shadcn mcp init`, which writes editor configuration; the CLI covers everything this handbook needs.
 
 ## 4. Blocks

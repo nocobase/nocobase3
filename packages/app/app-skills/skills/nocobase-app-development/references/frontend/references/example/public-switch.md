@@ -10,7 +10,7 @@ Rules: ["Checkbox and Switch" in `form.md`](../form.md#checkbox-and-switch), and
 
 ```tsx
 // client/pages/projects/project-public-switch.tsx
-import { ApiClientError, useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, useId, useState } from 'react';
@@ -22,7 +22,6 @@ import {
   FieldLabel,
 } from '@/components/ui/field';
 import { Switch } from '@/components/ui/switch';
-import { toast } from '@/components/ui/toast';
 
 export interface ProjectPublicSwitchProps {
   readonly projectId: number;
@@ -40,6 +39,7 @@ export function ProjectPublicSwitch({
 }: ProjectPublicSwitchProps): ReactElement {
   const { t } = useTranslation();
   const api = useApiClient();
+  const toaster = useToaster();
   const { refresh } = useAuthentication();
   const id = useId();
   // The value being saved: shown while the request runs, cleared afterwards, so a failure falls back to the saved value.
@@ -54,7 +54,7 @@ export function ProjectPublicSwitch({
         json: { isPublic: next },
       });
       onSaved(data.isPublic);
-      toast.add({
+      toaster.show({
         type: 'success',
         title: data.isPublic
           ? t('projects.settings.publicOn')
@@ -63,9 +63,8 @@ export function ProjectPublicSwitch({
     } catch (error: unknown) {
       // No dialog to show the error in, so use an error toast (guideline I3); the switch returns to the saved value.
       const status = error instanceof ApiClientError ? error.status : undefined;
-      toast.add({
+      toaster.show({
         type: 'error',
-        priority: 'high',
         title:
           status === 401
             ? t('status.sessionExpired')

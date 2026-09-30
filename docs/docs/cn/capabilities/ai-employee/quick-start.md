@@ -6,15 +6,14 @@ keywords: 'NocoBase,AI 员工,快速开始,config.yml,LLM,全局对话'
 
 # 快速开始
 
-这条路径使用 NocoBase 内置的 AI 员工和前端组件，不要求你先编写自己的员工。完成 LLM 配置、确认模型和创建全局入口后，就可以开始对话。
+这条路径使用 NocoBase 内置的 AI 员工和前端组件，不要求你先编写自己的员工。先在第一次启动前用 CLI 从内置 Provider 获取真实模型 ID，再完成服务初始化、最小调用测试和聊天入口配置。
 
 ## 前置条件
 
 - 已使用 `pnpm create @nocobase/app <目录名>` 创建应用，并在应用目录中运行过 `pnpm nocobase config init`
-- 应用可以通过 `pnpm dev` 启动
-- `@nocobase/app-plugin-ai-employee` 已在应用的 Server 和 Client 插件列表中注册
-- 已准备 LLM 服务的 API Key
+- 已注册 `@nocobase/app-plugin-ai-employee` 的 Server、Client 和 CLI 入口；CLI 入口注册在 `cli/plugins.ts`
 - 当前账号可以访问 `/settings/ai`
+- 对于需要密钥的 Provider，由你本人在自己的环境中设置密钥，不需要把密钥提供给 AI 助手
 
 ## 创建应用
 
@@ -26,141 +25,123 @@ cd ai-workspace
 pnpm nocobase config init
 ```
 
-创建命令生成完整的应用源码并安装依赖，`pnpm nocobase config init` 生成 `config.yml`（默认使用 SQLite，并填入随机密钥）。确认初始应用能够通过 `pnpm dev` 启动，然后继续配置 AI。
+创建命令生成完整的应用源码并安装依赖，`pnpm nocobase config init` 生成 `config.yml`（默认使用 SQLite，并填入随机密钥）。确认 CLI 可用：
+
+```bash
+pnpm nocobase commands --json
+```
+
+不要让 AI 助手读取或打印 `config.yml`、`.env`、环境变量或任何密钥；后续命令只报告配置诊断和 Provider 返回的模型 ID。
 
 ## 第一步：声明 LLM 服务
 
-打开应用根目录的 `config.yml`，在 `ai.llmServices` 中添加服务。下面使用名为 `gpt` 的 OpenAI 服务，并把密钥留给环境变量注入。
+保持服务停止，打开应用根目录的 `config.yml`，在 `ai.llmServices` 中添加服务。`llmServices` 是以服务名为键的对象；下面的 `openai` 是服务名，不是必须使用的 Provider 名称。先不要写 `enabledModels`，也不要把密钥写入仓库。
 
 ```yaml
 ai:
   llmServices:
-    - name: gpt
-      title: GPT
+    openai:
+      title: OpenAI
       provider: openai
-      options:
-        apiKey: ${OPENAI_API_KEY}
-      enabledModels:
-        - label: GPT-5.6
-          value: gpt-5.6
       enabled: true
 ```
 
-`name` 是 NocoBase 内部引用这个服务的稳定标识，`provider` 是内置 Provider 的注册名。`enabledModels[].value` 必须使用服务商接受的真实模型 ID；如果当前账号不能使用示例中的 `gpt-5.6`，请替换成实际可用的模型。
+键 `openai` 是 NocoBase 内部引用服务的稳定标识，条目里没有 `name` 字段。`provider` 必须是内置 Provider 的注册名。自定义 Provider 不能通过本页的启动前 CLI 流程发现；它需要应用启动后由应用代码注册，再到 LLM services 页面配置。
 
-你也可以先不写 `enabledModels`：
+<a id="第二步配置密钥并重启"></a>
 
-```yaml
-ai:
-  llmServices:
-    - name: gpt
-      title: GPT
-      provider: openai
-      options:
-        apiKey: ${OPENAI_API_KEY}
-      enabled: true
-```
+## 第二步：检查配置并由用户设置密钥
 
-省略 `enabledModels` 后，服务使用 Provider 模型模式。服务启动后，再到管理页搜索并选择要开放的模型。
-
-## 第二步：配置密钥并重启
-
-密钥不能进入仓库，也不能被提交。动手之前，先确认 `config.yml` 和 `.env` 都被 Git 忽略并且没有被跟踪。刚创建的应用还不是 git 仓库时，先在应用根目录执行 `git init`。下面每一行输出 `ok` 才能继续：
+在应用根目录运行：
 
 ```bash
-git check-ignore -q config.yml && ! git ls-files --error-unmatch config.yml >/dev/null 2>&1 && echo "config.yml ok" || echo "config.yml 未被忽略，停止"
-git check-ignore -q .env && ! git ls-files --error-unmatch .env >/dev/null 2>&1 && echo ".env ok" || echo ".env 未被忽略，停止"
+pnpm nocobase config check
 ```
 
-`config.example.yml` 会入库，所以无论用哪种方式，它都只写 `${OPENAI_API_KEY}`，不写真实的值。
-
-密钥可以放在三个地方，按推荐顺序排列：
-
-| 方式                        | 密钥在哪里               | `config.yml` 写什么 | 适用范围                                     |
-| --------------------------- | ------------------------ | ------------------- | -------------------------------------------- |
-| 推荐：系统环境变量          | 本机或部署环境的环境变量 | `${OPENAI_API_KEY}` | 开发和部署逻辑一致                           |
-| 其次：直接写入 `config.yml` | `config.yml`             | 密钥的值            | 开发和部署都可用，前提是 `config.yml` 不入库 |
-| 最后：`.env`                | 应用根目录的 `.env`      | `${OPENAI_API_KEY}` | **当前版本只有 `pnpm dev` 支持**             |
-
-下面的命令都要在你自己的终端里运行。命令运行后会提示 `OpenAI API Key:`，粘贴密钥后回车即可；输入时屏幕上不会显示，密钥也不会出现在命令行和 shell 历史里。不要把密钥发给 AI 助手，也不要让它代你执行这些命令，否则密钥会留在对话记录里。
-
-这些命令在 zsh、bash 下实测过：配置文件不存在时会新建，并且只有你自己可读；已经存在的文件保持原来的权限，如果它别人也能读，先用 `chmod 600` 收紧；配置文件是软链接时，写入链接指向的文件，不会替换链接本身；其他行原样保留，同名的旧设置会被替换，重复执行也只留下一行；密钥里有引号、`$`、反斜杠、反引号或首尾空格时也能原样读回。命令不依赖你设置的 alias。输入时按 Ctrl-C 可以取消，什么也不会写入，终端回显也会恢复。
-
-**系统环境变量。** 按你使用的 shell 选一条：
+如果 Provider 需要密钥，检查会报告 `ai.llmServices.openai.options.apiKey` 的警告。写入前确认 `config.yml` 已被 Git 忽略且未被跟踪；应用还不是 Git 仓库时，先检查 `.gitignore` 包含 `/config.yml`。不要在会提交的 `config.example.yml` 中填写密钥。在已有 Git 仓库中可以用下面的命令检查，它不读取配置内容：
 
 ```bash
-# zsh（会读取 ZDOTDIR 指定的目录）
-f="${ZDOTDIR:-$HOME}/.zshrc"; IFS= read -rs 'v?OpenAI API Key: '; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
-
-# bash（Linux）
-f=~/.bashrc; IFS= read -rsp 'OpenAI API Key: ' v; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
-
-# bash（macOS）：终端启动的是登录 shell，依次查找 ~/.bash_profile、~/.bash_login、~/.profile，写入第一个存在的文件，都不存在时新建 ~/.bash_profile
-f=~/.bash_profile; for c in ~/.bash_profile ~/.bash_login ~/.profile; do [ -e "$c" ] && { f=$c; break; }; done; IFS= read -rsp 'OpenAI API Key: ' v; echo; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed "s/'/'\\\\''/g"); k=$(command grep -v '^export OPENAI_API_KEY=' "$f"); command printf "%s\nexport OPENAI_API_KEY='%s'\n" "$k" "$q" > "$f"; unset v q k; source "$f"
+git check-ignore -q config.yml && ! git ls-files --error-unmatch config.yml >/dev/null 2>&1 && echo 'config.yml ok'
 ```
 
-```powershell
-# Windows PowerShell：写入当前用户的环境变量，对之后新开的终端生效
-$k = Read-Host 'OpenAI API Key' -AsSecureString; [Environment]::SetEnvironmentVariable('OPENAI_API_KEY', [System.Net.NetworkCredential]::new('', $k).Password, 'User'); Remove-Variable k
-# 然后在新开的终端里确认
-if ($env:OPENAI_API_KEY) { 'OPENAI_API_KEY 已设置' } else { 'OPENAI_API_KEY 未设置' }
-```
-
-也可以不用命令：在 Windows 的「编辑账户的环境变量」对话框里新建 `OPENAI_API_KEY`，或者用编辑器在 shell 配置文件里加一行 `export OPENAI_API_KEY='你的密钥'`（密钥里有单引号时写成 `'\''`）。
-
-可以用下面的命令确认变量已经生效，它不会打印密钥本身：
+用户应在自己的受保护终端中设置密钥，例如使用已经私下设置的环境变量运行下面的命令；不要把密钥发送给 AI 助手，也不要让 AI 助手读取、回显或验证密钥内容：
 
 ```bash
-[ -n "$OPENAI_API_KEY" ] && echo "OPENAI_API_KEY 已设置" || echo "OPENAI_API_KEY 未设置"
+pnpm nocobase config set --from-env ai.llmServices.openai.options.apiKey=OPENAI_API_KEY
 ```
 
-`source` 只对执行它的那个终端生效。其他已经打开的终端和正在运行的进程仍然使用启动时的环境，AI 助手的终端也一样：在当前会话里新设的变量，AI 助手启动的 `pnpm dev` 读不到，`${OPENAI_API_KEY}` 会展开成空字符串。所以要么在你自己的终端里启动服务，要么从已经有这个变量的终端重新打开 AI 助手的会话。
+写入后再次运行 `pnpm nocobase config check`。AI 助手只应根据命令的成功或诊断输出继续操作，不应读取 `config.yml` 或 `.env`。
 
-**直接写入 `config.yml`。** 先把 `apiKey` 写成单引号包起来的占位标记 `apiKey: 'REPLACE_WITH_OPENAI_API_KEY'`，再运行下面的命令。它按 YAML 单引号字符串的规则写入密钥（单引号写成两个），读回来就是原值；文件里找不到占位标记时会报错，不改动文件。插件同步配置时会把值里的 `${字母开头的名字}` 当成环境变量展开，这种片段在 `config.yml` 里没有办法转义，所以密钥里恰好有这样的片段时，命令会提示你改用系统环境变量：
+### 由运行环境注入密钥
 
-```bash
-command printf 'OpenAI API Key: '; stty -echo; IFS= read -r v; stty echo; echo; case $v in *'${'[A-Za-z_]*'}'*) command printf '%s\n' '这个密钥含有 ${字母…} 形式的片段，插件会把它当成环境变量展开，请改用系统环境变量。';; *) KEY="$v" command perl -e 'local $/; my $f = shift; open my $in, "<", $f or die "$f: $!\n"; my $s = <$in>; close $in; (my $k = $ENV{KEY}) =~ s/\x27/\x27\x27/g; $s =~ s/REPLACE_WITH_OPENAI_API_KEY/$k/g or die "$f 里没有找到 REPLACE_WITH_OPENAI_API_KEY\n"; open my $out, ">", $f or die "$f: $!\n"; print $out $s; close $out or die "$f: $!\n"' config.yml;; esac; unset v
-```
-
-选择这种方式意味着 AI 助手之后每次修改 `config.yml`（添加 MCP 服务、附件存储或其他 LLM 服务）都会读到密钥，密钥会因此进入对话记录，所以它排在第二位。
-
-**`.env`。** 当前版本中，只有 `pnpm dev` 会把 `.env` 合并进服务进程的环境；构建后的服务（`pnpm start` 和部署环境）读不到它，`${OPENAI_API_KEY}` 会展开成空字符串。这个问题会在后续版本处理。
-
-`pnpm dev` 合并时，`.env.local` 里的同名变量优先于 `.env`，启动 `pnpm dev` 的终端里已有的环境变量又优先于这两个文件。所以用 `.env` 之前，先在要启动服务的终端里确认两处都没有 `OPENAI_API_KEY`，否则 `.env` 里的值不会生效。下面的命令只输出有没有，不打印值：
-
-```bash
-[ -n "$OPENAI_API_KEY" ] && echo "终端里已有 OPENAI_API_KEY" || echo "终端里没有"; command grep -q '^OPENAI_API_KEY=' .env.local 2>/dev/null && echo ".env.local 里已有 OPENAI_API_KEY" || echo ".env.local 里没有"
-```
-
-`.env` 里的值即使加了引号，`$NAME` 和 `${NAME}` 也会被展开成环境变量，`\n`、`\r` 会被转成换行。下面的命令把值用单引号包起来，并把会被展开的 `$` 写成 `\$`；密钥里如果恰好有「反斜杠加 n 或 r」，`.env` 无法保存，命令会提示你改用系统环境变量：
-
-```bash
-command printf 'OpenAI API Key: '; stty -echo; IFS= read -r v; stty echo; echo; case $v in *'\n'*|*'\r'*) command printf '%s\n' '这个密钥含有反斜杠加 n 或 r，.env 无法保存，请改用系统环境变量。';; *) f=.env; [ -e "$f" ] || (umask 077; command touch "$f"); q=$(command printf '%s' "$v" | command sed -E 's/\$(\{?[A-Za-z_])/\\$\1/g'); k=$(command grep -v '^OPENAI_API_KEY=' "$f"); command printf "%s\nOPENAI_API_KEY='%s'\n" "$k" "$q" > "$f";; esac; unset v q k
-```
-
-服务只在启动时读取环境变量、`config.yml` 和 `.env`，无论改的是哪一项，都要重启服务才会生效。`pnpm dev` 在 `config.yml` 或 `.env` 变化时会自动重启，并重新读取这两个文件；但它沿用的是 `pnpm dev` 启动时的环境，拿不到之后新设的系统环境变量。使用系统环境变量方式时，要彻底停掉 `pnpm dev`，再从已经有这个变量的终端重新启动。
+如果密钥由服务管理器、容器或 CI 注入，则保留 `server/config/ai.ts` 中的 `defineAIConfig` 和默认配置，在 `env` 中添加映射，例如 `OPENAI_API_KEY: envString('llmServices.openai.options.apiKey')`，其中 `envString` 从 `@nocobase/app-server/config` 导入。映射路径从 `ai` 节点往下写，只映射已声明的服务。有值的映射变量覆盖 `config.yml`；构建后的服务要重新 `pnpm build` 才会读取新的映射代码。在相同运行环境里用 `pnpm nocobase config env` 查看映射及是否已设置，不打印值，再运行 `config check`。
 
 :::warning 部署时单独配置
 
-部署环境要在 `dist/` 旁边单独配置自己的 `config.yml`，`pnpm build` 的产物只包含 `dist/` 和 `config.example.yml`，不会带上 `config.yml`。构建会生成一个 `dist/.env`，但里面只有框架自身的白名单键（数据库、邮件、缓存等），不包含 LLM 密钥。使用环境变量方式时，变量要设置在服务管理器启动进程的环境里，例如 systemd 的 `Environment=`、进程管理器的环境配置或容器的环境变量。服务不会读取登录 shell 的 `~/.zshrc`，所以终端里能读到的变量，服务进程里不一定有。首次启动前，请确认这两处都已配置好密钥。
+部署环境有自己的运行配置，做法见[独立部署](../../deployment/standalone.md)和[运行配置](../../deployment/configuration.md)。`ai.llmServices` 的服务条目和密钥也属于这份配置，要在部署环境里同样设置。
 
 :::
 
-:::tip 为什么 `${OPENAI_API_KEY}` 可以使用
+## 第三步：启动前获取真实模型 ID
 
-`config.yml` 本身没有通用的环境变量插值语法。`${NAME}` 在这里能生效，是因为 AI 员工插件同步 `ai.llmServices` 和 `ai.mcpServers` 时会递归展开这些值。变量不存在时会得到空字符串，调用通常会在 Provider 认证阶段失败。
+在第一次启动应用之前，使用已注册的 CLI 入口从 Provider 获取模型 ID：
 
-:::
+```bash
+pnpm nocobase ai-employee models openai --json
+pnpm nocobase ai-employee models openai --search gpt --json
+```
 
-## 第三步：在管理页确认模型
+`<service>` 是 `ai.llmServices` 中的服务名，`--search` 按不区分大小写的子字符串过滤返回的模型 ID。该命令使用最终配置（包括环境变量映射），只调用内置 Provider，不启动 Server、不读取数据库、不修改配置，也不显示密钥。`--json` 返回标准 CLI 信封：`{ schemaVersion, ok, command, status, result | error, warnings }`；先检查 `ok` 和退出状态，再从 `result` 中取模型 ID。
 
-打开设置侧栏「AI」分组里的「LLM services」页面（`/settings/ai/llm-services`）。你应该能看到 `gpt` 服务、`OpenAI` Provider 和当前已启用模型。
+模型列表只说明 Provider 返回了这些 ID，不保证账号能够调用某个模型。选择服务商返回的真实 ID，不要使用记忆中的示例值。
+
+## 第四步：写入 enabledModels
+
+把选择的真实 ID 写入 `config.yml` 的 `enabledModels`，替换下面片段中的 `<real-model-id>` 占位符。AI 助手可通过不输出文件内容的本地脚本只更新这个字段，保留其他配置、密钥和注释，不得输出敏感错误片段。更新后运行 `config check --no-connect`，等待你确认后再启动服务器：
+
+```yaml
+ai:
+  llmServices:
+    openai:
+      title: OpenAI
+      provider: openai
+      enabledModels:
+        - label: Provider returned model
+          value: <real-model-id>
+      enabled: true
+```
+
+`label` 只影响显示，`value` 会原样发送给 Provider。再次运行配置检查：
+
+```bash
+pnpm nocobase config check
+```
+
+`enabledModels` 默认只在服务记录第一次创建时初始化模型列表；因此新服务要在第一次启动前完成这一步。已初始化的服务不要用编辑 `config.yml` 的方式替代管理页操作，除非明确设置 `overrideEnabledModels: true` 并接受每次启动覆盖管理页的模型选择。
+
+## 第五步：第一次启动、最小调用测试和聊天
+
+现在启动应用：
+
+```bash
+pnpm dev
+```
+
+确认服务初始化后，先获得用户对潜在 Provider 费用的明确批准，再运行最小调用测试：
+
+```bash
+pnpm nocobase ai-employee test openai --model <real-model-id> --json
+```
+
+该命令使用最终配置，不启动另一个 Server、不访问数据库，发送最小 completion 并报告模型是否可调用，不输出回答正文。它可能产生费用，只证明这一次基础调用成功；它不证明聊天、流式输出、工具、附件或网页搜索可用。不要自动重试未知结果，也不要把失败信息中的密钥或完整配置打印出来。
+
+打开设置侧栏「AI」分组里的「LLM services」页面（`/settings/ai/llm-services`）确认服务和模型已启用。如果服务已经初始化过，或者使用了自定义 Provider，在这里从 Provider 返回的模型列表中选择模型并保存，而不是期待 `enabledModels` 的后续编辑自动生效。
 
 ![编辑 LLM 服务模型](https://static-docs.nocobase.com/20260914111142-ai-employee-llm-services.png)
 
-如果配置里没有写 `enabledModels`，点击模型列前的编辑按钮，从 Provider 返回的模型列表中选择模型；也可以切换到手动输入，填写模型 ID 和显示名称。最后确认服务右侧的「Enabled」开关已经打开。
+还需要发送真实聊天消息来验证完整链路；下面先创建全局聊天入口。
 
-## 第四步：创建全局 AI 对话入口
+## 第六步：创建全局 AI 对话入口
 
 开发模式下打开 `/dev/ai-components/floating`，这里展示了全局悬浮入口、右侧面板和对话框之间的组合方式。
 
@@ -178,28 +159,31 @@ command printf 'OpenAI API Key: '; stty -echo; IFS= read -r v; stty echo; echo; 
 - 点击后用 ChatSurface 打开右侧对话面板，并允许展开为 dialog；
 - 复用同一个 AIChatProvider、controller 和 AIChatWindow，切换容器时不要重建会话；
 - 用 useAI() 的就绪状态控制渲染：员工或模型还在加载、加载失败、没有可用员工或没有已启用模型时，显示对应的提示，而不是一个看起来可用的输入框；
-- 给 AIChatProvider 传入 defaultEmployee，指定入口默认使用的员工（悬浮入口不传 aiEmployee 时也会用它），不要依赖排序第一的内置员工；
+- 给 AIChatProvider 传入 defaultEmployee，指定入口默认使用的员工，不要依赖排序第一的内置员工；
 - 保留历史会话、Tool 审批、附件和断线恢复能力；
 - 完成后运行应用的 lint、typecheck、test 和 build。
 ```
 
-## 第五步：开始对话
+## 第七步：开始对话
 
-刷新应用，点击右下角的 AI 图标。确认默认选中的是你指定的员工和刚才启用的模型，然后发送一条消息。如果员工、模型、流式回答和会话历史都能正常显示，最小链路就已经打通。
+刷新应用，点击右下角的 AI 图标，确认默认选中预期员工和刚才启用的模型，然后发送一条消息。检查流式回答和会话历史，再刷新页面重复第一次发送，确认新挂载的聊天也可用。CLI 的 `test` 成功不能替代这些验证。
 
-遇到问题时按下面的顺序检查：
+## 遇到问题时
 
-| 现象                          | 优先检查                                               |
-| ----------------------------- | ------------------------------------------------------ |
-| 「LLM services」页面没有服务  | `config.yml` 的 YAML 缩进、`ai.llmServices` 和服务重启 |
-| 服务存在但没有模型            | 编辑模型列表，或检查 `enabledModels` 中的模型 ID       |
-| 调用返回认证错误              | 运行进程是否读到环境变量，Provider 是否与密钥匹配      |
-| 看不到可用员工                | 员工是否在「AI Employees」页面启用                     |
-| `/dev/ai-components/*` 不存在 | 当前是否为开发模式；Dev Route 不进入生产构建           |
+| 现象                            | 优先检查                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `ai-employee models` 不可用     | `@nocobase/app-plugin-ai-employee/cli` 是否导出并注册在 `cli/plugins.ts`               |
+| 模型命令报告缺少密钥            | 让用户在自己的环境中设置密钥，然后只重新运行 `config check` 和模型命令；不要读取密钥   |
+| 模型命令返回空列表              | 服务名、Provider、最终配置和服务商账号权限；不要猜模型 ID                              |
+| 启动报 `Invalid ai.llmServices` | `llmServices` 是否写成以服务名为键的对象，条目里是否多写了 `name`                      |
+| 测试返回 Provider 错误          | 服务商账号、真实模型 ID、Provider 和用户设置的密钥；测试可能已经产生费用，不要盲目重试 |
+| 服务存在但聊天没有模型          | 新服务是否在第一次启动前写入 `enabledModels`；已有服务请到管理页选择并启用模型         |
+| 自定义 Provider 无法用 CLI 发现 | 启动应用让 Provider 注册，再使用 LLM services 页面和真实聊天验证                       |
+| `/dev/ai-components/*` 不存在   | 当前是否为开发模式；Dev Route 不进入生产构建                                           |
 
 ## 相关链接
 
-- [LLM 配置](./configuration/llm.md) — 查看全部 Provider 和配置字段
+- [LLM 配置](./configuration/llm.md) — 查看全部 Provider、CLI 模型发现和配置字段
 - [聊天框](./components/chat.md) — 了解聊天窗口的组件层次
 - [全局对话入口](./components/floating.md) — 在应用级 Provider 中挂载悬浮入口
-- [LLM 服务管理](./management/llm-services.md) — 在后台选择和启用模型
+- [LLM 服务管理](./management/llm-services.md) — 管理已初始化服务的模型和启用状态
