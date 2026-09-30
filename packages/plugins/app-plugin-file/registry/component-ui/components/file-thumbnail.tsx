@@ -6,7 +6,7 @@ import {
   FileText,
   FileVideo,
 } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 
 import { isSafeImagePreview } from '../lib/file-preview';
 import type { FileThumbnailProps } from '../types';
@@ -48,12 +48,15 @@ export function FileThumbnail({
   const imageUrl = resolveSafeFileUrl(
     url ?? (isSafeImagePreview(file) ? (file.contentUrl ?? '') : ''),
   );
-  return imageUrl ? (
+  // Remember which URL failed rather than a flag, so a new URL is tried again.
+  const [failedUrl, setFailedUrl] = useState<string>();
+  return imageUrl && imageUrl !== failedUrl ? (
     <img
       data-slot='file-thumbnail'
       src={imageUrl}
       alt={alt}
       className='h-full w-full object-cover'
+      onError={() => setFailedUrl(imageUrl)}
     />
   ) : (
     <span
