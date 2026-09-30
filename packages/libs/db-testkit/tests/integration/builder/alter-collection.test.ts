@@ -105,4 +105,30 @@ describeIntegrationDatabases('collection alteration', (context) => {
       }),
     ).resolves.toBeDefined();
   });
+
+  it('relaxes nullability and changes a default without restating the type', async () => {
+    await context.builder.createCollection('tickets', (collection) => {
+      collection.increments('id');
+      collection.integer('ownerId', { nullable: false });
+      collection.string('status', {
+        length: 20,
+        nullable: false,
+        defaultValue: 'draft',
+      });
+    });
+
+    await context.builder.alterCollection('tickets', (collection) => {
+      collection.alterField('ownerId', { nullable: true });
+      collection.alterField('status', { defaultValue: 'open' });
+    });
+
+    await context.db(context.table('tickets')).insert({ owner_id: null });
+    await context.db(context.table('tickets')).insert({ owner_id: 7 });
+    const rows = await context
+      .db(context.table('tickets'))
+      .select('owner_id', 'status')
+      .orderBy('id');
+    expect(rows.map((row) => row.status)).toEqual(['open', 'open']);
+    expect(rows.map((row) => row.owner_id)).toEqual([null, 7]);
+  });
 });
