@@ -36,9 +36,11 @@ describe('workflow queue adapter', () => {
   const services: ManagedJobExecutorService[] = [];
 
   /** One service per simulated process; they share the state directory. */
-  function createService(): ManagedJobExecutorService {
+  function createService(
+    appName: string = 'workflow-queue-adapter',
+  ): ManagedJobExecutorService {
     const service = createJobExecutorService(undefined, {
-      appName: 'workflow-queue-adapter',
+      appName,
       storagePath,
     });
     services.push(service);
@@ -180,6 +182,38 @@ describe('workflow queue adapter', () => {
     await waitFor(() => firstTasks.length === 1 && secondTasks.length === 1);
 
     expect(firstTasks).toEqual([{ executionId: 1 }]);
+    expect(secondTasks).toEqual([{ executionId: 2 }]);
+    await first.stop();
+    await second.stop();
+  });
+
+  it('binds each application to its own dispatch on the same scope', async () => {
+    // What the `workflow:<appName>` queue name used to separate: two
+    // applications in one process, each with its own jobs service. The
+    // namespace, which defaults to the application name, keeps them apart.
+    const firstTasks: WorkflowQueueTask[] = [];
+    const secondTasks: WorkflowQueueTask[] = [];
+    const first = createWorkflowQueueAdapter({
+      executor: createService('first-app').getJobExecutor(SCOPE),
+      dispatch: async (task) => {
+        firstTasks.push(task);
+      },
+    });
+    const second = createWorkflowQueueAdapter({
+      executor: createService('second-app').getJobExecutor(SCOPE),
+      dispatch: async (task) => {
+        secondTasks.push(task);
+      },
+    });
+
+    await first.startWorker();
+    await second.startWorker();
+    await first.publish({ executionId: 1 });
+    await second.publish({ executionId: 2 });
+    await first.publish({ executionId: 3 });
+    await waitFor(() => firstTasks.length === 2 && secondTasks.length === 1);
+
+    expect(firstTasks).toEqual([{ executionId: 1 }, { executionId: 3 }]);
     expect(secondTasks).toEqual([{ executionId: 2 }]);
     await first.stop();
     await second.stop();
