@@ -96,12 +96,12 @@ They remain independently configurable: to change the sidebar, change these toke
 
 ### Fonts
 
-| Token            | Value                                                         | Consumers                                                                                                                                                    |
-| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--font-sans`    | System sans-serif stack with Chinese fallbacks; the body font | `font-sans`, `body`                                                                                                                                          |
-| `--font-serif`   | System serif stack with Chinese fallbacks                     | `font-serif`                                                                                                                                                 |
-| `--font-mono`    | System monospace stack                                        | `font-mono`, `code`, `pre`, `kbd`, `samp`                                                                                                                    |
-| `--font-heading` | `var(--font-sans)`; may be a separate stack                   | `font-heading`: `h1`–`h6`, the title parts of `PageHeader` and of primitives such as `Card`, `Dialog`, `Sheet` and `Popover`, and the `Typography*` headings |
+| Token            | Value                                                         | Consumers                                                                                                                    |
+| ---------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `--font-sans`    | System sans-serif stack with Chinese fallbacks; the body font | `font-sans`, `body`                                                                                                          |
+| `--font-serif`   | System serif stack with Chinese fallbacks                     | `font-serif`                                                                                                                 |
+| `--font-mono`    | System monospace stack                                        | `font-mono`, `code`, `pre`, `kbd`, `samp`                                                                                    |
+| `--font-heading` | `var(--font-sans)`; may be a separate stack                   | `font-heading`: `h1`–`h6`, the title parts of `PageHeader` and of primitives such as `Card`, `Dialog`, `Sheet` and `Popover` |
 
 Both presets define the same stacks:
 

@@ -131,7 +131,6 @@ Also:
 | Component                                      | Purpose                                                                                                                                                                 |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PageContainer`, `PageHeader`                  | Page frame: padding, title, description, actions area                                                                                                                   |
-| `Typography*` (`typography.tsx`)               | Long-form text: headings, paragraphs, lists, quotes                                                                                                                     |
 | `BackButton`                                   | The way back from a page below another one, above its title; leads to the parent route with the query string ([`page.md`](page.md#7-back-button-and-breadcrumbs))       |
 | `Breadcrumbs`                                  | Breadcrumbs generated from routes' `breadcrumb` declarations, in place of `BackButton` when the user asks for them ([`page.md`](page.md#7-back-button-and-breadcrumbs)) |
 | `RouteDialog`, `RouteDrawer`, `RouteChildPage` | Dialogs, drawers, and covering child pages opened by URL ([`overlay.md`](overlay.md), [`child-routes.md`](child-routes.md))                                             |
