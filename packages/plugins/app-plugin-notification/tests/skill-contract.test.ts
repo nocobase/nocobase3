@@ -40,9 +40,9 @@ describe('@nocobase/app-plugin-notification Agent Skill contract', () => {
     expect(sendingNotifications).toContain('notificationServiceToken');
     expect(channelExtensions).toContain('notificationExtensionRegistryToken');
     expect(skill).toContain('references/delivery-diagnostics.md');
-    expect(skill).toMatch(/missing required input/i);
-    expect(skill).toMatch(/high-impact actions/i);
-    expect(skill).toMatch(/rollback/i);
+    expect(skill).toMatch(/resolve missing details before sending/i);
+    expect(skill).toMatch(/Test sends reach real recipients/i);
+    expect(skill).toMatch(/A submitted notification cannot be recalled/i);
     expect(skill).toContain('`notification:test` `send`');
 
     const references = [
