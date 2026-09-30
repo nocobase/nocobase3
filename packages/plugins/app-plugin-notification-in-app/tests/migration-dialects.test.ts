@@ -116,6 +116,14 @@ describe.skipIf(!dialect)(
         },
       ]);
 
+      // Oracle rejects changing a populated timestamp column's datatype (ORA-01439).
+      if (dialect === 'oracle') {
+        await connection.query
+          .deleteFrom('notificationInAppItems')
+          .where('id', '=', delivered.id)
+          .execute();
+      }
+
       await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 1,
         rolledBack: [
