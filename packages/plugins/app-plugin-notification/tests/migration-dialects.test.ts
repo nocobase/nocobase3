@@ -166,6 +166,18 @@ describe.skipIf(!dialect)(
           .execute(),
       ).rejects.toThrow();
 
+      if (dialect === 'oracle') {
+        for (const id of [
+          'notification-dialect-legacy-3',
+          'notification-dialect-current-1',
+        ]) {
+          await connection.query
+            .deleteFrom('notificationDispatches')
+            .where('id', '=', id)
+            .execute();
+        }
+      }
+
       await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 2,
         rolledBack: [
