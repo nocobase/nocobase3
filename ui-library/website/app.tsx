@@ -19,6 +19,7 @@ import {
   Sun,
   Table2,
   Tablet,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -56,6 +57,7 @@ import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
 import { AuthenticationUiDemo } from './demo/auth/auth-ui';
 import { BackButtonDemo } from './demo/components/back-button';
+import { ConfirmDialogDemo } from './demo/components/confirm-dialog';
 import { DataTableDemo } from './demo/components/data-table';
 import { DatePickerDemo } from './demo/components/date-picker';
 import { DateTimePickerDemo } from './demo/components/date-time-picker';
@@ -122,6 +124,10 @@ const itemPreviews: Record<string, ItemPreview> = {
     icon: CalendarClock,
   },
   'data-table': { path: '/demo/components/data-table', icon: Table2 },
+  'confirm-dialog': {
+    path: '/demo/components/confirm-dialog',
+    icon: TriangleAlert,
+  },
 };
 
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -171,6 +177,9 @@ function AppContent(): ReactElement {
   }
   if (pathname.startsWith('/demo/components/data-table')) {
     return <DataTableDemo />;
+  }
+  if (pathname.startsWith('/demo/components/confirm-dialog')) {
+    return <ConfirmDialogDemo />;
   }
   if (pathname.startsWith('/demo/components/date-picker')) {
     return <DatePickerDemo />;

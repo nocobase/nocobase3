@@ -256,6 +256,26 @@
           "target": "client/components/data-table/view-options.tsx"
         }
       ]
+    },
+    {
+      "name": "confirm-dialog",
+      "type": "registry:component",
+      "title": "Confirm Dialog",
+      "description": "An alert dialog that confirms one action: it runs the action, shows its progress, and keeps a failure inside the dialog.",
+      "meta": {
+        "group": "Dialogs",
+        "iframeHeight": 520
+      },
+      "dependencies": ["@nocobase/i18n@^1.0.0-beta.4"],
+      "registryDependencies": ["alert-dialog", "spinner"],
+      "docs": "Open ConfirmDialog from your own state and put the action in onConfirm: the dialog shows a spinner while it runs, closes when it resolves, and stays open with the error when it rejects or returns { error }. Cancel and the default failure message are translated under confirmDialog.cancel and confirmDialog.failed; add them to your locale resources (Cancel / 取消, The action failed. Please try again. / 操作失败，请重试。), or they read English in every language.",
+      "files": [
+        {
+          "path": "confirm-dialog.tsx",
+          "type": "registry:component",
+          "target": "client/components/confirm-dialog.tsx"
+        }
+      ]
     }
   ]
 }
