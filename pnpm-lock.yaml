@@ -1674,7 +1674,7 @@ importers:
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       carbone:
         specifier: 3.8.2
-        version: 3.8.2
+        version: 3.8.2(supports-color@8.1.1)
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -4496,9 +4496,6 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.4(react@19.2.8)
-      '@tanstack/react-table':
-        specifier: 'catalog:'
-        version: 8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -4556,9 +4553,6 @@ importers:
       cn:
         specifier: ^0.4.0
         version: 0.4.0
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.4.0
       dayjs:
         specifier: ^1.10.7
         version: 1.11.21
@@ -4601,9 +4595,6 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.8
-      react-day-picker:
-        specifier: 10.0.1
-        version: 10.0.1(@types/react@19.2.18)(react@19.2.8)
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
@@ -4872,9 +4863,6 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.4(react@19.2.8)
-      '@tanstack/react-table':
-        specifier: 'catalog:'
-        version: 8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -4932,9 +4920,6 @@ importers:
       cn:
         specifier: ^0.4.0
         version: 0.4.0
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.4.0
       dayjs:
         specifier: ^1.10.7
         version: 1.11.21
@@ -4977,9 +4962,6 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.8
-      react-day-picker:
-        specifier: 10.0.1
-        version: 10.0.1(@types/react@19.2.18)(react@19.2.8)
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
@@ -5185,9 +5167,6 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.4(react@19.2.8)
-      '@tanstack/react-table':
-        specifier: 'catalog:'
-        version: 8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -5245,9 +5224,6 @@ importers:
       cn:
         specifier: ^0.4.0
         version: 0.4.0
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.4.0
       dayjs:
         specifier: ^1.10.7
         version: 1.11.21
@@ -5559,6 +5535,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:^
         version: link:../packages/libs/i18n
+      '@tanstack/react-table':
+        specifier: 'catalog:'
+        version: 8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -5599,6 +5578,12 @@ importers:
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.3(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
@@ -5611,6 +5596,9 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.3.0)
       shadcn:
         specifier: ^4.18.0
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
@@ -5623,6 +5611,9 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
 packages:
 
@@ -20211,7 +20202,7 @@ snapshots:
 
   caniuse-lite@1.0.30001809: {}
 
-  carbone@3.8.2:
+  carbone@3.8.2(supports-color@8.1.1):
     dependencies:
       dayjs: 1.11.20
       debug: 4.4.3(supports-color@8.1.1)

@@ -28,7 +28,7 @@ For anything else, start from the test that already sets it up:
 
 - **Real translations in both languages**: `tests/components/auth-i18n.test.tsx` creates an `I18nRuntime` (`@nocobase/i18n`) with the application namespace `app`, registers the application's `client/locales/index.ts` (imported as `index.js`), initializes it in `en-US` and renders inside `I18nProvider` (`@nocobase/i18n/client`); `changeLanguage('zh-CN')` inside `act` switches the language. Use it when the copy itself is under test; otherwise mock `t` as the page harness does, because outside an `I18nProvider` `t()` returns keys.
 - **Overlay behavior in depth** (`beforeClose`, nested layers, focus): `tests/logic/route-overlay.test.tsx`.
-- **An existing component with `defaultValue` copy**: `tests/components/data-table.test.tsx`, whose `t` mock fills `{{name}}` placeholders into the default value.
+- **A component with `defaultValue` copy**, such as a UI Library item: mock `t` to return `options?.defaultValue ?? key`, as `tests/logic/account-permissions.test.tsx` does, and when the copy interpolates, fill its `{{name}}` placeholders from `options` as well.
 
 - Assert what the user can see: text, roles and accessible names, the result of a click (`@testing-library/react`, `@testing-library/user-event` and the jest-dom assertions are set up). Do not assert internal state.
 - To assert a toast, mock `useToaster` as the harness does, returning one shared `{ show: vi.fn(), close: vi.fn() }`, and assert what `show` was called with: its `type`, `title` and `description`, not how Base UI renders them. A component rendered without a registered toaster still renders; its toasts are logged to the console instead of shown.

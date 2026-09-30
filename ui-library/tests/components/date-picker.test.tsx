@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DatePicker,
   DateRangePicker,
-} from '../../client/components/date-picker';
+} from '../../registry/components/date-picker';
 
 describe('DatePicker', () => {
   it('shows the placeholder until a date is picked', () => {

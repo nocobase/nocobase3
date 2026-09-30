@@ -4,14 +4,14 @@
 
 ## 1. What the template ships and how to add the rest
 
-The Default and Hub templates ship these; Examples adds `badge`, `card`, `field`, `separator`, `skeleton`, `textarea`, `toggle` and `toggle-group`.
+The Default and Hub templates ship these; Examples adds `badge`, `card`, `field`, `select`, `separator`, `skeleton`, `table`, `textarea`, `toggle` and `toggle-group`.
 
-| Primitive                                                                             | Used by                                                         |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `button`, `dropdown-menu`, `input`, `label`, `popover`, `spinner`, `toast`, `tooltip` | The shell, the sign-in pages and the Appearance popover         |
-| `dialog`                                                                              | `RouteDialog` and `RouteDrawer`                                 |
-| `select`, `table`                                                                     | `DataTable` and its pagination                                  |
-| `calendar`                                                                            | `DatePicker` and `DateRangePicker` (`@/components/date-picker`) |
+| Primitive                                                                             | Used by                                                 |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `button`, `dropdown-menu`, `input`, `label`, `popover`, `spinner`, `toast`, `tooltip` | The shell, the sign-in pages and the Appearance popover |
+| `dialog`                                                                              | `RouteDialog` and `RouteDrawer`                         |
+
+A table and a date field are NocoBase UI Library items rather than primitives, added the same way: `@nocobase/data-table` brings `DataTable` and its companions into `client/components/data-table/` together with the `select` and `table` primitives, and `@nocobase/date-picker` brings `DatePicker` and `DateRangePicker` with `calendar`. Name them in the same run as the primitives a page needs, such as `yes n | pnpm exec shadcn add card @nocobase/data-table`.
 
 A file that imports any other primitive — `field`, `card`, `alert`, `badge`, `skeleton`, `empty`, `alert-dialog`, `sheet`, `checkbox` and so on — compiles only after it is added. Check `client/components/ui/` first (or the `components` list of `pnpm exec shadcn info --json`), add everything missing in one run, then format what the run created:
 
@@ -25,7 +25,7 @@ pnpm exec prettier --write client/components/ui/field.tsx client/components/ui/s
 - **Translate the English they carry**, as ["English built into primitives"](#english-built-into-primitives) below lists.
 - Each document of the worked example names what it needs on its **Add first** line ([`example.md`](example.md)).
 - A bare name comes from `@shadcn`, the registry for primitives, and `@nocobase/<item>` from the NocoBase UI Library ([section 3 of `styling.md`](styling.md#3-use-shadcn)). Neither needs the user's choice; ask before adding from any other registry, as the skill says.
-- When a primitive needs an npm package the application does not have yet (`recharts` for `chart`, `cmdk` for `command`), the CLI installs it into `dependencies`. Move it to `devDependencies`: client code is bundled, and `dependencies` is what every deployment installs ("Adding a dependency" in the application's `AGENTS.md`). A package already declared in either is not installed again.
+- When a primitive needs an npm package the application does not have yet (`recharts` for `chart`, `cmdk` for `command`), the CLI installs it into `dependencies`, and a UI Library item does the same with the packages it declares: `@tanstack/react-table` for `@nocobase/data-table`, `date-fns` and `react-day-picker` for `@nocobase/date-picker`. Move them to `devDependencies`: client code is bundled, and `dependencies` is what every deployment installs ("Adding a dependency" in the application's `AGENTS.md`). A package already declared in `devDependencies` stays there. An item that translates its labels, as both of these do, also adds `@nocobase/i18n` again, which pins its range in `dependencies` to an exact version; leave it in `dependencies`, where the server needs it, and put the `^` back.
 - Primitives from the registry import `cn` from the `cn` package, which `devDependencies` declares; the template's own primitives and the application's code import it from `@/lib/utils`. Both merge class names the same way, so leave either import as it is, and keep using `@/lib/utils` in application code.
 - Apart from formatting and those translations, keep each primitive as the CLI writes it. For a different look, use its props or change the theme ([`theme.md`](theme.md)). The template's own copies differ from the registry too, which is one more reason to answer no: `dialog.tsx`, `spinner.tsx` and `toast.tsx` translate their labels, and `button.tsx` sizes its small text with `text-sm` instead of the registry's fixed `text-[0.8rem]`.
 - To update a primitive, compare first with `pnpm exec shadcn add <name> --diff <file>`, and overwrite only with the user's approval, as "Updating Components" in the skill says. Then apply the translations again: `tests/components/primitive-labels.test.tsx` fails when a shipped primitive has lost one.

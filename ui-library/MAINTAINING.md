@@ -8,7 +8,7 @@ Put a component here when the applications and plugins that use it should own an
 
 An item is one of two kinds, and its kind decides where it installs:
 
-- **A component** is a single business component that pages are composed from, such as `page-header` or `route-dialog`. It installs beside the consumer's own components in `client/components/`, the way shadcn installs its primitives into `client/components/ui/`, and is imported like one of them: `@/components/page-header`. Keep it to one component — its own file plus only the files it cannot work without, such as the `route-overlay.tsx` that `route-dialog` and `route-drawer` share. A consumer that wants two components installs two items.
+- **A component** is a single business component that pages are composed from, such as `page-header` or `route-dialog`. It installs beside the consumer's own components in `client/components/`, the way shadcn installs its primitives into `client/components/ui/`, and is imported like one of them: `@/components/page-header`. Keep it to one component — its own file plus only the files it cannot work without, such as the `route-overlay.tsx` that `route-dialog` and `route-drawer` share, or the parts that exist only to be used with it. `data-table` is the second case: its column header, pagination and view menu mean nothing without the table, so the item installs all four into a directory of their own, `client/components/data-table/`, imported as `@/components/data-table`. A consumer that wants two components installs two items.
 - **A block** is a complete feature assembled from several components, such as `auth-ui`: pages, forms, layout and translations that only make sense together. It installs into a directory of its own, `client/extensions/nocobase-<item>/`, which is where consumers find it and the directory they delete to remove it.
 
 Two neighbours look similar and are not the same thing:
@@ -27,6 +27,7 @@ ui-library/
 │   │   └── auth-ui/            a block: its source files, locales/, and README
 │   └── components/             the group of components: registry.json, a README, and every
 │                               component's files side by side, as they land in client/components/
+├── tests/<group>/              each item's tests, rendering its sources the way the preview does
 ├── website/                    the preview site (Vite and React)
 │   ├── app.tsx                 index page, and routing to each item's demo
 │   ├── components/ui/          shadcn primitives the preview and the items render with
@@ -36,7 +37,8 @@ ui-library/
 ├── tsconfig.json               the preview together with the item sources
 ├── tsconfig.registry.json      the item sources, compiled the way a plugin compiles them
 ├── eslint.config.js
-└── vite.config.ts              the preview build, and the aliases that swap plugin exports for mocks
+├── vite.config.ts              the preview build, and the aliases that swap plugin exports for mocks
+└── vitest.config.ts            the tests, with `@/` resolved to the preview's primitives
 ```
 
 `pnpm --filter @nocobase/ui-library build` runs `shadcn build`, which reads `registry.json`, follows its `include` list into each group's `registry.json`, and writes `public/r/registry.json` plus one `public/r/<item>.json` per item with the content of every file inlined. Vite then builds the preview and copies `public/` into `dist/`, which the UI Library workflow uploads to the bucket root. A consumer therefore receives exactly the sources `develop` had at the last publish. The registry keeps no versions, and there is no way to install an older copy of an item.
@@ -89,7 +91,8 @@ These rules follow from where the files end up: in an application, compiled by V
 4. Mock whatever needs a server. The preview is a static site, so it cannot run a plugin's headless actions. Put a stand-in module in `website/demo/<group>/`, type it with `import type` from the real export, and point the export at it from `resolve.alias` in `vite.config.ts`. Do not add the mapping to `tsconfig.json`: TypeScript has to keep resolving the real export, which is what checks both the item and the mock against the plugin's contract. `website/demo/auth/auth-ui/mock-actions.tsx` is the model.
 5. Add demo routes under `website/demo/<group>/` that render the item the way an application would, importing its sources by relative path.
 6. Wire the demo into `website/app.tsx`, which does not discover items yet. Route the demo's root path to its component in `AppContent`, and give the item a preview path and a sidebar icon in `itemPreviews`; an item without an entry shows "Preview is not available". Set `meta.group` as well, since `groupItems` files an ungrouped `registry:block` under Authentication. The fallback entry `authUiItem`, shown when `public/r/registry.json` has not been built, is still written for `auth-ui` alone.
-7. Run the [checks](#checks), then install the local build into a scratch application, and into a plugin if the item is meant for plugins, as described in [Trying a build before merging](#trying-a-build-before-merging).
+7. Test the behavior a consumer relies on in `tests/<group>/<item>.test.tsx`, importing the item's sources by relative path; `@/` resolves to the preview's primitives, which are what `shadcn add` installs. Render outside an `I18nProvider`, where `t()` returns each `defaultValue`, and mock `@nocobase/i18n/client` only to interpolate values into it, as `tests/components/data-table.test.tsx` does. Mock a plugin's export with `vi.mock`: the tests do not read the aliases `vite.config.ts` gives the preview.
+8. Run the [checks](#checks), then install the local build into a scratch application, and into a plugin if the item is meant for plugins, as described in [Trying a build before merging](#trying-a-build-before-merging).
 
 A pull request that changes only `ui-library/` needs no changeset. The package is private and published to OSS rather than npm, and `scripts/require-changesets.mjs` looks only at `packages/`. Merging it to `develop` publishes it.
 
@@ -140,12 +143,13 @@ The dry run lists the files the install would create or overwrite and the depend
 | Command                                        | What it covers                                                                                                                                                                                                                                                         |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm --filter @nocobase/ui-library typecheck` | Two programs. `tsconfig.json` covers the preview and the item sources with Bundler resolution; `tsconfig.registry.json` covers the item sources alone with NodeNext resolution, as a plugin compiles them. Both resolve the real workspace packages rather than mocks. |
+| `pnpm --filter @nocobase/ui-library test`      | Vitest under jsdom, over `tests/`: each item rendered from its sources against the preview's primitives, the way a consumer's page renders it.                                                                                                                         |
 | `pnpm --filter @nocobase/ui-library lint`      | The rules `createClientLibraryConfig` applies to a plugin, over the item sources and the preview. The shadcn primitives under `website/` get the relaxations the Portal configuration gives an application's `client/components/ui/`.                                  |
 | `pnpm --filter @nocobase/ui-library build`     | `shadcn build`, then `vite build`.                                                                                                                                                                                                                                     |
 
-The UI Library workflow runs lint, typecheck, and build, and checks that `dist/` holds the index and a file for every item the index lists, before it uploads anything; see [DEPLOYMENT.md](DEPLOYMENT.md). The Quality workflow lints this package when a pull request changes it and runs `typecheck` on every pull request, which is what catches a plugin change that breaks an item. The pre-commit hook lints staged files here with this package's own ESLint configuration.
+The UI Library workflow runs lint, typecheck, test, and build, and checks that `dist/` holds the index and a file for every item the index lists, before it uploads anything; see [DEPLOYMENT.md](DEPLOYMENT.md). The Quality workflow lints this package when a pull request changes it and runs `typecheck` and `test` on every pull request, which is what catches a plugin change that breaks an item. The pre-commit hook lints staged files here with this package's own ESLint configuration.
 
-No check renders an item or tests its behavior, verifies explicit export types, or installs the item into an application. [Trying a build before merging](#trying-a-build-before-merging) is what covers the last two.
+The tests cover an item's behavior only as far as jsdom shows it: no check lays an item out, verifies explicit export types, or installs the item into an application. The preview covers the first, and [Trying a build before merging](#trying-a-build-before-merging) the other two.
 
 ## Known limitations
 

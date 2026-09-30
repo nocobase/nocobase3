@@ -1,18 +1,19 @@
 # NocoBase business components
 
-Single components that pages are built from. Each is its own item, installs into the consumer's `client/components/` beside the components it already owns, and belongs to the consumer from then on. The application templates ship the page-layout and route-overlay components preinstalled there; the date pickers are installed when a page needs one.
+Single components that pages are built from. Each is its own item, installs into the consumer's `client/components/` beside the components it already owns, and belongs to the consumer from then on. The application templates ship the page-layout and route-overlay components preinstalled there; the date pickers and the data table are installed when a page needs one.
 
-| Item               | Installs                                                                | Exports                          |
-| ------------------ | ----------------------------------------------------------------------- | -------------------------------- |
-| `page-container`   | `page-container.tsx`                                                    | `PageContainer`                  |
-| `page-header`      | `page-header.tsx`                                                       | `PageHeader`                     |
-| `route-dialog`     | `route-dialog.tsx`, with `route-overlay.tsx` and `use-route-overlay.ts` | `RouteDialog`, `useRouteOverlay` |
-| `route-drawer`     | `route-drawer.tsx`, with `route-overlay.tsx` and `use-route-overlay.ts` | `RouteDrawer`, `useRouteOverlay` |
-| `route-child-page` | `route-child-page.tsx`                                                  | `RouteChildPage`                 |
-| `date-picker`      | `date-picker.tsx`                                                       | `DatePicker`, `DateRangePicker`  |
-| `date-time-picker` | `date-time-picker.tsx`, with `date-picker.tsx`                          | `DateTimePicker`                 |
+| Item               | Installs                                                                          | Exports                                                                             |
+| ------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `page-container`   | `page-container.tsx`                                                              | `PageContainer`                                                                     |
+| `page-header`      | `page-header.tsx`                                                                 | `PageHeader`                                                                        |
+| `route-dialog`     | `route-dialog.tsx`, with `route-overlay.tsx` and `use-route-overlay.ts`           | `RouteDialog`, `useRouteOverlay`                                                    |
+| `route-drawer`     | `route-drawer.tsx`, with `route-overlay.tsx` and `use-route-overlay.ts`           | `RouteDrawer`, `useRouteOverlay`                                                    |
+| `route-child-page` | `route-child-page.tsx`                                                            | `RouteChildPage`                                                                    |
+| `date-picker`      | `date-picker.tsx`                                                                 | `DatePicker`, `DateRangePicker`                                                     |
+| `date-time-picker` | `date-time-picker.tsx`, with `date-picker.tsx`                                    | `DateTimePicker`                                                                    |
+| `data-table`       | `data-table/index.tsx`, `column-header.tsx`, `pagination.tsx`, `view-options.tsx` | `DataTable`, `DataTableColumnHeader`, `DataTablePagination`, `DataTableViewOptions` |
 
-`route-dialog` and `route-drawer` both install `route-overlay.tsx`, the implementation they share, and `use-route-overlay.ts`, the Context it provides. Installing the second of them finds both files already in place. `date-time-picker` installs `date-picker.tsx` the same way, because `DateTimePicker` is the `DatePicker` composition with a time field.
+`route-dialog` and `route-drawer` both install `route-overlay.tsx`, the implementation they share, and `use-route-overlay.ts`, the Context it provides. Installing the second of them finds both files already in place. `date-time-picker` installs `date-picker.tsx` the same way, because `DateTimePicker` is the `DatePicker` composition with a time field. `data-table` is one item of four files in `client/components/data-table/`: the header, pagination and view menu only make sense around the table, so they install together.
 
 ## Page layout
 
@@ -87,23 +88,67 @@ import { DateTimePicker, type DateTimeRange } from '@/components/date-time-picke
 
 Pass a `date-fns` `locale` so the trigger text and the calendar follow the interface language. The trigger never clips a long localized value: it grows past its width when the formatted text needs the room.
 
+## Data table
+
+`DataTable` renders a list with TanStack Table, composed from the `Table` primitive: sorting, filtering, column visibility, row selection and pagination all run in the browser over the `data` it is given. Column definitions decide what each feature does. A sortable column uses `DataTableColumnHeader` as its `header`, which opens a menu to sort or hide the column; `toolbar` receives the table instance and renders above the table, where filters call `table.getColumn(id)?.setFilterValue(...)` and `DataTableViewOptions` toggles the hideable columns; a display column that renders a `Checkbox` selects rows.
+
+```tsx
+import type { ColumnDef } from '@tanstack/react-table';
+
+import { DataTable } from '@/components/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/column-header';
+import { DataTableViewOptions } from '@/components/data-table/view-options';
+
+const columns: ColumnDef<Order>[] = [
+  {
+    accessorKey: 'id',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Order' />
+    ),
+  },
+  { accessorKey: 'customer', header: 'Customer' },
+];
+
+<DataTable
+  columns={columns}
+  data={orders}
+  toolbar={(table) => <DataTableViewOptions table={table} />}
+  showSelectedCount={false}
+/>;
+```
+
+`DataTable` also takes `emptyMessage`, shown when no row survives filtering; `pagination={false}`, which renders every row and drops the footer; `pageSize` and `pageSizeOptions`; `getRowId`; `onRowClick`; and `showSelectedCount`, which turns off the "n of m row(s) selected" summary for a table without row selection. Inside a card's `CardContent` the table drops its own border and reaches the card's edges, and its first and last cells take the card's padding, so its text lines up with the card's title. `DataTablePagination` is what `DataTable` renders below the rows; use it directly only when composing a table by hand.
+
 ## Translations
 
-The overlays' close button names itself with `useTranslation()` from `@nocobase/i18n/client` under `routeOverlay.close`, falling back to `Close`, and the date pickers look up their keys the same way. A component ships no locale file, so add the keys to the locale resources of the namespace that renders them:
+The overlays' close button names itself with `useTranslation()` from `@nocobase/i18n/client` under `routeOverlay.close`, falling back to `Close`, and the date pickers and the data table look up their keys the same way. A component ships no locale file, so add the keys to the locale resources of the namespace that renders them:
 
-| Key                           | `en-US`           | `zh-CN`      |
-| ----------------------------- | ----------------- | ------------ |
-| `routeOverlay.close`          | Close             | 关闭         |
-| `datePicker.placeholder`      | Pick a date       | 选择日期     |
-| `datePicker.rangePlaceholder` | Pick a date range | 选择日期范围 |
-| `dateTimePicker.time`         | Time              | 时间         |
-| `dateTimePicker.startTime`    | Start Time        | 开始时间     |
-| `dateTimePicker.endTime`      | End Time          | 结束时间     |
-| `dateTimePicker.clear`        | Clear             | 清除         |
-| `dateTimePicker.confirm`      | Confirm           | 确认         |
+| Key                           | `en-US`                                    | `zh-CN`                              |
+| ----------------------------- | ------------------------------------------ | ------------------------------------ |
+| `routeOverlay.close`          | Close                                      | 关闭                                 |
+| `datePicker.placeholder`      | Pick a date                                | 选择日期                             |
+| `datePicker.rangePlaceholder` | Pick a date range                          | 选择日期范围                         |
+| `dateTimePicker.time`         | Time                                       | 时间                                 |
+| `dateTimePicker.startTime`    | Start Time                                 | 开始时间                             |
+| `dateTimePicker.endTime`      | End Time                                   | 结束时间                             |
+| `dateTimePicker.clear`        | Clear                                      | 清除                                 |
+| `dateTimePicker.confirm`      | Confirm                                    | 确认                                 |
+| `dataTable.noResults`         | No results.                                | 暂无数据。                           |
+| `dataTable.sortAscending`     | Asc                                        | 升序                                 |
+| `dataTable.sortDescending`    | Desc                                       | 降序                                 |
+| `dataTable.hideColumn`        | Hide                                       | 隐藏                                 |
+| `dataTable.view`              | View                                       | 视图                                 |
+| `dataTable.toggleColumns`     | Toggle columns                             | 显示列                               |
+| `dataTable.selectedCount`     | {{selected}} of {{total}} row(s) selected. | 已选择 {{selected}} / {{total}} 行。 |
+| `dataTable.rowsPerPage`       | Rows per page                              | 每页行数                             |
+| `dataTable.pageOf`            | Page {{page}} of {{pageCount}}             | 第 {{page}} 页，共 {{pageCount}} 页  |
+| `dataTable.firstPage`         | Go to first page                           | 第一页                               |
+| `dataTable.previousPage`      | Go to previous page                        | 上一页                               |
+| `dataTable.nextPage`          | Go to next page                            | 下一页                               |
+| `dataTable.lastPage`          | Go to last page                            | 最后一页                             |
 
-`page-container`, `page-header` and `route-child-page` render no text of their own.
+`page-container`, `page-header` and `route-child-page` render no text of their own. The application templates' locale files already carry the `datePicker` and `dataTable` keys, so installing `date-picker` or `data-table` into an application created from a template needs no locale change.
 
 ## In a plugin
 
-`page-header` has no `@/` imports and compiles in a plugin as installed. The others import `cn` from `@/lib/utils`, and most of them also import primitives as `@/components/ui/<name>` — `route-dialog` and `route-drawer` the `button` and `dialog` ones, `date-picker` the `button`, `calendar` and `popover` ones, and `date-time-picker` the `button`, `field` and `input-group` ones; rewrite those imports to relative `.js` paths, as [USAGE.md](../../USAGE.md#add-an-item-to-a-plugin) describes. `date-time-picker` already reaches `DatePicker` through `./date-picker.js`, so the two files stay together wherever they are installed.
+`page-header` has no `@/` imports and compiles in a plugin as installed. The others import `cn` from `@/lib/utils`, and most of them also import primitives as `@/components/ui/<name>` — `route-dialog` and `route-drawer` the `button` and `dialog` ones, `date-picker` the `button`, `calendar` and `popover` ones, `date-time-picker` the `button`, `field` and `input-group` ones, and `data-table` the `button`, `dropdown-menu`, `select` and `table` ones; rewrite those imports to relative `.js` paths, as [USAGE.md](../../USAGE.md#add-an-item-to-a-plugin) describes. `date-time-picker` already reaches `DatePicker` through `./date-picker.js`, and `DataTable` its pagination through `./pagination.js`, so each item's files stay together wherever they are installed.
