@@ -8,7 +8,7 @@ tests/logic/        Logic tests: route declarations, pure functions, providers (
 e2e/                End-to-end tests against a running application (Playwright); create the directory with the first test
 ```
 
-Tests never go beside the source. Vitest discovers `tests/**/*.test.{ts,tsx}` (`vitest.config.ts`); Playwright discovers `e2e/**/*.test.ts` (`playwright.config.ts`). Use `e2e/` only for what needs a real server and database, such as a flow across the browser and the API or a server-side permission check seen from the page. Everything else is a component or logic test.
+Tests never go beside the source. Vitest discovers `tests/**/*.test.{ts,tsx}` (`vitest.config.ts`); Playwright discovers `e2e/**/*.test.ts` (`playwright.config.ts`). Use `e2e/` only for what needs a real server and database, such as a flow across the browser and the API or a server-side permission check seen from the page. Everything else is a component or logic test. Applications created from the Default and Examples templates have Playwright set up; one created from the Hub template does not, so before its first end-to-end test add `@playwright/test` to `devDependencies`, a `playwright.config.ts` with `testDir: './e2e'` and `testMatch: '**/*.test.ts'`, a `test:e2e` script running `playwright test --pass-with-no-tests`, and `playwright.config.ts` and `e2e/**/*.ts` to the `include` of `tsconfig.node.json`.
 
 ## What to test
 

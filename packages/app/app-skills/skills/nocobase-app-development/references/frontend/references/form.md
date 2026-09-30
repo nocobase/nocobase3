@@ -371,7 +371,7 @@ export function ProjectReminderForm({
 ## Where forms go
 
 - Create and edit forms with **no more than 8 fields and no complex interdependencies**: put them in a `RouteDialog` as a child route (guidelines T3.1 and I1); see "Inside a RouteDialog" and [`overlay.md`](overlay.md). Do not drive create or edit dialogs with open state held inside a component.
-- **More fields, or grouping or steps needed**: a separate page (guideline T3.1). `create.tsx`, [`example/create-page.md`](example/create-page.md), is the frame to copy:
+- **More fields, or grouping or steps needed**: a separate page (guideline T3.1). `create.tsx`, [`example/create-page.md`](example/create-page.md), is the frame to follow:
   - a covering child page (`RouteChildPage`, [section 5 of `child-routes.md`](child-routes.md#5-covering-child-pages-routechildpage)) when the user comes from the list and returns to it, otherwise a standalone page ([`page.md`](page.md));
   - `PageContainer` and `PageHeader`, the form in a `max-w-2xl` column (guideline L4), fields grouped with `FieldSet`;
   - the buttons right-aligned below the form, linked with `form={formId}` when the form component renders none;

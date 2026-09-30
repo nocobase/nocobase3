@@ -417,18 +417,24 @@ export default function CustomerOverviewTab(): ReactElement {
 - **It ends with an `Outlet` that passes the page's context on.** The edit dialog is its child route, and a child route reads the context of the nearest `Outlet` above it. A tab without one renders nothing at `…/overview/edit`; one that passes other data breaks the dialog's `onSaved`.
 - `orders.tsx` is written the same way: it loads the customer's orders itself, with the loader of [project summary](project-summary.md), and ends with the same `<Outlet context={context} />`. Its search box and status filter write `ordersQ` and `ordersStatus` (`useUrlSearch({ param: 'ordersQ' })`), never the `q` and `status` of the page this one covers, which it neither reads nor changes ([section 5 of `table.md`](../table.md#5-writing-search-and-filters-to-the-url)); a new parameter joins `CUSTOMER_PAGE_PARAMS`. Its own children, such as an order's drawer, declared beside the header's overlays, read the same context; when they need more, the tab passes an object that adds their fields to it.
 
-`detail/edit.tsx` is the [edit dialog](edit-dialog.md) with `Customer` in place of `Project`: it reads `CustomerEditOutletContext` and its id from `useParams()`, and nothing in it depends on the tab it opens over.
+`detail/edit.tsx` is not written out here: write it first, as the [edit dialog](edit-dialog.md) with `Customer` in place of `Project`, since the test below and the routes in [`child-routes.md`](../child-routes.md) import it; the `customers.form.*` keys it calls are not in [copy](copy.md), so add them to both locale files. It reads `CustomerEditOutletContext` and its id from `useParams()`, and nothing in it depends on the tab it opens over.
 
 ## The test
 
-`tests/components/customer-page.test.tsx` renders the page as `customerDetailRoutes` declares it and opens the header's "Edit" from every tab, which also catches a tab the header's overlays were not declared under, and goes back to check that the list gets exactly its own parameters:
+`tests/components/customer-page.test.tsx` renders the page with the routes `customerDetailRoutes` declares, written out, and opens the header's "Edit" from every tab, which catches a tab that does not pass the page's context on through its `Outlet`; that every tab declares the header's overlays is the route test's to check (below). It then goes back to check that the list gets exactly its own parameters:
 
 ```tsx
 // tests/components/customer-page.test.tsx
-// The setup of tests/components/page-harness.test.tsx — the vi.hoisted values and the mocks of useApiClient,
-// useAuthentication, useTranslation with useLocale — unchanged; only what differs is shown.
+// The setup of tests/components/page-harness.test.tsx — its vi.hoisted values and every vi.mock — unchanged; only
+// what differs is shown. The runtime reads the application's own locale files,
+// where the customer copy lives, so the queries name what the user reads.
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -437,7 +443,18 @@ import EditCustomerPage from '@/pages/customers/detail/edit';
 import CustomerOrdersTab from '@/pages/customers/detail/orders';
 import CustomerOverviewTab from '@/pages/customers/detail/overview';
 
+import packageMetadata from '../../package.json' with { type: 'json' };
+import enUS from '../../client/locales/en-US.js';
+
 // … vi.hoisted and vi.mock as in page-harness.test.tsx
+
+const runtime = await createTestI18nRuntime({
+  application: { namespace: packageMetadata.name, resources: enUS },
+});
+
+function I18n({ children }: { readonly children: ReactNode }) {
+  return <TestI18nProvider runtime={runtime}>{children}</TestI18nProvider>;
+}
 
 const customer = { id: 12, name: 'Acme', updatedAt: '2026-01-01T00:00:00Z' };
 const reloadCustomers = vi.fn();
@@ -473,7 +490,7 @@ function renderAt(url: string) {
     ],
     { initialEntries: [url] },
   );
-  render(<RouterProvider router={router} />);
+  render(<RouterProvider router={router} />, { wrapper: I18n });
   return router;
 }
 
@@ -487,17 +504,19 @@ describe('customer page', () => {
     reloadCustomers.mockReset();
   });
 
-  it.each(['overview', 'orders'])(
+  it.each(['overview', 'orders'] as const)(
     'stacks the header edit on the %s tab and returns to it',
     async (tab) => {
       const router = renderAt(`/customers/12/${tab}?status=vip`);
 
       await userEvent.click(
-        await screen.findByRole('button', { name: 'customers.actions.edit' }),
+        await screen.findByRole('button', {
+          name: enUS.customers.actions.edit,
+        }),
       );
 
       expect(
-        await screen.findByRole('dialog', { name: 'customers.edit.title' }),
+        await screen.findByRole('dialog', { name: enUS.customers.edit.title }),
       ).toBeInTheDocument();
       expect(router.state.location).toMatchObject({
         pathname: `/customers/12/${tab}/edit`,
@@ -507,13 +526,13 @@ describe('customer page', () => {
       // the query includes hidden elements.
       expect(
         screen.getByRole('link', {
-          name: `customers.tabs.${tab}`,
+          name: enUS.customers.tabs[tab],
           hidden: true,
         }),
       ).toHaveAttribute('aria-current', 'page');
 
       await userEvent.click(
-        screen.getByRole('button', { name: 'actions.cancel' }),
+        screen.getByRole('button', { name: enUS.actions.cancel }),
       );
 
       await waitFor(() =>
@@ -530,7 +549,7 @@ describe('customer page', () => {
     const router = renderAt('/customers/12/orders?status=vip&ordersQ=acme');
 
     await userEvent.click(
-      await screen.findByRole('link', { name: 'navigation.back' }),
+      await screen.findByRole('link', { name: enUS.navigation.back }),
     );
 
     await waitFor(() =>
@@ -545,10 +564,13 @@ describe('customer page', () => {
     renderAt('/customers/12/orders/edit');
 
     expect(
-      await screen.findByRole('dialog', { name: 'customers.edit.title' }),
+      await screen.findByRole('dialog', { name: enUS.customers.edit.title }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'customers.tabs.orders', hidden: true }),
+      screen.getByRole('link', {
+        name: enUS.customers.tabs.orders,
+        hidden: true,
+      }),
     ).toHaveAttribute('aria-current', 'page');
   });
 });

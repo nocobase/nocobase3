@@ -4,6 +4,8 @@ Part of the [projects worked example](../example.md).
 
 **Depends on**: the [list page](list-page.md), which it changes, and what that depends on; [types](types.md) for the component.
 
+**Add first**: what the [list page](list-page.md) adds; its `@nocobase/data-table` brings the `table` primitive and `DataTablePagination` this component imports.
+
 **Links to**: the same child routes as the list page.
 
 Rules: [section 1 of `table.md`](../table.md#1-choosing-a-table-component). Use it instead of `DataTable` when the endpoint paginates; the list page keeps the page in the URL and passes it down.
@@ -275,7 +277,7 @@ export function ProjectsServerTable({
   emptyMessage,
   pageSizeOptions,
 }: ProjectsServerTableProps): ReactElement {
-  // TanStack Table returns a mutable instance the React Compiler cannot memoize, as in data-table.tsx.
+  // TanStack Table returns a mutable instance the React Compiler cannot memoize, as in `data-table/index.tsx`.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,

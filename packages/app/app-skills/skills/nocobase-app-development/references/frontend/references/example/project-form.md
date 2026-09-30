@@ -4,7 +4,7 @@ Part of the [projects worked example](../example.md).
 
 **Depends on**: [session alert](session-expired-alert.md), [types](types.md), [copy](copy.md).
 
-**Add first**: `yes n | pnpm exec shadcn add alert field`, then format the files it creates ([how](../shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest)).
+**Add first**: `yes n | pnpm exec shadcn add alert field select`, then format the files it creates ([how](../shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest)).
 
 Rules: [`form.md`](../form.md). The fields are name (required), owner (optional) and status (a Select). Passing `project` means editing (`PATCH`); omitting it means creating (`POST`). The form renders no buttons: the container puts the submit button outside the `<form>` and links it through `formId`.
 

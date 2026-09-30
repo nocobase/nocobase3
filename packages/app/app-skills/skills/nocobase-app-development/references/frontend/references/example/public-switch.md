@@ -72,10 +72,10 @@ export function ProjectPublicSwitch({
               ? t('projects.error.forbidden')
               : t('projects.error.requestFailed'),
         // A 401 offers to sign in again; the user chooses when, since refresh() blanks the signed-in pages.
-        actionProps:
+        action:
           status === 401
             ? {
-                children: t('actions.signInAgain'),
+                label: t('actions.signInAgain'),
                 onClick: () => void refresh(),
               }
             : undefined,

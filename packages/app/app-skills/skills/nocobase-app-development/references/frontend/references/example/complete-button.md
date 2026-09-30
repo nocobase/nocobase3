@@ -60,8 +60,8 @@ export function CompleteProjectButton({
         toaster.show({
           type: 'error',
           title: t('status.sessionExpired'),
-          actionProps: {
-            children: t('actions.signInAgain'),
+          action: {
+            label: t('actions.signInAgain'),
             onClick: () => void refresh(),
           },
         });

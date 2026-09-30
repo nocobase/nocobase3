@@ -86,7 +86,7 @@ The confirmed design is the basis for development and the acceptance review.
 
 ### Step 3: Development
 
-1. Copy the matching files from [`references/example.md`](references/example.md) (its task table names the documents) and adapt them; return to the topic references read in step 1 only for a rule the design did not need.
+1. Read the documents the task table of [`references/example.md`](references/example.md) names, then write the feature's files from `design.md`. Copy a file unchanged only where a document says it is shared infrastructure, as `session-expired-alert.tsx` and `use-url-search.ts` are. Return to the topic references read in step 1 only for a rule the design did not need.
 2. Implement according to `design.md`: every item in the component list, every state, every interaction and every piece of copy must have a matching implementation.
 3. When new backend endpoints are needed, implement them to the endpoint contract in the design (for backend code, see [`../server-routes.md`](../server-routes.md), [`../migrations.md`](../migrations.md) and [`../database-and-data.md`](../database-and-data.md)).
 4. When the design contains decisions that the code does not show by itself but that anyone changing this page later needs to know (for example, why an approach was not used, or what limits an endpoint has), write them as code comments. `design.md` is deleted when the task ends.

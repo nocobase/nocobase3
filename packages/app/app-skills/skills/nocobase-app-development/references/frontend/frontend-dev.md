@@ -2,7 +2,7 @@
 
 When you write or change code under `client/`, first decide the workflow with [`ui-workflow.md`](ui-workflow.md), then read the documents listed here by topic. For what the UI should look like, see [`ui-guidelines.md`](ui-guidelines.md); this handbook covers only how to write the code.
 
-All code examples use the example "projects" domain. The topic references hold the rules with focused snippets, none longer than a small component; [`references/example.md`](references/example.md) indexes the complete files of the feature, one document per file, by task. Every example is complete as code: hooks are called at the top level of a component, a snippet comes with the component or function it belongs to, and omitted parts are marked with `// …`. The translation keys an example calls are not all in the template: add the shared `actions.*` keys listed in `references/i18n.md` and the example's own feature group before copying it.
+All code examples use the example "projects" domain. The topic references hold the rules with focused snippets, none longer than a small component; [`references/example.md`](references/example.md) indexes the complete files of the feature, one document per file, by task. Every example is complete as code: hooks are called at the top level of a component, a snippet comes with the component or function it belongs to, and omitted parts are marked with `// …`. The translation keys an example calls are not all in the template: add the shared keys listed in `references/i18n.md` and your feature's own group before code that follows an example calls them.
 
 **The examples show the rules, not your feature.** Take from an example the rule it illustrates, then write the code for the current requirement: its fields, data volume, permissions and interactions. Values that belong to the projects domain — field names, copy keys, the columns and filters, widths such as `max-w-60` — are placeholders; decide each one again. Copy a file unchanged only where a document says it is shared infrastructure, such as `session-expired-alert.tsx`.
 
@@ -108,6 +108,6 @@ pnpm exec vitest run <related-test-files>
 - A changed `t()` key or route title always includes `tests/logic/app-locale-coverage.test.ts`; what it does not catch is in ["Checks" in `i18n.md`](references/i18n.md#checks).
 - Confirm that every test file you named ran: see ["Running tests" in `testing.md`](references/testing.md#running-tests).
 - When you changed server or database code as well, also run `pnpm exec tsc -p tsconfig.server.json --noEmit`.
-- When you changed an end-to-end test under `e2e/`, also run `pnpm exec tsc -p tsconfig.node.json --noEmit`, which covers `e2e/`.
+- When you changed an end-to-end test under `e2e/`, also run `pnpm exec tsc -p tsconfig.node.json --noEmit`, which covers `e2e/` once Playwright is set up (a Hub application sets it up first, as [`references/testing.md`](references/testing.md) describes).
 
 Passing all of these commands shows only that the code compiles and that the assertions you wrote hold; it does not mean the feature works. In your report, state what you ran, the results, and what you did not verify and why.

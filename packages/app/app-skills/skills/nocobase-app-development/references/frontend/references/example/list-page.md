@@ -4,7 +4,7 @@ Part of the [projects worked example](../example.md).
 
 **Depends on**: [delete dialog](delete-dialog.md), [status badge](../i18n.md#dynamic-keys), [session alert](session-expired-alert.md), [types](types.md), [search hook](url-search.md), [copy](copy.md); the `projects` route in [section 1 of `page.md`](../page.md#1-declare-the-route).
 
-**Add first**: `yes n | pnpm exec shadcn add alert empty input-group skeleton @nocobase/data-table`, then format the files it creates, move the `@tanstack/react-table` it installs to `devDependencies` and put back the `^` range of `@nocobase/i18n` ([how](../shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest)).
+**Add first**: `yes n | pnpm exec shadcn add alert empty input-group select skeleton @nocobase/data-table`, then format the files it creates, move the `@tanstack/react-table` it installs to `devDependencies` and put back the `^` range of `@nocobase/i18n` ([how](../shadcn.md#1-what-the-template-ships-and-how-to-add-the-rest)).
 
 **Links to**: the [create dialog](create-dialog.md), the [detail drawer](detail-drawer.md) and the [edit dialog](edit-dialog.md), which a row's menu opens alone, are its child routes. Without a detail view, render the name as plain text: a link to a route that does not exist lands on the home page.
 

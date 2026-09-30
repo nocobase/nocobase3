@@ -156,17 +156,18 @@ defineAppRoutes([
 // client/pages/orders/index.tsx
 import { useTranslation } from '@nocobase/i18n/client';
 import { Link, Outlet } from 'react-router';
+import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
 
 export default function OrdersPage() {
   const { t } = useTranslation();
   return (
     <>
-      <section className='space-y-6 p-6'>
+      <PageContainer>
         <PageHeader title={t('orders.title')} />
         {/* 实际列表中的链接使用对应订单 ID。 */}
         <Link to='42'>{t('orders.viewDetail')}</Link>
-      </section>
+      </PageContainer>
       <Outlet />
     </>
   );
@@ -189,7 +190,8 @@ export default function OrdersPage() {
 // client/pages/orders/detail.tsx
 import { useTranslation } from '@nocobase/i18n/client';
 import { useParams } from 'react-router';
-import { Breadcrumbs } from '@/components/breadcrumbs';
+import { BackButton } from '@/components/back-button';
+import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
 import { RouteChildPage } from '@/components/route-child-page';
 
@@ -198,23 +200,23 @@ export default function OrderDetailPage() {
   const { orderId } = useParams();
   return (
     <RouteChildPage>
-      <section className='space-y-6 p-6'>
-        <Breadcrumbs />
+      <PageContainer>
+        <BackButton />
         <PageHeader title={t('orders.detailTitle')} />
         <p>{t('orders.orderNumber', { id: orderId })}</p>
-      </section>
+      </PageContainer>
     </RouteChildPage>
   );
 }
 ```
 
-如果详情页还有更深的子路由，把它的 `<Outlet />` 放在 `RouteChildPage` 旁边，不要放进覆盖层内部，否则更深的覆盖层会随当前层一起滚动。
+如果详情页还有更深的子路由，把它的 `<Outlet />` 放在 `RouteChildPage` 旁边：更深一层的子页面会像这一层一样覆盖整个内容区。只能渲染在层内的子页面（比如某个 Tab 通过自己的 `Outlet` 打开的子页面）会覆盖整个当前层，不会随这一层的内容滚走。
 
-`RouteChildPage` 不限制焦点在层内，侧栏和页头仍可操作。它没有关闭按钮，也不响应 Escape，用户通过面包屑或浏览器历史返回。被覆盖的前置兄弟元素会临时设为 `inert`，避免操作隐藏内容。顶层页面不需要使用它。
+`RouteChildPage` 不限制焦点在层内，侧栏和页头仍可操作。它没有关闭按钮，也不响应 Escape：用标题上方的 `BackButton` 返回下面的页面，或者使用浏览器的后退。需要显示层级路径时才改用面包屑。被覆盖的前置兄弟元素会临时设为 `inert`，避免操作隐藏内容。顶层页面不需要使用它。
 
 ## 面包屑
 
-`navigation` 决定菜单入口，`breadcrumb` 独立决定面包屑标题。上面的列表和详情路由都声明了 `breadcrumb`，访问 `/orders/42` 时，详情页的 `<Breadcrumbs />` 会显示“订单列表 > 订单详情”。添加示例中的翻译 key 到 `client/locales/`，让标题使用当前语言。
+`navigation` 决定菜单入口，`breadcrumb` 独立决定面包屑标题。上面的列表和详情路由都声明了 `breadcrumb`。需要显示层级路径时，在详情页标题上方用 `<Breadcrumbs />` 代替 `BackButton`，访问 `/orders/42` 时它会显示“订单列表 > 订单详情”。添加示例中的翻译 key 到 `client/locales/`，让标题使用当前语言。
 
 - 匹配到的路由中，只有声明 `breadcrumb` 的条目进入面包屑；至少有两项才显示。
 - 前面的页面条目链接到对应路径；没有页面组件的分组显示纯文本，最后一项也不生成链接。
