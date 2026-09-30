@@ -8,12 +8,15 @@ import type {
 import { RedisQueueRuntime } from './runtime.js';
 
 /**
- * The BullMQ implementation: every configuration whose backend is not
- * `inMemory` runs on it, with the backend factory registered under its name.
+ * The BullMQ implementation: every `adapter: redis` configuration runs on it,
+ * with the backend factory its `queueBackend` names, or BullMQ's own Redis
+ * backend when it names none.
  */
 export class RedisQueueImplementation implements QueueImplementation {
   public constructor(
-    private readonly backendFactory: (name: string) => BackendFactory,
+    private readonly backendFactory: (
+      name: string | undefined,
+    ) => BackendFactory,
   ) {}
 
   public createRuntime(context: QueueRuntimeContext): QueueRuntime {

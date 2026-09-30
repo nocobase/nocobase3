@@ -4,7 +4,7 @@ import { createRedisBackend, type BackendFactory } from 'bullmq';
 
 import {
   BUILT_IN_MEMORY_KEY,
-  IN_MEMORY_BACKEND,
+  IN_MEMORY_ADAPTER,
   normalizeQueueConfig,
   queueConfigKeys,
   REDIS_BACKEND,
@@ -136,11 +136,6 @@ class DefaultQueueService implements QueueService, QueueHost {
     if (typeof name !== 'string' || name === '') {
       throw new TypeError('A queue backend name must be a non-empty string.');
     }
-    if (name === IN_MEMORY_BACKEND) {
-      throw new Error(
-        `"${IN_MEMORY_BACKEND}" is reserved for the in-process implementation and cannot name a backend factory.`,
-      );
-    }
     if (name === REDIS_BACKEND || this.backends.has(name)) {
       throw new Error(`Queue backend "${name}" is already registered.`);
     }
@@ -173,12 +168,12 @@ class DefaultQueueService implements QueueService, QueueHost {
   }
 
   public implementationFor(config: ResolvedQueueConfig): QueueImplementation {
-    if (config.queueBackend === IN_MEMORY_BACKEND) {
+    if (config.adapter === IN_MEMORY_ADAPTER) {
       this.memory ??= new InMemoryQueueService();
       return this.memory;
     }
     this.redis ??= new RedisQueueImplementation((name) =>
-      this.backendFactory(name),
+      this.backendFactory(name ?? REDIS_BACKEND),
     );
     return this.redis;
   }
@@ -224,11 +219,7 @@ class DefaultQueueService implements QueueService, QueueHost {
 
   private assertBackend(config: ResolvedQueueConfig): void {
     const name = config.queueBackend;
-    if (
-      name !== IN_MEMORY_BACKEND &&
-      name !== REDIS_BACKEND &&
-      !this.backends.has(name)
-    ) {
+    if (name !== undefined && !this.backends.has(name)) {
       throw new Error(
         `Queue ${keyLabel(config.key)} uses backend "${name}", which is not registered.`,
       );

@@ -24,7 +24,7 @@ const connection = {
 
 defineQueueContract({
   name: 'redis',
-  entry: (namespace) => ({ queueBackend: 'redis', connection, namespace }),
+  entry: (namespace) => ({ adapter: 'redis', connection, namespace }),
 });
 
 describe('redis queue backend', () => {
@@ -46,7 +46,7 @@ describe('redis queue backend', () => {
     const created = createQueueService(
       {
         default: 'main',
-        main: { queueBackend: 'redis', connection, namespace, ...entry },
+        main: { adapter: 'redis', connection, namespace, ...entry },
       },
       {
         appName: 'redis-test',
@@ -168,6 +168,7 @@ describe('redis queue backend', () => {
       {
         default: 'custom',
         custom: {
+          adapter: 'redis',
           queueBackend: 'tracked',
           connection,
           namespace: `redis-${randomUUID()}`,
@@ -197,7 +198,7 @@ describe('redis queue backend', () => {
       {
         default: 'main',
         main: {
-          queueBackend: 'redis',
+          adapter: 'redis',
           connection: { host: '127.0.0.1', port: 1 },
           setupTimeoutMs: 300,
         },

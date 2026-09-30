@@ -49,8 +49,8 @@ function recordingLogger(): QueueLogger & { warnings: string[] } {
 describe('configuration key selection', () => {
   const config: QueueConfig = {
     default: 'memory',
-    memory: { queueBackend: 'inMemory' },
-    background: { queueBackend: 'inMemory', namespace: 'background' },
+    memory: { adapter: 'inMemory' },
+    background: { adapter: 'inMemory', namespace: 'background' },
   };
 
   it('uses the named key, then default, then the built-in memory configuration', () => {
@@ -67,9 +67,31 @@ describe('configuration key selection', () => {
     );
   });
 
+  it('leaves the connection to a registered backend factory', () => {
+    const resolved = resolveQueueConfig(
+      { key: 'pg', entry: { adapter: 'redis', queueBackend: 'postgres' } },
+      { appName: 'crm', storagePath },
+    );
+    expect(resolved).toMatchObject({
+      adapter: 'redis',
+      queueBackend: 'postgres',
+      connection: undefined,
+    });
+    // Naming BullMQ's own Redis backend is the same as naming none.
+    expect(
+      resolveQueueConfig(
+        {
+          key: 'r',
+          entry: { adapter: 'redis', queueBackend: 'redis', connection: {} },
+        },
+        { appName: 'crm', storagePath },
+      ).queueBackend,
+    ).toBeUndefined();
+  });
+
   it('defaults the namespace to the application name and fills every default', () => {
     const resolved = resolveQueueConfig(
-      { key: 'memory', entry: { queueBackend: 'inMemory' } },
+      { key: 'memory', entry: { adapter: 'inMemory' } },
       { appName: 'crm', storagePath },
     );
     expect(resolved).toMatchObject({
@@ -89,24 +111,24 @@ describe('configuration key selection', () => {
   });
 
   it.each([
-    [{ queueBackend: 'inMemory', connection: {} }, /takes no connection/u],
-    [{ queueBackend: 'redis' }, /needs a redis connection/u],
+    [{ adapter: 'inMemory', connection: {} }, /takes no connection/u],
+    [{ adapter: 'redis' }, /needs a redis connection/u],
     [
-      { queueBackend: 'redis', connection: {}, persistence: { path: '/x' } },
+      { adapter: 'redis', connection: {}, persistence: { path: '/x' } },
       /only inMemory/u,
     ],
-    [{ queueBackend: 'inMemory', concurrency: 0 }, /positive integer/u],
-    [{ queueBackend: 'inMemory', namespace: '  ' }, /namespace/u],
+    [{ adapter: 'inMemory', concurrency: 0 }, /positive integer/u],
+    [{ adapter: 'inMemory', namespace: '  ' }, /namespace/u],
+    [{ adapter: 'inMemory', rateLimit: { max: 1 } }, /rateLimit.duration/u],
+    [{ adapter: 'inMemory', backoff: { type: 'linear' } }, /not supported/u],
+    [{ adapter: 'inMemory', timeout: 1 }, /does not accept "timeout"/u],
+    [{ connection: {} }, /needs an adapter/u],
+    [{ adapter: 'custom' }, /needs an adapter/u],
     [
-      { queueBackend: 'inMemory', rateLimit: { max: 1 } },
-      /rateLimit.duration/u,
+      { adapter: 'inMemory', queueBackend: 'postgres' },
+      /takes no queueBackend/u,
     ],
-    [
-      { queueBackend: 'inMemory', backoff: { type: 'linear' } },
-      /not supported/u,
-    ],
-    [{ queueBackend: 'inMemory', timeout: 1 }, /does not accept "timeout"/u],
-    [{ connection: {} }, /needs a queueBackend/u],
+    [{ adapter: 'redis', queueBackend: '' }, /must name a backend factory/u],
   ])('rejects %j', (entry, error) => {
     expect(() =>
       resolveQueueConfig(
@@ -128,7 +150,7 @@ describe('queue service configuration', () => {
 
     const explicit = vi.fn();
     const memory = service(
-      { default: 'memory', memory: { queueBackend: 'inMemory' } },
+      { default: 'memory', memory: { adapter: 'inMemory' } },
       { onFallback: explicit },
     );
     memory.producer('a');
@@ -162,7 +184,7 @@ describe('queue service configuration', () => {
     const mixed = service(
       {
         default: 'memory',
-        memory: { queueBackend: 'inMemory' },
+        memory: { adapter: 'inMemory' },
         worker: {},
       } as unknown as QueueConfig,
       { logger, onFallback },
@@ -176,8 +198,8 @@ describe('queue service configuration', () => {
   it('validates every key and backend name at setup', async () => {
     const unknownBackend = service({
       default: 'memory',
-      memory: { queueBackend: 'inMemory' },
-      other: { queueBackend: 'custom', connection: {} },
+      memory: { adapter: 'inMemory' },
+      other: { adapter: 'redis', queueBackend: 'custom', connection: {} },
     });
     await expect(unknownBackend.setup()).rejects.toThrow(/not registered/u);
 
@@ -196,9 +218,6 @@ describe('queue service configuration', () => {
     );
     expect(() => first.registerBackend('redis', createRedisBackend)).toThrow(
       /already registered/u,
-    );
-    expect(() => first.registerBackend('inMemory', createRedisBackend)).toThrow(
-      /reserved/u,
     );
     expect(() =>
       second.registerBackend('custom', createRedisBackend),

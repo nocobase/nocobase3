@@ -13,11 +13,11 @@ import type { AppQueueConfig } from '@nocobase/app-server/queue';
 const queue: AppConfigFactory<AppQueueConfig> = defineAppConfig(
   ({ paths }) => ({
     memory: {
-      queueBackend: 'inMemory',
+      adapter: 'inMemory',
       persistence: { path: paths.storage('queue') },
     },
     redis: {
-      queueBackend: 'redis',
+      adapter: 'redis',
       connection: { host: '127.0.0.1', port: 6379, db: 0 },
       removeOnComplete: { count: 1000 },
       removeOnFail: { age: 604_800 },

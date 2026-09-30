@@ -1434,7 +1434,7 @@ function createTestQueueConfig(): AppQueueConfig {
   return {
     default: 'memory',
     memory: {
-      queueBackend: 'inMemory',
+      adapter: 'inMemory',
       persistence: {
         path: mkdtempSync(
           path.join(tmpdir(), 'nocobase-app-template-examples-queue-'),
@@ -1813,7 +1813,7 @@ function writeRuntimeTestConfig(
       queue: {
         default: 'memory',
         memory: {
-          queueBackend: 'inMemory',
+          adapter: 'inMemory',
           persistence: { path: path.join(directory, 'queue') },
         },
       },

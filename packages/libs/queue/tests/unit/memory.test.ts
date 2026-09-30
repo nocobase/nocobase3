@@ -33,7 +33,7 @@ function memoryService(
     {
       default: 'memory',
       memory: {
-        queueBackend: 'inMemory',
+        adapter: 'inMemory',
         namespace,
         persistence: { path: storagePath },
         ...entry,
@@ -97,7 +97,7 @@ describe('in-memory state file', () => {
       {
         default: 'renamed',
         renamed: {
-          queueBackend: 'inMemory',
+          adapter: 'inMemory',
           namespace: 'memory-test',
           persistence: { path: storage },
         },

@@ -75,11 +75,11 @@ describe('application config', () => {
     // No default: queues run on the built-in memory configuration until one is named.
     expect(runtime.config.get<AppQueueConfig>('queue')).toEqual({
       memory: {
-        queueBackend: 'inMemory',
+        adapter: 'inMemory',
         persistence: { path: runtime.paths.storage('queue') },
       },
       redis: {
-        queueBackend: 'redis',
+        adapter: 'redis',
         connection: { host: '127.0.0.1', port: 6379, db: 0 },
         removeOnComplete: { count: 1000 },
         removeOnFail: { age: 604_800 },

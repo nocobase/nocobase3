@@ -1,19 +1,21 @@
 import type { BackendFactory, ConnectionOptions, JobsOptions } from 'bullmq';
 
-/** Connection option types of the built-in backends, keyed by backend name. */
-export interface QueueBackendConnections {
+/**
+ * The implementation a configuration runs on: `inMemory` for the in-process
+ * queue, `redis` for BullMQ.
+ */
+export type QueueAdapter = 'inMemory' | 'redis';
+
+/** Connection option types, keyed by adapter. */
+export interface QueueAdapterConnections {
+  /** BullMQ connection options, or what a registered backend factory interprets. */
   redis: ConnectionOptions;
   inMemory: Record<string, never>;
 }
 
-/**
- * The connection type of backend `B`: checked for the built-in backends,
- * `unknown` for a registered factory, which interprets its own connection.
- */
-export type QueueConnectionOptions<B extends string> =
-  B extends keyof QueueBackendConnections
-    ? QueueBackendConnections[B]
-    : unknown;
+/** The connection type of adapter `A`. */
+export type QueueConnectionOptions<A extends QueueAdapter> =
+  QueueAdapterConnections[A];
 
 /** A job's routing label; BullMQ stores it as `job.name`. */
 export type Channel = string;
@@ -43,11 +45,15 @@ export type QueueRetentionPolicy = JobsOptions['removeOnComplete'];
 export type QueueBackoffOptions = JobsOptions['backoff'];
 
 /** One complete queue configuration. Keys never inherit from each other. */
-export interface QueueConfigEntry<B extends string = string> {
-  /** `inMemory`, `redis`, or the name of a registered backend factory. */
-  readonly queueBackend: B;
-  /** Omitted for `inMemory`. */
-  readonly connection?: QueueConnectionOptions<B>;
+export interface QueueConfigEntry<A extends QueueAdapter = QueueAdapter> {
+  readonly adapter: A;
+  /**
+   * `redis` only: the name of a BullMQ backend factory registered with
+   * `registerBackend()`. Omitted, BullMQ's Redis backend is used.
+   */
+  readonly queueBackend?: string;
+  /** Required for `redis` on BullMQ's Redis backend; omitted for `inMemory`. */
+  readonly connection?: QueueConnectionOptions<A>;
   /** `inMemory` only: the directory holding the state files. */
   readonly persistence?: { readonly path?: string };
   /** Defaults to the application name. */
@@ -107,7 +113,7 @@ export interface QueueServiceDefaults {
 }
 
 export interface QueueService {
-  /** Registers a BullMQ backend factory. Only before `setup()` starts. */
+  /** Registers a BullMQ backend factory for `queueBackend` to name. Only before `setup()` starts. */
   registerBackend(name: string, factory: BackendFactory): void;
   manager(queue: string, configKey?: string): QueueManager;
   producer(queue: string, configKey?: string): QueueProducer;

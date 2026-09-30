@@ -127,7 +127,7 @@ describe('QueueServiceProvider', () => {
     const { app, container, logger } = await application({
       default: 'memory',
       memory: {
-        queueBackend: 'inMemory',
+        adapter: 'inMemory',
         namespace: 'crm-queue',
         persistence: { path: path.join(rootDir, 'custom') },
       },

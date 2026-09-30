@@ -2,10 +2,10 @@
 
 Application queues for NocoBase: a producer publishes messages on a channel of a named queue, consumers registered on that queue receive them, and a manager adjusts the queue at runtime. The application's `QueueService` routes each queue to one of two implementations, chosen by the configuration key the queue selects.
 
-| `queueBackend`                | Implementation                                                         | Deployment                                                                                                      |
-| ----------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `redis`, or a registered name | BullMQ 6.3.6 through its public `Queue` and `Worker` APIs              | Any number of instances share a queue and compete for its jobs                                                  |
-| `inMemory`                    | `InMemoryQueueService`, in process memory, with a state file per queue | One process; unfinished jobs are written at a clean shutdown, and everything since start is lost on a hard kill |
+| `adapter`  | Implementation                                                         | Deployment                                                                                                      |
+| ---------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `redis`    | BullMQ 6.3.6 through its public `Queue` and `Worker` APIs              | Any number of instances share a queue and compete for its jobs                                                  |
+| `inMemory` | `InMemoryQueueService`, in process memory, with a state file per queue | One process; unfinished jobs are written at a clean shutdown, and everything since start is lost on a hard kill |
 
 The package holds no module-level service or registry and reads neither application settings nor the process environment. Applications compose it through `@nocobase/app-server/queue`, which supplies the application name, the storage directory and the logger; plugins resolve the application's service from `queueServiceToken` and never create one of their own.
 
@@ -39,11 +39,11 @@ import type { AppQueueConfig } from '@nocobase/app-server/queue';
 const queue: AppConfigFactory<AppQueueConfig> = defineAppConfig(
   ({ paths }) => ({
     memory: {
-      queueBackend: 'inMemory',
+      adapter: 'inMemory',
       persistence: { path: paths.storage('queue') },
     },
     redis: {
-      queueBackend: 'redis',
+      adapter: 'redis',
       connection: { host: '127.0.0.1', port: 6379, db: 0 },
       removeOnComplete: { count: 1000 },
       removeOnFail: { age: 604_800 },
@@ -58,13 +58,13 @@ export default queue;
 
 The `queue` section has the same shape as `jobs`: `default` names one key, and every other key is one complete configuration. Keys never inherit from each other, and the section declares configurations, not queues: `queue.producer('reports')` creates the `reports` queue on the default key without any key mentioning it.
 
-A queue's key is chosen when its first entry point is obtained: the `configKey` argument when that key exists, otherwise the key `queue.default` names, otherwise the built-in memory configuration `{ queueBackend: 'inMemory' }` with its state files under `storage/queue`. A queue stays bound to that key within the service, and asking for it under a key that resolves differently throws. Outside development the built-in configuration is reported once as a warning; set `queue.default: memory` to choose it explicitly and silence the report, or `queue.default: redis` to share queues across instances.
+A queue's key is chosen when its first entry point is obtained: the `configKey` argument when that key exists, otherwise the key `queue.default` names, otherwise the built-in memory configuration `{ adapter: 'inMemory' }` with its state files under `storage/queue`. A queue stays bound to that key within the service, and asking for it under a key that resolves differently throws. Outside development the built-in configuration is reported once as a warning; set `queue.default: memory` to choose it explicitly and silence the report, or `queue.default: redis` to share queues across instances.
 
 ```yaml
 queue:
   default: redis
   redis:
-    queueBackend: redis
+    adapter: redis
     namespace: crm # Defaults to the application name.
     connection:
       host: redis.internal
@@ -77,8 +77,9 @@ queue:
 
 | Field                                      | Default                              | Meaning                                                                                                          |
 | ------------------------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `queueBackend`                             | required                             | `inMemory`, `redis`, or the name of a registered backend factory                                                 |
-| `connection`                               | required for `redis`                 | BullMQ connection options, handed over as they are; `inMemory` takes none                                        |
+| `adapter`                                  | required                             | `inMemory` for the in-process queue, `redis` for BullMQ                                                          |
+| `queueBackend`                             | BullMQ's Redis backend               | `redis` only: the name of a BullMQ backend factory registered with `registerBackend()`                           |
+| `connection`                               | required for BullMQ's Redis backend  | BullMQ connection options, handed over as they are, or what the named factory interprets; `inMemory` takes none  |
 | `persistence.path`                         | `storage/queue`                      | `inMemory` only: the directory of the state files                                                                |
 | `namespace`                                | the application name                 | Isolates applications sharing a backend                                                                          |
 | `concurrency`                              | `1`                                  | Jobs of one queue this instance runs at once                                                                     |
@@ -132,7 +133,7 @@ public override register(): void {
 }
 ```
 
-`inMemory` is reserved, and names are unique per service. A backend factory is BullMQ's `BackendFactory`; it receives the configuration's `connection` as BullMQ's `opts.connection` and interprets it.
+A configuration selects the factory with `adapter: redis` and `queueBackend: custom`; without `queueBackend` it runs on BullMQ's own Redis backend, whose name `redis` cannot be registered again. Names are unique per service. A backend factory is BullMQ's `BackendFactory`; it receives the configuration's `connection` as BullMQ's `opts.connection` and interprets it.
 
 ## Publishing
 

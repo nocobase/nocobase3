@@ -9,7 +9,7 @@ const storage = mkdtempSync(path.join(tmpdir(), 'nocobase-queue-contract-'));
 defineQueueContract({
   name: 'inMemory',
   entry: (namespace) => ({
-    queueBackend: 'inMemory',
+    adapter: 'inMemory',
     namespace,
     persistence: { path: storage },
   }),
