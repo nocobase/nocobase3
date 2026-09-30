@@ -118,7 +118,11 @@ describe.skipIf(!dialect)(
 
       await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 1,
-        rolledBack: [targetMigration.name, instantMigration.name, migration.name],
+        rolledBack: [
+          targetMigration.name,
+          instantMigration.name,
+          migration.name,
+        ],
         warnings: [],
       });
       await expect(

@@ -39,8 +39,7 @@ const apiRoutes = defineApiRoutes(({ container }) => {
       action: 'view',
     });
     const policy = decision.conditions?.database?.[QUOTES] as
-      | RepositoryPolicy
-      | undefined;
+      RepositoryPolicy | undefined;
     if (decision.effect === 'deny' || !policy?.read)
       throw new AuthorizationDeniedError(decision);
 

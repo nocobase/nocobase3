@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-notification
-description: "Use when configuring or sending application notifications through email, SMTP, Resend, Feishu, DingTalk, or Webhook channels, or inspecting delivery logs and retries. Use nocobase-app-plugin-notification-in-app for inbox pages, unread counts, and browser notification UI."
+description: 'Use when configuring or sending application notifications through email, SMTP, Resend, Feishu, DingTalk, or Webhook channels, or inspecting delivery logs and retries. Use nocobase-app-plugin-notification-in-app for inbox pages, unread counts, and browser notification UI.'
 argument-hint: '[action: explain|integrate|configure|send|inspect|diagnose] [channel-or-notification-id]'
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 owner: notification

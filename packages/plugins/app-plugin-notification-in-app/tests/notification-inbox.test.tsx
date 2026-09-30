@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type { ApiClient } from '@nocobase/app-client';
 import type { PropsWithChildren, ReactElement } from 'react';
 import { useMemo, useState } from 'react';
@@ -72,8 +78,12 @@ describe('NotificationInAppInbox', () => {
     });
 
     renderInbox();
-    expect(await screen.findByRole('heading', { name: 'Needs review' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Already read' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Needs review' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Already read' }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Unread' }));
     await waitFor(() =>
@@ -86,7 +96,9 @@ describe('NotificationInAppInbox', () => {
         screen.queryByRole('heading', { name: 'Already read' }),
       ).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole('heading', { name: 'Needs review' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Needs review' }),
+    ).toBeInTheDocument();
 
     mocks.request.mockResolvedValue({ data: [] });
     fireEvent.click(screen.getByRole('button', { name: 'Unread' }));
@@ -103,11 +115,17 @@ describe('NotificationInAppInbox', () => {
     );
 
     renderInbox();
-    expect(await screen.findByRole('heading', { name: 'First notice' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'First notice' }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
 
-    expect(await screen.findByRole('heading', { name: 'Second notice' })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { name: 'First notice' })).toHaveLength(1);
+    expect(
+      await screen.findByRole('heading', { name: 'Second notice' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('heading', { name: 'First notice' }),
+    ).toHaveLength(1);
     expect(screen.getByRole('status')).toHaveTextContent('No more messages');
   });
 
@@ -140,10 +158,7 @@ describe('NotificationInAppInbox', () => {
       }
       const updated = {
         ...item,
-        readAt:
-          action === 'read'
-            ? '2026-09-30T00:00:00.000Z'
-            : undefined,
+        readAt: action === 'read' ? '2026-09-30T00:00:00.000Z' : undefined,
       };
       serverItems = serverItems.map((candidate) =>
         candidate.id === itemId ? updated : candidate,
@@ -152,10 +167,14 @@ describe('NotificationInAppInbox', () => {
     });
 
     renderInbox();
-    expect(await screen.findByRole('heading', { name: 'First notice' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'First notice' }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Mark read' })[0]);
-    expect(await screen.findByRole('button', { name: 'Mark unread' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Mark unread' }),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(requests).toContainEqual(
         expect.objectContaining({
@@ -179,13 +198,17 @@ describe('NotificationInAppInbox', () => {
       }),
     );
 
-    const secondRow = screen.getByRole('heading', { name: 'Second notice' }).closest('article');
+    const secondRow = screen
+      .getByRole('heading', { name: 'Second notice' })
+      .closest('article');
     if (!secondRow) throw new Error('Second notice row was not rendered');
     fireEvent.click(
       within(secondRow).getByRole('button', { name: 'Delete notification' }),
     );
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Second notice' })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('heading', { name: 'Second notice' }),
+      ).not.toBeInTheDocument(),
     );
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -217,9 +240,7 @@ function renderInbox(): void {
   );
 }
 
-function TestRuntimeProvider({
-  children,
-}: PropsWithChildren): ReactElement {
+function TestRuntimeProvider({ children }: PropsWithChildren): ReactElement {
   const [revision, setRevision] = useState(0);
   const value = useMemo<NotificationInAppRuntimeValue>(
     () => ({
@@ -236,11 +257,7 @@ function TestRuntimeProvider({
   );
 }
 
-function inboxItem(
-  id: string,
-  title: string,
-  read = false,
-): InboxItem {
+function inboxItem(id: string, title: string, read = false): InboxItem {
   return {
     id,
     deliveryId: `delivery-${id}`,

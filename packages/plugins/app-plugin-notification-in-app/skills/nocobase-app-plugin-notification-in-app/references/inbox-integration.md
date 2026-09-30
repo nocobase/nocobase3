@@ -65,7 +65,12 @@ export function NotificationButton() {
 
 function NotificationLink() {
   const { unreadCount } = useNotificationInAppRuntime();
-  return <Link to='/notifications' aria-label={`Notifications, ${unreadCount} unread`} />;
+  return (
+    <Link
+      to='/notifications'
+      aria-label={`Notifications, ${unreadCount} unread`}
+    />
+  );
 }
 ```
 
@@ -85,15 +90,15 @@ Endpoints are rooted at `/api/notifications/in-app` on the app API host. Within 
 
 Every route derives the user from the authenticated session and scopes reads and writes to that user. A client-supplied user id is never an identity. Stable plugin errors use `{ error: { code, message, ns, key, params? } }`; branch on `code` and display `message`.
 
-| Response | Typical cause |
-| --- | --- |
-| `401 IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED` | No authenticated user could be resolved |
-| `400 IN_APP_NOTIFICATION_INVALID_LIMIT` | Limit is not an integer from 1 through 100 |
-| `400 IN_APP_NOTIFICATION_INVALID_CURSOR` | Cursor is malformed or not canonical |
-| `400 IN_APP_NOTIFICATION_INVALID_BODY` | Mutation body is not a JSON object |
-| `400 IN_APP_NOTIFICATION_INVALID_ACTION` | Action is not `read`, `unread`, or `delete` |
-| `403 IN_APP_NOTIFICATION_INVALID_CSRF` | Header and cookie are missing or do not match |
-| `404 IN_APP_NOTIFICATION_NOT_FOUND` | Item does not exist for the authenticated user |
+| Response                                          | Typical cause                                  |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `401 IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED` | No authenticated user could be resolved        |
+| `400 IN_APP_NOTIFICATION_INVALID_LIMIT`           | Limit is not an integer from 1 through 100     |
+| `400 IN_APP_NOTIFICATION_INVALID_CURSOR`          | Cursor is malformed or not canonical           |
+| `400 IN_APP_NOTIFICATION_INVALID_BODY`            | Mutation body is not a JSON object             |
+| `400 IN_APP_NOTIFICATION_INVALID_ACTION`          | Action is not `read`, `unread`, or `delete`    |
+| `403 IN_APP_NOTIFICATION_INVALID_CSRF`            | Header and cookie are missing or do not match  |
+| `404 IN_APP_NOTIFICATION_NOT_FOUND`               | Item does not exist for the authenticated user |
 
 ## Custom clients and hosts
 

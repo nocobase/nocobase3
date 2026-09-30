@@ -20,11 +20,25 @@ describe('@nocobase/app-plugin-notification Agent Skill contract', () => {
       ),
       'utf8',
     );
+    const sendingNotifications = readFileSync(
+      path.join(
+        packageRoot,
+        'skills/nocobase-app-plugin-notification/references/sending-notifications.md',
+      ),
+      'utf8',
+    );
+    const channelExtensions = readFileSync(
+      path.join(
+        packageRoot,
+        'skills/nocobase-app-plugin-notification/references/channel-and-provider-extensions.md',
+      ),
+      'utf8',
+    );
 
     expect(packageJson.files).toContain('skills');
     expect(skill).toContain('name: nocobase-app-plugin-notification');
-    expect(skill).toContain('notificationServiceToken');
-    expect(skill).toContain('notificationExtensionRegistryToken');
+    expect(sendingNotifications).toContain('notificationServiceToken');
+    expect(channelExtensions).toContain('notificationExtensionRegistryToken');
     expect(skill).toContain('references/delivery-diagnostics.md');
     expect(skill).toMatch(/missing required input/i);
     expect(skill).toMatch(/high-impact actions/i);

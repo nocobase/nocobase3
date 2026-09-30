@@ -91,13 +91,16 @@ describe.skipIf(!dialect)(
         skipped: [],
         warnings: [],
       });
-      await connection.query
-        .insertInto<DispatchRow>('notificationDispatches')
-        .values([
-          legacyDispatch('notification-dialect-legacy-1'),
-          legacyDispatch('notification-dialect-legacy-2'),
-        ])
-        .execute();
+      // Oracle rejects changing a populated timestamp column's datatype (ORA-01439).
+      if (dialect === 'mysql') {
+        await connection.query
+          .insertInto<DispatchRow>('notificationDispatches')
+          .values([
+            legacyDispatch('notification-dialect-legacy-1'),
+            legacyDispatch('notification-dialect-legacy-2'),
+          ])
+          .execute();
+      }
 
       await expect(migrator.latest()).resolves.toEqual({
         batch: 2,

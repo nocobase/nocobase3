@@ -31,17 +31,17 @@ A Provider can request a bounded retry with disposition `same_provider`. `never`
 
 ### Built-in Provider signals
 
-| Provider result | Runtime outcome |
-| --- | --- |
-| SMTP response code `4xx` | Known failure; retry on the same Provider while attempts remain |
-| SMTP response code `5xx` or rejected credentials/message | Permanent known failure; no automatic retry |
-| SMTP DNS/connect failure before submission | Known pre-submission failure; retry on the same Provider |
-| SMTP timeout, reset, or broken pipe after submission may have started | `unknown`; verify with the mail service before replacing the send |
-| Resend HTTP `429` or `5xx` | Same-Provider retry; the built-in Provider sends the Delivery id as the idempotency key, retained for 24 hours |
-| Resend timeout/reset/broken pipe | `unknown`; the request may have been accepted |
-| Feishu/DingTalk HTTP `429` | Same-Provider retry; a valid HTTP `Retry-After` hint overrides the configured interval |
-| Feishu/DingTalk HTTP `5xx` | `unknown`; HTTP success with a Provider-body rejection is classified from the returned Provider code |
-| Feishu/DingTalk successful HTTP response with a body error code | Rate-limit and known transient Provider codes retry on the same Provider; other body rejections are permanent |
+| Provider result                                                       | Runtime outcome                                                                                                |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| SMTP response code `4xx`                                              | Known failure; retry on the same Provider while attempts remain                                                |
+| SMTP response code `5xx` or rejected credentials/message              | Permanent known failure; no automatic retry                                                                    |
+| SMTP DNS/connect failure before submission                            | Known pre-submission failure; retry on the same Provider                                                       |
+| SMTP timeout, reset, or broken pipe after submission may have started | `unknown`; verify with the mail service before replacing the send                                              |
+| Resend HTTP `429` or `5xx`                                            | Same-Provider retry; the built-in Provider sends the Delivery id as the idempotency key, retained for 24 hours |
+| Resend timeout/reset/broken pipe                                      | `unknown`; the request may have been accepted                                                                  |
+| Feishu/DingTalk HTTP `429`                                            | Same-Provider retry; a valid HTTP `Retry-After` hint overrides the configured interval                         |
+| Feishu/DingTalk HTTP `5xx`                                            | `unknown`; HTTP success with a Provider-body rejection is classified from the returned Provider code           |
+| Feishu/DingTalk successful HTTP response with a body error code       | Rate-limit and known transient Provider codes retry on the same Provider; other body rejections are permanent  |
 
 For Webhook network failures, connect/TLS failures known to occur before submission are retryable; failures after a request may have reached the endpoint are `unknown`. Do not infer retryability from a generic `network` category alone; use the recorded Delivery status and sanitized Provider code/message.
 
@@ -59,18 +59,18 @@ The logs endpoints are `GET /api/notifications/logs` and `GET /api/notifications
 
 The test API requires authentication and `x-nocobase-notification-test: 1`. Missing header or missing `notification:test` `send` permission on submission returns `403`; invalid input returns `400`; an unknown status id or another user's test id returns `404`. Test sends are real sends.
 
-| Symptom | Check |
-| --- | --- |
-| Channel is not enabled | Effective `notification.channels`, `enabled`, and exact Channel name |
-| Channel definition is not registered | Optional package installed and plugin boot order before first send |
-| Provider definition is not registered | Built-in or custom Provider plugin booted and exact Provider identifier |
-| Runtime identity mismatch | Definition returns the registered Provider identifier exactly |
-| Unsupported recipient | Native recipient address and message validation contract |
-| Queue dispatch warning | Reconciler recovery, worker availability, and persisted ready Delivery |
-| Repeated retry | Attempt categories, configured interval, and maximum attempts |
-| Submission timeout | Provider timeout, abort handling, remote latency, and unknown risk |
-| Logs API 401/403 | Authentication and `page:notification.logs` `access` permission |
-| Test API 403 | Authentication, test header, and `notification:test` `send` permission for submission |
+| Symptom                               | Check                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| Channel is not enabled                | Effective `notification.channels`, `enabled`, and exact Channel name                  |
+| Channel definition is not registered  | Optional package installed and plugin boot order before first send                    |
+| Provider definition is not registered | Built-in or custom Provider plugin booted and exact Provider identifier               |
+| Runtime identity mismatch             | Definition returns the registered Provider identifier exactly                         |
+| Unsupported recipient                 | Native recipient address and message validation contract                              |
+| Queue dispatch warning                | Reconciler recovery, worker availability, and persisted ready Delivery                |
+| Repeated retry                        | Attempt categories, configured interval, and maximum attempts                         |
+| Submission timeout                    | Provider timeout, abort handling, remote latency, and unknown risk                    |
+| Logs API 401/403                      | Authentication and `page:notification.logs` `access` permission                       |
+| Test API 403                          | Authentication, test header, and `notification:test` `send` permission for submission |
 
 ## Safe recovery
 

@@ -32,7 +32,9 @@ it('sends a message through Nodemailer to a local SMTP server', async () => {
       providerMessageId: expect.any(String),
     });
     expect(smtp.messages).toHaveLength(1);
-    expect(smtp.messages[0]).toContain('From: NocoBase <notifications@example.com>');
+    expect(smtp.messages[0]).toContain(
+      'From: NocoBase <notifications@example.com>',
+    );
     expect(smtp.messages[0]).toContain('To: alice@example.com');
     expect(smtp.messages[0]).toContain('Subject: Approval complete');
     expect(smtp.messages[0]).toContain('Reply-To: support@example.com');

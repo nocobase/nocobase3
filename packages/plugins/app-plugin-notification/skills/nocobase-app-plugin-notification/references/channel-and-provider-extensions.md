@@ -12,7 +12,9 @@ import { ServiceProvider } from '@nocobase/service-provider';
 
 export default class SmsProvider extends ServiceProvider {
   override async boot() {
-    const registry = this.app.container.resolve(notificationExtensionRegistryToken);
+    const registry = this.app.container.resolve(
+      notificationExtensionRegistryToken,
+    );
     registry.registerChannel(createSmsChannelDefinition());
     registry.registerProvider(createSmsProviderDefinition());
   }
