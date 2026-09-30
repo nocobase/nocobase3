@@ -1167,7 +1167,7 @@ export function ProjectStatusHelp(): ReactElement {
 ```
 
 - Use `SheetTrigger render={<Button />}` for the trigger button and `SheetClose render={<Button />}` for the close button. To control opening and closing from code, pass `open` and `onOpenChange` to `Sheet`.
-- `side` defaults to `'right'`; the other options are `'left'`, `'top'` and `'bottom'`. On the left and right sides the width is `w-3/4 sm:max-w-sm`; adjust it with `className`.
+- `side` defaults to `'right'`; the other options are `'left'`, `'top'` and `'bottom'`. On the left and right sides the width comes from side-scoped classes such as `data-[side=right]:w-3/4 data-[side=right]:sm:max-w-sm`, which outrank a plain `sm:max-w-*`: widen the panel with the same variant, for example `className='data-[side=right]:sm:max-w-3xl'` (use `data-[side=left]:` for a left panel), because `className='sm:max-w-3xl'` alone leaves it at `max-w-sm`.
 - `SheetContent` is a vertical flex container and does not scroll itself: give the content area `min-h-0 flex-1 overflow-y-auto`. `SheetFooter` sits at the bottom, with its buttons stacked vertically.
 - `SheetContent` has a built-in close button in the top-right corner (remove it with `showCloseButton={false}`); its accessible name is currently hard-coded to the English "Close".
 
