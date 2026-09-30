@@ -139,7 +139,9 @@ describe('bundled capability templates', () => {
     );
     expect(plugin).not.toContain('queue:');
     expect(plugin).toContain('serviceProviders,');
-    expect(job).not.toContain('extends Job');
+    expect(job).toContain('extends Job<__NOCOBASE_SYMBOL_NAME__JobPayload>');
+    expect(job).toContain("from '@nocobase/jobs'");
+    expect(job).not.toContain('@nocobase/queue');
     expect(job).not.toContain('JobOptions');
     expect(providers).toContain('__NOCOBASE_SYMBOL_NAME__JobsProvider,');
   });

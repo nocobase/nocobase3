@@ -29,7 +29,7 @@ async function linkDependencies(target: string): Promise<void> {
   };
   const workspacePackages: Record<string, string> = {
     '@nocobase/app-server': 'packages/app/app-server',
-    '@nocobase/queue': 'packages/libs/queue',
+    '@nocobase/jobs': 'packages/libs/jobs',
     '@nocobase/service-provider': 'packages/libs/service-provider',
     '@nocobase/dev-config': 'packages/tools/dev-config',
   };

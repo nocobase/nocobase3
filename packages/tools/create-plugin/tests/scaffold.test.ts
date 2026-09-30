@@ -114,7 +114,7 @@ describe('createPlugin', () => {
       'server.jobs',
       ['./package.json', './server'],
       [],
-      ['@nocobase/app-server', '@nocobase/queue', '@nocobase/service-provider'],
+      ['@nocobase/app-server', '@nocobase/jobs', '@nocobase/service-provider'],
     ],
     [
       'server.locales',
@@ -433,7 +433,7 @@ describe('createPlugin', () => {
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 
-  it('generates an instance consumer Provider instead of legacy job scanning', async () => {
+  it('generates a jobs executor Provider instead of legacy job scanning', async () => {
     const result = await createWith(['server.jobs']);
     const job = await readFile(
       path.join(result.targetDirectory, 'server/jobs/audit-log.ts'),
@@ -450,12 +450,17 @@ describe('createPlugin', () => {
     );
     expect(plugin).not.toContain('queue:');
     expect(plugin).toContain('serviceProviders,');
-    expect(job).not.toContain('extends Job');
-    expect(job).toContain("'@nocobase/app-plugin-audit-log/audit-log'");
-    expect(job).toContain('queue.producer(');
-    expect(job).toContain('.publish(');
-    expect(test).toContain('createQueueService');
-    expect(test).toContain('await queue.setup()');
+    expect(job).toContain('extends Job<AuditLogJobPayload>');
+    expect(job).toMatch(
+      /static readonly jobName: string =\s+'@nocobase\/app-plugin-audit-log\/audit-log'/,
+    );
+    expect(job).toMatch(
+      /export const auditLogJobScope: string =\s+'@nocobase\/app-plugin-audit-log'/,
+    );
+    expect(job).toContain('.addJob(');
+    expect(job).not.toContain('@nocobase/queue');
+    expect(test).toContain('createJobExecutorService');
+    expect(test).toContain('await provider.start()');
     expect(test).toContain('expect.poll');
     expect(result.files).toContain('server/providers/audit-log-jobs.ts');
     expect(result.files).not.toContain('server/tokens.ts');
@@ -463,10 +468,10 @@ describe('createPlugin', () => {
       path.join(result.targetDirectory, 'server/providers/audit-log-jobs.ts'),
       'utf8',
     );
-    expect(provider).toContain('queueServiceToken');
-    expect(provider).toContain('override async boot()');
-    expect(provider).toContain('await this.unregister?.()');
-    expect(provider).not.toContain('queue.shutdown()');
+    expect(provider).toContain('override async start()');
+    expect(provider).toContain('executor.registerJob(AuditLogJob)');
+    expect(provider).toContain('await executor?.shutdown()');
+    expect(provider).not.toContain('@nocobase/queue');
   });
 
   it('maps selected Client entries without inventing routes or providers', async () => {
@@ -524,7 +529,7 @@ describe('createPlugin', () => {
       '@nocobase/app-server': 'workspace:^',
       '@nocobase/db': 'workspace:^',
       '@nocobase/i18n': 'workspace:^',
-      '@nocobase/queue': 'workspace:^',
+      '@nocobase/jobs': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',
     });
     expect(manifest.files).toEqual(

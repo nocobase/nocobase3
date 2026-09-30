@@ -436,7 +436,7 @@ async function renderManifest(
     capabilities.client.serviceProviders
   )
     addRuntimePeer('@nocobase/service-provider');
-  if (capabilities.server.jobs) addRuntimePeer('@nocobase/queue');
+  if (capabilities.server.jobs) addRuntimePeer('@nocobase/jobs');
   if (clientPlugin) addRuntimePeer('@nocobase/app-client');
   if (capabilities.cli) {
     addRuntimePeer('@nocobase/app-cli');
@@ -687,7 +687,7 @@ function renderReadme(
       ? selected.map((value) => `- \`${value}\``).join('\n')
       : '- Package foundation only';
   const jobsGuide = capabilities.server.jobs
-    ? `\n## Background jobs\n\nThe App must register its core \`QueueServiceProvider\` before this plugin's Providers. The core Provider owns setup in \`start()\` and shared queue shutdown. This plugin registers its instance handler in \`boot()\` and awaits unregister in \`shutdown()\` before releasing handler dependencies. There is no Job class or directory discovery.\n\n\`server/jobs/${context.shortName}.ts\` owns the stable queue/channel names, serializable payload, channel filtering, cancellation check, and \`publish${context.symbolName}(container, payload)\` producer. Call the producer only after App startup; it resolves the original \`queueServiceToken\` and returns a receipt, not a completed business result. The generated handler validates the message but intentionally has no domain side effect yet. Add an idempotent domain operation and honor its abort signal before exposing it. HTTP callers must enforce their own authentication and authorization.\n\nNo queue configuration means app-scoped in-memory storage, which loses messages on restart. Configure a durable backend in the App when required. Tests use a real in-memory QueueService, await setup and observable handler settlement, then unregister before shutdown; publishing is never assumed to execute synchronously.\n`
+    ? `\n## Background jobs\n\nThe App must register its core \`JobExecutorServiceProvider\` before this plugin's Providers. This plugin owns its own \`JobExecutor\`, resolved from \`jobExecutorServiceToken\` under the package name as scope: the Provider registers the job class and sets the executor up in \`start()\`, and shuts it down in \`shutdown()\`, which waits for running tasks before their dependencies are released. There is no directory discovery.\n\n\`server/jobs/${context.shortName}.ts\` owns the stable \`jobName\`, the strict-JSON payload, run-time payload validation, the cancellation check, and the \`submit${context.symbolName}(container, payload)\` producer. Submit only after the Provider has started; the receipt means the backend accepted the task, not that it ran. The generated job validates its payload but intentionally has no domain side effect yet. Add an idempotent domain operation and honor its abort signal before exposing it, because a task can run again after failure or recovery. HTTP callers must enforce their own authentication and authorization.\n\nWithout a \`jobs\` configuration the App uses the built-in memory backend, which keeps tasks in one process. Configure a \`redis\` jobs configuration in the App to run more than one instance. Tests use a real memory jobs service, start the Provider, and await an observable result; submitting is never assumed to execute synchronously.\n`
     : '';
   return `# ${context.packageName}\n\n${context.description}\n\n## Generated capabilities\n\n${list}\n\nImplement only the public behavior this plugin owns. Keep declarations, exports, dependencies, tests, README, and Plugin Skills aligned when capabilities change. Every concrete Server Route must own and test its authentication and authorization boundary.\n\n${jobsGuide}\n## Verification\n\n\`\`\`bash\npnpm --filter ${context.packageName} lint\npnpm --filter ${context.packageName} typecheck\npnpm --filter ${context.packageName} test\npnpm --filter ${context.packageName} build\n\`\`\`\n`;
 }
@@ -710,7 +710,7 @@ function renderSkill(
     capabilities.server.routes &&
       '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
     capabilities.server.jobs &&
-      '- Server jobs: document the App-owned QueueServiceProvider prerequisite, stable queue/channel names, producer entry, serializable payloads, retry/idempotency behavior, awaited handler unregistration, and observable asynchronous results.',
+      '- Server jobs: document the App-owned JobExecutorServiceProvider prerequisite, the executor scope and stable jobName, the submit entry, strict-JSON payloads, retry/idempotency behavior, awaited executor shutdown, and observable asynchronous results.',
     capabilities.database &&
       '- Database: document only App-visible schema prerequisites and lifecycle constraints; do not copy migration implementation details.',
     capabilities.registry &&
