@@ -4,7 +4,7 @@ This page is the application side: where the directories live, how `pnpm nocobas
 
 How to write the files themselves — the migration and seed shape, the immutability and self-containment rules, the Collection Builder, and which of `builder`, `query` and `repository` a task context should reach for — belongs to the package that owns them. Read `.agents/skills/nocobase-db/SKILL.md` sections 2 and 3 before writing one, and run `pnpm nocobase skills sync` if that file is missing.
 
-Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run. Migrations create structure. Seeds never do.
+Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run. Migrations create structure. Seeds never do. Example records a demonstration needs are required by nobody, and get [seeds of their own](#sample-and-demonstration-data).
 
 `database/tsconfig.json` extends the server configuration so editor tooling and ESLint recognize migrations and seeds as Node source. Keep it in place when adding connection directories.
 
@@ -17,6 +17,16 @@ pnpm nocobase db apply
 This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. Both halves run only what is pending, so on an already-migrated database it applies seeds alone. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
 
 Seeds are the second half of that run, so the structure a seed writes into must already exist from an earlier migration. Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields — and never let a repeat run silently overwrite data a user has edited.
+
+## Sample and demonstration data
+
+A request to ship the application with example records — a couple of customers, a few contacts, some deals to click through — is a request for data the application does not need in order to run, and `.agents/skills/nocobase-db/SKILL.md` section 2 is what decides which mechanism carries it. This is where those files go in an application:
+
+- A demonstration seed is an ordinary file in `database/main/seeds/`, named for what it carries, such as `202610150003_demo_customers.ts`, and holding nothing the application requires. Keeping it apart from the required seeds is what later lets a production build drop the demonstration by deleting files.
+- When one build serves both a demonstration instance and a real one, read the switch from the seed's `config`, as [reading runtime configuration](#reading-runtime-configuration) describes. A seed that returns early is still recorded as executed, so the choice is made once per database rather than at every start.
+- Data meant to be reloaded on demand belongs in an application command under `cli/commands/` instead — see [adding an application command](commands.md). It carries no history record and no checksum, so it can run as often as the work needs and stays out of the installation sequence. For a database that is genuinely disposable, `pnpm nocobase db reset --force` reruns every migration and seed from empty.
+
+Test data is neither, and never reaches `database/`: the test that needs it creates it, as [testing and verification](testing.md) describes.
 
 ## Multiple connections
 
