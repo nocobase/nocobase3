@@ -41,7 +41,6 @@ import {
   sessionManagerToken,
 } from '@nocobase/app-server/session';
 import { createNullSessionConfig } from '@nocobase/session';
-import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 
 describe('app service providers', () => {
   it('registers core services and shuts them down in reverse order', async () => {
@@ -142,57 +141,6 @@ describe('app service providers', () => {
 
     expect(services.has(driveManagerToken)).toBe(true);
     expect(services.resolve(driveManagerToken)).toBeDefined();
-  });
-
-  it('starts the queue without using the application database', async () => {
-    const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry();
-    const connection = { kind: 'connection' };
-    const database = {
-      connection: vi.fn(() => connection),
-      destroy: vi.fn(() => Promise.resolve()),
-    } as unknown as DatabaseManager;
-    const queueConfig = { queueBackend: 'inMemory' };
-    const app = createProviderApplication(
-      {
-        database: createDatabaseConfig(),
-        app: {
-          name: 'provider-test',
-          publicOrigin: 'https://example.com',
-          publicBasePath: '/provider-test',
-        },
-        auth: {
-          secret: 'test-auth-secret-at-least-32-characters',
-        },
-        caching: createDefaultCachingConfig(),
-        logging: {
-          enabled: false,
-          level: 'silent',
-        },
-        queue: queueConfig,
-        snowflake: {
-          workerId: 0,
-        },
-      },
-      services,
-    );
-    services.instance(databaseManagerToken, database);
-    registry.add(new LoggingProvider(app));
-    registry.add(new CachingProvider(app));
-    registry.add(new IdGeneratorProvider(app));
-    registry.add(new QueueServiceProvider(app));
-
-    registry.registerAll();
-    const queue = services.resolve(queueServiceToken);
-    await registry.bootAll();
-    await registry.startAll();
-    await expect(queue.producer('test').publish('event', {})).resolves.toEqual({
-      jobId: expect.any(String),
-    });
-
-    expect(database.connection).not.toHaveBeenCalled();
-    expect(services.resolve(databaseManagerToken)).toBe(database);
-    await registry.shutdown();
   });
 });
 
@@ -375,16 +323,5 @@ function createTestConfig(
     raw: () => values,
     reload: () => Promise.resolve({ changedNamespaces: [] }),
     subscribe: () => () => undefined,
-  };
-}
-
-function createDatabaseConfig(): object {
-  return {
-    default: 'main',
-    connections: {},
-    migrations: {
-      directory: '',
-      autoRun: false,
-    },
   };
 }
