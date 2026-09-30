@@ -19,7 +19,8 @@ Choose a lowercase kebab-case short name, check the destination and npm name for
 | Reusable runtime UI                      | Plugin `client/components/` and deliberate public exports |
 | Shared React context                     | Client React Provider                                     |
 | Client service or startup initialization | Client ServiceProvider                                    |
-| Asynchronous execution                   | Queue Job                                                 |
+| Background task                          | `@nocobase/jobs` Job on the plugin's `JobExecutor` |
+| Channel messages or delayed publication  | `QueueService` handler |
 | App-owned editable UI source             | Registry item                                             |
 | Agent integration knowledge              | Plugin `skills/`                                          |
 | Application command                      | Plugin `cli/` and `./cli` export                          |
@@ -33,7 +34,7 @@ An App owns its page composition, business models, call sites, and permission co
 | `database`                 | Migration and seed directories with disabled examples |
 | `server.service-providers` | Server Provider, Service, and Token                   |
 | `server.routes`            | API/Root Route contribution structure                 |
-| `server.jobs`              | Queue Job structure                                   |
+| `server.jobs`              | `@nocobase/jobs` Job class, submit function, and executor Provider |
 | `server.locales`           | Server locale declaration/resources                   |
 | `client.routes`            | Client Route contribution structure                   |
 | `client.components`        | Plugin-owned React components                         |
@@ -82,7 +83,7 @@ This is the union of possible capabilities, not a directory tree every plugin mu
 | `server/providers/index.ts`               | Default-exported `serviceProviders` constructor array      |
 | `server/services/`                        | Domain implementations                                     |
 | `server/routes/`                          | Direct HTTP contributions                                  |
-| `server/jobs/`                            | Queue Job definitions                                      |
+| `server/jobs/`                            | Job classes, imported explicitly by their Provider |
 | `server/locales/`                         | Lazy Server locale resources                               |
 | `database/migrations/`, `database/seeds/` | Historical schema operations and initial records           |
 | `cli/`                                    | Explicit CLI contribution and command modules              |

@@ -19,15 +19,16 @@ Tasks that do not need to be viewed and tracked through the UI must not be manag
 
 After deciding to use Scheduler, choose according to business complexity:
 
-| Scenario                                                                                  | Choice          | Implementation boundary                                                                                    |
-| ----------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| Periodic cleanup, cache refresh, a single report, or one business Service call            | Own target type | Short operations may complete directly; dispatch lengthy, batch, or retryable work to a business Queue Job |
-| Staged processing, branches, persisted node state, or node-level diagnostics              | `workflow`      | Scheduler determines when to trigger; Workflow orchestrates the process and nodes call typed business code |
-| A simple operation that happens hourly                                                    | Own target type | Cron alone is not a reason to introduce Workflow                                                           |
-| Immediate asynchronous execution or a one-time delay                                      | Queue           | No Cron Schedule is needed                                                                                 |
-| Another execution system with its own references, status queries, and completion protocol | Own target type | The same `registerTarget()` call, with `inspect()` and completion reporting for work that finishes later   |
+| Scenario                                                                                  | Choice               | Implementation boundary                                                                                    |
+| ----------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Periodic cleanup, cache refresh, a single report, or one business Service call            | Own target type      | Short operations may complete directly; submit lengthy, batch, or retryable work as a business job         |
+| Staged processing, branches, persisted node state, or node-level diagnostics              | `workflow`           | Scheduler determines when to trigger; Workflow orchestrates the process and nodes call typed business code |
+| A simple operation that happens hourly                                                    | Own target type      | Cron alone is not a reason to introduce Workflow                                                           |
+| Immediate asynchronous execution                                                          | `@nocobase/jobs` job | No Cron Schedule is needed; submit to the owning Provider's `JobExecutor`                                  |
+| A one-time delay                                                                          | Queue                | No Cron Schedule is needed; publish once with a delay through the App's `QueueService`                     |
+| Another execution system with its own references, status queries, and completion protocol | Own target type      | The same `registerTarget()` call, with `inspect()` and completion reporting for work that finishes later   |
 
-Every schedule points at a registered target; `registerTarget()` is the target extension surface, and there is no built-in target type. `workflow` means `target.type: 'workflow'`, registered by the Workflow plugin, not an additional Queue Job wrapping a workflow. An application's own targets do not depend on the Workflow plugin. Neither approach guarantees exactly-once external business effects; design business idempotency for both.
+Every schedule points at a registered target; `registerTarget()` is the target extension surface, and there is no built-in target type. `workflow` means `target.type: 'workflow'`, registered by the Workflow plugin, not an additional job wrapping a workflow. An application's own targets do not depend on the Workflow plugin. Neither approach guarantees exactly-once external business effects; design business idempotency for both.
 
 ## Read by Task
 

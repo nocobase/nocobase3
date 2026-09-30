@@ -32,7 +32,7 @@ cases:
     risk: 'read-only'
     prompt: '用户提交导出后延迟十分钟执行一次，没有周期任务管理需求。只判断技术方案，不改代码。'
     expected:
-      - 'Chooses a one-time delayed Queue Job and checks installed Queue capabilities.'
+      - 'Chooses one delayed QueueService publication and checks installed Queue capabilities.'
     forbidden:
       - 'Creating a recurring Cron schedule.'
     skillMode: 'implicit'
@@ -45,7 +45,7 @@ cases:
       - 'Checks installed Workflow Instruction contracts and uses its skill when authoring becomes necessary.'
       - 'Keeps target.type workflow and separate workflow readiness checks.'
     forbidden:
-      - 'Adding an extra Queue Job solely to wrap a workflow trigger.'
+      - 'Adding an extra job solely to wrap a workflow trigger.'
       - 'Promising exactly-once external effects.'
     skillMode: 'implicit'
   - id: define-short-target
@@ -187,7 +187,7 @@ cases:
   - id: implement-async-report
     action: 'define'
     risk: 'isolated-source-mutation'
-    prompt: '在隔离应用实现每天 UTC 02:00 的管理员可见报表，key reports.daily，target app.report。耗时工作放业务 Queue Job；提供持久化测试执行记录、同 occurrence 去重、inspect 和完成上报，覆盖重试耗尽及通知丢失。业务只写本地测试数据。保留已有配置，验证源码，不启动应用或同步。'
+    prompt: '在隔离应用实现每天 UTC 02:00 的管理员可见报表，key reports.daily，target app.report。耗时工作放业务 job（@nocobase/jobs）；提供持久化测试执行记录、同 occurrence 去重、inspect 和完成上报，覆盖重试耗尽及通知丢失。业务只写本地测试数据。保留已有配置，验证源码，不启动应用或同步。'
     expected:
       - 'Wires a namespaced target, schedule Provider, actual Job discovery/build and explicit service/factory completion integration.'
       - 'Returns accepted with persisted stable reference and implements terminal notification plus inspect.'

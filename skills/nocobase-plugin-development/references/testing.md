@@ -14,7 +14,8 @@ Use this reference to select checks for the changed behavior and its target App 
 | Server Services/Providers | Original Token, lazy singleton behavior, lifecycle, failure cleanup                                                       |
 | HTTP contributions        | Production router requests, validation, status/body, authentication, allowed and denied authorization paths               |
 | Migration/Seed            | Real database schema and metadata, `up`, reversible `down`, required records and repeat behavior                          |
-| Queue Jobs                | Handler execution, payload, service effects, failures, retry/idempotency                                                  |
+| Background jobs           | `execute` behavior, payload validation, service effects, failures, retry/idempotency, shutdown waiting for running tasks |
+| Queue handlers            | Channel filtering, message validation, service effects, retry/idempotency, awaited unregistration |
 | Locales                   | Key shape, namespaces, two-language rendering, request/recipient locale selection, lazy chunks                            |
 | Registry                  | Config/build, copied source, App typecheck/test/build and actual integration                                              |
 | CLI                       | Registration, command IDs, flags, errors, target App help/command execution                                               |

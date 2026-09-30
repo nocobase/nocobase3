@@ -373,7 +373,7 @@ Call each exported contribution's real `createRouter()` with a complete `AppPlug
 ```ts
 // tests/routes.test.ts
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { createDatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
@@ -411,7 +411,7 @@ describe('order Route contributions', () => {
         appName: 'main',
         publicBasePath: '',
         config: { app: { name: 'main', publicBasePath: '' } },
-        paths: createConfigPaths({ rootDir: '/tmp/order-route-example' }),
+        paths: createAppPaths({ rootDir: '/tmp/order-route-example' }),
         router: application,
         container,
       };

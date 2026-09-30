@@ -9,11 +9,12 @@ Use this reference when a plugin needs HTTP routes, background jobs, or a Server
 | Reusable domain behavior                                       | Service, optionally registered through a `ServiceProvider`      |
 | Stable cross-module capability identity                        | `ServiceToken<T>` owned and exported by the capability provider |
 | HTTP input, output, authentication, and authorization          | Root or API Route contribution                                  |
-| Deferred, retryable, delayed, or batch execution               | Queue Job                                                       |
+| Deferred, retryable, or batch background work                  | `@nocobase/jobs` Job on the plugin's own `JobExecutor`          |
+| Channel messages consumed by handlers, or delayed publication  | `QueueService` handler from `@nocobase/queue`                   |
 | Table, field, relation, index, constraint, or metadata history | Migration                                                       |
 | Required initial records in an existing schema                 | Seed                                                            |
 
-Keep these boundaries visible in the code. A Route maps HTTP to a Service call. A Job validates a serializable payload and orchestrates one asynchronous execution. A Service implements reusable behavior without Hono context, status codes, paths, or Queue retry policy. A Provider registers dependencies and owns resource lifecycle.
+Keep these boundaries visible in the code. A Route maps HTTP to a Service call. A Job validates a serializable payload and orchestrates one asynchronous execution. A Service implements reusable behavior without Hono context, status codes, paths, or job retry policy. A Provider registers dependencies and owns resource lifecycle.
 
 ## Declare the Server plugin
 
@@ -37,9 +38,6 @@ const plugin: AppServerPlugin = defineServerPlugin({
   locales,
   serviceProviders,
   routes,
-  queue: {
-    jobs: ['./server/jobs'],
-  },
   database: {
     migrations: './database/migrations',
     seeds: './database/seeds',
@@ -49,11 +47,11 @@ const plugin: AppServerPlugin = defineServerPlugin({
 export default plugin;
 ```
 
-Declare only capabilities the plugin implements. Provider constructors and Route definitions are direct contributions. Jobs, migrations, and seeds are filesystem locations relative to `baseDir`. The target App must import the plugin's `./server` export and include the definition in its explicit `server/plugins.ts` composition; installing the package alone does not activate it.
+Declare only capabilities the plugin implements. Provider constructors and Route definitions are direct contributions. Migrations and seeds are filesystem locations relative to `baseDir`. Job classes and queue handlers are imported explicitly by their Provider; nothing discovers a directory, and the retired `queue` contribution is rejected. The target App must import the plugin's `./server` export and include the definition in its explicit `server/plugins.ts` composition; installing the package alone does not activate it.
 
 ### `baseDir` is part of the runtime contract
 
-Every Server plugin must provide an absolute `baseDir`. In a source `server/plugin.ts`, `path.resolve(import.meta.dirname, '..')` points to the package root. In the compiled `dist/server/plugin.js`, the same expression points to `dist`. The runtime resolves migrations, seeds, jobs, and package metadata only from the loaded copy; it does not search a source fallback, a build fallback, or a directory selected from `NODE_ENV`.
+Every Server plugin must provide an absolute `baseDir`. In a source `server/plugin.ts`, `path.resolve(import.meta.dirname, '..')` points to the package root. In the compiled `dist/server/plugin.js`, the same expression points to `dist`. The runtime resolves migrations, seeds, and package metadata only from the loaded copy; it does not search a source fallback, a build fallback, or a directory selected from `NODE_ENV`.
 
 Filesystem contribution paths must be safe `baseDir`-relative paths beginning with `./`; `..`, backslashes, doubled separators, and the bare `./` are rejected. The resolver walks upward from `baseDir` until it finds a `package.json` whose `name` equals `packageName`. Keep source and published `./server` exports aligned so each loads its matching declaration, and ensure compiled resources are present below `dist`.
 
@@ -132,69 +130,76 @@ The [complete production contribution test](server-route-examples.md#test-the-pr
 
 Also compose a later unrelated route and verify the plugin middleware does not leak into it. Contribution tests do not prove final mount prefixes, public base paths, interaction among multiple contributions, or real authentication; cover those in a target App integration test.
 
-## Queue Jobs
+## Background jobs
 
-Use a Job for execution that is deferred, delayed, retried, batched, or performed by a worker. Keep reusable domain behavior outside the Job class.
+Use a job for work that is deferred, retried, batched, or too slow for a request. Keep reusable domain behavior outside the job class. Jobs run on `@nocobase/jobs`: resolve `jobExecutorServiceToken` from `@nocobase/app-server/jobs` and take the plugin's own executor with `getJobExecutor(scope)`, using the package name as the scope. `pnpm plugin:create <name> --with server.jobs` generates this shape.
 
 ```ts
-import { Job, type JobOptions } from '@nocobase/queue';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import {
+  Job,
+  type JobExecutionContext,
+  type JobExecutor,
+} from '@nocobase/jobs';
+import { ServiceProvider } from '@nocobase/service-provider';
 
 export interface RebuildIndexPayload {
   readonly collection: string;
   readonly requestedAt: string;
 }
 
-interface RebuildIndexDependencies {
-  readonly logger: {
-    info(data: Record<string, unknown>, message: string): void;
-  };
+export class RebuildIndexJob extends Job<RebuildIndexPayload> {
+  // The handler identity stored with every task: keep it stable.
+  public static readonly jobName: string = 'rebuild-index';
+
+  public async execute({ signal }: JobExecutionContext): Promise<void> {
+    signal.throwIfAborted();
+    // Validate this.payload, then call an idempotent domain operation with the signal.
+  }
 }
 
-export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
-  public static options: JobOptions = {
-    name: '@nocobase/app-plugin-audit-log/rebuild-index',
-    queue: 'default',
-  };
+export class AuditLogJobsProvider extends ServiceProvider<AppPluginApplication> {
+  public readonly name: string = '@nocobase/app-plugin-audit-log/jobs';
+  private executor: JobExecutor | undefined;
 
-  public constructor(private readonly dependencies: RebuildIndexDependencies) {
-    super();
+  public override async start(): Promise<void> {
+    const executor = this.app.container
+      .resolve(jobExecutorServiceToken)
+      .getJobExecutor('@nocobase/app-plugin-audit-log');
+    // Register every class before setup(): setup() starts consuming, and a
+    // task waiting from an earlier run must find its handler.
+    executor.registerJob(RebuildIndexJob);
+    await executor.setup();
+    this.executor = executor;
   }
 
-  public async execute(): Promise<void> {
-    this.dependencies.logger.info(
-      {
-        jobId: this.context.jobId,
-        queue: this.context.queue,
-        attempt: this.context.attempt,
-        collection: this.payload.collection,
-      },
-      'Rebuilding search index',
-    );
+  public override async shutdown(): Promise<void> {
+    const executor = this.executor;
+    this.executor = undefined;
+    // Aborts running tasks and waits for them before their dependencies close.
+    await executor?.shutdown();
   }
 }
 ```
 
-Give every Job a stable `options.name`; class names are refactoring details. Payloads must be serializable, validated, and reconstructible in another process. Do not place Services, request contexts, database connections, functions, or secrets in the payload. A published payload change must account for older queued jobs.
+Give every job class its own stable `static jobName`; class names are refactoring details. Its constructor takes only the payload and has no side effects, and nothing injects a container, database, or logger. A job that needs an App service closes over it: the owning Provider defines the class inside a factory that captures the service and registers the class the factory returns, as `createDeliveryJob` in `packages/plugins/app-plugin-notification/server/delivery-job.ts` does. Do not reach for a module-level container.
 
-The default App Queue factory constructs discovered jobs with an object containing `database` when available and `logger`; it does not inject `ServiceContainer`. A Job that needs an App service must not reach for a module-level container. Either extract a domain operation that accepts explicit dependencies, or let a Provider register a named factory through `queueJobFactoryRegistryToken` during `boot()` and unregister it during `shutdown()`. The factory name must match the Job's stable `options.name`.
+Payloads must be strict JSON: plain objects, arrays, strings, finite numbers, booleans, and null. Do not place Services, request contexts, database connections, functions, class instances such as `Date`, or secrets in the payload. Validate it when the job runs, because a task queued by an earlier version may carry an older shape.
 
-Dispatch from a Route, Provider, or other container-aware producer:
+Submit with `executor.addJob(new RebuildIndexJob(payload))` from a Route, Provider, or Service once the owning Provider has started; a submission before setup rejects. The receipt means the backend accepted the task, not that it ran. There is no delay, priority, or deduplication option. A Route that submits a job still needs its own authentication and authorization.
 
-```ts
-import { queueManagerToken } from '@nocobase/app-server/queue';
+Assume at-least-once execution. Use a stable business key or durable execution state for side effects such as email, external API calls, billing, and file writes. Distinguish temporary retryable failures from invalid input or terminal business failures. Log the job ID, job name, attempt, and non-sensitive business identity. Never rely on a process-local `Map` to remember completion. Shutdown aborts the signal and waits for running handlers, so honor the signal and release a job's dependencies only after `executor.shutdown()` settles.
 
-const queue = container.resolve(queueManagerToken);
-await queue.dispatch(RebuildIndexJob, {
-  collection: 'auditLogs',
-  requestedAt: new Date().toISOString(),
-});
-```
+The App's `jobs` configuration selects the backend. The built-in memory configuration keeps tasks in one process; running more than one instance needs a `redis` configuration.
 
-Dispatch options support connection, queue, priority, delay, group, and deduplication. A Route that dispatches a Job still needs its own authentication and authorization.
+Test `execute` directly for payload validation and behavior. Then start the Provider on a real memory jobs service from `createJobExecutorService(undefined, { appName, storagePath })`, submit, and await an observable result; never assume a submission runs synchronously. Cover retry and idempotency where relevant, and verify shutdown waits for a running task.
 
-Assume at-least-once execution. Use a stable business key, Queue deduplication, or durable execution state for side effects such as email, external API calls, billing, and file writes. Distinguish temporary retryable failures from invalid input or terminal business failures. Log Job ID, queue, attempt, and non-sensitive business identity. Never rely on a process-local `Map` to remember completion.
+## Publish/subscribe messaging
 
-Test the handler's payload validation and behavior directly, then cover retry, deduplication, and idempotency where relevant. Verify the declaration points to a real compiled location and run a target App integration test that discovers, dispatches, executes, and shuts down the worker.
+When producers publish channel messages that application-owned handlers consume, or a message must be published after a delay, use the App's `QueueService` from `@nocobase/queue` instead of a job. Resolve `queueServiceToken` from `@nocobase/app-server/queue`; never create a second token or a private service. The App's core `QueueServiceProvider` owns setup in `start()` and shutdown after plugin Providers. Register a handler in the plugin Provider's `boot()` with `queue.consumer(queueName).consume(handler)`, keep the unregister function it returns, and await it in `shutdown()` before releasing handler dependencies.
+
+Publish with `queue.producer(queueName).publish(channel, payload)` after startup; the receipt identifies queued work, not a completed result. Keep queue and channel names stable and filter channels explicitly in the handler, which receives the channel, the message, and an `AbortSignal`. The same payload, idempotency, and authorization rules as jobs apply. `packages/app/app-skills/skills/nocobase-app-development/references/services-and-jobs.md` describes backends, identity, and shutdown in detail.
 
 ## Verification and source references
 
@@ -206,4 +211,5 @@ Use these maintained implementations when a detail is uncertain:
 - Server plugin path resolution (`packages/app/app-server/src/plugins/resolve.ts`)
 - Application startup and Route mounting (`packages/app/app-server/src/application/index.ts`)
 - Runnable Route plugin (`packages/examples/app-plugin-routes-example`)
+- Runnable jobs plugin (`packages/examples/app-plugin-jobs-example`)
 - Runnable Queue plugin (`packages/examples/app-plugin-queue-example`)
