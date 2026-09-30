@@ -311,6 +311,7 @@ async function createQueueApplication(name: string) {
         {
           definition: defineServerPlugin({
             packageName: '@nocobase/app-plugin-queue-test',
+            baseDir: import.meta.dirname,
             serviceProviders: [QueuePluginProvider],
           }),
           metadata: {

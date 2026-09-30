@@ -36,10 +36,10 @@ describe('runCreatePluginCli', () => {
         version: '0.0.1',
       }),
     ).toBe(0);
-    const result = JSON.parse(output.join('')) as {
-      files: Array<{ path: string; reason: string }>;
+    const envelope = JSON.parse(output.join('')) as {
+      result: { files: Array<{ path: string; reason: string }> };
     };
-    expect(result.files).toEqual(
+    expect(envelope.result.files).toEqual(
       expect.arrayContaining([
         { path: 'server/providers/index.ts', reason: 'server.jobs' },
         { path: 'server/providers/audit-log-jobs.ts', reason: 'server.jobs' },

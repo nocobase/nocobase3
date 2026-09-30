@@ -242,6 +242,10 @@ describe('server package generation', () => {
       /allowBuilds:\n(?:.*\n)*? {2}better-sqlite3: true/,
     );
     expect(workspace).toMatch(/ {2}tesseract\.js: false/);
+    // BullMQ's msgpackr runs without its optional native accelerator.
+    expect(workspace).toMatch(
+      /ignoredOptionalDependencies:\n {2}- msgpackr-extract\n/,
+    );
   });
 
   it("carries the application's registry settings, and nothing else, into dist/.npmrc", () => {
