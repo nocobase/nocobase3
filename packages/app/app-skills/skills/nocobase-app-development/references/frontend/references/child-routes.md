@@ -9,6 +9,7 @@ For the basic rules on route fields, `auth`, `authz`, menus, the back button and
 - **Child routes go in the parent route's `children`**, declared in `client/routes.ts`, not in page component files.
 - A child route's `path` is relative to its parent and is appended to the parent's path. A leading `/` is stripped before joining, so `new` and `/new` behave the same; this handbook writes the form without `/`.
 - **The parent page must place `<Outlet />` itself**, where the child content should appear. Pages do not insert an Outlet automatically, and neither do `RouteChildPage`, `RouteDialog` or `RouteDrawer`; only a plain navigation group gets its Outlet from the route renderer.
+- **A child route that is a page of its own returns `RouteChildPage`.** Only tab content renders inline. A child route with a `PageContainer` of its own — a record's page, a form too long for a dialog, an import page — wraps it in `RouteChildPage` ([section 5](#5-covering-child-pages-routechildpage)). Returned bare, it renders at the parent's `Outlet`, below everything the parent shows, and the user has to scroll past the parent page to find it. A page that returns a bare `PageContainer` belongs on a top-level route instead.
 - Child routes inherit the entry route's `auth` and cannot change it, and follow the `authz` inheritance rules in [section 4 of `page.md`](page.md#4-authz-page-authorization): a child page renders only after the parent page's check passes.
 - Link to a child route with a relative path and keep the query string ([section 2.2 of `overlay.md`](overlay.md#22-place-the-outlet-in-the-parent-page)). A relative path resolves against the route that renders the link, not the URL on screen ([section 2 of `page.md`](page.md#2-the-page-component)).
 - Route declarations have no `index` field. Do not invent an index route, and do not register a child route at the parent's own path; when "opening the parent URL shows a particular child page" is needed, use the redirect in [section 4](#4-page-tabs).
@@ -49,14 +50,14 @@ Adding a set of child routes usually changes these files:
 
 ## 3. Four ways to present a child route
 
-A child route renders in the parent page's Outlet. It can be displayed inline, or it can cover the parent page with one of the three components below:
+A child route renders in the parent page's Outlet, and what its component returns decides how it is shown. Tab content returns its content and is shown inline; every other child route returns one of the three components below and covers the parent page. There is no fifth way: a child route that returns its own `PageContainer` without `RouteChildPage` is shown inline with a second page frame, below the parent's content.
 
 |                 | Inline (tabs, etc.)                      | `RouteChildPage`                             | `RouteDialog`                          | `RouteDrawer`    |
 | --------------- | ---------------------------------------- | -------------------------------------------- | -------------------------------------- | ---------------- |
 | Position        | Where the Outlet sits in the parent page | Covers the whole content area                | Center of the page                     | Side of the page |
 | Modal           | No                                       | No; the sidebar and header remain usable     | Yes                                    | Yes              |
 | `breadcrumb`    | Omit                                     | Only for breadcrumbs the user asked for      | Omit                                   | Omit             |
-| `PageContainer` | None; uses the parent page's             | Adds its own                                 | None                                   | None             |
+| `PageContainer` | None; uses the parent page's             | Adds its own, inside `RouteChildPage`        | None                                   | None             |
 | How to leave    | Switch to another child route            | `BackButton` or browser back                 | Close button, Esc, backdrop, `close()` | Same as left     |
 | Use for         | Page tabs                                | Child pages with long forms or many sections | Create and edit forms                  | Record details   |
 
@@ -609,6 +610,7 @@ A page that shows a record whose detail is a page of its own — an orders list'
 - The link is relative — `{ pathname: String(row.customerId), search: location.search }` — never the other module's path (`/customers/12`). It keeps the whole query string, the orders page's own filters (`?status=paid`) included: the customer page's `BackButton` brings back what it finds there, so a filter the link dropped is gone when the user returns. The customer page and its tabs name their own parameters apart from the orders page's, read only those, and remove them on the way back ([section 5 of `table.md`](table.md#5-writing-search-and-filters-to-the-url), [section 7 of `page.md`](page.md#7-back-button-and-breadcrumbs)).
 - **`BackButton` on the shared page must not name one parent.** Omit `to` so it follows the parent route it was opened from ([section 7 of `page.md`](page.md#7-back-button-and-breadcrumbs)); a hard-coded `to` sends the user who came from `/orders` to `/customers`, a page they were not on (I9). The page's Cancel, close and redirect paths follow the same rule.
 - Route names are unique across the application, so the function takes an owner and composes every name from it, outside in — `order-customer-detail`, `order-customer-detail-orders`, `order-customer-detail-orders-edit` — as `projectDetailRoutes(owner)` does for drawers ([section 2.1 of `overlay.md`](overlay.md#21-declare-the-child-routes)).
+- The shared page returns `RouteChildPage` as it does under its own list: under every parent it is a child route, and without the layer it renders below that parent's content.
 - The added routes join the route test's page-grant list for their own path ([section 12 of `page.md`](page.md#12-update-the-route-test)).
 
 ## 6. Navigation groups and clickable parents
@@ -639,7 +641,7 @@ A page that shows a record whose detail is a page of its own — an orders list'
 5. Check the menu, the copy in each language, the link and expand button of clickable parents, and navigation on narrow screens.
 6. Remove permission for the parent page: none of the child pages can load. Then remove permission for just one child page that declares `authz` explicitly.
 7. Settings pages and dev pages: the menu position is as expected; dev pages do not appear in the production build.
-8. Covering child pages: the back button returns to the list with exactly the search and filters it had, and nothing the child page or its tabs wrote is left in the list's URL; the covered page keeps its input and scroll position; after going back, it works normally.
+8. Covering child pages: opening one covers the parent from the top of the content area, whatever the parent's scroll position, and nothing of the parent shows below it; the back button returns to the list with exactly the search and filters it had, and nothing the child page or its tabs wrote is left in the list's URL; the covered page keeps its input and scroll position; after going back, it works normally.
 9. Pages with tabs whose header opens overlays: from a tab other than the default, open each one. Its URL is the tab's URL plus its own segment, the tab stays selected and its content mounted behind it, and closing, saving, Esc and Back all return to that tab; opening that URL directly shows the same tab behind it.
 
 Write these behaviors as tests in `tests/` (see [`testing.md`](testing.md)).

@@ -138,7 +138,7 @@ export default function ProjectsPage(): ReactElement {
 - **`PageContainer`** (`@/components/page-container`) renders a `section` that owns the full width, the spacing between blocks and the responsive padding (`w-full space-y-6 p-6 md:p-8`); the back button, the title, actions, content and the loading, empty and error states all go inside it. Do not hand-write an outer `div`, `main` or `section` with page padding, and do not change its spacing on one page (to change it everywhere, change the component).
 - **`PageContainer` is provided by the component that owns the page, one per page**:
   - An inline child page (including tab content) renders inside the parent page's `PageContainer`; do not add another one.
-  - A covering child page uses its own `PageContainer` inside `RouteChildPage` (see [`child-routes.md`](child-routes.md)).
+  - A covering child page uses its own `PageContainer` inside `RouteChildPage` (see [`child-routes.md`](child-routes.md)). A child route that returns a bare `PageContainer` is neither: it renders at the parent's `Outlet`, below the parent's content.
   - Dialog and drawer content uses the overlay's own container; do not add `PageContainer`.
 - **`PageHeader`** (`@/components/page-header`) props: `title` (required), `description`, `actions` (on the right, for page-level actions). The title matches the menu name (guidelines L1, L3 and L5).
 - A page with child routes must place `<Outlet />` itself, or the child route content does not render; put it at the end of `PageContainer`. For how to write child routes, see [`child-routes.md`](child-routes.md) and [`overlay.md`](overlay.md).

@@ -150,7 +150,7 @@ defineAppRoutes([
 ]);
 ```
 
-父页面必须手动放置 `<Outlet />`，子页面才会渲染。比如把它放在列表内容之后：
+父页面必须手动放置 `<Outlet />`，子页面才会渲染。把它放在 `PageContainer` 的最后：
 
 ```tsx
 // client/pages/orders/index.tsx
@@ -162,19 +162,17 @@ import { PageHeader } from '@/components/page-header';
 export default function OrdersPage() {
   const { t } = useTranslation();
   return (
-    <>
-      <PageContainer>
-        <PageHeader title={t('orders.title')} />
-        {/* 实际列表中的链接使用对应订单 ID。 */}
-        <Link to='42'>{t('orders.viewDetail')}</Link>
-      </PageContainer>
+    <PageContainer>
+      <PageHeader title={t('orders.title')} />
+      {/* 实际列表中的链接使用对应订单 ID。 */}
+      <Link to='42'>{t('orders.viewDetail')}</Link>
       <Outlet />
-    </>
+    </PageContainer>
   );
 }
 ```
 
-子页面可以直接返回内容，在 `Outlet` 位置内嵌显示。页面内的 Tab 通常采用这种方式：每个 Tab 声明为子路由，用链接切换，以 URL 决定当前选中项。
+只有 Tab 这类内容直接返回内容，在 `Outlet` 位置内嵌显示：每个 Tab 声明为子路由，用链接切换，以 URL 决定当前选中项。自带 `PageContainer` 的子页面（详情页、放不进对话框的长表单）要放在 `RouteChildPage` 里；直接返回 `PageContainer` 的话，它会显示在父页面内容的下方，而不是覆盖父页面。
 
 需要覆盖父页面时，由子页面选择展示组件：
 
