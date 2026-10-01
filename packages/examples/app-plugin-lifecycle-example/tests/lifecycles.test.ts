@@ -1,0 +1,336 @@
+// The lifecycles tested as plain function calls: a memory store, a fake
+// clock and in-process effects. No database, server or jobs service.
+import { createLifecycleTestKit } from '@nocobase/lifecycle/testing';
+import { describe, expect, it } from 'vitest';
+
+import { expenseLifecycle } from '../server/lifecycles/expense.js';
+import type { ExampleServices } from '../server/lifecycles/services.js';
+import { ticketLifecycle } from '../server/lifecycles/ticket.js';
+
+function services(): ExampleServices & {
+  readonly sent: string[];
+  readonly paid: string[];
+} {
+  const sent: string[] = [];
+  const paid: string[] = [];
+  return {
+    sent,
+    paid,
+    deliver: (to) => void sent.push(to),
+    pay: (payee, amountCents) => {
+      paid.push(`${payee}:${amountCents}`);
+      return `PAY-${paid.length}`;
+    },
+  };
+}
+
+describe('support ticket', () => {
+  function kit() {
+    const fake = services();
+    return {
+      fake,
+      tickets: createLifecycleTestKit(ticketLifecycle, {
+        services: fake,
+        now: '2026-10-01T09:00:00Z',
+      }),
+    };
+  }
+  const ticket = {
+    subject: '无法登录后台',
+    description: '输入密码后提示会话过期',
+    category: 'account',
+    priority: 'high',
+    requesterId: 'customer-li',
+    assigneeId: null,
+    failNotifications: 0,
+  };
+
+  it('is taken by the agent who first replies, and emails the customer', async () => {
+    const { tickets, fake } = kit();
+    const created = tickets.create(ticket);
+    await tickets.fire(
+      created,
+      'reply',
+      { message: '请清除浏览器缓存后重试' },
+      { actor: 'agent-zhou' },
+    );
+    expect(tickets.get(created)).toMatchObject({
+      status: 'awaitingCustomer',
+      assigneeId: 'agent-zhou',
+    });
+    expect(fake.sent).toEqual(['li@xinghe.example.com']);
+  });
+
+  it('closes a ticket the customer leaves unanswered', async () => {
+    const { tickets } = kit();
+    const created = tickets.create(ticket);
+    await tickets.fire(
+      created,
+      'reply',
+      { message: '请重试' },
+      { actor: 'agent-zhou' },
+    );
+    tickets.advance({ minutes: 1 });
+    expect(await tickets.runTriggers()).toBe(0);
+    tickets.advance({ minutes: 2 });
+    expect(await tickets.runTriggers()).toBe(1);
+    expect(tickets.get(created)).toMatchObject({
+      status: 'closed',
+      closedReason: 'timeout',
+    });
+  });
+
+  it('restarts the wait when the agent follows up', async () => {
+    const { tickets, fake } = kit();
+    const created = tickets.create(ticket);
+    await tickets.fire(
+      created,
+      'reply',
+      { message: '请重试' },
+      { actor: 'agent-zhou' },
+    );
+    tickets.advance({ minutes: 1.5 });
+    await tickets.fire(
+      created,
+      'reply',
+      { message: '补充：也可以换个浏览器试试' },
+      { actor: 'agent-zhou' },
+    );
+    tickets.advance({ minutes: 1 });
+    expect(await tickets.runTriggers()).toBe(0);
+    expect(tickets.get(created)).toMatchObject({ status: 'awaitingCustomer' });
+    expect(fake.sent).toHaveLength(2);
+  });
+
+  it('goes back to the agent when the customer replies, and tells them', async () => {
+    const { tickets, fake } = kit();
+    const created = tickets.create(ticket);
+    await tickets.fire(
+      created,
+      'reply',
+      { message: '请重试' },
+      { actor: 'agent-zhou' },
+    );
+    await tickets.fire(
+      created,
+      'customerReply',
+      { message: '还是不行' },
+      { actor: 'customer-li' },
+    );
+    expect(tickets.get(created).status).toBe('open');
+    expect(fake.sent.at(-1)).toBe('zhou.ning@example.com');
+    tickets.advance({ hours: 1 });
+    await tickets.runTriggers();
+    expect(tickets.get(created).status).toBe('open');
+  });
+
+  it('lets only the requester write as the customer, and only agents reply', async () => {
+    const { tickets } = kit();
+    const created = tickets.create(ticket);
+    await expect(
+      tickets.fire(
+        created,
+        'customerReply',
+        { message: '我也是' },
+        { actor: 'customer-wang' },
+      ),
+    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+    await expect(
+      tickets.fire(
+        created,
+        'reply',
+        { message: '好的' },
+        { actor: 'customer-li' },
+      ),
+    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+  });
+
+  it('can be reopened by the customer within seven days of closing', async () => {
+    const { tickets } = kit();
+    const first = tickets.create(ticket);
+    await tickets.fire(first, 'accept', {}, { actor: 'agent-zhou' });
+    await tickets.fire(first, 'resolve', {}, { actor: 'agent-zhou' });
+    tickets.advance({ days: 2 });
+    await tickets.fire(
+      first,
+      'reopen',
+      { message: '问题又出现了' },
+      { actor: 'customer-li' },
+    );
+    expect(tickets.get(first)).toMatchObject({
+      status: 'open',
+      closedReason: null,
+    });
+
+    await tickets.fire(first, 'resolve', {}, { actor: 'agent-zhou' });
+    tickets.advance({ days: 8 });
+    await expect(
+      tickets.fire(
+        first,
+        'reopen',
+        { message: '又坏了' },
+        { actor: 'customer-li' },
+      ),
+    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+  });
+
+  it('retries a failing email and keeps the reply', async () => {
+    const { tickets } = kit();
+    const created = tickets.create({ ...ticket, failNotifications: 2 });
+    await tickets.fire(
+      created,
+      'reply',
+      { message: '请重试' },
+      { actor: 'agent-zhou' },
+    );
+    expect(await tickets.effectRuns(created)).toMatchObject([
+      { status: 'succeeded', attempts: 3 },
+    ]);
+  });
+});
+
+describe('expense report', () => {
+  function kit() {
+    const fake = services();
+    return {
+      fake,
+      expenses: createLifecycleTestKit(expenseLifecycle, {
+        services: fake,
+        now: '2026-10-01T09:00:00Z',
+      }),
+    };
+  }
+  const item = (amountCents: number) => ({
+    date: '2026-09-28',
+    category: 'transport',
+    description: '往返机票',
+    amountCents,
+  });
+  const report = (amountCents: number, failPayments = 0) => {
+    const items = [item(amountCents)];
+    return {
+      title: '上海客户拜访',
+      purpose: '季度客户回访',
+      items,
+      amountCents,
+      applicantId: 'lin',
+      approverId: null,
+      failPayments,
+    };
+  };
+
+  it('refuses to submit a report without items', async () => {
+    const { expenses } = kit();
+    const created = expenses.create({ ...report(0), items: [] });
+    await expect(
+      expenses.fire(created, 'submit', {}, { actor: 'lin' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      message: expect.stringContaining('至少填写一条费用明细'),
+    });
+  });
+
+  it('pays up to 5,000 yuan without anyone approving, and records the payment', async () => {
+    const { expenses, fake } = kit();
+    const created = expenses.create(report(300_000));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expect(expenses.get(created)).toMatchObject({
+      status: 'paid',
+      paymentRef: 'PAY-1',
+    });
+    expect(fake.paid).toEqual(['lin:300000']);
+  });
+
+  it('needs the manager, then finance, above 50,000 yuan', async () => {
+    const { expenses } = kit();
+    const created = expenses.create(report(8_000_000));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expect(expenses.get(created)).toMatchObject({
+      status: 'awaitingManager',
+      approverId: 'chen',
+    });
+    await expenses.fire(
+      created,
+      'approve',
+      { comment: '同意' },
+      { actor: 'chen' },
+    );
+    expect(expenses.get(created)).toMatchObject({
+      status: 'awaitingFinance',
+      approverId: 'zhao',
+    });
+    await expenses.fire(created, 'approve', {}, { actor: 'zhao' });
+    expect(expenses.get(created).status).toBe('paid');
+    expect(await expenses.history(created)).toEqual([
+      'submit',
+      'approve',
+      'approve',
+      'paid',
+    ]);
+  });
+
+  it('lets the applicant withdraw while it waits, and edit before resubmitting', async () => {
+    const { expenses } = kit();
+    const created = expenses.create(report(800_000));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    await expenses.fire(created, 'withdraw', {}, { actor: 'lin' });
+    expect(expenses.get(created)).toMatchObject({
+      status: 'draft',
+      approverId: null,
+    });
+    expenses.update(created, { items: [item(450_000)], amountCents: 450_000 });
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expect(expenses.get(created).status).toBe('paid');
+  });
+
+  it('sends a report back for information and routes it again', async () => {
+    const { expenses } = kit();
+    const created = expenses.create(report(800_000));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    await expect(
+      expenses.fire(created, 'requestInfo', {}, { actor: 'chen' }),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    await expenses.fire(
+      created,
+      'requestInfo',
+      { reason: '请补充发票' },
+      { actor: 'chen' },
+    );
+    expect(expenses.get(created)).toMatchObject({
+      status: 'needsInfo',
+      approverId: null,
+    });
+    await expenses.fire(created, 'resubmit', {}, { actor: 'lin' });
+    expect(expenses.get(created)).toMatchObject({
+      status: 'awaitingManager',
+      approverId: 'chen',
+    });
+  });
+
+  it('passes an idle manager over for theirs, once', async () => {
+    const { expenses, fake } = kit();
+    const created = expenses.create(report(800_000));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expenses.advance({ minutes: 4 });
+    expect(await expenses.runTriggers()).toBe(1);
+    expect(expenses.get(created)).toMatchObject({
+      status: 'awaitingManager',
+      approverId: 'wang',
+    });
+    expect(fake.sent).toEqual(['chen.ming@example.com', 'wang.li@example.com']);
+    // 王丽 has nobody above her: waiting longer escalates no further.
+    expenses.advance({ minutes: 10 });
+    expect(await expenses.runTriggers()).toBe(0);
+  });
+
+  it('stays approved when every payment attempt fails', async () => {
+    const { expenses } = kit();
+    const created = expenses.create(report(300_000, 5));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expect(expenses.get(created).status).toBe('approved');
+    const payment = (await expenses.effectRuns(created)).find(
+      (run) => run.effect === 'expenses.requestPayment',
+    );
+    expect(payment).toMatchObject({ status: 'failed', attempts: 3 });
+  });
+});
