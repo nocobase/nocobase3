@@ -60,8 +60,9 @@ Use `list()`, `getWorkflow(id)`, `revisions(id)`, and `getParameters(id)`. Curre
 
 For `QUEUEING`:
 
-- Confirm the workflow runtime/worker and queue are started.
-- Look for persisted queue job, retries, dead-letter/failure evidence, and event-key deduplication.
+- Confirm the workflow runtime has initialized in some process. It sets its jobs executor up as a consumer, and recovers runs left undispatched, on the first trigger that process receives, not at application start.
+- Identify the `jobs` configuration tasks run on: `workflow.jobs`, otherwise `jobs.default`. On `memory` a task is consumed only by the process that published it, so more than one instance needs `redis`.
+- Look for failed task evidence in that backend (BullMQ failed jobs on `redis`, the executor's `JobError` logs) and for event-key deduplication.
 - An accepted receipt without a run can occur briefly when another concurrent call with the same event key is still creating it; otherwise inspect persistence or invocation errors rather than attributing the gap to normal queue scheduling.
 
 For `STARTED`:
@@ -76,7 +77,7 @@ For `FAILED` or `ERROR`:
 - Fetch the failing leaf node attempt before its parent/ancestor propagation record.
 - A thrown `run` script error is execution error; a returned `{ status: 'failed' }` is successful business data and will not fail the node.
 - Check module resolution/artifact errors, invalid runtime result serialization, missing named `run` export, and business-service exceptions.
-- For condition errors, verify JSON Logic returns a boolean and referenced data exists with the expected type.
+- For condition errors, verify the condition's handler module returns a boolean and that the data it reads from `{ input, parameters, nodeResults }` exists with the expected type.
 
 For `ABORTED`:
 
@@ -85,7 +86,7 @@ For `ABORTED`:
 
 For an unexpected path:
 
-- Read the condition Node Run result (`true`/`false`) and exact expression.
+- Read the condition Node Run result (`true`/`false`) and the handler module its config names, then read that module.
 - Compare persisted input and input snapshot, not current external records/settings.
 - Confirm template typing: an exact template preserves number/boolean/object, while interpolation produces a string.
 - Confirm the referenced node result was declared and actually returned the matching runtime shape. Result schemas are compile-time contracts, not a universal runtime validator.
@@ -113,11 +114,11 @@ For an unexpected path:
 | duplicate-looking trigger        | caller generated different event keys for the same event                                   |
 | no second run                    | same event key was intentionally deduplicated                                              |
 | failed run unchanged after retry | same event key identifies the existing run; public APIs do not replay it                   |
-| stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                         |
+| stuck queueing                   | runtime not initialized, wrong `jobs` configuration, failed jobs task                      |
 | run node module error            | module omitted from artifact, bad relative specifier, missing named `run`, digest mismatch |
 | source check passes, build fails | inspect package scan and the default server build's package-relative output                |
 | run node serialization error     | BigInt, model/class instance, circular reference, function/symbol, non-finite number       |
-| condition type error             | expression produced non-boolean or mixed comparison types                                  |
+| condition type error             | the handler module returned a non-boolean value                                            |
 | unexpected empty arg             | missing path resolved to `undefined`; embedded template converted it to empty string       |
 | node result not visible at check | reference is self/later/sibling-branch/branch-internal or node has no result schema        |
 | apparent old settings            | run correctly uses its invocation-time input snapshot                                      |
@@ -131,15 +132,13 @@ Report at least:
 - Event key, run id, status name/value, reason, manual flag, and timestamps.
 - Input/input facts relevant to the decision, with sensitive values omitted.
 - Executed node keys in attempt order and the first failing leaf attempt.
-- Node type, module or condition expression, status, duration/timestamps, error, and log availability.
+- Node type, handler module, status, duration/timestamps, error, and log availability.
 - Whether any result/error/log was redacted or truncated.
 - Trigger receipt status/reason; omit event key/run claims for a skipped receipt.
-- Root-cause category: source/compile, activation/config, invocation contract, queue/worker, artifact/module, business script, timeout/cancellation, or authorization/observability.
+- Root-cause category: source/compile, activation/config, invocation contract, jobs executor, artifact/module, business script, timeout/cancellation, or authorization/observability.
 - Safest recovery: source revision, configuration correction, idempotent retry, new invocation, or explicit compensation.
 
-The current management routes enforce authentication only. Do not attribute a
-response or missing log to per-action ACL or audit behavior that is not
-implemented.
+The current management routes require authentication and the `manage` action on `{ type: 'settings', id: 'workflow' }`. A 403 response can indicate a missing Workflow Manage grant; the routes do not provide separate per-workflow permissions or audit hooks.
 
 ## Installed implementation discovery
 

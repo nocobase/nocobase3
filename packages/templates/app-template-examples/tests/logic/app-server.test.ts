@@ -28,7 +28,10 @@ import {
   LoggingProvider,
   requestLoggingMiddleware,
 } from '@nocobase/app-server/logging';
-import { QueueProvider } from '@nocobase/app-server/queue';
+import {
+  QueueServiceProvider,
+  type AppQueueConfig,
+} from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionHttpMiddleware,
@@ -64,7 +67,6 @@ import {
   type QueryAdapter,
 } from '@nocobase/db';
 import { createSilentLoggingConfig } from '@nocobase/logging';
-import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import { spaRootRoutes } from '@nocobase/app-server/spa';
 import { createNullSessionConfig } from '@nocobase/session';
 import {
@@ -838,12 +840,15 @@ describe('app server', () => {
     expect(rejected.status).toBe(401);
   });
 
-  it('runs the schedule example plugin on the application schedule service', async () => {
+  it('runs the jobs example schedule on the application jobs service', async () => {
     const app = trackCloseable(
       await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/schedule-example`);
+    const anonymous = await requestApp(
+      app,
+      `${baseUrl}/api/jobs-example/schedule`,
+    );
     expect(anonymous.status).toBe(401);
 
     const signIn = await requestApp(
@@ -862,23 +867,82 @@ describe('app server', () => {
       async () => {
         const response = await requestApp(
           app,
-          `${baseUrl}/api/schedule-example`,
+          `${baseUrl}/api/jobs-example/schedule`,
           { headers: { cookie } },
         );
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toMatchObject({
-          scope: '@nocobase/app-plugin-schedule-example',
-          job: 'heartbeat',
-          nextRunAt: expect.any(String),
-          runs: [expect.objectContaining({ outcome: 'succeeded' })],
+          scope: '@nocobase/app-plugin-jobs-example',
+          rules: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'heartbeat',
+              state: 'active',
+              nextRunAt: expect.any(String),
+              runs: [expect.objectContaining({ outcome: 'succeeded' })],
+            }),
+          ]),
         });
       },
       { timeout: 5000, interval: 100 },
     );
   });
 
-  it('dispatches jobs from enabled app plugins', async () => {
-    vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
+  it('runs the jobs example one-off job on the application jobs service', async () => {
+    const app = trackCloseable(
+      await createInstalledStandaloneServer({
+        viteDevUrl: false,
+        // The origin a cookie-bearing write is checked against.
+        env: { APP_PUBLIC_ORIGIN: 'http://localhost' },
+      }),
+    );
+    const baseUrl = `http://localhost${app.application.publicBasePath}`;
+    const anonymous = await requestApp(app, `${baseUrl}/api/jobs-example/job`);
+    expect(anonymous.status).toBe(401);
+
+    const signIn = await requestApp(
+      app,
+      `${baseUrl}/api/auth/sign-in/username`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
+      },
+    );
+    expect(signIn.status).toBe(200);
+    const cookie = signIn.headers.get('set-cookie') ?? '';
+
+    const submitted = await requestApp(app, `${baseUrl}/api/jobs-example/job`, {
+      method: 'POST',
+      headers: { cookie, origin: 'http://localhost' },
+    });
+    expect(submitted.status).toBe(202);
+    const task = (await submitted.json()) as { jobId: string };
+
+    // A task takes ten seconds; its first reported step is proof enough that it
+    // runs on the jobs service. The plugin's own tests follow it to the end.
+    await vi.waitFor(
+      async () => {
+        const response = await requestApp(
+          app,
+          `${baseUrl}/api/jobs-example/job`,
+          { headers: { cookie } },
+        );
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as {
+          scope: string;
+          tasks: { jobId: string; status: string; progress: number }[];
+        };
+        expect(body.scope).toBe('@nocobase/app-plugin-jobs-example');
+        expect(body.tasks).toEqual([
+          expect.objectContaining({ jobId: task.jobId, status: 'running' }),
+        ]);
+        expect(body.tasks[0]!.progress).toBeGreaterThanOrEqual(10);
+      },
+      { timeout: 5000, interval: 100 },
+    );
+  });
+
+  it('publishes to and consumes queues from enabled app plugins', async () => {
     const app = trackCloseable(
       await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
@@ -901,13 +965,29 @@ describe('app server', () => {
       headers: { cookie: cookie ?? '' },
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     await expect(response.json()).resolves.toMatchObject({
       jobId: expect.any(String),
-      job: 'QueueExample',
-      queue: 'default',
-      syncExecutions: 1,
+      queue: 'queue-example',
+      channel: 'greeting',
     });
+    await vi.waitFor(
+      async () => {
+        const deliveries = await requestApp(
+          app,
+          `${baseUrl}/api/queue-example/deliveries`,
+          { headers: { cookie: cookie ?? '' } },
+        );
+        const body = (await deliveries.json()) as {
+          deliveries: Array<{ handler: string }>;
+        };
+        expect(body.deliveries.map(({ handler }) => handler).sort()).toEqual([
+          'audit',
+          'greeting',
+        ]);
+      },
+      { timeout: 5000, interval: 100 },
+    );
   });
 
   it('exposes services registered by enabled plugin providers', async () => {
@@ -1349,6 +1429,21 @@ interface CreateTestAppOptions {
   };
 }
 
+/** Queue state files of a test application stay in a temporary directory. */
+function createTestQueueConfig(): AppQueueConfig {
+  return {
+    default: 'memory',
+    memory: {
+      adapter: 'inMemory',
+      persistence: {
+        path: mkdtempSync(
+          path.join(tmpdir(), 'nocobase-app-template-examples-queue-'),
+        ),
+      },
+    },
+  };
+}
+
 function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   const publicBasePath = normalizeBasePath(
     options.publicBasePath ?? '/app-template-examples',
@@ -1391,11 +1486,11 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       },
     },
     logging: createSilentLoggingConfig(),
-    queue: options.queue ?? createSyncQueueConfig(),
+    queue: options.queue ?? createTestQueueConfig(),
     session: createNullSessionConfig(),
     workflow: {
-      sourceRoot: path.resolve(process.cwd(), 'server/workflows'),
-      distRoot: path.resolve(process.cwd(), 'dist/server/workflows'),
+      sourceRoot: path.resolve(process.cwd(), 'workflows'),
+      distRoot: path.resolve(process.cwd(), 'dist/workflows'),
       artifactDisk: 'local',
       production: false,
     },
@@ -1447,7 +1542,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   app.addServiceProvider(IdGeneratorProvider);
   app.addServiceProvider(SessionProvider);
   app.addServiceProvider(DriveProvider);
-  app.addServiceProvider(QueueProvider);
+  app.addServiceProvider(QueueServiceProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
   app.addRoutes(healthCheckApiRoutes);
@@ -1712,6 +1807,14 @@ function writeRuntimeTestConfig(
         memory: {
           adapter: 'memory',
           persistence: { path: path.join(directory, 'jobs') },
+        },
+      },
+      // Queue state files likewise stay beside the test database.
+      queue: {
+        default: 'memory',
+        memory: {
+          adapter: 'inMemory',
+          persistence: { path: path.join(directory, 'queue') },
         },
       },
       database: {

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "1.0.0-beta.29",
+  "version": "1.0.0-beta.31",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -30,6 +30,10 @@
       "types": "./build/index.ts",
       "import": "./build/index.ts"
     },
+    "./vite": {
+      "types": "./build/vite.ts",
+      "import": "./build/vite.ts"
+    },
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
@@ -38,7 +42,11 @@
       "types": "./server/config.ts",
       "import": "./server/config.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./dsl": {
+      "types": "./dsl/index.ts",
+      "import": "./dsl/index.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -59,6 +67,10 @@
         "types": "./dist/build/index.d.ts",
         "import": "./dist/build/index.js"
       },
+      "./vite": {
+        "types": "./dist/build/vite.d.ts",
+        "import": "./dist/build/vite.js"
+      },
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
@@ -67,7 +79,11 @@
         "types": "./dist/server/config.d.ts",
         "import": "./dist/server/config.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./dsl": {
+        "types": "./dist/dsl/index.d.ts",
+        "import": "./dist/dsl/index.js"
+      }
     }
   },
   "files": [
@@ -77,7 +93,7 @@
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json && nocobase-db-manifests",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit && tsc -p tests/dsl/types/tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:integration": "pnpm test:integration:sqlite",
     "test:integration:sqlite": "INTEGRATION_DB_CONNECTIONS=sqlite vitest run tests/integration",
@@ -108,7 +124,7 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
-    "@nocobase/queue": "workspace:^",
+    "@nocobase/jobs": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
     "@xyflow/react": "^12.11.3",
@@ -117,18 +133,16 @@
     "react": "catalog:",
     "react-router": "catalog:",
     "tailwind-merge": "catalog:",
-    "typescript": "catalog:"
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
   },
   "peerDependenciesMeta": {
     "@nocobase/app-plugin-scheduler": {
       "optional": true
-    },
-    "typescript": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@boringnode/queue": "catalog:",
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/react": "catalog:",
@@ -139,7 +153,6 @@
     "knex": "catalog:",
     "prettier": "catalog:",
     "react-dom": "catalog:",
-    "tsx": "catalog:",
     "vitest": "catalog:",
     "yaml": "catalog:",
     "@nocobase/db-postgres": "workspace:*",

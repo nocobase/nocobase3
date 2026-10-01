@@ -1,5 +1,21 @@
 # `@nocobase/app-server`
 
+## Ordinary and recurring jobs
+
+`JobExecutorServiceProvider` and `jobExecutorServiceToken` from `@nocobase/app-server/jobs` compose both `JobExecutor` and `ScheduleExecutor` from `@nocobase/jobs`. The provider lazily creates one service from the application's `jobs` configuration, application name, storage paths and logger. Owners set up their executors; the provider starts no worker by itself and shuts down all ordinary and schedule executors when the application stops. Repeated shutdown is safe, including executors their owners already stopped.
+
+Resolve the existing token and call `getJobExecutor(scope, name?)` for ordinary one-off tasks or `getScheduleExecutor(scope, name?)` for recurring rules. Use the package name as the scope. Both select the named configuration, then `jobs.default`, then built-in single-process memory under `app.paths.storage('jobs')`. An invalid configured default rejects. The namespace defaults to `app.appName`; configure Redis before running multiple instances. Built-in fallback warns outside `develop` and `development`. Omitted, `default`, and unknown configuration names share the executor selected by the same resolved key and scope. Ordinary and Schedule executors remain separate.
+
+For ordinary tasks, extend `Job` from `@nocobase/jobs` with a payload-only constructor and an explicit own stable `static jobName`. Register every class with `registerJob` before consumer `setup()`, then submit with `addJob(new JobClass(payload))`. A producer-only executor first calls `setup({ consume: false })`. Submission rejects before setup starts and waits if setup is still in progress. Its receipt confirms backend acceptance, not completion. Each task attempt creates a fresh class instance from a strict JSON payload snapshot; there is no job factory, global service container or dependency injection into this constructor. Executor settings come from the selected configuration, not method overrides.
+
+Ordinary task identity is connection or storage path, namespace and scope, like Schedule's, so renaming a configuration key does not strand pending tasks; ordinary tasks still never share a queue or file with Schedule. Ordinary memory snapshots use separate pending-only files and are saved at shutdown; a forced exit can lose new work or replay work completed since the last snapshot. Scheduler plugin behavior is unchanged. See the [jobs package guide](../../libs/jobs/README.md) for examples, persistence identities, local attempt events and cooperative shutdown.
+
+## Queues
+
+Background work goes to the jobs service above by default; queues are for what it does not have — delays, priorities, deduplicating job IDs, batches, rate limits and several handlers per message. `QueueServiceProvider` and `queueServiceToken` from `@nocobase/app-server/queue` compose the application's `QueueService` from `@nocobase/queue`. Add the provider before plugin providers with `app.addServiceProvider(QueueServiceProvider, { nodeEnv })`. It creates the service lazily from the `queue` configuration section, with `app.appName` as the default namespace, `app.paths.storage('queue')` for memory state files, and the `queue` logger. `start()` calls `setup()` after every provider has booted, and `shutdown()` releases the service. `AppQueueConfig` types `server/config/queue.ts`.
+
+Plugins resolve `queueServiceToken`, register backend factories in `register()`, register handlers with `consumer(queue).consume()` in `boot()`, publish after setup, and await their unregister functions in `shutdown()` before releasing what the handlers use. Without `queue.default`, queues run on the built-in memory configuration, which warns outside `develop` and `development`. A `queue` section in the former `connections`/`worker`/`jobs` format is ignored with one warning. See the [queue package guide](../../libs/queue/README.md) for configuration keys, delivery, retries, cancellation and shutdown.
+
 ## Standalone proxy
 
 `defineStandaloneServer()` accepts an optional `proxy: ({ application }) => ({ match, target })` factory, evaluated after application startup. `match(pathname)` chooses requests before the application's public base path adapter; `target()` returns the current upstream HTTP(S) origin or `null`. Both `create()` and `start()` configure this boundary. Applications without a proxy retain their normal routing.
@@ -280,7 +296,7 @@ for the JSON Aggregate, Filter and Sort AST contracts.
 
 ## Plugin resource directories
 
-Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations, Seeds, and Queue Jobs resolve only against that directory. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
+Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations and Seeds resolve only against that directory. The `queue: { jobs }` contribution is deprecated: it is accepted and ignored, each plugin declaring it is reported once at startup and as a `SERVER_QUEUE_JOBS_DEPRECATED` inspection warning, and `createPluginJobLocations()` returns an empty list. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
 
 `rootDir` remains the package root: the resolver walks upward from `baseDir` to a `package.json` whose name matches `packageName`. Inspection includes both directories and the resolved contribution paths, so an installed copy cannot silently borrow another copy's metadata. Missing `baseDir` is an API error; update all Server plugin declarations when upgrading.
 

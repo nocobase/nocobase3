@@ -1,14 +1,17 @@
 import type { DatabaseManager } from '@nocobase/db';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { JobExecutor } from '@nocobase/jobs';
 import type { WorkflowRunServices } from './run-services.js';
 
 import type {
   WorkflowParameterSchema,
   WorkflowParameterValues,
-} from './parameters.js';
+} from '../../shared/parameters.js';
 import type { WorkflowInputSchema } from './invocation.js';
 import type { WorkflowArtifactStore } from '../loader/artifact-store.js';
-import type { WorkflowNodeOptions } from '../instructions/types.js';
+import type {
+  WorkflowNodeOptions,
+  WorkflowClientSource,
+} from '../instructions/types.js';
 export {
   WorkflowInstruction,
   type WorkflowInstructionClass,
@@ -50,6 +53,7 @@ export interface WorkflowDefinition {
   inputSchema: WorkflowInputSchema;
   parametersSchema: WorkflowParameterSchema;
   parameterValues: WorkflowParameterValues;
+  client?: WorkflowClientSource;
   current: boolean | null;
   options: JsonObject;
   nodes: WorkflowNode[];
@@ -159,13 +163,12 @@ export interface WorkflowEngineOptions {
   // every field declared before this point is unchanged. ---
 
   /**
-   * Queue manager tasks are published to. Without it the runtime dispatches
-   * in-process (`Dispatcher.enqueue()` falls through to `dispatch()`), which is
-   * useful for a single-process test or an application without a queue manager.
+   * Executor tasks are published to and consumed from. The engine owns its
+   * lifecycle: `initialize()` sets it up as a consumer and `dispose()` shuts it
+   * down. Without it the runtime dispatches in-process (`Dispatcher.enqueue()`
+   * falls through to `dispatch()`), which is useful for a single-process test.
    */
-  queue?: NocoBaseQueueManager;
-  /** Queue name to publish on and to consume from, default `WORKFLOW_QUEUE_NAME`. */
-  queueName?: string;
+  executor?: JobExecutor;
   /** `false` keeps the reaper from being created at all; default is enabled. */
   timeoutReaper?: boolean;
   /** Forwarded to `createTimeoutReaper()`. */
