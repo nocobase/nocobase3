@@ -71,15 +71,15 @@ pnpm nocobase hub deploy --remote production --config ./runtime.yml
 pnpm nocobase hub deploy --release-id <releaseId>
 ```
 
-| Flag                    | Meaning                                                                                                                                                               |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--build`, `--no-build` | Build for the Hub first (the default), or upload `storage/exports/dist.tar.gz` as it is                                                                               |
-| `--file`                | Upload this archive, relative to the current directory, without building                                                                                              |
-| `--release-id`          | Deploy a Release already on the Hub, such as one `hub upload` created or an earlier one to roll back to. Nothing is built or uploaded                                 |
-| `--config`              | Runtime YAML configuration to deploy with: non-empty UTF-8, at most 1 MiB. Omitted, the current Hub configuration is reused                                           |
-| `--wait`, `--no-wait`   | Wait for the deployment to finish (the default), or return once the Hub accepts it                                                                                    |
-| `--idempotency-key`     | Retry identity of the deployment. Defaults to a digest of the App and Release IDs and the configuration content                                                       |
-| `--timeout`             | Deadline for each request to the Hub and for the wait for a deployment, in seconds. Defaults to 600. Neither the build nor the archive transfer as a whole is counted |
+| Flag                    | Meaning                                                                                                                                                                                                                                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--build`, `--no-build` | Build for the Hub first (the default), or upload `storage/exports/dist.tar.gz` as it is                                                                                                                                                                                                                         |
+| `--file`                | Upload this archive, relative to the current directory, without building                                                                                                                                                                                                                                        |
+| `--release-id`          | Deploy a Release already on the Hub, such as one `hub upload` created or an earlier one to roll back to. Nothing is built or uploaded                                                                                                                                                                           |
+| `--config`              | Runtime YAML configuration to deploy with: non-empty UTF-8, at most 1 MiB. Omitted, the current Hub configuration is reused                                                                                                                                                                                     |
+| `--wait`, `--no-wait`   | Wait for the deployment to finish (the default), or return once the Hub accepts it                                                                                                                                                                                                                              |
+| `--idempotency-key`     | Retry identity of the deployment. Defaults to a digest of the App and Release IDs and the configuration content; when the App has deployed something else since a deployment under that digest, to a key derived from that deployment, so deploying an earlier Release rolls back while a retry repeats nothing |
+| `--timeout`             | Deadline for each request to the Hub and for the wait for a deployment, in seconds. Defaults to 600. Neither the build nor the archive transfer as a whole is counted                                                                                                                                           |
 
 `--build` cannot be combined with `--file` or `--release-id`. An archive the run did not build is checked against the Hub's platform before it is uploaded, and the Hub checks it again; a mismatch fails with `BUILD_TARGET_MISMATCH`.
 
@@ -114,7 +114,7 @@ With `--json`, each run prints one JSON document on stdout, success or failure. 
 | 2    | Invalid arguments or local input                                                                               |
 | 3    | The outcome could not be confirmed: a connection failure, a timeout, a malformed response or an unknown status |
 
-Exit 3 does not mean the deployment failed or was cancelled. Inspect the deployment in Hub, then retry with the same `--idempotency-key` if necessary. Use a fresh key only to deploy the same Release again on purpose.
+Exit 3 does not mean the deployment failed or was cancelled. Inspect the deployment in Hub, then retry with the same `--idempotency-key` if necessary. Use a fresh key only to deploy again, on purpose, what the App already runs.
 
 ## Library
 

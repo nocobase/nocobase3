@@ -1,4 +1,5 @@
 // Reading a secret without echoing it, and reading one piped in.
+import { HubCliError } from '../../errors.ts';
 
 /** Reads all of standard input. */
 export async function readStdin(): Promise<string> {
@@ -11,7 +12,8 @@ export async function readStdin(): Promise<string> {
 /**
  * Asks on stderr and reads one line from the terminal with echo off. Stderr, so a `--json` document on stdout stays
  * the only thing there. Input that ends without a line break, such as a terminal that hangs up, answers with what
- * was typed so far, which the caller rejects when it is empty.
+ * was typed so far, which the caller rejects when it is empty. Ctrl-C cancels with exit code 130, as an interrupted
+ * command does in a shell.
  */
 export function promptHidden(question: string): Promise<string> {
   const stdin = process.stdin;
@@ -48,7 +50,13 @@ export function promptHidden(question: string): Promise<string> {
           return;
         }
         if (character === '\u0003') {
-          finish(new Error('Cancelled'));
+          finish(
+            new HubCliError(
+              'LOGIN_CANCELLED',
+              'Cancelled; no API key was saved.',
+              130,
+            ),
+          );
           return;
         }
         if (character === '\u007f' || character === '\b')

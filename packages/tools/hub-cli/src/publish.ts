@@ -23,6 +23,9 @@ export const DEFAULT_ARTIFACT: string = 'storage/exports/dist.tar.gz';
 /** The largest archive the Hub's resumable upload accepts. */
 export const MAX_ARTIFACT_SIZE: number = 2 * 1024 * 1024 * 1024;
 
+/** How many earlier deployments of one Release and configuration a deployment under the default key steps past. */
+const MAX_REDEPLOY_STEPS = 100;
+
 export interface PublishOptions {
   readonly target: RemoteTarget;
   readonly apiKey: string;
@@ -230,7 +233,7 @@ async function deployRelease(
   input: { releaseId: string; config: string | undefined; timeout: number },
 ): Promise<Published<DeployResult>> {
   const { releaseId, config } = input;
-  const idempotencyKey =
+  let idempotencyKey =
     options.idempotencyKey ??
     createHash('sha256')
       .update(
@@ -239,7 +242,22 @@ async function deployRelease(
       .digest('hex');
   client.known.idempotencyKey = idempotencyKey;
   client.known.releaseId = releaseId;
-  const started = await client.deploy({ releaseId, config, idempotencyKey });
+  let started = await client.deploy({ releaseId, config, idempotencyKey });
+  // The default key names the Release and configuration, so it also matches an earlier deployment of them that the
+  // App has moved on from, as when rolling back. Each such deployment leads to the next key, derived from it, until
+  // the Hub answers with the App's latest deployment or creates one: a retry walks the same keys and repeats nothing.
+  if (options.idempotencyKey === undefined) {
+    for (let step = 0; started.reused && step < MAX_REDEPLOY_STEPS; step++) {
+      const [latest] = await client.listDeployments(1);
+      if (latest === undefined || latest.operationId === started.operationId)
+        break;
+      idempotencyKey = createHash('sha256')
+        .update(`${idempotencyKey}:${started.operationId}`)
+        .digest('hex');
+      client.known.idempotencyKey = idempotencyKey;
+      started = await client.deploy({ releaseId, config, idempotencyKey });
+    }
+  }
   client.known.operationId = started.operationId;
   client.known.operationStatus = started.status;
   const result: DeployResult = {
@@ -291,10 +309,13 @@ async function deployRelease(
       }
     }
   }
-  // A reused deployment is history: this run deployed nothing now, and the App may be running another Release.
-  const warning = started.reused
-    ? 'Hub reused an earlier deployment for this Release and configuration; nothing was deployed now. Pass a new --idempotency-key to deploy again.'
-    : undefined;
+  // A reused deployment is history: this run deployed nothing now. Under the default key it is the App's latest
+  // deployment; under a given key the App may have moved on to another Release since.
+  const warning = !started.reused
+    ? undefined
+    : options.idempotencyKey === undefined
+      ? "The App's latest deployment already deploys this Release and configuration; nothing was deployed now. Pass a new --idempotency-key to deploy it again."
+      : 'Hub reused an earlier deployment for this idempotency key; nothing was deployed now. Pass a new --idempotency-key to deploy again.';
   return { result, warning };
 }
 

@@ -82,6 +82,15 @@ export abstract class HubCommand extends AppCommand {
         (error.code === 'INVALID_API_KEY' || error.code === 'API_KEY_FORBIDDEN')
       )
         suggestions.push(this.loginSuggestion(remote));
+      if (
+        remote !== undefined &&
+        suggestions.length === 0 &&
+        error.code === 'HUB_NOT_FOUND'
+      )
+        suggestions.push({
+          message: `Remote "${remote.name}" is ${remote.url}; its URL is <Hub URL>/apps/<App ID>. List the remotes:`,
+          run: this.cliCommand(['hub', 'remote', 'list']),
+        });
       if (error.code === 'NO_REMOTE' && suggestions.length === 0)
         suggestions.push({
           message:

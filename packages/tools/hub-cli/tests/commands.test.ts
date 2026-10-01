@@ -179,6 +179,31 @@ describe('hub auth', () => {
     expect(await loadKey(REMOTE_URL)).toBeUndefined();
   });
 
+  it('points to the remote URL when no Hub answers at it', async () => {
+    await addOrigin();
+    fakeHub({
+      'GET ': () => new Response('<html>Not Found</html>', { status: 404 }),
+    });
+    vi.mocked(readStdin).mockResolvedValue(secret);
+    const result = await run(HubAuthLogin, 'hub:auth:login', ['--with-token']);
+    expect(result.exitCode).toBe(1);
+    expect(result.json()).toMatchObject({
+      error: {
+        code: 'HUB_NOT_FOUND',
+        suggestions: [
+          {
+            message: expect.stringContaining(REMOTE_URL),
+            run: {
+              command: 'pnpm',
+              args: ['nocobase', 'hub', 'remote', 'list'],
+            },
+          },
+        ],
+      },
+    });
+    expect(await loadKey(REMOTE_URL)).toBeUndefined();
+  });
+
   it('refuses an empty key', async () => {
     await addOrigin();
     vi.mocked(readStdin).mockResolvedValue('  \n');

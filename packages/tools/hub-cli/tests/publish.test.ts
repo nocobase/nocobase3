@@ -11,6 +11,7 @@ import { DEFAULT_ARTIFACT, publish } from '../src/publish.ts';
 import {
   APP_ID,
   data,
+  DEPLOYMENT,
   failure,
   fakeHub,
   HOST_TARGET,
@@ -170,6 +171,113 @@ describe('hub deploy', () => {
     });
     expect(result.reused).toBe(true);
     expect(warning).toMatch(/nothing was deployed now/u);
+  });
+
+  /**
+   * A Hub that answers a known idempotency key with its deployment and any other with a new one, `op-3`. `latest` is
+   * the App's latest deployment until then.
+   */
+  function hubWithDeployments(
+    byKey: Record<string, string>,
+    latest: string,
+  ): ReturnType<typeof fakeHub> {
+    const deployments = new Map(Object.entries(byKey));
+    return fakeHub({
+      'POST deploy': (request) => {
+        const key = request.headers['idempotency-key'] ?? '';
+        const existing = deployments.get(key);
+        if (existing !== undefined)
+          return data({
+            operationId: existing,
+            status: 'succeeded',
+            reused: true,
+          });
+        deployments.set(key, 'op-3');
+        latest = 'op-3';
+        return data({ operationId: 'op-3', status: 'queued', reused: false });
+      },
+      'GET deployments?page=1&pageSize=1': () =>
+        data({ items: [{ ...DEPLOYMENT, id: latest }], total: 3 }),
+      'GET deployments/op-3/status': () => data({ status: 'succeeded' }),
+    });
+  }
+
+  it('rolls back to a Release deployed before, which its default key alone would only find again', async () => {
+    // op-1 deployed r1 under the default key, then op-2 deployed r2.
+    const firstKey = sha256(`${APP_ID}:r1`);
+    const hub = hubWithDeployments({ [firstKey]: 'op-1' }, 'op-2');
+    const { result, warning } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      releaseId: 'r1',
+    });
+    const nextKey = sha256(`${firstKey}:op-1`);
+    expect(result).toMatchObject({
+      operationId: 'op-3',
+      reused: false,
+      operationStatus: 'succeeded',
+      idempotencyKey: nextKey,
+    });
+    expect(warning).toBeUndefined();
+    expect(
+      hub.requests.map((request) => [
+        request.route,
+        request.headers['idempotency-key'],
+      ]),
+    ).toEqual([
+      ['deploy', firstKey],
+      ['deployments?page=1&pageSize=1', undefined],
+      ['deploy', nextKey],
+      ['deployments/op-3/status', undefined],
+    ]);
+  });
+
+  it('repeats nothing when a rollback runs again, walking the same keys to the deployment it made', async () => {
+    // The rollback above made op-3 under the key derived from op-1.
+    const firstKey = sha256(`${APP_ID}:r1`);
+    const nextKey = sha256(`${firstKey}:op-1`);
+    const hub = hubWithDeployments(
+      { [firstKey]: 'op-1', [nextKey]: 'op-3' },
+      'op-3',
+    );
+    const { result, warning } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      releaseId: 'r1',
+      wait: false,
+    });
+    expect(result).toMatchObject({
+      operationId: 'op-3',
+      reused: true,
+      idempotencyKey: nextKey,
+    });
+    expect(warning).toMatch(/latest deployment already deploys this Release/u);
+    expect(
+      hub.requests.filter((request) => request.route === 'deploy'),
+    ).toHaveLength(2);
+  });
+
+  it('keeps a given idempotency key exact, even when the App has moved on', async () => {
+    const hub = hubWithDeployments({ 'given-key': 'op-1' }, 'op-2');
+    const { result, warning } = await publish({
+      target,
+      apiKey,
+      root,
+      deploy: true,
+      releaseId: 'r1',
+      idempotencyKey: 'given-key',
+      wait: false,
+    });
+    expect(result).toMatchObject({ operationId: 'op-1', reused: true });
+    expect(warning).toMatch(/earlier deployment for this idempotency key/u);
+    expect(hub.requests.map((request) => request.route)).toEqual([
+      'deploy',
+      'deployments/op-1/status',
+    ]);
   });
 
   it('deploys a named Release without building or uploading, keyed by its configuration', async () => {
@@ -490,6 +598,29 @@ describe('failures', () => {
       message: 'Hub rejected the request (404, RELEASE_NOT_FOUND).',
     });
     expect(JSON.stringify(error)).not.toContain('secret-bearing');
+  });
+
+  it('says no Hub answered when a 404 names nothing the Hub would, as at a mistyped mount path', async () => {
+    for (const notFound of [
+      () => new Response('<html>Not Found</html>', { status: 404 }),
+      () => Response.json({ error: 'Not found' }, { status: 404 }),
+    ]) {
+      fakeHub({ 'POST deploy': notFound });
+      const error: unknown = await publish({
+        target,
+        apiKey,
+        root,
+        deploy: true,
+        releaseId: 'r1',
+      }).catch((caught: unknown) => caught);
+      // Nothing reached the Hub, so the outcome is known: nothing was deployed.
+      expect(error).toMatchObject({
+        code: 'HUB_NOT_FOUND',
+        exitCode: 1,
+        message:
+          'No Hub API answered at https://hub.example/main (404). Check the remote URL.',
+      });
+    }
   });
 
   it('calls a lost request that changes the Hub unknown, and a lost read unreachable', async () => {

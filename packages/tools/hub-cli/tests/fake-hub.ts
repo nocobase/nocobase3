@@ -89,6 +89,12 @@ export function defaultRoutes(state: UploadState): Record<string, Handler> {
     'POST deploy': () =>
       data({ operationId: 'op-1', status: 'queued', reused: false }),
     'GET deployments/op-1/status': () => data({ status: 'succeeded' }),
+    // The App's latest deployment is the one `POST deploy` answers with.
+    'GET deployments?page=1&pageSize=1': () =>
+      data({
+        items: [{ ...DEPLOYMENT, id: 'op-1', releaseId: 'r1' }],
+        total: 1,
+      }),
   };
 }
 

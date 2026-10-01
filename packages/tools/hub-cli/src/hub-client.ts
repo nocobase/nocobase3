@@ -116,12 +116,14 @@ export class HubClient {
   readonly known: HubCliErrorDetails = {};
   /** `<Hub URL>/api/hub/apps/<App ID>`, without a trailing slash: the Hub routes the App itself there. */
   readonly #base: string;
+  readonly #hub: string;
   readonly #apiKey: string;
   readonly #timeout: number;
 
   constructor(options: HubClientOptions) {
     this.#apiKey = options.apiKey;
     this.#timeout = options.timeout;
+    this.#hub = options.target.hub;
     this.#base = `${options.target.hub}/api/hub/apps/${encodeURIComponent(options.target.appId)}`;
   }
 
@@ -527,24 +529,36 @@ export class HubClient {
           );
     }
     let payload: unknown;
+    let readable = true;
     try {
       payload = await response.json();
     } catch {
+      readable = false;
+    }
+    const error =
+      !response.ok && isRecord(payload) && isRecord(payload.error)
+        ? payload.error
+        : undefined;
+    const hubCode =
+      typeof error?.code === 'string' && /^[A-Z0-9_]+$/.test(error.code)
+        ? error.code
+        : undefined;
+    // The Hub names what it did not find. A 404 that names nothing came from whatever else answers at that address,
+    // such as a mistyped mount path, so nothing reached the Hub.
+    if (response.status === 404 && hubCode === undefined)
+      throw this.failure(
+        'HUB_NOT_FOUND',
+        `No Hub API answered at ${this.#hub} (404). Check the remote URL.`,
+        1,
+      );
+    if (!readable)
       throw this.failure(
         'INVALID_HUB_RESPONSE',
         'Hub returned an unreadable response; the result is unknown.',
         3,
       );
-    }
     if (!response.ok) {
-      const error =
-        isRecord(payload) && isRecord(payload.error)
-          ? payload.error
-          : undefined;
-      const code =
-        typeof error?.code === 'string' && /^[A-Z0-9_]+$/.test(error.code)
-          ? error.code
-          : 'HUB_REQUEST_FAILED';
+      const code = hubCode ?? 'HUB_REQUEST_FAILED';
       const offset = error?.offset;
       // Do not echo raw response text: proxies and remote exceptions can contain credentials.
       throw new HubRejection(

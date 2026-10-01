@@ -9,7 +9,7 @@ import { HubCommand, remoteFlag, timeoutFlag } from './hub-command.ts';
 export default class HubDeploy extends HubCommand {
   static override summary = 'Deploy this application to the Hub.';
   static override description =
-    "Builds the application for the platform the Hub runs Apps on, uploads the archive as a Release of the remote's App and deploys it, then waits for the deployment to finish. With --release-id, deploys a Release already on the Hub instead: one hub upload created, or an earlier Release to roll back to. When the Hub already has the archive, its Release is deployed.\n\nThe remote comes from --remote or the default remote in .nocobase/hub.json; the API key is the one hub auth login saved for it. Retrying with the same --idempotency-key is safe when a run could not confirm its result; deploying the same Release again needs a new key.";
+    "Builds the application for the platform the Hub runs Apps on, uploads the archive as a Release of the remote's App and deploys it, then waits for the deployment to finish. With --release-id, deploys a Release already on the Hub instead: one hub upload created, or an earlier Release to roll back to. When the Hub already has the archive, its Release is deployed.\n\nThe remote comes from --remote or the default remote in .nocobase/hub.json; the API key is the one hub auth login saved for it. Retrying with the same --idempotency-key is safe when a run could not confirm its result; deploying again what the App's latest deployment already deploys needs a new key.";
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
@@ -56,7 +56,7 @@ export default class HubDeploy extends HubCommand {
     }),
     'idempotency-key': Flags.string({
       description:
-        'Retry identity of the deployment. Defaults to a digest of the App and Release IDs and the --config content. Use a new key to deploy the same Release again.',
+        'Retry identity of the deployment. Defaults to a digest of the App and Release IDs and the --config content, moved on past earlier deployments of them the App has since replaced. Use a new key to deploy again what the App already runs.',
     }),
     timeout: timeoutFlag,
   };
