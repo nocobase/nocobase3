@@ -11,6 +11,8 @@ export type CollectionReferentialAction = NonNullable<
 export interface CollectionFieldSnapshot {
   readonly type: string;
   readonly nullable: boolean;
+  /** The declared length of a string Field, where the database reports one. */
+  readonly length?: number;
 }
 
 /** An index or unique constraint, by the Fields it covers; physical names are left out. */
@@ -68,6 +70,7 @@ export async function inspectCollection(
     fields[field.name] = {
       type: field.type,
       nullable: field.nullable ?? true,
+      ...(field.length === undefined ? {} : { length: field.length }),
     };
   }
   let primaryKey: readonly string[] = [];

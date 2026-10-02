@@ -102,7 +102,7 @@ describeMigration('202609020001_example_create_orders', {
 `expectCollection(name)` reads the physical schema through the connection's inspector and resolves it back to Field and Collection names, so one expectation holds on every dialect:
 
 - `toExist()` — resolves with the snapshot for further assertions
-- `toHaveField(name, { type?, nullable? })`
+- `toHaveField(name, { type?, nullable?, length? })`
 - `toHaveIndex(fields, { unique? })` — an index or a unique constraint over exactly these Fields
 - `toHaveForeignKey(fields, collection, { referencedFields?, onDelete?, onUpdate? })`
 - `not.toExist()`, `not.toHaveField(name)`, `not.toHaveIndex(fields)`, `not.toHaveForeignKey(fields, collection)`

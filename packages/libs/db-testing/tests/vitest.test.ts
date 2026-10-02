@@ -22,6 +22,7 @@ describe('createDatabaseTest with schema isolation', () => {
     await expectCollection('libraryBooks').toHaveField('title', {
       type: 'string',
       nullable: false,
+      length: 255,
     });
     await expectCollection('libraryBooks').toHaveForeignKey(
       ['authorId'],
