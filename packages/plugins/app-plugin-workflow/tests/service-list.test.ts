@@ -68,6 +68,17 @@ describe('workflow repositories', () => {
     expect(page.data.map((item) => item.key)).toEqual(['expense-approval']);
   });
 
+  it('searches workflows regardless of case on every database', async () => {
+    await createTestWorkflow(database, {
+      key: 'leave-approval',
+      nodes: [],
+    });
+
+    const page = await workflows.list({ query: 'APPROVAL' });
+
+    expect(page.data.map((item) => item.key)).toEqual(['leave-approval']);
+  });
+
   it('loads run summaries only for the requested workflow page', async () => {
     const older = await createTestWorkflow(database, {
       key: 'older-workflow',
