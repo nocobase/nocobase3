@@ -1,10 +1,23 @@
 import {
   describeLifecycle,
+  type EffectDefinition,
   type Lifecycle,
   type LifecycleDescription,
+  type TransitionContext,
 } from './definition.js';
-import { LifecycleError, type LifecycleErrorCode } from './errors.js';
-import { planTransition, stateOf, transitionsFrom, versionOf } from './plan.js';
+import {
+  LifecycleError,
+  type Blocker,
+  type LifecycleErrorCode,
+} from './errors.js';
+import {
+  guardBlockers,
+  planTransition,
+  stateOf,
+  transitionsFrom,
+  versionOf,
+  type ExtraGuard,
+} from './plan.js';
 import type {
   EffectRun,
   EffectRunChanges,
@@ -98,9 +111,28 @@ export interface AvailableTransition {
   readonly name: string;
   readonly title: string;
   readonly to: readonly string[];
-  /** Whether the guard lets this actor fire it now. Input is checked only on fire. */
+  /** Whether every guard lets this actor fire it now. Input is checked only on fire. */
   readonly allowed: boolean;
+  /** Why not, when it is not allowed: one entry per guard that refused. */
+  readonly blockers: readonly Blocker[];
 }
+
+/** The answer of `runtime.can()`: allowed, or the reasons it is not. */
+export interface TransitionCheck {
+  readonly allowed: boolean;
+  readonly blockers: readonly Blocker[];
+}
+
+export interface CreateOptions {
+  readonly actor: LifecycleActor;
+  /** One of the lifecycle's initial states; the default one when absent. */
+  readonly state?: string;
+  /** Kept on the creation's log entry, as a transition's input is. */
+  readonly input?: JsonObject;
+}
+
+/** The log entry `runtime.create()` writes, so a record's history starts at its creation. */
+export const CREATE_TRANSITION: string = '$create';
 
 export interface RecordHistory {
   readonly transitions: readonly TransitionEntry[];
@@ -111,6 +143,8 @@ interface Registered {
   readonly lifecycle: Lifecycle<LifecycleTypes>;
   readonly services: (transactionHandle: unknown) => object;
   readonly parameters: () => object;
+  /** Guards added with `addGuard()`, by transition name. */
+  readonly guards: Map<string, ExtraGuard<LifecycleTypes>[]>;
 }
 
 const silent: LifecycleLogger = { warn: () => {}, error: () => {} };
@@ -197,7 +231,50 @@ export class LifecycleRuntime {
       services:
         typeof source === 'function' ? source : (): object => source ?? {},
       parameters: options.parameters ?? ((): object => ({})),
+      guards: new Map(),
     });
+  }
+
+  /**
+   * Adds a guard to transitions of a registered lifecycle from outside its
+   * definition, the way another plugin would veto approvals while a budget
+   * is frozen. `'*'` adds it to every transition. Its refusals join the
+   * blockers of `available()`, `can()` and `fire()`. Returns a function that
+   * removes it again.
+   */
+  public addGuard<T extends LifecycleTypes>(
+    name: string,
+    transitions: string | readonly string[],
+    guard: ExtraGuard<T>,
+  ): () => void {
+    const registered = this.get(name);
+    const names =
+      transitions === '*'
+        ? [...registered.lifecycle.transitions.keys()]
+        : typeof transitions === 'string'
+          ? [transitions]
+          : [...transitions];
+    for (const transition of names)
+      if (!registered.lifecycle.transitions.has(transition))
+        throw new LifecycleError(
+          'UNKNOWN_TRANSITION',
+          `Lifecycle "${name}" has no transition "${transition}".`,
+        );
+    const added = guard as unknown as ExtraGuard<LifecycleTypes>;
+    for (const transition of names) {
+      const list = registered.guards.get(transition) ?? [];
+      list.push(added);
+      registered.guards.set(transition, list);
+    }
+    return (): void => {
+      for (const transition of names) {
+        const list = registered.guards.get(transition) ?? [];
+        registered.guards.set(
+          transition,
+          list.filter((other) => other !== added),
+        );
+      }
+    };
   }
 
   public describe(name: string): LifecycleDescription {
@@ -230,7 +307,10 @@ export class LifecycleRuntime {
     return committed;
   }
 
-  /** The transitions the record's state allows, each with whether the guard passes for `actor`. */
+  /**
+   * The transitions the record's state allows, each with whether `actor`
+   * may fire it now and, if not, every reason why.
+   */
   public async available(
     name: string,
     id: RecordId,
@@ -238,34 +318,127 @@ export class LifecycleRuntime {
   ): Promise<AvailableTransition[]> {
     const registered = this.get(name);
     const { lifecycle } = registered;
-    const record = await this.store.findRecord(lifecycle.collection, id);
-    if (!record)
-      throw new LifecycleError(
-        'RECORD_NOT_FOUND',
-        `No ${lifecycle.collection} record "${String(id)}".`,
-      );
-    const context = Object.freeze({
-      record,
-      actor,
-      input: {},
-      parameters: this.parameters(name) as ParametersOf<LifecycleTypes>,
-      services: registered.services(undefined) as ServicesOf<LifecycleTypes>,
-      now: this.clock(),
-    });
+    const record = await this.require(registered, id);
+    const context = this.guardContext(registered, record, actor);
     const result: AvailableTransition[] = [];
     for (const transition of transitionsFrom(
       lifecycle,
       stateOf(lifecycle, record),
     )) {
-      const definition = transition.definition;
+      const blockers = await guardBlockers(
+        transition,
+        context,
+        registered.guards.get(transition.name),
+      );
       result.push({
         name: transition.name,
         title: transition.title,
         to: [...transition.to],
-        allowed: definition.guard ? await definition.guard(context) : true,
+        allowed: blockers.length === 0,
+        blockers,
       });
     }
     return result;
+  }
+
+  /**
+   * Whether `actor` may fire `transition` on the record now. A transition
+   * the record's state does not allow is refused with a `state` blocker,
+   * before any guard is asked.
+   */
+  public async can(
+    name: string,
+    id: RecordId,
+    transition: string,
+    actor: LifecycleActor,
+  ): Promise<TransitionCheck> {
+    const registered = this.get(name);
+    const { lifecycle } = registered;
+    const declared = lifecycle.transitions.get(transition);
+    if (!declared)
+      throw new LifecycleError(
+        'UNKNOWN_TRANSITION',
+        `Lifecycle "${name}" has no transition "${transition}".`,
+      );
+    const record = await this.require(registered, id);
+    const state = stateOf(lifecycle, record);
+    if (!declared.from.includes(state))
+      return {
+        allowed: false,
+        blockers: [
+          {
+            source: 'state',
+            code: 'INVALID_STATE',
+            message: `"${transition}" cannot start from "${state}".`,
+          },
+        ],
+      };
+    const blockers = await guardBlockers(
+      declared,
+      this.guardContext(registered, record, actor),
+      registered.guards.get(transition),
+    );
+    return { allowed: blockers.length === 0, blockers };
+  }
+
+  /**
+   * Creates a record through the lifecycle: in one transaction it writes the
+   * record in an initial state, a log entry from nothing, and the effect runs
+   * the state's `onEnter` owes, so a record's history starts where it does.
+   */
+  public async create(
+    name: string,
+    values: Readonly<Record<string, unknown>>,
+    options: CreateOptions,
+  ): Promise<FireResult> {
+    const registered = this.get(name);
+    const { lifecycle } = registered;
+    const state = options.state ?? lifecycle.initial;
+    if (!lifecycle.initialStates.includes(state))
+      throw new LifecycleError(
+        'INVALID_STATE',
+        `"${state}" is not an initial state of "${name}".`,
+      );
+    for (const field of [
+      lifecycle.stateField,
+      lifecycle.changedAtField,
+      lifecycle.versionField,
+    ])
+      if (field in values)
+        throw new LifecycleError(
+          'INVALID_SET',
+          `Creating a ${name} record may not set "${field}"; the lifecycle owns it.`,
+        );
+    const now = this.clock();
+    const at = now.toISOString();
+    const committed = await this.store.transaction(async (store) => {
+      const record = await store.createRecord(lifecycle.collection, {
+        ...values,
+        [lifecycle.stateField]: state,
+        [lifecycle.changedAtField]: at,
+        [lifecycle.versionField]: 1,
+      });
+      const entry = await store.appendTransition({
+        lifecycle: lifecycle.name,
+        recordId: String(record.id),
+        transition: CREATE_TRANSITION,
+        from: null,
+        to: state,
+        actorId: options.actor.id,
+        input: options.input ?? {},
+        at,
+        version: 1,
+      });
+      const effectRuns = await this.owe(
+        store,
+        lifecycle,
+        entry,
+        lifecycle.onEnter.get(state) ?? [],
+      );
+      return { record, entry, effectRuns };
+    });
+    for (const run of committed.effectRuns) await this.handOver(run.id, null);
+    return committed;
   }
 
   public async history(name: string, id: RecordId): Promise<RecordHistory> {
@@ -602,6 +775,7 @@ export class LifecycleRuntime {
         store.transactionHandle,
       ) as ServicesOf<LifecycleTypes>,
       now,
+      guards: registered.guards.get(transition) ?? [],
     });
     const written = await store.updateRecordIf(
       lifecycle.collection,
@@ -631,9 +805,24 @@ export class LifecycleRuntime {
       at,
       version: plan.nextVersion,
     });
-    const effectRuns: EffectRun[] = [];
-    for (const effect of plan.effects)
-      effectRuns.push(
+    const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
+    const record = Object.freeze({
+      ...current,
+      ...plan.values,
+    }) as LifecycleRecord;
+    return { record, entry, effectRuns };
+  }
+
+  /** Writes a queued run for each effect a log entry owes. */
+  private async owe(
+    store: LifecycleStore,
+    lifecycle: Lifecycle<LifecycleTypes>,
+    entry: TransitionEntry,
+    effects: readonly EffectDefinition<LifecycleTypes>[],
+  ): Promise<EffectRun[]> {
+    const runs: EffectRun[] = [];
+    for (const effect of effects)
+      runs.push(
         await store.createEffectRun({
           transitionId: entry.id,
           lifecycle: lifecycle.name,
@@ -644,17 +833,45 @@ export class LifecycleRuntime {
           maxAttempts: effect.retry?.attempts ?? 1,
           result: null,
           error: null,
-          createdAt: at,
-          updatedAt: at,
+          createdAt: entry.at,
+          updatedAt: entry.at,
           claimedAt: null,
           runAfter: null,
         }),
       );
-    const record = Object.freeze({
-      ...current,
-      ...plan.values,
-    }) as LifecycleRecord;
-    return { record, entry, effectRuns };
+    return runs;
+  }
+
+  private async require(
+    registered: Registered,
+    id: RecordId,
+  ): Promise<LifecycleRecord> {
+    const { lifecycle } = registered;
+    const record = await this.store.findRecord(lifecycle.collection, id);
+    if (!record)
+      throw new LifecycleError(
+        'RECORD_NOT_FOUND',
+        `No ${lifecycle.collection} record "${String(id)}".`,
+      );
+    return record;
+  }
+
+  /** What a guard sees outside a transition: no input, no transaction. */
+  private guardContext(
+    registered: Registered,
+    record: LifecycleRecord,
+    actor: LifecycleActor,
+  ): TransitionContext<LifecycleTypes> {
+    return Object.freeze({
+      record,
+      actor,
+      input: {},
+      parameters: this.parameters(
+        registered.lifecycle.name,
+      ) as ParametersOf<LifecycleTypes>,
+      services: registered.services(undefined) as ServicesOf<LifecycleTypes>,
+      now: this.clock(),
+    });
   }
 
   private discarded(effect: string, runId: string, attempt: number): void {

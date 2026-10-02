@@ -5,6 +5,7 @@ export {
   type EffectContext,
   type EffectDefinition,
   type EffectRetry,
+  type GuardVerdict,
   type Lifecycle,
   type LifecycleDefinition,
   type LifecycleDescription,
@@ -15,18 +16,28 @@ export {
   type TransitionDefinition,
   type TriggerDefinition,
 } from './definition.js';
-export { LifecycleError, type LifecycleErrorCode } from './errors.js';
 export {
+  LifecycleError,
+  type Blocker,
+  type InputProblem,
+  type LifecycleErrorCode,
+  type LifecycleErrorDetails,
+} from './errors.js';
+export {
+  guardBlockers,
   planTransition,
   stateOf,
   transitionsFrom,
   versionOf,
+  type ExtraGuard,
   type PlanContext,
   type TransitionPlan,
 } from './plan.js';
 export {
+  CREATE_TRANSITION,
   LifecycleRuntime,
   type AvailableTransition,
+  type CreateOptions,
   type EffectDispatcher,
   type FireExpectation,
   type FireOptions,
@@ -36,6 +47,7 @@ export {
   type RecordHistory,
   type RegisterOptions,
   type ServicesSource,
+  type TransitionCheck,
 } from './runtime.js';
 export type {
   EffectRun,

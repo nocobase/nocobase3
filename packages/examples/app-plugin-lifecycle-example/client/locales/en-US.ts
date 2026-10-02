@@ -201,6 +201,8 @@ const enUS = {
   lifecycle: {
     title: 'Under the hood',
     hint: 'What the lifecycle recorded for this record. A real application would not show this to its users.',
+    available: 'What the current identity can do',
+    final: 'No transition leaves this state.',
     states: 'States',
     parameters: 'Parameters',
     transitions: 'Transition log',
@@ -239,6 +241,7 @@ const enUS = {
     paid: 'Paid',
   },
   transitions: {
+    create: 'Created',
     accept: 'Take',
     reply: 'Reply',
     customerReply: 'Customer reply',

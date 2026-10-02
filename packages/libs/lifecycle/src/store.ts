@@ -11,7 +11,8 @@ export interface TransitionEntry {
   readonly lifecycle: string;
   readonly recordId: string;
   readonly transition: string;
-  readonly from: string;
+  /** Null on the entry `runtime.create()` writes: the record came from nothing. */
+  readonly from: string | null;
   readonly to: string;
   readonly actorId: string;
   readonly input: JsonObject;
@@ -120,6 +121,11 @@ export interface LifecycleStore {
     collection: string,
     id: RecordId,
   ): Promise<LifecycleRecord | undefined>;
+  /** Inserts a record and returns it as stored, its id included. */
+  createRecord(
+    collection: string,
+    values: Readonly<Record<string, unknown>>,
+  ): Promise<LifecycleRecord>;
   /**
    * Writes `values` only while the record still matches `condition`.
    * Returns whether it did: the condition is what makes two concurrent

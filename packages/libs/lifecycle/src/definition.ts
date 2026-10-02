@@ -1,4 +1,4 @@
-import { LifecycleError } from './errors.js';
+import { LifecycleError, type InputProblem } from './errors.js';
 import type {
   JsonObject,
   LifecycleActor,
@@ -31,7 +31,8 @@ export interface EffectContext<T extends LifecycleTypes> {
   readonly record: T['record'];
   readonly input: JsonObject;
   readonly transition: string;
-  readonly from: T['state'];
+  /** Null for the entry `runtime.create()` writes. */
+  readonly from: T['state'] | null;
   readonly to: T['state'];
   /** 1 on the first try. */
   readonly attempt: number;
@@ -62,6 +63,10 @@ export interface EffectDefinition<T extends LifecycleTypes> {
   run(context: EffectContext<T>): unknown;
 }
 
+/** What a guard answers: `true` to allow, anything else to refuse and say why. */
+export type GuardVerdict =
+  boolean | string | { readonly code?: string; readonly message: string };
+
 export interface TransitionDefinition<T extends LifecycleTypes> {
   readonly title?: string;
   readonly from: OneOrMany<T['state']>;
@@ -69,10 +74,20 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
   readonly to: OneOrMany<T['state']>;
   /** Picks one of `to` at run time. */
   route?(context: TransitionContext<T>): T['state'];
-  /** Whether this actor may fire it now. */
-  guard?(context: TransitionContext<T>): boolean | Promise<boolean>;
-  /** Returns a message when the input is unacceptable. */
-  validate?(input: JsonObject): string | null;
+  /**
+   * Whether this actor may fire it now. `true` allows it; `false`, a
+   * message, or `{ code, message }` refuses it, and the message is what
+   * `available()` and the refusal tell the person.
+   */
+  guard?(context: TransitionContext<T>): GuardVerdict | Promise<GuardVerdict>;
+  /** Returns what is wrong with the input: a message, a list of problems, or nothing. */
+  validate?(input: JsonObject): string | readonly InputProblem[] | null;
+  /**
+   * Input fields copied onto the record as they are, in the same write as
+   * the state; `set` runs after and wins. The lifecycle's own fields may not
+   * be accepted.
+   */
+  readonly accept?: readonly string[];
   /** Other fields to write in the same transaction. */
   set?(
     context: SetContext<T>,
@@ -108,7 +123,11 @@ export interface LifecycleDefinition<T extends LifecycleTypes> {
    * transitions that leave the state unchanged cannot both commit.
    */
   readonly versionField?: string;
-  readonly initial: T['state'];
+  /**
+   * The state `runtime.create()` starts a record in. Several are allowed; the
+   * first is the default and the others must be asked for.
+   */
+  readonly initial: OneOrMany<T['state']>;
   readonly states: readonly T['state'][];
   /** Defaults an administrator may override. They do not change the shape of the lifecycle. */
   readonly parameters?: ParametersOf<T>;
@@ -144,7 +163,10 @@ export interface Lifecycle<T extends LifecycleTypes> {
   readonly stateField: string;
   readonly changedAtField: string;
   readonly versionField: string;
+  /** The default initial state. */
   readonly initial: T['state'];
+  /** Every state a record may be created in, the default first. */
+  readonly initialStates: readonly T['state'][];
   readonly states: readonly T['state'][];
   readonly parameters: ParametersOf<T>;
   readonly transitions: ReadonlyMap<string, LifecycleTransition<T>>;
@@ -227,7 +249,14 @@ export function defineLifecycle<T extends LifecycleTypes>(
     if (!states.has(state))
       throw invalid(name, `${where} names unknown state "${state}".`);
   };
-  known(definition.initial, 'initial');
+  const initialStates = list(definition.initial);
+  if (!initialStates.length)
+    throw invalid(name, 'it declares no initial state.');
+  for (const state of initialStates) known(state, 'initial');
+  const stateField = definition.stateField ?? 'status';
+  const changedAtField = definition.changedAtField ?? 'statusChangedAt';
+  const versionField = definition.versionField ?? 'lifecycleVersion';
+  const owned = new Set(['id', stateField, changedAtField, versionField]);
 
   const effects = new Map<string, EffectDefinition<T>>();
   const collect = (effect: EffectDefinition<T>, where: string): void => {
@@ -255,6 +284,12 @@ export function defineLifecycle<T extends LifecycleTypes>(
         name,
         `transition "${key}" can reach ${to.length} states and needs a route.`,
       );
+    for (const field of transition.accept ?? [])
+      if (owned.has(field))
+        throw invalid(
+          name,
+          `transition "${key}" may not accept "${field}"; the lifecycle owns it.`,
+        );
     for (const effect of transition.effects ?? [])
       collect(effect, `transition "${key}"`);
     transitions.set(
@@ -320,10 +355,11 @@ export function defineLifecycle<T extends LifecycleTypes>(
   return Object.freeze({
     name,
     collection: definition.collection ?? name,
-    stateField: definition.stateField ?? 'status',
-    changedAtField: definition.changedAtField ?? 'statusChangedAt',
-    versionField: definition.versionField ?? 'lifecycleVersion',
-    initial: definition.initial,
+    stateField,
+    changedAtField,
+    versionField,
+    initial: initialStates[0],
+    initialStates,
     states: [...states],
     parameters: Object.freeze({
       ...(definition.parameters ?? {}),

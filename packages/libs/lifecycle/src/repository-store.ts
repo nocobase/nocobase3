@@ -82,7 +82,7 @@ function toTransition(row: Row): TransitionEntry {
     lifecycle: String(row.lifecycle),
     recordId: String(row.recordId),
     transition: String(row.transition),
-    from: String(row.from),
+    from: text(row.from),
     to: String(row.to),
     actorId: String(row.actorId),
     input: json<JsonObject>(row.input, {}),
@@ -141,6 +141,16 @@ class RepositoryLifecycleStore implements LifecycleStore {
       filter: { id: key(id) },
     });
     return row ? toRecord(row) : undefined;
+  }
+
+  public async createRecord(
+    collection: string,
+    values: Readonly<Record<string, unknown>>,
+  ): Promise<LifecycleRecord> {
+    const created = await this.repository(collection).createOne({
+      values: asRow(values),
+    });
+    return toRecord(created.record);
   }
 
   public async updateRecordIf(

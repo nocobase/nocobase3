@@ -3,6 +3,8 @@ import {
   type Lifecycle,
   type LifecycleRecord,
   type TransitionContext,
+  type GuardVerdict,
+  type InputProblem,
 } from '@nocobase/lifecycle';
 
 import { person } from '../../shared/people.js';
@@ -31,18 +33,19 @@ export interface TicketTypes {
 
 type Context = TransitionContext<TicketTypes>;
 
-function isAgent({ actor }: Context): boolean {
-  return person(actor.id)?.role === 'agent';
+// A guard's message is what the page shows beside a button it greys out.
+function isAgent({ actor }: Context): GuardVerdict {
+  return person(actor.id)?.role === 'agent' || '只有客服可以处理工单';
 }
 
-function isRequester({ record, actor }: Context): boolean {
-  return actor.id === record.requesterId;
+function isRequester({ record, actor }: Context): GuardVerdict {
+  return actor.id === record.requesterId || '只有提交工单的客户可以操作';
 }
 
-function messageRequired(input: Record<string, unknown>): string | null {
+function messageRequired(input: Record<string, unknown>): InputProblem[] {
   return typeof input.message === 'string' && input.message.trim()
-    ? null
-    : '请填写内容';
+    ? []
+    : [{ field: 'message', message: '请填写内容' }];
 }
 
 /**
@@ -108,10 +111,15 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
         from: 'closed',
         to: 'open',
         // Only the customer, and only for a while after it closed.
-        guard: (context) =>
-          isRequester(context) &&
-          context.now.getTime() - Date.parse(context.record.statusChangedAt) <
-            context.parameters.reopenDays * 86_400_000,
+        guard: (context) => {
+          const requester = isRequester(context);
+          if (requester !== true) return requester;
+          return (
+            context.now.getTime() - Date.parse(context.record.statusChangedAt) <
+              context.parameters.reopenDays * 86_400_000 ||
+            `关闭超过 ${context.parameters.reopenDays} 天，不能再重新打开，请提交新工单`
+          );
+        },
         validate: messageRequired,
         set: () => ({ closedReason: null }),
         effects: [notifyAssignee],

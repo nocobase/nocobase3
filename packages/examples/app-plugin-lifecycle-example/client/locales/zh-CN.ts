@@ -197,6 +197,8 @@ const zhCN: LifecycleExampleResource = {
   lifecycle: {
     title: '生命周期详情',
     hint: 'lifecycle 为这条记录记下的内容。真实应用不会把这些展示给业务用户。',
+    available: '当前身份可执行的转换',
+    final: '这个状态没有可执行的转换。',
     states: '状态',
     parameters: '参数',
     transitions: '转换记录',
@@ -234,6 +236,7 @@ const zhCN: LifecycleExampleResource = {
     paid: '已付款',
   },
   transitions: {
+    create: '创建',
     accept: '受理',
     reply: '回复客户',
     customerReply: '客户回复',

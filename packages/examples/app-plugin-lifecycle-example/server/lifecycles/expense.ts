@@ -4,6 +4,8 @@ import {
   type Lifecycle,
   type LifecycleRecord,
   type TransitionContext,
+  type GuardVerdict,
+  type InputProblem,
 } from '@nocobase/lifecycle';
 
 import { itemProblems, parseItems } from '../../shared/expense.js';
@@ -58,12 +60,13 @@ function routeByAmount({ record, parameters }: Context): ExpenseState {
     : 'awaitingManager';
 }
 
-function isApplicant({ record, actor }: Context): boolean {
-  return actor.id === record.applicantId;
+// A guard's message is what the page shows beside a button it greys out.
+function isApplicant({ record, actor }: Context): GuardVerdict {
+  return actor.id === record.applicantId || '只能操作自己的报销单';
 }
 
-function isApprover({ record, actor }: Context): boolean {
-  return actor.id === record.approverId;
+function isApprover({ record, actor }: Context): GuardVerdict {
+  return actor.id === record.approverId || '只有当前审批人可以处理';
 }
 
 /** A report with no items, or an item without a date, cannot be submitted. */
@@ -77,10 +80,10 @@ function readyToSubmit({ record }: Context): Record<string, unknown> {
   return { approverId: MANAGERS[record.applicantId] ?? FINANCE_DIRECTOR };
 }
 
-function reasonRequired(input: Record<string, unknown>): string | null {
+function reasonRequired(input: Record<string, unknown>): InputProblem[] {
   return typeof input.reason === 'string' && input.reason.trim()
-    ? null
-    : '请填写原因';
+    ? []
+    : [{ field: 'reason', message: '请填写原因' }];
 }
 
 /**
@@ -186,8 +189,9 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
         from: 'approved',
         to: 'paid',
         guard: ({ actor }) => actor.system === true,
-        // The input is what the payment effect returned.
-        set: ({ input }) => ({ paymentRef: text(input.paymentRef) || null }),
+        // The input is what the payment effect returned; its reference is
+        // written onto the report with the state.
+        accept: ['paymentRef'],
       },
     },
     // Whichever transition enters the state, these run.

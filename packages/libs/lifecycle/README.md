@@ -34,11 +34,11 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
   });
 ```
 
-| Concept    | What it is                                                                                                                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transition | `from`, `to`, and optionally `guard` (may this actor fire it), `validate` (input), `route` (pick one of several `to`) and `set` (other fields)                                                        |
-| Effect     | A function run after commit, with `retry`, a stable `idempotencyKey`, and `onSuccess`/`onFailure` transitions, fired with the effect's result or its error as input; `onEnter` runs effects per state |
-| Trigger    | Fires a transition on records idle in a state for longer than `after`, found by a query rather than a timer per record                                                                                |
+| Concept    | What it is                                                                                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transition | `from`, `to`, and optionally `guard` (may this actor fire it, and if not, why), `validate` (input problems), `accept` (input fields written onto the record), `route` (pick one of several `to`) and `set` (other fields) |
+| Effect     | A function run after commit, with `retry`, a stable `idempotencyKey`, and `onSuccess`/`onFailure` transitions, fired with the effect's result or its error as input; `onEnter` runs effects per state                     |
+| Trigger    | Fires a transition on records idle in a state for longer than `after`, found by a query rather than a timer per record                                                                                                    |
 
 `LifecycleRuntime.fire()` checks the state, writes the record, a transition log entry and the effect runs in one transaction, guarded by a conditional update so two concurrent transitions of one record cannot both commit. The condition is the state and an integer version every transition increments (`versionField`, `lifecycleVersion` by default), so two transitions that leave the state unchanged — an escalation, a follow-up reply — are refused just the same. `fire()` also takes `expect: { version }`, so a decision made on a page showing an older version is refused rather than applied.
 
@@ -53,6 +53,14 @@ runtime.register(requestLifecycle, {
   services: (handle) => ({ store: store.bound(handle) }),
 });
 ```
+
+## Explaining refusals and creating records
+
+A guard answers `true` to allow a transition, or refuses it with `false`, a message, or `{ code, message }`. `available()` returns every transition the record's state allows with `allowed` and `blockers`, one per guard that refused, and `can(name, id, transition, actor)` answers for one transition, a `state` blocker included when the record is in the wrong state. `fire()` asks the same guards in the same way and refuses with a `LifecycleError` that carries the blockers, so what a button shows and what a click does cannot disagree. `validate` returns a message, a list of `{ field, message }` problems, or nothing; the refusal carries the problems.
+
+Other code can veto transitions without touching the definition: `runtime.addGuard(name, transitions, guard)` adds a guard to some transitions or to `'*'`, its refusals join the blockers, and the function it returns removes it.
+
+`runtime.create(name, values, { actor, state })` creates a record in an initial state — `initial` may list several, the first being the default — and in the same transaction writes a log entry from `null` under `CREATE_TRANSITION` and the runs the state's `onEnter` effects owe, so a record's history starts at its creation. The transition log's `from` is therefore nullable.
 
 ## Testing a lifecycle
 

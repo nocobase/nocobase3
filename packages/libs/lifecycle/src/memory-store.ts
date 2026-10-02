@@ -104,6 +104,13 @@ export class MemoryLifecycleStore implements LifecycleStore {
     return Promise.resolve(this.rows(collection).get(String(id)));
   }
 
+  public createRecord(
+    collection: string,
+    values: Readonly<Record<string, unknown>>,
+  ): Promise<LifecycleRecord> {
+    return Promise.resolve(this.insertRecord(collection, values));
+  }
+
   public updateRecordIf(
     collection: string,
     id: RecordId,

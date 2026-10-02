@@ -285,21 +285,19 @@ export class OfficeFlowsService {
   ): Promise<Plain> {
     if (actor !== DATA_REQUEST_ROLES.applicant)
       throw new OfficeFlowsError('FORBIDDEN', '只有申请人可以新建申请');
-    const now = this.store.now();
-    const created = await this.database
-      .repository(COLLECTIONS.dataRequests)
-      .createOne({
-        values: {
-          ...normalizeDataRequest(form),
-          number: await this.store.nextNumber('SJSY'),
-          applicantId: actor,
-          status: 'draft',
-          statusChangedAt: now,
-          lifecycleVersion: 0,
-          createdAt: now,
-        },
-      });
-    return { ...created.record };
+    // Created through the lifecycle: the request's history starts here.
+    const number = await this.store.nextNumber('SJSY');
+    const { record } = await this.runtime.create(
+      'dataRequests',
+      {
+        ...normalizeDataRequest(form),
+        number,
+        applicantId: actor,
+        createdAt: this.store.now(),
+      },
+      { actor: { id: actor } },
+    );
+    return { ...record };
   }
 
   public async updateDataRequest(
@@ -464,31 +462,29 @@ export class OfficeFlowsService {
   public async createIncoming(values: Plain, actor: string): Promise<Plain> {
     if (actor !== INCOMING_ROLES.registrar)
       throw new OfficeFlowsError('FORBIDDEN', '只有办公室收文员可以录入收文');
-    const now = this.store.now();
-    const created = await this.database
-      .repository(COLLECTIONS.incoming)
-      .createOne({
-        values: {
-          title: '',
-          code: '',
-          sender: '',
-          senderRef: '',
-          summary: '',
-          officeOpinion: '',
-          distributionType: '',
-          officeHeadId: INCOMING_ROLES.officeHead,
-          officeLeaderId: INCOMING_ROLES.officeLeader,
-          attachments: [],
-          ...pick(values, INCOMING_FIELDS),
-          number: await this.store.nextNumber('SWSQ'),
-          registrarId: actor,
-          status: 'draft',
-          statusChangedAt: now,
-          lifecycleVersion: 0,
-          createdAt: now,
-        } as RepositoryRecord,
-      });
-    return { ...created.record };
+    // Created through the lifecycle: the document's history starts here.
+    const number = await this.store.nextNumber('SWSQ');
+    const { record } = await this.runtime.create(
+      'incoming',
+      {
+        title: '',
+        code: '',
+        sender: '',
+        senderRef: '',
+        summary: '',
+        officeOpinion: '',
+        distributionType: '',
+        officeHeadId: INCOMING_ROLES.officeHead,
+        officeLeaderId: INCOMING_ROLES.officeLeader,
+        attachments: [],
+        ...pick(values, INCOMING_FIELDS),
+        number,
+        registrarId: actor,
+        createdAt: this.store.now(),
+      },
+      { actor: { id: actor } },
+    );
+    return { ...record };
   }
 
   public async updateIncoming(
