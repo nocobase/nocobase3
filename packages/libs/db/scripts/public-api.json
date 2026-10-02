@@ -37,6 +37,7 @@
         "defineCollectionMetadata",
         "defineDatabase",
         "defineMigration",
+        "defineRepositoryEventMeta",
         "defineSeed",
         "expandPolicyRefs",
         "extractLegacyCollectionMetadata",
