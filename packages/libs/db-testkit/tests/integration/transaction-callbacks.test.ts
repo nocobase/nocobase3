@@ -176,7 +176,7 @@ describeIntegrationDatabases('transaction callbacks', (context) => {
       });
       transaction.afterCommit(async () => {
         const collection = await connection.collections.get('callbackOrders');
-        fieldsSeen = collection?.fields.map((field) => field.name) ?? [];
+        fieldsSeen = collection?.fields?.map((field) => field.name) ?? [];
       });
     });
 
@@ -199,7 +199,7 @@ describeIntegrationDatabases('transaction callbacks', (context) => {
       });
       transaction.afterCommit(async () => {
         const collection = await connection.collections.get('callbackOrders');
-        fieldsSeen = collection?.fields.map((field) => field.name) ?? [];
+        fieldsSeen = collection?.fields?.map((field) => field.name) ?? [];
       });
     });
 
