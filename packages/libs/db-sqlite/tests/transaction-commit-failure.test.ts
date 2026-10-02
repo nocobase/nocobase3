@@ -14,8 +14,10 @@ import sqlite from '../src/index.js';
 const require = createRequire(import.meta.url);
 
 interface NativeDatabase {
+  readonly inTransaction: boolean;
   exec(sql: string): unknown;
   close(): void;
+  __knex__disposed?: unknown;
 }
 const BetterSqlite3 = require('better-sqlite3') as new (
   filename: string,
@@ -92,6 +94,9 @@ describe('SQLite transaction whose COMMIT fails', () => {
     const database = createManager(filename);
     cleanups.push(() => database.destroy());
     const client = await database.connection().client<Knex>();
+    // A reader only blocks COMMIT in rollback-journal mode; in WAL it would
+    // succeed and the test would not exercise the failed COMMIT at all.
+    await client.raw('pragma journal_mode = delete');
     await client.raw('pragma busy_timeout = 0');
     await client.raw('create table items (id integer primary key)');
 
@@ -128,22 +133,49 @@ describe('SQLite transaction whose COMMIT fails', () => {
       if (/^rollback\b/i.test(sql)) throw new Error('disk I/O error');
       return exec(sql);
     };
+    const close = vi.spyOn(native, 'close');
+    // Silences the warning Knex prints for the discarded connection.
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     cleanups.push(() => log.mockRestore());
 
     await expect(insertOrphan(database)).rejects.toThrow(
       'FOREIGN KEY constraint failed',
     );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to roll back after a failed COMMIT'),
-    );
+    expect(native.__knex__disposed).toMatchObject({
+      message: 'disk I/O error',
+    });
 
     // The pool replaces the connection; closing it discarded the open
     // transaction, and the replacement starts transactions again.
     expect(await count(database, 'children')).toBe(0);
+    expect(close).toHaveBeenCalledTimes(1);
     await database.transaction(async (connection) => {
       await (await connection.client<Knex>())('parents').insert({ id: 1 });
     });
     expect(await count(database, 'parents')).toBe(1);
+  });
+
+  it('leaves a connection alone once the transaction has released it', async () => {
+    const database = createManager(':memory:');
+    cleanups.push(() => database.destroy());
+    const client = await database.connection().client<Knex>();
+    await client.raw('create table items (id integer primary key)');
+    const native = (await client.client.acquireConnection()) as NativeDatabase;
+    await client.client.releaseConnection(native);
+    const exec = vi.spyOn(native, 'exec');
+
+    // The container commits itself, so Knex's own commit afterwards is
+    // rejected as already complete after the connection was released. A
+    // transaction open on the connection by then belongs to the next caller
+    // and must not be rolled back.
+    await client.transaction(async (trx) => {
+      await trx('items').insert({ id: 1 });
+      await trx.commit();
+      native.exec('begin');
+    });
+    expect(native.inTransaction).toBe(true);
+    expect(exec).not.toHaveBeenCalledWith(expect.stringMatching(/rollback/i));
+    native.exec('rollback');
+    expect(await count(database, 'items')).toBe(1);
   });
 });

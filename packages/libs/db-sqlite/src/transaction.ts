@@ -6,11 +6,15 @@ const require = createRequire(import.meta.url);
 interface NativeConnection {
   readonly inTransaction: boolean;
   exec(sql: string): unknown;
+  // Knex sets this to the owning transaction's id while that transaction
+  // holds the connection, and deletes it when the connection is released.
+  __knexTxId?: string;
   // Knex's pool validation destroys a connection carrying this flag instead
   // of handing it out again.
   __knex__disposed?: unknown;
 }
 interface KnexTransaction {
+  txid: string;
   client: { logger: { warn(message: string): void } };
   trxClient: {
     query(connection: NativeConnection, sql: string): Promise<unknown>;
@@ -54,6 +58,11 @@ class SqliteTransaction extends Transaction_Sqlite {
   // Runs synchronously on the native connection, before the rejection lets
   // Knex release the connection to the next caller.
   private rollbackFailedCommit(connection: NativeConnection): void {
+    // The COMMIT is also rejected, without running, when the transaction was
+    // already completed: the container called `trx.commit()` itself and Knex
+    // then commits again. By then the connection has been released, and a
+    // transaction it is now open for belongs to the next caller.
+    if (connection.__knexTxId !== this.txid) return;
     if (!connection.inTransaction) return;
     try {
       connection.exec('ROLLBACK');
