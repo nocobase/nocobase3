@@ -1,6 +1,7 @@
 import {
   describeLifecycle,
   type EffectDefinition,
+  type EffectRetry,
   type Lifecycle,
   type LifecycleDescription,
   type TransitionContext,
@@ -21,6 +22,7 @@ import {
 import type {
   EffectRun,
   EffectRunChanges,
+  EffectRunQuery,
   LifecycleStore,
   TransitionEntry,
 } from './store.js';
@@ -98,13 +100,38 @@ export interface FireOptions {
   readonly actor: LifecycleActor;
   readonly input?: JsonObject;
   readonly expect?: FireExpectation;
+  /**
+   * The caller's key for this request — a form submission, a webhook
+   * delivery. Sent again for the same record, it finds the first request's
+   * log entry and changes nothing.
+   */
+  readonly requestId?: string;
 }
 
 export interface FireResult {
-  /** The record as this transition committed it. */
+  /** The record as this transition committed it, or as it is now for a replay. */
   readonly record: LifecycleRecord;
   readonly entry: TransitionEntry;
   readonly effectRuns: readonly EffectRun[];
+  /** True when a request with this `requestId` had already fired. */
+  readonly replayed?: boolean;
+}
+
+/** An effect run, and whether this process knows the effect it names. */
+export interface EffectRunView extends EffectRun {
+  /**
+   * False for an effect no registered lifecycle declares: renamed or
+   * removed, or known only to another process in a rolling deploy. Such a
+   * run stays queued rather than being given up on.
+   */
+  readonly registered: boolean;
+}
+
+export interface PruneOptions {
+  /** Runs last changed before this instant. */
+  readonly olderThan: Date | string;
+  /** Defaults to succeeded and cancelled runs. */
+  readonly statuses?: readonly EffectRun['status'][];
 }
 
 export interface AvailableTransition {
@@ -221,6 +248,13 @@ function isRefusal(
   return error instanceof LifecycleError && codes.has(error.code);
 }
 
+/** The delay before retrying after `attempt`: grows by `factor`, capped at `maxMs`. */
+function backoffMs(retry: EffectRetry | undefined, attempt: number): number {
+  const base = retry?.backoffMs ?? 0;
+  const delay = base * (retry?.factor ?? 1) ** (attempt - 1);
+  return Math.min(delay, retry?.maxMs ?? Number.POSITIVE_INFINITY);
+}
+
 class InlineDispatcher implements EffectDispatcher {
   public constructor(private readonly runtime: LifecycleRuntime) {}
 
@@ -244,6 +278,8 @@ export class LifecycleRuntime {
   private readonly beforeEffect: LifecycleRuntimeOptions['beforeEffect'];
   private readonly lifecycles = new Map<string, Registered>();
   private readonly subscriptions: Subscription[] = [];
+  /** Attempts running in this process, so `cancelRun()` can abort them. */
+  private readonly attempts = new Map<string, AbortController>();
 
   public constructor(options: LifecycleRuntimeOptions) {
     this.store = options.store;
@@ -341,6 +377,7 @@ export class LifecycleRuntime {
     const committed = await this.store.transaction((store) =>
       this.decide(store, registered, id, transition, options, now),
     );
+    if (committed.replayed) return committed;
     await this.emit(registered, committed, options.actor);
     for (const run of committed.effectRuns) await this.handOver(run.id, null);
     return committed;
@@ -504,6 +541,7 @@ export class LifecycleRuntime {
         input: options.input ?? {},
         at,
         version: 1,
+        requestId: null,
       });
       const effectRuns = await this.owe(
         store,
@@ -581,7 +619,17 @@ export class LifecycleRuntime {
     if (!claimed) return this.store.findEffectRun(runId);
 
     const { lifecycle } = registered;
-    let outcome: { ok: true; result: JsonValue } | { ok: false; error: string };
+    let outcome:
+      | { ok: true; result: JsonValue }
+      | { ok: false; error: string; cause: unknown };
+    // One controller per attempt: the caller's signal, cancelRun() and the
+    // timeout all abort it.
+    const controller = new AbortController();
+    const forward = (): void => controller.abort(signal.reason);
+    if (signal.aborted) forward();
+    else signal.addEventListener('abort', forward, { once: true });
+    this.attempts.set(runId, controller);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const entry = await this.store.findTransition(run.transitionId);
       const record = await this.store.findRecord(
@@ -591,30 +639,57 @@ export class LifecycleRuntime {
       if (!entry || !record)
         throw new Error('Its transition or record no longer exists.');
       await this.beforeEffect?.(effect.name, attempt);
-      const value: unknown = await effect.run({
-        record,
-        input: entry.input,
-        transition: entry.transition,
-        from: entry.from,
-        to: entry.to,
-        attempt,
-        idempotencyKey: `${lifecycle.name}:${runId}`,
-        parameters: this.parameters(
-          lifecycle.name,
-        ) as ParametersOf<LifecycleTypes>,
-        services: registered.services(undefined) as ServicesOf<LifecycleTypes>,
-        signal,
-        now: this.clock(),
-      });
+      const work = Promise.resolve(
+        effect.run({
+          record,
+          input: entry.input,
+          transition: entry.transition,
+          from: entry.from,
+          to: entry.to,
+          attempt,
+          idempotencyKey: `${lifecycle.name}:${runId}`,
+          parameters: this.parameters(
+            lifecycle.name,
+          ) as ParametersOf<LifecycleTypes>,
+          services: registered.services(
+            undefined,
+          ) as ServicesOf<LifecycleTypes>,
+          signal: controller.signal,
+          now: this.clock(),
+        }),
+      );
+      const limit = effect.timeoutMs;
+      const value: unknown =
+        limit === undefined
+          ? await work
+          : await Promise.race([
+              work,
+              new Promise<never>((_, reject) => {
+                timer = setTimeout(() => {
+                  const error = new Error(`Timed out after ${limit} ms.`);
+                  controller.abort(error);
+                  reject(error);
+                }, limit);
+              }),
+            ]);
       outcome = { ok: true, result: storable(value) };
     } catch (error) {
-      outcome = { ok: false, error: errorText(error) };
+      outcome = { ok: false, error: errorText(error), cause: error };
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', forward);
+      this.attempts.delete(runId);
     }
 
     const finishedAt = this.clock().toISOString();
-    if (!outcome.ok && attempt < run.maxAttempts) {
-      const backoff = effect.retry?.backoffMs ?? 0;
-      const runAfter = new Date(this.clock().getTime() + backoff).toISOString();
+    if (
+      !outcome.ok &&
+      attempt < run.maxAttempts &&
+      (effect.retry?.shouldRetry?.(outcome.cause, attempt) ?? true)
+    ) {
+      const runAfter = new Date(
+        this.clock().getTime() + backoffMs(effect.retry, attempt),
+      ).toISOString();
       const requeued = await this.store.updateEffectRun(
         runId,
         { status: 'running', attempts: attempt },
@@ -699,6 +774,96 @@ export class LifecycleRuntime {
         { runId, error: outcome.error },
       );
     return this.store.findEffectRun(runId);
+  }
+
+  /**
+   * Effect runs for an operations page: the stuck, the failed, the dead.
+   * Each says whether this process knows its effect.
+   */
+  public async listEffectRuns(
+    query: EffectRunQuery = {},
+  ): Promise<EffectRunView[]> {
+    const runs = await this.store.listEffectRuns(query);
+    return runs.map((run) => ({
+      ...run,
+      registered:
+        this.lifecycles
+          .get(run.lifecycle)
+          ?.lifecycle.effects.has(run.effect) === true,
+    }));
+  }
+
+  /**
+   * Runs a failed, dead or cancelled run again from its first attempt —
+   * once whatever made it fail is fixed. Its earlier `onFailure` stays fired;
+   * if it now succeeds, its `onSuccess` is refused should the record have
+   * moved on.
+   */
+  public async retryRun(runId: string): Promise<EffectRun | undefined> {
+    const run = await this.store.findEffectRun(runId);
+    if (!run) return undefined;
+    if (
+      run.status !== 'failed' &&
+      run.status !== 'dead' &&
+      run.status !== 'cancelled'
+    )
+      throw new LifecycleError(
+        'INVALID_STATE',
+        `Effect run "${runId}" is ${run.status}; only a failed, dead or cancelled run can be retried.`,
+      );
+    const reset = await this.store.updateEffectRun(
+      runId,
+      { status: run.status, attempts: run.attempts },
+      {
+        status: 'queued',
+        attempts: 0,
+        claimedAt: null,
+        runAfter: null,
+        updatedAt: this.clock().toISOString(),
+      },
+    );
+    if (reset) await this.handOver(runId, null);
+    return this.store.findEffectRun(runId);
+  }
+
+  /**
+   * Gives up on a queued or running run. A running attempt in this process
+   * is aborted; one elsewhere finds the run cancelled when it finishes and
+   * its outcome is discarded. Nothing follows from a cancelled run.
+   */
+  public async cancelRun(runId: string): Promise<EffectRun | undefined> {
+    const run = await this.store.findEffectRun(runId);
+    if (!run) return undefined;
+    if (run.status !== 'queued' && run.status !== 'running')
+      throw new LifecycleError(
+        'INVALID_STATE',
+        `Effect run "${runId}" is ${run.status}; only a queued or running run can be cancelled.`,
+      );
+    const cancelled = await this.store.updateEffectRun(
+      runId,
+      { status: run.status, attempts: run.attempts },
+      {
+        status: 'cancelled',
+        error: 'Cancelled.',
+        claimedAt: null,
+        updatedAt: this.clock().toISOString(),
+      },
+    );
+    if (cancelled)
+      this.attempts.get(runId)?.abort(new Error('The run was cancelled.'));
+    return this.store.findEffectRun(runId);
+  }
+
+  /** Deletes finished runs last changed before `olderThan`; returns how many. */
+  public prune(options: PruneOptions): Promise<number> {
+    const olderThan =
+      typeof options.olderThan === 'string'
+        ? options.olderThan
+        : options.olderThan.toISOString();
+    return this.store.deleteEffectRuns({
+      statuses: options.statuses ?? ['succeeded', 'cancelled'],
+      updatedBefore: olderThan,
+    });
   }
 
   /**
@@ -828,6 +993,20 @@ export class LifecycleRuntime {
         'RECORD_NOT_FOUND',
         `No ${lifecycle.collection} record "${String(id)}".`,
       );
+    if (options.requestId !== undefined) {
+      const earlier = await store.findTransitionByRequest(
+        lifecycle.name,
+        String(current.id),
+        options.requestId,
+      );
+      if (earlier)
+        return {
+          record: current,
+          entry: earlier,
+          effectRuns: [],
+          replayed: true,
+        };
+    }
     const expected = options.expect;
     if (
       expected?.version !== undefined &&
@@ -884,6 +1063,7 @@ export class LifecycleRuntime {
       input: plan.input,
       at,
       version: plan.nextVersion,
+      requestId: options.requestId ?? null,
     });
     const record = Object.freeze({
       ...current,

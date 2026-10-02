@@ -58,8 +58,11 @@ const migration: MigrationDefinition = defineMigration({
       table.json('input').notNull().defaultTo({});
       table.datetimeTz('at').notNull();
       table.integer('version').notNull();
+      // The caller's request key: a repeated request finds its entry.
+      table.string('requestId');
       table.index(['lifecycle', 'recordId', 'id']);
       table.unique(['lifecycle', 'recordId', 'version']);
+      table.unique(['lifecycle', 'recordId', 'requestId']);
     });
 
     await builder.createCollection('lifecycleExampleEffectRuns', (table) => {

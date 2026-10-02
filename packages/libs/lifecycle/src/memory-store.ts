@@ -2,6 +2,7 @@ import type {
   EffectRun,
   EffectRunChanges,
   EffectRunCondition,
+  EffectRunPruneQuery,
   EffectRunQuery,
   RecordCondition,
   IdleRecordQuery,
@@ -155,7 +156,8 @@ export class MemoryLifecycleStore implements LifecycleStore {
         (other) =>
           other.lifecycle === entry.lifecycle &&
           other.recordId === entry.recordId &&
-          other.version === entry.version,
+          (other.version === entry.version ||
+            (entry.requestId !== null && other.requestId === entry.requestId)),
       )
     )
       return Promise.reject(
@@ -171,6 +173,21 @@ export class MemoryLifecycleStore implements LifecycleStore {
   public findTransition(id: string): Promise<TransitionEntry | undefined> {
     return Promise.resolve(
       this.state.transitions.find((entry) => entry.id === id),
+    );
+  }
+
+  public findTransitionByRequest(
+    lifecycle: string,
+    recordId: string,
+    requestId: string,
+  ): Promise<TransitionEntry | undefined> {
+    return Promise.resolve(
+      this.state.transitions.find(
+        (entry) =>
+          entry.lifecycle === lifecycle &&
+          entry.recordId === recordId &&
+          entry.requestId === requestId,
+      ),
     );
   }
 
@@ -217,6 +234,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
       (run) =>
         (query.lifecycle === undefined || run.lifecycle === query.lifecycle) &&
         (query.recordId === undefined || run.recordId === query.recordId) &&
+        (query.effect === undefined || run.effect === query.effect) &&
         (query.status === undefined || run.status === query.status) &&
         (query.claimedBefore === undefined ||
           (run.claimedAt !== null && run.claimedAt < query.claimedBefore)),
@@ -224,6 +242,19 @@ export class MemoryLifecycleStore implements LifecycleStore {
     return Promise.resolve(
       query.limit === undefined ? runs : runs.slice(0, query.limit),
     );
+  }
+
+  public deleteEffectRuns(query: EffectRunPruneQuery): Promise<number> {
+    let deleted = 0;
+    for (const [id, run] of this.state.effectRuns)
+      if (
+        query.statuses.includes(run.status) &&
+        run.updatedAt < query.updatedBefore
+      ) {
+        this.state.effectRuns.delete(id);
+        deleted += 1;
+      }
+    return Promise.resolve(deleted);
   }
 
   private rows(collection: string): Map<string, LifecycleRecord> {

@@ -117,6 +117,19 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       context.json({ fired: await service.runTriggers() }),
     );
 
+    // An operator's tools for the effect runs the record panel lists.
+    router.post('/lifecycle-example/effect-runs/:id/retry', async (context) => {
+      await service.retryRun(context.req.param('id'));
+      return context.body(null, 204);
+    });
+    router.post(
+      '/lifecycle-example/effect-runs/:id/cancel',
+      async (context) => {
+        await service.cancelRun(context.req.param('id'));
+        return context.body(null, 204);
+      },
+    );
+
     router.get('/lifecycle-example/tickets', async (context) =>
       context.json({
         records: await service.listTickets(actor(context.req.query('actAs'))),
@@ -186,6 +199,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           values.transition,
           isObject(values.input) ? (values.input as JsonObject) : {},
           actor(values.actAs),
+          typeof values.requestId === 'string' ? values.requestId : undefined,
         ),
       );
     });

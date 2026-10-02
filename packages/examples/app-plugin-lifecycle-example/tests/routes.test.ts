@@ -93,15 +93,18 @@ describe('lifecycle example routes', () => {
         transition: 'approve',
         actAs: 'chen',
         input: { comment: 'OK' },
+        requestId: 'click-1',
       }),
     );
     expect(response.status).toBe(200);
+    // The request key travels with the click, so a retried request fires once.
     expect(service.fire).toHaveBeenCalledWith(
       'expenses',
       '1',
       'approve',
       { comment: 'OK' },
       'chen',
+      'click-1',
     );
   });
 

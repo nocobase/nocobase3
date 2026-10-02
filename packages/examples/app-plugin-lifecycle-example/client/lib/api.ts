@@ -18,7 +18,8 @@ export interface EffectRun {
   readonly id: string;
   readonly transitionId: string;
   readonly effect: string;
-  readonly status: 'queued' | 'running' | 'succeeded' | 'failed' | 'dead';
+  readonly status:
+    'queued' | 'running' | 'succeeded' | 'failed' | 'dead' | 'cancelled';
   readonly attempts: number;
   readonly maxAttempts: number;
   readonly result: unknown;
@@ -93,6 +94,8 @@ export function exampleApi(client: ApiClient): {
     input?: Plain,
   ): Promise<RecordDetail>;
   runTriggers(): Promise<number>;
+  retryRun(runId: string): Promise<void>;
+  cancelRun(runId: string): Promise<void>;
 } {
   return {
     list: (name, actAs, view) =>
@@ -122,8 +125,21 @@ export function exampleApi(client: ApiClient): {
       client.request<RecordDetail>({
         method: 'POST',
         path: `${base}/${name}/${encodeURIComponent(id)}/fire`,
-        json: { actAs, transition, input },
+        // One key per click: a request the network retries fires once.
+        json: { actAs, transition, input, requestId: crypto.randomUUID() },
       }),
+    retryRun: async (runId) => {
+      await client.request({
+        method: 'POST',
+        path: `${base}/effect-runs/${encodeURIComponent(runId)}/retry`,
+      });
+    },
+    cancelRun: async (runId) => {
+      await client.request({
+        method: 'POST',
+        path: `${base}/effect-runs/${encodeURIComponent(runId)}/cancel`,
+      });
+    },
     runTriggers: async () =>
       (
         await client.request<{ fired: number }>({

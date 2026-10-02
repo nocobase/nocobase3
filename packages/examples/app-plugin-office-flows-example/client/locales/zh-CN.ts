@@ -90,6 +90,7 @@ const zhCN: OfficeFlowsExampleResource = {
     succeeded: '成功',
     failed: '失败',
     dead: '已放弃',
+    cancelled: '已取消',
   },
 };
 

@@ -72,6 +72,12 @@ Other code can veto transitions without touching the definition: `runtime.addGua
 
 `runtime.on(event, filter, listener)` hears transitions after they commit: `completed` once per transition and creation, `entered` once per state entered, and `announce` once per transition the new state allows, which is what a to-do list needs. A filter narrows by `lifecycle`, `transition` and `state`. Delivery is best effort — a listener that throws is logged, and nothing is delivered again after a crash — so work that must happen belongs in an effect, not a listener.
 
+## Operating effects
+
+`retry` takes `attempts`, `backoffMs`, a growth `factor`, a cap `maxMs` and `shouldRetry(error, attempt)` for errors not worth another try, such as a declined payment; `timeoutMs` fails an attempt that runs longer and aborts its signal. `fire()` takes a `requestId`: the same request sent again for a record finds its first log entry and changes nothing, which makes a retried form submission or webhook safe — the transition log keeps it under a unique index.
+
+`listEffectRuns(query)` lists runs by lifecycle, record, effect and status, each saying whether this process knows its effect; a run naming an effect no registered lifecycle declares stays queued, because in a rolling deploy another process may know it. `retryRun(id)` runs a failed, dead or cancelled run again from its first attempt; `cancelRun(id)` gives up on a queued or running one, aborting an attempt in this process and discarding the outcome of one elsewhere. `prune({ olderThan })` deletes succeeded and cancelled runs last changed before then.
+
 ## Testing a lifecycle
 
 `@nocobase/lifecycle/testing` runs one lifecycle on a memory store, a fake clock and in-process effects, so waiting, retrying and continuing are unit tests:

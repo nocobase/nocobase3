@@ -12,6 +12,9 @@ import { Button } from './ui/button.js';
 
 type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
 
+const RETRYABLE: ReadonlySet<string> = new Set(['failed', 'dead', 'cancelled']);
+const CANCELLABLE: ReadonlySet<string> = new Set(['queued', 'running']);
+
 const TONES: Record<Tone, string> = {
   neutral: 'bg-muted text-muted-foreground',
   info: 'bg-primary/10 text-primary',
@@ -99,6 +102,20 @@ export function LifecyclePanel({
   const transitionNames = new Map(
     detail.history.transitions.map((entry) => [entry.id, entry.transition]),
   );
+
+  // What an operator does with a run that is stuck or gave up.
+  const operate = async (
+    action: 'retryRun' | 'cancelRun',
+    runId: string,
+  ): Promise<void> => {
+    try {
+      await exampleApi(client)[action](runId);
+      setNote('');
+      await onChange();
+    } catch (cause) {
+      setNote(errorMessage(cause));
+    }
+  };
 
   const runTriggers = async (): Promise<void> => {
     try {
@@ -286,9 +303,10 @@ export function LifecyclePanel({
                       <th className='py-1 pr-3 font-normal whitespace-nowrap'>
                         {t('lifecycle.columns.attempts')}
                       </th>
-                      <th className='py-1 font-normal whitespace-nowrap'>
+                      <th className='py-1 pr-3 font-normal whitespace-nowrap'>
                         {t('lifecycle.columns.error')}
                       </th>
+                      <th className='py-1 font-normal whitespace-nowrap' />
                     </tr>
                   </thead>
                   <tbody>
@@ -307,8 +325,27 @@ export function LifecyclePanel({
                             max: run.maxAttempts,
                           })}
                         </td>
-                        <td className='py-1.5 break-all text-destructive'>
+                        <td className='py-1.5 pr-3 break-all text-destructive'>
                           {run.error ?? ''}
+                        </td>
+                        <td className='py-1.5 whitespace-nowrap'>
+                          {RETRYABLE.has(run.status) ? (
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              onClick={() => void operate('retryRun', run.id)}
+                            >
+                              {t('lifecycle.retry')}
+                            </Button>
+                          ) : CANCELLABLE.has(run.status) ? (
+                            <Button
+                              size='sm'
+                              variant='ghost'
+                              onClick={() => void operate('cancelRun', run.id)}
+                            >
+                              {t('lifecycle.cancel')}
+                            </Button>
+                          ) : null}
                         </td>
                       </tr>
                     ))}

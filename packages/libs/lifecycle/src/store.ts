@@ -23,6 +23,11 @@ export interface TransitionEntry {
    * even if a conditional update were ever bypassed.
    */
   readonly version: number;
+  /**
+   * The caller's key for this request, unique per record when present: the
+   * same submission sent twice finds this entry instead of firing again.
+   */
+  readonly requestId: string | null;
 }
 
 /**
@@ -31,7 +36,7 @@ export interface TransitionEntry {
  * it and retries it or gives up.
  */
 export type EffectRunStatus =
-  'queued' | 'running' | 'succeeded' | 'failed' | 'dead';
+  'queued' | 'running' | 'succeeded' | 'failed' | 'dead' | 'cancelled';
 
 /**
  * One effect a transition owes. It is written in the same transaction as the
@@ -88,9 +93,17 @@ export interface EffectRunCondition {
 export interface EffectRunQuery {
   readonly lifecycle?: string;
   readonly recordId?: string;
+  readonly effect?: string;
   readonly status?: EffectRunStatus;
   readonly claimedBefore?: string;
   readonly limit?: number;
+}
+
+/** Which finished runs `deleteEffectRuns` removes. */
+export interface EffectRunPruneQuery {
+  readonly statuses: readonly EffectRunStatus[];
+  /** Runs last changed before this instant. */
+  readonly updatedBefore: string;
 }
 
 export interface IdleRecordQuery {
@@ -144,6 +157,12 @@ export interface LifecycleStore {
 
   appendTransition(entry: NewTransitionEntry): Promise<TransitionEntry>;
   findTransition(id: string): Promise<TransitionEntry | undefined>;
+  /** The entry a request already wrote on a record, if it did. */
+  findTransitionByRequest(
+    lifecycle: string,
+    recordId: string,
+    requestId: string,
+  ): Promise<TransitionEntry | undefined>;
   /** Oldest first. */
   listTransitions(
     lifecycle: string,
@@ -160,4 +179,6 @@ export interface LifecycleStore {
   ): Promise<boolean>;
   /** Oldest first. */
   listEffectRuns(query: EffectRunQuery): Promise<EffectRun[]>;
+  /** Removes finished runs; returns how many. */
+  deleteEffectRuns(query: EffectRunPruneQuery): Promise<number>;
 }

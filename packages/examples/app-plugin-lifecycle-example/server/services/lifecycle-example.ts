@@ -193,12 +193,26 @@ export class LifecycleExampleService {
     transition: string,
     input: JsonObject,
     actor: string,
+    requestId?: string,
   ): Promise<RecordDetail> {
     await this.runtime.fire(name, id, transition, {
       actor: { id: actor },
       input,
+      ...(requestId ? { requestId } : {}),
     });
     return this.detail(name, id, actor);
+  }
+
+  /** Runs again an effect run that failed, died or was cancelled. */
+  public async retryRun(runId: string): Promise<void> {
+    if (!(await this.runtime.retryRun(runId)))
+      throw new ExampleError('NOT_FOUND', '执行记录不存在');
+  }
+
+  /** Gives up on an effect run that is waiting or running. */
+  public async cancelRun(runId: string): Promise<void> {
+    if (!(await this.runtime.cancelRun(runId)))
+      throw new ExampleError('NOT_FOUND', '执行记录不存在');
   }
 
   /** The parameters the lifecycle runs with, which pages quote to their users. */

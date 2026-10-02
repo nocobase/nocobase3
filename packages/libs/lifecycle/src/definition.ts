@@ -69,8 +69,17 @@ export interface EffectContext<T extends LifecycleTypes> {
 export interface EffectRetry {
   /** Tries in total, the first included. Defaults to 1. */
   readonly attempts: number;
-  /** Delay before each retry. Defaults to 0. */
+  /** Delay before the first retry. Defaults to 0. */
   readonly backoffMs?: number;
+  /** Each later delay is the one before times this. Defaults to 1. */
+  readonly factor?: number;
+  /** The longest a delay grows to. */
+  readonly maxMs?: number;
+  /**
+   * Whether an attempt that threw is worth another. A declined payment is
+   * not; a timeout is. Defaults to retrying everything.
+   */
+  shouldRetry?(error: unknown, attempt: number): boolean;
 }
 
 export interface EffectDefinition<T extends LifecycleTypes> {
@@ -81,6 +90,11 @@ export interface EffectDefinition<T extends LifecycleTypes> {
   readonly onSuccess?: string;
   /** Transition fired as the system once the last attempt fails; its input is `{ error }`. */
   readonly onFailure?: string;
+  /**
+   * How long one attempt may take. The attempt's signal is aborted and the
+   * attempt fails then, whether or not `run` notices.
+   */
+  readonly timeoutMs?: number;
   /** Returns a JSON value to keep with the run, or nothing. Throw to fail. */
   run(context: EffectContext<T>): unknown;
 }
@@ -293,6 +307,14 @@ export function defineEffect<T extends LifecycleTypes>(
     throw new LifecycleError(
       'INVALID_DEFINITION',
       `Effect "${effect.name}" must try at least once.`,
+    );
+  if (
+    effect.timeoutMs !== undefined &&
+    !(Number.isFinite(effect.timeoutMs) && effect.timeoutMs > 0)
+  )
+    throw new LifecycleError(
+      'INVALID_DEFINITION',
+      `Effect "${effect.name}" needs a positive timeout.`,
     );
   return Object.freeze(effect);
 }

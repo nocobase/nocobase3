@@ -202,6 +202,8 @@ const zhCN: LifecycleExampleResource = {
     diagram: '流程图（Mermaid）',
     diagramHint:
       '由 toMermaid(describe()) 生成，可以粘贴到任意 Mermaid 渲染器里查看。',
+    retry: '重试',
+    cancel: '取消',
     states: '状态',
     parameters: '参数',
     transitions: '转换记录',
@@ -261,6 +263,7 @@ const zhCN: LifecycleExampleResource = {
     succeeded: '成功',
     failed: '失败',
     dead: '已放弃',
+    cancelled: '已取消',
   },
 };
 

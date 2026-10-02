@@ -8,7 +8,8 @@ import type { TicketTypes } from './ticket.js';
 export const notifyCustomer: EffectDefinition<TicketTypes> =
   defineEffect<TicketTypes>({
     name: 'tickets.notifyCustomer',
-    retry: { attempts: 3, backoffMs: 2_000 },
+    retry: { attempts: 3, backoffMs: 2_000, factor: 2, maxMs: 10_000 },
+    timeoutMs: 10_000,
     run({ record, input, attempt, idempotencyKey, services }) {
       // The example's failure switch: the first N attempts fail, so the page
       // can show a retry, and a failure that outlasts every attempt.

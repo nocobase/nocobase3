@@ -53,7 +53,9 @@ async function createTables(): Promise<void> {
     table.json('input').notNull().defaultTo({});
     table.datetimeTz('at').notNull();
     table.integer('version').notNull();
+    table.string('requestId');
     table.unique(['lifecycle', 'recordId', 'version']);
+    table.unique(['lifecycle', 'recordId', 'requestId']);
   });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.effectRuns, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -373,6 +375,30 @@ describe('Repository lifecycle store', () => {
         (entry) => entry.version,
       ),
     ).toEqual([1, 2]);
+  });
+
+  it('replays a repeated request and prunes finished runs on the database', async () => {
+    const id = await createTicket();
+    const options = {
+      actor: { id: 'agent' },
+      input: { message: 'Please confirm' },
+      requestId: 'reply-1',
+    };
+    await runtime().fire('tickets', id, 'replyToCustomer', options);
+    const again = await runtime().fire(
+      'tickets',
+      id,
+      'replyToCustomer',
+      options,
+    );
+    expect(again.replayed).toBe(true);
+    expect(sent).toEqual(['a@example.com']);
+    const history = await runtime().history('tickets', id);
+    expect(history.transitions).toMatchObject([{ requestId: 'reply-1' }]);
+    expect(history.effectRuns).toMatchObject([{ status: 'succeeded' }]);
+    now = new Date(now.getTime() + 60_000);
+    expect(await runtime().prune({ olderThan: now })).toBe(1);
+    expect((await runtime().history('tickets', id)).effectRuns).toEqual([]);
   });
 
   it('takes back an attempt whose process stopped answering', async () => {
