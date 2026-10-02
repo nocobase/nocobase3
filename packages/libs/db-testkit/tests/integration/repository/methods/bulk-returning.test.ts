@@ -67,4 +67,58 @@ describeIntegrationDatabases('Repository methods/bulk-returning', (context) => {
       }),
     ).resolves.toEqual({ deletedCount: 0, records: [] });
   });
+
+  // One statement per locked row set used to OR every key together, which
+  // SQLite refuses past about a thousand rows ("Expression tree is too large").
+  it('updates, checks scope for, reloads and deletes more rows than one statement can address', async () => {
+    await createOrders(context);
+    const repository = context.database.repository('repositoryOrders');
+    const total = 1200;
+    for (let start = 0; start < total; start += 200) {
+      await repository.createMany({
+        values: Array.from({ length: 200 }, (_, offset) => ({
+          orderNo: `SO-${String(start + offset).padStart(5, '0')}`,
+          status: 'draft',
+          amount: start + offset,
+        })),
+      });
+    }
+
+    const updated = await repository.updateMany({
+      filter: { status: 'draft' },
+      values: { status: 'paid' },
+      select: (select) => select.fields('id', 'status'),
+    });
+    expect(updated.updatedCount).toBe(total);
+    expect(updated.records.map((record) => record.id)).toEqual(
+      Array.from({ length: total }, (_, index) => index + 1),
+    );
+    expect(updated.records.every((record) => record.status === 'paid')).toBe(
+      true,
+    );
+
+    const scoped = repository.withPolicy({
+      read: { scope: { status: 'paid' }, fields: ['id', 'status'] },
+      create: { scope: { status: 'paid' }, fields: ['status'] },
+      update: { scope: { status: 'paid' }, fields: ['status'] },
+      delete: { scope: { status: 'paid' } },
+    });
+    await expect(
+      scoped.updateMany({ all: true, values: { status: 'paid' } }),
+    ).resolves.toEqual({ updatedCount: total });
+    await expect(
+      scoped.updateMany({ all: true, values: { status: 'void' } }),
+    ).rejects.toMatchObject({ code: 'SCOPE_VIOLATION' });
+    await expect(
+      repository.count({ filter: { status: 'paid' } }),
+    ).resolves.toBe(total);
+
+    const deleted = await repository.deleteMany({
+      all: true,
+      select: (select) => select.fields('id'),
+    });
+    expect(deleted.deletedCount).toBe(total);
+    expect(deleted.records).toHaveLength(total);
+    await expect(repository.count()).resolves.toBe(0);
+  });
 });

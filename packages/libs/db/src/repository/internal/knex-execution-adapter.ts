@@ -823,16 +823,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const selected = await this.lockManyByFilter(plan.collection, plan.filter);
     if (selected.length === 0)
       return fields ? { count: 0, records: [] } : { count: 0 };
-    const query = tableQuery(this.getClient(), plan.collection).update(
-      mapUpdate(this.getClient(), plan.collection, plan.values),
-    );
-    applySelectors(
-      query,
-      plan.collection,
-      selected.map((item) => item.unique),
-    );
-    incrementVersion(query, plan.collection);
-    const count = affectedCount(await query);
+    let count = 0;
+    for (const batch of selectorBatches(selected.map((item) => item.unique))) {
+      const query = tableQuery(this.getClient(), plan.collection).update(
+        mapUpdate(this.getClient(), plan.collection, plan.values),
+      );
+      applySelectors(query, plan.collection, batch);
+      incrementVersion(query, plan.collection);
+      count += affectedCount(await query);
+    }
     assertBulkMutationCount('updateMany', count, selected.length);
     if (
       plan.scopeCheck &&
@@ -946,9 +945,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       fields,
       plan.select,
     );
-    const query = tableQuery(this.getClient(), plan.collection).delete();
-    applySelectors(query, plan.collection, selectors);
-    const count = affectedCount(await query);
+    let count = 0;
+    for (const batch of selectorBatches(selectors)) {
+      const query = tableQuery(this.getClient(), plan.collection).delete();
+      applySelectors(query, plan.collection, batch);
+      count += affectedCount(await query);
+    }
     assertBulkMutationCount('deleteMany', count, selected.length);
     return { count, records };
   }
@@ -1138,22 +1140,25 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (selectors.length === 0) return;
     const client = this.getClient();
     const alias = 'repository_scope';
-    const query = tableQuery(client, collection, alias).select(
-      selectColumn(
-        client,
-        collection,
-        {
-          column: column(collection, selectors[0].fields[0]),
-          alias: 'id',
-        },
-        alias,
-      ),
-    );
-    applySelectors(query, collection, selectors);
     const graph = await this.prepareFilterGraph(collection, check.scope.root);
-    applyFilter(query, collection, check.scope.root, graph, alias, client);
-    const rows = (await query) as RepositoryRecord[];
-    if (rows.length === selectors.length) return;
+    let within = 0;
+    for (const batch of selectorBatches(selectors)) {
+      const query = tableQuery(client, collection, alias).select(
+        selectColumn(
+          client,
+          collection,
+          {
+            column: column(collection, batch[0].fields[0]),
+            alias: 'id',
+          },
+          alias,
+        ),
+      );
+      applySelectors(query, collection, batch);
+      applyFilter(query, collection, check.scope.root, graph, alias, client);
+      within += ((await query) as RepositoryRecord[]).length;
+    }
+    if (within === selectors.length) return;
     throw new RepositoryError(
       'SCOPE_VIOLATION',
       `The written record does not satisfy ${operation}.scope.`,
@@ -1340,21 +1345,26 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     select: SelectAst | undefined,
   ): Promise<RepositoryRecord[]> {
     if (selectors.length === 0) return [];
-    const records = await this.findMany({
-      collection,
-      fields,
-      select,
-      filter: selectorsFilter(selectors),
-      sort: {
-        kind: 'sort',
-        version: 1,
-        items: stableIdentityFields(collection).map((field) => ({
-          kind: 'field',
-          path: [field],
-          direction: 'asc',
+    const records: RepositoryRecord[] = [];
+    for (const batch of selectorBatches(selectors)) {
+      records.push(
+        ...(await this.findMany({
+          collection,
+          fields,
+          select,
+          filter: selectorsFilter(batch),
+          sort: {
+            kind: 'sort',
+            version: 1,
+            items: stableIdentityFields(collection).map((field) => ({
+              kind: 'field',
+              path: [field],
+              direction: 'asc',
+            })),
+          },
         })),
-      },
-    });
+      );
+    }
     const identityFields = selectors[0]?.fields;
     if (!identityFields) return [];
     const recordsBySelector = new Map(
@@ -1540,6 +1550,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     scopeNode?: RelationScopeNode,
   ): Promise<void> {
     if (node.action === 'set') {
+      if (resolved.type === 'hasOne' && node.target.kind === 'create') {
+        // The new target is inserted already pointing at the source, so the
+        // current one has to let go first; a unique foreign key would
+        // otherwise reject the insert.
+        await this.detachCurrentHasOneTarget(
+          resolved,
+          source[resolved.sourceKey],
+        );
+      }
       const target = await this.resolveMutationTarget(
         resolved.target,
         node.target,
@@ -2023,6 +2042,37 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     return target;
   }
 
+  /**
+   * A hasOne source holds one target. Attaching another first lets go of the
+   * current one, which needs a nullable foreign key; `keep` is the target
+   * being attached, when it already exists.
+   */
+  private async detachCurrentHasOneTarget(
+    resolved: Extract<ResolvedRepositoryRelation, { readonly type: 'hasOne' }>,
+    sourceValue: unknown,
+    keep?: UniqueSelector,
+  ): Promise<void> {
+    const existing = tableQuery(this.getClient(), resolved.target).where(
+      column(resolved.target, resolved.targetForeignKey),
+      relationKeyValue(
+        this.getClient(),
+        resolved.source,
+        resolved.sourceKey,
+        sourceValue,
+      ),
+    );
+    if (keep) {
+      existing.whereNot((query) => applyUnique(query, resolved.target, keep));
+    }
+    if (!(await existing.clone().first())) return;
+    if (!relationForeignKeyNullable(resolved)) {
+      relationActionNotAllowed(resolved, 'set');
+    }
+    await existing.update({
+      [column(resolved.target, resolved.targetForeignKey)]: null,
+    });
+  }
+
   private async connectRelation(
     resolved: ResolvedRepositoryRelation,
     source: RepositoryRecord,
@@ -2062,27 +2112,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         );
       }
       if (resolved.type === 'hasOne') {
-        const existing = tableQuery(this.getClient(), resolved.target)
-          .where(
-            column(resolved.target, resolved.targetForeignKey),
-            relationKeyValue(
-              this.getClient(),
-              resolved.source,
-              resolved.sourceKey,
-              sourceValue,
-            ),
-          )
-          .whereNot((query) =>
-            applyUnique(query, resolved.target, targetUnique),
-          );
-        if (await existing.clone().first()) {
-          if (!relationForeignKeyNullable(resolved)) {
-            relationActionNotAllowed(resolved, 'set');
-          }
-          await existing.update({
-            [column(resolved.target, resolved.targetForeignKey)]: null,
-          });
-        }
+        await this.detachCurrentHasOneTarget(
+          resolved,
+          sourceValue,
+          targetUnique,
+        );
       }
       const query = tableQuery(this.getClient(), resolved.target);
       applyUnique(query, resolved.target, targetUnique);
@@ -4134,6 +4168,24 @@ function bindQueryValue(
     return temporal;
   }
   return value;
+}
+
+/**
+ * Most row selectors one statement carries. Each selector is one OR branch,
+ * and SQLite refuses an expression nested deeper than 1000 levels, so a write
+ * or reload addressed to every locked row of a bulk call is split. 200 also
+ * keeps a composite key's bound parameters well under the 2100 MSSQL allows.
+ */
+const SELECTOR_BATCH_SIZE = 200;
+
+function selectorBatches(
+  selectors: readonly UniqueSelector[],
+): UniqueSelector[][] {
+  const batches: UniqueSelector[][] = [];
+  for (let start = 0; start < selectors.length; start += SELECTOR_BATCH_SIZE) {
+    batches.push(selectors.slice(start, start + SELECTOR_BATCH_SIZE));
+  }
+  return batches;
 }
 
 function applySelectors(
