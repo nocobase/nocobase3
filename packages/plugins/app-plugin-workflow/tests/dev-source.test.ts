@@ -290,25 +290,30 @@ describe('development workflow source discovery', () => {
     });
   });
 
-  it('matches a build that collects the same source resources', async () => {
-    const { root, sourceRoot } = await application();
-    await writePackage(sourceRoot, 'sample', terminatingWorkflow('Sample'));
-    const distRoot = path.join(root, 'dist/workflows');
+  // Compiles the workflows with TypeScript, which takes most of the default timeout on a loaded CI runner.
+  it(
+    'matches a build that collects the same source resources',
+    { timeout: 120_000 },
+    async () => {
+      const { root, sourceRoot } = await application();
+      await writePackage(sourceRoot, 'sample', terminatingWorkflow('Sample'));
+      const distRoot = path.join(root, 'dist/workflows');
 
-    await buildApplicationWorkflows({ sourceRoot, distRoot });
-    const [built] = await fs.readdir(path.join(distRoot, 'sample'));
-    const [loaded] = await loadWorkflowSourcePackages(sourceRoot, {
-      instructions: coreInstructions,
-    });
+      await buildApplicationWorkflows({ sourceRoot, distRoot });
+      const [built] = await fs.readdir(path.join(distRoot, 'sample'));
+      const [loaded] = await loadWorkflowSourcePackages(sourceRoot, {
+        instructions: coreInstructions,
+      });
 
-    // Both paths collect the same source files here. A production build uses
-    // compiled resources and has a different digest.
-    expect(loaded.digest).toBe(built);
-    expect(loaded.key).toBe('sample');
-    expect(loaded.directory).toBe(
-      await fs.realpath(path.join(sourceRoot, 'sample')),
-    );
-  });
+      // Both paths collect the same source files here. A production build uses
+      // compiled resources and has a different digest.
+      expect(loaded.digest).toBe(built);
+      expect(loaded.key).toBe('sample');
+      expect(loaded.directory).toBe(
+        await fs.realpath(path.join(sourceRoot, 'sample')),
+      );
+    },
+  );
 
   it('treats a missing source root as an application with no workflows', async () => {
     const { sourceRoot } = await application();
@@ -541,46 +546,60 @@ describe('development workflow loading', () => {
     ).resolves.toMatchObject({ status: 'accepted' });
   });
 
-  it('reads built Artifacts and never the source when production', async () => {
-    const { root, sourceRoot } = await application();
-    await writePackage(sourceRoot, 'sample', terminatingWorkflow('Source'));
-    await buildApplicationWorkflows({
-      sourceRoot,
-      distRoot: path.join(root, 'dist/workflows'),
-    });
-    await writePackage(sourceRoot, 'sample', terminatingWorkflow('Edited'));
-    const service = await createService(root, true);
+  // Compiles the workflows with TypeScript, which takes most of the default timeout on a loaded CI runner.
+  it(
+    'reads built Artifacts and never the source when production',
+    { timeout: 120_000 },
+    async () => {
+      const { root, sourceRoot } = await application();
+      await writePackage(sourceRoot, 'sample', terminatingWorkflow('Source'));
+      await buildApplicationWorkflows({
+        sourceRoot,
+        distRoot: path.join(root, 'dist/workflows'),
+      });
+      await writePackage(sourceRoot, 'sample', terminatingWorkflow('Edited'));
+      const service = await createService(root, true);
 
-    const discovered = await service.discoverArtifacts();
+      const discovered = await service.discoverArtifacts();
 
-    expect(discovered).toHaveLength(1);
-    expect(discovered[0].workflow.title).toBe('Source');
-    expect(discovered[0].origin).toBe('dist');
-  });
+      expect(discovered).toHaveLength(1);
+      expect(discovered[0].workflow.title).toBe('Source');
+      expect(discovered[0].origin).toBe('dist');
+    },
+  );
 
-  it('prefers source over a stale built Artifact for the same key', async () => {
-    const { root, sourceRoot } = await application();
-    await writePackage(sourceRoot, 'sample', terminatingWorkflow('Stale'));
-    await writePackage(sourceRoot, 'built-only', terminatingWorkflow('Built'));
-    await buildApplicationWorkflows({
-      sourceRoot,
-      distRoot: path.join(root, 'dist/workflows'),
-    });
-    await fs.rm(path.join(sourceRoot, 'built-only'), { recursive: true });
-    await writePackage(sourceRoot, 'sample', terminatingWorkflow('Fresh'));
-    const service = await createService(root, false);
+  // Compiles the workflows with TypeScript, which takes most of the default timeout on a loaded CI runner.
+  it(
+    'prefers source over a stale built Artifact for the same key',
+    { timeout: 120_000 },
+    async () => {
+      const { root, sourceRoot } = await application();
+      await writePackage(sourceRoot, 'sample', terminatingWorkflow('Stale'));
+      await writePackage(
+        sourceRoot,
+        'built-only',
+        terminatingWorkflow('Built'),
+      );
+      await buildApplicationWorkflows({
+        sourceRoot,
+        distRoot: path.join(root, 'dist/workflows'),
+      });
+      await fs.rm(path.join(sourceRoot, 'built-only'), { recursive: true });
+      await writePackage(sourceRoot, 'sample', terminatingWorkflow('Fresh'));
+      const service = await createService(root, false);
 
-    const discovered = await service.discoverArtifacts();
+      const discovered = await service.discoverArtifacts();
 
-    expect(
-      discovered.map((artifact) => [
-        artifact.key,
-        artifact.workflow.title,
-        artifact.origin,
-      ]),
-    ).toEqual([
-      ['built-only', 'Built', 'dist'],
-      ['sample', 'Fresh', 'source'],
-    ]);
-  });
+      expect(
+        discovered.map((artifact) => [
+          artifact.key,
+          artifact.workflow.title,
+          artifact.origin,
+        ]),
+      ).toEqual([
+        ['built-only', 'Built', 'dist'],
+        ['sample', 'Fresh', 'source'],
+      ]);
+    },
+  );
 });
