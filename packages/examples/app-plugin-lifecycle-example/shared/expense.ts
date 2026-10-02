@@ -26,13 +26,22 @@ export function yuan(cents: number): string {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A `YYYY-MM-DD` that names a real day: `2026-02-31` is refused, not moved to March. */
+export function isCalendarDate(value: string): boolean {
+  if (!DATE.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value
+  );
+}
+
 /** What is wrong with a report's items; empty when it may be submitted. */
 export function itemProblems(items: readonly ExpenseItem[]): string[] {
   if (!items.length) return ['至少填写一条费用明细'];
   const problems: string[] = [];
   items.forEach((item, index) => {
     const line = `第 ${index + 1} 行`;
-    if (!DATE.test(item.date)) problems.push(`${line}缺少日期`);
+    if (!isCalendarDate(item.date)) problems.push(`${line}日期无效`);
     if (!EXPENSE_CATEGORIES.includes(item.category))
       problems.push(`${line}缺少类别`);
     if (!item.description.trim()) problems.push(`${line}缺少说明`);

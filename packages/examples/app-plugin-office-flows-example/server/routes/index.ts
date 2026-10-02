@@ -41,6 +41,7 @@ const LIFECYCLE_STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
 const SERVICE_STATUS: Record<OfficeFlowsError['code'], ContentfulStatusCode> = {
   NOT_FOUND: 404,
   FORBIDDEN: 403,
+  CONFLICT: 409,
   INVALID: 400,
 };
 
@@ -74,15 +75,61 @@ function input(values: Record<string, unknown>): JsonObject {
   return isObject(values.input) ? (values.input as JsonObject) : {};
 }
 
+type FieldKind = 'text' | 'count' | 'flag' | 'list';
+
+/** What each form field must arrive as; a nullable count or flag may be null. */
+const FORM_FIELDS: Readonly<Record<keyof DataRequestForm, FieldKind>> = {
+  subject: 'text',
+  reason: 'text',
+  volume: 'text',
+  frequency: 'text',
+  deliveryDate: 'text',
+  firstUseDate: 'text',
+  lastDeliveryDate: 'text',
+  quarterDay: 'count',
+  monthDay: 'count',
+  weekDay: 'count',
+  frequencyNote: 'text',
+  scope: 'text',
+  consumers: 'list',
+  fileShieldAccepted: 'flag',
+  fileShieldScope: 'text',
+  fileShieldCopy: 'flag',
+  fileShieldValidUntil: 'text',
+  ndaFiles: 'list',
+  securityFiles: 'list',
+};
+
+function fits(kind: FieldKind, value: unknown): boolean {
+  if (kind === 'text') return typeof value === 'string';
+  if (kind === 'count')
+    return (
+      value === null || (typeof value === 'number' && Number.isInteger(value))
+    );
+  if (kind === 'flag') return value === null || typeof value === 'boolean';
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
+}
+
+/**
+ * The form as its declared types, so validation sees strings, numbers and
+ * lists rather than whatever JSON arrived. A field of the wrong type is a 400,
+ * not a crash further in.
+ */
 function form(values: Record<string, unknown>): DataRequestForm {
-  const empty = emptyDataRequest();
+  const empty: Record<string, unknown> = { ...emptyDataRequest() };
   const source = isObject(values.form) ? values.form : {};
-  return Object.fromEntries(
-    Object.entries(empty).map(([key, fallback]) => [
-      key,
-      key in source ? source[key] : fallback,
-    ]),
-  ) as unknown as DataRequestForm;
+  for (const [key, kind] of Object.entries(FORM_FIELDS) as [
+    keyof DataRequestForm,
+    FieldKind,
+  ][]) {
+    if (!(key in source)) continue;
+    if (!fits(kind, source[key]))
+      throw new OfficeFlowsError('INVALID', `字段 ${key} 的格式不正确`);
+    empty[key] = source[key];
+  }
+  return empty as unknown as DataRequestForm;
 }
 
 function rowInput(values: Record<string, unknown>): RowInput {

@@ -200,6 +200,10 @@ const migration: MigrationDefinition = defineMigration({
       table.string('action').notNull();
       table.json('detail').notNull().defaultTo({});
       table.datetimeTz('at').notNull();
+      // An effect writes its trace under its run's key, so a retry cannot
+      // write it twice.
+      table.string('key').notNull();
+      table.unique(['key'], { mode: 'index' });
       table.index(['docKind', 'docId', 'id']);
     });
 

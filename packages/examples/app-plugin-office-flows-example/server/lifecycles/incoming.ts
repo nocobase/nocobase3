@@ -61,10 +61,11 @@ export const dispatchClerks: EffectDefinition<IncomingTypes> =
   defineEffect<IncomingTypes>({
     name: 'incoming.dispatchClerks',
     retry: { attempts: 3, backoffMs: 1_000 },
-    async run({ record, input, services, transition }) {
+    async run({ record, input, services, transition, idempotencyKey }) {
       const result = await services.store.dispatch(1, rowIds(input));
       if (result.created.length)
         await services.store.trace({
+          key: idempotencyKey,
           docKind: 'incoming',
           docId: idOf(record.id),
           actorId: record.registrarId,
@@ -85,20 +86,21 @@ export const forwardManagement: EffectDefinition<IncomingTypes> =
   defineEffect<IncomingTypes>({
     name: 'incoming.forwardManagement',
     retry: { attempts: 3, backoffMs: 1_000 },
-    async run({ record, input, services }) {
+    async run({ record, input, services, idempotencyKey }) {
       const recipients: string[] = [];
       const groups: string[] = [];
       for (const id of rowIds(input)) {
-        const claimed = await services.store
-          .repository(COLLECTIONS.managementCc)
-          .updateMany({
-            filter: { id, forwarded: false },
-            values: { forwarded: true },
-          });
-        if (!claimed.updatedCount) continue;
+        await services.store.repository(COLLECTIONS.managementCc).updateMany({
+          filter: { id, forwarded: false },
+          values: { forwarded: true },
+        });
+        // A row an earlier attempt forwarded counts too: if that attempt
+        // stopped before reminding, this one reminds; the reminders and the
+        // trace each happen once however many attempts run.
         const row = await services.store.find(COLLECTIONS.managementCc, id);
-        groups.push(text(row?.groupName));
-        recipients.push(...people(row?.members));
+        if (row?.forwarded !== true) continue;
+        groups.push(text(row.groupName));
+        recipients.push(...people(row.members));
       }
       const notified = await services.store.notify({
         rootKind: 'incoming',
@@ -111,6 +113,7 @@ export const forwardManagement: EffectDefinition<IncomingTypes> =
       });
       if (groups.length)
         await services.store.trace({
+          key: idempotencyKey,
           docKind: 'incoming',
           docId: idOf(record.id),
           actorId: record.registrarId,

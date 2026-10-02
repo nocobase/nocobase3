@@ -93,7 +93,7 @@ export const dispatchTeams: EffectDefinition<ClerkTypes> =
   defineEffect<ClerkTypes>({
     name: 'clerkTasks.dispatchTeams',
     retry: { attempts: 3, backoffMs: 1_000 },
-    async run({ record, input, services }) {
+    async run({ record, input, services, idempotencyKey }) {
       const result = await services.store.dispatch(2, rowIds(input));
       if (result.created.length) {
         const detail = {
@@ -104,6 +104,7 @@ export const dispatchTeams: EffectDefinition<ClerkTypes> =
           skipped: result.skipped,
         };
         await services.store.trace({
+          key: `${idempotencyKey}:root`,
           docKind: 'incoming',
           docId: idOf(record.rootId),
           actorId: people(record.assignees)[0] ?? '',
@@ -111,6 +112,7 @@ export const dispatchTeams: EffectDefinition<ClerkTypes> =
           detail,
         });
         await services.store.trace({
+          key: `${idempotencyKey}:clerk`,
           docKind: 'clerk',
           docId: idOf(record.id),
           actorId: people(record.assignees)[0] ?? '',
@@ -130,10 +132,11 @@ export const dispatchAssist: EffectDefinition<ClerkTypes> =
   defineEffect<ClerkTypes>({
     name: 'clerkTasks.dispatchAssist',
     retry: { attempts: 3, backoffMs: 1_000 },
-    async run({ record, input, services }) {
+    async run({ record, input, services, idempotencyKey }) {
       const result = await services.store.dispatch(1, rowIds(input));
       if (result.created.length)
         await services.store.trace({
+          key: idempotencyKey,
           docKind: 'incoming',
           docId: idOf(record.rootId),
           actorId: people(record.assignees)[0] ?? '',
@@ -177,10 +180,11 @@ export const dispatchExecutors: EffectDefinition<TeamTypes> =
   defineEffect<TeamTypes>({
     name: 'teamTasks.dispatchExecutors',
     retry: { attempts: 3, backoffMs: 1_000 },
-    async run({ record, input, services }) {
+    async run({ record, input, services, idempotencyKey }) {
       const result = await services.store.dispatch(3, rowIds(input));
       if (result.created.length)
         await services.store.trace({
+          key: idempotencyKey,
           docKind: 'team',
           docId: idOf(record.id),
           actorId: people(record.assignees)[0] ?? '',

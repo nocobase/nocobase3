@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   consumerOptions,
   emptyDataRequest,
+  isDate,
   normalizeDataRequest,
   validateDataRequest,
   visibility,
@@ -95,6 +96,16 @@ describe('data usage request form', () => {
     expect(normalizeDataRequest(complete)).toMatchObject({
       monthDay: null,
       fileShieldScope: '',
+    });
+  });
+
+  it('refuses a date that names no real day instead of moving it', () => {
+    expect(isDate('2026-02-28')).toBe(true);
+    expect(isDate('2028-02-29')).toBe(true);
+    expect(isDate('2026-02-31')).toBe(false);
+    expect(isDate('2026-13-01')).toBe(false);
+    expect(validateDataRequest(form({ deliveryDate: '2026-02-31' }))).toEqual({
+      deliveryDate: '请填写数据交付日期',
     });
   });
 });

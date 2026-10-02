@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   DatabaseConnection,
   DatabaseManager,
@@ -175,15 +177,14 @@ export class OfficeStore {
   public async nextNumber(prefix: string): Promise<string> {
     const period = this.now().slice(0, 7).replace('-', '');
     const key = `${prefix}-${period}`;
-    await this.repository(COLLECTIONS.serials).upsertOne({
+    // The value the upsert itself wrote: a separate read could see another
+    // caller's increment and hand out the same number twice.
+    const { record } = await this.repository(COLLECTIONS.serials).upsertOne({
       filter: { key },
       create: { key, value: 1 },
       update: { value: (value) => value.increment(1) },
     });
-    const row = await this.repository(COLLECTIONS.serials).findOne({
-      filter: { key },
-    });
-    return `${key}-${text(Number(row?.value ?? 1)).padStart(4, '0')}`;
+    return `${key}-${text(Number(record.value)).padStart(4, '0')}`;
   }
 
   public async calendar(): Promise<WorkCalendar> {
@@ -293,22 +294,39 @@ export class OfficeStore {
     return reached;
   }
 
+  /**
+   * Adds a line to a document's distribution record. An effect passes its
+   * run's idempotency key, so a retry after a partial attempt writes the
+   * line once; without a key every call writes one.
+   */
   public async trace(values: {
     readonly docKind: string;
     readonly docId: number;
     readonly actorId: string;
     readonly action: string;
     readonly detail: Plain;
+    readonly key?: string;
   }): Promise<void> {
-    await this.repository(COLLECTIONS.traces).createOne({
-      values: { ...values, at: this.now() },
-    });
+    const key = values.key ?? `trace:${randomUUID()}`;
+    const traces = this.repository(COLLECTIONS.traces);
+    if (values.key && (await traces.exists({ filter: { key } }))) return;
+    try {
+      await traces.createOne({
+        values: { ...values, key, at: this.now() },
+      });
+    } catch (error) {
+      // The unique key: a concurrent attempt wrote it first.
+      if (!(await traces.exists({ filter: { key } }))) throw error;
+    }
   }
 
   /**
    * Sends distribution rows down one level: each row not yet dispatched
    * becomes a task for its department, and everyone the row names is
    * reminded. Claiming the row and creating its task are one transaction.
+   * A row an earlier attempt already dispatched is reported again rather
+   * than skipped, so a retry after the reminders failed still sends them;
+   * the reminders themselves go out once per person and level.
    */
   public async dispatch(
     level: 1 | 2 | 3,
@@ -334,7 +352,19 @@ export class OfficeStore {
           filter: { id: rowId, dispatched: false, level },
           values: { dispatched: true },
         });
-        if (claimed.updatedCount === 0) return undefined;
+        if (claimed.updatedCount === 0) {
+          const done = plain(await rows.findOne({ filter: { id: rowId } }));
+          if (!done || done.level !== level || done.childId == null)
+            return undefined;
+          const child = plain(
+            await connection
+              .repository(target.collection)
+              .findOne({ filter: { id: idOf(done.childId) } }),
+          );
+          return child
+            ? { row: done, id: idOf(done.childId), number: text(child.number) }
+            : undefined;
+        }
         const row = plain(await rows.findOne({ filter: { id: rowId } }))!;
         const now = this.now();
         const record = await connection

@@ -31,6 +31,7 @@ function application(authentication: Auth) {
     fireIncoming: vi.fn(async () => undefined),
     fireTask: vi.fn(async () => undefined),
     addRow: vi.fn(async () => 1),
+    createDataRequest: vi.fn(async () => ({ id: 1 })),
   };
   const container = new ServiceContainer();
   container.instance(authenticationToken, authentication);
@@ -122,5 +123,38 @@ describe('office flows routes', () => {
     expect(fired.status).toBe(403);
     expect(added.status).toBe(403);
     expect(unknownKind.status).toBe(404);
+  });
+
+  it('answers a form field of the wrong type with a 400', async () => {
+    const { app, service } = application(allow);
+    const router = await apiRoutes.createRouter(app);
+    const wrong = await router.request(
+      post('/office-flows/data-requests', {
+        actAs: 'zhangwei',
+        form: { subject: 123, consumers: 'all' },
+      }),
+    );
+    expect(wrong.status).toBe(400);
+    expect(service.createDataRequest).not.toHaveBeenCalled();
+    const right = await router.request(
+      post('/office-flows/data-requests', {
+        actAs: 'zhangwei',
+        form: {
+          subject: '客户画像',
+          consumers: ['内部合规风险审计'],
+          monthDay: 5,
+        },
+      }),
+    );
+    expect(right.status).toBe(201);
+    expect(service.createDataRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: '客户画像',
+        consumers: ['内部合规风险审计'],
+        monthDay: 5,
+        reason: '',
+      }),
+      'zhangwei',
+    );
   });
 });

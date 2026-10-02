@@ -9,6 +9,7 @@ import type {
 } from '@nocobase/lifecycle';
 
 import {
+  isDate,
   normalizeDataRequest,
   type DataRequestForm,
 } from '../../shared/data-request.js';
@@ -47,7 +48,7 @@ const TASK_LIFECYCLES: Readonly<Record<TaskKind, LifecycleName>> = {
 /** A refusal the service makes itself, before any lifecycle is involved. */
 export class OfficeFlowsError extends Error {
   public constructor(
-    public readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID',
+    public readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID' | 'CONFLICT',
     message: string,
   ) {
     super(message);
@@ -255,11 +256,21 @@ export class OfficeFlowsService {
     if (!allowed(record))
       throw new OfficeFlowsError('FORBIDDEN', '当前角色不能修改');
     if (!Object.keys(values).length) return;
-    // The status and its timestamp are never in `values`: only fire() writes them.
-    await this.database.repository(collection).updateMany({
-      filter: { id: idOf(id) },
-      values: values as RepositoryRecord,
-    });
+    // The status and its timestamp are never in `values`: only fire() writes
+    // them. The edit was authorized for the record as read, so it applies
+    // only while the record is still that version.
+    const { updatedCount } = await this.database
+      .repository(collection)
+      .updateMany({
+        filter: {
+          id: idOf(id),
+          status: text(record.status),
+          lifecycleVersion: Number(record.lifecycleVersion ?? 0),
+        },
+        values: values as RepositoryRecord,
+      });
+    if (!updatedCount)
+      throw new OfficeFlowsError('CONFLICT', '记录已被他人处理，请刷新后重试');
   }
 
   // ── Data usage requests ────────────────────────────────────────────────
@@ -356,10 +367,7 @@ export class OfficeFlowsService {
         'FORBIDDEN',
         '只有抽数受理环节可以创建抽数子流程',
       );
-    if (
-      !values.topic.trim() ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(values.scheduledDate)
-    )
+    if (!values.topic.trim() || !isDate(values.scheduledDate))
       throw new OfficeFlowsError('INVALID', '请填写抽数任务主题和首抽时间');
     const count = await this.database
       .repository(COLLECTIONS.extractions)

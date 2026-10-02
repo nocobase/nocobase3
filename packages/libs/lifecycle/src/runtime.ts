@@ -3,7 +3,7 @@ import {
   type Lifecycle,
   type LifecycleDescription,
 } from './definition.js';
-import { LifecycleError } from './errors.js';
+import { LifecycleError, type LifecycleErrorCode } from './errors.js';
 import { planTransition, stateOf, transitionsFrom, versionOf } from './plan.js';
 import type {
   EffectRun,
@@ -128,6 +128,26 @@ function storable(value: unknown): JsonValue {
   if (text === undefined)
     throw new Error('An effect result must be a JSON value.');
   return JSON.parse(text) as JsonValue;
+}
+
+/** Refusals that mean the record is no longer where the caller found it. */
+const MOVED_ON: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
+  'RECORD_NOT_FOUND',
+  'INVALID_STATE',
+  'GUARD_REJECTED',
+]);
+
+/** What a sweep expects when another sweep or a person got there first. */
+const RACED: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
+  ...MOVED_ON,
+  'CONFLICT',
+]);
+
+function isRefusal(
+  error: unknown,
+  codes: ReadonlySet<LifecycleErrorCode>,
+): error is LifecycleError {
+  return error instanceof LifecycleError && codes.has(error.code);
 }
 
 class InlineDispatcher implements EffectDispatcher {
@@ -408,7 +428,9 @@ export class LifecycleRuntime {
         // The record has moved on, or the guard refuses: the outcome is
         // still recorded, and nothing follows from it. decide() writes
         // nothing before it refuses, so the transaction stays whole.
-        if (!(error instanceof LifecycleError)) throw error;
+        // Anything else, a conflict included, rolls the attempt back so
+        // recover() runs it again rather than losing what should follow.
+        if (!isRefusal(error, MOVED_ON)) throw error;
         this.logger.warn(
           `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
           { runId },
@@ -434,6 +456,7 @@ export class LifecycleRuntime {
    */
   public async runTriggers(): Promise<number> {
     let fired = 0;
+    const failures: unknown[] = [];
     for (const { lifecycle } of this.lifecycles.values()) {
       const parameters = this.parameters(
         lifecycle.name,
@@ -461,11 +484,24 @@ export class LifecycleRuntime {
           } catch (error) {
             // Another sweep or a person got there first, or the guard said
             // no: the record is no longer this trigger's business.
-            if (!(error instanceof LifecycleError)) throw error;
+            if (isRefusal(error, RACED)) continue;
+            // A broken definition or a failing store: keep sweeping the
+            // other records, then report it rather than look idle forever.
+            this.logger.error(
+              `Trigger "${trigger.name}" could not fire "${trigger.transition}" on ${lifecycle.collection} record "${String(record.id)}"`,
+              { error },
+            );
+            failures.push(error);
           }
         }
       }
     }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(
+        failures,
+        `${failures.length} triggered transitions failed.`,
+      );
     return fired;
   }
 

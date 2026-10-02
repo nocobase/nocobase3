@@ -138,8 +138,13 @@ export function consumerOptions(scope: UsageScope | ''): readonly string[] {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function isDate(value: string): boolean {
-  return DATE.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+/** A `YYYY-MM-DD` that names a real day: `2026-02-31` is refused, not moved to March. */
+export function isDate(value: string): boolean {
+  if (!DATE.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value
+  );
 }
 
 /**

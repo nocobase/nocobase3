@@ -26,6 +26,7 @@ const root = path.resolve(import.meta.dirname, '..');
 let directory: string;
 let database: DatabaseManager;
 let service: OfficeFlowsService;
+let store: OfficeStore;
 
 beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'office-flows-'));
@@ -56,7 +57,7 @@ beforeEach(async () => {
       },
     }),
   });
-  const store = new OfficeStore(database);
+  store = new OfficeStore(database);
   registerLifecycles(runtime, store);
   service = new OfficeFlowsService(database, runtime, store);
 });
@@ -448,5 +449,64 @@ describe('incoming document', () => {
     expect(
       (await noticesOf('zhoujie')).map((notice) => notice.message),
     ).toEqual([expect.stringContaining('有异议')]);
+  });
+});
+
+describe('office store under retries and races', () => {
+  it('hands out a different number to each concurrent caller', async () => {
+    const numbers = await Promise.all(
+      Array.from({ length: 5 }, () => store.nextNumber('TEST')),
+    );
+    expect(new Set(numbers).size).toBe(5);
+    expect(numbers.map((number) => number.slice(-4)).sort()).toEqual([
+      '0001',
+      '0002',
+      '0003',
+      '0004',
+      '0005',
+    ]);
+  });
+
+  it('writes a keyed trace once however often it is retried', async () => {
+    const trace = {
+      key: 'incoming:42',
+      docKind: 'incoming',
+      docId: 1,
+      actorId: 'registrar',
+      action: '派发办事人员',
+      detail: {},
+    };
+    await store.trace(trace);
+    await store.trace(trace);
+    await store.trace({ ...trace, key: undefined });
+    expect(
+      await database
+        .repository(COLLECTIONS.traces)
+        .count({ filter: { docKind: 'incoming', docId: 1 } }),
+    ).toBe(2);
+  });
+
+  it('reports a row an earlier attempt dispatched instead of skipping it', async () => {
+    const row = await database.repository(COLLECTIONS.assignments).createOne({
+      values: {
+        rootId: 1,
+        parentKind: 'incoming',
+        parentId: 1,
+        level: 1,
+        departmentName: '财务部',
+        assignees: ['clerk-a'],
+        createdBy: 'registrar',
+        createdAt: new Date().toISOString(),
+      },
+    });
+    const id = Number(row.record.id);
+    const first = await store.dispatch(1, [id]);
+    // The attempt stopped after dispatching, before the reminders and the
+    // trace; the retry must still report the task so they are sent.
+    const retry = await store.dispatch(1, [id]);
+    expect(retry.created).toEqual(first.created);
+    expect(retry.notified).toEqual([]);
+    expect(retry.skipped).toEqual(['clerk-a']);
+    expect(await database.repository(COLLECTIONS.clerkTasks).count({})).toBe(1);
   });
 });
