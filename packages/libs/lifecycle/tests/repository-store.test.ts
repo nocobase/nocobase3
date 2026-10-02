@@ -36,6 +36,11 @@ async function createTables(): Promise<void> {
     table.datetimeTz('statusChangedAt').notNull();
     table.integer('lifecycleVersion').notNull().defaultTo(0);
   });
+  await builder.createCollection('notes', (table) => {
+    table.bigInt('id').primary().autoIncrement().notNull();
+    table.string('ticketId').notNull();
+    table.string('text').notNull();
+  });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.transitions, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
     table.string('lifecycle').notNull();
@@ -249,6 +254,60 @@ describe('Repository lifecycle store', () => {
       actor: { id: 'agent' },
     });
     expect(result.record).toMatchObject({ status: 'closed' });
+  });
+
+  it('commits what onTransition writes with the state, and rolls it back with it', async () => {
+    interface NotedTypes {
+      record: TicketTypes['record'];
+      state: TicketTypes['state'];
+    }
+    const id = await createTicket();
+    const noted = new LifecycleRuntime({ store, clock: () => now });
+    noted.register(
+      defineLifecycle<NotedTypes>({
+        name: 'notedTickets',
+        collection: 'tickets',
+        initial: 'open',
+        states: ['open', 'awaitingCustomer', 'closed'],
+        transitions: {
+          wait: {
+            from: 'open',
+            to: 'awaitingCustomer',
+            onTransition: async ({ record, transactionHandle }) => {
+              await (transactionHandle as DatabaseConnection)
+                .repository('notes')
+                .createOne({
+                  values: { ticketId: String(record.id), text: 'waiting' },
+                });
+            },
+          },
+          close: {
+            from: 'awaitingCustomer',
+            to: 'closed',
+            onTransition: async ({ record, transactionHandle }) => {
+              await (transactionHandle as DatabaseConnection)
+                .repository('notes')
+                .createOne({
+                  values: { ticketId: String(record.id), text: 'closing' },
+                });
+              throw new Error('Closing is not allowed today.');
+            },
+          },
+        },
+      }),
+    );
+    await noted.fire('notedTickets', id, 'wait', { actor: { id: 'agent' } });
+    await expect(
+      noted.fire('notedTickets', id, 'close', { actor: { id: 'agent' } }),
+    ).rejects.toThrow('Closing is not allowed today.');
+    expect(
+      (await database.repository('notes').findMany({})).map((row) => row.text),
+    ).toEqual(['waiting']);
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(id) } }),
+    ).toMatchObject({ status: 'awaitingCustomer' });
   });
 
   it('writes a record only at the version it was read at', async () => {

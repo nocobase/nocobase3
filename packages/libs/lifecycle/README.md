@@ -62,6 +62,12 @@ Other code can veto transitions without touching the definition: `runtime.addGua
 
 `runtime.create(name, values, { actor, state })` creates a record in an initial state — `initial` may list several, the first being the default — and in the same transaction writes a log entry from `null` under `CREATE_TRANSITION` and the runs the state's `onEnter` effects owe, so a record's history starts at its creation. The transition log's `from` is therefore nullable.
 
+## Extending a lifecycle
+
+`onTransition` on a transition runs inside its transaction, after the record and the log entry are written, with the transaction's handle and services built from it: write related rows that must commit with the state, or throw to refuse the transition and roll everything back.
+
+`runtime.on(event, filter, listener)` hears transitions after they commit: `completed` once per transition and creation, `entered` once per state entered, and `announce` once per transition the new state allows, which is what a to-do list needs. A filter narrows by `lifecycle`, `transition` and `state`. Delivery is best effort — a listener that throws is logged, and nothing is delivered again after a crash — so work that must happen belongs in an effect, not a listener.
+
 ## Testing a lifecycle
 
 `@nocobase/lifecycle/testing` runs one lifecycle on a memory store, a fake clock and in-process effects, so waiting, retrying and continuing are unit tests:

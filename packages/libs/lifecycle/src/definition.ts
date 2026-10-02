@@ -1,4 +1,5 @@
 import { LifecycleError, type InputProblem } from './errors.js';
+import type { TransitionEntry } from './store.js';
 import type {
   JsonObject,
   LifecycleActor,
@@ -24,6 +25,27 @@ export interface SetContext<
 > extends TransitionContext<T> {
   readonly from: T['state'];
   readonly to: T['state'];
+}
+
+/**
+ * What `onTransition` sees: the record as this transition wrote it, the log
+ * entry, and the transaction the write is part of.
+ */
+export interface TransitionHookContext<T extends LifecycleTypes> {
+  readonly record: T['record'];
+  /** The record as it was before this transition. */
+  readonly previous: T['record'];
+  readonly actor: LifecycleActor;
+  readonly input: JsonObject;
+  readonly from: T['state'];
+  readonly to: T['state'];
+  readonly entry: TransitionEntry;
+  readonly parameters: ParametersOf<T>;
+  /** Built from the transaction's handle, as a guard's are. */
+  readonly services: ServicesOf<T>;
+  /** The store's transaction, such as a `@nocobase/db` connection. */
+  readonly transactionHandle: unknown;
+  readonly now: Date;
 }
 
 export interface EffectContext<T extends LifecycleTypes> {
@@ -92,6 +114,13 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
   set?(
     context: SetContext<T>,
   ): Record<string, unknown> | Promise<Record<string, unknown>>;
+  /**
+   * Runs inside the transition's transaction, after the record and its log
+   * entry are written: write related rows that must commit with the state,
+   * or throw to refuse the transition and roll everything back. Nothing that
+   * reaches outside the database belongs here; that is an effect.
+   */
+  onTransition?(context: TransitionHookContext<T>): void | Promise<void>;
   /** Run after commit. */
   readonly effects?: readonly EffectDefinition<T>[];
 }

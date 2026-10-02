@@ -115,6 +115,21 @@ export class LifecycleExampleProvider extends ServiceProvider<AppPluginApplicati
     });
     runtime.register(ticketLifecycle, { services });
     runtime.register(expenseLifecycle, { services });
+    // Another plugin would subscribe the same way, to refresh a page, keep a
+    // to-do list or feed a search index; work that must happen is an effect.
+    runtime.on('completed', {}, (event) => {
+      logger.info(
+        {
+          lifecycle: event.lifecycle,
+          recordId: event.entry.recordId,
+          transition: event.transition,
+          from: event.from,
+          to: event.to,
+          actor: event.actor.id,
+        },
+        'transition committed',
+      );
+    });
     this.runtime = runtime;
     return runtime;
   }

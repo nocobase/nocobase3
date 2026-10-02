@@ -131,6 +131,43 @@ export interface CreateOptions {
   readonly input?: JsonObject;
 }
 
+/** What happened, told after it committed. */
+export interface LifecycleEvent {
+  readonly lifecycle: string;
+  /** The transition, or `CREATE_TRANSITION` for a creation. */
+  readonly transition: string;
+  readonly from: string | null;
+  readonly to: string;
+  /** The record as the transition committed it. */
+  readonly record: LifecycleRecord;
+  readonly entry: TransitionEntry;
+  readonly actor: LifecycleActor;
+}
+
+/** A transition the record's new state now allows, before any guard is asked. */
+export interface AnnounceEvent extends LifecycleEvent {
+  readonly next: string;
+}
+
+/**
+ * Which events a listener hears. `transition` matches the transition that
+ * committed (for `announce`, the one now allowed); `state` matches the state
+ * entered.
+ */
+export interface EventFilter {
+  readonly lifecycle?: string;
+  readonly transition?: string;
+  readonly state?: string;
+}
+
+export type LifecycleListener<E> = (event: E) => void | Promise<void>;
+
+interface Subscription {
+  readonly event: 'completed' | 'entered' | 'announce';
+  readonly filter: EventFilter;
+  readonly listener: LifecycleListener<LifecycleEvent>;
+}
+
 /** The log entry `runtime.create()` writes, so a record's history starts at its creation. */
 export const CREATE_TRANSITION: string = '$create';
 
@@ -206,6 +243,7 @@ export class LifecycleRuntime {
   private readonly leaseMs: number;
   private readonly beforeEffect: LifecycleRuntimeOptions['beforeEffect'];
   private readonly lifecycles = new Map<string, Registered>();
+  private readonly subscriptions: Subscription[] = [];
 
   public constructor(options: LifecycleRuntimeOptions) {
     this.store = options.store;
@@ -303,8 +341,46 @@ export class LifecycleRuntime {
     const committed = await this.store.transaction((store) =>
       this.decide(store, registered, id, transition, options, now),
     );
+    await this.emit(registered, committed, options.actor);
     for (const run of committed.effectRuns) await this.handOver(run.id, null);
     return committed;
+  }
+
+  /**
+   * Listens to transitions after they commit: `completed` once per
+   * transition (and creation), `entered` once per state entered, and
+   * `announce` once per transition the new state allows — what a to-do list
+   * needs. Delivery is best effort: a listener that throws is logged and the
+   * caller is not told, and nothing is delivered again after a crash, so
+   * work that must happen belongs in an effect. Returns a function that
+   * stops listening.
+   */
+  public on(
+    event: 'completed' | 'entered',
+    filter: EventFilter,
+    listener: LifecycleListener<LifecycleEvent>,
+  ): () => void;
+  public on(
+    event: 'announce',
+    filter: EventFilter,
+    listener: LifecycleListener<AnnounceEvent>,
+  ): () => void;
+  public on(
+    event: 'completed' | 'entered' | 'announce',
+    filter: EventFilter,
+    listener:
+      LifecycleListener<LifecycleEvent> | LifecycleListener<AnnounceEvent>,
+  ): () => void {
+    const subscription: Subscription = {
+      event,
+      filter,
+      listener: listener as LifecycleListener<LifecycleEvent>,
+    };
+    this.subscriptions.push(subscription);
+    return (): void => {
+      const index = this.subscriptions.indexOf(subscription);
+      if (index >= 0) this.subscriptions.splice(index, 1);
+    };
   }
 
   /**
@@ -437,6 +513,7 @@ export class LifecycleRuntime {
       );
       return { record, entry, effectRuns };
     });
+    await this.emit(registered, committed, options.actor);
     for (const run of committed.effectRuns) await this.handOver(run.id, null);
     return committed;
   }
@@ -586,9 +663,9 @@ export class LifecycleRuntime {
         changes,
       );
       if (!recorded) return undefined;
-      if (next === undefined) return [];
+      if (next === undefined) return null;
       try {
-        const continued = await this.decide(
+        return await this.decide(
           store,
           registered,
           run.recordId,
@@ -596,7 +673,6 @@ export class LifecycleRuntime {
           { actor: SYSTEM_ACTOR, input },
           this.clock(),
         );
-        return continued.effectRuns;
       } catch (error) {
         // The record has moved on, or the guard refuses: the outcome is
         // still recorded, and nothing follows from it. decide() writes
@@ -608,11 +684,15 @@ export class LifecycleRuntime {
           `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
           { runId },
         );
-        return [];
+        return null;
       }
     });
     if (finished === undefined) this.discarded(effect.name, runId, attempt);
-    else for (const owed of finished) await this.handOver(owed.id, null);
+    else if (finished) {
+      await this.emit(registered, finished, SYSTEM_ACTOR);
+      for (const owed of finished.effectRuns)
+        await this.handOver(owed.id, null);
+    }
     if (!outcome.ok)
       this.logger.warn(
         `Effect "${effect.name}" failed after ${attempt} attempt(s)`,
@@ -805,12 +885,88 @@ export class LifecycleRuntime {
       at,
       version: plan.nextVersion,
     });
-    const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
     const record = Object.freeze({
       ...current,
       ...plan.values,
     }) as LifecycleRecord;
+    const definition = lifecycle.transitions.get(transition)?.definition;
+    if (definition?.onTransition)
+      await definition.onTransition(
+        Object.freeze({
+          record,
+          previous: current,
+          actor: options.actor,
+          input: plan.input,
+          from: plan.from,
+          to: plan.to,
+          entry,
+          parameters: this.parameters(
+            lifecycle.name,
+          ) as ParametersOf<LifecycleTypes>,
+          services: registered.services(
+            store.transactionHandle,
+          ) as ServicesOf<LifecycleTypes>,
+          transactionHandle: store.transactionHandle,
+          now,
+        }),
+      );
+    const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
     return { record, entry, effectRuns };
+  }
+
+  /** Tells the listeners about a committed transition; a failing listener is logged, never thrown. */
+  private async emit(
+    registered: Registered,
+    committed: FireResult,
+    actor: LifecycleActor,
+  ): Promise<void> {
+    if (!this.subscriptions.length) return;
+    const { lifecycle } = registered;
+    const { entry, record } = committed;
+    const base: LifecycleEvent = Object.freeze({
+      lifecycle: lifecycle.name,
+      transition: entry.transition,
+      from: entry.from,
+      to: entry.to,
+      record,
+      entry,
+      actor,
+    });
+    const deliveries: [Subscription['event'], LifecycleEvent][] = [
+      ['completed', base],
+      ['entered', base],
+      ...transitionsFrom(lifecycle, entry.to).map(
+        (next): [Subscription['event'], LifecycleEvent] => [
+          'announce',
+          Object.freeze({ ...base, next: next.name }) as AnnounceEvent,
+        ],
+      ),
+    ];
+    for (const [event, payload] of deliveries)
+      for (const subscription of [...this.subscriptions]) {
+        if (subscription.event !== event) continue;
+        const { filter } = subscription;
+        const transition =
+          event === 'announce'
+            ? (payload as AnnounceEvent).next
+            : payload.transition;
+        if (
+          (filter.lifecycle !== undefined &&
+            filter.lifecycle !== payload.lifecycle) ||
+          (filter.transition !== undefined &&
+            filter.transition !== transition) ||
+          (filter.state !== undefined && filter.state !== payload.to)
+        )
+          continue;
+        try {
+          await subscription.listener(payload);
+        } catch (error) {
+          this.logger.error(
+            `A "${event}" listener failed on ${lifecycle.name} record "${entry.recordId}"`,
+            { error },
+          );
+        }
+      }
   }
 
   /** Writes a queued run for each effect a log entry owes. */

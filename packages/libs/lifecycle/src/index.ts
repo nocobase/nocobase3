@@ -14,6 +14,7 @@ export {
   type SetContext,
   type TransitionContext,
   type TransitionDefinition,
+  type TransitionHookContext,
   type TriggerDefinition,
 } from './definition.js';
 export {
@@ -36,12 +37,16 @@ export {
 export {
   CREATE_TRANSITION,
   LifecycleRuntime,
+  type AnnounceEvent,
   type AvailableTransition,
   type CreateOptions,
+  type EventFilter,
   type EffectDispatcher,
   type FireExpectation,
   type FireOptions,
   type FireResult,
+  type LifecycleEvent,
+  type LifecycleListener,
   type LifecycleLogger,
   type LifecycleRuntimeOptions,
   type RecordHistory,
