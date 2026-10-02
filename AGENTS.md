@@ -120,6 +120,12 @@ Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename r
 
 Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/libs/db` does.
 
+### Database Tests Do Not Choose a Dialect
+
+A test outside the `@nocobase/db` packages that needs a database gets it from `@nocobase/db-testing` rather than configuring one: `createDatabaseTest()` from `@nocobase/db-testing/vitest` gives each test migrated databases on the dialect `NOCOBASE_TEST_DB_DIALECT` names, SQLite when it is unset, and `describeMigration()` is the migration test described under "Database Migration Development". Such a test does not import a `@nocobase/db-<dialect>` package, does not configure `dialect: 'sqlite'` or `':memory:'`, and does not reach for SQL that only one database understands — `PRAGMA`, `sqlite_master`, triggers. Assert on the schema with `expectCollection()`, which compares Field and Collection names rather than physical ones, and prepare rows through a Repository or `connection.query`. `packages/libs/db-testing/README.md` lists what to write instead of each SQLite-specific form.
+
+The default run stays on SQLite so `pnpm test` needs no server, which is exactly why a test that only works on SQLite goes unnoticed: nothing fails until someone selects another dialect. A test whose subject is SQLite itself — the SQLite driver, or configuration that names it — is the exception and stays where it is.
+
 ### Never Assert a Package's Own Version as a Literal
 
 A test must not spell out the version of a package in this repository. Read it from the manifest instead:
@@ -175,7 +181,7 @@ Do not import or iterate over live collection schemas, field definitions, model 
 
 When a migration needs to create a collection, call `builder.createCollection` with its fixed name and declare every field, relation, index, and constraint in the migration itself. Write `down` with the corresponding explicit reverse operations in a safe dependency order. For an existing schema, use explicit `builder.alterCollection`, field, index, constraint, or metadata operations rather than synchronizing from the current collection definition.
 
-Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata.
+Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata. Outside the `@nocobase/db` packages, write it with `describeMigration()` from `@nocobase/db-testing/vitest`: it applies the migrations before this one, applies, rolls back and reapplies this one, checks after each step that metadata and tables agree and that rolling back restores exactly the tables that existed before, and runs on whichever dialect the environment selects.
 
 ### Choosing a data-access tool in a migration or seed
 

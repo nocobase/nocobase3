@@ -407,7 +407,13 @@
         "temporalProjection",
         "validateJsonCondition"
       ],
-      "types": ["KnexConnectionConfig"]
+      "types": [
+        "KnexConnectionConfig",
+        "ProvisionedTestDatabase",
+        "TestDatabaseEnvironment",
+        "TestDatabaseProvisionOptions",
+        "TestDatabaseProvisioner"
+      ]
     }
   }
 }
