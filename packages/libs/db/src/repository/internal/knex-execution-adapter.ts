@@ -892,6 +892,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           this.runtime,
         ) === 'lock-then-write-by-key'
       ) {
+        // A scope check learns the rows by whatever unique key the Collection
+        // has, nullable or not; that is no identity the event can report, so
+        // the event stays a count then. (Returning records needs a primary
+        // key, which always is one.)
         return this.runRecorded(
           'updateMany',
           plan.collection,
@@ -899,6 +903,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           subscriptions,
           (adapter) => adapter.executeUpdateManyReturning(plan),
           (result) => result.count > 0,
+          eventIdentityFields(plan.collection) ? undefined : countOf,
         );
       }
       return this.runCounted(
@@ -974,7 +979,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       count += affectedCount(await query);
     }
     assertBulkMutationCount('updateMany', count, selected.length);
-    if (this.recorder) {
+    if (this.recorder && eventIdentityFields(plan.collection)) {
       const written = writtenFields(plan.collection, plan.values);
       const values = this.recorder.withValues
         ? withoutNumericMutations(plan.values)
@@ -3011,12 +3016,6 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       adapter: KnexRepositoryExecutionAdapter,
     ) => Promise<RepositoryExecutedManyMutation>,
   ): Promise<RepositoryExecutedManyMutation> {
-    const counted = (
-      result: RepositoryExecutedManyMutation,
-    ): RepositoryMutationCount => ({
-      granularity: 'count',
-      count: result.count,
-    });
     if (
       isTransaction(this.getClient()) ||
       subscriptions.some((subscription) => subscription.listeners.inTransaction)
@@ -3028,7 +3027,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         subscriptions,
         execute,
         (result) => result.count > 0,
-        counted,
+        countOf,
       );
     }
     const call = beginRepositoryMutationCall(
@@ -3040,7 +3039,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       meta,
     );
     const result = await execute(this);
-    await emitRepositoryMutation(call, counted(result));
+    await emitRepositoryMutation(call, countOf(result));
     return result;
   }
 
@@ -3116,13 +3115,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     identity: readonly string[],
   ): void {
     if (!this.recorder) return;
-    const encodeRow = prepareWrite(this.getClient(), plan.collection);
+    // Encoding maps each field to its column one to one, so the fields a row
+    // writes are the keys of its values; nothing is encoded a second time.
     const changes: RowChange[] = plan.records.map((record) => {
       const values = withInitialVersion(plan.collection, record);
-      const written = logicalFields(
-        plan.collection,
-        Object.keys(encodeRow(values)),
-      );
+      const written = Object.keys(values);
       return {
         collection: plan.collection.name!,
         kind: 'created',
@@ -4110,6 +4107,13 @@ function selectorKeyValues(
   return Object.fromEntries(
     unique.fields.map((field) => [field, unique.values[field]]),
   );
+}
+
+/** The count event of a bulk write. */
+function countOf(
+  result: RepositoryExecutedManyMutation,
+): RepositoryMutationCount {
+  return { granularity: 'count', count: result.count };
 }
 
 /** Fields a bulk update writes: its values and an incremented version. */

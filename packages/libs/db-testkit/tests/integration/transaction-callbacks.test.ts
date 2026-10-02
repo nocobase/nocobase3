@@ -143,10 +143,13 @@ describeIntegrationDatabases('transaction callbacks', (context) => {
     ).resolves.toBe('done');
 
     expect(after).toHaveBeenCalledOnce();
-    expect(warning).toHaveBeenCalledWith(failure, {
-      code: 'TRANSACTION_CALLBACK_FAILED',
-      detail: 'phase: afterCommit',
-    });
+    expect(warning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'TRANSACTION_CALLBACK_FAILED',
+        detail: 'phase: afterCommit',
+        cause: failure,
+      }),
+    );
     await expect(countOrders()).resolves.toBe(1);
   });
 

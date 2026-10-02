@@ -131,13 +131,53 @@ describe('transaction callbacks on SQLite', () => {
     ).rejects.toBe(cause);
 
     expect(after).toHaveBeenCalledOnce();
-    expect(warning).toHaveBeenCalledWith(handlerFailure, {
-      code: 'TRANSACTION_CALLBACK_FAILED',
-      detail: 'phase: handler',
-    });
-    expect(warning).toHaveBeenCalledWith(failure, {
-      code: 'TRANSACTION_CALLBACK_FAILED',
-      detail: 'phase: afterCommit',
-    });
+    expect(warning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'TRANSACTION_CALLBACK_FAILED',
+        detail: 'phase: handler',
+        cause: handlerFailure,
+      }),
+    );
+    expect(warning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'TRANSACTION_CALLBACK_FAILED',
+        detail: 'phase: afterCommit',
+        cause: failure,
+      }),
+    );
+  });
+
+  it('emits a warning whose code a process listener can read', async () => {
+    const database = createDatabase();
+    const failure = new Error('realtime is down');
+    const warnings: Error[] = [];
+    const onWarning = (warning: Error): void => {
+      warnings.push(warning);
+    };
+    process.on('warning', onWarning);
+    try {
+      await database.transaction(async (connection) => {
+        connection.afterCommit(() => {
+          throw failure;
+        });
+      });
+      // Node hands the warning to listeners on the next tick.
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('warning', onWarning);
+    }
+
+    // Observed through the event rather than a spy on emitWarning: Node drops
+    // the code and detail options when it is handed an Error, so only the
+    // emitted warning shows what a listener gets.
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        name: 'Warning',
+        message: 'realtime is down',
+        code: 'TRANSACTION_CALLBACK_FAILED',
+        detail: 'phase: afterCommit',
+        cause: failure,
+      }),
+    );
   });
 });

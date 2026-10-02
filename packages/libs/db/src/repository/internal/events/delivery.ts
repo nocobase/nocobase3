@@ -49,6 +49,11 @@ export interface RepositoryEventsBinding {
   ): Promise<T>;
   /** The connection an `inTransaction` listener of `parent` receives. */
   listenerConnection(parent: RepositoryOperationParent): DatabaseConnection;
+  /**
+   * The root connection an `afterCommit` listener receives, whose writes
+   * descend from `parent`: the batch it was handed.
+   */
+  afterCommitConnection(parent: RepositoryOperationParent): DatabaseConnection;
   reportError(error: unknown, context: RepositoryEventErrorContext): void;
 }
 
@@ -118,9 +123,14 @@ export async function emitRepositoryMutation(
 ): Promise<void> {
   if (payload.granularity === 'rows' && payload.changes.length === 0) return;
   if (payload.granularity === 'count' && payload.count === 0) return;
+  // The call targeted its root Collection even when every row it wrote was a
+  // nested one, so a subscription on the root hears about it too.
   const touched =
     payload.granularity === 'rows'
-      ? new Set(payload.changes.map((change) => change.collection))
+      ? new Set([
+          call.collection,
+          ...payload.changes.map((change) => change.collection),
+        ])
       : new Set([call.collection]);
   const delivered = call.subscriptions.filter((subscription) =>
     matchesAny(subscription, touched),
@@ -145,6 +155,7 @@ export async function emitRepositoryMutation(
   const entry: BatchEntry = {
     event: views,
     subscriptions: afterCommit,
+    depth: call.depth,
   };
   const callbacks = call.binding.callbacks;
   const slot =
@@ -210,6 +221,8 @@ function withoutValues(change: RowChange): RowChange {
 interface BatchEntry {
   readonly event: EventViews;
   readonly subscriptions: readonly RepositoryMutationSubscription[];
+  /** How deep in listener writes the call was; its afterCommit writes go one deeper. */
+  readonly depth: number;
 }
 
 /**
@@ -219,7 +232,7 @@ interface BatchEntry {
  * An entry made inside a savepoint also registers a rollback callback on the
  * savepoint's scope, which takes it out if the savepoint rolls back.
  */
-const batches = new WeakMap<TransactionCallbacks, BatchEntry[]>();
+const pendingBatches = new WeakMap<TransactionCallbacks, BatchEntry[]>();
 
 function reserve(
   callbacks: TransactionCallbacks,
@@ -228,17 +241,17 @@ function reserve(
 ): { cancel(): void } {
   let root = callbacks;
   while (root.parent) root = root.parent;
-  let batch = batches.get(root);
+  let batch = pendingBatches.get(root);
   if (!batch) {
     const entries: BatchEntry[] = [];
     batch = entries;
-    batches.set(root, entries);
+    pendingBatches.set(root, entries);
     root.afterCommit(async () => {
-      batches.delete(root);
+      pendingBatches.delete(root);
       await deliver(entries, binding);
     });
     root.afterRollback(() => {
-      batches.delete(root);
+      pendingBatches.delete(root);
     });
   }
   const entries = batch;
@@ -256,26 +269,34 @@ async function deliver(
   binding: RepositoryEventsBinding,
 ): Promise<void> {
   const order: RepositoryMutationSubscription[] = [];
-  const events = new Map<
+  const batches = new Map<
     RepositoryMutationSubscription,
-    RepositoryMutationEvent[]
+    { events: RepositoryMutationEvent[]; depth: number }
   >();
   for (const entry of entries) {
     for (const subscription of entry.subscriptions) {
-      let list = events.get(subscription);
-      if (!list) {
-        list = [];
-        events.set(subscription, list);
+      let batch = batches.get(subscription);
+      if (!batch) {
+        batch = { events: [], depth: 0 };
+        batches.set(subscription, batch);
         order.push(subscription);
       }
-      list.push(entry.event.for(subscription));
+      batch.events.push(entry.event.for(subscription));
+      batch.depth = Math.max(batch.depth, entry.depth);
     }
   }
   order.sort((left, right) => left.sequence - right.sequence);
   for (const subscription of order) {
-    const received = events.get(subscription)!;
+    const { events: received, depth } = batches.get(subscription)!;
+    // Writes the listener makes descend from the batch: the last event is
+    // their parent and the deepest one sets their depth, so a listener that
+    // keeps writing what it observes meets the limit instead of looping.
+    const connection = binding.afterCommitConnection({
+      operationId: received[received.length - 1].operationId,
+      depth,
+    });
     try {
-      await subscription.listeners.afterCommit?.(received);
+      await subscription.listeners.afterCommit?.(received, connection);
     } catch (error) {
       binding.reportError(error, {
         ...(subscription.id === undefined

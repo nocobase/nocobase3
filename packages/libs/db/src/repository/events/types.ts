@@ -66,7 +66,11 @@ export interface RepositoryEventMeta<T> {
 export interface RepositoryMutationEventBase {
   /** Unique per Repository call. */
   readonly operationId: string;
-  /** Set for a write made through the connection an `inTransaction` listener received. */
+  /**
+   * Set for a write made through the connection a listener received: the
+   * `operationId` of the event an `inTransaction` listener was handling, or
+   * of the last event in the batch an `afterCommit` listener was handed.
+   */
   readonly parentOperationId?: string;
   /** Connection name. */
   readonly connection: string;
@@ -102,9 +106,10 @@ export interface RepositoryMutationSubscriptionOptions {
   /** Diagnostic name, shown by `explainRepositoryEvents()` and passed to `onRepositoryEventError`. */
   readonly id?: string;
   /**
-   * Collections to observe. An event matches when any of its row changes is
-   * in one of them, nested targets and through Collections included; a count
-   * event matches by its root Collection. Must not be empty.
+   * Collections to observe. An event matches when its root Collection or any
+   * of its row changes is in one of them, nested targets and through
+   * Collections included; a count event matches by its root Collection. Must
+   * not be empty.
    */
   readonly collections: readonly string[];
   /**
@@ -132,11 +137,17 @@ export interface RepositoryMutationListeners {
   ) => void | Promise<void>;
   /**
    * Runs once the outermost transaction has committed, with every matching
-   * event of that transaction in order. Errors go to `onRepositoryEventError`
-   * and never reach the caller.
+   * event of that transaction in order and the root connection. Writes made
+   * through that connection emit events whose `parentOperationId` is the
+   * last event's `operationId` and count one level deeper than the deepest
+   * event of the batch towards `repositoryEventMaxDepth`, so a listener that
+   * writes the Collection it observes stops with `REPOSITORY_EVENT_RECURSION`
+   * instead of running forever. Errors go to `onRepositoryEventError` and
+   * never reach the caller.
    */
   readonly afterCommit?: (
     events: readonly RepositoryMutationEvent[],
+    connection: DatabaseConnection,
   ) => void | Promise<void>;
 }
 

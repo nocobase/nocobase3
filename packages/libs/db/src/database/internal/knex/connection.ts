@@ -120,6 +120,9 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       TransactionCallbacks | undefined = undefined,
     /** Owned by the root connection and shared with all its transactions. */
     private readonly mutationRegistry: RepositoryMutationRegistry = new RepositoryMutationRegistry(),
+    /** The connection this transaction connection was opened from; none on the root. */
+    private readonly rootConnection:
+      KnexDatabaseConnection | undefined = undefined,
   ) {
     const maxDepth = sourceConfig.repositoryEventMaxDepth;
     if (
@@ -343,6 +346,11 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         }),
       listenerConnection: (operation) =>
         new RepositoryListenerConnection(this, operation),
+      afterCommitConnection: (operation) =>
+        new RepositoryListenerConnection(
+          this.rootConnection ?? this,
+          operation,
+        ),
       reportError: (error, context) =>
         this.reportRepositoryEventError(error, context),
     };
@@ -440,6 +448,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           this.dialectDriver,
           callbacks,
           this.mutationRegistry,
+          this.rootConnection ?? this,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);
@@ -490,18 +499,14 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       } catch (handlerError) {
         // A failing handler must not undo the guarantee it reports on: the
         // transaction outcome stays as it is and the next callbacks still run.
-        process.emitWarning(
-          handlerError instanceof Error
-            ? handlerError
-            : new Error(String(handlerError)),
-          { code: 'TRANSACTION_CALLBACK_FAILED', detail: 'phase: handler' },
+        emitCodedWarning(
+          'TRANSACTION_CALLBACK_FAILED',
+          'phase: handler',
+          handlerError,
         );
       }
     }
-    process.emitWarning(
-      error instanceof Error ? error : new Error(String(error)),
-      { code: 'TRANSACTION_CALLBACK_FAILED', detail: `phase: ${phase}` },
-    );
+    emitCodedWarning('TRANSACTION_CALLBACK_FAILED', `phase: ${phase}`, error);
   }
 
   private reportRepositoryEventError(
@@ -521,12 +526,10 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         );
       }
     }
-    process.emitWarning(
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        code: 'REPOSITORY_EVENT_LISTENER_FAILED',
-        detail: `subscription: ${context.subscriptionId ?? '(unnamed)'}; operations: ${context.operationIds.join(', ')}`,
-      },
+    emitCodedWarning(
+      'REPOSITORY_EVENT_LISTENER_FAILED',
+      `subscription: ${context.subscriptionId ?? '(unnamed)'}; operations: ${context.operationIds.join(', ')}`,
+      error,
     );
   }
 
@@ -535,11 +538,32 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       this.sourceConfig.onCollectionMetadataInvalidationError(error);
       return;
     }
-    process.emitWarning(
-      error instanceof Error ? error : new Error(String(error)),
-      { code: 'COLLECTION_METADATA_INVALIDATION_FAILED' },
+    emitCodedWarning(
+      'COLLECTION_METADATA_INVALIDATION_FAILED',
+      undefined,
+      error,
     );
   }
+}
+
+/**
+ * `process.emitWarning` applies `code` and `detail` only to a warning it
+ * builds from a string; an Error handed to it is emitted as it is, without
+ * them. So the warning is built here, with the failure as its `cause`, and a
+ * `warning` listener can read the code it was promised.
+ */
+function emitCodedWarning(
+  code: string,
+  detail: string | undefined,
+  cause: unknown,
+): void {
+  const warning = Object.assign(
+    new Error(cause instanceof Error ? cause.message : String(cause), {
+      cause,
+    }),
+    { name: 'Warning', code, ...(detail === undefined ? {} : { detail }) },
+  );
+  process.emitWarning(warning);
 }
 
 class TransactionInvalidationCollector {

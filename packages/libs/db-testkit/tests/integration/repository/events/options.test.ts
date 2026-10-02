@@ -296,11 +296,32 @@ describeIntegrationDatabases(
         values: [
           { email: null, label: 'A' },
           { email: null, label: 'B' },
+          { email: 'c@example.com', label: 'C' },
         ],
       });
       await context.connection
         .repository('nullableKeys')
         .deleteMany({ filter: { label: 'A' } });
+      // A Policy scope check makes the call learn its rows by the nullable
+      // unique key, which is still no identity the event can report.
+      const scoped = context.connection.withPolicies(
+        {
+          nullableKeys: {
+            read: { scope: true },
+            create: { scope: true, fields: ['email', 'label'] },
+            delete: { scope: true },
+            update: {
+              scope: (filter) => filter.string('label').startsWith('C'),
+              fields: ['label'],
+            },
+          },
+        },
+        undefined,
+      );
+      await scoped.repository('nullableKeys').updateMany({
+        filter: { label: 'C' },
+        values: { label: 'C2' },
+      });
 
       expect(
         seen.batches
@@ -314,11 +335,12 @@ describeIntegrationDatabases(
       ).toEqual([
         ['eventLog', 'createMany', 'count', 2],
         ['eventLog', 'updateMany', 'count', 2],
-        ['nullableKeys', 'createMany', 'count', 2],
+        ['nullableKeys', 'createMany', 'count', 3],
         ['nullableKeys', 'deleteMany', 'count', 1],
+        ['nullableKeys', 'updateMany', 'count', 1],
       ]);
       expect(await context.connection.repository('nullableKeys').count()).toBe(
-        1,
+        2,
       );
     });
 

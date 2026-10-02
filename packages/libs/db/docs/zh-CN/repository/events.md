@@ -35,19 +35,19 @@ const off = db.connection().onRepositoryMutation(
 off();
 ```
 
-| 选项          | 默认    | 说明                                                                                                            |
-| ------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| `collections` | 必填    | 要观察的 Collection 逻辑名，不能为空。事件中任意一条变更落在其中即匹配，包括嵌套写入的目标和 through Collection |
-| `id`          | 无      | 诊断用名称，出现在 `explainRepositoryEvents()` 结果和 `onRepositoryEventError` 的 context 中                    |
-| `keys`        | `true`  | 是否需要批量写的行键。`false` 表示批量写只要行数，见“执行策略”                                                  |
-| `values`      | `false` | 是否在变更中附带写入的值，见“values”                                                                            |
+| 选项          | 默认    | 说明                                                                                                                            |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `collections` | 必填    | 要观察的 Collection 逻辑名，不能为空。事件的根 Collection 或任意一条变更落在其中即匹配，包括嵌套写入的目标和 through Collection |
+| `id`          | 无      | 诊断用名称，出现在 `explainRepositoryEvents()` 结果和 `onRepositoryEventError` 的 context 中                                    |
+| `keys`        | `true`  | 是否需要批量写的行键。`false` 表示批量写只要行数，见“执行策略”                                                                  |
+| `values`      | `false` | 是否在变更中附带写入的值，见“values”                                                                                            |
 
 监听器至少提供一个：
 
-| 监听器                             | 时机                                 | 收到                                     |
-| ---------------------------------- | ------------------------------------ | ---------------------------------------- |
-| `inTransaction(event, connection)` | 本次调用的写入全部完成后、事务结束前 | 一个事件和本次调用所在的事务 Connection  |
-| `afterCommit(events)`              | 最外层事务提交之后                   | 该事务内匹配本订阅的全部事件，按发生顺序 |
+| 监听器                             | 时机                                 | 收到                                                      |
+| ---------------------------------- | ------------------------------------ | --------------------------------------------------------- |
+| `inTransaction(event, connection)` | 本次调用的写入全部完成后、事务结束前 | 一个事件和本次调用所在的事务 Connection                   |
+| `afterCommit(events, connection)`  | 最外层事务提交之后                   | 该事务内匹配本订阅的全部事件（按发生顺序）和根 Connection |
 
 订阅登记在根 Connection 上，并由它的所有事务 Connection 共享。通过事务 Connection 或 Policy 绑定的 Connection 调用 `onRepositoryMutation()`，登记的仍是整个 Connection 的订阅，不只是那个事务；它在 `off()` 之前一直有效。不同 Connection 的订阅互不相干；`DatabaseManager` 不提供跨 Connection 的订阅。
 
@@ -149,7 +149,7 @@ belongsToMany 的 `connect` 不写目标表，所以没有目标 Collection 的�
 | 阶段            | 能否写库                                                          | 抛错的后果                                                                                                                                                                               |
 | --------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `inTransaction` | 可以，用收到的 Connection，与本次调用在同一事务；写入会再产生事件 | 本次调用以原错误失败；其后的 `inTransaction` 监听器不再执行，本次调用的 `afterCommit` 不投递。没有外层事务时隐式事务回滚                                                                 |
-| `afterCommit`   | 可以，用根 Connection 或新事务；收到时事务已经结束                | 不影响调用方，也不影响其他监听器。错误交给连接配置 `onRepositoryEventError(error, { subscriptionId, operationIds })`，未配置时成为 code 为 `REPOSITORY_EVENT_LISTENER_FAILED` 的进程警告 |
+| `afterCommit`   | 可以，用收到的 Connection；收到时事务已经结束                     | 不影响调用方，也不影响其他监听器。错误交给连接配置 `onRepositoryEventError(error, { subscriptionId, operationIds })`，未配置时成为 code 为 `REPOSITORY_EVENT_LISTENER_FAILED` 的进程警告 |
 
 - 同一阶段的监听器按登记顺序逐个 `await`。
 - 没有改动任何行的调用（例如以 `RECORD_NOT_FOUND` 失败，或批量写匹配零行）不产生事件。
@@ -159,6 +159,8 @@ belongsToMany 的 `connect` 不写目标表，所以没有目标 Collection 的�
 - 需要“写入前拒绝”的检查，放在 `inTransaction` 中按写入后的状态判断：判断与写入在同一事务内，失败则一起回滚。
 
 `inTransaction` 收到的 Connection 是本次调用所在的事务 Connection，不是调用方使用的 Policy 绑定 Connection；需要按 Policy 写入时自己调用 `withPolicies()`。经它写入产生的事件带 `parentOperationId`。这种嵌套写入的深度受连接配置 `repositoryEventMaxDepth`（默认 8）限制，超过时写入在执行前以 `RepositoryError('REPOSITORY_EVENT_RECURSION')` 失败，整个调用回滚；监听器写入自己订阅的 Collection 时，这就是无限递归的出口。
+
+`afterCommit` 收到的 Connection 是根 Connection，写入在新的事务中进行，事件的 `parentOperationId` 是这批事件中最后一个的 `operationId`，深度从这批事件中最深的一个再加一，同样受 `repositoryEventMaxDepth` 限制。监听器在提交后写入自己订阅的 Collection 时，超过深度的那次写入以 `REPOSITORY_EVENT_RECURSION` 失败并交给 `onRepositoryEventError`，调用方正常返回。直接用 `db.connection()` 写入不带这些信息，也就不受限制，提交后的写入应经收到的 Connection 进行。
 
 ## 执行策略
 

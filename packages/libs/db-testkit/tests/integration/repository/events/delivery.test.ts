@@ -300,12 +300,114 @@ describeIntegrationDatabases(
 
       expect(later).toHaveBeenCalledOnce();
       expect(warnings).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'delivery failed' }),
         expect.objectContaining({
+          message: 'delivery failed',
           code: 'REPOSITORY_EVENT_LISTENER_FAILED',
           detail: expect.stringContaining('broken') as unknown,
+          cause: expect.objectContaining({
+            message: 'delivery failed',
+          }) as unknown,
         }),
       );
+    });
+
+    it('lets an afterCommit listener write through the connection it receives, with the batch as parent', async () => {
+      await createEventsFixture(context);
+      const notes = collectEvents();
+      let batch: readonly RepositoryMutationEvent[] = [];
+      subscribe(
+        { collections: ['tasks'] },
+        {
+          afterCommit: async (events, connection) => {
+            batch = events;
+            await connection
+              .repository('notes')
+              .createOne({ values: { body: 'after commit' } });
+          },
+        },
+      );
+      subscribe({ collections: ['notes'] }, notes.listeners);
+
+      await context.connection.repository('tasks').updateOne({
+        filter: { id: 'task-edit' },
+        values: { title: 'Audited' },
+      });
+
+      expect(batch).toHaveLength(1);
+      expect(notes.batches).toHaveLength(1);
+      expect(notes.batches[0]).toMatchObject([
+        {
+          collection: 'notes',
+          operation: 'createOne',
+          scope: 'connection',
+          parentOperationId: batch[0]!.operationId,
+        },
+      ]);
+      expect(await countRows('notes')).toBe(3);
+    });
+
+    it('stops an afterCommit listener that keeps writing what it observes at the depth limit', async () => {
+      await createEventsFixture(context);
+      const warnings = vi
+        .spyOn(process, 'emitWarning')
+        .mockImplementation(() => undefined);
+      subscribe(
+        { collections: ['notes'] },
+        {
+          afterCommit: async (_events, connection) => {
+            await connection
+              .repository('notes')
+              .createOne({ values: { body: 'echo' } });
+          },
+        },
+      );
+
+      await context.connection
+        .repository('notes')
+        .createOne({ values: { body: 'start' } });
+
+      // The start plus the eight echoes the limit allows; the ninth is refused
+      // before it runs and reported, so the call returns instead of looping.
+      expect(await countRows('notes')).toBe(2 + 1 + 8);
+      expect(warnings).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          code: 'REPOSITORY_EVENT_LISTENER_FAILED',
+          cause: expect.objectContaining({
+            code: 'REPOSITORY_EVENT_RECURSION',
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('matches a subscription on the root Collection when the call wrote only nested rows', async () => {
+      await createEventsFixture(context);
+      const seen = collectEvents();
+      subscribe({ collections: ['teams'] }, seen.listeners);
+
+      await context.connection.repository('teams').updateOne({
+        filter: { id: 'team-1' },
+        values: {
+          members: {
+            connect: [{ where: { id: 'user-2' }, through: { role: 'member' } }],
+          },
+        },
+      });
+
+      expect(seen.batches).toHaveLength(1);
+      expect(seen.batches[0]).toMatchObject([
+        {
+          collection: 'teams',
+          operation: 'updateOne',
+          granularity: 'rows',
+          changes: [
+            {
+              collection: 'memberships',
+              kind: 'created',
+              key: { teamId: 'team-1', userId: 'user-2' },
+            },
+          ],
+        },
+      ]);
     });
 
     it('matches a subscription by any changed Collection and skips one whose Collections were not written', async () => {

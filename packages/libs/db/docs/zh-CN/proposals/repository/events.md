@@ -486,6 +486,8 @@ const actor = audit.read(event); // { actorId: string } | undefined
 | 批量取键的代价              | 按键写入使用每批至多 200 个键的语句。文件型 SQLite 上 1 万行的 `updateMany`：无订阅 1.4 ms，`keys: true` 约 40 ms，`keys: false` 1.4 ms                                                                           |
 | 订阅参数校验                | `collections` 为空、两个监听器都没有提供时，`onRepositoryMutation()` 抛 `TypeError`                                                                                                                               |
 | `onRepositoryEventError`    | context 为 `{ subscriptionId?, operationIds }`；它自身抛错时，两个错误合并为一条 `REPOSITORY_EVENT_LISTENER_FAILED` 进程警告                                                                                      |
+| `afterCommit` 的第二个参数  | 监听器收到根 Connection，经它写入的事件以这批事件的最后一个为 parent、以最深的一个加一为深度，受 `repositoryEventMaxDepth` 限制；设计稿中 `afterCommit` 只收事件，提交后写入自己订阅的 Collection 会无限自触发    |
+| 根 Collection 的匹配        | 事件按根 Collection 或任意一条变更所在的 Collection 匹配订阅；只改了嵌套行的调用也投递给根 Collection 的订阅，与 `explainRepositoryEvents()` 的说法一致                                                           |
 
 ## 已定决策
 

@@ -52,6 +52,11 @@ export function bulkStrategy(
     return 'single-statement';
   }
   if (operation !== 'createMany') return 'lock-then-write-by-key';
+  // A dialect that cannot insert this Collection in one statement at all
+  // cannot do so with RETURNING either.
+  if (runtime?.repository?.createManyFallback?.(collection)) {
+    return 'insert-per-row';
+  }
   return runtime?.repository?.insertManyReturning
     ? 'insert-returning'
     : 'insert-per-row';
