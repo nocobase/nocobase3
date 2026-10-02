@@ -4,7 +4,11 @@ import {
   createAppAuthorization,
   type Authorization,
 } from '@nocobase/app-plugin-authorization';
-import { createMigrator, type DatabaseManager } from '@nocobase/db';
+import {
+  createMigrator,
+  type DatabaseConnection,
+  type DatabaseManager,
+} from '@nocobase/db';
 import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,6 +60,23 @@ describe('Hub user role scope', () => {
     });
     // What HubAuthorizationProvider declares at runtime.
     protectHubPermissionSets(authorization.permissionSets);
+    // What UsersProvider declares at runtime: a disabled account no longer
+    // counts as an active assignment. Without it every assignment counts, and
+    // whether a disabled administrator still protects the last one would
+    // depend on which concurrent transaction takes the lock first.
+    authorization.subjects.add<DatabaseConnection>('user', {
+      filterActive: async (ids, connection) =>
+        ids.length === 0
+          ? []
+          : (
+              await (connection ?? database.connection()).query
+                .selectFrom('user')
+                .select('id')
+                .where('id', 'in', [...ids])
+                .where('disabledAt', 'is', null)
+                .execute()
+            ).map((row) => String(row.id)),
+    });
   });
 
   afterEach(async () => {
