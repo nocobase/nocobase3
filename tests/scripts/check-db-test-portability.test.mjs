@@ -5,7 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   checkDbTestPortability,
+  EXEMPT,
   findViolations,
+  PENDING,
   readMarker,
 } from '../../scripts/check-db-test-portability.mjs';
 
@@ -32,6 +34,17 @@ test('finds each way a test chooses SQLite', () => {
     ),
     ['trigger'],
   );
+  assert.deepEqual(rules("client.raw('PRAGMA foreign_keys = ON')"), ['pragma']);
+  assert.deepEqual(rules("import Database from 'better-sqlite3';"), [
+    'sqlite-driver',
+  ]);
+  assert.deepEqual(
+    rules("knex({ client: 'better-sqlite3', connection: { filename } })"),
+    ['sqlite-driver'],
+  );
+  assert.deepEqual(rules('await import(`@nocobase/db-${dialect}`);'), [
+    'dynamic-dialect-import',
+  ]);
 });
 
 test('leaves portable tests and look-alikes alone', () => {
@@ -44,6 +57,13 @@ test('leaves portable tests and look-alikes alone', () => {
     [],
   );
   assert.deepEqual(rules("const spec = '@nocobase/db-postgres@^0.1.0';"), []);
+  // Prose about what a ported test replaced is not SQL.
+  assert.deepEqual(
+    rules('// replaces the old PRAGMA assertions with expectCollection'),
+    [],
+  );
+  // A package name in a manifest fixture is not a driver import.
+  assert.deepEqual(rules("const builds = { 'better-sqlite3': false };"), []);
 });
 
 test('reads a marker and requires a reason', () => {
@@ -68,6 +88,35 @@ test('reads a marker and requires a reason', () => {
     reason: undefined,
   });
   assert.equal(readMarker("import x from 'y';\n"), undefined);
+});
+
+test('reports a listed file that is marked or no longer chooses a dialect', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'db-test-portability-'));
+  try {
+    const write = (relativePath, source) => {
+      const file = path.join(root, relativePath);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, source);
+    };
+    const [exempt] = EXEMPT.keys();
+    const [pending, markedPending] = PENDING;
+    write(exempt, 'const portable = true;\n');
+    write(pending, 'const portable = true;\n');
+    write(
+      markedPending,
+      "// db-test-portability: sqlite-only — the SQLite driver\nconst c = { dialect: 'sqlite' };\n",
+    );
+
+    const problems = await checkDbTestPortability({ repositoryRoot: root });
+    const about = (file) =>
+      problems.filter((problem) => problem.file === file).map((p) => p.message);
+
+    assert.match(about(exempt).join('\n'), /remove it from EXEMPT/);
+    assert.match(about(pending).join('\n'), /remove it from PENDING/);
+    assert.match(about(markedPending).join('\n'), /also listed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('reports unmarked tests and helpers but not marked ones or the database packages', async () => {
@@ -102,6 +151,10 @@ test('reports unmarked tests and helpers but not marked ones or the database pac
       'packages/libs/db-sqlite/tests/x.test.ts',
       "const c = { dialect: 'sqlite' };\n",
     );
+    write(
+      'packages/plugins/d/tests/d.test.ts',
+      "// db-test-portability: sqlite-only — ported since\nconst c = { dialect: 'postgres' };\n",
+    );
 
     const problems = await checkDbTestPortability({ repositoryRoot: root });
     const files = problems.map((problem) => problem.file);
@@ -118,6 +171,14 @@ test('reports unmarked tests and helpers but not marked ones or the database pac
       ),
     );
     assert.ok(!files.includes('packages/libs/db-sqlite/tests/x.test.ts'));
+    // A marker that no longer covers a violation is stale, like a listed file.
+    assert.ok(
+      problems.some(
+        (problem) =>
+          problem.file === 'packages/plugins/d/tests/d.test.ts' &&
+          /remove its db-test-portability marker/.test(problem.message),
+      ),
+    );
     // Listed files that do not exist in this synthetic repository are reported as stale entries.
     assert.ok(
       problems.some((problem) => /no longer exists/.test(problem.message)),
