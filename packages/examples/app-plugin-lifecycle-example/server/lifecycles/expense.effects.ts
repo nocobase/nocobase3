@@ -42,7 +42,9 @@ export const notifyApplicant: EffectDefinition<ExpenseTypes> =
 export const requestPayment: EffectDefinition<ExpenseTypes> =
   defineEffect<ExpenseTypes>({
     name: 'expenses.requestPayment',
-    retry: { attempts: 3, backoffMs: 2_000 },
+    // 2 s, then 4 s; a payment taking longer than 10 s counts as failed.
+    retry: { attempts: 3, backoffMs: 2_000, factor: 2, maxMs: 10_000 },
+    timeoutMs: 10_000,
     // Marks the expense paid with the reference the payment returned.
     onSuccess: 'paid',
     run({ record, attempt, idempotencyKey, services }) {

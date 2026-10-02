@@ -33,7 +33,8 @@ export interface EffectRun {
   readonly id: string;
   readonly transitionId: string;
   readonly effect: string;
-  readonly status: 'queued' | 'running' | 'succeeded' | 'failed' | 'dead';
+  readonly status:
+    'queued' | 'running' | 'succeeded' | 'failed' | 'dead' | 'cancelled';
   readonly attempts: number;
   readonly maxAttempts: number;
   readonly error: string | null;

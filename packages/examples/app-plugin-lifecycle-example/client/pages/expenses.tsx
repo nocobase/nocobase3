@@ -665,7 +665,11 @@ function ExpenseView({
       const payment = [...effectRuns]
         .reverse()
         .find((run) => run.effect === 'expenses.requestPayment');
-      if (payment?.status === 'failed' || payment?.status === 'dead')
+      if (
+        payment?.status === 'failed' ||
+        payment?.status === 'dead' ||
+        payment?.status === 'cancelled'
+      )
         return (
           <Banner tone='danger'>
             {t('expenses.banner.paymentFailed', {

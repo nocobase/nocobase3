@@ -26,6 +26,9 @@ import { lifecycleExampleServiceToken } from '../tokens.js';
 /** How often the triggers are swept. */
 export const TRIGGER_SWEEP_MS: number = 10_000;
 
+/** How long finished effect runs are kept. */
+export const RUN_RETENTION_MS: number = 7 * 86_400_000;
+
 /**
  * Wires the lifecycles to the application: the Repository store on the
  * default connection, effects on a JobExecutor, and the trigger sweep on a
@@ -69,6 +72,10 @@ export class LifecycleExampleProvider extends ServiceProvider<AppPluginApplicati
       payload: {},
       execute: async () => {
         await runtime.runTriggers();
+        // Succeeded and cancelled runs are kept for a week, then pruned.
+        await runtime.prune({
+          olderThan: new Date(Date.now() - RUN_RETENTION_MS),
+        });
       },
     });
     await schedule.setup();

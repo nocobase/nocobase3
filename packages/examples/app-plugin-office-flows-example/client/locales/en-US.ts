@@ -92,6 +92,7 @@ const enUS = {
     succeeded: 'Succeeded',
     failed: 'Failed',
     dead: 'Gave up',
+    cancelled: 'Cancelled',
   },
 };
 

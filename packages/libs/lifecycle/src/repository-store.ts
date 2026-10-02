@@ -11,6 +11,7 @@ import type {
   EffectRun,
   EffectRunChanges,
   EffectRunCondition,
+  EffectRunPruneQuery,
   EffectRunQuery,
   EffectRunStatus,
   IdleRecordQuery,
@@ -88,6 +89,7 @@ function toTransition(row: Row): TransitionEntry {
     input: json<JsonObject>(row.input, {}),
     at: text(row.at) ?? '',
     version: Number(row.version ?? 0),
+    requestId: text(row.requestId),
   };
 }
 
@@ -209,6 +211,17 @@ class RepositoryLifecycleStore implements LifecycleStore {
     return row ? toTransition(row) : undefined;
   }
 
+  public async findTransitionByRequest(
+    lifecycle: string,
+    recordId: string,
+    requestId: string,
+  ): Promise<TransitionEntry | undefined> {
+    const row = await this.repository(this.names.transitions).findOne({
+      filter: { lifecycle, recordId, requestId },
+    });
+    return row ? toTransition(row) : undefined;
+  }
+
   public async listTransitions(
     lifecycle: string,
     recordId: string,
@@ -265,6 +278,9 @@ class RepositoryLifecycleStore implements LifecycleStore {
           ...(query.recordId === undefined
             ? []
             : [filter.string('recordId').eq(query.recordId)]),
+          ...(query.effect === undefined
+            ? []
+            : [filter.string('effect').eq(query.effect)]),
           ...(query.status === undefined
             ? []
             : [filter.string('status').eq(query.status)]),
@@ -276,6 +292,22 @@ class RepositoryLifecycleStore implements LifecycleStore {
       ...(query.limit === undefined ? {} : { limit: query.limit }),
     });
     return rows.map(toEffectRun);
+  }
+
+  public async deleteEffectRuns(query: EffectRunPruneQuery): Promise<number> {
+    if (!query.statuses.length) return 0;
+    const { deletedCount } = await this.repository(
+      this.names.effectRuns,
+    ).deleteMany({
+      filter: (filter) =>
+        filter.and([
+          filter.or(
+            query.statuses.map((status) => filter.string('status').eq(status)),
+          ),
+          filter.date('updatedAt').before(query.updatedBefore),
+        ]),
+    });
+    return deletedCount;
   }
 }
 

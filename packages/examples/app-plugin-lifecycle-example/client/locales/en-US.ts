@@ -206,6 +206,8 @@ const enUS = {
     diagram: 'Diagram (Mermaid)',
     diagramHint:
       'toMermaid(describe()) draws the lifecycle as a state diagram; paste it into any Mermaid renderer.',
+    retry: 'Retry',
+    cancel: 'Cancel',
     states: 'States',
     parameters: 'Parameters',
     transitions: 'Transition log',
@@ -266,6 +268,7 @@ const enUS = {
     succeeded: 'Succeeded',
     failed: 'Failed',
     dead: 'Gave up',
+    cancelled: 'Cancelled',
   },
 };
 
