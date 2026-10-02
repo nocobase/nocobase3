@@ -53,8 +53,12 @@ export function describeTestDatabaseProvisioner(
           ).items.length;
         await expect(tables(first)).resolves.toBe(1);
         await expect(tables(second)).resolves.toBe(0);
-        const listed = await provisioner.listProvisioned?.({ prefix, env });
-        expect(listed).toEqual(expect.arrayContaining(names));
+        // Listing is optional: a dialect whose databases do not outlive the process has nothing to list.
+        if (provisioner.listProvisioned) {
+          await expect(
+            provisioner.listProvisioned({ prefix, env }),
+          ).resolves.toEqual(expect.arrayContaining(names));
+        }
       } finally {
         for (const database of databases) await database.destroy();
         for (const database of provisioned) await database.drop();
@@ -70,14 +74,19 @@ export function describeTestDatabaseProvisioner(
       const prefix = `nbt_provisioner_stale_${process.pid}_`;
       const name = `${prefix}a`;
       const provisioned = await provisioner.provision({ name, env });
-      // Removed the way a later run removes a leftover, before the run that created it drops it itself.
-      await provisioner.dropProvisioned?.({ name, env });
-      if (provisioner.listProvisioned) {
-        await expect(
-          provisioner.listProvisioned({ prefix, env }),
-        ).resolves.toEqual([]);
+      try {
+        // Removed the way a later run removes a leftover, before the run that created it drops it itself.
+        await provisioner.dropProvisioned?.({ name, env });
+        if (provisioner.listProvisioned) {
+          await expect(
+            provisioner.listProvisioned({ prefix, env }),
+          ).resolves.toEqual([]);
+        }
+      } finally {
+        // Also proves that dropping an already removed database is harmless, and cleans up when an assertion
+        // above failed.
+        await provisioned.drop();
       }
-      await provisioned.drop();
     });
   });
 }

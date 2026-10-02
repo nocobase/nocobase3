@@ -107,17 +107,26 @@ export function createSqlTestDatabaseProvisioner(
 ): TestDatabaseProvisioner {
   const { statements } = options;
   const identifier = options.identifier ?? ((name: string) => name);
+  const statementsOf = (sql: string | readonly string[]): readonly string[] =>
+    typeof sql === 'string' ? [sql] : sql;
+  const runStatement = async (
+    client: Knex,
+    statement: string,
+    name: string,
+  ): Promise<void> => {
+    const placeholders = statement.match(/\?\??/g)?.length ?? 0;
+    await client.raw(
+      statement,
+      Array.from({ length: placeholders }, () => identifier(name)),
+    );
+  };
   const run = async (
     client: Knex,
     sql: string | readonly string[],
     name: string,
   ): Promise<void> => {
-    for (const statement of typeof sql === 'string' ? [sql] : sql) {
-      const placeholders = statement.match(/\?\??/g)?.length ?? 0;
-      await client.raw(
-        statement,
-        Array.from({ length: placeholders }, () => identifier(name)),
-      );
+    for (const statement of statementsOf(sql)) {
+      await runStatement(client, statement, name);
     }
   };
   const withAdmin = async <T>(
@@ -139,7 +148,25 @@ export function createSqlTestDatabaseProvisioner(
     dialect: options.dialect,
     capabilities: options.capabilities,
     provision: async ({ name, env }) => {
-      await withAdmin(env, (client) => run(client, statements.create, name));
+      await withAdmin(env, async (client) => {
+        const [first, ...rest] = statementsOf(statements.create);
+        // A failure of the first statement leaves nothing of this run behind — the name may even belong to
+        // something that predates it — so it is not cleaned up. Once the database or user exists, a failure of a
+        // later step drops it again, since the caller never receives the drop() that would.
+        if (first !== undefined) await runStatement(client, first, name);
+        try {
+          for (const statement of rest) {
+            await runStatement(client, statement, name);
+          }
+        } catch (error) {
+          try {
+            await run(client, statements.drop, name);
+          } catch {
+            // The create failure is what the caller needs to see; a stale sweep removes what remains.
+          }
+          throw error;
+        }
+      });
       return {
         connection: options.connection(env, name),
         drop: () => drop(env, name),
