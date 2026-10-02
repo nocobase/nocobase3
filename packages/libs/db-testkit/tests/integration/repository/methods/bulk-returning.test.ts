@@ -121,4 +121,43 @@ describeIntegrationDatabases('Repository methods/bulk-returning', (context) => {
     expect(deleted.records).toHaveLength(total);
     await expect(repository.count()).resolves.toBe(0);
   });
+
+  // Batching the delete must not mistake rows a database cascade already
+  // removed, from an earlier batch, for rows that could not be deleted.
+  it('deletes selected rows that an earlier batch removed by cascade', async () => {
+    // SQL Server refuses a self-referencing ON DELETE CASCADE.
+    if (context.spec.dialect === 'mssql') return;
+    await context.builder.createCollection('cascadeNodes', (collection) => {
+      collection.string('id').primary().notNull();
+      collection.string('parentId').nullable();
+      collection.foreignKey('parentId', {
+        references: { collection: 'cascadeNodes', fields: ['id'] },
+        onDelete: 'cascade',
+      });
+    });
+    const repository = context.database.repository('cascadeNodes');
+    const id = (index: number): string => `n${String(index).padStart(3, '0')}`;
+    // Rows 201-250 are children of rows 1-50, so their parents fall in the
+    // first batch of 200 and the children in the second.
+    await repository.createMany({
+      values: Array.from({ length: 200 }, (_, index) => ({
+        id: id(index + 1),
+      })),
+    });
+    await repository.createMany({
+      values: Array.from({ length: 50 }, (_, index) => ({
+        id: id(index + 201),
+        parentId: id(index + 1),
+      })),
+    });
+
+    const deleted = await repository.deleteMany({
+      all: true,
+      select: (select) => select.fields('id'),
+    });
+
+    expect(deleted.deletedCount).toBe(250);
+    expect(deleted.records).toHaveLength(250);
+    await expect(repository.count()).resolves.toBe(0);
+  });
 });

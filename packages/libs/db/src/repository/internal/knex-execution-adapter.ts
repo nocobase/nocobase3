@@ -951,6 +951,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       applySelectors(query, plan.collection, batch);
       count += affectedCount(await query);
     }
+    if (
+      count < selected.length &&
+      !(await this.anySelectedRowRemains(plan.collection, selectors))
+    ) {
+      // A database cascade from an earlier batch removed rows a later batch
+      // addressed; drivers do not count cascaded rows, but they are gone.
+      count = selected.length;
+    }
     assertBulkMutationCount('deleteMany', count, selected.length);
     return { count, records };
   }
@@ -1336,6 +1344,20 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           stableIdentityFields(collection),
         ),
       }));
+  }
+
+  private async anySelectedRowRemains(
+    collection: CollectionDefinition,
+    selectors: readonly UniqueSelector[],
+  ): Promise<boolean> {
+    for (const batch of selectorBatches(selectors)) {
+      const query = tableQuery(this.getClient(), collection).select(
+        column(collection, batch[0].fields[0]),
+      );
+      applySelectors(query, collection, batch);
+      if (await query.first()) return true;
+    }
+    return false;
   }
 
   private async findManyBySelectors(
@@ -4173,17 +4195,31 @@ function bindQueryValue(
 /**
  * Most row selectors one statement carries. Each selector is one OR branch,
  * and SQLite refuses an expression nested deeper than 1000 levels, so a write
- * or reload addressed to every locked row of a bulk call is split. 200 also
- * keeps a composite key's bound parameters well under the 2100 MSSQL allows.
+ * or reload addressed to every locked row of a bulk call is split.
  */
 const SELECTOR_BATCH_SIZE = 200;
 
-function selectorBatches(
+/**
+ * Most selector values one statement binds. MSSQL allows 2100 parameters in
+ * a statement; the rest is left for the values a write sets and the scope it
+ * is checked against.
+ */
+const SELECTOR_PARAMETER_BUDGET = 1000;
+
+export function selectorBatches(
   selectors: readonly UniqueSelector[],
 ): UniqueSelector[][] {
+  const width = Math.max(1, selectors[0]?.fields.length ?? 1);
+  const size = Math.max(
+    1,
+    Math.min(
+      SELECTOR_BATCH_SIZE,
+      Math.floor(SELECTOR_PARAMETER_BUDGET / width),
+    ),
+  );
   const batches: UniqueSelector[][] = [];
-  for (let start = 0; start < selectors.length; start += SELECTOR_BATCH_SIZE) {
-    batches.push(selectors.slice(start, start + SELECTOR_BATCH_SIZE));
+  for (let start = 0; start < selectors.length; start += size) {
+    batches.push(selectors.slice(start, start + size));
   }
   return batches;
 }
