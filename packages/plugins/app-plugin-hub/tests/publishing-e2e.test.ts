@@ -192,14 +192,22 @@ describe('Hub publishing end to end (CLI → Hub HTTP → App Host)', () => {
   }, 120_000);
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      if (!server) return resolve();
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
-    await service?.shutdown();
-    await supervisor?.shutdown();
-    await testDatabase?.destroy();
-    await rm(rootDir, { recursive: true, force: true });
+    // Release the database even when stopping the server or a service fails,
+    // so a failed run does not leave its connections open.
+    try {
+      await new Promise<void>((resolve, reject) => {
+        if (!server) return resolve();
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+      await service?.shutdown();
+      await supervisor?.shutdown();
+    } finally {
+      try {
+        await testDatabase?.destroy();
+      } finally {
+        await rm(rootDir, { recursive: true, force: true });
+      }
+    }
   }, 60_000);
 
   it('uploads, deploys, stops, starts and rolls back an App through the real chain', async () => {

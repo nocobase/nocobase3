@@ -126,9 +126,18 @@ describe('@nocobase/app-plugin-hub service', () => {
   }
 
   afterEach(async () => {
-    await service.shutdown();
-    await testDatabase.destroy();
-    await rm(rootDir, { recursive: true, force: true });
+    // beforeEach can fail before the service exists, for example when a
+    // migration is rejected; the database must still be released, or every
+    // later test leaks its connections.
+    try {
+      await service?.shutdown();
+    } finally {
+      try {
+        await testDatabase.destroy();
+      } finally {
+        await rm(rootDir, { recursive: true, force: true });
+      }
+    }
   });
 
   it('keeps desired configurations and deployment logs independent of the Host config path', async () => {

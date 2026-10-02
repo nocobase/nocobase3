@@ -367,7 +367,9 @@ describe('actor-bound data services with a real database and authorization', () 
         {
           id: 'a1',
           externalId: '9007199254740993',
-          amount: '100000000000000.25',
+          // Every significant digit survives; a dialect with a native decimal
+          // type returns the value padded to the column's scale of 8.
+          amount: expect.stringMatching(/^100000000000000\.250*$/),
         },
       ],
     });

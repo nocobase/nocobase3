@@ -4,6 +4,7 @@ import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 
 import createMigration from '../database/migrations/202608260002_create_ai_employee.js';
 import removeRecommendedModelsMigration from '../database/migrations/202609010001_remove_recommended_llm_models.js';
+import { authenticationMigrations } from './support/migrations.js';
 
 const testDatabases: TestDatabase[] = [];
 
@@ -18,6 +19,10 @@ describe('recommended LLM models migration', () => {
     const testDatabase = await createTestDatabase();
     testDatabases.push(testDatabase);
     const { database, connection } = testDatabase;
+    // The `user` table the conversations reference has to exist first.
+    await database
+      .createMigrator({ sources: authenticationMigrations })
+      .latest();
     const context = {
       builder: database.builder(),
       query: connection.query,

@@ -29,6 +29,7 @@ import {
 } from '../server/factory/repository-factory.js';
 import { serviceFactoryToken } from '../server/factory/service-factory.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
+import { aiEmployeeMigrations } from './support/migrations.js';
 
 const providers: AIEmployeeProvider[] = [];
 const databases: Awaited<ReturnType<typeof createTestAppDeps>>['database'][] =
@@ -84,8 +85,7 @@ describe('AIEmployeeProvider application config', () => {
     await deps.database.connect();
     await createMigrator({
       database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: new URL('../database/migrations', import.meta.url).pathname,
+      sources: aiEmployeeMigrations,
     }).latest();
     const repositories = new RepositoryFactory({
       connection: deps.database.connection(),
@@ -161,8 +161,7 @@ describe('AIEmployeeProvider application config', () => {
     await deps.database.connect();
     await createMigrator({
       database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: new URL('../database/migrations', import.meta.url).pathname,
+      sources: aiEmployeeMigrations,
     }).latest();
     await new RepositoryFactory({
       connection: deps.database.connection(),
@@ -289,8 +288,7 @@ describe('AIEmployeeProvider application config', () => {
     await deps.database.connect();
     await createMigrator({
       database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: new URL('../database/migrations', import.meta.url).pathname,
+      sources: aiEmployeeMigrations,
     }).latest();
     const config = () => ({
       ai: {
@@ -326,8 +324,7 @@ describe('AIEmployeeProvider application config', () => {
     await deps.database.connect();
     await createMigrator({
       database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: new URL('../database/migrations', import.meta.url).pathname,
+      sources: aiEmployeeMigrations,
     }).latest();
     const config = () => ({
       ai: { mcpServers: { search: { transport: 'http', url: mcp.url } } },
@@ -474,8 +471,7 @@ async function createProvider(
     await deps.database.connect();
     await createMigrator({
       database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: new URL('../database/migrations', import.meta.url).pathname,
+      sources: aiEmployeeMigrations,
     }).latest();
   }
 

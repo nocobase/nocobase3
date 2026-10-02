@@ -3,7 +3,10 @@ import { createTestDatabase } from '@nocobase/db-testing';
 import { describe, expect, it } from 'vitest';
 
 import createMigration from '../database/migrations/202608260002_create_ai_employee.js';
-import { aiEmployeeMigrations } from './support/migrations.js';
+import {
+  aiEmployeeMigrations,
+  authenticationMigrations,
+} from './support/migrations.js';
 
 const COLLECTIONS = [
   'aiEmployees',
@@ -48,6 +51,10 @@ describe('@nocobase/app-plugin-ai-employee database', () => {
   it('re-runs the schema migration safely', async () => {
     const { database, connection, destroy } = await createTestDatabase();
     try {
+      // The `user` table the conversations reference has to exist first.
+      await database
+        .createMigrator({ sources: authenticationMigrations })
+        .latest();
       const context = {
         builder: database.builder(),
         query: connection.query,

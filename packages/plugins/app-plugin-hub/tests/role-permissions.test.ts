@@ -284,6 +284,13 @@ describe('Hub role API permissions', () => {
       '@nocobase/app-plugin-authorization',
       '../../app-plugin-authorization/database/migrations',
     );
+    // The Hub's API key table references the api-keys plugin's table, which an
+    // application creates before the Hub's migrations run.
+    await migratePackage(
+      database,
+      '@nocobase/app-plugin-api-keys',
+      '../../app-plugin-api-keys/database/migrations',
+    );
     await migratePackage(
       database,
       '@nocobase/app-plugin-hub',

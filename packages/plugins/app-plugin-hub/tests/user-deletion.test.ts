@@ -469,6 +469,12 @@ describe('Hub user deletion', () => {
       .set({ createdBy: target })
       .where('id', '=', 'other-app')
       .execute();
+    // Boots UsersProvider as the application does. Its user subject type is
+    // what makes a deleted administrator stop counting as an active
+    // assignment; without it the guard counts every assigned user as active.
+    // A database that runs both transactions concurrently reaches that guard
+    // with each actor still active, so the guard alone has to decide.
+    await router();
     const results = await Promise.allSettled([
       management.remove('admin', 'admin-two'),
       management.remove('admin-two', 'admin'),
