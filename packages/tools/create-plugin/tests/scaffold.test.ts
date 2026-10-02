@@ -406,6 +406,23 @@ describe('createPlugin', () => {
     expect(manifest.files).toEqual(['dist', 'README.md', 'CHANGELOG.md']);
   });
 
+  it('tests the database capability with db-testing', async () => {
+    const result = await createWith(['database']);
+    const manifest = JSON.parse(
+      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
+    ) as { devDependencies?: Record<string, string> };
+    const test = await readFile(
+      path.join(result.targetDirectory, 'tests/database.test.ts'),
+      'utf8',
+    );
+    expect(manifest.devDependencies).toHaveProperty(
+      '@nocobase/db-testing',
+      'workspace:*',
+    );
+    expect(test).toContain("from '@nocobase/db-testing/vitest'");
+    expect(test).not.toMatch(/@nocobase\/db-sqlite|dialect: 'sqlite'|:memory:/);
+  });
+
   it('keeps Server routes independent from providers and database', async () => {
     const result = await createWith(['server.routes']);
     const manifest = JSON.parse(

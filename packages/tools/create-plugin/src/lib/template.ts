@@ -432,6 +432,9 @@ async function renderManifest(
     addRuntimePeer('@nocobase/i18n');
   if (serverPlugin) addRuntimePeer('@nocobase/app-server');
   if (capabilities.database) addRuntimePeer('@nocobase/db');
+  // The generated database test takes its database from db-testing, so it runs on whichever dialect the run selects.
+  if (capabilities.database)
+    devDependencies['@nocobase/db-testing'] = 'workspace:*';
   if (
     capabilities.server.serviceProviders ||
     capabilities.server.jobs ||
