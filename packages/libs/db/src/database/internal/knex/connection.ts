@@ -87,7 +87,8 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     private readonly sourceConfig: ConnectionConfig,
     metadataStore?: CollectionMetadataStore,
     knexInstance?: Knex,
-    transactionInvalidations?: TransactionInvalidationCollector,
+    private readonly transactionInvalidations:
+      TransactionInvalidationCollector | undefined = undefined,
     private readonly dialectDriver:
       DatabaseDriverDefinition | undefined = undefined,
     private readonly transactionCallbacks:
@@ -358,6 +359,10 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       await callbacks.rollback(error, report);
       throw error;
     }
+    // A savepoint's metadata changes are only durable once the enclosing
+    // transaction commits, so the enclosing transaction has to publish them to
+    // the root Registry as well, not just this transaction's own.
+    this.transactionInvalidations?.absorb(invalidations);
     invalidations.apply(this.collections as CollectionRegistry);
     if (callbacks.parent) {
       callbacks.release();
@@ -384,9 +389,21 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     error: unknown,
     phase: TransactionCallbackPhase,
   ): void {
-    if (this.sourceConfig.onTransactionCallbackError) {
-      this.sourceConfig.onTransactionCallbackError(error, phase);
-      return;
+    const handler = this.sourceConfig.onTransactionCallbackError;
+    if (handler) {
+      try {
+        handler(error, phase);
+        return;
+      } catch (handlerError) {
+        // A failing handler must not undo the guarantee it reports on: the
+        // transaction outcome stays as it is and the next callbacks still run.
+        process.emitWarning(
+          handlerError instanceof Error
+            ? handlerError
+            : new Error(String(handlerError)),
+          { code: 'TRANSACTION_CALLBACK_FAILED', detail: 'phase: handler' },
+        );
+      }
     }
     process.emitWarning(
       error instanceof Error ? error : new Error(String(error)),
@@ -415,6 +432,15 @@ class TransactionInvalidationCollector {
     for (const collection of this.collections) {
       await collections.validateRelations(collection);
     }
+  }
+
+  /** Takes over what a released savepoint recorded. */
+  absorb(savepoint: TransactionInvalidationCollector): void {
+    if (savepoint.all) this.all = true;
+    for (const collection of savepoint.collections) {
+      this.collections.add(collection);
+    }
+    this.namingIndex ||= savepoint.namingIndex;
   }
 
   record(change?: CollectionMetadataInvalidation): void {

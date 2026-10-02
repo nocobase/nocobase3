@@ -5,7 +5,7 @@ description: 候选设计：事务提交与回滚回调、覆盖嵌套写入的 
 
 # Repository 与事务生命周期事件
 
-> 文档状态：候选设计，未实现。本页的接口、类型和示例都不是当前公开 API，不得据此生成生产代码。当前用法以 [Repository 正式文档](../../repository/overview.md)、[API 参考](../../reference/repository-api.md)和公开类型为准。
+> 文档状态：第一层（事务回调 `afterCommit` / `afterRollback`）已实现，正式用法见[事务](../../database/transactions.md)。第二层（Repository 变更事件）与第三层仍是候选设计，其中的接口、类型和示例不是当前公开 API，不得据此生成生产代码；Repository 当前用法以[正式文档](../../repository/overview.md)、[API 参考](../../reference/repository-api.md)和公开类型为准。
 
 > **状态：第一层已实现，用法见[事务](../../database/transactions.md)；第二层已在 SQLite 上完成原型验证，结论可行，见“原型结论”。** 进入第 3 步前，需先修复两个已有缺陷并确认“原型提出的设计修正”。逐层的用法示例、实际收到的事件和常见场景见 [Repository 与事务生命周期事件示例](./events-examples.md)。
 

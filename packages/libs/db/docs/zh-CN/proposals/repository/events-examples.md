@@ -5,7 +5,7 @@ description: 从手动通知的现状出发，逐层加入 afterCommit、变更�
 
 # Repository 与事务生命周期事件示例
 
-> 文档状态：候选设计，未实现。本页的接口、类型和示例都不是当前公开 API，不得据此生成生产代码。当前用法以 [Repository 正式文档](../../repository/overview.md)、[API 参考](../../reference/repository-api.md)和公开类型为准。
+> 文档状态：第一层（事务回调 `afterCommit` / `afterRollback`）已实现，正式用法见[事务](../../database/transactions.md)。第二层（Repository 变更事件）与第三层仍是候选设计，其中的接口、类型和示例不是当前公开 API，不得据此生成生产代码；Repository 当前用法以[正式文档](../../repository/overview.md)、[API 参考](../../reference/repository-api.md)和公开类型为准。
 
 本文是 [Repository 与事务生命周期事件](./events.md) 的配套说明，按层次递进：每一节只加入一个概念，前面各层继续生效。设计依据与取舍在设计文档里，这里只讲“写成什么样、收到什么、出错会怎样”。
 

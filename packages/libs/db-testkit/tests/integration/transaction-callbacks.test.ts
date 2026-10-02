@@ -183,6 +183,29 @@ describeIntegrationDatabases('transaction callbacks', (context) => {
     expect(fieldsSeen).toContain('note');
   });
 
+  it("applies a savepoint's metadata changes before the outer commit callbacks run", async () => {
+    await createOrders();
+    const connection = context.database.connection(context.spec.name);
+    await connection.collections.get('callbackOrders');
+    let fieldsSeen: string[] = [];
+
+    await connection.transaction(async (transaction) => {
+      await transaction.transaction(async (savepoint) => {
+        await savepoint.builder.addField('callbackOrders', {
+          name: 'note',
+          type: 'string',
+          title: 'Note',
+        });
+      });
+      transaction.afterCommit(async () => {
+        const collection = await connection.collections.get('callbackOrders');
+        fieldsSeen = collection?.fields.map((field) => field.name) ?? [];
+      });
+    });
+
+    expect(fieldsSeen).toContain('note');
+  });
+
   it('forwards callbacks through a policy-bound connection', async () => {
     await createOrders();
     const committed = vi.fn();
