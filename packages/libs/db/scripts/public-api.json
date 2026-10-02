@@ -369,6 +369,7 @@
         "ThroughWritePolicy",
         "ThroughWritePolicyBuilder",
         "TimeFilterOperators",
+        "TransactionCallbackPhase",
         "UniqueSelector",
         "UpdateManyOptions",
         "UpdateManyResult",
