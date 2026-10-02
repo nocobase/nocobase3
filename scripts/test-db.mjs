@@ -64,6 +64,8 @@ export function parseTestDbArguments(argv) {
       // One package at a time: several suites at once compete for one machine and one database server, and a
       // timeout they cause reads as a test failure.
       '--workspace-concurrency=1',
+      // Every package runs even after one fails, so a run reports each package's result on the dialect.
+      '--no-bail',
       'run',
       'test',
       // `pnpm run` hands everything after the script name to the script; a `--` would reach Vitest as one more

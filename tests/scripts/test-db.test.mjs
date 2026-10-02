@@ -24,6 +24,7 @@ test('runs each filtered package test script with the remaining arguments', () =
         '--filter',
         '@nocobase/db-testing',
         '--workspace-concurrency=1',
+        '--no-bail',
         'run',
         'test',
         'tests/database.test.ts',
