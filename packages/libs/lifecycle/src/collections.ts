@@ -6,7 +6,13 @@
  * The fields it needs are those of `TransitionEntry` and
  * `EffectRun`: a `bigInt` auto-increment `id`; strings for names, ids
  * and statuses; `json` for `input` and `result`; `text` for `error`; integers
- * for `attempts` and `maxAttempts`; and `datetimeTz` for every instant.
+ * for `version`, `attempts` and `maxAttempts`; and `datetimeTz` for every
+ * instant. The transitions collection also takes a unique index on
+ * `(lifecycle, recordId, version)`.
+ *
+ * Each record collection a lifecycle runs on needs its state field, its
+ * changed-at field (`datetimeTz`) and its version field (an integer,
+ * not null, default 0).
  */
 export const LIFECYCLE_COLLECTIONS: {
   readonly transitions: 'lifecycleTransitions';

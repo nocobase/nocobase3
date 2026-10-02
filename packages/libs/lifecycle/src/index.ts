@@ -20,6 +20,7 @@ export {
   planTransition,
   stateOf,
   transitionsFrom,
+  versionOf,
   type PlanContext,
   type TransitionPlan,
 } from './plan.js';
@@ -27,6 +28,7 @@ export {
   LifecycleRuntime,
   type AvailableTransition,
   type EffectDispatcher,
+  type FireExpectation,
   type FireOptions,
   type FireResult,
   type LifecycleLogger,
@@ -38,12 +40,14 @@ export {
 export type {
   EffectRun,
   EffectRunChanges,
+  EffectRunCondition,
   EffectRunQuery,
   EffectRunStatus,
   IdleRecordQuery,
   LifecycleStore,
   NewEffectRun,
   NewTransitionEntry,
+  RecordCondition,
   TransitionEntry,
 } from './store.js';
 export { MemoryLifecycleStore } from './memory-store.js';

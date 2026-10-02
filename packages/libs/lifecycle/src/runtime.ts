@@ -4,8 +4,13 @@ import {
   type LifecycleDescription,
 } from './definition.js';
 import { LifecycleError } from './errors.js';
-import { planTransition, stateOf, transitionsFrom } from './plan.js';
-import type { EffectRun, LifecycleStore, TransitionEntry } from './store.js';
+import { planTransition, stateOf, transitionsFrom, versionOf } from './plan.js';
+import type {
+  EffectRun,
+  EffectRunChanges,
+  LifecycleStore,
+  TransitionEntry,
+} from './store.js';
 import {
   SYSTEM_ACTOR,
   type JsonObject,
@@ -65,9 +70,21 @@ export interface RegisterOptions<T extends LifecycleTypes> {
   readonly parameters?: () => Partial<ParametersOf<T>>;
 }
 
+/**
+ * What the record must still be when the transition is decided, checked
+ * inside its transaction. A page passes the version it showed, so a
+ * decision made on a stale screen is refused rather than applied.
+ */
+export interface FireExpectation {
+  readonly version?: number | null;
+  /** The record must have been in its state since before this instant. */
+  readonly changedBefore?: string;
+}
+
 export interface FireOptions {
   readonly actor: LifecycleActor;
   readonly input?: JsonObject;
+  readonly expect?: FireExpectation;
 }
 
 export interface FireResult {
@@ -185,73 +202,10 @@ export class LifecycleRuntime {
     options: FireOptions,
   ): Promise<FireResult> {
     const registered = this.get(name);
-    const { lifecycle } = registered;
     const now = this.clock();
-    const parameters = this.parameters(name);
-    const committed = await this.store.transaction(async (store) => {
-      const current = await store.findRecord(lifecycle.collection, id);
-      if (!current)
-        throw new LifecycleError(
-          'RECORD_NOT_FOUND',
-          `No ${lifecycle.collection} record "${String(id)}".`,
-        );
-      const plan = await planTransition(lifecycle, current, transition, {
-        actor: options.actor,
-        ...(options.input === undefined ? {} : { input: options.input }),
-        parameters: parameters as ParametersOf<LifecycleTypes>,
-        services: registered.services(
-          store.transactionHandle,
-        ) as ServicesOf<LifecycleTypes>,
-        now,
-      });
-      const written = await store.updateRecordInState(
-        lifecycle.collection,
-        id,
-        lifecycle.stateField,
-        plan.from,
-        plan.values,
-      );
-      if (!written)
-        throw new LifecycleError(
-          'CONFLICT',
-          `The ${lifecycle.collection} record "${String(id)}" changed state while "${transition}" was being decided.`,
-        );
-      const at = now.toISOString();
-      const entry = await store.appendTransition({
-        lifecycle: lifecycle.name,
-        recordId: String(current.id),
-        transition,
-        from: plan.from,
-        to: plan.to,
-        actorId: options.actor.id,
-        input: plan.input,
-        at,
-      });
-      const effectRuns: EffectRun[] = [];
-      for (const effect of plan.effects)
-        effectRuns.push(
-          await store.createEffectRun({
-            transitionId: entry.id,
-            lifecycle: lifecycle.name,
-            recordId: entry.recordId,
-            effect: effect.name,
-            status: 'queued',
-            attempts: 0,
-            maxAttempts: effect.retry?.attempts ?? 1,
-            result: null,
-            error: null,
-            createdAt: at,
-            updatedAt: at,
-            claimedAt: null,
-            runAfter: null,
-          }),
-        );
-      const record = Object.freeze({
-        ...current,
-        ...plan.values,
-      }) as LifecycleRecord;
-      return { record, entry, effectRuns };
-    });
+    const committed = await this.store.transaction((store) =>
+      this.decide(store, registered, id, transition, options, now),
+    );
     for (const run of committed.effectRuns) await this.handOver(run.id, null);
     return committed;
   }
@@ -308,7 +262,9 @@ export class LifecycleRuntime {
 
   /**
    * Runs one attempt of a queued effect run. Claiming it is a conditional
-   * update, so two workers handed the same run execute it once.
+   * update, so two workers handed the same run execute it once; every later
+   * write names the attempt it belongs to, so an attempt `recover()` took
+   * back cannot record a result over the attempt that replaced it.
    */
   public async runEffect(
     runId: string,
@@ -324,14 +280,34 @@ export class LifecycleRuntime {
       );
       return run;
     }
-    const attempt = run.attempts + 1;
     const startedAt = this.clock().toISOString();
-    const claimed = await this.store.updateEffectRun(runId, 'queued', {
-      status: 'running',
-      attempts: attempt,
-      claimedAt: startedAt,
-      updatedAt: startedAt,
-    });
+    // Every attempt was claimed and none came back: the process running it
+    // stopped each time. Running it again could stop this one too.
+    if (run.attempts >= run.maxAttempts) {
+      await this.store.updateEffectRun(
+        runId,
+        { status: 'queued', attempts: run.attempts },
+        {
+          status: 'dead',
+          error: `Interrupted on all ${run.attempts} attempt(s); it needs a person to retry it.`,
+          claimedAt: null,
+          updatedAt: startedAt,
+        },
+      );
+      this.logger.error(`Effect "${effect.name}" is dead`, { runId });
+      return this.store.findEffectRun(runId);
+    }
+    const attempt = run.attempts + 1;
+    const claimed = await this.store.updateEffectRun(
+      runId,
+      { status: 'queued', attempts: run.attempts },
+      {
+        status: 'running',
+        attempts: attempt,
+        claimedAt: startedAt,
+        updatedAt: startedAt,
+      },
+    );
     if (!claimed) return this.store.findEffectRun(runId);
 
     const { lifecycle } = registered;
@@ -366,46 +342,87 @@ export class LifecycleRuntime {
     }
 
     const finishedAt = this.clock().toISOString();
-    if (outcome.ok) {
-      await this.store.updateEffectRun(runId, 'running', {
-        status: 'succeeded',
-        result: outcome.result,
-        error: null,
-        claimedAt: null,
-        updatedAt: finishedAt,
-      });
-      await this.continueWith(
-        lifecycle,
-        run,
-        effect.onSuccess,
-        isJsonObject(outcome.result) ? outcome.result : {},
-      );
-    } else if (attempt < run.maxAttempts) {
+    if (!outcome.ok && attempt < run.maxAttempts) {
       const backoff = effect.retry?.backoffMs ?? 0;
       const runAfter = new Date(this.clock().getTime() + backoff).toISOString();
-      await this.store.updateEffectRun(runId, 'running', {
-        status: 'queued',
-        error: outcome.error,
-        claimedAt: null,
-        runAfter,
-        updatedAt: finishedAt,
-      });
-      await this.handOver(runId, runAfter);
-    } else {
-      await this.store.updateEffectRun(runId, 'running', {
-        status: 'failed',
-        error: outcome.error,
-        claimedAt: null,
-        updatedAt: finishedAt,
-      });
+      const requeued = await this.store.updateEffectRun(
+        runId,
+        { status: 'running', attempts: attempt },
+        {
+          status: 'queued',
+          error: outcome.error,
+          claimedAt: null,
+          runAfter,
+          updatedAt: finishedAt,
+        },
+      );
+      if (requeued) await this.handOver(runId, runAfter);
+      else this.discarded(effect.name, runId, attempt);
+      return this.store.findEffectRun(runId);
+    }
+
+    const changes: EffectRunChanges = outcome.ok
+      ? {
+          status: 'succeeded',
+          result: outcome.result,
+          error: null,
+          claimedAt: null,
+          updatedAt: finishedAt,
+        }
+      : {
+          status: 'failed',
+          error: outcome.error,
+          claimedAt: null,
+          updatedAt: finishedAt,
+        };
+    const next = outcome.ok ? effect.onSuccess : effect.onFailure;
+    // The next transition receives what the effect returned, or why it
+    // failed, so it can record a payment reference or a failure reason.
+    const input: JsonObject = outcome.ok
+      ? isJsonObject(outcome.result)
+        ? outcome.result
+        : {}
+      : { error: outcome.error };
+    // Recording the outcome and firing what follows it commit together: a
+    // stop between the two would otherwise leave a succeeded run whose
+    // record never moves on.
+    const finished = await this.store.transaction(async (store) => {
+      const recorded = await store.updateEffectRun(
+        runId,
+        { status: 'running', attempts: attempt },
+        changes,
+      );
+      if (!recorded) return undefined;
+      if (next === undefined) return [];
+      try {
+        const continued = await this.decide(
+          store,
+          registered,
+          run.recordId,
+          next,
+          { actor: SYSTEM_ACTOR, input },
+          this.clock(),
+        );
+        return continued.effectRuns;
+      } catch (error) {
+        // The record has moved on, or the guard refuses: the outcome is
+        // still recorded, and nothing follows from it. decide() writes
+        // nothing before it refuses, so the transaction stays whole.
+        if (!(error instanceof LifecycleError)) throw error;
+        this.logger.warn(
+          `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
+          { runId },
+        );
+        return [];
+      }
+    });
+    if (finished === undefined) this.discarded(effect.name, runId, attempt);
+    else for (const owed of finished) await this.handOver(owed.id, null);
+    if (!outcome.ok)
       this.logger.warn(
         `Effect "${effect.name}" failed after ${attempt} attempt(s)`,
         { runId, error: outcome.error },
       );
-      await this.continueWith(lifecycle, run, effect.onFailure, {
-        error: outcome.error,
-      });
-    }
     return this.store.findEffectRun(runId);
   }
 
@@ -434,8 +451,11 @@ export class LifecycleRuntime {
         });
         for (const record of records) {
           try {
+            // The record must still be idle when the transition is
+            // decided: another sweep may have moved it since this one read it.
             await this.fire(lifecycle.name, record.id, trigger.transition, {
               actor: SYSTEM_ACTOR,
+              expect: { changedBefore },
             });
             fired += 1;
           } catch (error) {
@@ -460,12 +480,16 @@ export class LifecycleRuntime {
       claimedBefore: new Date(now.getTime() - this.leaseMs).toISOString(),
     });
     for (const run of stale)
-      await this.store.updateEffectRun(run.id, 'running', {
-        status: 'queued',
-        error: 'The attempt was interrupted and will run again.',
-        claimedAt: null,
-        updatedAt: now.toISOString(),
-      });
+      await this.store.updateEffectRun(
+        run.id,
+        { status: 'running', attempts: run.attempts },
+        {
+          status: 'queued',
+          error: 'The attempt was interrupted and will run again.',
+          claimedAt: null,
+          updatedAt: now.toISOString(),
+        },
+      );
     const queued = await this.store.listEffectRuns({ status: 'queued' });
     for (const run of queued) await this.handOver(run.id, run.runAfter);
     return queued.length;
@@ -495,26 +519,112 @@ export class LifecycleRuntime {
     }
   }
 
-  private async continueWith(
-    lifecycle: Lifecycle<LifecycleTypes>,
-    run: EffectRun,
-    transition: string | undefined,
-    input: JsonObject,
-  ): Promise<void> {
-    if (transition === undefined) return;
-    try {
-      // The next transition receives what the effect returned, or why it
-      // failed, so it can record a payment reference or a failure reason.
-      await this.fire(lifecycle.name, run.recordId, transition, {
-        actor: SYSTEM_ACTOR,
-        input,
-      });
-    } catch (error) {
-      if (!(error instanceof LifecycleError)) throw error;
-      this.logger.warn(
-        `Effect "${run.effect}" could not continue with "${transition}": ${error.message}`,
-        { runId: run.id },
+  /**
+   * Decides and writes one transition on `store`, which is a transaction.
+   * Everything it checks comes before anything it writes, so a refusal
+   * leaves the transaction as it found it.
+   */
+  private async decide(
+    store: LifecycleStore,
+    registered: Registered,
+    id: RecordId,
+    transition: string,
+    options: FireOptions,
+    now: Date,
+  ): Promise<FireResult> {
+    const { lifecycle } = registered;
+    const current = await store.findRecord(lifecycle.collection, id);
+    if (!current)
+      throw new LifecycleError(
+        'RECORD_NOT_FOUND',
+        `No ${lifecycle.collection} record "${String(id)}".`,
       );
-    }
+    const expected = options.expect;
+    if (
+      expected?.version !== undefined &&
+      versionOf(lifecycle, current) !== expected.version
+    )
+      throw new LifecycleError(
+        'CONFLICT',
+        `The ${lifecycle.collection} record "${String(id)}" changed since it was read.`,
+      );
+    if (
+      expected?.changedBefore !== undefined &&
+      !(String(current[lifecycle.changedAtField]) < expected.changedBefore)
+    )
+      throw new LifecycleError(
+        'CONFLICT',
+        `The ${lifecycle.collection} record "${String(id)}" changed state after ${expected.changedBefore}.`,
+      );
+    const plan = await planTransition(lifecycle, current, transition, {
+      actor: options.actor,
+      ...(options.input === undefined ? {} : { input: options.input }),
+      parameters: this.parameters(
+        lifecycle.name,
+      ) as ParametersOf<LifecycleTypes>,
+      services: registered.services(
+        store.transactionHandle,
+      ) as ServicesOf<LifecycleTypes>,
+      now,
+    });
+    const written = await store.updateRecordIf(
+      lifecycle.collection,
+      id,
+      {
+        stateField: lifecycle.stateField,
+        state: plan.from,
+        versionField: lifecycle.versionField,
+        version: plan.version,
+      },
+      plan.values,
+    );
+    if (!written)
+      throw new LifecycleError(
+        'CONFLICT',
+        `The ${lifecycle.collection} record "${String(id)}" changed while "${transition}" was being decided.`,
+      );
+    const at = now.toISOString();
+    const entry = await store.appendTransition({
+      lifecycle: lifecycle.name,
+      recordId: String(current.id),
+      transition,
+      from: plan.from,
+      to: plan.to,
+      actorId: options.actor.id,
+      input: plan.input,
+      at,
+      version: plan.nextVersion,
+    });
+    const effectRuns: EffectRun[] = [];
+    for (const effect of plan.effects)
+      effectRuns.push(
+        await store.createEffectRun({
+          transitionId: entry.id,
+          lifecycle: lifecycle.name,
+          recordId: entry.recordId,
+          effect: effect.name,
+          status: 'queued',
+          attempts: 0,
+          maxAttempts: effect.retry?.attempts ?? 1,
+          result: null,
+          error: null,
+          createdAt: at,
+          updatedAt: at,
+          claimedAt: null,
+          runAfter: null,
+        }),
+      );
+    const record = Object.freeze({
+      ...current,
+      ...plan.values,
+    }) as LifecycleRecord;
+    return { record, entry, effectRuns };
+  }
+
+  private discarded(effect: string, runId: string, attempt: number): void {
+    this.logger.warn(
+      `Attempt ${attempt} of effect "${effect}" finished after recover() took it back; its outcome is discarded.`,
+      { runId },
+    );
   }
 }

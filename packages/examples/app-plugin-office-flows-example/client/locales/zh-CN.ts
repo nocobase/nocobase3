@@ -88,6 +88,7 @@ const zhCN: OfficeFlowsExampleResource = {
     running: '执行中',
     succeeded: '成功',
     failed: '失败',
+    dead: '已放弃',
   },
 };
 

@@ -508,7 +508,7 @@ function TicketView({
   })();
 
   const deliveryText = (run: EffectRun): string => {
-    if (run.status === 'failed')
+    if (run.status === 'failed' || run.status === 'dead')
       return t('tickets.thread.delivery.failed', {
         attempts: run.attempts,
         error: run.error ?? '',

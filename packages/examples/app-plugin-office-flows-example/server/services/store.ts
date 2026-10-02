@@ -240,6 +240,7 @@ export class OfficeStore {
           number: await this.nextNumber('SJSY_CS'),
           status: 'pending',
           statusChangedAt: now,
+          lifecycleVersion: 0,
           createdAt: now,
         },
       });
@@ -352,6 +353,7 @@ export class OfficeStore {
               attachments: [],
               status: target.initial,
               statusChangedAt: now,
+              lifecycleVersion: 0,
               createdAt: now,
             },
           });

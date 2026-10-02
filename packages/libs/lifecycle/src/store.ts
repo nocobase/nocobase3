@@ -16,9 +16,21 @@ export interface TransitionEntry {
   readonly actorId: string;
   readonly input: JsonObject;
   readonly at: string;
+  /**
+   * The record's version after this transition. Unique per record, so a
+   * store with a unique index refuses a second entry for the same version
+   * even if a conditional update were ever bypassed.
+   */
+  readonly version: number;
 }
 
-export type EffectRunStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+/**
+ * `dead` is a run whose attempts all ended without a result, because the
+ * process running them stopped. It continues with nothing: someone looks at
+ * it and retries it or gives up.
+ */
+export type EffectRunStatus =
+  'queued' | 'running' | 'succeeded' | 'failed' | 'dead';
 
 /**
  * One effect a transition owes. It is written in the same transaction as the
@@ -49,6 +61,28 @@ export type NewEffectRun = Omit<EffectRun, 'id'>;
 export type EffectRunChanges = Partial<
   Omit<EffectRun, 'id' | 'transitionId' | 'lifecycle' | 'recordId' | 'effect'>
 >;
+
+/**
+ * What a record must still be for a transition to write it. The version is
+ * what makes a self-transition safe: the state alone would not change.
+ */
+export interface RecordCondition {
+  readonly stateField: string;
+  readonly state: string;
+  readonly versionField: string;
+  /** Null matches a record written before it had a version. */
+  readonly version: number | null;
+}
+
+/**
+ * What an effect run must still be for a write to it. `attempts` fences an
+ * attempt: once `recover()` takes a run back and another worker claims it,
+ * the first worker's writes no longer match and are dropped.
+ */
+export interface EffectRunCondition {
+  readonly status: EffectRunStatus;
+  readonly attempts?: number;
+}
 
 export interface EffectRunQuery {
   readonly lifecycle?: string;
@@ -87,15 +121,14 @@ export interface LifecycleStore {
     id: RecordId,
   ): Promise<LifecycleRecord | undefined>;
   /**
-   * Writes `values` only while the record is still in `expected`. Returns
-   * whether it did: the condition is what makes two concurrent transitions
-   * of one record safe without a lock.
+   * Writes `values` only while the record still matches `condition`.
+   * Returns whether it did: the condition is what makes two concurrent
+   * transitions of one record safe without a lock.
    */
-  updateRecordInState(
+  updateRecordIf(
     collection: string,
     id: RecordId,
-    stateField: string,
-    expected: string,
+    condition: RecordCondition,
     values: Readonly<Record<string, unknown>>,
   ): Promise<boolean>;
   findIdleRecords(
@@ -113,10 +146,10 @@ export interface LifecycleStore {
 
   createEffectRun(run: NewEffectRun): Promise<EffectRun>;
   findEffectRun(id: string): Promise<EffectRun | undefined>;
-  /** Writes `changes` only while the run is still in `expected`; the same guard as records. */
+  /** Writes `changes` only while the run still matches `condition`; the same guard as records. */
   updateEffectRun(
     id: string,
-    expected: EffectRunStatus,
+    condition: EffectRunCondition,
     changes: EffectRunChanges,
   ): Promise<boolean>;
   /** Oldest first. */

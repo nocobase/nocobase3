@@ -102,6 +102,12 @@ export interface LifecycleDefinition<T extends LifecycleTypes> {
   readonly stateField?: string;
   /** Defaults to `statusChangedAt`. Every transition, a self-transition too, updates it. */
   readonly changedAtField?: string;
+  /**
+   * Defaults to `lifecycleVersion`: an integer every transition increments.
+   * The conditional update checks it as well as the state, so two
+   * transitions that leave the state unchanged cannot both commit.
+   */
+  readonly versionField?: string;
   readonly initial: T['state'];
   readonly states: readonly T['state'][];
   /** Defaults an administrator may override. They do not change the shape of the lifecycle. */
@@ -137,6 +143,7 @@ export interface Lifecycle<T extends LifecycleTypes> {
   readonly collection: string;
   readonly stateField: string;
   readonly changedAtField: string;
+  readonly versionField: string;
   readonly initial: T['state'];
   readonly states: readonly T['state'][];
   readonly parameters: ParametersOf<T>;
@@ -315,6 +322,7 @@ export function defineLifecycle<T extends LifecycleTypes>(
     collection: definition.collection ?? name,
     stateField: definition.stateField ?? 'status',
     changedAtField: definition.changedAtField ?? 'statusChangedAt',
+    versionField: definition.versionField ?? 'lifecycleVersion',
     initial: definition.initial,
     states: [...states],
     parameters: Object.freeze({

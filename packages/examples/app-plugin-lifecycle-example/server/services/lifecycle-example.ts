@@ -217,6 +217,7 @@ export class LifecycleExampleService {
           ...values,
           [lifecycle.stateField]: lifecycle.initial,
           [lifecycle.changedAtField]: now,
+          [lifecycle.versionField]: 0,
           createdAt: now,
         } as RepositoryRecord,
       });

@@ -10,12 +10,14 @@ import { LIFECYCLE_COLLECTIONS } from './collections.js';
 import type {
   EffectRun,
   EffectRunChanges,
+  EffectRunCondition,
   EffectRunQuery,
   EffectRunStatus,
   IdleRecordQuery,
   LifecycleStore,
   NewEffectRun,
   NewTransitionEntry,
+  RecordCondition,
   TransitionEntry,
 } from './store.js';
 import type {
@@ -85,6 +87,7 @@ function toTransition(row: Row): TransitionEntry {
     actorId: String(row.actorId),
     input: json<JsonObject>(row.input, {}),
     at: text(row.at) ?? '',
+    version: Number(row.version ?? 0),
   };
 }
 
@@ -140,15 +143,19 @@ class RepositoryLifecycleStore implements LifecycleStore {
     return row ? toRecord(row) : undefined;
   }
 
-  public async updateRecordInState(
+  public async updateRecordIf(
     collection: string,
     id: RecordId,
-    stateField: string,
-    expected: string,
+    condition: RecordCondition,
     values: Readonly<Record<string, unknown>>,
   ): Promise<boolean> {
     const result = await this.repository(collection).updateMany({
-      filter: { id: key(id), [stateField]: expected },
+      // A null version filters as IS NULL, for rows written before it existed.
+      filter: {
+        id: key(id),
+        [condition.stateField]: condition.state,
+        [condition.versionField]: condition.version,
+      },
       values: asRow(values),
     });
     return result.updatedCount > 0;
@@ -222,11 +229,17 @@ class RepositoryLifecycleStore implements LifecycleStore {
 
   public async updateEffectRun(
     id: string,
-    expected: EffectRunStatus,
+    condition: EffectRunCondition,
     changes: EffectRunChanges,
   ): Promise<boolean> {
     const result = await this.repository(this.names.effectRuns).updateMany({
-      filter: { id: key(id), status: expected },
+      filter: {
+        id: key(id),
+        status: condition.status,
+        ...(condition.attempts === undefined
+          ? {}
+          : { attempts: condition.attempts }),
+      },
       values: asRow({ ...changes }),
     });
     return result.updatedCount > 0;
