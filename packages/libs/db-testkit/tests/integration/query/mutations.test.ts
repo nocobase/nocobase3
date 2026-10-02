@@ -282,27 +282,40 @@ describeIntegrationDatabases('query mutations', (context) => {
       context.database.query().selectFrom(table).select(['key']).execute(),
     ).resolves.toEqual([{ key: 'late-inactive' }]);
 
-    // A value the Field could not store is not refused the way a write refuses it: a date without a time is
-    // bound as given, and every database reads it as that day's midnight in its own zone.
-    await expect(
-      context.database
-        .query()
-        .selectFrom(table)
-        .select(['key'])
-        .where('dueAt', '>=', '2026-08-13')
-        .where('dueAt', '<', '2026-08-16')
-        .execute(),
-    ).resolves.toEqual([{ key: 'late-inactive' }]);
-    await expect(
-      context.database
-        .query()
-        .updateTable(table)
-        .set({ key: 'late-inactive-today' })
-        .where('dueAt', '>=', '2026-08-13')
-        .execute(),
-    ).resolves.toEqual({ updatedCount: 1 });
-    // A pattern is never a stored value, so `like` binds it verbatim. PostgreSQL has no `like` for timestamps.
-    if (context.spec.dialect !== 'postgres') {
+    // What a database makes of a value the Field could not store is its own business; the contract is only that
+    // the value reaches it as given instead of being refused the way a write refuses it. A date without a time
+    // is read as that day's midnight everywhere but on Oracle, whose session timestamp format requires the time.
+    const readsDateAsMidnight = context.spec.dialect !== 'oracle';
+    // A pattern is never a stored value, so `like` binds it verbatim; the PostgreSQL family has no `like` for a
+    // timestamp, and Oracle spells one by its session format.
+    const comparesTimestampAsText = ![
+      'postgres',
+      'kingbase',
+      'oracle',
+    ].includes(context.spec.dialect);
+    const remaining = readsDateAsMidnight
+      ? 'late-inactive-today'
+      : 'late-inactive';
+    if (readsDateAsMidnight) {
+      await expect(
+        context.database
+          .query()
+          .selectFrom(table)
+          .select(['key'])
+          .where('dueAt', '>=', '2026-08-13')
+          .where('dueAt', '<', '2026-08-16')
+          .execute(),
+      ).resolves.toEqual([{ key: 'late-inactive' }]);
+      await expect(
+        context.database
+          .query()
+          .updateTable(table)
+          .set({ key: remaining })
+          .where('dueAt', '>=', '2026-08-13')
+          .execute(),
+      ).resolves.toEqual({ updatedCount: 1 });
+    }
+    if (comparesTimestampAsText) {
       await expect(
         context.database
           .query()
@@ -310,7 +323,7 @@ describeIntegrationDatabases('query mutations', (context) => {
           .select(['key'])
           .where('dueAt', 'like', '2026-08-1%')
           .execute(),
-      ).resolves.toEqual([{ key: 'late-inactive-today' }]);
+      ).resolves.toEqual([{ key: remaining }]);
       await expect(
         context.database
           .query()
