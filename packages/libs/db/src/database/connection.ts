@@ -67,6 +67,31 @@ export interface DatabaseConnection {
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T>;
+
+  /**
+   * Run `callback` once the outermost transaction this connection belongs to
+   * has committed, after the Collection metadata changes it made are applied.
+   *
+   * Registered inside a savepoint, the callback waits for the outermost
+   * commit and is dropped if the savepoint rolls back. Outside a transaction
+   * it starts at once and is not awaited. `transaction()` resolves only after
+   * every commit callback has finished. A callback that throws does not change
+   * the outcome of the transaction; the error goes to the connection's
+   * `onTransactionCallbackError`, or to a `TRANSACTION_CALLBACK_FAILED`
+   * process warning.
+   *
+   * The transaction connection is finished when the callback runs. Write
+   * through the root connection or a new transaction instead.
+   */
+  afterCommit(callback: () => void | Promise<void>): void;
+
+  /**
+   * Run `callback` with the error once the transaction or savepoint this
+   * connection belongs to has rolled back, including when the commit itself
+   * fails. Callbacks registered in a savepoint that was released run when the
+   * enclosing transaction rolls back. Ignored outside a transaction.
+   */
+  afterRollback(callback: (error: unknown) => void | Promise<void>): void;
 }
 
 /**

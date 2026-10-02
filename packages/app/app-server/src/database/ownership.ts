@@ -53,6 +53,7 @@ function genericOwnershipTarget(
     'metadataStore',
     'naming',
     'onCollectionMetadataInvalidationError',
+    'onTransactionCallbackError',
     'password',
     'pool',
     'schemaManagement',

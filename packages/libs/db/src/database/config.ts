@@ -4,6 +4,7 @@ import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/document-store.js';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { SchemaInspector } from '../schema/inspector/types.js';
+import type { TransactionCallbackPhase } from './internal/transaction-callbacks.js';
 import type { DatabaseDriverRuntimeFactory } from './runtime.js';
 
 /**
@@ -209,6 +210,15 @@ export interface BaseConnectionConfig {
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
   onCollectionMetadataInvalidationError?: (error: unknown) => void;
+  /**
+   * Receives an error thrown by an `afterCommit` or `afterRollback` callback.
+   * Without it the error becomes a `TRANSACTION_CALLBACK_FAILED` process
+   * warning. Either way the transaction's outcome is unchanged.
+   */
+  onTransactionCallbackError?: (
+    error: unknown,
+    phase: TransactionCallbackPhase,
+  ) => void;
   schemaManagement?: SchemaManagementMode;
   /**
    * Physical tables on this connection that are NocoBase bookkeeping rather

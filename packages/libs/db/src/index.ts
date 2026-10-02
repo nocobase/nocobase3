@@ -28,6 +28,7 @@ export type {
   DirectoryCollectionMetadataStoreConfig,
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
+export type { TransactionCallbackPhase } from './database/internal/transaction-callbacks.js';
 export type { DatabaseManager } from './database/manager.js';
 export type {
   DatabaseDriverRuntime,

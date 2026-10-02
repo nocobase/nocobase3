@@ -52,6 +52,13 @@ import type {
   ScopedDatabaseConnection,
 } from '../../connection.js';
 import { SchemaManagementSchemaAdapter } from '../../schema-management.js';
+import {
+  runAfterCommitNow,
+  TransactionCallbacks,
+  type AfterCommitCallback,
+  type AfterRollbackCallback,
+  type TransactionCallbackPhase,
+} from '../transaction-callbacks.js';
 import { createKnexClient } from './client.js';
 import {
   resolveKnexConnectionConfig,
@@ -83,6 +90,8 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     transactionInvalidations?: TransactionInvalidationCollector,
     private readonly dialectDriver:
       DatabaseDriverDefinition | undefined = undefined,
+    private readonly transactionCallbacks:
+      TransactionCallbacks | undefined = undefined,
   ) {
     this.knexInstance = knexInstance;
     this.config = resolveKnexConnectionConfig(sourceConfig, dialectDriver);
@@ -295,12 +304,31 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.collections.invalidate();
   }
 
+  afterCommit(callback: AfterCommitCallback): void {
+    if (this.transactionCallbacks) {
+      this.transactionCallbacks.afterCommit(callback);
+      return;
+    }
+    runAfterCommitNow(callback, (error, phase) =>
+      this.reportTransactionCallbackError(error, phase),
+    );
+  }
+
+  afterRollback(callback: AfterRollbackCallback): void {
+    this.transactionCallbacks?.afterRollback(callback);
+  }
+
   async transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {
     const client = await this.resolveClient();
     let stagedMetadata: TransactionCollectionMetadataStore | undefined;
     const invalidations = new TransactionInvalidationCollector();
+    // A transaction opened on a transaction connection is a savepoint; its
+    // callbacks are scoped to it and handed to the enclosing transaction.
+    const callbacks = new TransactionCallbacks(this.transactionCallbacks);
+    const report = (error: unknown, phase: TransactionCallbackPhase): void =>
+      this.reportTransactionCallbackError(error, phase);
     let result: T;
     try {
       result = await client.transaction(async (trx) => {
@@ -317,6 +345,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           trx,
           invalidations,
           this.dialectDriver,
+          callbacks,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);
@@ -326,9 +355,16 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     } catch (error) {
       await stagedMetadata?.rollbackCommitted();
       invalidations.clear();
+      await callbacks.rollback(error, report);
       throw error;
     }
     invalidations.apply(this.collections as CollectionRegistry);
+    if (callbacks.parent) {
+      callbacks.release();
+    } else {
+      // After the invalidations, so a callback reads the committed schema.
+      await callbacks.commit(report);
+    }
     return result;
   }
 
@@ -342,6 +378,20 @@ export class KnexDatabaseConnection implements DatabaseConnection {
 
   private async resolveClient(): Promise<Knex> {
     return this.getClient();
+  }
+
+  private reportTransactionCallbackError(
+    error: unknown,
+    phase: TransactionCallbackPhase,
+  ): void {
+    if (this.sourceConfig.onTransactionCallbackError) {
+      this.sourceConfig.onTransactionCallbackError(error, phase);
+      return;
+    }
+    process.emitWarning(
+      error instanceof Error ? error : new Error(String(error)),
+      { code: 'TRANSACTION_CALLBACK_FAILED', detail: `phase: ${phase}` },
+    );
   }
 
   private reportCollectionMetadataInvalidationError(error: unknown): void {

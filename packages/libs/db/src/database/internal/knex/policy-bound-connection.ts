@@ -130,6 +130,14 @@ export class PolicyBoundConnection implements ScopedDatabaseConnection {
     return this.inner.resetManagedSchema();
   }
 
+  afterCommit(callback: () => void | Promise<void>): void {
+    this.inner.afterCommit(callback);
+  }
+
+  afterRollback(callback: (error: unknown) => void | Promise<void>): void {
+    this.inner.afterRollback(callback);
+  }
+
   /**
    * Transactions run on the connection underneath, so everything it sets up
    * for one — the deferred invalidation collector above all — stays in place.
