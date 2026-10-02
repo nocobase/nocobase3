@@ -4,6 +4,12 @@ import type { CollectionMetadataService } from '../metadata/service.js';
 import type { QueryAdapter } from '../query/types.js';
 import type { Repository, RepositoryRecord } from '../repository/types.js';
 import type {
+  ExplainRepositoryEventsOptions,
+  RepositoryEventsExplanation,
+  RepositoryMutationListeners,
+  RepositoryMutationSubscriptionOptions,
+} from '../repository/events/types.js';
+import type {
   NormalizedRepositoryPolicy,
   RepositoryPolicy,
 } from '../repository/policy/types.js';
@@ -92,6 +98,34 @@ export interface DatabaseConnection {
    * enclosing transaction rolls back. Ignored outside a transaction.
    */
   afterRollback(callback: (error: unknown) => void | Promise<void>): void;
+
+  /**
+   * Observe the rows Repository writes change: every write method, nested
+   * relation writes included, reports one event per call.
+   *
+   * Subscriptions belong to the root connection and are shared with its
+   * transactions, so registering through a transaction connection observes
+   * the whole connection, not only that transaction. Writes made through
+   * `query`, `client()` or a migration or seed task are not observed, nor
+   * are rows the database changes by itself, such as a cascading delete.
+   * Events are delivered only in the process that made the write.
+   *
+   * Returns a function that removes the subscription.
+   */
+  onRepositoryMutation(
+    options: RepositoryMutationSubscriptionOptions,
+    listeners: RepositoryMutationListeners,
+  ): () => void;
+
+  /**
+   * How a Repository call on `collection` would run given the subscriptions
+   * matching that Collection: whether bulk writes lock rows to learn their
+   * keys, which granularity events get, and whether an implicit transaction
+   * is opened.
+   */
+  explainRepositoryEvents(
+    options: ExplainRepositoryEventsOptions,
+  ): Promise<RepositoryEventsExplanation>;
 }
 
 /**

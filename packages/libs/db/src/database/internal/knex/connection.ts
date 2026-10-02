@@ -20,9 +20,23 @@ import type {
   Repository,
   RepositoryRecord,
 } from '../../../repository/types.js';
-import { normalizeRepositoryPolicy } from '../../../repository/policy/normalize.js';
-import { expandPolicyRefs } from '../../../repository/policy/refs.js';
-import { PolicyBoundConnection } from './policy-bound-connection.js';
+import { bindPolicies } from './policy-bound-connection.js';
+import { RepositoryListenerConnection } from './listener-connection.js';
+import { RepositoryError } from '../../../repository/errors.js';
+import type {
+  ExplainRepositoryEventsOptions,
+  RepositoryEventErrorContext,
+  RepositoryEventsExplanation,
+  RepositoryMutationListeners,
+  RepositoryMutationSubscriptionOptions,
+} from '../../../repository/events/types.js';
+import type {
+  RepositoryEventsBinding,
+  RepositoryOperationParent,
+} from '../../../repository/internal/events/delivery.js';
+import { RepositoryMutationRegistry } from '../../../repository/internal/events/registry.js';
+import { explainStrategy } from '../../../repository/internal/events/strategy.js';
+import { registerUnobservedRepositories } from '../../../repository/internal/events/unobserved.js';
 import type {
   NormalizedRepositoryPolicy,
   RepositoryPolicy,
@@ -65,6 +79,17 @@ import {
   type KnexConnectionConfig,
 } from './config.js';
 
+/** How deep `inTransaction` listener writes may nest unless the connection says otherwise. */
+const defaultRepositoryEventMaxDepth = 8;
+
+/** Which events a Repository handed out by a connection takes part in. */
+export interface RepositoryEventScope {
+  /** The event whose `inTransaction` listener is making this write. */
+  readonly parent?: RepositoryOperationParent;
+  /** False for a migration or seed task's Repository: nothing is recorded or delivered. */
+  readonly observed?: boolean;
+}
+
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
   readonly dialect: DatabaseDialect;
@@ -93,8 +118,22 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       DatabaseDriverDefinition | undefined = undefined,
     private readonly transactionCallbacks:
       TransactionCallbacks | undefined = undefined,
+    /** Owned by the root connection and shared with all its transactions. */
+    private readonly mutationRegistry: RepositoryMutationRegistry = new RepositoryMutationRegistry(),
   ) {
+    const maxDepth = sourceConfig.repositoryEventMaxDepth;
+    if (
+      maxDepth !== undefined &&
+      (!Number.isInteger(maxDepth) || maxDepth < 0)
+    ) {
+      throw new TypeError(
+        `Connection "${name}" repositoryEventMaxDepth must be a non-negative integer.`,
+      );
+    }
     this.knexInstance = knexInstance;
+    registerUnobservedRepositories(this, (collection) =>
+      this.createRepository(collection, undefined, { observed: false }),
+    );
     this.config = resolveKnexConnectionConfig(sourceConfig, dialectDriver);
     this.metadataStore =
       metadataStore ??
@@ -235,6 +274,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   >(
     collection: string,
     policy: NormalizedRepositoryPolicy | undefined,
+    events: RepositoryEventScope = {},
   ): Repository<TRecord, TCreate, TUpdate> {
     return new DefaultRepository<TRecord, TCreate, TUpdate>({
       collection,
@@ -244,8 +284,68 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         () => this.getClient(),
         (name) => this.collections.get(name),
         this.runtime,
+        events.observed === false
+          ? undefined
+          : this.repositoryEvents(events.parent),
       ),
     });
+  }
+
+  onRepositoryMutation(
+    options: RepositoryMutationSubscriptionOptions,
+    listeners: RepositoryMutationListeners,
+  ): () => void {
+    return this.mutationRegistry.subscribe(options, listeners);
+  }
+
+  async explainRepositoryEvents(
+    options: ExplainRepositoryEventsOptions,
+  ): Promise<RepositoryEventsExplanation> {
+    const collection = await this.collections.get(options.collection);
+    if (!collection) {
+      throw new RepositoryError(
+        'COLLECTION_NOT_FOUND',
+        `Collection "${options.collection}" was not found.`,
+        { collection: options.collection },
+      );
+    }
+    return explainStrategy(
+      collection,
+      options.operation,
+      this.mutationRegistry.matching(new Set([collection.name!])),
+      this.runtime,
+    );
+  }
+
+  /**
+   * What the execution adapter of a Repository on this connection needs to
+   * deliver events. Its implicit transactions go through `transaction()`, so
+   * listeners get a transaction connection and delivery rides on layer 1.
+   */
+  private repositoryEvents(
+    parent: RepositoryOperationParent | undefined,
+  ): RepositoryEventsBinding {
+    return {
+      registry: this.mutationRegistry,
+      connectionName: this.name,
+      callbacks: this.transactionCallbacks,
+      parent,
+      maxDepth:
+        this.sourceConfig.repositoryEventMaxDepth ??
+        defaultRepositoryEventMaxDepth,
+      transaction: (execute) =>
+        this.transaction((connection) => {
+          const transaction = connection as KnexDatabaseConnection;
+          return execute(
+            transaction.repositoryEvents(parent),
+            transaction.getClient() as Knex.Transaction,
+          );
+        }),
+      listenerConnection: (operation) =>
+        new RepositoryListenerConnection(this, operation),
+      reportError: (error, context) =>
+        this.reportRepositoryEventError(error, context),
+    };
   }
 
   withPolicies<P>(
@@ -254,15 +354,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     >,
     principal: P,
   ): ScopedDatabaseConnection {
-    const normalized = Object.fromEntries(
-      Object.entries(policies).map(([collection, policy]) => [
-        collection,
-        normalizeRepositoryPolicy(
-          typeof policy === 'function' ? policy(principal) : policy,
-        ),
-      ]),
-    );
-    return new PolicyBoundConnection(this, expandPolicyRefs(normalized));
+    return bindPolicies(this, policies, principal);
   }
 
   async disconnect(): Promise<void> {
@@ -347,6 +439,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           invalidations,
           this.dialectDriver,
           callbacks,
+          this.mutationRegistry,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);
@@ -408,6 +501,32 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     process.emitWarning(
       error instanceof Error ? error : new Error(String(error)),
       { code: 'TRANSACTION_CALLBACK_FAILED', detail: `phase: ${phase}` },
+    );
+  }
+
+  private reportRepositoryEventError(
+    error: unknown,
+    context: RepositoryEventErrorContext,
+  ): void {
+    if (this.sourceConfig.onRepositoryEventError) {
+      try {
+        this.sourceConfig.onRepositoryEventError(error, context);
+        return;
+      } catch (reporterError) {
+        // A failing reporter must not turn a committed write into an error;
+        // both failures still surface as one warning.
+        error = new AggregateError(
+          [error, reporterError],
+          'onRepositoryEventError threw while reporting a listener failure.',
+        );
+      }
+    }
+    process.emitWarning(
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        code: 'REPOSITORY_EVENT_LISTENER_FAILED',
+        detail: `subscription: ${context.subscriptionId ?? '(unnamed)'}; operations: ${context.operationIds.join(', ')}`,
+      },
     );
   }
 

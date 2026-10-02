@@ -29,6 +29,26 @@ export type {
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
 export type { TransactionCallbackPhase } from './database/internal/transaction-callbacks.js';
+export type {
+  ExplainRepositoryEventsOptions,
+  RepositoryEventErrorContext,
+  RepositoryEventMeta,
+  RepositoryEventMetaBag,
+  RepositoryEventMetaEntry,
+  RepositoryEventPhase,
+  RepositoryEventStrategy,
+  RepositoryEventSubscriptionDescription,
+  RepositoryEventsExplanation,
+  RepositoryMutationCount,
+  RepositoryMutationEvent,
+  RepositoryMutationEventBase,
+  RepositoryMutationListeners,
+  RepositoryMutationOperation,
+  RepositoryMutationRows,
+  RepositoryMutationSubscriptionOptions,
+  RowChange,
+  RowChangeKind,
+} from './repository/events/types.js';
 export type { DatabaseManager } from './database/manager.js';
 export type {
   DatabaseDriverRuntime,

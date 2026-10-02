@@ -53,9 +53,11 @@ function genericOwnershipTarget(
     'metadataStore',
     'naming',
     'onCollectionMetadataInvalidationError',
+    'onRepositoryEventError',
     'onTransactionCallbackError',
     'password',
     'pool',
+    'repositoryEventMaxDepth',
     'schemaManagement',
     'ssl',
   ]);
