@@ -288,6 +288,17 @@ Returning commits; throwing rolls back. Swallowing an error inside the callback 
 
 A Repository nested write opens its own transaction when none is active and joins an existing one when there already is, without a savepoint per write. Several independent calls that must roll back together need an explicit transaction around them.
 
+Work that must happen only if the writes are kept — a realtime message, a cache delete, a job dispatch — goes in `connection.afterCommit(callback)`, never directly inside the callback, where it would still run when a later step rolls the transaction back:
+
+```ts
+await db.transaction(async (connection) => {
+  await connection.repository('orders').createOne({ values: order });
+  connection.afterCommit(() => ordersTopic.publish({ orderNo: order.orderNo }));
+});
+```
+
+It runs after the outermost commit, in registration order, and `transaction()` resolves once every callback has finished, so keep it quick and hand slow work to a job. Inside a nested `transaction()` it waits for the outer commit and is dropped if that savepoint rolls back. Outside a transaction it starts at once, so a service can call it whether or not its caller opened one. A callback that throws does not undo the commit: the error goes to the connection's `onTransactionCallbackError`, or becomes a `TRANSACTION_CALLBACK_FAILED` warning. The transaction connection is finished when the callback runs; write through `db` or a new transaction. `connection.afterRollback((error) => …)` is the counterpart for logging and cleanup after a rollback. Migration and seed contexts do not offer either.
+
 ## 6. Collections
 
 A Collection is what the database resolves to once physical schema and metadata are combined. There are two ways to reach it, and they answer different questions.

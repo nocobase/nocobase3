@@ -206,6 +206,8 @@ Collection-aware 记录和关系访问请优先阅读下一节 Repository；本�
 - [Mutation AST 提案](./proposals/repository/mutation-ast.md)：候选的精简关系写入、Fluent Builder 和 Agent 协议。
 - [表单到 Mutation AST 提案](./proposals/repository/form-mutation.md)：将前端大表单变化编译为 Repository mutation。
 - [Repository 写入 API 改进提案](./proposals/repository/prisma-inspired-mutations.md)：参考 Prisma 的模型形状输入和字段级 Relation Builder，讨论下一版写入契约。
+- [Repository 与事务生命周期事件提案](./proposals/repository/events.md)：候选的事务回调与 Repository 行级变更事件。
+- [Repository 与事务生命周期事件示例](./proposals/repository/events-examples.md)：从现状出发逐层演示每个概念与常见场景。
 
 ## 历史归档
 
