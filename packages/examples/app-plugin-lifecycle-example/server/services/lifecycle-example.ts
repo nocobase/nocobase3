@@ -128,11 +128,15 @@ export class LifecycleExampleService {
       throw new ExampleError('INVALID', '请选择问题分类');
     if (!PRIORITIES.includes(values.priority as (typeof PRIORITIES)[number]))
       throw new ExampleError('INVALID', '请选择优先级');
-    return this.create('tickets', {
-      ...values,
-      requesterId: actor,
-      assigneeId: null,
-    });
+    return this.create(
+      'tickets',
+      {
+        ...values,
+        requesterId: actor,
+        assigneeId: null,
+      },
+      actor,
+    );
   }
 
   public async createExpense(
@@ -141,11 +145,15 @@ export class LifecycleExampleService {
   ): Promise<Plain> {
     if (person(actor)?.role !== 'applicant')
       throw new ExampleError('FORBIDDEN', '只有员工可以发起报销');
-    return this.create('expenses', {
-      ...this.expenseValues(values),
-      applicantId: actor,
-      approverId: null,
-    });
+    return this.create(
+      'expenses',
+      {
+        ...this.expenseValues(values),
+        applicantId: actor,
+        approverId: null,
+      },
+      actor,
+    );
   }
 
   /** A report is edited only by its applicant, while it is a draft or sent back. */
@@ -209,23 +217,17 @@ export class LifecycleExampleService {
     };
   }
 
+  /** Created through the lifecycle, so a record's history starts at its creation. */
   private async create(
     name: ExampleLifecycleName,
     values: Plain,
+    actor: string,
   ): Promise<Plain> {
-    const lifecycle = LIFECYCLES[name];
-    const now = this.clock().toISOString();
-    const created = await this.database
-      .repository(lifecycle.collection)
-      .createOne({
-        values: {
-          ...values,
-          [lifecycle.stateField]: lifecycle.initial,
-          [lifecycle.changedAtField]: now,
-          [lifecycle.versionField]: 0,
-          createdAt: now,
-        } as RepositoryRecord,
-      });
-    return plain(created.record);
+    const { record } = await this.runtime.create(
+      name,
+      { ...values, createdAt: this.clock().toISOString() },
+      { actor: { id: actor } },
+    );
+    return { ...record };
   }
 }

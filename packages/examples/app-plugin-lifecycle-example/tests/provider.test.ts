@@ -15,6 +15,7 @@ import {
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { createJobExecutorService } from '@nocobase/jobs';
+import { CREATE_TRANSITION } from '@nocobase/lifecycle';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -146,7 +147,14 @@ describe('lifecycle example provider', () => {
       );
       expect(
         detail.history.transitions.map((entry) => entry.transition),
-      ).toEqual(['submit', 'requestInfo', 'resubmit', 'approve', 'paid']);
+      ).toEqual([
+        CREATE_TRANSITION,
+        'submit',
+        'requestInfo',
+        'resubmit',
+        'approve',
+        'paid',
+      ]);
       expect(
         detail.history.effectRuns.every((run) => run.status === 'succeeded'),
       ).toBe(true);

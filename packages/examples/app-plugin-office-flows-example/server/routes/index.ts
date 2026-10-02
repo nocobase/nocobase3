@@ -152,7 +152,12 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.onError((error, context) => {
       if (error instanceof LifecycleError)
         return context.json(
-          { code: error.code, message: error.message },
+          {
+            code: error.code,
+            message: error.message,
+            blockers: error.blockers,
+            problems: error.problems,
+          },
           LIFECYCLE_STATUS[error.code],
         );
       if (error instanceof OfficeFlowsError)

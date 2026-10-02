@@ -28,6 +28,7 @@ import { Card, CardContent } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
 import { useActorName } from '../lib/actor.js';
 import {
+  CREATE_TRANSITION,
   errorMessage,
   exampleApi,
   type Plain,
@@ -704,7 +705,7 @@ function ExpenseView({
       );
     else
       lines.push(
-        `${actorName(entry.actorId)} ${t(`transitions.${entry.transition}`)}`,
+        `${actorName(entry.actorId)} ${t(`transitions.${entry.transition === CREATE_TRANSITION ? 'create' : entry.transition}`)}`,
       );
     if (
       (entry.transition === 'submit' || entry.transition === 'resubmit') &&

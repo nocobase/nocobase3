@@ -1,10 +1,11 @@
 import type {
   EffectDefinition,
+  GuardVerdict,
   Lifecycle,
   LifecycleTransition,
   TransitionContext,
 } from './definition.js';
-import { LifecycleError } from './errors.js';
+import { LifecycleError, type Blocker, type InputProblem } from './errors.js';
 import type {
   JsonObject,
   LifecycleActor,
@@ -13,12 +14,65 @@ import type {
   ServicesOf,
 } from './types.js';
 
+/**
+ * A guard added from outside the definition, with `runtime.addGuard()`: a
+ * budget plugin refusing approvals while a budget is frozen, say. It answers
+ * like a definition's guard, and its refusals join the same blockers.
+ */
+export type ExtraGuard<T extends LifecycleTypes> = (
+  context: TransitionContext<T> & { readonly transition: string },
+) => GuardVerdict | Promise<GuardVerdict>;
+
 export interface PlanContext<T extends LifecycleTypes> {
   readonly actor: LifecycleActor;
   readonly input?: JsonObject;
   readonly parameters: ParametersOf<T>;
   readonly services: ServicesOf<T>;
   readonly now: Date;
+  /** Guards added for this transition with `runtime.addGuard()`. */
+  readonly guards?: readonly ExtraGuard<T>[];
+}
+
+function blockerOf(verdict: GuardVerdict, fallback: string): Blocker | null {
+  if (verdict === true) return null;
+  if (verdict === false)
+    return { source: 'guard', code: 'GUARD_REJECTED', message: fallback };
+  if (typeof verdict === 'string')
+    return { source: 'guard', code: 'GUARD_REJECTED', message: verdict };
+  return {
+    source: 'guard',
+    code: verdict.code ?? 'GUARD_REJECTED',
+    message: verdict.message,
+  };
+}
+
+/**
+ * Every guard's answer for this context: the definition's, then the added
+ * ones. All are asked, so a page can show each reason at once; `fire()` and
+ * `available()` call this same function, so what a button shows and what a
+ * click does cannot disagree.
+ */
+export async function guardBlockers<T extends LifecycleTypes>(
+  transition: LifecycleTransition<T>,
+  context: TransitionContext<T>,
+  guards: readonly ExtraGuard<T>[] = [],
+): Promise<Blocker[]> {
+  const fallback = `"${context.actor.id}" may not fire "${transition.name}" now.`;
+  const verdicts: GuardVerdict[] = [];
+  if (transition.definition.guard)
+    verdicts.push(await transition.definition.guard(context));
+  for (const guard of guards)
+    verdicts.push(await guard({ ...context, transition: transition.name }));
+  return verdicts
+    .map((verdict) => blockerOf(verdict, fallback))
+    .filter((blocker): blocker is Blocker => blocker !== null);
+}
+
+function problemsOf(
+  answer: string | readonly InputProblem[] | null | undefined,
+): readonly InputProblem[] {
+  if (answer === null || answer === undefined) return [];
+  return typeof answer === 'string' ? [{ message: answer }] : answer;
 }
 
 /** What a transition will write and run, decided without touching any store. */
@@ -98,13 +152,18 @@ export async function planTransition<T extends LifecycleTypes>(
     now: context.now,
   });
   const definition = transition.definition;
-  if (definition.guard && !(await definition.guard(base)))
+  const blockers = await guardBlockers(transition, base, context.guards);
+  if (blockers.length)
+    throw new LifecycleError('GUARD_REJECTED', blockers[0].message, {
+      blockers,
+    });
+  const problems = problemsOf(definition.validate?.(input));
+  if (problems.length)
     throw new LifecycleError(
-      'GUARD_REJECTED',
-      `"${context.actor.id}" may not fire "${transitionName}" now.`,
+      'INVALID_INPUT',
+      problems.map((problem) => problem.message).join('; '),
+      { problems },
     );
-  const problem = definition.validate?.(input) ?? null;
-  if (problem !== null) throw new LifecycleError('INVALID_INPUT', problem);
 
   const to = definition.route ? definition.route(base) : transition.to[0];
   if (!transition.to.includes(to))
@@ -113,9 +172,15 @@ export async function planTransition<T extends LifecycleTypes>(
       `"${transitionName}" routed to "${to}", which it does not declare.`,
     );
 
-  const extra = definition.set
-    ? await definition.set(Object.freeze({ ...base, from, to }))
-    : {};
+  const accepted: Record<string, unknown> = {};
+  for (const field of definition.accept ?? [])
+    if (field in input) accepted[field] = input[field];
+  const extra = {
+    ...accepted,
+    ...(definition.set
+      ? await definition.set(Object.freeze({ ...base, from, to }))
+      : {}),
+  };
   for (const field of [
     'id',
     lifecycle.stateField,

@@ -9,7 +9,7 @@ import type {
   ProcessingLevel,
   RecordView,
 } from '../lib/api.js';
-import { list } from '../lib/api.js';
+import { CREATE_TRANSITION, list } from '../lib/api.js';
 import { NAMESPACE, names } from '../lib/format.js';
 import { stateLabel, TASK_LIFECYCLE } from '../lib/labels.js';
 import { cn } from '../lib/utils.js';
@@ -402,10 +402,14 @@ export function History({
         <div className='space-y-1'>
           <p className='text-sm'>
             <span className='font-medium'>
-              {titles.get(entry.transition) ?? entry.transition}
+              {entry.transition === CREATE_TRANSITION
+                ? t('common.created')
+                : (titles.get(entry.transition) ?? entry.transition)}
             </span>{' '}
             <span className='text-muted-foreground'>
-              {stateLabel(lifecycle, entry.from)} →{' '}
+              {entry.from === null
+                ? ''
+                : `${stateLabel(lifecycle, entry.from)} → `}
               {stateLabel(lifecycle, entry.to)}
             </span>
           </p>

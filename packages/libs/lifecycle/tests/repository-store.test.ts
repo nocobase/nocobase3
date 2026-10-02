@@ -11,6 +11,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  CREATE_TRANSITION,
   createRepositoryLifecycleStore,
   defineLifecycle,
   LIFECYCLE_COLLECTIONS,
@@ -40,7 +41,8 @@ async function createTables(): Promise<void> {
     table.string('lifecycle').notNull();
     table.string('recordId').notNull();
     table.string('transition').notNull();
-    table.string('from').notNull();
+    // Null on the entry runtime.create() writes.
+    table.string('from');
     table.string('to').notNull();
     table.string('actorId').notNull();
     table.json('input').notNull().defaultTo({});
@@ -286,6 +288,32 @@ describe('Repository lifecycle store', () => {
     expect((await runtime().history('tickets', id)).transitions).toMatchObject([
       { version: 2 },
     ]);
+  });
+
+  it('creates a record through the lifecycle, its history starting there', async () => {
+    const created = await runtime().create(
+      'tickets',
+      { customerEmail: 'b@example.com' },
+      { actor: { id: 'customer' } },
+    );
+    expect(created.record).toMatchObject({
+      customerEmail: 'b@example.com',
+      status: 'open',
+      lifecycleVersion: 1,
+    });
+    const id = String(created.record.id);
+    expect((await runtime().history('tickets', id)).transitions).toMatchObject([
+      { transition: CREATE_TRANSITION, from: null, to: 'open', version: 1 },
+    ]);
+    await runtime().fire('tickets', id, 'replyToCustomer', {
+      actor: { id: 'agent' },
+      input: { message: 'Hello' },
+    });
+    expect(
+      (await runtime().history('tickets', id)).transitions.map(
+        (entry) => entry.version,
+      ),
+    ).toEqual([1, 2]);
   });
 
   it('takes back an attempt whose process stopped answering', async () => {

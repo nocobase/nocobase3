@@ -118,8 +118,15 @@ describe('lifecycle example routes', () => {
 
   it('maps a refused transition to an HTTP status', async () => {
     const { app, service } = application(allow);
+    const blocker = {
+      source: 'guard' as const,
+      code: 'GUARD_REJECTED',
+      message: '只有当前审批人可以处理',
+    };
     service.fire.mockRejectedValueOnce(
-      new LifecycleError('GUARD_REJECTED', 'no'),
+      new LifecycleError('GUARD_REJECTED', blocker.message, {
+        blockers: [blocker],
+      }),
     );
     service.fire.mockRejectedValueOnce(
       new LifecycleError('INVALID_STATE', 'no'),
@@ -133,8 +140,11 @@ describe('lifecycle example routes', () => {
       post('/lifecycle-example/expenses/1/fire', body),
     );
     expect(denied.status).toBe(403);
+    // The page shows why, not only that it was refused.
     await expect(denied.json()).resolves.toMatchObject({
       code: 'GUARD_REJECTED',
+      message: '只有当前审批人可以处理',
+      blockers: [blocker],
     });
     expect(conflict.status).toBe(409);
   });

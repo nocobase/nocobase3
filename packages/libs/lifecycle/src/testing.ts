@@ -1,6 +1,10 @@
 import type { Lifecycle } from './definition.js';
 import { MemoryLifecycleStore } from './memory-store.js';
-import { LifecycleRuntime, type AvailableTransition } from './runtime.js';
+import {
+  LifecycleRuntime,
+  type AvailableTransition,
+  type TransitionCheck,
+} from './runtime.js';
 import type { EffectRun, TransitionEntry } from './store.js';
 import type {
   JsonObject,
@@ -104,6 +108,22 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
     });
   }
 
+  /**
+   * Creates a record through the lifecycle, as `runtime.create()` does: the
+   * history starts with the creation, and the initial state's `onEnter`
+   * effects run before it returns.
+   */
+  public async start(
+    values: Readonly<Record<string, unknown>> = {},
+    options: KitFireOptions & { readonly state?: T['state'] } = {},
+  ): Promise<T['record']> {
+    const { record } = await this.runtime.create(this.lifecycle.name, values, {
+      actor: actorOf(options.actor),
+      ...(options.state === undefined ? {} : { state: options.state }),
+    });
+    return this.get(record);
+  }
+
   public get(record: RecordRef): T['record'] {
     const current = this.store.record(this.lifecycle.collection, idOf(record));
     if (!current)
@@ -146,6 +166,19 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
     return this.runtime.available(
       this.lifecycle.name,
       idOf(record),
+      actorOf(actor),
+    );
+  }
+
+  public can(
+    record: RecordRef,
+    transition: string,
+    actor?: string | LifecycleActor,
+  ): Promise<TransitionCheck> {
+    return this.runtime.can(
+      this.lifecycle.name,
+      idOf(record),
+      transition,
       actorOf(actor),
     );
   }

@@ -6,7 +6,8 @@ export type LifecycleName = 'tickets' | 'expenses';
 export interface TransitionEntry {
   readonly id: string;
   readonly transition: string;
-  readonly from: string;
+  /** Null on the entry that records the creation. */
+  readonly from: string | null;
   readonly to: string;
   readonly actorId: string;
   readonly input: Plain;
@@ -24,12 +25,23 @@ export interface EffectRun {
   readonly error: string | null;
 }
 
+export interface Blocker {
+  readonly source: 'state' | 'guard';
+  readonly code: string;
+  readonly message: string;
+}
+
 export interface Available {
   readonly name: string;
   readonly title: string;
   readonly to: readonly string[];
   readonly allowed: boolean;
+  /** Why it is not allowed, one entry per guard that refused. */
+  readonly blockers: readonly Blocker[];
 }
+
+/** The transition name of the log entry that records a creation. */
+export const CREATE_TRANSITION = '$create';
 
 /** Mirrors the server's `RecordDetail`; the client imports no server code. */
 export interface RecordDetail {

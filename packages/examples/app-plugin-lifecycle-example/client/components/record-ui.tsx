@@ -148,6 +148,38 @@ export function LifecyclePanel({
           </div>
 
           <div className='space-y-2'>
+            <h3 className='font-medium'>{t('lifecycle.available')}</h3>
+            {detail.available.length ? (
+              <ul className='space-y-1'>
+                {detail.available.map((item) => (
+                  <li key={item.name} className='flex flex-wrap gap-x-2'>
+                    <span
+                      className={cn(
+                        'font-mono',
+                        item.allowed
+                          ? 'text-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    >
+                      {item.allowed ? '✓' : '✗'} {item.name}
+                    </span>
+                    {item.blockers.map((blocker) => (
+                      <span
+                        key={blocker.code + blocker.message}
+                        className='text-muted-foreground'
+                      >
+                        {blocker.message}
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className='text-muted-foreground'>{t('lifecycle.final')}</p>
+            )}
+          </div>
+
+          <div className='space-y-2'>
             <h3 className='font-medium'>{t('lifecycle.parameters')}</h3>
             <code className='block rounded-md bg-muted px-2 py-1.5 text-xs'>
               {JSON.stringify(detail.parameters)}
@@ -201,7 +233,7 @@ export function LifecyclePanel({
                           {entry.transition}
                         </td>
                         <td className='py-1.5 pr-3 font-mono whitespace-nowrap'>
-                          {entry.from} → {entry.to}
+                          {entry.from ?? '∅'} → {entry.to}
                         </td>
                         <td className='py-1.5 pr-3 whitespace-nowrap'>
                           {actorName(entry.actorId)}

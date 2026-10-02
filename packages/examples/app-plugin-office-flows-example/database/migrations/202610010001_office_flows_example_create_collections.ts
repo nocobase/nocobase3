@@ -212,7 +212,8 @@ const migration: MigrationDefinition = defineMigration({
       table.string('lifecycle').notNull();
       table.string('recordId').notNull();
       table.string('transition').notNull();
-      table.string('from').notNull();
+      // Null on the entry runtime.create() writes.
+      table.string('from');
       table.string('to').notNull();
       table.string('actorId').notNull();
       table.json('input').notNull().defaultTo({});

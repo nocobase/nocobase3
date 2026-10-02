@@ -21,7 +21,8 @@ export interface Available {
 export interface TransitionEntry {
   readonly id: string;
   readonly transition: string;
-  readonly from: string;
+  /** Null on the entry that records the creation. */
+  readonly from: string | null;
   readonly to: string;
   readonly actorId: string;
   readonly input: Plain;
@@ -86,6 +87,9 @@ export interface Config {
     readonly name: string;
   }[];
 }
+
+/** The transition name of the log entry that records a creation. */
+export const CREATE_TRANSITION = '$create';
 
 const base = 'office-flows';
 
