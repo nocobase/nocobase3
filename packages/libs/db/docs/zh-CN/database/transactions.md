@@ -118,6 +118,8 @@ await db.transaction((connection) => publishOrder(connection, 'SO-001')); // 提
 
 `afterRollback((error) => …)` 用于回滚后的记录与清理，不能挽回事务。Migration 与 Seed 的上下文不提供这两个方法。
 
+`afterCommit` 需要在每个写入点登记。要集中观察“谁改了哪些表的哪些行”，包括嵌套关系写入改到的行，使用 [Repository 变更事件](../repository/events.md)。
+
 ## 使用注意事项
 
 - transaction 内只使用回调里的 `connection`。

@@ -5,9 +5,9 @@ description: 候选设计：事务提交与回滚回调、覆盖嵌套写入的 
 
 # Repository 与事务生命周期事件
 
-> 文档状态：第一层（事务回调 `afterCommit` / `afterRollback`）已实现，正式用法见[事务](../../database/transactions.md)。第二层（Repository 变更事件）与第三层仍是候选设计，其中的接口、类型和示例不是当前公开 API，不得据此生成生产代码；Repository 当前用法以[正式文档](../../repository/overview.md)、[API 参考](../../reference/repository-api.md)和公开类型为准。
+> 文档状态：设计与演进记录。第一层与第二层均已实现，当前用法以[事务](../../database/transactions.md)、[Repository 变更事件](../../repository/events.md)和公开类型为准；本页与正式文档不一致处，以正式文档为准。第三层（outbox）仍是候选设计。
 
-> **状态：第一层已实现，用法见[事务](../../database/transactions.md)；第二层已在 SQLite 上完成原型验证，结论可行，见“原型结论”。** 进入第 3 步前，需先修复两个已有缺陷并确认“原型提出的设计修正”。逐层的用法示例、实际收到的事件和常见场景见 [Repository 与事务生命周期事件示例](./events-examples.md)。
+> **状态：第一层已实现，用法见[事务](../../database/transactions.md)；第二层已实现，用法见 [Repository 变更事件](../../repository/events.md)。** “原型提出的设计修正”已采纳，除第 9 条外均已实现；实现与本页设计的差异见“实现与设计的差异”，未完成的事项见“待决问题”。逐层的用法示例、实际收到的事件和常见场景见 [Repository 与事务生命周期事件示例](./events-examples.md)。
 
 ## 背景
 
@@ -422,6 +422,8 @@ const actor = audit.read(event); // { actorId: string } | undefined
 4. **第二层补全。** `defineRepositoryEventMeta`、`explainRepositoryEvents()`、递归上限。
 5. **文档转正。** 实现部分移入 `repository/` 正式文档，本页保留为演进记录。
 
+第 3 至 5 步已完成：结构性测试与投递语义测试位于 `db-testkit/tests/integration/repository/events/`，在每个方言上运行；没有订阅时 SQL 逐条不变的断言与可选的耗时基准位于 `db-sqlite/tests/repository-events/`。
+
 ## 原型结论（第 0 步）
 
 **结论：设计在 SQLite 上可行，验收标准全部满足。** 原型分支为 `feat/db-repository-events-prototype`（未合并），测试位于该分支的 `packages/libs/db-sqlite/tests/prototype-events/`，完整报告为分支根目录的 `PROTOTYPE-REPORT.md`。其他方言尚未验证。
@@ -467,7 +469,23 @@ const actor = audit.read(event); // { actorId: string } | undefined
 | 10  | 带 `keys` 的 `createMany` 退化为逐行插入                                                       | 主键由调用方给出时直接使用；支持 `RETURNING` 的方言用多行 `INSERT … RETURNING`                    |
 | 11  | 监听器写入自己订阅的 Collection 会无限递归                                                     | 正式实现必须包含递归上限（原型未实现）                                                            |
 
-原型未实现、留给正式实现的部分：`values`、meta、`parentOperationId`、递归上限、`explainRepositoryEvents()`、`onRepositoryEventError`、迁移与 Seed 中关闭事件、adapter 内 savepoint 回滚的测试，以及 SQLite 以外的方言。
+以上修正均已采纳。除第 9 条（见待决问题 6）外均已实现。
+
+原型未实现、留给正式实现的部分（均已在正式实现中完成）：`values`、meta、`parentOperationId`、递归上限、`explainRepositoryEvents()`、`onRepositoryEventError`、迁移与 Seed 中关闭事件、adapter 内 savepoint 回滚的测试，以及 SQLite 以外的方言。
+
+## 实现与设计的差异
+
+| 方面                        | 实现                                                                                                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `explainRepositoryEvents()` | 返回 Promise，因为需要读取 Collection 定义判断行标识。`strategy` 取值为 `unchanged`、`single-statement`、`lock-then-write-by-key`、`insert-returning`、`insert-per-row`；没有匹配的订阅时 `granularity` 为 `none` |
+| debug 日志                  | 未实现，见待决问题 7                                                                                                                                                                                              |
+| `createMany` 取键           | 每行都给出键时保持原来的单条语句；否则方言运行时声明 `insertManyReturning` 时用一条多行 `INSERT … RETURNING`（目前只有 SQLite 声明），其余方言逐行插入                                                            |
+| `values`                    | 不含递增后的版本号、数据库默认值，以及批量写中原子数值运算的结果；单行写的原子运算会回读，给出运算后的值                                                                                                          |
+| 没有行标识的关系目标        | 按条件解除关系时，目标 Collection 没有主键或非空唯一键，就无法按键写入：写入照常执行，这些行不出现在 `changes` 中                                                                                                 |
+| `inTransaction` 失败        | 调用的 `afterCommit` 位置在监听器运行前预留，监听器抛错时撤回。调用方捕获错误后继续提交时，那次调用的写入被提交，但不投递事件                                                                                     |
+| 批量取键的代价              | 按键写入使用每批至多 200 个键的语句。文件型 SQLite 上 1 万行的 `updateMany`：无订阅 1.4 ms，`keys: true` 约 40 ms，`keys: false` 1.4 ms                                                                           |
+| 订阅参数校验                | `collections` 为空、两个监听器都没有提供时，`onRepositoryMutation()` 抛 `TypeError`                                                                                                                               |
+| `onRepositoryEventError`    | context 为 `{ subscriptionId?, operationIds }`；它自身抛错时，两个错误合并为一条 `REPOSITORY_EVENT_LISTENER_FAILED` 进程警告                                                                                      |
 
 ## 已定决策
 
@@ -481,10 +499,14 @@ const actor = audit.read(event); // { actorId: string } | undefined
 
 ## 待决问题
 
-| #   | 问题                                                                                                | 当前倾向                                                                                                                                   |
-| --- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | `values` 是否需要按字段声明（例如只要 `status`），以便排除敏感字段                                  | 先做布尔开关，敏感字段由 Collection 元数据标记后统一排除                                                                                   |
-| 2   | 是否在 Repository 层模拟外键级联，使级联删除的行也产生事件                                          | 不在本提案范围                                                                                                                             |
-| 3   | 递归深度上限的默认值，以及是否可配置                                                                | 默认 8，连接配置可调                                                                                                                       |
-| 4   | 在事务中、存在 `inTransaction` 监听器时，是否为每次调用自动建 savepoint，使监听器失败只回滚本次调用 | 不建，保持与现有 Repository 事务语义一致                                                                                                   |
-| 5   | 是否在 db 内提供跨进程广播                                                                          | 不提供。只需执行一次的工作交给 jobs、队列或第三层 outbox；需要每个节点都执行的（例如清本地缓存），应避免这种设计，或由框架另行提供广播通道 |
+| #   | 问题                                                                                                | 当前倾向                                                                                                                                                                              |
+| --- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `values` 是否需要按字段声明（例如只要 `status`），以便排除敏感字段                                  | 先做布尔开关，敏感字段由 Collection 元数据标记后统一排除                                                                                                                              |
+| 2   | 是否在 Repository 层模拟外键级联，使级联删除的行也产生事件                                          | 不在本提案范围                                                                                                                                                                        |
+| 3   | 递归深度上限的默认值，以及是否可配置                                                                | 已定：默认 8，连接配置 `repositoryEventMaxDepth` 可调                                                                                                                                 |
+| 4   | 在事务中、存在 `inTransaction` 监听器时，是否为每次调用自动建 savepoint，使监听器失败只回滚本次调用 | 不建，保持与现有 Repository 事务语义一致                                                                                                                                              |
+| 5   | 是否在 db 内提供跨进程广播                                                                          | 不提供。只需执行一次的工作交给 jobs、队列或第三层 outbox；需要每个节点都执行的（例如清本地缓存），应避免这种设计，或由框架另行提供广播通道                                            |
+| 6   | SQLite 的取键路径是否使用 `BEGIN IMMEDIATE`（原型修正第 9 条）                                      | 未实现。Knex 的 SQLite 事务固定发出 `BEGIN;`，需要驱动运行时新增钩子并替换事务类。分析表明多进程下不会取到错误的行键，只可能在锁升级时以 `SQLITE_BUSY` 失败；已写入正式文档的已知限制 |
+| 7   | Repository 是否在 debug 日志中输出执行策略                                                          | 未实现；db 目前没有日志接口，先用 `explainRepositoryEvents()`                                                                                                                         |
+| 8   | 其他方言是否声明 `insertManyReturning`                                                              | 先只在 SQLite 声明；PostgreSQL 等支持多行 RETURNING 的方言需在各自 CI 验证解码后再开启                                                                                                |
+| 9   | 单字段主键的按键批量写是否改用 `IN` 列表以降低代价                                                  | 待评估；当前与已有批量写共用每批 200 个键的 OR 条件                                                                                                                                   |
