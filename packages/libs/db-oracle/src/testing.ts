@@ -48,9 +48,11 @@ export const testDatabaseProvisioner: TestDatabaseProvisioner =
     statements: {
       create: [
         `create user ?? identified by "${TEST_USER_PASSWORD}" quota unlimited on users`,
-        'grant create session, create table, create view, create sequence, create procedure, create trigger, create type to ??',
+        'grant create session, create table, create view, create materialized view, create sequence, create synonym, create procedure, create trigger, create type to ??',
       ],
-      drop: 'drop user if exists ?? cascade',
+      // `drop user if exists` is Oracle 23ai syntax; this block drops the user on every supported version and
+      // ignores only ORA-01918, "user does not exist".
+      drop: `begin execute immediate 'drop user "' || ? || '" cascade'; exception when others then if sqlcode != -1918 then raise; end if; end;`,
       list: 'select lower(username) as "name" from all_users order by username',
     },
   });
