@@ -67,6 +67,9 @@ describe('transaction callbacks on SQLite', () => {
     expect(outcome).toBeInstanceOf(Error);
     expect(committed).not.toHaveBeenCalled();
     expect(rolledBack).toHaveBeenCalledExactlyOnceWith(outcome);
+    await expect(client('children').count({ total: '*' })).resolves.toEqual([
+      { total: 0 },
+    ]);
   });
 
   it('hands a callback failure to onTransactionCallbackError with its phase', async () => {
