@@ -51,7 +51,7 @@ const pay = defineEffect<OrderTypes>({
 const orders: Lifecycle<OrderTypes> = defineLifecycle<OrderTypes>({
   name: 'orders',
   initial: 'waiting',
-  states: ['waiting', 'approved', 'paid'],
+  states: ['waiting', 'approved', { name: 'paid', final: true }],
   parameters: { escalateAfterMinutes: 10 },
   transitions: {
     escalate: {
@@ -338,7 +338,7 @@ describe('lifecycle concurrency', () => {
     }>({
       name: 'items',
       initial: 'idle',
-      states: ['idle', 'done'],
+      states: ['idle', { name: 'done', final: true }],
       transitions: {
         finish: {
           from: 'idle',

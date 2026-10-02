@@ -5,13 +5,16 @@ export {
   type EffectContext,
   type EffectDefinition,
   type EffectRetry,
+  type FromStates,
   type GuardVerdict,
   type Lifecycle,
   type LifecycleDefinition,
   type LifecycleDescription,
+  type LifecycleState,
   type LifecycleTransition,
   type LifecycleTrigger,
   type SetContext,
+  type StateDefinition,
   type TransitionContext,
   type TransitionDefinition,
   type TransitionHookContext,
@@ -67,6 +70,7 @@ export type {
   RecordCondition,
   TransitionEntry,
 } from './store.js';
+export { toMermaid, type MermaidOptions } from './mermaid.js';
 export { MemoryLifecycleStore } from './memory-store.js';
 export { LIFECYCLE_COLLECTIONS } from './collections.js';
 export {

@@ -105,8 +105,8 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
       'awaitingFinance',
       'needsInfo',
       'approved',
-      'rejected',
-      'paid',
+      { name: 'rejected', final: true },
+      { name: 'paid', final: true },
     ],
     // A real approval escalates after days; the example after minutes.
     parameters: {
@@ -166,7 +166,8 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
       },
       withdraw: {
         title: '撤回',
-        from: ['awaitingManager', 'awaitingFinance', 'needsInfo'],
+        // Any state still under way, but a draft and an approved report.
+        from: { except: ['draft', 'approved'] },
         to: 'draft',
         guard: isApplicant,
         set: () => ({ approverId: null }),

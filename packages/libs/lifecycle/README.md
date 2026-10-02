@@ -54,6 +54,10 @@ runtime.register(requestLifecycle, {
 });
 ```
 
+## Describing a lifecycle
+
+A state is a name or `{ name, title, final, meta }`, and a transition may carry `meta` too, so a page can label, colour and confirm from the definition. `from` takes one state, several, `'*'` for every state that is not final, or `{ except: [...] }`. The definition is checked when the module loads: every state must be reachable from an initial state, a final state may have no transition leaving it, and any other state must have one — a state with no way out is almost always a forgotten transition, so it has to be marked final to pass. `describe()` returns all of it, effects' continuations included, and `toMermaid(describe())` draws it as a Mermaid state diagram, marking the transitions triggers fire and the ones effects continue with.
+
 ## Explaining refusals and creating records
 
 A guard answers `true` to allow a transition, or refuses it with `false`, a message, or `{ code, message }`. `available()` returns every transition the record's state allows with `allowed` and `blockers`, one per guard that refused, and `can(name, id, transition, actor)` answers for one transition, a `state` blocker included when the record is in the wrong state. `fire()` asks the same guards in the same way and refuses with a `LifecycleError` that carries the blockers, so what a button shows and what a click does cannot disagree. `validate` returns a message, a list of `{ field, message }` problems, or nothing; the refusal carries the problems.

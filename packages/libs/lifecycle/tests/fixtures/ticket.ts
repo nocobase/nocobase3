@@ -36,7 +36,7 @@ export const notifyCustomer = defineEffect<TicketTypes>({
 export const ticketDefinition: LifecycleDefinition<TicketTypes> = {
   name: 'tickets',
   initial: 'open',
-  states: ['open', 'awaitingCustomer', 'closed'],
+  states: ['open', 'awaitingCustomer', { name: 'closed', final: true }],
   parameters: { waitHours: 72 },
   transitions: {
     replyToCustomer: {

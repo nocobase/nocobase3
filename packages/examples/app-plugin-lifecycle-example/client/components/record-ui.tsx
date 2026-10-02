@@ -199,6 +199,18 @@ export function LifecyclePanel({
             </div>
           </div>
 
+          <details className='space-y-2'>
+            <summary className='cursor-pointer font-medium'>
+              {t('lifecycle.diagram')}
+            </summary>
+            <p className='text-xs text-muted-foreground'>
+              {t('lifecycle.diagramHint')}
+            </p>
+            <pre className='overflow-x-auto rounded-md bg-muted px-2 py-1.5 text-xs'>
+              {detail.diagram}
+            </pre>
+          </details>
+
           <div className='space-y-2'>
             <h3 className='font-medium'>{t('lifecycle.transitions')}</h3>
             {detail.history.transitions.length ? (

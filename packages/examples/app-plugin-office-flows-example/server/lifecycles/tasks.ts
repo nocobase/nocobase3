@@ -216,7 +216,13 @@ export const clerkTaskLifecycle: Lifecycle<ClerkTypes> =
     name: 'clerkTasks',
     collection: COLLECTIONS.clerkTasks,
     initial: 'signing',
-    states: ['signing', 'reviewing', 'accepted', 'objected', 'done'],
+    states: [
+      'signing',
+      'reviewing',
+      { name: 'accepted', final: true },
+      { name: 'objected', final: true },
+      { name: 'done', final: true },
+    ],
     transitions: {
       sign: {
         title: '会签',
@@ -276,7 +282,7 @@ export const teamTaskLifecycle: Lifecycle<TeamTypes> =
     name: 'teamTasks',
     collection: COLLECTIONS.teamTasks,
     initial: 'processing',
-    states: ['processing', 'done'],
+    states: ['processing', { name: 'done', final: true }],
     transitions: {
       dispatchExecutors: {
         title: '派发执行人',
@@ -303,7 +309,7 @@ export const executorTaskLifecycle: Lifecycle<ExecutorTypes> =
     name: 'executorTasks',
     collection: COLLECTIONS.executorTasks,
     initial: 'processing',
-    states: ['processing', 'done'],
+    states: ['processing', { name: 'done', final: true }],
     transitions: {
       submitFeedback: {
         title: '提交反馈',

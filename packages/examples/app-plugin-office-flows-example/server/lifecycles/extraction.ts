@@ -46,7 +46,11 @@ export const extractionLifecycle: Lifecycle<ExtractionTypes> =
     name: 'extractions',
     collection: COLLECTIONS.extractions,
     initial: 'pending',
-    states: ['pending', 'completed', 'voided'],
+    states: [
+      'pending',
+      { name: 'completed', final: true },
+      { name: 'voided', final: true },
+    ],
     transitions: {
       submit: {
         title: '提交反馈',

@@ -41,7 +41,7 @@ const publish = defineEffect<DocTypes>({
 const docs: Lifecycle<DocTypes> = defineLifecycle<DocTypes>({
   name: 'docs',
   initial: 'draft',
-  states: ['draft', 'review', 'approved', 'archived'],
+  states: ['draft', 'review', 'approved', { name: 'archived', final: true }],
   parameters: { archiveAfterMinutes: 60 },
   transitions: {
     submit: { from: 'draft', to: 'review' },

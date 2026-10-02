@@ -20,6 +20,8 @@ export interface RecordDetail {
   readonly history: RecordHistory;
   readonly description: LifecycleDescription;
   readonly parameters: object;
+  /** The lifecycle as Mermaid source, for the page to show. */
+  readonly diagram: string;
 }
 
 export const lifecycleExampleServiceToken: ServiceToken<LifecycleExampleService> =

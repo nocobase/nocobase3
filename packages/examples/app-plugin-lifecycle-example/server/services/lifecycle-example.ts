@@ -1,5 +1,9 @@
 import type { DatabaseManager, RepositoryRecord } from '@nocobase/db';
-import type { JsonObject, LifecycleRuntime } from '@nocobase/lifecycle';
+import {
+  toMermaid,
+  type JsonObject,
+  type LifecycleRuntime,
+} from '@nocobase/lifecycle';
 
 import {
   parseItems,
@@ -116,6 +120,7 @@ export class LifecycleExampleService {
       history: await this.runtime.history(name, id),
       description: this.runtime.describe(name),
       parameters: this.runtime.parameters(name),
+      diagram: toMermaid(this.runtime.describe(name)),
     };
   }
 

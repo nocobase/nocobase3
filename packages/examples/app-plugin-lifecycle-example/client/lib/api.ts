@@ -64,6 +64,8 @@ export interface RecordDetail {
     }[];
   };
   readonly parameters: Readonly<Record<string, unknown>>;
+  /** The lifecycle as Mermaid source. */
+  readonly diagram: string;
 }
 
 export interface RecordList {

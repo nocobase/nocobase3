@@ -199,6 +199,9 @@ const zhCN: LifecycleExampleResource = {
     hint: 'lifecycle 为这条记录记下的内容。真实应用不会把这些展示给业务用户。',
     available: '当前身份可执行的转换',
     final: '这个状态没有可执行的转换。',
+    diagram: '流程图（Mermaid）',
+    diagramHint:
+      '由 toMermaid(describe()) 生成，可以粘贴到任意 Mermaid 渲染器里查看。',
     states: '状态',
     parameters: '参数',
     transitions: '转换记录',
