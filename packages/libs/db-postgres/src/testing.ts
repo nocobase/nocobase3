@@ -1,4 +1,4 @@
-import { createDatabaseManager } from '@nocobase/db';
+import { createDatabaseManager, rawRows } from '@nocobase/db';
 import type {
   TestDatabaseEnvironment,
   TestDatabaseProvisioner,
@@ -51,4 +51,32 @@ export const testDatabaseProvisioner: TestDatabaseProvisioner = {
       throw error;
     }
   },
+  listProvisioned: ({ prefix, env }) =>
+    withAdmin(env, async (client) =>
+      rawRows<{ name: string }>(
+        await client.raw(
+          'select nspname as name from pg_catalog.pg_namespace order by nspname',
+        ),
+      )
+        .map((row) => row.name)
+        .filter((name) => name.startsWith(prefix)),
+    ),
+  dropProvisioned: ({ name, env }) =>
+    withAdmin(env, async (client) => {
+      await client.raw('drop schema if exists ?? cascade', [name]);
+    }),
 };
+
+async function withAdmin<T>(
+  env: TestDatabaseEnvironment,
+  run: (client: Knex) => Promise<T>,
+): Promise<T> {
+  const admin = createDatabaseManager({
+    connections: { main: postgres(postgresTestConnection(env)) },
+  });
+  try {
+    return await run(await admin.connection().client<Knex>());
+  } finally {
+    await admin.destroy();
+  }
+}

@@ -411,6 +411,7 @@
         "KnexConnectionConfig",
         "ProvisionedTestDatabase",
         "TestDatabaseEnvironment",
+        "TestDatabaseListOptions",
         "TestDatabaseProvisionOptions",
         "TestDatabaseProvisioner"
       ]

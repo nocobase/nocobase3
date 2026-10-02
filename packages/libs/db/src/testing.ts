@@ -26,6 +26,7 @@ export {
 export type {
   ProvisionedTestDatabase,
   TestDatabaseEnvironment,
+  TestDatabaseListOptions,
   TestDatabaseProvisionOptions,
   TestDatabaseProvisioner,
 } from './database/test-provisioner.js';

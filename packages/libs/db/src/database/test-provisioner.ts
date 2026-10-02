@@ -21,6 +21,12 @@ export interface ProvisionedTestDatabase {
   drop(): Promise<void>;
 }
 
+export interface TestDatabaseListOptions {
+  /** Only names starting with this prefix are returned. */
+  readonly prefix: string;
+  readonly env: TestDatabaseEnvironment;
+}
+
 /**
  * Creates isolated databases for tests that must not depend on one dialect.
  *
@@ -34,4 +40,12 @@ export interface TestDatabaseProvisioner {
   provision(
     options: TestDatabaseProvisionOptions,
   ): Promise<ProvisionedTestDatabase>;
+  /**
+   * Isolated databases or schemas the server currently holds, so a run can
+   * remove those an interrupted run left behind. Absent where nothing
+   * outlives the process, as with an in-memory database.
+   */
+  listProvisioned?(options: TestDatabaseListOptions): Promise<string[]>;
+  /** Removes one isolated database or schema named by `listProvisioned`. */
+  dropProvisioned?(options: TestDatabaseProvisionOptions): Promise<void>;
 }

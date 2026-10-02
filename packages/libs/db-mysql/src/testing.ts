@@ -1,4 +1,4 @@
-import { createDatabaseManager } from '@nocobase/db';
+import { createDatabaseManager, rawRows } from '@nocobase/db';
 import type {
   TestDatabaseEnvironment,
   TestDatabaseProvisioner,
@@ -50,4 +50,32 @@ export const testDatabaseProvisioner: TestDatabaseProvisioner = {
       throw error;
     }
   },
+  listProvisioned: ({ prefix, env }) =>
+    withAdmin(env, async (client) =>
+      rawRows<{ name: string }>(
+        await client.raw(
+          'select schema_name as name from information_schema.schemata order by schema_name',
+        ),
+      )
+        .map((row) => row.name)
+        .filter((name) => name.startsWith(prefix)),
+    ),
+  dropProvisioned: ({ name, env }) =>
+    withAdmin(env, async (client) => {
+      await client.raw('drop database if exists ??', [name]);
+    }),
 };
+
+async function withAdmin<T>(
+  env: TestDatabaseEnvironment,
+  run: (client: Knex) => Promise<T>,
+): Promise<T> {
+  const admin = createDatabaseManager({
+    connections: { main: mysql(mysqlTestConnection(env)) },
+  });
+  try {
+    return await run(await admin.connection().client<Knex>());
+  } finally {
+    await admin.destroy();
+  }
+}

@@ -29,11 +29,34 @@ describe('MySQL test database provisioner', () => {
         tableNamePrefixes: ['provisioned_items'],
       });
       expect(page.items.map((item) => item.schema)).toEqual([name]);
+      await expect(
+        testDatabaseProvisioner.listProvisioned?.({
+          prefix: 'nbt_provisioner_',
+          env: process.env,
+        }),
+      ).resolves.toContain(name);
     } finally {
       await database.destroy();
       await provisioned.drop();
     }
     await expect(databaseExists(name)).resolves.toBe(false);
+  });
+
+  it('lists and drops a database another run left behind', async () => {
+    const name = `nbt_provisioner_stale_${process.pid}`;
+    const provisioned = await testDatabaseProvisioner.provision({
+      name,
+      env: process.env,
+    });
+    // Removed the way a later run removes a leftover, while the run that created it still holds a connection.
+    await testDatabaseProvisioner.dropProvisioned?.({ name, env: process.env });
+    await expect(
+      testDatabaseProvisioner.listProvisioned?.({
+        prefix: 'nbt_provisioner_stale_',
+        env: process.env,
+      }),
+    ).resolves.not.toContain(name);
+    await provisioned.drop();
   });
 });
 

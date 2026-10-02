@@ -10,9 +10,11 @@ import {
   type MigrationSource,
   type SeedSource,
 } from '@nocobase/db';
+import { hostname } from 'node:os';
 import type {
   ProvisionedTestDatabase,
   TestDatabaseEnvironment,
+  TestDatabaseProvisioner,
 } from '@nocobase/db/testing';
 import {
   loadTestDatabaseProvisioner,
@@ -26,6 +28,8 @@ export interface ProvisionTestDatabasesOptions {
   readonly env?: TestDatabaseEnvironment;
   /** One isolated database is provisioned per name; the first is the default connection. */
   readonly connections?: readonly string[];
+  /** Used instead of the provisioner of the selected dialect's package. */
+  readonly provisioner?: TestDatabaseProvisioner;
 }
 
 export interface OpenTestDatabaseOptions {
@@ -77,14 +81,16 @@ export async function provisionTestDatabases(
   options: ProvisionTestDatabasesOptions = {},
 ): Promise<ProvisionedTestDatabases> {
   const env = options.env ?? process.env;
-  const dialect = testDatabaseDialect(env);
+  const dialect = options.provisioner?.dialect ?? testDatabaseDialect(env);
   const names = options.connections ?? [DEFAULT_TEST_CONNECTION];
   if (names.length === 0 || new Set(names).size !== names.length) {
     throw new Error(
       'Test database connections must be a non-empty list of distinct names.',
     );
   }
-  const provisioner = await loadTestDatabaseProvisioner(dialect);
+  const provisioner =
+    options.provisioner ?? (await loadTestDatabaseProvisioner(dialect));
+  await removeStaleDatabases(provisioner, env);
   const prefix = isolatedDatabasePrefix(env);
   const provisioned: Array<[string, ProvisionedTestDatabase]> = [];
   try {
@@ -219,15 +225,77 @@ async function dropAll(
 }
 
 /**
- * Unique per process, Vitest worker and call, so parallel workers and
- * repeated runs against one server never share a database.
+ * Every name starts with `nbt_<host>_<pid>_`: the host tag keeps one machine
+ * from judging another machine's processes when several share a server, and
+ * the process id tells whether the run that created it is still alive.
  */
 function isolatedDatabasePrefix(env: TestDatabaseEnvironment): string {
   provisionCount += 1;
-  const worker = env.VITEST_POOL_ID ?? env.VITEST_WORKER_ID ?? '0';
+  const worker = sanitize(env.VITEST_POOL_ID ?? env.VITEST_WORKER_ID ?? '0');
   const random = Math.random().toString(36).slice(2, 8);
-  return `nbt_${process.pid}_${worker}_${provisionCount}_${random}`.replace(
-    /[^a-z0-9_]/g,
-    '_',
-  );
+  return `${hostPrefix()}${process.pid}_${worker}_${provisionCount}_${random}`;
+}
+
+function hostPrefix(): string {
+  let hash = 0x811c9dc5;
+  for (const character of hostname()) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `nbt_${(hash >>> 0).toString(36).padStart(7, '0')}_`;
+}
+
+function sanitize(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
+const staleRemovals = new WeakMap<TestDatabaseProvisioner, Promise<void>>();
+
+/**
+ * Drops the isolated databases an interrupted run on this machine left
+ * behind: those whose creating process no longer exists. Runs once per
+ * process and provisioner, and only warns when it cannot finish, because a
+ * leftover database never makes a test wrong.
+ */
+function removeStaleDatabases(
+  provisioner: TestDatabaseProvisioner,
+  env: TestDatabaseEnvironment,
+): Promise<void> {
+  if (!provisioner.listProvisioned || !provisioner.dropProvisioned) {
+    return Promise.resolve();
+  }
+  const listProvisioned = provisioner.listProvisioned.bind(provisioner);
+  const dropProvisioned = provisioner.dropProvisioned.bind(provisioner);
+  let pending = staleRemovals.get(provisioner);
+  if (!pending) {
+    pending = (async () => {
+      const prefix = hostPrefix();
+      try {
+        const names = await listProvisioned({ prefix, env });
+        for (const name of names) {
+          const pid = Number(name.slice(prefix.length).split('_')[0]);
+          if (!Number.isInteger(pid) || isRunning(pid)) continue;
+          await dropProvisioned({ name, env });
+        }
+      } catch (error) {
+        console.warn(
+          `[db-testing] Could not remove stale ${provisioner.dialect} test databases:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    })();
+    staleRemovals.set(provisioner, pending);
+  }
+  return pending;
+}
+
+function isRunning(pid: number): boolean {
+  if (pid === process.pid) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the process exists but belongs to someone else.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }

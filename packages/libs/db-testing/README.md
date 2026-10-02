@@ -26,7 +26,9 @@ docker compose -f packages/templates/app-template-examples/docker-compose.yml up
 NOCOBASE_TEST_DB_DIALECT=postgres pnpm --filter @nocobase/app-plugin-scheduler test
 ```
 
-Every test file gets databases of its own — a schema on PostgreSQL, a database on MySQL, a fresh `:memory:` database on SQLite — named `nbt_<pid>_<worker>_…`, and drops them when it finishes, so files running in parallel never share state.
+Every test file gets databases of its own — a schema on PostgreSQL, a database on MySQL, a fresh `:memory:` database on SQLite — named `nbt_<host>_<pid>_…`, and drops them when it finishes, so files running in parallel never share state.
+
+A run that is killed cannot drop its databases. The next run on the same machine removes them: before it provisions anything, it drops every `nbt_` database whose host tag is this machine's and whose process no longer exists. Databases another machine created on a shared server, and those of runs still in progress, are left alone. A failure to clean up is reported as a warning and never fails the run.
 
 ## A test with a database
 
@@ -124,4 +126,4 @@ Physical names are deliberately not compared: index and constraint names are tru
 
 ## Adding a dialect
 
-A dialect package exports a `TestDatabaseProvisioner` — the interface is in `@nocobase/db/testing` — as `testDatabaseProvisioner` from a `./testing` entry. `provision({ name, env })` creates the isolated database or schema called `name` and returns its connection configuration with a `drop()` that removes it. Everything specific to the database stays in the dialect package; this package only selects the provisioner by name.
+A dialect package exports a `TestDatabaseProvisioner` — the interface is in `@nocobase/db/testing` — as `testDatabaseProvisioner` from a `./testing` entry. `provision({ name, env })` creates the isolated database or schema called `name` and returns its connection configuration with a `drop()` that removes it. A dialect whose databases outlive the process also implements `listProvisioned({ prefix, env })` and `dropProvisioned({ name, env })`, which the cleanup of interrupted runs uses. `provisionTestDatabases({ provisioner })` takes one directly instead of loading it by dialect, which is how a provisioner is tried before its package exports it. Everything specific to the database stays in the dialect package; this package only selects the provisioner by name.
