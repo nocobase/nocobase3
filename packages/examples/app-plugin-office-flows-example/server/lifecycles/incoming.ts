@@ -140,7 +140,13 @@ export const incomingLifecycle: Lifecycle<IncomingTypes> =
     name: 'incoming',
     collection: COLLECTIONS.incoming,
     initial: 'draft',
-    states: ['draft', 'headReview', 'leaderReview', 'dispatching', 'closed'],
+    states: [
+      'draft',
+      'headReview',
+      'leaderReview',
+      'dispatching',
+      { name: 'closed', final: true },
+    ],
     transitions: {
       submit: {
         title: '提交',

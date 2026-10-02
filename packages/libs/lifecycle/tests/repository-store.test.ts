@@ -226,7 +226,7 @@ describe('Repository lifecycle store', () => {
         name: 'guardedTickets',
         collection: 'tickets',
         initial: 'open',
-        states: ['open', 'awaitingCustomer', 'closed'],
+        states: ['open', { name: 'closed', final: true }],
         transitions: {
           close: {
             from: 'open',
@@ -268,7 +268,7 @@ describe('Repository lifecycle store', () => {
         name: 'notedTickets',
         collection: 'tickets',
         initial: 'open',
-        states: ['open', 'awaitingCustomer', 'closed'],
+        states: ['open', 'awaitingCustomer', { name: 'closed', final: true }],
         transitions: {
           wait: {
             from: 'open',

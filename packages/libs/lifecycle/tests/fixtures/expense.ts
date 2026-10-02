@@ -82,8 +82,8 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
       'awaitingFinance',
       'needsInfo',
       'approved',
-      'rejected',
-      'paid',
+      { name: 'rejected', final: true },
+      { name: 'paid', final: true },
     ],
     parameters: {
       autoApproveLimit: 5000,

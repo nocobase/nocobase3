@@ -40,7 +40,7 @@ describe('defineLifecycle', () => {
         defineLifecycle<DoorTypes>({
           name: 'doors',
           initial: 'open',
-          states: ['open', 'shut'],
+          states: ['open', { name: 'shut', final: true }],
           transitions: {
             // @ts-expect-error -- the type also rejects it
             lock: { from: 'shut', to: 'locked' },
@@ -56,7 +56,7 @@ describe('defineLifecycle', () => {
         defineLifecycle<DoorTypes>({
           name: 'doors',
           initial: 'open',
-          states: ['open', 'shut'],
+          states: ['open', { name: 'shut', final: true }],
           transitions: { swing: { from: 'open', to: ['open', 'shut'] } },
         }),
       ),
@@ -69,7 +69,7 @@ describe('defineLifecycle', () => {
         defineLifecycle<DoorTypes>({
           name: 'doors',
           initial: 'open',
-          states: ['open', 'shut'],
+          states: ['open', { name: 'shut', final: true }],
           transitions: { shut: { from: 'open', to: 'shut' } },
           triggers: {
             autoShut: { transition: 'shut', when: 'shut', after: () => 1 },
@@ -90,7 +90,7 @@ describe('defineLifecycle', () => {
         defineLifecycle<DoorTypes>({
           name: 'doors',
           initial: 'open',
-          states: ['open', 'shut'],
+          states: ['open', { name: 'shut', final: true }],
           transitions: {
             shut: { from: 'open', to: 'shut', effects: [effect] },
           },
@@ -107,6 +107,8 @@ describe('defineLifecycle', () => {
       from: ['open'],
       to: ['awaitingCustomer'],
       effects: ['tickets.notifyCustomer'],
+      accept: [],
+      meta: {},
     });
     expect(description.triggers).toEqual([
       { name: 'autoClose', transition: 'close', when: ['awaitingCustomer'] },

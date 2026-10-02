@@ -144,8 +144,8 @@ export const dataRequestLifecycle: Lifecycle<DataRequestTypes> =
       'level2Review',
       'level3Review',
       'accepting',
-      'completed',
-      'exited',
+      { name: 'completed', final: true },
+      { name: 'exited', final: true },
     ],
     transitions: {
       submit: {

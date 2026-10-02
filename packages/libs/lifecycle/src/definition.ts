@@ -85,13 +85,31 @@ export interface EffectDefinition<T extends LifecycleTypes> {
   run(context: EffectContext<T>): unknown;
 }
 
+/** A state with what a page needs to show it. A bare name is a state with none of this. */
+export interface StateDefinition<S extends string> {
+  readonly name: S;
+  /** Defaults to the name. */
+  readonly title?: string;
+  /** No transition leaves a final state, and only a final state may have none. */
+  readonly final?: boolean;
+  /** Anything a page or a diagram wants: a colour, an icon. */
+  readonly meta?: JsonObject;
+}
+
+/**
+ * Where a transition may start: one state, several, `'*'` for every state
+ * that is not final, or every such state but some.
+ */
+export type FromStates<S extends string> =
+  OneOrMany<S> | '*' | { readonly except: readonly S[] };
+
 /** What a guard answers: `true` to allow, anything else to refuse and say why. */
 export type GuardVerdict =
   boolean | string | { readonly code?: string; readonly message: string };
 
 export interface TransitionDefinition<T extends LifecycleTypes> {
   readonly title?: string;
-  readonly from: OneOrMany<T['state']>;
+  readonly from: FromStates<T['state']>;
   /** Every state this transition can reach; more than one requires `route`. */
   readonly to: OneOrMany<T['state']>;
   /** Picks one of `to` at run time. */
@@ -123,6 +141,8 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
   onTransition?(context: TransitionHookContext<T>): void | Promise<void>;
   /** Run after commit. */
   readonly effects?: readonly EffectDefinition<T>[];
+  /** Anything a page wants for its button: a tone, whether to confirm. */
+  readonly meta?: JsonObject;
 }
 
 /**
@@ -157,7 +177,8 @@ export interface LifecycleDefinition<T extends LifecycleTypes> {
    * first is the default and the others must be asked for.
    */
   readonly initial: OneOrMany<T['state']>;
-  readonly states: readonly T['state'][];
+  /** Names, or definitions with a title, `final` and `meta`. */
+  readonly states: readonly (T['state'] | StateDefinition<T['state']>)[];
   /** Defaults an administrator may override. They do not change the shape of the lifecycle. */
   readonly parameters?: ParametersOf<T>;
   readonly transitions: Readonly<Record<string, TransitionDefinition<T>>>;
@@ -175,6 +196,14 @@ export interface LifecycleTransition<T extends LifecycleTypes> {
   readonly to: readonly T['state'][];
   readonly definition: TransitionDefinition<T>;
   readonly effects: readonly EffectDefinition<T>[];
+  readonly meta: JsonObject;
+}
+
+export interface LifecycleState<S extends string> {
+  readonly name: S;
+  readonly title: string;
+  readonly final: boolean;
+  readonly meta: JsonObject;
 }
 
 export interface LifecycleTrigger<T extends LifecycleTypes> {
@@ -197,6 +226,8 @@ export interface Lifecycle<T extends LifecycleTypes> {
   /** Every state a record may be created in, the default first. */
   readonly initialStates: readonly T['state'][];
   readonly states: readonly T['state'][];
+  /** Each state's title, whether it is final, and its metadata. */
+  readonly stateInfo: ReadonlyMap<T['state'], LifecycleState<T['state']>>;
   readonly parameters: ParametersOf<T>;
   readonly transitions: ReadonlyMap<string, LifecycleTransition<T>>;
   readonly onEnter: ReadonlyMap<T['state'], readonly EffectDefinition<T>[]>;
@@ -209,13 +240,23 @@ export interface Lifecycle<T extends LifecycleTypes> {
 export interface LifecycleDescription {
   readonly name: string;
   readonly initial: string;
+  readonly initialStates: readonly string[];
   readonly states: readonly string[];
+  readonly stateInfo: readonly LifecycleState<string>[];
   readonly transitions: readonly {
     readonly name: string;
     readonly title: string;
     readonly from: readonly string[];
     readonly to: readonly string[];
     readonly effects: readonly string[];
+    readonly accept: readonly string[];
+    readonly meta: JsonObject;
+  }[];
+  /** Each effect's continuation transitions, for a diagram. */
+  readonly continuations: readonly {
+    readonly effect: string;
+    readonly onSuccess?: string;
+    readonly onFailure?: string;
   }[];
   readonly onEnter: Readonly<Record<string, readonly string[]>>;
   readonly triggers: readonly {
@@ -267,12 +308,26 @@ export function defineLifecycle<T extends LifecycleTypes>(
   if (!NAME.test(name)) throw invalid(name, 'the name is not an identifier.');
 
   const states = new Set<T['state']>();
-  for (const state of definition.states) {
-    if (!NAME.test(state))
-      throw invalid(name, `state "${state}" is not an identifier.`);
-    if (states.has(state)) throw invalid(name, `state "${state}" repeats.`);
-    states.add(state);
+  const stateInfo = new Map<T['state'], LifecycleState<T['state']>>();
+  for (const entry of definition.states) {
+    const state: StateDefinition<T['state']> =
+      typeof entry === 'string' ? { name: entry } : entry;
+    if (!NAME.test(state.name))
+      throw invalid(name, `state "${state.name}" is not an identifier.`);
+    if (states.has(state.name))
+      throw invalid(name, `state "${state.name}" repeats.`);
+    states.add(state.name);
+    stateInfo.set(
+      state.name,
+      Object.freeze({
+        name: state.name,
+        title: state.title ?? state.name,
+        final: state.final === true,
+        meta: Object.freeze({ ...(state.meta ?? {}) }),
+      }),
+    );
   }
+  const open = [...states].filter((state) => !stateInfo.get(state)?.final);
   if (!states.size) throw invalid(name, 'it declares no states.');
   const known = (state: T['state'], where: string): void => {
     if (!states.has(state))
@@ -302,7 +357,14 @@ export function defineLifecycle<T extends LifecycleTypes>(
   for (const [key, transition] of Object.entries(definition.transitions)) {
     if (!NAME.test(key))
       throw invalid(name, `transition "${key}" is not an identifier.`);
-    const from = list(transition.from);
+    const source = transition.from;
+    const excluded: readonly T['state'][] =
+      typeof source === 'object' && 'except' in source ? source.except : [];
+    for (const state of excluded) known(state, `transition "${key}" except`);
+    const from: readonly T['state'][] =
+      source === '*' || (typeof source === 'object' && 'except' in source)
+        ? open.filter((state) => !excluded.includes(state))
+        : list(source as OneOrMany<T['state']>);
     const to = list(transition.to);
     if (!from.length || !to.length)
       throw invalid(name, `transition "${key}" needs a from and a to.`);
@@ -330,9 +392,44 @@ export function defineLifecycle<T extends LifecycleTypes>(
         to,
         definition: transition,
         effects: transition.effects ?? [],
+        meta: Object.freeze({ ...(transition.meta ?? {}) }),
       }),
     );
   }
+
+  // Every state is reached from an initial one, a final state has no way
+  // out, and every other state has one: a slip in either is almost always a
+  // transition someone forgot.
+  const leaving = new Set<T['state']>();
+  for (const transition of transitions.values())
+    for (const state of transition.from) leaving.add(state);
+  for (const state of states) {
+    const final = stateInfo.get(state)?.final === true;
+    if (final && leaving.has(state))
+      throw invalid(name, `final state "${state}" has transitions leaving it.`);
+    if (!final && !leaving.has(state))
+      throw invalid(
+        name,
+        `state "${state}" has no way out; mark it final or add a transition.`,
+      );
+  }
+  const reached = new Set<T['state']>(initialStates);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const transition of transitions.values())
+      if (transition.from.some((state) => reached.has(state)))
+        for (const state of transition.to)
+          if (!reached.has(state)) {
+            reached.add(state);
+            grew = true;
+          }
+  }
+  for (const state of states)
+    if (!reached.has(state))
+      throw invalid(
+        name,
+        `state "${state}" cannot be reached from an initial state.`,
+      );
 
   const onEnter = new Map<T['state'], readonly EffectDefinition<T>[]>();
   for (const [state, entered] of Object.entries(definition.onEnter ?? {}) as [
@@ -390,6 +487,7 @@ export function defineLifecycle<T extends LifecycleTypes>(
     initial: initialStates[0],
     initialStates,
     states: [...states],
+    stateInfo,
     parameters: Object.freeze({
       ...(definition.parameters ?? {}),
     }) as ParametersOf<T>,
@@ -406,14 +504,29 @@ export function describeLifecycle<T extends LifecycleTypes>(
   return {
     name: lifecycle.name,
     initial: lifecycle.initial,
+    initialStates: [...lifecycle.initialStates],
     states: [...lifecycle.states],
+    stateInfo: [...lifecycle.stateInfo.values()],
     transitions: [...lifecycle.transitions.values()].map((transition) => ({
       name: transition.name,
       title: transition.title,
       from: [...transition.from],
       to: [...transition.to],
       effects: transition.effects.map((effect) => effect.name),
+      accept: [...(transition.definition.accept ?? [])],
+      meta: transition.meta,
     })),
+    continuations: [...lifecycle.effects.values()]
+      .filter((effect) => effect.onSuccess ?? effect.onFailure)
+      .map((effect) => ({
+        effect: effect.name,
+        ...(effect.onSuccess === undefined
+          ? {}
+          : { onSuccess: effect.onSuccess }),
+        ...(effect.onFailure === undefined
+          ? {}
+          : { onFailure: effect.onFailure }),
+      })),
     onEnter: Object.fromEntries(
       [...lifecycle.onEnter].map(([state, effects]) => [
         state,

@@ -203,6 +203,9 @@ const enUS = {
     hint: 'What the lifecycle recorded for this record. A real application would not show this to its users.',
     available: 'What the current identity can do',
     final: 'No transition leaves this state.',
+    diagram: 'Diagram (Mermaid)',
+    diagramHint:
+      'toMermaid(describe()) draws the lifecycle as a state diagram; paste it into any Mermaid renderer.',
     states: 'States',
     parameters: 'Parameters',
     transitions: 'Transition log',

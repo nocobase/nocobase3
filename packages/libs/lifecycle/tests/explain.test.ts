@@ -36,7 +36,7 @@ const welcome = defineEffect<RequestTypes>({
 const requests: Lifecycle<RequestTypes> = defineLifecycle<RequestTypes>({
   name: 'requests',
   initial: ['draft', 'review'],
-  states: ['draft', 'review', 'done'],
+  states: ['draft', 'review', { name: 'done', final: true }],
   transitions: {
     submit: {
       from: 'draft',
@@ -189,7 +189,7 @@ describe('input', () => {
       defineLifecycle<RequestTypes>({
         name: 'bad',
         initial: 'draft',
-        states: ['draft', 'done'],
+        states: ['draft', { name: 'done', final: true }],
         transitions: {
           finish: { from: 'draft', to: 'done', accept: ['status'] },
         },
