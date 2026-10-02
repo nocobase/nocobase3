@@ -420,7 +420,7 @@ describe('createPlugin', () => {
       'workspace:*',
     );
     expect(test).toContain("from '@nocobase/db-testing/vitest'");
-    expect(test).not.toMatch(/@nocobase\/db-sqlite|dialect: 'sqlite'|:memory:/);
+    expect(test).not.toMatch(/@nocobase\/db-sqlite|dialect:|:memory:/);
   });
 
   it('keeps Server routes independent from providers and database', async () => {
