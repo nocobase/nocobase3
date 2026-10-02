@@ -278,6 +278,8 @@ it('expires a request nobody handles', async () => {
 
 ## By scenario
 
+Each recipe below is a paragraph; [examples.md](examples.md) has the code for most of them.
+
 **Never write the state field directly.** The library does not protect it. Writing `status`, `statusChangedAt` or `lifecycleVersion` through an ordinary Repository or SQL bypasses the guards, the log, the effects and the version check, and leaves no trace of who did it. Change state with `runtime.fire()`, create with `runtime.create()`, and write a data fix as a transition only the system may fire.
 
 ### Tell the person why a button is greyed out
