@@ -1,0 +1,1893 @@
+<title>NocoBase 3 接口规范方案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+/>
+<style>
+  /* Layout: a decision memo in the same family as the HTTP API review — one reading column, the ask up front, rules shown as before/after pairs, the plan and the sign-off at the end. */
+  :root {
+    --bg: #f4f5f2;
+    --surface: #ffffff;
+    --ink: #15191c;
+    --muted: #5b645f;
+    --line: #dce0da;
+    --code: #eceee9;
+    --accent: #2b45c2;
+    --accent-soft: rgba(43, 69, 194, 0.08);
+    --old: #b8362a;
+    --new: #2c7a4c;
+    --warn: #c0621a;
+    --font-display: 'Archivo', 'Noto Sans SC', system-ui, sans-serif;
+    --font-body:
+      'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    --font-mono:
+      'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas,
+      monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #101315;
+      --surface: #171b1e;
+      --ink: #e6eae7;
+      --muted: #99a29d;
+      --line: #2a3033;
+      --code: #1e2326;
+      --accent: #8fa2ff;
+      --accent-soft: rgba(143, 162, 255, 0.12);
+      --old: #ff7f72;
+      --new: #71cf97;
+      --warn: #f2a15f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #101315;
+    --surface: #171b1e;
+    --ink: #e6eae7;
+    --muted: #99a29d;
+    --line: #2a3033;
+    --code: #1e2326;
+    --accent: #8fa2ff;
+    --accent-soft: rgba(143, 162, 255, 0.12);
+    --old: #ff7f72;
+    --new: #71cf97;
+    --warn: #f2a15f;
+    color-scheme: dark;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 40px 80px;
+    display: grid;
+    gap: 60px;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.3;
+  }
+  h2 {
+    font-size: 25px;
+    font-weight: 800;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  p {
+    margin: 0;
+  }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--code);
+    padding: 1px 5px;
+    border-radius: 4px;
+    word-break: break-word;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  a {
+    color: var(--accent);
+  }
+  a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stack {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+  }
+  .stack-lg {
+    display: grid;
+    gap: 26px;
+    min-width: 0;
+  }
+
+  /* Hero */
+  .hero {
+    display: grid;
+    gap: 22px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 30px;
+  }
+  .hero h1 {
+    font-size: clamp(30px, 5vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .hero .lede {
+    font-size: 17px;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .meta b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .ask {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 18px 20px;
+    display: grid;
+    gap: 10px;
+  }
+  .ask .label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+  .ask ul {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+  }
+
+  /* Section heads */
+  .sec-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    align-items: baseline;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 10px;
+  }
+  .sec-head .idx {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  /* Problem strip */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .facts div {
+    background: var(--surface);
+    padding: 14px 16px;
+    display: grid;
+    gap: 2px;
+    align-content: start;
+  }
+  .facts .v {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 28px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .facts .k {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* Options */
+  .options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .opt {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    min-width: 0;
+  }
+  .opt .tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .opt.pick {
+    border: 2px solid var(--accent);
+    background: var(--accent-soft);
+  }
+  .opt.pick .tag {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .opt p {
+    font-size: 14px;
+  }
+
+  /* Rules */
+  .rules {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--line);
+    counter-reset: rule;
+  }
+  .rule {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 12px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+    counter-increment: rule;
+  }
+  .rule::before {
+    content: counter(rule, decimal-leading-zero);
+    font-family: var(--font-mono);
+    color: var(--muted);
+    font-size: 13px;
+    padding-top: 3px;
+  }
+  .rule .body {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+  .ba {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .ba > div {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: grid;
+    gap: 4px;
+    align-content: start;
+    min-width: 0;
+    font-size: 13px;
+  }
+  .ba .h {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .ba .was .h {
+    color: var(--old);
+  }
+  .ba .now .h {
+    color: var(--new);
+  }
+  .ba code {
+    background: none;
+    padding: 0;
+    font-size: 12.5px;
+  }
+  .ba .line {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    word-break: break-all;
+  }
+
+  /* Exception */
+  .exception {
+    background: var(--surface);
+    border: 1px dashed var(--muted);
+    border-radius: 6px;
+    padding: 18px 20px;
+    display: grid;
+    gap: 12px;
+  }
+  .exception h3 {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .exception .pill {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--warn);
+    color: var(--warn);
+  }
+  .exception ul {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+  }
+
+  /* JSON */
+  pre.snip {
+    margin: 0;
+    background: var(--code);
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+  pre.snip .c {
+    color: var(--muted);
+  }
+
+  /* Tables */
+  .tbl-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13.5px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--code);
+    white-space: nowrap;
+  }
+  tr:last-child td {
+    border-bottom: 0;
+  }
+  td.m {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  td .was {
+    color: var(--old);
+  }
+  td .now {
+    color: var(--new);
+  }
+
+  /* Benefits / costs */
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 18px;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    min-width: 0;
+  }
+  .panel ul {
+    margin: 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 8px;
+  }
+  .panel.gain h3 {
+    color: var(--new);
+  }
+  .panel.cost h3 {
+    color: var(--warn);
+  }
+
+  /* Plan */
+  .lanes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .lane {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+  .lane-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 6px;
+  }
+  .lane-head b {
+    font-family: var(--font-display);
+    font-size: 18px;
+  }
+  .lane-head span {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .task {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: grid;
+    gap: 3px;
+    font-size: 13.5px;
+  }
+  .task b {
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .task span {
+    color: var(--muted);
+  }
+
+  /* Sign-off */
+  .signoff {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+  .signoff li {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .signoff li::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--ink);
+    border-radius: 3px;
+    margin-top: 5px;
+  }
+
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    counter-reset: step;
+  }
+  .flow > div {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: grid;
+    gap: 4px;
+    align-content: start;
+    font-size: 13.5px;
+    min-width: 0;
+    counter-increment: step;
+  }
+  .flow > div::before {
+    content: '第 ' counter(step) ' 步';
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+  .flow b {
+    font-size: 14px;
+  }
+  .flow span {
+    color: var(--muted);
+  }
+  @media (max-width: 720px) {
+    .flow {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  details {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 16px;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+  details summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  details[open] summary {
+    margin-bottom: 12px;
+  }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    font-size: 12.5px;
+    color: var(--muted);
+    display: grid;
+    gap: 6px;
+  }
+
+  @media (max-width: 720px) {
+    .wrap {
+      padding-block: 24px 56px;
+      padding-inline: 16px;
+      gap: 46px;
+    }
+    .options,
+    .lanes,
+    .ba {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">HTTP API 规范 · 决策稿</div>
+    <h1>NocoBase 3 接口规范方案</h1>
+    <p class="lede">
+      我们约 380
+      个接口现在各写各的，没有统一格式，也没有对外文档。本方案采用谷歌公开的 API
+      设计规范作为统一标准，一次性把所有插件改到同一套写法上，并据此自动生成对外的接口文档（Swagger）。
+    </p>
+    <div class="meta">
+      <span>依据 <b>HTTP API 体检报告（2026-09-29）</b></span>
+      <span>日期 <b>2026-09-30</b></span>
+      <span>预计周期 <b>约 2 个月，分三步</b></span>
+    </div>
+    <div class="ask">
+      <div class="label">需要拍板</div>
+      <ul>
+        <li>
+          采用<b>谷歌 API 设计规范</b>作为 NocoBase 3 所有接口的统一标准。
+        </li>
+        <li>
+          现有接口<b>一次性改到新规范</b>，不保留旧地址；改动过的插件按破坏性更新发布大版本。
+        </li>
+        <li>按第 07 节的三步计划投入执行。</li>
+      </ul>
+    </div>
+  </header>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">01</span>
+      <h2>为什么现在要定规范</h2>
+    </div>
+    <p>
+      接口是程序之间对话的约定：往哪个地址发请求、带什么数据、会收到什么回答。体检发现，这套约定在我们系统里没有统一过，每个插件都有自己的写法。
+    </p>
+    <div class="facts">
+      <div>
+        <span class="v">3 套</span><span class="k">互不兼容的地址写法</span>
+      </div>
+      <div>
+        <span class="v">7 种</span
+        ><span class="k">出错时的返回格式，另有部分接口出错直接返回纯文本</span>
+      </div>
+      <div>
+        <span class="v">4 种</span
+        ><span class="k">「启用 / 停用」这一个动作的写法</span>
+      </div>
+      <div>
+        <span class="v">0 份</span
+        ><span class="k">接口文档，外部开发者只能读源码</span>
+      </div>
+    </div>
+    <p>
+      这些问题平时藏在代码里，但有三件事让它们必须现在解决：Hub 已经通过 API Key
+      向外部开放调用；团队大量开发由 AI Agent
+      完成，它们需要一份机器能读懂的接口说明；接口越多，后面统一的成本越高。
+    </p>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">02</span>
+      <h2>选哪种规范</h2>
+    </div>
+    <p>
+      业界常见的有三种思路。我们的系统不只是简单的增删改查，还有大量「动作」，比如部署、回滚、启停、标记已读，还有带复杂筛选条件的数据查询。
+    </p>
+    <div class="options">
+      <div class="opt">
+        <span class="tag">方案 A</span>
+        <h3>纯 RESTful</h3>
+        <p>
+          最流行，擅长增删改查。但没有「动作」的标准写法，每遇到部署、启停就要各自想办法。我们现在
+          4 种启停写法，就是这么来的。
+        </p>
+      </div>
+      <div class="opt">
+        <span class="tag">方案 B</span>
+        <h3>全部按动作调用</h3>
+        <p>
+          NocoBase 2
+          的做法，所有请求都是「对某个东西做某个动作」。写起来自由，但外部工具、网关、缓存都认不出哪些操作是安全的只读，对外接入不友好。
+        </p>
+      </div>
+      <div class="opt pick">
+        <span class="tag">✓ 采用 · 方案 C</span>
+        <h3>谷歌 API 设计规范</h3>
+        <p>
+          介于两者之间：增删改查照 RESTful
+          写，动作有一套统一的标准写法。谷歌所有云服务都遵循它，规范公开成文（aip.dev），遇到争议有据可查，不用我们自己维护一套细则。我们只做一处调整：动作的分隔符用斜杠，不用谷歌的冒号。
+        </p>
+      </div>
+    </div>
+    <p>
+      另一个好处是迁移成本低：我们最大的一批接口（约 150
+      个自动生成的数据接口）本来就是「对象 +
+      动作」的写法，只需要统一分隔符，由框架一处改完。
+    </p>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">03</span>
+      <h2>新规范的核心规则</h2>
+    </div>
+    <p>
+      完整细则会写进开发规范和 AI Agent
+      使用的技能文档。下面是影响最大的几条，每条都附了改动前后的对比。
+    </p>
+    <ol class="rules">
+      <li class="rule">
+        <div class="body">
+          <h3>地址统一格式，按插件分区</h3>
+          <p>
+            地址一律用同一种命名风格（camelCase，即
+            <code>apiKeys</code>
+            这种首字母小写、后续单词首字母大写的写法）。每个插件的接口放在以插件名开头的地址下，避免不同插件抢同一个地址。插件的主要资源和插件同名时，省掉重复的一层，比如用户插件的用户列表就是
+            <code>/api/users</code>，而不是
+            <code>/api/users/users</code
+            >。两个插件占用同一个地址时，系统启动直接报错，不再悄悄覆盖。
+          </p>
+          <div class="ba">
+            <div class="was">
+              <span class="h">现在</span
+              ><span class="line">/api/hub/api-keys</span
+              ><span class="line">/api/permission-sets</span
+              ><span class="line">/api/aiSkills</span>
+            </div>
+            <div class="now">
+              <span class="h">改为</span
+              ><span class="line">/api/hub/apiKeys</span
+              ><span class="line">/api/authorization/permissionSets</span
+              ><span class="line">/api/aiEmployees/skills</span>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>增删改查用标准方式，动作用 <code>/动作名</code></h3>
+          <p>
+            查看、新建、修改、删除，各对应一种固定的请求方式。除此之外的动作，统一写成「对象地址
+            / 动作名」。同一个动作全系统只有一种写法。
+          </p>
+          <div class="ba">
+            <div class="was">
+              <span class="h">现在（启用工作流有两种写法）</span
+              ><span class="line">PATCH /api/workflows/42/status</span
+              ><span class="line">POST /api/workflows/42/enable</span>
+            </div>
+            <div class="now">
+              <span class="h">改为</span
+              ><span class="line">POST /api/workflows/42/enable</span
+              ><span class="line">POST /api/workflows/42/disable</span>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>「查看」类请求不能改数据</h3>
+          <p>
+            现在有几个接口在「查看」时顺手改了数据，比如打开消息列表就标记已读。浏览器预加载、搜索引擎、缓存都可能在用户不知情时触发它们。新规范里，改数据的操作必须明确发起。
+          </p>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>成功时的返回格式统一</h3>
+          <p>
+            所有成功的返回都是 <code>{ data }</code>，列表额外带
+            <code>meta</code
+            >（分页信息）。分页只保留两种方式：往下翻页（适合消息流和对外接口）和按页码跳转（适合后台表格）。
+          </p>
+          <div class="ba">
+            <div class="was">
+              <span class="h">现在（6 种列表格式）</span
+              ><span class="line">{ rows, count, totalPages }</span
+              ><span class="line">{ data: { items, total } }</span
+              ><span class="line">{ data, nextCursor }</span>
+            </div>
+            <div class="now">
+              <span class="h">改为</span
+              ><span class="line">{ data: [...], meta: { nextPageToken } }</span
+              ><span class="line"
+                >{ data: [...], meta: { page, pageSize, total } }</span
+              >
+            </div>
+          </div>
+          <p class="muted">
+            往下翻页的参数名
+            <code>pageSize</code>、<code>pageToken</code>、<code
+              >nextPageToken</code
+            >
+            直接沿用谷歌规范（AIP-158）。<code>nextPageToken</code>
+            是服务端给出的「下一页凭证」，调用方原样传回即可，不需要理解其内容。它和数据接口里可以自己组装的查询条件
+            <code>cursor</code> 不是一回事，所以不沿用
+            <code>nextCursor</code> 这个旧名字。
+          </p>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>出错时的返回格式统一</h3>
+          <p>
+            7
+            种错误格式合并成一种，按谷歌规范设计：既告诉程序「是哪一类错误」（程序据此做处理），也给出面向用户的翻译文案，还附带请求编号，用户反馈问题时可以直接定位到日志。任何意外错误也会返回这个格式，不再出现纯文本的「Internal
+            Server Error」。
+          </p>
+          <pre class="snip">{
+  "error": {
+    "code": 404,                        <span class="c">// HTTP 状态码</span>
+    "status": "NOT_FOUND",              <span class="c">// 错误大类，全系统固定十几种</span>
+    "reason": "WORKFLOW_NOT_FOUND",     <span class="c">// 具体原因，程序按它判断</span>
+    "domain": "workflow",               <span class="c">// 哪个插件定义的这个错误</span>
+    "message": "Workflow 42 was not found.",
+    "localizedMessage": { "locale": "zh-CN", "message": "工作流 42 不存在。" },
+    "requestId": "7f1c9a…"              <span class="c">// 用于排查日志</span>
+  }
+}</pre>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>所有输入先校验再处理</h3>
+          <p>
+            每个接口声明自己接受什么数据，不合格的请求在进入业务逻辑前就被拒绝，并指出哪个字段有问题。这份声明同时就是接口文档的来源，写一次，校验和文档两用。
+          </p>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>数据格式细节统一</h3>
+          <p>
+            ID 一律以文字形式返回。我们的 ID 位数很长，按数字返回时，外部
+            JavaScript
+            程序会悄悄算错最后几位。时间统一用国际标准格式。字段名统一为
+            camelCase。
+          </p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="stack">
+      <h3>自定义动作怎么写</h3>
+      <p>
+        第 02 条里的「动作」，在谷歌规范里叫「自定义方法」（<a
+          href="https://google.aip.dev/136"
+          target="_blank"
+          rel="noopener"
+          >AIP-136</a
+        >）。下面按「什么时候用 → 地址怎么写 → 用什么请求方式 →
+        动作怎么起名」四步说明。
+      </p>
+
+      <p>
+        <b>1. 什么时候用。</b
+        >先看能不能用查看、新建、修改、删除这四种标准操作表达。能表达就不要用自定义动作；只有标准操作表达不了、硬套会让含义变味时才用，比如部署、回滚、启停、发送、复制。
+      </p>
+
+      <p>
+        <b>2. 地址怎么写。</b>动作作用在谁身上，就接在谁的地址后面，有三种形态：
+      </p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>作用对象</th>
+              <th>写法</th>
+              <th>例子</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>某一个具体对象（最常见）</td>
+              <td class="m">/对象集合/{id}/动作</td>
+              <td class="m">POST /api/hub/apps/7/deploy</td>
+            </tr>
+            <tr>
+              <td>一整个集合，比如批量处理</td>
+              <td class="m">/对象集合/动作</td>
+              <td class="m">
+                POST /api/notificationInApp/messages/markAllRead
+              </td>
+            </tr>
+            <tr>
+              <td>不针对任何已有对象的计算类操作</td>
+              <td class="m">/范围/动作名词</td>
+              <td class="m">POST /api/ai/translateText</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <b>3. 用什么请求方式。</b>只有两种选择：会改数据或有副作用的，用
+        <code>POST</code>，这是绝大多数情况；纯查看、不改任何东西的，用
+        <code>GET</code>，但如果查询条件太复杂、放不进地址，也可以用
+        <code>POST</code>。参数放在请求内容里，返回照常是
+        <code>{ data }</code
+        >：可以返回被操作后的对象，也可以返回这个动作专门的结果。
+      </p>
+
+      <p><b>4. 动作怎么起名。</b></p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>规则</th>
+              <th>对</th>
+              <th>错</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>用动词，或「动词 + 名词」，camelCase</td>
+              <td class="m">
+                <span class="now">/deploy</span>　<span class="now"
+                  >/markRead</span
+                >　<span class="now">/batchDelete</span>
+              </td>
+              <td class="m">
+                <span class="was">/deployment</span>　<span class="was"
+                  >/mark-read</span
+                >
+              </td>
+            </tr>
+            <tr>
+              <td>动作用动词，下属资源用复数名词，一眼能分清</td>
+              <td class="m">
+                <span class="now">/users/5/activate</span>（动作）<br /><span
+                  class="now"
+                  >/users/5/roles</span
+                >（下属资源）
+              </td>
+              <td class="m"><span class="was">/users/5/activation</span></td>
+            </tr>
+            <tr>
+              <td>
+                不能用标准操作的动词 get / list / create / update / delete
+                冒充自定义动作，这些应该用标准操作
+              </td>
+              <td class="m">
+                <span class="now">GET /api/aiEmployees/skills/x</span>
+              </td>
+              <td class="m">
+                <span class="was">/getDetails</span>　<span class="was"
+                  >/listAll</span
+                >
+              </td>
+            </tr>
+            <tr>
+              <td>不带介词（for、with、by、to 等），把条件作为参数传</td>
+              <td class="m">
+                <span class="now">/send</span> + <code>{ userId }</code>
+              </td>
+              <td class="m"><span class="was">/sendToUser</span></td>
+            </tr>
+            <tr>
+              <td>
+                不带 Async
+                之类描述执行方式的词；耗时的动作返回一个可查询进度的对象
+              </td>
+              <td class="m"><span class="now">/deploy</span> → 返回部署记录</td>
+              <td class="m"><span class="was">/deployAsync</span></td>
+            </tr>
+            <tr>
+              <td>成对的动作用成对的动词</td>
+              <td class="m">
+                <span class="now">/enable</span> /
+                <span class="now">/disable</span>　<span class="now"
+                  >/start</span
+                >
+                / <span class="now">/stop</span>
+              </td>
+              <td class="m">
+                <span class="was">/enable</span> /
+                <span class="was">/turnOff</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <b>和谷歌规范的一处差异：用斜杠，不用冒号。</b>谷歌的写法是
+        <code>/apps/7:deploy</code>（例如谷歌云
+        <a
+          href="https://docs.cloud.google.com/service-usage/docs/reference/rest/v1/services/enable"
+          target="_blank"
+          rel="noopener"
+          ><code>services/*:enable</code></a
+        >），我们写成
+        <code>/apps/7/deploy</code
+        >，其余规则不变。原因有三个：我们用的服务端框架 Hono
+        不支持冒号写法，强行支持需要额外的转换层；斜杠是 Swagger
+        等接口文档工具最原生支持的写法，冒号在部分工具里会被误认；斜杠也是业界更常见的写法，例如
+        Stripe 的 <code>POST /v1/payment_intents/{id}/confirm</code>、GitHub 的
+        <code>PUT /repos/{owner}/{repo}/pulls/{number}/merge</code>。
+      </p>
+      <p class="muted">
+        斜杠带来一个需要框架兜住的问题：<code>/users/options</code>
+        这种固定名字和
+        <code>/users/{id}</code>
+        会在同一层竞争，谁先注册谁生效且不报错。框架会自动让固定名字优先，并在启动时检测冲突直接报错。另外，地址里的
+        ID 如果含有 <code>/</code>、<code>:</code>
+        等特殊字符，客户端会自动编码，开发者不需要处理。
+      </p>
+    </div>
+
+    <div class="stack">
+      <h3>两类例外</h3>
+      <p>以下两类接口不完全按上面的规则写。除此之外，所有接口都没有例外。</p>
+    </div>
+
+    <div class="exception">
+      <h3>例外一：自动生成的数据接口 <span class="pill">保留原有动作</span></h3>
+      <p>
+        系统根据数据表配置自动生成的数据接口（约 150
+        个）保留自己的一套动作，只跟随全系统把冒号换成斜杠：<code
+          >POST /api/users:findMany</code
+        >
+        改为 <code>POST /api/users/findMany</code>。
+      </p>
+      <ul>
+        <li>
+          <b>只改分隔符，请求方式、动作名、请求参数都不变。</b
+          >这个改动由框架的生成逻辑和前端的数据接口客户端各改一处完成，业务代码不用动。
+        </li>
+        <li>
+          这批接口的查询条件是一棵复杂的筛选结构，只能放在请求内容里，所以统一用
+          POST 发送。谷歌规范对这种情况是允许的。
+        </li>
+        <li>它们是框架统一生成的，本身已经很整齐，不存在各写各的问题。</li>
+        <li>
+          这条例外只给自动生成的接口。插件手写的接口不得模仿这套写法，一律遵守上面的规则。
+        </li>
+        <li>它们同样会出现在自动生成的接口文档里。</li>
+      </ul>
+    </div>
+
+    <div class="exception">
+      <h3>例外二：第三方登录库自带的接口 <span class="pill">保持不变</span></h3>
+      <p>
+        登录、注册、会话、个人 API Key 等功能由第三方登录库 Better Auth
+        提供，它的接口统一在 <code>/api/auth/</code> 下，形如
+        <code>POST /api/auth/api-key/create</code>：
+      </p>
+      <ul>
+        <li>
+          <b>这些地址由第三方库自己决定</b
+          >，我们改不了；如果为了统一格式再包一层转发，只会多一套要维护的接口，还会跟不上它的升级。
+        </li>
+        <li>
+          它们在接口文档里单独归为「认证」一类，并注明来自 Better
+          Auth，外部开发者可以直接查阅它的官方文档。
+        </li>
+        <li>
+          这条例外只给
+          <code>/api/auth/</code>
+          下由第三方库注册的接口。我们自己写的、与登录相关的接口（例如 Hub 的
+          API Key 管理 <code>/api/hub/apiKeys</code>）照常遵守上面的规则。
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">04</span>
+      <h2>接口文档怎么生成</h2>
+    </div>
+    <p>
+      接口文档（Swagger，正式名称是
+      OpenAPI）不靠人手写，而是从代码里自动产出。开发者写接口时声明「接受什么、返回什么」，这份声明同时用来校验请求和生成文档。代码改了，文档跟着变，不会出现文档和实际不一致。
+    </p>
+
+    <h3>文档的三个来源</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>接口类型</th>
+            <th>文档从哪来</th>
+            <th>开发者要做什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>插件手写的接口</td>
+            <td>
+              每个接口用 zod 声明输入和输出的结构，由
+              <code>hono-openapi</code> 读取
+            </td>
+            <td>写接口时顺手声明；这份声明同时负责校验请求</td>
+          </tr>
+          <tr>
+            <td>自动生成的数据接口（约 150 个）</td>
+            <td>从数据表的暴露配置和字段定义自动推导</td>
+            <td>什么都不用做</td>
+          </tr>
+          <tr>
+            <td>登录相关接口（Better Auth）</td>
+            <td>Better Auth 自带的 OpenAPI 插件产出，合并进来</td>
+            <td>什么都不用做</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>生成流程</h3>
+    <div class="flow">
+      <div>
+        <b>声明</b><span>每个接口写明输入、输出、所属插件和一句说明。</span>
+      </div>
+      <div>
+        <b>收集</b
+        ><span
+          >应用启动时，框架收集所有已启用插件的接口声明，加上数据接口和登录接口。</span
+        >
+      </div>
+      <div>
+        <b>合并</b
+        ><span
+          >合成一份标准的 OpenAPI 3.1
+          文档，按插件分组。每个应用装的插件不同，文档也只包含它实际拥有的接口。</span
+        >
+      </div>
+      <div>
+        <b>输出</b
+        ><span>在线文档页、可下载的文档文件、前端类型定义、自动检查。</span>
+      </div>
+    </div>
+
+    <h3>谁在哪里看到文档</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>给谁</th>
+            <th>在哪里</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>开发者、外部合作方</td>
+            <td class="m">GET /api/swagger/docs</td>
+            <td>
+              给人看的在线文档页（Swagger
+              UI），按插件分组列出所有接口，可以直接在页面上填参数试调
+            </td>
+          </tr>
+          <tr>
+            <td>AI Agent、各类工具</td>
+            <td class="m">GET /api/swagger</td>
+            <td>
+              同一份文档的原始数据（JSON
+              格式），给程序读；上面的在线页面也是读它来显示的。也可以直接下载这个文件发给合作方
+            </td>
+          </tr>
+          <tr>
+            <td>前端开发</td>
+            <td>自动生成的类型定义</td>
+            <td>
+              前端调用接口时，参数和返回值的类型从文档生成，写错会在编译时报错
+            </td>
+          </tr>
+          <tr>
+            <td>代码审核</td>
+            <td>每次提交自动比对</td>
+            <td>
+              接口有变化时列出差异，删字段、改类型这类破坏性改动必须明确确认；没写声明的接口直接拦下
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">
+      两个地址都放在
+      <code>/api/swagger</code>
+      下，这一段由框架保留，插件和数据表暴露名都不能占用，启动时检测到冲突直接报错。
+    </p>
+
+    <h3>谁能访问</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>环境</th>
+            <th>文档数据 <code>/api/swagger</code></th>
+            <th>文档页面 <code>/api/swagger/docs</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>开发环境</td>
+            <td>无需登录</td>
+            <td>无需登录</td>
+          </tr>
+          <tr>
+            <td>生产环境（默认）</td>
+            <td>
+              已登录用户，或带有效 API Key 的请求，都可以访问；未登录、无 Key
+              返回 401
+            </td>
+            <td>
+              页面本身可以打开，但不含任何接口信息。已登录时直接显示文档；未登录时提示填入
+              API Key，填入后再加载
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">
+      这样外部合作方拿到 API Key
+      就能看文档、直接试调，不需要管理员账号。应用也可以通过配置把文档完全公开（比如
+      Hub
+      想让所有人都能看），或者在生产环境完全关闭。看到文档不等于能调用：每个接口在被调用时仍然会单独检查权限。
+    </p>
+
+    <h3>原始数据长什么样</h3>
+    <p>
+      <code>GET /api/swagger</code> 返回的是一份标准 OpenAPI 3.1 文档。以「部署
+      Hub 应用」这一个接口为例，截取其中一段：
+    </p>
+    <pre class="snip">{
+  "openapi": "3.1.0",
+  "info": { "title": "NocoBase API", "version": "2.0.0-beta.0" },   <span class="c">// 应用名称和版本</span>
+  "servers": [{ "url": "/api" }],
+  "tags": [{ "name": "Hub", "description": "Manage Hub apps, releases and deployments." }],   <span class="c">// 按插件分组</span>
+  "paths": {
+    "/hub/apps/{appId}/deploy": {                                    <span class="c">// 接口地址</span>
+      "post": {                                                      <span class="c">// 请求方式</span>
+        "tags": ["Hub"],
+        "summary": "Deploy an app",
+        "parameters": [{ "name": "appId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {                                             <span class="c">// 要传什么</span>
+          "content": { "application/json": { "schema": {
+            "type": "object", "required": ["releaseId"],
+            "properties": { "releaseId": { "type": "string" } } } } }
+        },
+        "responses": {                                               <span class="c">// 会收到什么</span>
+          "202": { "description": "Deployment started", "content": { "application/json": { "schema": {
+            "type": "object", "properties": { "data": { "$ref": "#/components/schemas/HubDeployment" } } } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }       <span class="c">// 统一错误格式，全文档共用</span>
+        },
+        "security": [{ "session": [] }, { "apiKey": [] }]            <span class="c">// 登录或 API Key 均可调用</span>
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HubDeployment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "running", "succeeded", "failed"] }
+        }
+      }
+    }
+  }
+}</pre>
+    <p class="muted">
+      这份文件对人来说不好读，但所有工具都认：Swagger UI
+      读它生成上面的在线页面，前端读它生成类型定义，Postman、Apifox
+      等工具可以直接导入它。
+    </p>
+
+    <h3>代码里怎么接起来</h3>
+    <p>
+      整条链路分三块：框架负责出文档和页面，每个插件只负责声明自己的接口，登录库
+      Better Auth
+      的接口由认证插件转交过来。插件开发者只需要做第三块里「写声明」这一件事。
+    </p>
+
+    <p>
+      <b>1. 框架内置：两个地址，插件不用写。</b>放在
+      <code>@nocobase/app-server</code> 里，应用启动后自动存在。
+    </p>
+    <pre
+      class="snip"
+    ><span class="c">// packages/app/app-server/src/router/swagger.ts（框架内置）</span>
+import { generateSpecs } from 'hono-openapi';
+import { swaggerUI } from '@hono/swagger-ui';
+
+router.get('/swagger', requireDocsAccess(app), async (c) =&gt; {
+  <span class="c">// ① 扫描所有插件的手写路由，读取每个路由上的 describeRoute 和 validator</span>
+  const spec = await generateSpecs(apiRouter, {
+    documentation: {
+      info: { title: app.name, version: app.version },
+      servers: [{ url: `${app.basePath}/api` }],
+      components: standardComponents,   <span class="c">// 统一错误体、session 和 API Key 两种认证方式</span>
+    },
+    exclude: ['/swagger', '/swagger/docs', '/swagger/assets/*', '/auth/*'],
+  });
+  <span class="c">// ② 合并不走 describeRoute 的来源：自动生成的数据接口、Better Auth</span>
+  for (const contribute of openApiContributions) mergeDocument(spec, await contribute(app));
+  return c.json(spec);
+});
+
+<span class="c">// ③ Swagger UI 页面：读取上面的 JSON 渲染；静态资源由我们自己的服务提供，内网部署也能打开</span>
+router.get('/swagger/docs', swaggerUI({
+  url: `${app.basePath}/api/swagger`,
+  baseUrl: `${app.basePath}/api/swagger/assets`,
+  manuallySwaggerUIHtml: renderDocsPage,   <span class="c">// 未登录时先提示填入 API Key，再加载文档</span>
+}));
+router.get('/swagger/assets/*', serveSwaggerUiDist());   <span class="c">// swagger-ui-dist 包里的 js / css</span></pre>
+    <p class="muted">
+      <code>@hono/swagger-ui</code> 默认从 jsDelivr CDN
+      加载页面资源，内网或离线部署的应用会打不开，所以改为用它的
+      <code>baseUrl</code> 选项指向我们自己提供的
+      <code>swagger-ui-dist</code>
+      文件。文档在第一次请求时生成并缓存，应用重启前路由不会变。
+    </p>
+
+    <p>
+      <b>2. 认证插件：把 Better Auth 的接口转交给框架。</b>Better Auth 自带
+      OpenAPI 插件，能直接产出它全部接口的描述，包括登录、注册、会话，以及个人
+      API Key 的增删改查。认证插件打开它，再把结果交给框架合并。
+    </p>
+    <pre
+      class="snip"
+    ><span class="c">// packages/plugins/app-plugin-authentication/server</span>
+import { openAPI } from 'better-auth/plugins';
+
+betterAuth({
+  plugins: [...plugins, openAPI({ disableDefaultReference: true })],   <span class="c">// 关掉它自带的页面，全应用只保留一个文档入口</span>
+});
+
+export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
+  const auth = app.container.resolve(authenticationToken);
+  const document = await auth.generateOpenAPISchema();   <span class="c">// 内部调用 Better Auth 的 auth.api.generateOpenAPISchema()</span>
+  return withTag(withPathPrefix(document, '/auth'), 'Authentication');   <span class="c">// 挂到 /api/auth 下，归入「认证」分组</span>
+});</pre>
+    <p class="muted">
+      自动生成的数据接口走同一个
+      <code>defineOpenApiContribution</code>
+      入口，由框架根据暴露配置和字段定义产出，插件不用写。<code>defineOpenApiContribution</code>、<code
+        >withPathPrefix</code
+      >
+      等是本方案要在框架里新增的函数，名字在实现时再定。Better Auth
+      产出的路径是否已经带
+      <code>/api/auth</code> 前缀，需要在实现时对照实际输出确认。
+    </p>
+
+    <p>
+      <b>3. 每个插件：在路由上写声明。</b
+      >这是插件开发者唯一要做的事，写法按下面的规范。
+    </p>
+
+    <h3>接口类型声明规范</h3>
+    <p>
+      每个 <code>/api</code> 下的手写接口都必须按以下规则声明，CI 会检查。声明用
+      zod 写，同一份声明同时产生 TypeScript 类型、运行时校验和文档。
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>规则</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>接口说明</td>
+            <td>
+              必须有 <code>describeRoute</code>，至少包含
+              <code>tags</code>（插件名，PascalCase，如
+              <code>Hub</code>）、<code>summary</code>（一句英文动宾短语，如
+              <code>Deploy an app</code>）、<code>operationId</code>（插件短名 +
+              动词 + 资源，camelCase，全局唯一，如
+              <code>hubDeployApp</code>，前端生成的方法名就用它）
+            </td>
+          </tr>
+          <tr>
+            <td>输入</td>
+            <td>
+              路径参数、查询参数、请求内容三类，用到哪类就用
+              <code>validator('param' | 'query' | 'json', Schema)</code>
+              声明哪类。处理函数只能用 <code>c.req.valid()</code> 取值，禁止
+              <code>c.req.json&lt;T&gt;()</code>、<code>c.req.query()</code>
+              直接读
+            </td>
+          </tr>
+          <tr>
+            <td>输入对象</td>
+            <td>
+              按输入类别区分：<b>请求内容</b>用
+              <code>z.strictObject</code>，多余字段返回 400
+              并指出字段名，防止拼错字段被悄悄忽略、防止偷塞字段（与谷歌云 API
+              的做法一致，未知字段报
+              <code>Unknown name</code>）；<b>查询参数</b>用
+              <code>z.object</code
+              >，多余参数悄悄去掉、不报错，避免误伤前端库和代理自动加的
+              <code>?_t=…</code> 等参数；<b>路径参数</b>用
+              <code>z.object</code
+              >，路由已限定参数，不会有多余。两种写法下处理函数都只拿得到声明过的字段。前端提交修改时只传要改的字段，不要把查询结果整个提交回来
+            </td>
+          </tr>
+          <tr>
+            <td>成功返回</td>
+            <td>
+              每个成功状态码都声明结构，用框架提供的
+              <code>dataOf(Schema)</code>、<code>listOf(Schema)</code> 包出
+              <code>{ data }</code> / <code>{ data, meta }</code>，不手写外层
+            </td>
+          </tr>
+          <tr>
+            <td>错误返回</td>
+            <td>
+              引用框架统一的错误组件（如
+              <code>errorResponses(400, 403, 404)</code
+              >），不自己描述错误结构；校验失败由框架统一返回 400 和字段级错误
+            </td>
+          </tr>
+          <tr>
+            <td>字段类型</td>
+            <td>
+              字段名 camelCase；ID 一律 <code>z.string()</code>；时间
+              <code>z.iso.datetime()</code>；枚举
+              <code>z.enum([...])</code>；「可以不传」用
+              <code>.optional()</code>，「可以为空」用
+              <code>.nullable()</code>，两者不混用；禁止
+              <code>z.any()</code>，<code>z.unknown()</code> 只用于确实任意的
+              JSON 并写明说明
+            </td>
+          </tr>
+          <tr>
+            <td>字段说明</td>
+            <td>
+              对外可见的字段用
+              <code>.meta({ description })</code> 写一句英文说明
+            </td>
+          </tr>
+          <tr>
+            <td>复用的结构</td>
+            <td>
+              被多个接口共用的对象加
+              <code>.meta({ ref })</code>，名字以插件名开头，如
+              <code>HubDeployment</code>，避免不同插件重名
+            </td>
+          </tr>
+          <tr>
+            <td>存放位置</td>
+            <td>
+              声明放在插件的 <code>server/routes/schemas.ts</code>（接口多时拆成
+              <code>schemas/</code> 目录）。服务层需要的类型用
+              <code>z.infer</code> 从声明导出，不再另写一份
+              <code>interface</code>
+            </td>
+          </tr>
+          <tr>
+            <td>特殊返回</td>
+            <td>
+              流式返回、文件下载声明各自的类型（<code>application/x-ndjson</code>、<code>text/event-stream</code>、<code>application/octet-stream</code>），不写成
+              JSON
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>按规范写出来的一个完整接口：</p>
+    <pre
+      class="snip"
+    ><span class="c">// packages/plugins/app-plugin-hub/server/routes/schemas.ts</span>
+import { z } from 'zod';
+
+export const AppParams = z.object({ appId: z.string() });                  <span class="c">// 路径参数：z.object</span>
+
+export const DeployAppInput = z.strictObject({                                <span class="c">// 请求内容：z.strictObject</span>
+  releaseId: z.string().meta({ description: 'The release to deploy.' }),
+});
+
+export const HubDeployment = z.object({
+  id: z.string(),
+  status: z.enum(['pending', 'running', 'succeeded', 'failed']),
+  createdAt: z.iso.datetime(),
+}).meta({ ref: 'HubDeployment' });
+
+export type DeployAppInput = z.infer&lt;typeof DeployAppInput&gt;;   <span class="c">// 服务层直接用这个类型</span>
+export type HubDeployment = z.infer&lt;typeof HubDeployment&gt;;
+
+<span class="c">// packages/plugins/app-plugin-hub/server/routes/apps.ts</span>
+import { describeRoute, validator } from 'hono-openapi';
+import { dataOf, errorResponses } from '@nocobase/app-server/openapi';   <span class="c">// 框架提供（待实现）</span>
+
+routes.post(
+  '/apps/:appId/deploy',
+  describeRoute({
+    tags: ['Hub'],
+    operationId: 'hubDeployApp',
+    summary: 'Deploy an app',
+    responses: {
+      202: dataOf(HubDeployment, 'Deployment started'),
+      ...errorResponses(400, 403, 404),
+    },
+  }),
+  validator('param', AppParams),
+  validator('json', DeployAppInput),
+  async (c) =&gt; {
+    const { appId } = c.req.valid('param');   <span class="c">// 已校验、带类型</span>
+    const input = c.req.valid('json');
+    return c.json({ data: await deployments.deploy(appId, input) }, 202);
+  },
+);</pre>
+
+    <p>
+      <b>CI 怎么检查：</b>用 <code>hono-openapi</code> 的
+      <code>includeEmptyPaths</code> 选项列出所有没有声明的
+      <code>/api</code> 路由，列表不为空就失败；再检查每个接口都有
+      <code>tags</code>、<code>summary</code>、<code>operationId</code>，且
+      <code>operationId</code>
+      不重复；最后把生成的文档和上一版比对，有破坏性变化时必须在 PR 里明确确认。
+    </p>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">05</span>
+      <h2>改动前后对照</h2>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>场景</th>
+            <th>现在</th>
+            <th>改为</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>部署 / 停止 Hub 应用</td>
+            <td class="m">
+              <span class="was">POST /api/hub/apps/7/deploy</span>
+            </td>
+            <td class="m">
+              <span class="now">POST /api/hub/apps/7/deploy</span><br /><span
+                class="muted"
+                >地址本来就对，统一动作语义即可</span
+              >
+            </td>
+          </tr>
+          <tr>
+            <td>查看 API Key 明文</td>
+            <td class="m">
+              <span class="was">POST /api/hub/api-keys/3/reveal</span>
+            </td>
+            <td class="m">
+              <span class="now">POST /api/hub/apiKeys/3/reveal</span>
+            </td>
+          </tr>
+          <tr>
+            <td>停用用户</td>
+            <td class="m">
+              <span class="was">POST /api/users/5/disable</span>
+            </td>
+            <td class="m">
+              <span class="now">POST /api/users/5/disable</span>
+            </td>
+          </tr>
+          <tr>
+            <td>删除用户</td>
+            <td class="m">
+              <span class="was">DELETE /api/users/5（附带确认内容）</span>
+            </td>
+            <td class="m">
+              <span class="now">DELETE /api/users/5?confirm=true</span>
+            </td>
+          </tr>
+          <tr>
+            <td>查看 AI 技能</td>
+            <td class="m">
+              <span class="was">GET /api/aiSkills:get?key=x</span>
+            </td>
+            <td class="m">
+              <span class="now">GET /api/aiEmployees/skills/x</span>
+            </td>
+          </tr>
+          <tr>
+            <td>站内信标记已读</td>
+            <td class="m">
+              <span class="was">POST /api/notifications/in-app/9 {action}</span>
+            </td>
+            <td class="m">
+              <span class="now"
+                >POST /api/notificationInApp/messages/9/markRead</span
+              >
+            </td>
+          </tr>
+          <tr>
+            <td>数据表查询（例外一）</td>
+            <td class="m"><span class="was">POST /api/users:findMany</span></td>
+            <td class="m"><span class="now">POST /api/users/findMany</span></td>
+          </tr>
+          <tr>
+            <td>创建个人 API Key（例外二）</td>
+            <td class="m">POST /api/auth/api-key/create</td>
+            <td class="m">不变</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">06</span>
+      <h2>收益与代价</h2>
+    </div>
+    <div class="cols">
+      <div class="panel gain">
+        <h3>能得到什么</h3>
+        <ul>
+          <li>
+            <b>自动生成的接口文档（Swagger）</b
+            >，外部开发者和合作方可以直接查阅、在线试调，不用再读源码。
+          </li>
+          <li>
+            <b>对外接入门槛下降</b>：所有接口一个格式，学会一个就会用全部。
+          </li>
+          <li>
+            <b>AI Agent 开发更可靠</b
+            >：它们照着机器可读的规范写接口，不再模仿各插件的不同写法。
+          </li>
+          <li>
+            <b>前端代码更少出错</b>：接口类型可以从文档自动生成，不用手写。
+          </li>
+          <li>
+            <b>不会再退化</b>：规范写进自动检查，新代码不合规就过不了合并。
+          </li>
+        </ul>
+      </div>
+      <div class="panel cost">
+        <h3>要付出什么</h3>
+        <ul>
+          <li>
+            <b>一次性的破坏性改动</b
+            >：旧地址不保留。我们自己的前端会在同一批改动里同步改好；已经在 beta
+            版上做了集成的外部用户需要按对照表调整。
+          </li>
+          <li>
+            <b>版本号跳变</b>：改动过的插件发布大版本。目前 1.0 测试版的包（如
+            Hub、工作流、用户）会直接进入 2.0 测试版。
+          </li>
+          <li>
+            <b>约 2 个月的工程投入</b>，第一步 1–2 周即可让新代码不再扩大混乱。
+          </li>
+          <li>
+            <b>暂不做接口版本号</b
+            >：现阶段接口随插件版本一起升级，等对外接口稳定后再单独设计。
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">07</span>
+      <h2>执行计划</h2>
+    </div>
+    <p>
+      先定规范、打好底，让新写的代码不再增加混乱；再按对外影响从大到小迁移存量接口；最后把规范放进自动检查，防止回退。
+    </p>
+    <div class="lanes">
+      <div class="lane">
+        <div class="lane-head"><b>第一步 · 定规矩</b><span>1–2 周</span></div>
+        <div class="task">
+          <b>规范成文</b
+          ><span>写入开发规范和 AI Agent 的技能文档，修正其中的错误示例。</span>
+        </div>
+        <div class="task">
+          <b>框架兜底</b
+          ><span>所有意外错误都返回统一格式；每个请求带可追踪的编号。</span>
+        </div>
+        <div class="task">
+          <b>插件模板更新</b><span>新建插件时自动生成符合规范的接口样例。</span>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-head"><b>第二步 · 迁移</b><span>约 1 个月</span></div>
+        <div class="task">
+          <b>接口文档上线</b
+          ><span
+            >框架接入文档生成，数据接口和登录接口直接覆盖，手写接口随迁移逐个补上声明。</span
+          >
+        </div>
+        <div class="task">
+          <b>先迁 Hub</b><span>它已有外部调用方，收益最大。</span>
+        </div>
+        <div class="task">
+          <b>再迁其余插件</b
+          ><span
+            >用户、权限、通知、定时任务、多语言、工作流、AI
+            员工，前端同步改好。</span
+          >
+        </div>
+        <div class="task">
+          <b>发布</b><span>改动过的插件统一发布大版本，附改动对照说明。</span>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-head"><b>第三步 · 守住</b><span>季度内</span></div>
+        <div class="task">
+          <b>自动检查</b
+          ><span>每次提交都比对接口文档，不合规或意外改动接口会被拦下。</span>
+        </div>
+        <div class="task">
+          <b>前端类型自动生成</b><span>从接口文档生成，不再手写。</span>
+        </div>
+        <div class="task">
+          <b>安全与稳定性</b
+          ><span>请求大小限制、超时、限流等统一在框架层实现。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack-lg">
+    <div class="sec-head">
+      <span class="idx">08</span>
+      <h2>请确认</h2>
+    </div>
+    <ul class="signoff">
+      <li>
+        <span
+          >采用谷歌 API 设计规范作为 NocoBase 3
+          接口统一标准，动作分隔符用斜杠代替冒号。</span
+        >
+      </li>
+      <li>
+        <span
+          >自动生成的数据接口保留原有动作（只换分隔符），第三方登录库自带的接口保持原样，作为两类例外。</span
+        >
+      </li>
+      <li><span>接口文档（Swagger）从代码自动生成，不手写。</span></li>
+      <li>
+        <span
+          >现有接口一次性迁移，不保留旧地址；改动过的插件发布大版本，接受 1.0
+          测试版直接进入 2.0 测试版。</span
+        >
+      </li>
+      <li><span>现阶段不做接口版本号。</span></li>
+      <li><span>按三步计划执行，第一步立即启动。</span></li>
+    </ul>
+
+    <details>
+      <summary>附：给工程师的细则摘要</summary>
+      <div class="stack">
+        <p class="muted">
+          完整细则见仓库根目录
+          <code>http-api-spec-proposal.md</code>，定稿后收入
+          <code>AGENTS.md</code> 和插件开发技能文档。
+        </p>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>操作</th>
+                <th>请求方式</th>
+                <th>地址</th>
+                <th>成功返回</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>列表</td>
+                <td class="m">GET</td>
+                <td class="m">/api/hub/apps</td>
+                <td class="m">200 {data: [...], meta}</td>
+              </tr>
+              <tr>
+                <td>查看单个</td>
+                <td class="m">GET</td>
+                <td class="m">/api/hub/apps/{appId}</td>
+                <td class="m">200 {data}</td>
+              </tr>
+              <tr>
+                <td>新建</td>
+                <td class="m">POST</td>
+                <td class="m">/api/hub/apps</td>
+                <td class="m">201 {data}</td>
+              </tr>
+              <tr>
+                <td>修改部分字段</td>
+                <td class="m">PATCH</td>
+                <td class="m">/api/hub/apps/{appId}</td>
+                <td class="m">200 {data}</td>
+              </tr>
+              <tr>
+                <td>整体替换单例配置</td>
+                <td class="m">PUT</td>
+                <td class="m">/api/hub/apps/{appId}/config</td>
+                <td class="m">200 {data}</td>
+              </tr>
+              <tr>
+                <td>删除</td>
+                <td class="m">DELETE</td>
+                <td class="m">/api/hub/apps/{appId}</td>
+                <td class="m">204 无内容</td>
+              </tr>
+              <tr>
+                <td>资源上的动作</td>
+                <td class="m">POST</td>
+                <td class="m">/api/hub/apps/{appId}/deploy</td>
+                <td class="m">200 {data} / 202</td>
+              </tr>
+              <tr>
+                <td>集合上的动作</td>
+                <td class="m">POST</td>
+                <td class="m">/api/notificationInApp/messages/markAllRead</td>
+                <td class="m">200 {data} / 204</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>HTTP</th>
+                <th>status</th>
+                <th>用于</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m">400</td>
+                <td class="m">INVALID_ARGUMENT / FAILED_PRECONDITION</td>
+                <td>参数不合法 / 当前状态不允许该操作</td>
+              </tr>
+              <tr>
+                <td class="m">401</td>
+                <td class="m">UNAUTHENTICATED</td>
+                <td>未登录</td>
+              </tr>
+              <tr>
+                <td class="m">403</td>
+                <td class="m">PERMISSION_DENIED</td>
+                <td>无权限；先于「是否存在」判断</td>
+              </tr>
+              <tr>
+                <td class="m">404</td>
+                <td class="m">NOT_FOUND</td>
+                <td>有权限但资源不存在</td>
+              </tr>
+              <tr>
+                <td class="m">409</td>
+                <td class="m">ALREADY_EXISTS / ABORTED</td>
+                <td>重复 / 并发修改冲突</td>
+              </tr>
+              <tr>
+                <td class="m">429</td>
+                <td class="m">RESOURCE_EXHAUSTED</td>
+                <td>限流</td>
+              </tr>
+              <tr>
+                <td class="m">500</td>
+                <td class="m">INTERNAL</td>
+                <td>意外错误，不回显内部信息</td>
+              </tr>
+              <tr>
+                <td class="m">503</td>
+                <td class="m">UNAVAILABLE</td>
+                <td>依赖服务不可用</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">
+          其他要点：「查看」类请求不得修改数据；删除请求不带请求体；分页参数为
+          <code>pageSize</code> + <code>pageToken</code>（返回
+          <code>nextPageToken</code>，均为 AIP-158 规定的名字）或
+          <code>page</code> + <code>pageSize</code>，每页默认 20、最多 100；ID
+          以字符串返回；时间用 RFC 3339；搜索参数统一为 <code>q</code>，排序为
+          <code>orderBy</code>；路径中的 ID 由客户端
+          <code>encodeURIComponent</code> 编码；固定路径段优先于
+          <code>{id}</code>，冲突启动即报错。
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    <span
+      >参考：Google API Improvement Proposals（aip.dev），重点为 AIP-121
+      资源设计、AIP-131~135 标准方法、AIP-136
+      自定义方法（分隔符改为斜杠）、AIP-158 分页、AIP-193 错误。</span
+    >
+    <span
+      >现状数据来自 HTTP API 体检报告，基于 develop @ fac3d58f
+      的静态代码阅读。</span
+    >
+  </footer>
+</div>
