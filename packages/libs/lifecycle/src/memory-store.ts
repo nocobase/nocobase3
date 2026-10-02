@@ -13,6 +13,25 @@ import type {
 } from './store.js';
 import type { LifecycleRecord, RecordId } from './types.js';
 
+/** The sweep order: oldest change first, then by id, as a database index would. */
+function compareIdle(
+  changedAtField: string,
+): (a: LifecycleRecord, b: LifecycleRecord) => number {
+  return (a, b) => {
+    const left = String(a[changedAtField]);
+    const right = String(b[changedAtField]);
+    if (left !== right) return left < right ? -1 : 1;
+    return compareIds(a.id, b.id);
+  };
+}
+
+function compareIds(a: RecordId, b: RecordId): number {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  const left = String(a);
+  const right = String(b);
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
 interface MemoryState {
   records: Map<string, Map<string, LifecycleRecord>>;
   transitions: TransitionEntry[];
@@ -137,14 +156,20 @@ export class MemoryLifecycleStore implements LifecycleStore {
     collection: string,
     query: IdleRecordQuery,
   ): Promise<LifecycleRecord[]> {
+    const { after } = query;
     return Promise.resolve(
       [...this.rows(collection).values()]
         .filter(
           (record) =>
             query.states.includes(String(record[query.stateField])) &&
             typeof record[query.changedAtField] === 'string' &&
-            (record[query.changedAtField] as string) < query.changedBefore,
+            (record[query.changedAtField] as string) < query.changedBefore &&
+            (after === undefined ||
+              (record[query.changedAtField] as string) > after.changedAt ||
+              ((record[query.changedAtField] as string) === after.changedAt &&
+                compareIds(record.id, after.id) > 0)),
         )
+        .sort(compareIdle(query.changedAtField))
         .slice(0, query.limit),
     );
   }

@@ -177,6 +177,7 @@ class RepositoryLifecycleStore implements LifecycleStore {
     collection: string,
     query: IdleRecordQuery,
   ): Promise<LifecycleRecord[]> {
+    const { after } = query;
     const rows = await this.repository(collection).findMany({
       filter: (filter) =>
         filter.and([
@@ -186,8 +187,32 @@ class RepositoryLifecycleStore implements LifecycleStore {
             ),
           ),
           filter.date(query.changedAtField).before(query.changedBefore),
+          // The page after the cursor, in the order below. A non-numeric id
+          // cannot be compared through the filter, so records sharing the
+          // cursor's instant are left to the next sweep.
+          ...(after === undefined
+            ? []
+            : [
+                typeof key(after.id) === 'number'
+                  ? filter.or([
+                      filter.date(query.changedAtField).after(after.changedAt),
+                      filter.and([
+                        filter
+                          .date(query.changedAtField)
+                          .notBefore(after.changedAt),
+                        filter
+                          .date(query.changedAtField)
+                          .notAfter(after.changedAt),
+                        filter.number('id').gt(key(after.id) as number),
+                      ]),
+                    ])
+                  : filter.date(query.changedAtField).after(after.changedAt),
+              ]),
         ]),
-      sort: (sort) => sort.field(query.changedAtField).asc(),
+      sort: (sort) => [
+        sort.field(query.changedAtField).asc(),
+        sort.field('id').asc(),
+      ],
       limit: query.limit,
     });
     return rows.map(toRecord);

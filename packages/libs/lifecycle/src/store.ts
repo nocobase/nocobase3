@@ -106,12 +106,25 @@ export interface EffectRunPruneQuery {
   readonly updatedBefore: string;
 }
 
+/**
+ * Records idle in one of `states` since before `changedBefore`, oldest first
+ * and then by id, so a sweep can page through them: `after` names the last
+ * record of the previous page, and only records sorting after it are
+ * returned.
+ */
 export interface IdleRecordQuery {
   readonly stateField: string;
   readonly states: readonly string[];
   readonly changedAtField: string;
   readonly changedBefore: string;
   readonly limit: number;
+  readonly after?: IdleRecordCursor;
+}
+
+/** Where the previous page of {@link IdleRecordQuery} ended. */
+export interface IdleRecordCursor {
+  readonly changedAt: string;
+  readonly id: RecordId;
 }
 
 /**

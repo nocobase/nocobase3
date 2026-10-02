@@ -182,18 +182,50 @@ describe('retry policy', () => {
 });
 
 describe('operating runs', () => {
-  it('retries a failed run from its first attempt', async () => {
+  it('retries a failed run with a fresh budget, counting on from its attempts', async () => {
     const { runtime, id, controls, store } = setup();
     controls.send = () => Promise.reject(new Declined('Declined.'));
     await runtime.fire('invoices', id, 'send', { actor: { id: 'clerk' } });
     const [failed] = (await runtime.history('invoices', id)).effectRuns;
+    expect(failed).toMatchObject({ status: 'failed', attempts: 1 });
     controls.send = () => Promise.resolve({ ok: true });
     const retried = await runtime.retryRun(failed!.id);
-    expect(retried).toMatchObject({ status: 'succeeded', attempts: 1 });
+    // Four more tries from where it stopped: attempt 2 of at most 5.
+    expect(retried).toMatchObject({
+      status: 'succeeded',
+      attempts: 2,
+      maxAttempts: 5,
+      error: null,
+    });
     // The record had already failed over, so the late success leads nowhere.
     expect(store.record('invoices', id)).toMatchObject({ status: 'failed' });
     await expect(runtime.retryRun(failed!.id)).rejects.toMatchObject({
       code: 'INVALID_STATE',
+    });
+  });
+
+  it('refuses to retry a run whose effect this process does not know', async () => {
+    const { runtime, store, id } = setup({ held: true });
+    const run = await store.createEffectRun({
+      transitionId: '1',
+      lifecycle: 'invoices',
+      recordId: String(id),
+      effect: 'invoices.renamedLongAgo',
+      status: 'failed',
+      attempts: 1,
+      maxAttempts: 1,
+      result: null,
+      error: 'Declined.',
+      createdAt: '2026-10-01T09:00:00.000Z',
+      updatedAt: '2026-10-01T09:00:00.000Z',
+      claimedAt: null,
+      runAfter: null,
+    });
+    await expect(runtime.retryRun(run.id)).rejects.toMatchObject({
+      code: 'UNKNOWN_EFFECT',
+    });
+    expect(await store.findEffectRun(run.id)).toMatchObject({
+      status: 'failed',
     });
   });
 

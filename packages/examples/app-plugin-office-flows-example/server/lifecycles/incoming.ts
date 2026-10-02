@@ -33,15 +33,15 @@ export interface IncomingTypes {
 type Context = TransitionContext<IncomingTypes>;
 
 export const INCOMING_REQUIRED: readonly (readonly [string, string])[] = [
-  ['title', '标题'],
-  ['code', '收文编码'],
-  ['sender', '来文单位'],
-  ['senderRef', '来文文号'],
-  ['summary', '摘要'],
-  ['officeOpinion', '办公室意见'],
-  ['distributionType', '分发类型'],
-  ['officeHeadId', '办公室部门主管'],
-  ['officeLeaderId', '办公室分管领导'],
+  ['title', 'title'],
+  ['code', 'document code'],
+  ['sender', 'sender'],
+  ['senderRef', "sender's reference"],
+  ['summary', 'summary'],
+  ['officeOpinion', 'office opinion'],
+  ['distributionType', 'distribution type'],
+  ['officeHeadId', 'office head'],
+  ['officeLeaderId', 'office leader'],
 ];
 
 function isRegistrar({ record, actor }: Context): boolean {
@@ -53,7 +53,7 @@ function rowIds(input: Record<string, unknown>): number[] {
 }
 
 function rowsRequired(input: Record<string, unknown>): string | null {
-  return rowIds(input).length ? null : '没有待派发的行';
+  return rowIds(input).length ? null : 'There are no rows to dispatch.';
 }
 
 /** Each pending department row becomes a task; its people are reminded once. */
@@ -160,7 +160,7 @@ export const incomingLifecycle: Lifecycle<IncomingTypes> =
           if (missing.length)
             throw new LifecycleError(
               'INVALID_INPUT',
-              `请填写：${missing.join('、')}`,
+              `Fill in before submitting: ${missing.join(', ')}.`,
             );
           return { returnReason: null };
         },
@@ -189,7 +189,7 @@ export const incomingLifecycle: Lifecycle<IncomingTypes> =
         validate: (input) =>
           typeof input.reason === 'string' && input.reason.trim()
             ? null
-            : '请填写退回原因',
+            : 'Give a reason for returning the document.',
         set: ({ input }) => ({ returnReason: text(input.reason) }),
       },
       dispatchClerks: {

@@ -7,11 +7,8 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import {
-  LifecycleError,
-  type JsonObject,
-  type LifecycleErrorCode,
-} from '@nocobase/lifecycle';
+import { LifecycleError, type JsonObject } from '@nocobase/lifecycle';
+import { LIFECYCLE_ERROR_STATUS } from '@nocobase/lifecycle/hono';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -24,19 +21,6 @@ import { OfficeFlowsError, type RowInput } from '../services/office-flows.js';
 import type { TaskKind } from '../services/store.js';
 import { officeFlowsServiceToken } from '../tokens.js';
 import { text } from '../../shared/text.js';
-
-const LIFECYCLE_STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
-  INVALID_DEFINITION: 500,
-  UNKNOWN_LIFECYCLE: 404,
-  UNKNOWN_TRANSITION: 404,
-  RECORD_NOT_FOUND: 404,
-  GUARD_REJECTED: 403,
-  INVALID_STATE: 409,
-  CONFLICT: 409,
-  INVALID_INPUT: 400,
-  INVALID_ROUTE: 400,
-  INVALID_SET: 400,
-};
 
 const SERVICE_STATUS: Record<OfficeFlowsError['code'], ContentfulStatusCode> = {
   NOT_FOUND: 404,
@@ -57,7 +41,10 @@ async function body(context: Context): Promise<Record<string, unknown>> {
 function taskKind(value: string): TaskKind {
   if (value === 'clerk' || value === 'team' || value === 'executor')
     return value;
-  throw new OfficeFlowsError('NOT_FOUND', `没有 ${value} 类子单`);
+  throw new OfficeFlowsError(
+    'NOT_FOUND',
+    `There is no "${value}" kind of task.`,
+  );
 }
 
 /**
@@ -67,7 +54,7 @@ function taskKind(value: string): TaskKind {
  */
 function actor(value: unknown): string {
   if (!isPerson(value))
-    throw new OfficeFlowsError('INVALID', '请选择扮演的人员');
+    throw new OfficeFlowsError('INVALID', 'Choose who to act as.');
   return value;
 }
 
@@ -126,7 +113,10 @@ function form(values: Record<string, unknown>): DataRequestForm {
   ][]) {
     if (!(key in source)) continue;
     if (!fits(kind, source[key]))
-      throw new OfficeFlowsError('INVALID', `字段 ${key} 的格式不正确`);
+      throw new OfficeFlowsError(
+        'INVALID',
+        `Field "${key}" has the wrong type.`,
+      );
     empty[key] = source[key];
   }
   return empty as unknown as DataRequestForm;
@@ -158,7 +148,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             blockers: error.blockers,
             problems: error.problems,
           },
-          LIFECYCLE_STATUS[error.code],
+          LIFECYCLE_ERROR_STATUS[error.code],
         );
       if (error instanceof OfficeFlowsError)
         return context.json(
@@ -395,7 +385,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const values = await body(context);
       const kind = taskKind(context.req.param('kind'));
       if (kind === 'executor')
-        throw new OfficeFlowsError('INVALID', '执行人子单不能再派发');
+        throw new OfficeFlowsError(
+          'INVALID',
+          'An executor task has nothing further to dispatch.',
+        );
       await service.addRow(
         kind,
         context.req.param('id'),

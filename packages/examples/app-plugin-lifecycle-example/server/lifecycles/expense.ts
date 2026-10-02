@@ -60,30 +60,41 @@ function routeByAmount({ record, parameters }: Context): ExpenseState {
     : 'awaitingManager';
 }
 
-// A guard's message is what the page shows beside a button it greys out.
+// A guard's verdict is what the page shows beside a button it greys out:
+// the code is stable for the page to translate, the message says it in English.
 function isApplicant({ record, actor }: Context): GuardVerdict {
-  return actor.id === record.applicantId || '只能操作自己的报销单';
+  return (
+    actor.id === record.applicantId || {
+      code: 'applicantOnly',
+      message: 'Only the applicant can do this with their report.',
+    }
+  );
 }
 
 function isApprover({ record, actor }: Context): GuardVerdict {
-  return actor.id === record.approverId || '只有当前审批人可以处理';
+  return (
+    actor.id === record.approverId || {
+      code: 'approverOnly',
+      message: 'Only the current approver can decide on this report.',
+    }
+  );
 }
 
 /** A report with no items, or an item without a date, cannot be submitted. */
 function readyToSubmit({ record }: Context): Record<string, unknown> {
   const problems = [
-    ...(record.title.trim() ? [] : ['请填写报销事由']),
+    ...(record.title.trim() ? [] : ['Give the report a title.']),
     ...itemProblems(parseItems(record.items)),
   ];
   if (problems.length)
-    throw new LifecycleError('INVALID_INPUT', problems.join('；'));
+    throw new LifecycleError('INVALID_INPUT', problems.join(' '));
   return { approverId: MANAGERS[record.applicantId] ?? FINANCE_DIRECTOR };
 }
 
 function reasonRequired(input: Record<string, unknown>): InputProblem[] {
   return typeof input.reason === 'string' && input.reason.trim()
     ? []
-    : [{ field: 'reason', message: '请填写原因' }];
+    : [{ field: 'reason', message: 'Give a reason.' }];
 }
 
 /**
@@ -179,10 +190,17 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
         from: 'awaitingManager',
         to: 'awaitingManager',
         guard: ({ record, actor }) => {
-          if (actor.system !== true) return '超时后由系统自动升级';
+          if (actor.system !== true)
+            return {
+              code: 'systemOnly',
+              message:
+                'The system escalates a report once the wait has passed.',
+            };
           return (
-            MANAGERS[text(record.approverId)] !== undefined ||
-            '当前审批人已是最高一级'
+            MANAGERS[text(record.approverId)] !== undefined || {
+              code: 'topApprover',
+              message: 'The current approver is already the highest level.',
+            }
           );
         },
         set: ({ record }) => ({
@@ -194,7 +212,11 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
         from: 'approved',
         to: 'paid',
         guard: ({ actor }) =>
-          actor.system === true || '付款成功后由系统自动标记',
+          actor.system === true || {
+            code: 'systemOnly',
+            message:
+              'The system marks a report paid once the payment succeeds.',
+          },
         // The input is what the payment effect returned; its reference is
         // written onto the report with the state.
         accept: ['paymentRef'],

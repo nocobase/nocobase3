@@ -198,6 +198,32 @@ const enUS = {
     },
     withdraw: 'Withdraw',
   },
+  blockers: {
+    agentOnly: 'Only a support agent can work on tickets.',
+    requesterOnly: 'Only the customer who filed the ticket can do this.',
+    systemOnly: 'The system does this on its own once the wait has passed.',
+    reopenExpired: 'Closed too long ago to reopen; file a new ticket instead.',
+    applicantOnly: 'Only the applicant can do this with their report.',
+    approverOnly: 'Only the current approver can decide on this report.',
+    topApprover: 'The current approver is already the highest level.',
+  },
+  problems: {
+    message: 'Write a message.',
+    reason: 'Give a reason.',
+  },
+  errors: {
+    actor: 'Choose who to act as.',
+    failures:
+      'The number of simulated failures must be a whole number, zero or more.',
+    customersOnly: 'Only a customer can file a ticket.',
+    ticketFields: 'Give the ticket a subject and a description.',
+    category: 'Choose a category.',
+    priority: 'Choose a priority.',
+    applicantsOnly: 'Only an employee can file an expense report.',
+    expenseMissing: 'The expense report does not exist.',
+    ownExpenseOnly: 'Only the applicant can edit this report.',
+    expenseLocked: 'A report under review cannot be edited; withdraw it first.',
+  },
   lifecycle: {
     title: 'Under the hood',
     hint: 'What the lifecycle recorded for this record. A real application would not show this to its users.',

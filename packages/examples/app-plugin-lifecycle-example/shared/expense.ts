@@ -37,25 +37,36 @@ export function isCalendarDate(value: string): boolean {
 
 /** What is wrong with a report's items; empty when it may be submitted. */
 export function itemProblems(items: readonly ExpenseItem[]): string[] {
-  if (!items.length) return ['至少填写一条费用明细'];
+  if (!items.length) return ['Add at least one expense line.'];
   const problems: string[] = [];
   items.forEach((item, index) => {
-    const line = `第 ${index + 1} 行`;
-    if (!isCalendarDate(item.date)) problems.push(`${line}日期无效`);
+    const line = `Line ${index + 1}`;
+    if (!isCalendarDate(item.date))
+      problems.push(`${line}: the date is invalid.`);
     if (!EXPENSE_CATEGORIES.includes(item.category))
-      problems.push(`${line}缺少类别`);
-    if (!item.description.trim()) problems.push(`${line}缺少说明`);
+      problems.push(`${line}: choose a category.`);
+    if (!item.description.trim())
+      problems.push(`${line}: describe the expense.`);
     if (!Number.isSafeInteger(item.amountCents) || item.amountCents <= 0)
-      problems.push(`${line}金额必须大于 0`);
+      problems.push(`${line}: the amount must be more than 0.`);
   });
   return problems;
+}
+
+/** A JSON text if it parses, else nothing: a malformed column or request is not a crash. */
+function parseJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Items as they arrive from a form or a JSON column, with anything malformed dropped. */
 export function parseItems(value: unknown): ExpenseItem[] {
   const source: unknown =
     typeof value === 'string' && value.startsWith('[')
-      ? JSON.parse(value)
+      ? parseJson(value)
       : value;
   if (!Array.isArray(source)) return [];
   return source

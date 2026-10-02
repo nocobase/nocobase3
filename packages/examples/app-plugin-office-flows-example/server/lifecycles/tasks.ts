@@ -59,7 +59,7 @@ function rowIds(input: Record<string, unknown>): number[] {
 }
 
 function rowsRequired(input: Record<string, unknown>): string | null {
-  return rowIds(input).length ? null : '没有待派发的行';
+  return rowIds(input).length ? null : 'There are no rows to dispatch.';
 }
 
 /** What a task needs before its feedback can be submitted. */
@@ -68,18 +68,21 @@ function feedbackSet(
   options: { readonly opinion: boolean; readonly outgoingRef: boolean },
 ): Record<string, unknown> {
   const missing: string[] = [];
-  if (options.opinion && !record.opinion) missing.push('意见');
+  if (options.opinion && !record.opinion) missing.push('opinion');
   if (record.redHeadFeedback === null || record.redHeadFeedback === undefined)
-    missing.push('是否反馈红头文件');
+    missing.push('whether an official document is fed back');
   if (
     options.outgoingRef &&
     record.redHeadFeedback === true &&
     !record.outgoingRef
   )
-    missing.push('对外发文文号');
-  if (!record.feedback) missing.push('反馈信息');
+    missing.push('outgoing document number');
+  if (!record.feedback) missing.push('feedback');
   if (missing.length)
-    throw new LifecycleError('INVALID_INPUT', `请填写：${missing.join('、')}`);
+    throw new LifecycleError(
+      'INVALID_INPUT',
+      `Fill in before submitting: ${missing.join(', ')}.`,
+    );
   return {};
 }
 
@@ -234,7 +237,7 @@ export const clerkTaskLifecycle: Lifecycle<ClerkTypes> =
         validate: (input) =>
           typeof input.decision === 'string' && input.decision in SIGN_DECISIONS
             ? null
-            : '请选择会签决策',
+            : 'Choose a countersign decision.',
         route: ({ record, actor, input }) => {
           if (input.decision === 'Y') return 'accepted';
           if (input.decision === 'B') return 'objected';

@@ -7,8 +7,11 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { createLifecycleRoutes } from '@nocobase/lifecycle/hono';
-import { LifecycleError, type LifecycleErrorCode } from '@nocobase/lifecycle';
+import {
+  createLifecycleRoutes,
+  LIFECYCLE_ERROR_STATUS,
+} from '@nocobase/lifecycle/hono';
+import { LifecycleError } from '@nocobase/lifecycle';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -20,19 +23,6 @@ import {
   type ExpenseDraft,
 } from '../services/lifecycle-example.js';
 import { lifecycleExampleServiceToken } from '../tokens.js';
-
-const LIFECYCLE_STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
-  INVALID_DEFINITION: 500,
-  UNKNOWN_LIFECYCLE: 404,
-  UNKNOWN_TRANSITION: 404,
-  RECORD_NOT_FOUND: 404,
-  GUARD_REJECTED: 403,
-  INVALID_STATE: 409,
-  CONFLICT: 409,
-  INVALID_INPUT: 400,
-  INVALID_ROUTE: 400,
-  INVALID_SET: 400,
-};
 
 const EXAMPLE_STATUS: Record<ExampleError['code'], ContentfulStatusCode> = {
   NOT_FOUND: 404,
@@ -55,14 +45,19 @@ async function body(context: Context): Promise<Record<string, unknown>> {
  * authorizes the action.
  */
 function actor(value: unknown): string {
-  if (!person(value)) throw new ExampleError('INVALID', '请选择当前身份');
+  if (!person(value))
+    throw new ExampleError('INVALID', 'actor', 'Choose who to act as.');
   return text(value);
 }
 
 function failures(value: unknown): number {
   const count = Number(value ?? 0);
   if (!Number.isInteger(count) || count < 0)
-    throw new ExampleError('INVALID', '模拟失败次数必须是非负整数');
+    throw new ExampleError(
+      'INVALID',
+      'failures',
+      'The number of simulated failures must be a whole number, zero or more.',
+    );
   return count;
 }
 
@@ -91,11 +86,11 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             blockers: error.blockers,
             problems: error.problems,
           },
-          LIFECYCLE_STATUS[error.code],
+          LIFECYCLE_ERROR_STATUS[error.code],
         );
       if (error instanceof ExampleError)
         return context.json(
-          { code: error.code, message: error.message },
+          { code: error.code, reason: error.reason, message: error.message },
           EXAMPLE_STATUS[error.code],
         );
       throw error;

@@ -76,7 +76,13 @@ Other code can veto transitions without touching the definition: `runtime.addGua
 
 `retry` takes `attempts`, `backoffMs`, a growth `factor`, a cap `maxMs` and `shouldRetry(error, attempt)` for errors not worth another try, such as a declined payment; `timeoutMs` fails an attempt that runs longer and aborts its signal. `fire()` takes a `requestId`: the same request sent again for a record finds its first log entry and changes nothing, which makes a retried form submission or webhook safe — the transition log keeps it under a unique index.
 
-`listEffectRuns(query)` lists runs by lifecycle, record, effect and status, each saying whether this process knows its effect; a run naming an effect no registered lifecycle declares stays queued, because in a rolling deploy another process may know it. `retryRun(id)` runs a failed, dead or cancelled run again from its first attempt; `cancelRun(id)` gives up on a queued or running one, aborting an attempt in this process and discarding the outcome of one elsewhere. `prune({ olderThan })` deletes succeeded and cancelled runs last changed before then.
+`listEffectRuns(query)` lists runs by lifecycle, record, effect and status, each saying whether this process knows its effect; a run naming an effect no registered lifecycle declares stays queued, because in a rolling deploy another process may know it. `retryRun(id)` runs a failed, dead or cancelled run again with a fresh budget of attempts, counting on from the attempts before — an earlier attempt still finishing somewhere cannot pass for a new one — and refuses a run whose effect this process does not know; `cancelRun(id)` gives up on a queued or running one, aborting an attempt in this process and discarding the outcome of one elsewhere. `prune({ olderThan })` deletes succeeded and cancelled runs last changed before then.
+
+An attempt whose outcome could not be recorded — the continuation met a conflict, or the store failed while writing — goes back in the queue after its backoff, and a run none of whose attempts recorded an outcome becomes `dead` for an operator to retry. An attempt whose process stopped stays claimed until its lease (`leaseMs`, five minutes by default) expires; `reclaim()` takes such attempts back and hands them over again, so call it on the same schedule as `runTriggers()`, and `recover()` once a process starts, which also hands over everything queued. A trigger fires at most `batchSize` transitions per sweep and pages past the records its guard refuses, so a record that cannot move does not keep the ones behind it from being reached.
+
+## Running on the jobs service
+
+`@nocobase/lifecycle/jobs` exports `createLifecycleJobs({ jobs, schedule, jobName, sweepEveryMs, onSweep })`, the dispatcher for an application whose effects run on `@nocobase/jobs`. Pass it to `new LifecycleRuntime({ dispatcher })`, register the lifecycles, then `start(runtime)`: it registers the effect job under `jobName` — stored with every queued task, so keep it stable — opens both executors, schedules a sweep that reclaims expired attempts, runs the triggers and then `onSweep`, and runs `recover()`. A retry's backoff waits on an in-process timer before the job is queued; a process that stops while it waits loses only the timer, and the next start recovers the run. `shutdown()` stops the timers and both executors. `@nocobase/jobs` is an optional peer, like `hono` and `react`.
 
 ## Routes and a React hook
 
@@ -102,4 +108,4 @@ await kit.runTriggers();
 expect(kit.get(ticket).status).toBe('closed');
 ```
 
-`kit.failEffect(name, { times })` makes the next attempts of an effect throw. `packages/examples/app-plugin-lifecycle-example` wires two lifecycles to an application's database and jobs service.
+`kit.failEffect(name, { times })` makes the next attempts of an effect throw. `packages/examples/app-plugin-lifecycle-example` wires two lifecycles to an application's database and jobs service through `createLifecycleJobs()`.

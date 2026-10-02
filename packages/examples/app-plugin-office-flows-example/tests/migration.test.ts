@@ -52,6 +52,10 @@ it('creates every collection on up and removes every one on down', async () => {
       /office_flows_transitions.*lifecycle.*record_id.*version/,
     );
     expect(indexes).toMatch(/office_flows_traces.*key/);
+    // The request key is unique only where there is one.
+    expect(indexes).toMatch(
+      /office_flows_transitions.*request_id[^\n]*where[^\n]*request_id[^\n]*is not null/i,
+    );
 
     await migrator.rollback();
     for (const name of names) {

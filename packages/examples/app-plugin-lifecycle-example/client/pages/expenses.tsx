@@ -37,7 +37,7 @@ import {
   type TransitionEntry,
 } from '../lib/api.js';
 import { ago, countdown, dateTime, NAMESPACE } from '../lib/format.js';
-import { useExampleRecord } from '../lib/use-example-record.js';
+import { useExampleRecord, useTranslate } from '../lib/use-example-record.js';
 import { useLoader } from '../lib/use-loader.js';
 import { useNow } from '../lib/use-now.js';
 import { cn } from '../lib/utils.js';
@@ -307,6 +307,7 @@ function ExpenseEditor({
   readonly onSaved: (id: string, error: string) => Promise<void>;
 }): ReactElement {
   const { t } = useTranslation(NAMESPACE);
+  const translate = useTranslate();
   const client = exampleApi(useApiClient());
   const [title, setTitle] = useState(() => text(record?.title));
   const [purpose, setPurpose] = useState(() => text(record?.purpose));
@@ -350,8 +351,8 @@ function ExpenseEditor({
       if (!submit) setNote(t('expenses.editor.saved'));
       await onSaved(id, '');
     } catch (cause) {
-      if (id && !record) await onSaved(id, errorMessage(cause));
-      else setError(errorMessage(cause));
+      if (id && !record) await onSaved(id, errorMessage(cause, translate));
+      else setError(errorMessage(cause, translate));
     } finally {
       setBusy(false);
     }
@@ -569,6 +570,7 @@ function ExpenseView({
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
+  const translate = useTranslate();
   const actorName = useActorName();
   const now = useNow();
   const [comment, setComment] = useState('');
@@ -596,7 +598,7 @@ function ExpenseView({
       setComment('');
       await onChange();
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(errorMessage(cause, translate));
     } finally {
       setBusy(false);
     }

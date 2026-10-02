@@ -191,6 +191,45 @@ describe('Repository lifecycle store', () => {
     expect(ticket?.status).toBe('closed');
   });
 
+  it('pages idle records by the time they changed and then by id', async () => {
+    const ids: string[] = [];
+    for (let index = 0; index < 5; index += 1) ids.push(await createTicket());
+    // Two tickets share an instant, so the page boundary falls inside a tie.
+    await database.repository('tickets').updateMany({
+      filter: { id: Number(ids[0]) },
+      values: { statusChangedAt: '2026-10-01T08:00:00.000Z' },
+    });
+    await database.repository('tickets').updateMany({
+      filter: { id: Number(ids[4]) },
+      values: { statusChangedAt: '2026-10-01T08:30:00.000Z' },
+    });
+    const query = {
+      stateField: 'status',
+      states: ['open'],
+      changedAtField: 'statusChangedAt',
+      changedBefore: '2026-10-01T10:00:00.000Z',
+      limit: 2,
+    };
+    const first = await store.findIdleRecords('tickets', query);
+    expect(first.map((record) => String(record.id))).toEqual([ids[0], ids[4]]);
+    const second = await store.findIdleRecords('tickets', {
+      ...query,
+      after: {
+        changedAt: String(first[1]!.statusChangedAt),
+        id: first[1]!.id,
+      },
+    });
+    expect(second.map((record) => String(record.id))).toEqual([ids[1], ids[2]]);
+    const third = await store.findIdleRecords('tickets', {
+      ...query,
+      after: {
+        changedAt: String(second[1]!.statusChangedAt),
+        id: second[1]!.id,
+      },
+    });
+    expect(third.map((record) => String(record.id))).toEqual([ids[3]]);
+  });
+
   it('runs an effect a crashed process left behind once it recovers', async () => {
     const id = await createTicket();
     // A dispatcher that accepts the run and then "crashes" before executing it.

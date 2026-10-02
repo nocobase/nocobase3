@@ -23,6 +23,7 @@ import type {
   EffectRun,
   EffectRunChanges,
   EffectRunQuery,
+  IdleRecordCursor,
   LifecycleStore,
   TransitionEntry,
 } from './store.js';
@@ -633,7 +634,7 @@ export class LifecycleRuntime {
         { status: 'queued', attempts: run.attempts },
         {
           status: 'dead',
-          error: `Interrupted on all ${run.attempts} attempt(s); it needs a person to retry it.`,
+          error: `None of its ${run.attempts} attempt(s) recorded an outcome; it needs a person to retry it.`,
           claimedAt: null,
           updatedAt: startedAt,
         },
@@ -767,37 +768,66 @@ export class LifecycleRuntime {
     // Recording the outcome and firing what follows it commit together: a
     // stop between the two would otherwise leave a succeeded run whose
     // record never moves on.
-    const finished = await this.store.transaction(async (store) => {
-      const recorded = await store.updateEffectRun(
+    let finished: FireResult | null | undefined;
+    try {
+      finished = await this.store.transaction(async (store) => {
+        const recorded = await store.updateEffectRun(
+          runId,
+          { status: 'running', attempts: attempt },
+          changes,
+        );
+        if (!recorded) return undefined;
+        if (next === undefined) return null;
+        try {
+          return await this.decide(
+            store,
+            registered,
+            run.recordId,
+            next,
+            { actor: SYSTEM_ACTOR, input },
+            this.clock(),
+          );
+        } catch (error) {
+          // The record has moved on, or the guard refuses: the outcome is
+          // still recorded, and nothing follows from it. decide() writes
+          // nothing before it refuses, so the transaction stays whole.
+          // Anything else, a conflict included, rolls the attempt back so
+          // it runs again rather than losing what should follow.
+          if (!isRefusal(error, MOVED_ON)) throw error;
+          this.logger.warn(
+            `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
+            { runId },
+          );
+          return null;
+        }
+      });
+    } catch (error) {
+      // Nothing of the outcome stuck. Put the attempt back in the queue now,
+      // after a backoff, rather than leaving it claimed until a lease expires
+      // and someone calls reclaim(); the run stays claimed only when even
+      // this write fails, and then reclaim() takes it back.
+      const runAfter = new Date(
+        this.clock().getTime() + backoffMs(effect.retry, attempt),
+      ).toISOString();
+      const requeued = await this.store.updateEffectRun(
         runId,
         { status: 'running', attempts: attempt },
-        changes,
+        {
+          status: 'queued',
+          error: `Its outcome could not be recorded: ${errorText(error)}`,
+          claimedAt: null,
+          runAfter,
+          updatedAt: this.clock().toISOString(),
+        },
       );
-      if (!recorded) return undefined;
-      if (next === undefined) return null;
-      try {
-        return await this.decide(
-          store,
-          registered,
-          run.recordId,
-          next,
-          { actor: SYSTEM_ACTOR, input },
-          this.clock(),
-        );
-      } catch (error) {
-        // The record has moved on, or the guard refuses: the outcome is
-        // still recorded, and nothing follows from it. decide() writes
-        // nothing before it refuses, so the transaction stays whole.
-        // Anything else, a conflict included, rolls the attempt back so
-        // recover() runs it again rather than losing what should follow.
-        if (!isRefusal(error, MOVED_ON)) throw error;
-        this.logger.warn(
-          `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
-          { runId },
-        );
-        return null;
-      }
-    });
+      if (!requeued) throw error;
+      this.logger.warn(
+        `Effect "${effect.name}" ran, but its outcome could not be recorded; attempt ${attempt} is queued again.`,
+        { runId, error },
+      );
+      await this.handOver(runId, runAfter);
+      return this.store.findEffectRun(runId);
+    }
     if (finished === undefined) this.discarded(effect.name, runId, attempt);
     else if (finished) {
       await this.emit(registered, finished, SYSTEM_ACTOR);
@@ -830,10 +860,11 @@ export class LifecycleRuntime {
   }
 
   /**
-   * Runs a failed, dead or cancelled run again from its first attempt —
-   * once whatever made it fail is fixed. Its earlier `onFailure` stays fired;
-   * if it now succeeds, its `onSuccess` is refused should the record have
-   * moved on.
+   * Runs a failed, dead or cancelled run again, with a fresh budget of
+   * attempts — once whatever made it fail is fixed. Its earlier `onFailure`
+   * stays fired; if it now succeeds, its `onSuccess` is refused should the
+   * record have moved on. The attempt count goes on from where it was: an
+   * earlier attempt still finishing somewhere cannot pass for a new one.
    */
   public async retryRun(runId: string): Promise<EffectRun | undefined> {
     const run = await this.store.findEffectRun(runId);
@@ -847,12 +878,21 @@ export class LifecycleRuntime {
         'INVALID_STATE',
         `Effect run "${runId}" is ${run.status}; only a failed, dead or cancelled run can be retried.`,
       );
+    const effect = this.lifecycles
+      .get(run.lifecycle)
+      ?.lifecycle.effects.get(run.effect);
+    if (!effect)
+      throw new LifecycleError(
+        'UNKNOWN_EFFECT',
+        `Effect run "${runId}" names "${run.lifecycle}/${run.effect}", which is not registered here.`,
+      );
     const reset = await this.store.updateEffectRun(
       runId,
       { status: run.status, attempts: run.attempts },
       {
         status: 'queued',
-        attempts: 0,
+        maxAttempts: run.attempts + (effect.retry?.attempts ?? 1),
+        error: null,
         claimedAt: null,
         runAfter: null,
         updatedAt: this.clock().toISOString(),
@@ -906,7 +946,9 @@ export class LifecycleRuntime {
    * Fires every trigger whose records have waited long enough. Run it on a
    * schedule; it is safe to run on several instances at once, because each
    * transition is a conditional update and a record moved by one sweep is
-   * refused by the other.
+   * refused by the other. A trigger fires at most `batchSize` transitions
+   * per sweep; records its guard refuses stay idle and are paged past, so
+   * they cannot keep the records behind them from being reached.
    */
   public async runTriggers(): Promise<number> {
     let fired = 0;
@@ -919,35 +961,59 @@ export class LifecycleRuntime {
         const changedBefore = new Date(
           this.clock().getTime() - trigger.definition.after(parameters),
         ).toISOString();
-        const records = await this.store.findIdleRecords(lifecycle.collection, {
-          stateField: lifecycle.stateField,
-          states: trigger.when,
-          changedAtField: lifecycle.changedAtField,
-          changedBefore,
-          limit: trigger.batchSize,
-        });
-        for (const record of records) {
-          try {
-            // The record must still be idle when the transition is
-            // decided: another sweep may have moved it since this one read it.
-            await this.fire(lifecycle.name, record.id, trigger.transition, {
-              actor: SYSTEM_ACTOR,
-              expect: { changedBefore },
-            });
-            fired += 1;
-          } catch (error) {
-            // Another sweep or a person got there first, or the guard said
-            // no: the record is no longer this trigger's business.
-            if (isRefusal(error, RACED)) continue;
-            // A broken definition or a failing store: keep sweeping the
-            // other records, then report it rather than look idle forever.
-            this.logger.error(
-              `Trigger "${trigger.name}" could not fire "${trigger.transition}" on ${lifecycle.collection} record "${String(record.id)}"`,
-              { error },
-            );
-            failures.push(error);
+        let after: IdleRecordCursor | undefined;
+        let firedHere = 0;
+        while (firedHere < trigger.batchSize) {
+          const records = await this.store.findIdleRecords(
+            lifecycle.collection,
+            {
+              stateField: lifecycle.stateField,
+              states: trigger.when,
+              changedAtField: lifecycle.changedAtField,
+              changedBefore,
+              limit: trigger.batchSize,
+              ...(after ? { after } : {}),
+            },
+          );
+          for (const record of records) {
+            if (firedHere >= trigger.batchSize) break;
+            try {
+              // The record must still be idle when the transition is
+              // decided: another sweep may have moved it since this one read it.
+              await this.fire(lifecycle.name, record.id, trigger.transition, {
+                actor: SYSTEM_ACTOR,
+                expect: { changedBefore },
+              });
+              firedHere += 1;
+            } catch (error) {
+              // Another sweep or a person got there first, or the guard said
+              // no: the record is no longer this trigger's business.
+              if (isRefusal(error, RACED)) continue;
+              // A broken definition or a failing store: keep sweeping the
+              // other records, then report it rather than look idle forever.
+              this.logger.error(
+                `Trigger "${trigger.name}" could not fire "${trigger.transition}" on ${lifecycle.collection} record "${String(record.id)}"`,
+                { error },
+              );
+              failures.push(error);
+            }
           }
+          const last = records.at(-1);
+          if (records.length < trigger.batchSize || !last) break;
+          const next: IdleRecordCursor = {
+            changedAt: String(last[lifecycle.changedAtField]),
+            id: last.id,
+          };
+          // A store that ignores the cursor would hand back the same page forever.
+          if (
+            after &&
+            after.changedAt === next.changedAt &&
+            after.id === next.id
+          )
+            break;
+          after = next;
         }
+        fired += firedHere;
       }
     }
     if (failures.length === 1) throw failures[0];
@@ -960,29 +1026,50 @@ export class LifecycleRuntime {
   }
 
   /**
+   * Takes back every attempt whose lease has expired — its process stopped,
+   * or stalled past `leaseMs` — and hands it over again. Run it on the same
+   * schedule as `runTriggers()`: a run left claimed is otherwise only noticed
+   * when a process starts. Returns how many it took back.
+   */
+  public async reclaim(): Promise<number> {
+    const taken = await this.takeBackStale();
+    for (const run of taken) await this.handOver(run.id, null);
+    return taken.length;
+  }
+
+  /**
    * Hands over again every queued run, and takes back every attempt whose
    * process stopped answering. Call it once a process starts.
    */
   public async recover(): Promise<number> {
+    await this.takeBackStale();
+    const queued = await this.store.listEffectRuns({ status: 'queued' });
+    for (const run of queued) await this.handOver(run.id, run.runAfter);
+    return queued.length;
+  }
+
+  private async takeBackStale(): Promise<EffectRun[]> {
     const now = this.clock();
     const stale = await this.store.listEffectRuns({
       status: 'running',
       claimedBefore: new Date(now.getTime() - this.leaseMs).toISOString(),
     });
+    const taken: EffectRun[] = [];
     for (const run of stale)
-      await this.store.updateEffectRun(
-        run.id,
-        { status: 'running', attempts: run.attempts },
-        {
-          status: 'queued',
-          error: 'The attempt was interrupted and will run again.',
-          claimedAt: null,
-          updatedAt: now.toISOString(),
-        },
-      );
-    const queued = await this.store.listEffectRuns({ status: 'queued' });
-    for (const run of queued) await this.handOver(run.id, run.runAfter);
-    return queued.length;
+      if (
+        await this.store.updateEffectRun(
+          run.id,
+          { status: 'running', attempts: run.attempts },
+          {
+            status: 'queued',
+            error: 'The attempt was interrupted and will run again.',
+            claimedAt: null,
+            updatedAt: now.toISOString(),
+          },
+        )
+      )
+        taken.push(run);
+    return taken;
   }
 
   private get(name: string): Registered {

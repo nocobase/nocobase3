@@ -26,6 +26,10 @@
     "./react": {
       "types": "./src/react.ts",
       "import": "./src/react.ts"
+    },
+    "./jobs": {
+      "types": "./src/jobs.ts",
+      "import": "./src/jobs.ts"
     }
   },
   "files": [
@@ -48,6 +52,10 @@
       "./react": {
         "types": "./dist/react.d.ts",
         "import": "./dist/react.js"
+      },
+      "./jobs": {
+        "types": "./dist/jobs.d.ts",
+        "import": "./dist/jobs.js"
       }
     },
     "access": "public"
@@ -65,12 +73,14 @@
   },
   "peerDependencies": {
     "@nocobase/db": "workspace:^",
+    "@nocobase/jobs": "workspace:^",
     "hono": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/jobs": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
@@ -90,6 +100,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "@nocobase/jobs": {
       "optional": true
     }
   }

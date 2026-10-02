@@ -2,19 +2,18 @@ import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
-import type { JobClass, JobExecutor, ScheduleExecutor } from '@nocobase/jobs';
 import {
   createRepositoryLifecycleStore,
   LifecycleRuntime,
 } from '@nocobase/lifecycle';
+import {
+  createLifecycleJobs,
+  type LifecycleJobs,
+} from '@nocobase/lifecycle/jobs';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { registerLifecycles } from '../lifecycles/index.js';
 import { COLLECTIONS, OFFICE_FLOWS_SCOPE } from '../scope.js';
-import {
-  createEffectJob,
-  type EffectJobPayload,
-} from '../services/effect-job.js';
 import { OfficeFlowsService } from '../services/office-flows.js';
 import { OfficeStore } from '../services/store.js';
 import { officeFlowsServiceToken } from '../tokens.js';
@@ -23,17 +22,15 @@ import { officeFlowsServiceToken } from '../tokens.js';
 export const SWEEP_MS: number = 60_000;
 
 /**
- * Wires the six lifecycles to the application: effects on a JobExecutor,
- * and one ScheduleExecutor rule that creates the extraction tasks falling
- * due. A real deployment would sweep once a day; the example sweeps every
- * minute so a new request shows its first task without waiting.
+ * Wires the six lifecycles to the application through `createLifecycleJobs()`:
+ * effects as jobs on a JobExecutor, and one ScheduleExecutor rule that sweeps
+ * the triggers and creates the extraction tasks falling due. A real
+ * deployment would sweep once a day; the example sweeps every minute so a new
+ * request shows its first task without waiting.
  */
 export class OfficeFlowsProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = OFFICE_FLOWS_SCOPE;
-  private jobs: JobExecutor | undefined;
-  private schedule: ScheduleExecutor | undefined;
-  private effectJob: JobClass<EffectJobPayload> | undefined;
-  private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+  private jobs: LifecycleJobs | undefined;
   private runtime: LifecycleRuntime | undefined;
 
   public override register(): void {
@@ -48,37 +45,10 @@ export class OfficeFlowsProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override async start(): Promise<void> {
-    const runtime = this.lifecycleRuntime();
-    const service = this.app.container.resolve(officeFlowsServiceToken);
-    const executors = this.app.container.resolve(jobExecutorServiceToken);
-
-    const jobs = executors.getJobExecutor(OFFICE_FLOWS_SCOPE);
-    this.effectJob = createEffectJob(runtime);
-    jobs.registerJob(this.effectJob);
-    await jobs.setup();
-    this.jobs = jobs;
-
-    const schedule = executors.getScheduleExecutor(OFFICE_FLOWS_SCOPE);
-    await schedule.addJob({
-      name: 'sweep',
-      options: { every: SWEEP_MS },
-      payload: {},
-      execute: async () => {
-        await service.runSchedule();
-        await runtime.runTriggers();
-      },
-    });
-    await schedule.setup();
-    this.schedule = schedule;
-
-    await runtime.recover();
+    await this.effectJobs().start(this.lifecycleRuntime());
   }
 
   public override async shutdown(): Promise<void> {
-    for (const timer of this.timers) clearTimeout(timer);
-    this.timers.clear();
-    await this.schedule?.shutdown();
-    this.schedule = undefined;
     await this.jobs?.shutdown();
     this.jobs = undefined;
   }
@@ -96,9 +66,7 @@ export class OfficeFlowsProvider extends ServiceProvider<AppPluginApplication> {
           effectRuns: COLLECTIONS.effectRuns,
         },
       }),
-      dispatcher: {
-        dispatch: (runId, { runAfter }) => this.dispatch(runId, runAfter),
-      },
+      dispatcher: this.effectJobs(),
       logger: {
         warn: (message, details) => logger.warn({ details }, message),
         error: (message, details) => logger.error({ details }, message),
@@ -109,25 +77,31 @@ export class OfficeFlowsProvider extends ServiceProvider<AppPluginApplication> {
     return runtime;
   }
 
-  /** The JobExecutor has no delay, so a retry with backoff waits here first. */
-  private async dispatch(
-    runId: string,
-    runAfter: string | null,
-  ): Promise<void> {
-    const delay = runAfter === null ? 0 : Date.parse(runAfter) - Date.now();
-    if (delay > 0) {
-      const timer = setTimeout(() => {
-        this.timers.delete(timer);
-        void this.dispatch(runId, null);
-      }, delay);
-      timer.unref();
-      this.timers.add(timer);
-      return;
-    }
-    const jobs = this.jobs;
-    const EffectJob = this.effectJob;
-    if (!jobs || !EffectJob)
-      throw new Error('The office flows example has not started.');
-    await jobs.addJob(new EffectJob({ effectRunId: runId }));
+  /** The dispatcher, created before the runtime that uses it. */
+  private effectJobs(): LifecycleJobs {
+    if (this.jobs) return this.jobs;
+    const executors = this.app.container.resolve(jobExecutorServiceToken);
+    const logger = this.app.container
+      .resolve(loggingToken)
+      .getLogger('office-flows-example');
+    this.jobs = createLifecycleJobs({
+      jobs: executors.getJobExecutor(OFFICE_FLOWS_SCOPE),
+      schedule: executors.getScheduleExecutor(OFFICE_FLOWS_SCOPE),
+      // Stored with every queued task: keep it stable.
+      jobName: `${OFFICE_FLOWS_SCOPE}/effect`,
+      sweepName: 'sweep',
+      sweepEveryMs: SWEEP_MS,
+      // The extraction tasks due today, after the triggers have run.
+      onSweep: () =>
+        this.app.container
+          .resolve(officeFlowsServiceToken)
+          .runSchedule()
+          .then(() => undefined),
+      logger: {
+        warn: (message, details) => logger.warn({ details }, message),
+        error: (message, details) => logger.error({ details }, message),
+      },
+    });
+    return this.jobs;
   }
 }

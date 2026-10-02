@@ -239,7 +239,10 @@ export class OfficeFlowsService {
   private async require(collection: string, id: unknown): Promise<Plain> {
     const record = await this.store.find(collection, id);
     if (!record)
-      throw new OfficeFlowsError('NOT_FOUND', `记录 ${text(id)} 不存在`);
+      throw new OfficeFlowsError(
+        'NOT_FOUND',
+        `Record "${text(id)}" does not exist.`,
+      );
     return record;
   }
 
@@ -252,9 +255,15 @@ export class OfficeFlowsService {
   ): Promise<void> {
     const record = await this.require(collection, id);
     if (!EDITABLE_STATES[name].includes(text(record.status)))
-      throw new OfficeFlowsError('INVALID', '当前环节不能修改');
+      throw new OfficeFlowsError(
+        'INVALID',
+        'The record cannot be edited at this step.',
+      );
     if (!allowed(record))
-      throw new OfficeFlowsError('FORBIDDEN', '当前角色不能修改');
+      throw new OfficeFlowsError(
+        'FORBIDDEN',
+        'The current role cannot edit this record.',
+      );
     if (!Object.keys(values).length) return;
     // The status and its timestamp are never in `values`: only fire() writes
     // them. The edit was authorized for the record as read, so it applies
@@ -270,7 +279,10 @@ export class OfficeFlowsService {
         values: values as RepositoryRecord,
       });
     if (!updatedCount)
-      throw new OfficeFlowsError('CONFLICT', '记录已被他人处理，请刷新后重试');
+      throw new OfficeFlowsError(
+        'CONFLICT',
+        'Someone else changed the record; reload and try again.',
+      );
   }
 
   // ── Data usage requests ────────────────────────────────────────────────
@@ -284,7 +296,10 @@ export class OfficeFlowsService {
     actor: string,
   ): Promise<Plain> {
     if (actor !== DATA_REQUEST_ROLES.applicant)
-      throw new OfficeFlowsError('FORBIDDEN', '只有申请人可以新建申请');
+      throw new OfficeFlowsError(
+        'FORBIDDEN',
+        'Only the applicant can create a request.',
+      );
     // Created through the lifecycle: the request's history starts here.
     const number = await this.store.nextNumber('SJSY');
     const { record } = await this.runtime.create(
@@ -363,16 +378,17 @@ export class OfficeFlowsService {
     if (request.status !== 'accepting' || actor !== DATA_REQUEST_ROLES.acceptor)
       throw new OfficeFlowsError(
         'FORBIDDEN',
-        '只有抽数受理环节可以创建抽数子流程',
+        'Only the acceptor can create an extraction task, and only while the request is in acceptance.',
       );
     if (!values.topic.trim() || !isDate(values.scheduledDate))
-      throw new OfficeFlowsError('INVALID', '请填写抽数任务主题和首抽时间');
-    const count = await this.database
-      .repository(COLLECTIONS.extractions)
-      .count({ filter: { requestId: idOf(id), origin: 'manual' } });
-    await this.store.createExtraction({
+      throw new OfficeFlowsError(
+        'INVALID',
+        'Give the extraction task a topic and a first extraction date.',
+      );
+    // A manual task has no period: its key is the number it is given, so
+    // two created at once cannot collide on a count read beforehand.
+    const created = await this.store.createExtraction({
       requestId: idOf(id),
-      periodKey: `manual-${count + 1}`,
       origin: 'manual',
       scheduledDate: values.scheduledDate,
       topic: values.topic.trim(),
@@ -381,6 +397,11 @@ export class OfficeFlowsService {
         ? values.executorIds
         : DATA_REQUEST_ROLES.executors,
     });
+    if (!created)
+      throw new OfficeFlowsError(
+        'CONFLICT',
+        'The request left acceptance before the task was created; reload and try again.',
+      );
   }
 
   /**
@@ -461,7 +482,10 @@ export class OfficeFlowsService {
 
   public async createIncoming(values: Plain, actor: string): Promise<Plain> {
     if (actor !== INCOMING_ROLES.registrar)
-      throw new OfficeFlowsError('FORBIDDEN', '只有办公室收文员可以录入收文');
+      throw new OfficeFlowsError(
+        'FORBIDDEN',
+        'Only the office registrar can record an incoming document.',
+      );
     // Created through the lifecycle: the document's history starts here.
     const number = await this.store.nextNumber('SWSQ');
     const { record } = await this.runtime.create(
@@ -539,11 +563,15 @@ export class OfficeFlowsService {
   ): Promise<number> {
     const parent = await this.rowParent(parentKind, parentId, actor);
     if (!input.includeClerks)
-      throw new OfficeFlowsError('INVALID', '必须勾选办事人员');
+      throw new OfficeFlowsError('INVALID', 'A row must include the clerks.');
     const department = await this.database
       .repository(COLLECTIONS.departments)
       .findOne({ filter: { name: input.departmentName } });
-    if (!department) throw new OfficeFlowsError('INVALID', '请选择分发部门');
+    if (!department)
+      throw new OfficeFlowsError(
+        'INVALID',
+        'Choose a department to distribute to.',
+      );
     // A clerk task's "派发其他部门协助" row goes to the root document's own
     // rows, at the clerk level, rather than to this task's execution team.
     const assist = parentKind === 'clerk' && input.assistOther === true;
@@ -585,9 +613,15 @@ export class OfficeFlowsService {
   public async removeRow(rowId: string, actor: string): Promise<void> {
     const row = await this.require(COLLECTIONS.assignments, rowId);
     if (row.dispatched)
-      throw new OfficeFlowsError('INVALID', '已派发的行不能删除');
+      throw new OfficeFlowsError(
+        'INVALID',
+        'A row that has been dispatched cannot be removed.',
+      );
     if (row.createdBy !== actor)
-      throw new OfficeFlowsError('FORBIDDEN', '只能删除自己添加的行');
+      throw new OfficeFlowsError(
+        'FORBIDDEN',
+        'Only the person who added a row can remove it.',
+      );
     await this.database
       .repository(COLLECTIONS.assignments)
       .deleteMany({ filter: { id: idOf(rowId), dispatched: false } });
@@ -602,7 +636,7 @@ export class OfficeFlowsService {
     if (record.status !== 'dispatching' || record.registrarId !== actor)
       throw new OfficeFlowsError(
         'FORBIDDEN',
-        '只有派发环节的收文员可以添加管理层',
+        'Only the registrar can add management groups, and only while the document is being dispatched.',
       );
     let groupName = (input.groupName ?? '').trim();
     let members = (input.members ?? []).filter((person) =>
@@ -619,7 +653,10 @@ export class OfficeFlowsService {
       fromConfig = true;
     }
     if (!groupName || !members.length)
-      throw new OfficeFlowsError('INVALID', '请填写群组并选择抄送人员');
+      throw new OfficeFlowsError(
+        'INVALID',
+        'Name the group and choose who to copy.',
+      );
     await this.database.repository(COLLECTIONS.managementCc).createOne({
       values: {
         incomingId: idOf(incomingId),
@@ -636,9 +673,15 @@ export class OfficeFlowsService {
     const row = await this.require(COLLECTIONS.managementCc, rowId);
     const record = await this.require(COLLECTIONS.incoming, row.incomingId);
     if (row.forwarded)
-      throw new OfficeFlowsError('INVALID', '已转发的行不能删除');
+      throw new OfficeFlowsError(
+        'INVALID',
+        'A row that has been forwarded cannot be removed.',
+      );
     if (record.registrarId !== actor)
-      throw new OfficeFlowsError('FORBIDDEN', '当前角色不能删除');
+      throw new OfficeFlowsError(
+        'FORBIDDEN',
+        'The current role cannot remove this row.',
+      );
     await this.database
       .repository(COLLECTIONS.managementCc)
       .deleteMany({ filter: { id: idOf(rowId), forwarded: false } });
@@ -777,14 +820,17 @@ export class OfficeFlowsService {
       if (record.status !== 'dispatching' || record.registrarId !== actor)
         throw new OfficeFlowsError(
           'FORBIDDEN',
-          '只有派发环节的收文员可以添加办事人员',
+          'Only the registrar can add rows, and only while the document is being dispatched.',
         );
       return { ...record, rootId: record.id };
     }
     const record = await this.require(TASK_COLLECTIONS[parentKind], parentId);
     const open = parentKind === 'clerk' ? 'reviewing' : 'processing';
     if (record.status !== open || !people(record.assignees).includes(actor))
-      throw new OfficeFlowsError('FORBIDDEN', '只有处理中的办事人员可以添加行');
+      throw new OfficeFlowsError(
+        'FORBIDDEN',
+        'Only an assignee of a task in progress can add rows.',
+      );
     return record;
   }
 

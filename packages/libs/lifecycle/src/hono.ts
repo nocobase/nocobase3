@@ -39,10 +39,14 @@ export interface LifecycleRoutesOptions {
   readonly lifecycles?: readonly string[];
 }
 
-const STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
+/** The HTTP status each refusal answers with; a plugin's own routes map the same way. */
+export const LIFECYCLE_ERROR_STATUS: Readonly<
+  Record<LifecycleErrorCode, ContentfulStatusCode>
+> = Object.freeze({
   INVALID_DEFINITION: 500,
   UNKNOWN_LIFECYCLE: 404,
   UNKNOWN_TRANSITION: 404,
+  UNKNOWN_EFFECT: 404,
   RECORD_NOT_FOUND: 404,
   GUARD_REJECTED: 403,
   INVALID_STATE: 409,
@@ -50,7 +54,7 @@ const STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
   INVALID_INPUT: 400,
   INVALID_ROUTE: 400,
   INVALID_SET: 400,
-};
+});
 
 class Refusal extends Error {
   public constructor(
@@ -125,7 +129,7 @@ export function createLifecycleRoutes(
           blockers: error.blockers,
           problems: error.problems,
         },
-        STATUS[error.code],
+        LIFECYCLE_ERROR_STATUS[error.code],
       );
     if (error instanceof Refusal)
       return context.json(

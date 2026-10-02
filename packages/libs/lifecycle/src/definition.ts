@@ -56,7 +56,7 @@ export interface EffectContext<T extends LifecycleTypes> {
   /** Null for the entry `runtime.create()` writes. */
   readonly from: T['state'] | null;
   readonly to: T['state'];
-  /** 1 on the first try. */
+  /** 1 on the first try; an operator's retry counts on from the attempts before it. */
   readonly attempt: number;
   /** The same on every attempt of this effect run: key external calls by it. */
   readonly idempotencyKey: string;

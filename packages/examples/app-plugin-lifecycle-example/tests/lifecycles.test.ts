@@ -233,7 +233,7 @@ describe('expense report', () => {
       expenses.fire(created, 'submit', {}, { actor: 'lin' }),
     ).rejects.toMatchObject({
       code: 'INVALID_INPUT',
-      message: expect.stringContaining('至少填写一条费用明细'),
+      message: expect.stringContaining('at least one expense line'),
     });
   });
 
@@ -372,7 +372,7 @@ describe('expense items', () => {
     expect(isCalendarDate('2026-02-31')).toBe(false);
     expect(itemProblems([item])).toEqual([]);
     expect(itemProblems([{ ...item, date: '2026-02-31' }])).toEqual([
-      '第 1 行日期无效',
+      'Line 1: the date is invalid.',
     ]);
   });
 });

@@ -214,46 +214,75 @@ export class OfficeStore {
   }
 
   /**
-   * Creates the extraction task for one period of a request unless it
-   * exists; the (request, period) key is unique, so a repeated sweep or a
-   * retried effect creates nothing twice.
+   * Creates an extraction task for a request in acceptance, unless the
+   * period already has one: the (request, period) key is unique, so a
+   * repeated sweep or a retried effect creates nothing twice. A manual task
+   * has no period and takes its number as its key. Returns nothing when the
+   * task exists or the request has left acceptance.
+   *
+   * The insert and the request's acceptance are decided together: the task's
+   * transaction first bumps the request's `lifecycleVersion` while it is
+   * still `accepting`, which locks the row against a `complete` deciding at
+   * the same time and makes the one that commits second meet a conflict.
+   * The version belongs to the lifecycle, and this is why it is touched from
+   * outside it: a transition that counted the request's tasks must not
+   * commit over a task it did not see.
    */
   public async createExtraction(values: {
     readonly requestId: number;
-    readonly periodKey: string;
+    readonly periodKey?: string;
     readonly origin: 'scheduled' | 'once' | 'manual';
     readonly scheduledDate: string;
     readonly topic: string;
     readonly requirement: string;
     readonly executorIds: readonly string[];
   }): Promise<Plain | undefined> {
-    const existing = await this.repository(COLLECTIONS.extractions).findOne({
-      filter: { requestId: values.requestId, periodKey: values.periodKey },
-    });
-    if (existing) return undefined;
+    const { periodKey } = values;
+    const existing = async (
+      repository: Repository,
+    ): Promise<Row | undefined> =>
+      periodKey === undefined
+        ? undefined
+        : repository.findOne({
+            filter: { requestId: values.requestId, periodKey },
+          });
+    if (await existing(this.repository(COLLECTIONS.extractions)))
+      return undefined;
+    // Numbered before the transaction: SQLite has one connection, and a
+    // read outside the transaction would wait for it.
+    const number = await this.nextNumber('SJSY_CS');
     const now = this.now();
-    try {
-      const created = await this.repository(COLLECTIONS.extractions).createOne({
-        values: {
-          ...values,
-          executorIds: [...values.executorIds],
-          feedbackFiles: [],
-          number: await this.nextNumber('SJSY_CS'),
-          status: 'pending',
-          statusChangedAt: now,
-          lifecycleVersion: 0,
-          createdAt: now,
-        },
-      });
-      return plain(created.record);
-    } catch (error) {
-      // Another sweep created it between the read and the insert.
-      const raced = await this.repository(COLLECTIONS.extractions).findOne({
-        filter: { requestId: values.requestId, periodKey: values.periodKey },
-      });
-      if (raced) return undefined;
-      throw error;
-    }
+    return this.transaction(async (connection) => {
+      const accepting = await connection
+        .repository(COLLECTIONS.dataRequests)
+        .updateMany({
+          filter: { id: values.requestId, status: 'accepting' },
+          values: { lifecycleVersion: { increment: 1 } },
+        });
+      if (accepting.updatedCount === 0) return undefined;
+      const extractions = connection.repository(COLLECTIONS.extractions);
+      if (await existing(extractions)) return undefined;
+      try {
+        const created = await extractions.createOne({
+          values: {
+            ...values,
+            periodKey: periodKey ?? `manual:${number}`,
+            executorIds: [...values.executorIds],
+            feedbackFiles: [],
+            number,
+            status: 'pending',
+            statusChangedAt: now,
+            lifecycleVersion: 0,
+            createdAt: now,
+          },
+        });
+        return plain(created.record);
+      } catch (error) {
+        // Another sweep created it between the read and the insert.
+        if (await existing(extractions)) return undefined;
+        throw error;
+      }
+    });
   }
 
   /**
