@@ -78,6 +78,12 @@ Other code can veto transitions without touching the definition: `runtime.addGua
 
 `listEffectRuns(query)` lists runs by lifecycle, record, effect and status, each saying whether this process knows its effect; a run naming an effect no registered lifecycle declares stays queued, because in a rolling deploy another process may know it. `retryRun(id)` runs a failed, dead or cancelled run again from its first attempt; `cancelRun(id)` gives up on a queued or running one, aborting an attempt in this process and discarding the outcome of one elsewhere. `prune({ olderThan })` deletes succeeded and cancelled runs last changed before then.
 
+## Routes and a React hook
+
+Every page that shows a lifecycle record needs the same requests, so the library provides them. `@nocobase/lifecycle/hono` exports `createLifecycleRoutes(runtime, { actor, authorize, lifecycles })`, a Hono app a plugin mounts under its own path: `GET /:lifecycle` answers the description, parameters and Mermaid diagram; `GET /:lifecycle/:id` the record, its state and version, what the actor may do and why not, and its history; `POST /:lifecycle/:id/fire` takes `{ transition, input, requestId, expectVersion }`; and `POST /:lifecycle/:id/runs/:runId/retry` and `/cancel` are for operators. `actor` says who the request acts as and `authorize` judges `describe`, `read`, `fire` and `operate` beyond the lifecycle's own guards — `operate` is refused unless it allows it. Lists and creation stay with the plugin, which knows its queries and its forms.
+
+`@nocobase/lifecycle/react` exports `createLifecycleClient({ transport, basePath, query })` and `useLifecycle(client, lifecycle, id)`. The transport is anything with `request({ method, path, query, json })`, which an application's API client already is, so the entry depends on nothing but React. The hook loads the record and its description, refreshes it while effects finish, and `fire(transition, input)` sends a fresh request key and the version on screen, then shows the record as the transition left it; a refusal rejects with a `LifecycleRequestError` carrying its blockers or problems. `hono` and `react` are optional peers: a package uses only the entry it imports.
+
 ## Testing a lifecycle
 
 `@nocobase/lifecycle/testing` runs one lifecycle on a memory store, a fake clock and in-process effects, so waiting, retrying and continuing are unit tests:

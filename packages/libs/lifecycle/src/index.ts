@@ -55,6 +55,7 @@ export {
   type LifecycleRuntimeOptions,
   type PruneOptions,
   type RecordHistory,
+  type RecordView,
   type RegisterOptions,
   type ServicesSource,
   type TransitionCheck,

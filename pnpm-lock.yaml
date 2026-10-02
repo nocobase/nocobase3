@@ -2651,15 +2651,39 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.4(@types/react@19.2.18)
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.3.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.8(react@19.2.8)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

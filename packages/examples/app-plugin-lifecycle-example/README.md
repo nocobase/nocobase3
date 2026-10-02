@@ -13,14 +13,16 @@ Each page has a **Signed in as** switch over the example's people — agents and
 
 ## How it is wired
 
-| Concern                | Where                                                                |
-| ---------------------- | -------------------------------------------------------------------- |
-| States and transitions | `server/lifecycles/*.ts`, the only definition of each flow           |
-| Effects                | `server/lifecycles/*.effects.ts`, plain functions                    |
-| Records and the log    | `database/migrations/`, through the Repository store                 |
-| Effect execution       | A `JobExecutor` job per effect run (`server/services/effect-job.ts`) |
-| Triggers               | A `ScheduleExecutor` rule sweeping every 10 seconds                  |
-| Recovery               | `runtime.recover()` once the executors start                         |
+| Concern                | Where                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| States and transitions | `server/lifecycles/*.ts`, the only definition of each flow                                            |
+| Effects                | `server/lifecycles/*.effects.ts`, plain functions                                                     |
+| Records and the log    | `database/migrations/`, through the Repository store                                                  |
+| Effect execution       | A `JobExecutor` job per effect run (`server/services/effect-job.ts`)                                  |
+| Triggers               | A `ScheduleExecutor` rule sweeping every 10 seconds                                                   |
+| Recovery               | `runtime.recover()` once the executors start                                                          |
+| Record routes          | `createLifecycleRoutes()` from `@nocobase/lifecycle/hono`, mounted at `/lifecycle-example/lifecycles` |
+| Record pages           | `useLifecycle()` from `@nocobase/lifecycle/react`, with the API client as transport                   |
 
 ## Testing
 

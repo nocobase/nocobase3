@@ -198,6 +198,19 @@ interface Subscription {
 /** The log entry `runtime.create()` writes, so a record's history starts at its creation. */
 export const CREATE_TRANSITION: string = '$create';
 
+/**
+ * Everything a page needs to show one record and its buttons: the record,
+ * its state and version, what the actor may do and why not, and its history.
+ */
+export interface RecordView {
+  readonly record: LifecycleRecord;
+  readonly state: string;
+  /** Pass it back as `expect.version` so a stale screen is refused. */
+  readonly version: number | null;
+  readonly available: readonly AvailableTransition[];
+  readonly history: RecordHistory;
+}
+
 export interface RecordHistory {
   readonly transitions: readonly TransitionEntry[];
   readonly effectRuns: readonly EffectRun[];
@@ -554,6 +567,29 @@ export class LifecycleRuntime {
     await this.emit(registered, committed, options.actor);
     for (const run of committed.effectRuns) await this.handOver(run.id, null);
     return committed;
+  }
+
+  /** The names of the registered lifecycles. */
+  public names(): string[] {
+    return [...this.lifecycles.keys()];
+  }
+
+  /** One record with what a page shows for it; see {@link RecordView}. */
+  public async view(
+    name: string,
+    id: RecordId,
+    actor: LifecycleActor,
+  ): Promise<RecordView> {
+    const registered = this.get(name);
+    const { lifecycle } = registered;
+    const record = await this.require(registered, id);
+    return {
+      record,
+      state: stateOf(lifecycle, record),
+      version: versionOf(lifecycle, record),
+      available: await this.available(name, id, actor),
+      history: await this.history(name, id),
+    };
   }
 
   public async history(name: string, id: RecordId): Promise<RecordHistory> {

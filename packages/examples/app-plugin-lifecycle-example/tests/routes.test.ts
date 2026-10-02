@@ -4,11 +4,13 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { LifecycleError } from '@nocobase/lifecycle';
+import { LifecycleRuntime, MemoryLifecycleStore } from '@nocobase/lifecycle';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
+import { expenseLifecycle } from '../server/lifecycles/expense.js';
+import { createExampleServices } from '../server/lifecycles/services.js';
 import { apiRoutes } from '../server/routes/index.js';
 import {
   lifecycleExampleServiceToken,
@@ -26,16 +28,30 @@ const deny = {
 } as unknown as Auth;
 
 function application(authentication: Auth) {
-  const detail = {
-    record: { id: 1 },
-    available: [],
-    history: { transitions: [], effectRuns: [] },
-  };
+  // A real runtime on a memory store: the record routes are the library's,
+  // so they are tested against a lifecycle, not a mock.
+  const store = new MemoryLifecycleStore();
+  const runtime = new LifecycleRuntime({ store });
+  runtime.register(expenseLifecycle, {
+    services: createExampleServices({ info: () => undefined }),
+  });
+  store.insertRecord('lifecycleExampleExpenses', {
+    id: 1,
+    title: '上海出差',
+    items: [],
+    amountCents: 800_000,
+    applicantId: 'lin',
+    approverId: 'chen',
+    paymentRef: null,
+    failPayments: 0,
+    status: 'awaitingManager',
+    statusChangedAt: '2026-10-01T09:00:00.000Z',
+    lifecycleVersion: 2,
+  });
   const service = {
-    fire: vi.fn(async () => detail),
+    runtime,
     createExpense: vi.fn(async (values: object) => ({ id: 1, ...values })),
     listTickets: vi.fn(async () => []),
-    detail: vi.fn(async () => detail),
     parameters: vi.fn(() => ({ waitMinutes: 2, reopenDays: 7 })),
   };
   const container = new ServiceContainer();
@@ -85,71 +101,77 @@ describe('lifecycle example routes', () => {
     expect(service.listTickets).toHaveBeenCalledWith('agent-zhou');
   });
 
-  it('fires a transition as one of the lifecycle personas', async () => {
+  it('fires a transition as one of the lifecycle personas through the record routes', async () => {
     const { app, service } = application(allow);
     const router = await apiRoutes.createRouter(app);
     const response = await router.request(
-      post('/lifecycle-example/expenses/1/fire', {
-        transition: 'approve',
-        actAs: 'chen',
-        input: { comment: 'OK' },
+      post('/lifecycle-example/lifecycles/expenses/1/fire?actAs=chen', {
+        transition: 'requestInfo',
+        input: { reason: '请补充行程单' },
         requestId: 'click-1',
+        expectVersion: 2,
       }),
     );
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      state: 'needsInfo',
+      version: 3,
+      replayed: false,
+    });
     // The request key travels with the click, so a retried request fires once.
-    expect(service.fire).toHaveBeenCalledWith(
-      'expenses',
-      '1',
-      'approve',
-      { comment: 'OK' },
-      'chen',
-      'click-1',
+    const again = await router.request(
+      post('/lifecycle-example/lifecycles/expenses/1/fire?actAs=chen', {
+        transition: 'requestInfo',
+        input: { reason: '请补充行程单' },
+        requestId: 'click-1',
+      }),
     );
+    await expect(again.json()).resolves.toMatchObject({ replayed: true });
+    const history = await service.runtime.history('expenses', 1);
+    expect(history.transitions.map((entry) => entry.actorId)).toEqual(['chen']);
   });
 
   it('rejects a persona the lifecycle does not define', async () => {
     const router = await apiRoutes.createRouter(application(allow).app);
     const response = await router.request(
-      post('/lifecycle-example/expenses/1/fire', {
+      post('/lifecycle-example/lifecycles/expenses/1/fire?actAs=mallory', {
         transition: 'approve',
-        actAs: 'mallory',
       }),
     );
     expect(response.status).toBe(400);
   });
 
-  it('maps a refused transition to an HTTP status', async () => {
-    const { app, service } = application(allow);
-    const blocker = {
-      source: 'guard' as const,
-      code: 'GUARD_REJECTED',
-      message: '只有当前审批人可以处理',
-    };
-    service.fire.mockRejectedValueOnce(
-      new LifecycleError('GUARD_REJECTED', blocker.message, {
-        blockers: [blocker],
-      }),
-    );
-    service.fire.mockRejectedValueOnce(
-      new LifecycleError('INVALID_STATE', 'no'),
-    );
-    const router = await apiRoutes.createRouter(app);
-    const body = { transition: 'approve', actAs: 'chen' };
+  it('answers a refused transition with its reasons and status', async () => {
+    const router = await apiRoutes.createRouter(application(allow).app);
     const denied = await router.request(
-      post('/lifecycle-example/expenses/1/fire', body),
-    );
-    const conflict = await router.request(
-      post('/lifecycle-example/expenses/1/fire', body),
+      post('/lifecycle-example/lifecycles/expenses/1/fire?actAs=sun', {
+        transition: 'approve',
+      }),
     );
     expect(denied.status).toBe(403);
     // The page shows why, not only that it was refused.
     await expect(denied.json()).resolves.toMatchObject({
       code: 'GUARD_REJECTED',
       message: '只有当前审批人可以处理',
-      blockers: [blocker],
+      blockers: [{ source: 'guard', message: '只有当前审批人可以处理' }],
     });
-    expect(conflict.status).toBe(409);
+    const stale = await router.request(
+      post('/lifecycle-example/lifecycles/expenses/1/fire?actAs=chen', {
+        transition: 'approve',
+        expectVersion: 1,
+      }),
+    );
+    expect(stale.status).toBe(409);
+    const view = await router.request(
+      '/lifecycle-example/lifecycles/expenses/1?actAs=lin',
+    );
+    await expect(view.json()).resolves.toMatchObject({
+      state: 'awaitingManager',
+      available: expect.arrayContaining([
+        expect.objectContaining({ name: 'withdraw', allowed: true }),
+        expect.objectContaining({ name: 'approve', allowed: false }),
+      ]),
+    });
   });
 
   it('validates a new expense before creating it', async () => {

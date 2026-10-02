@@ -1,73 +1,27 @@
 import type { ApiClient } from '@nocobase/app-client';
+import type {
+  LifecycleDescriptionView,
+  RecordView,
+} from '@nocobase/lifecycle/react';
+
+export type {
+  AvailableTransition as Available,
+  Blocker,
+  EffectRun,
+  TransitionEntry,
+} from '@nocobase/lifecycle/react';
 
 export type Plain = Record<string, unknown>;
 export type LifecycleName = 'tickets' | 'expenses';
 
-export interface TransitionEntry {
-  readonly id: string;
-  readonly transition: string;
-  /** Null on the entry that records the creation. */
-  readonly from: string | null;
-  readonly to: string;
-  readonly actorId: string;
-  readonly input: Plain;
-  readonly at: string;
-}
-
-export interface EffectRun {
-  readonly id: string;
-  readonly transitionId: string;
-  readonly effect: string;
-  readonly status:
-    'queued' | 'running' | 'succeeded' | 'failed' | 'dead' | 'cancelled';
-  readonly attempts: number;
-  readonly maxAttempts: number;
-  readonly result: unknown;
-  readonly error: string | null;
-}
-
-export interface Blocker {
-  readonly source: 'state' | 'guard';
-  readonly code: string;
-  readonly message: string;
-}
-
-export interface Available {
-  readonly name: string;
-  readonly title: string;
-  readonly to: readonly string[];
-  readonly allowed: boolean;
-  /** Why it is not allowed, one entry per guard that refused. */
-  readonly blockers: readonly Blocker[];
-}
-
 /** The transition name of the log entry that records a creation. */
 export const CREATE_TRANSITION = '$create';
 
-/** Mirrors the server's `RecordDetail`; the client imports no server code. */
-export interface RecordDetail {
-  readonly record: Plain;
-  readonly available: readonly Available[];
-  readonly history: {
-    readonly transitions: readonly TransitionEntry[];
-    readonly effectRuns: readonly EffectRun[];
-  };
-  readonly description: {
-    readonly states: readonly string[];
-    readonly transitions: readonly {
-      readonly name: string;
-      readonly title: string;
-    }[];
-    readonly triggers: readonly {
-      readonly name: string;
-      readonly transition: string;
-      readonly when: readonly string[];
-    }[];
-  };
-  readonly parameters: Readonly<Record<string, unknown>>;
-  /** The lifecycle as Mermaid source. */
-  readonly diagram: string;
-}
+/** Where the plugin mounts the library's record routes. */
+export const LIFECYCLE_ROUTES = 'lifecycle-example/lifecycles';
+
+/** One record as a page shows it: the library's view and its lifecycle's description. */
+export type RecordDetail = RecordView & LifecycleDescriptionView;
 
 export interface RecordList {
   readonly records: readonly Plain[];
@@ -76,9 +30,9 @@ export interface RecordList {
 
 const base = 'lifecycle-example';
 
+/** The plugin's own routes: lists and forms. A record's view and its transitions go through `useExampleRecord`. */
 export function exampleApi(client: ApiClient): {
   list(name: LifecycleName, actAs: string, view?: string): Promise<RecordList>;
-  detail(name: LifecycleName, id: string, actAs: string): Promise<RecordDetail>;
   create(name: LifecycleName, actAs: string, values: Plain): Promise<Plain>;
   update(
     name: LifecycleName,
@@ -86,27 +40,13 @@ export function exampleApi(client: ApiClient): {
     actAs: string,
     values: Plain,
   ): Promise<void>;
-  fire(
-    name: LifecycleName,
-    id: string,
-    actAs: string,
-    transition: string,
-    input?: Plain,
-  ): Promise<RecordDetail>;
   runTriggers(): Promise<number>;
-  retryRun(runId: string): Promise<void>;
-  cancelRun(runId: string): Promise<void>;
 } {
   return {
     list: (name, actAs, view) =>
       client.request<RecordList>({
         path: `${base}/${name}`,
         query: { actAs, ...(view ? { view } : {}) },
-      }),
-    detail: (name, id, actAs) =>
-      client.request<RecordDetail>({
-        path: `${base}/${name}/${encodeURIComponent(id)}`,
-        query: { actAs },
       }),
     create: (name, actAs, values) =>
       client.request<Plain>({
@@ -119,25 +59,6 @@ export function exampleApi(client: ApiClient): {
         method: 'PUT',
         path: `${base}/${name}/${encodeURIComponent(id)}`,
         json: { ...values, actAs },
-      });
-    },
-    fire: (name, id, actAs, transition, input = {}) =>
-      client.request<RecordDetail>({
-        method: 'POST',
-        path: `${base}/${name}/${encodeURIComponent(id)}/fire`,
-        // One key per click: a request the network retries fires once.
-        json: { actAs, transition, input, requestId: crypto.randomUUID() },
-      }),
-    retryRun: async (runId) => {
-      await client.request({
-        method: 'POST',
-        path: `${base}/effect-runs/${encodeURIComponent(runId)}/retry`,
-      });
-    },
-    cancelRun: async (runId) => {
-      await client.request({
-        method: 'POST',
-        path: `${base}/effect-runs/${encodeURIComponent(runId)}/cancel`,
       });
     },
     runTriggers: async () =>
