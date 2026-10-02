@@ -2,6 +2,7 @@
 // clock and in-process effects. No database, server or jobs service.
 import { createLifecycleTestKit } from '@nocobase/lifecycle/testing';
 import { describe, expect, it } from 'vitest';
+import { isCalendarDate, itemProblems } from '../shared/expense.js';
 
 import { expenseLifecycle } from '../server/lifecycles/expense.js';
 import type { ExampleServices } from '../server/lifecycles/services.js';
@@ -332,5 +333,23 @@ describe('expense report', () => {
       (run) => run.effect === 'expenses.requestPayment',
     );
     expect(payment).toMatchObject({ status: 'failed', attempts: 3 });
+  });
+});
+
+describe('expense items', () => {
+  const item = {
+    date: '2026-09-28',
+    category: 'transport',
+    description: '高铁',
+    amountCents: 12_000,
+  };
+
+  it('refuses a date that names no real day instead of moving it', () => {
+    expect(isCalendarDate('2028-02-29')).toBe(true);
+    expect(isCalendarDate('2026-02-31')).toBe(false);
+    expect(itemProblems([item])).toEqual([]);
+    expect(itemProblems([{ ...item, date: '2026-02-31' }])).toEqual([
+      '第 1 行日期无效',
+    ]);
   });
 });

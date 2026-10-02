@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defineEffect,
   defineLifecycle,
+  LifecycleError,
   LifecycleRuntime,
   MemoryLifecycleStore,
   planTransition,
@@ -26,6 +27,8 @@ interface Controls {
   pay(attempt: number, key: string): Promise<{ ref: string }>;
   /** Makes recording the payment throw, as a database error would. */
   breakRecording: boolean;
+  /** Makes recording the payment refuse once with a conflict. */
+  conflictOnce: boolean;
 }
 
 interface OrderTypes {
@@ -69,6 +72,10 @@ const orders: Lifecycle<OrderTypes> = defineLifecycle<OrderTypes>({
       guard: ({ actor }) => actor.system === true,
       set: ({ input, services }) => {
         if (services.breakRecording) throw new Error('The database went away.');
+        if (services.conflictOnce) {
+          services.conflictOnce = false;
+          throw new LifecycleError('CONFLICT', 'Someone else wrote it first.');
+        }
         return { paymentRef: String(input.ref) };
       },
     },
@@ -112,6 +119,7 @@ function setup(options: { dispatcher?: EffectDispatcher } = {}) {
       return Promise.resolve({ ref: `PAY-${attempt}` });
     },
     breakRecording: false,
+    conflictOnce: false,
   };
   const make = (over: LifecycleStore = store): LifecycleRuntime => {
     const runtime = new LifecycleRuntime({
@@ -304,5 +312,69 @@ describe('lifecycle concurrency', () => {
     expect(run).toMatchObject({ status: 'dead', attempts: 2 });
     expect(keys).toEqual([]);
     expect(record()).toMatchObject({ status: 'approved' });
+  });
+  it('runs a continuation that met a conflict again instead of dropping it', async () => {
+    const { make, id, controls, advance, record } = setup();
+    const runtime = make();
+    controls.conflictOnce = true;
+    await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
+    expect(record()).toMatchObject({ status: 'approved' });
+    advance(2);
+    await runtime.recover();
+    expect(record()).toMatchObject({ status: 'paid', paymentRef: 'PAY-2' });
+  });
+
+  it('keeps sweeping past a broken record, then reports it', async () => {
+    type State = 'idle' | 'done';
+    interface Item extends LifecycleRecord {
+      readonly status: State;
+      readonly broken: boolean;
+    }
+    const items = defineLifecycle<{
+      record: Item;
+      state: State;
+      parameters: object;
+      services: object;
+    }>({
+      name: 'items',
+      initial: 'idle',
+      states: ['idle', 'done'],
+      transitions: {
+        finish: {
+          from: 'idle',
+          to: 'done',
+          // A routing bug that only some records reach.
+          route: ({ record }) => (record.broken ? ('lost' as State) : 'done'),
+        },
+      },
+      triggers: {
+        finishIdle: { transition: 'finish', when: 'idle', after: () => 0 },
+      },
+    });
+    const store = new MemoryLifecycleStore();
+    const at = '2026-10-01T09:00:00.000Z';
+    const broken = store.insertRecord('items', {
+      status: 'idle',
+      broken: true,
+      statusChangedAt: at,
+      lifecycleVersion: 0,
+    });
+    const fine = store.insertRecord('items', {
+      status: 'idle',
+      broken: false,
+      statusChangedAt: at,
+      lifecycleVersion: 0,
+    });
+    const runtime = new LifecycleRuntime({
+      store,
+      clock: () => new Date('2026-10-01T10:00:00Z'),
+    });
+    runtime.register(items);
+
+    await expect(runtime.runTriggers()).rejects.toMatchObject({
+      code: 'INVALID_ROUTE',
+    });
+    expect(store.record('items', fine.id)).toMatchObject({ status: 'done' });
+    expect(store.record('items', broken.id)).toMatchObject({ status: 'idle' });
   });
 });

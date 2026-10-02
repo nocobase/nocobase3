@@ -163,8 +163,13 @@ export class LifecycleExampleService {
     if (current.status !== 'draft' && current.status !== 'needsInfo')
       throw new ExampleError('INVALID', '审批中的报销单不能修改，请先撤回');
     await this.database.repository(expenseLifecycle.collection).updateMany({
-      // The status in the filter: a concurrent submit wins, and this edit changes nothing.
-      filter: { id: Number(id), status: String(current.status) },
+      // The state and version as read: a concurrent submit wins, and this
+      // edit changes nothing.
+      filter: {
+        id: Number(id),
+        status: String(current.status),
+        lifecycleVersion: Number(current.lifecycleVersion ?? 0),
+      },
       values: this.expenseValues(values) as RepositoryRecord,
     });
   }
