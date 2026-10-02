@@ -59,5 +59,6 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
 - [docs/concepts.md](docs/concepts.md) — why the record is the process, the seven concepts, what a click does, when to use it and when not.
 - [docs/design.md](docs/design.md) — the invariants, the transaction, effect execution, trigger sweeps, storage requirements, where an extension goes, and how to change a definition that is in production.
 - [docs/guide.md](docs/guide.md) — a leave request from definition to page, recipes by scenario, the checklist before going live, troubleshooting, error codes and the standard routes.
+- [docs/examples.md](docs/examples.md) — code for the recurring patterns: chained background steps, multi-level approval, self-transitions, webhooks, countersigns, parents waiting for children, repeated dispatch, vetoes from another plugin, to-do lists, data fixes, permissions and tests.
 
 `packages/examples/app-plugin-lifecycle-example` shows every capability on a help desk and expense reports; `packages/examples/app-plugin-office-flows-example` builds two office processes from six lifecycles.
