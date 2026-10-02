@@ -86,7 +86,15 @@ describe('verifyMigration', () => {
       verifyMigration('202601010001_library_leaky_down', {
         sources: leakyMigrations,
       }),
-    ).rejects.toThrow(/the tables after rolling back/);
+    ).rejects.toThrow(/the schema after rolling back/);
+  });
+
+  it('fails a migration whose down leaves the column it added behind', async () => {
+    await expect(
+      verifyMigration('202601010002_library_leaky_column', {
+        sources: leakyMigrations,
+      }),
+    ).rejects.toThrow(/the schema after rolling back/);
   });
 
   it('fails a migration that is not in the sources', async () => {

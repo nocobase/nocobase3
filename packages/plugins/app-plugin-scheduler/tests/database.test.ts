@@ -52,7 +52,7 @@ describeMigration('202609020001_scheduler_create_definitions', {
     await expectCollection('scheduleOccurrences').toHaveForeignKey(
       ['scheduleId'],
       'scheduleDefinitions',
-      { referencedFields: ['id'] },
+      { referencedFields: ['id'], onDelete: 'restrict' },
     );
     await expectCollection('scheduleOccurrences').toHaveIndex([
       'targetReferenceType',

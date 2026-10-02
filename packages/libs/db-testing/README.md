@@ -68,13 +68,13 @@ test('creates an order', async ({ connection }) => {
 
 The context carries `database` (the `DatabaseManager`), `connection` (its default connection), `dialect`, `capabilities`, and `expectCollection`. Name the export `test` or `it`: the shared ESLint configuration recognises those names as test blocks.
 
-| Option          | Meaning                                                                                                   |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| `migrations`    | Applied, in name order across all sources, before every test                                              |
-| `seeds`         | Run after the migrations                                                                                  |
-| `isolation`     | `'schema'` (default): every test starts from emptied databases. `'none'`: one database for the whole file |
-| `connections`   | Names of the connections to provision, each its own database; the first is the default                    |
-| `metadataStore` | A factory for the Collection metadata store; defaults to the store the connection keeps in its database   |
+| Option          | Meaning                                                                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `migrations`    | Applied, in name order across all sources, before every test                                                                                                                                                                    |
+| `seeds`         | Run after the migrations                                                                                                                                                                                                        |
+| `isolation`     | `'schema'` (default): every test starts from emptied databases; a test that runs concurrently with its siblings (`test.concurrent`, `describe.concurrent`) gets databases of its own. `'none'`: one database for the whole file |
+| `connections`   | Names of the connections to provision, each its own database; the first is the default                                                                                                                                          |
+| `metadataStore` | A factory for the Collection metadata store; defaults to the store the connection keeps in its database. A store supplied here is emptied together with the schema                                                              |
 
 `'schema'` matches what a new in-memory database in every `beforeEach` gives today. It runs the migrations again for each test, which costs little on SQLite and noticeably more on a server; choose `'none'` for a file whose tests are written to share state.
 
@@ -100,7 +100,7 @@ Branch on a capability rather than on a dialect name where one describes the dif
 
 ## Testing a migration
 
-`describeMigration` declares the test every migration needs. It applies the migrations before this one, runs `before`, applies this one and runs `up`, rolls it back and checks that the tables are exactly those that existed before it ran, runs `down`, then applies it again and runs `up` once more. After every step it checks that Collection metadata and physical tables agree.
+`describeMigration` declares the test every migration needs. It applies the migrations before this one, runs `before`, applies this one and runs `up`, rolls it back and checks that every table is exactly what it was before it ran — its Fields, indexes and foreign keys, not only its name — runs `down`, then applies it again and runs `up` once more. After every step it checks that Collection metadata and physical tables agree.
 
 ```ts
 import { describeMigration } from '@nocobase/db-testing/vitest';
@@ -148,8 +148,8 @@ Physical names are deliberately not compared: index and constraint names are tru
 
 ## Without Vitest
 
-`createTestDatabase(options)` provisions and opens in one call and `destroy()` drops everything again. `provisionTestDatabases(options)` provisions once and `open()` gives a fresh `DatabaseManager` on emptied databases as often as needed; `connectionConfig(name)` returns a connection configuration for code that builds its own manager.
+`createTestDatabase(options)` provisions and opens in one call and `destroy()` drops everything again. `provisionTestDatabases(options)` provisions once and `open()` gives a fresh `DatabaseManager` on emptied databases as often as needed; `connectionConfig(name)` returns a connection configuration for code that builds its own manager. Vitest is an optional peer dependency that only the `@nocobase/db-testing/vitest` entry needs; the root entry works under any test runner.
 
 ## Adding a dialect
 
-A dialect package exports a `TestDatabaseProvisioner` — the interface is in `@nocobase/db/testing` — as `testDatabaseProvisioner` from a `./testing` entry. `capabilities` is the capabilities its driver declares. `provision({ name, env })` creates the isolated database or schema called `name` and returns its connection configuration with a `drop()` that removes it. A dialect whose databases outlive the process also implements `listProvisioned({ prefix, env })` and `dropProvisioned({ name, env })`, which the cleanup of interrupted runs uses. `provisionTestDatabases({ provisioner })` takes one directly instead of loading it by dialect, which is how a provisioner is tried before its package exports it. Everything specific to the database stays in the dialect package; this package only selects the provisioner by name.
+A dialect package exports a `TestDatabaseProvisioner` — the interface is in `@nocobase/db/testing` — as `testDatabaseProvisioner` from a `./testing` entry. A server dialect builds it with `createSqlTestDatabaseProvisioner()` from the same entry, giving it the connection options for the server and for an isolated database and the three statements that create, drop and list isolated databases, as `@nocobase/db-postgres` and `@nocobase/db-mysql` do. `capabilities` is the capabilities its driver declares. `provision({ name, env })` creates the isolated database or schema called `name` and returns its connection configuration with a `drop()` that removes it. A dialect whose databases outlive the process also implements `listProvisioned({ prefix, env })` and `dropProvisioned({ name, env })`, which the cleanup of interrupted runs uses. `provisionTestDatabases({ provisioner })` takes one directly instead of loading it by dialect, which is how a provisioner is tried before its package exports it. Everything specific to the database stays in the dialect package; this package only selects the provisioner by name.

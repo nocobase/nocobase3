@@ -21,7 +21,7 @@ import {
   testDatabaseDialect,
 } from './environment.js';
 
-export const DEFAULT_TEST_CONNECTION = 'main';
+export const DEFAULT_TEST_CONNECTION: string = 'main';
 
 export interface ProvisionTestDatabasesOptions {
   /** Where the dialect and its server are read from; defaults to `process.env`. */
@@ -168,20 +168,32 @@ async function openTestDatabase(
     for (const name of names) {
       await database.connection(name).resetManagedSchema();
     }
+    // Resetting the schema empties the metadata store a connection keeps in its own database, but not one the
+    // caller supplied; its Collection documents would outlive their tables, so it is emptied here.
+    if (options.metadataStore) {
+      await clearMetadataStore(options.metadataStore);
+      for (const name of names) {
+        database.connection(name).collections.invalidate();
+      }
+    }
   };
   const migrate = async (
     sources: readonly MigrationSource[],
     connection: string = defaultName,
   ): Promise<void> => {
     if (sources.length === 0) return;
-    await createMigrator({ database, connection, sources }).latest();
+    await oneTaskAtATime(() =>
+      createMigrator({ database, connection, sources }).latest(),
+    );
   };
   const seed = async (
     sources: readonly SeedSource[],
     connection: string = defaultName,
   ): Promise<void> => {
     if (sources.length === 0) return;
-    await createSeeder({ database, connection, sources }).run();
+    await oneTaskAtATime(() =>
+      createSeeder({ database, connection, sources }).run(),
+    );
   };
   try {
     await reset();
@@ -202,6 +214,39 @@ async function openTestDatabase(
     reset,
     destroy: () => database.destroy(),
   };
+}
+
+/**
+ * The migration and seed runners hold an in-process lock keyed by connection
+ * name, not by database, so two Database Managers in one process — two
+ * concurrent tests on databases of their own — cannot migrate at the same
+ * time. The migrations and seeds of every test database in this process run
+ * one after another; the tests themselves still run together.
+ */
+let lastTask: Promise<unknown> = Promise.resolve();
+
+function oneTaskAtATime<T>(run: () => Promise<T>): Promise<T> {
+  const task = lastTask.then(run, run);
+  lastTask = task.catch(() => undefined);
+  return task;
+}
+
+async function clearMetadataStore(
+  store: CollectionMetadataStore,
+): Promise<void> {
+  if (!store.capabilities.writable) {
+    throw new Error(
+      'A test database cannot be reset with a read-only metadata store: its Collection documents would outlive their tables.',
+    );
+  }
+  // Deleting shifts the pages, so each round reads the first page again until nothing is left.
+  let page = await store.list();
+  while (page.items.length > 0) {
+    for (const item of page.items) {
+      await store.delete(item.name, { expectedRevision: item.revision });
+    }
+    page = await store.list();
+  }
 }
 
 async function dropAll(

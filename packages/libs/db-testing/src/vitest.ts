@@ -29,7 +29,9 @@ export * from './index.js';
  *
  * - `schema` (the default): every test opens a fresh Database Manager on
  *   emptied databases and runs the migrations and seeds again, the way a new
- *   SQLite database in each `beforeEach` behaves.
+ *   SQLite database in each `beforeEach` behaves. A test that runs
+ *   concurrently with its siblings (`test.concurrent`, `describe.concurrent`)
+ *   cannot share the file's databases with them and gets databases of its own.
  * - `none`: one Database Manager for the whole file; tests share its state.
  */
 export type DatabaseTestIsolation = 'schema' | 'none';
@@ -65,14 +67,16 @@ export function createDatabaseTest(
   options: DatabaseTestOptions = {},
 ): DatabaseTestAPI {
   const isolation = options.isolation ?? 'schema';
+  const provision = (): Promise<ProvisionedTestDatabases> =>
+    provisionTestDatabases({
+      ...(options.connections ? { connections: options.connections } : {}),
+    });
   return test.extend<DatabaseTestContext>({
     testDatabases: [
       // Vitest reads a fixture's dependencies from this destructuring pattern; this one has none.
       // eslint-disable-next-line no-empty-pattern
       async ({}, use) => {
-        const databases = await provisionTestDatabases({
-          ...(options.connections ? { connections: options.connections } : {}),
-        });
+        const databases = await provision();
         try {
           await use(databases);
         } finally {
@@ -82,18 +86,28 @@ export function createDatabaseTest(
       { scope: 'file' },
     ],
     testDatabase: [
-      async ({ testDatabases }, use) => {
-        const database = await testDatabases.open({
-          migrations: options.migrations ?? [],
-          seeds: options.seeds ?? [],
-          ...(options.metadataStore
-            ? { metadataStore: options.metadataStore() }
-            : {}),
-        });
+      async ({ testDatabases, task }, use) => {
+        // A concurrent test cannot share the file's databases: the tests running beside it would reset and
+        // migrate the same database under it. It gets databases of its own for as long as it runs.
+        const own =
+          isolation === 'schema' && task.concurrent === true
+            ? await provision()
+            : undefined;
         try {
-          await use(database);
+          const database = await (own ?? testDatabases).open({
+            migrations: options.migrations ?? [],
+            seeds: options.seeds ?? [],
+            ...(options.metadataStore
+              ? { metadataStore: options.metadataStore() }
+              : {}),
+          });
+          try {
+            await use(database);
+          } finally {
+            await database.destroy();
+          }
         } finally {
-          await database.destroy();
+          await own?.drop();
         }
       },
       { scope: isolation === 'none' ? 'file' : 'test' },
@@ -257,9 +271,10 @@ export interface DescribeMigrationOptions {
 
 /**
  * The test every migration needs, on the selected dialect: apply it after
- * the migrations before it, check the schema, roll it back, check that the
- * tables are exactly what they were before it ran, and apply it again. Each
- * step also checks that Collection metadata and physical tables agree.
+ * the migrations before it, check the schema, roll it back, check that every
+ * table is exactly what it was before it ran — its Fields, indexes and
+ * foreign keys, not only its name — and apply it again. Each step also
+ * checks that Collection metadata and physical tables agree.
  */
 export function describeMigration(
   name: string,
@@ -306,7 +321,7 @@ export async function verifyMigration(
       sources: options.sources,
     });
     if (previous) await migrator.upTo(previous);
-    const tablesBefore = await listTables(connection);
+    const schemaBefore = await snapshotSchema(connection);
     await options.before?.(context);
 
     await migrator.upTo(name);
@@ -318,9 +333,9 @@ export async function verifyMigration(
     expect(rollback.rolledBack, 'the migrations rolled back').toEqual([name]);
     await expectConsistentMetadata(connection, `after rolling back ${name}`);
     expect(
-      await listTables(connection),
-      `the tables after rolling back ${name}`,
-    ).toEqual(tablesBefore);
+      await snapshotSchema(connection),
+      `the schema after rolling back ${name}`,
+    ).toEqual(schemaBefore);
     await options.down?.(context);
 
     await migrator.upTo(name);
@@ -345,21 +360,31 @@ async function expectConsistentMetadata(
 
 const BOOKKEEPING_TABLE_PREFIX = '__nocobase_';
 
-async function listTables(connection: DatabaseConnection): Promise<string[]> {
-  const names: string[] = [];
+/**
+ * The schema of every table on the connection, by table, so that a rollback
+ * is checked Field by Field: a `down` that drops the column it added but
+ * leaves its index behind, or forgets the column altogether, changes the
+ * snapshot although the list of tables is the same.
+ */
+async function snapshotSchema(
+  connection: DatabaseConnection,
+): Promise<Record<string, CollectionSchemaSnapshot>> {
+  connection.collections.invalidate();
+  const snapshots: Record<string, CollectionSchemaSnapshot> = {};
   let cursor: string | undefined;
   do {
-    const page = await connection.schemaInspector.listPhysicalCollections({
+    const page = await connection.collections.list({
       ...(cursor ? { cursor } : {}),
     });
     for (const item of page.items) {
       // Migration and metadata bookkeeping appears on the first run and is not part of any migration's schema.
       if (item.tableName.startsWith(BOOKKEEPING_TABLE_PREFIX)) continue;
-      names.push(`${item.schema}.${item.tableName}`);
+      const snapshot = await inspectCollection(connection, item.name);
+      if (snapshot) snapshots[`${item.schema}.${item.tableName}`] = snapshot;
     }
     cursor = page.nextCursor;
   } while (cursor);
-  return names.sort();
+  return snapshots;
 }
 
 function describeIndex(

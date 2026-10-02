@@ -6,9 +6,10 @@ import {
 } from '@nocobase/db/testing';
 
 /** The variable that selects the dialect; unset means SQLite. */
-export const TEST_DATABASE_DIALECT_VARIABLE = 'NOCOBASE_TEST_DB_DIALECT';
+export const TEST_DATABASE_DIALECT_VARIABLE: string =
+  'NOCOBASE_TEST_DB_DIALECT';
 
-export const DEFAULT_TEST_DATABASE_DIALECT = 'sqlite';
+export const DEFAULT_TEST_DATABASE_DIALECT: string = 'sqlite';
 
 /** Raised when the environment selects a dialect that cannot be used. */
 export class TestDatabaseConfigurationError extends Error {
@@ -81,9 +82,22 @@ async function importProvisioner(
   try {
     module = (await import(`${packageName}/testing`)) as ProvisionerModule;
   } catch (error) {
-    // Node and Vite word a missing package or export differently; both name it. A module missing deeper inside the
-    // dialect package names something else and is rethrown as it is.
-    if (String(error).includes(packageName)) {
+    const code = (error as { code?: unknown }).code;
+    const text = String(error);
+    // The dialect package is installed but predates its ./testing entry: Node refuses the subpath, not the
+    // package, and adding the package again would not help.
+    if (
+      code === 'ERR_PACKAGE_PATH_NOT_EXPORTED' ||
+      text.includes('is not defined by "exports"')
+    ) {
+      throw new TestDatabaseConfigurationError(
+        `Testing on "${dialect}" needs a version of ${packageName} that exports ./testing; the installed one does not. Upgrade it, or unset ${TEST_DATABASE_DIALECT_VARIABLE} to test on SQLite.`,
+        { cause: error },
+      );
+    }
+    // Node and Vite word a missing package differently; both name it. A module missing deeper inside the dialect
+    // package names something else and is rethrown as it is.
+    if (code === 'ERR_MODULE_NOT_FOUND' || text.includes(packageName)) {
       throw new TestDatabaseConfigurationError(
         `Testing on "${dialect}" needs ${packageName} with a ./testing entry. Add it to the devDependencies of the package under test, or unset ${TEST_DATABASE_DIALECT_VARIABLE} to test on SQLite.`,
         { cause: error },

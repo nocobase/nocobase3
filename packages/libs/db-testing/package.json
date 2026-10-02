@@ -60,6 +60,9 @@
     },
     "@nocobase/db-postgres": {
       "optional": true
+    },
+    "vitest": {
+      "optional": true
     }
   },
   "devDependencies": {

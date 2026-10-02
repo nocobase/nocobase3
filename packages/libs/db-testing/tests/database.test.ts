@@ -1,3 +1,4 @@
+import { InMemoryCollectionMetadataStore } from '@nocobase/db';
 import { describe, expect, it } from 'vitest';
 import {
   createTestDatabase,
@@ -29,6 +30,29 @@ describe('createTestDatabase', () => {
       await expect(
         inspectCollection(testDatabase.connection, 'libraryAuthors'),
       ).resolves.toBeUndefined();
+    } finally {
+      await testDatabase.destroy();
+    }
+  });
+
+  it('reset empties a metadata store the caller supplies', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const testDatabase = await createTestDatabase({
+      migrations,
+      metadataStore,
+    });
+    try {
+      await expect(metadataStore.get('libraryAuthors')).resolves.toBeDefined();
+      await testDatabase.reset();
+      await expect(
+        metadataStore.get('libraryAuthors'),
+      ).resolves.toBeUndefined();
+      await expect(
+        inspectCollection(testDatabase.connection, 'libraryAuthors'),
+      ).resolves.toBeUndefined();
+      // The emptied database takes the migrations again, as a reused one has to.
+      await testDatabase.migrate(migrations);
+      await expect(metadataStore.get('libraryAuthors')).resolves.toBeDefined();
     } finally {
       await testDatabase.destroy();
     }
