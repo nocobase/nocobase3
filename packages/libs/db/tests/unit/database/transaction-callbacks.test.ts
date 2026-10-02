@@ -105,6 +105,18 @@ describe('TransactionCallbacks', () => {
     expect(order).toEqual(['inner-rollback']);
   });
 
+  it('refuses callbacks once the scope has finished', async () => {
+    const callbacks = new TransactionCallbacks(undefined);
+    await callbacks.commit(reporter().report);
+
+    expect(() => callbacks.afterCommit(() => undefined)).toThrow(
+      'This transaction has finished',
+    );
+    expect(() => callbacks.afterRollback(() => undefined)).toThrow(
+      'This transaction has finished',
+    );
+  });
+
   it('refuses to release the outermost scope', () => {
     expect(() => new TransactionCallbacks(undefined).release()).toThrow(
       'Only a savepoint scope can be released.',

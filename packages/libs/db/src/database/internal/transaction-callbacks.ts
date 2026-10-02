@@ -20,14 +20,17 @@ export type TransactionCallbackErrorReporter = (
 export class TransactionCallbacks {
   private commitCallbacks: AfterCommitCallback[] = [];
   private rollbackCallbacks: AfterRollbackCallback[] = [];
+  private finished = false;
 
   constructor(readonly parent: TransactionCallbacks | undefined) {}
 
   afterCommit(callback: AfterCommitCallback): void {
+    this.assertOpen();
     this.commitCallbacks.push(callback);
   }
 
   afterRollback(callback: AfterRollbackCallback): void {
+    this.assertOpen();
     this.rollbackCallbacks.push(callback);
   }
 
@@ -38,8 +41,7 @@ export class TransactionCallbacks {
     }
     this.parent.commitCallbacks.push(...this.commitCallbacks);
     this.parent.rollbackCallbacks.push(...this.rollbackCallbacks);
-    this.commitCallbacks = [];
-    this.rollbackCallbacks = [];
+    this.finish();
   }
 
   /**
@@ -49,8 +51,7 @@ export class TransactionCallbacks {
    */
   async commit(report: TransactionCallbackErrorReporter): Promise<void> {
     const callbacks = this.commitCallbacks;
-    this.commitCallbacks = [];
-    this.rollbackCallbacks = [];
+    this.finish();
     for (const callback of callbacks) {
       try {
         await callback();
@@ -66,14 +67,32 @@ export class TransactionCallbacks {
     report: TransactionCallbackErrorReporter,
   ): Promise<void> {
     const callbacks = this.rollbackCallbacks;
-    this.commitCallbacks = [];
-    this.rollbackCallbacks = [];
+    this.finish();
     for (const callback of callbacks) {
       try {
         await callback(cause);
       } catch (error) {
         report(error, 'afterRollback');
       }
+    }
+  }
+
+  private finish(): void {
+    this.finished = true;
+    this.commitCallbacks = [];
+    this.rollbackCallbacks = [];
+  }
+
+  /**
+   * A transaction connection that escaped its callback would otherwise accept
+   * a callback that can never run, and the work it stood for would silently
+   * never happen.
+   */
+  private assertOpen(): void {
+    if (this.finished) {
+      throw new Error(
+        'This transaction has finished; register afterCommit and afterRollback callbacks inside the transaction callback.',
+      );
     }
   }
 }
