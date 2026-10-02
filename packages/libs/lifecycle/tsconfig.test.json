@@ -1,7 +1,9 @@
 {
   "extends": "@nocobase/dev-config/tsconfig/server.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
   },
   "include": ["src", "tests"]
 }

@@ -1,9 +1,5 @@
 import type { DatabaseManager, RepositoryRecord } from '@nocobase/db';
-import {
-  toMermaid,
-  type JsonObject,
-  type LifecycleRuntime,
-} from '@nocobase/lifecycle';
+import type { LifecycleRuntime } from '@nocobase/lifecycle';
 
 import {
   parseItems,
@@ -14,12 +10,7 @@ import { person } from '../../shared/people.js';
 import { PRIORITIES, TICKET_CATEGORIES } from '../../shared/ticket.js';
 import { expenseLifecycle } from '../lifecycles/expense.js';
 import { ticketLifecycle } from '../lifecycles/ticket.js';
-import type { ExampleLifecycleName, Plain, RecordDetail } from '../tokens.js';
-
-const LIFECYCLES = {
-  tickets: ticketLifecycle,
-  expenses: expenseLifecycle,
-} as const;
+import type { ExampleLifecycleName, Plain } from '../tokens.js';
 
 /** A refusal the service makes before any lifecycle is involved. */
 export class ExampleError extends Error {
@@ -62,7 +53,8 @@ export interface ExpenseDraft {
 export class LifecycleExampleService {
   public constructor(
     private readonly database: DatabaseManager,
-    private readonly runtime: LifecycleRuntime,
+    /** The routes mount the library's record routes on it. */
+    public readonly runtime: LifecycleRuntime,
     private readonly clock: () => Date = (): Date => new Date(),
   ) {}
 
@@ -103,25 +95,6 @@ export class LifecycleExampleService {
         limit: 100,
       });
     return rows.map(plain);
-  }
-
-  public async detail(
-    name: ExampleLifecycleName,
-    id: string,
-    actor: string,
-  ): Promise<RecordDetail> {
-    const record = await this.database
-      .repository(LIFECYCLES[name].collection)
-      .findOne({ filter: { id: Number(id) } });
-    if (!record) throw new ExampleError('NOT_FOUND', '记录不存在');
-    return {
-      record: plain(record),
-      available: await this.runtime.available(name, id, { id: actor }),
-      history: await this.runtime.history(name, id),
-      description: this.runtime.describe(name),
-      parameters: this.runtime.parameters(name),
-      diagram: toMermaid(this.runtime.describe(name)),
-    };
   }
 
   public async createTicket(values: NewTicket, actor: string): Promise<Plain> {
@@ -185,34 +158,6 @@ export class LifecycleExampleService {
       },
       values: this.expenseValues(values) as RepositoryRecord,
     });
-  }
-
-  public async fire(
-    name: ExampleLifecycleName,
-    id: string,
-    transition: string,
-    input: JsonObject,
-    actor: string,
-    requestId?: string,
-  ): Promise<RecordDetail> {
-    await this.runtime.fire(name, id, transition, {
-      actor: { id: actor },
-      input,
-      ...(requestId ? { requestId } : {}),
-    });
-    return this.detail(name, id, actor);
-  }
-
-  /** Runs again an effect run that failed, died or was cancelled. */
-  public async retryRun(runId: string): Promise<void> {
-    if (!(await this.runtime.retryRun(runId)))
-      throw new ExampleError('NOT_FOUND', '执行记录不存在');
-  }
-
-  /** Gives up on an effect run that is waiting or running. */
-  public async cancelRun(runId: string): Promise<void> {
-    if (!(await this.runtime.cancelRun(runId)))
-      throw new ExampleError('NOT_FOUND', '执行记录不存在');
   }
 
   /** The parameters the lifecycle runs with, which pages quote to their users. */

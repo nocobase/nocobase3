@@ -7,11 +7,8 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import {
-  LifecycleError,
-  type JsonObject,
-  type LifecycleErrorCode,
-} from '@nocobase/lifecycle';
+import { createLifecycleRoutes } from '@nocobase/lifecycle/hono';
+import { LifecycleError, type LifecycleErrorCode } from '@nocobase/lifecycle';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -22,10 +19,7 @@ import {
   ExampleError,
   type ExpenseDraft,
 } from '../services/lifecycle-example.js';
-import {
-  lifecycleExampleServiceToken,
-  type ExampleLifecycleName,
-} from '../tokens.js';
+import { lifecycleExampleServiceToken } from '../tokens.js';
 
 const LIFECYCLE_STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
   INVALID_DEFINITION: 500,
@@ -81,11 +75,6 @@ function expenseDraft(values: Record<string, unknown>): ExpenseDraft {
   };
 }
 
-function lifecycleName(value: string): ExampleLifecycleName {
-  if (value === 'tickets' || value === 'expenses') return value;
-  throw new ExampleError('NOT_FOUND', `没有 ${value}`);
-}
-
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono<AuthEnv>();
@@ -117,17 +106,17 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       context.json({ fired: await service.runTriggers() }),
     );
 
-    // An operator's tools for the effect runs the record panel lists.
-    router.post('/lifecycle-example/effect-runs/:id/retry', async (context) => {
-      await service.retryRun(context.req.param('id'));
-      return context.body(null, 204);
-    });
-    router.post(
-      '/lifecycle-example/effect-runs/:id/cancel',
-      async (context) => {
-        await service.cancelRun(context.req.param('id'));
-        return context.body(null, 204);
-      },
+    // Each record's own routes — view, fire, and the operator's retry and
+    // cancel — are the library's; this plugin keeps the lists and the forms.
+    router.route(
+      '/lifecycle-example/lifecycles',
+      createLifecycleRoutes(service.runtime, {
+        lifecycles: ['tickets', 'expenses'],
+        actor: (context) => ({ id: actor(context.req.query('actAs')) }),
+        // The example lets anyone act as an operator from the record panel;
+        // an application would check a permission here.
+        authorize: () => true,
+      }),
     );
 
     router.get('/lifecycle-example/tickets', async (context) =>
@@ -177,31 +166,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         actor(values.actAs),
       );
       return context.body(null, 204);
-    });
-
-    router.get('/lifecycle-example/:name/:id', async (context) =>
-      context.json(
-        await service.detail(
-          lifecycleName(context.req.param('name')),
-          context.req.param('id'),
-          actor(context.req.query('actAs')),
-        ),
-      ),
-    );
-    router.post('/lifecycle-example/:name/:id/fire', async (context) => {
-      const values = await body(context);
-      if (typeof values.transition !== 'string')
-        throw new ExampleError('INVALID', '请选择操作');
-      return context.json(
-        await service.fire(
-          lifecycleName(context.req.param('name')),
-          context.req.param('id'),
-          values.transition,
-          isObject(values.input) ? (values.input as JsonObject) : {},
-          actor(values.actAs),
-          typeof values.requestId === 'string' ? values.requestId : undefined,
-        ),
-      );
     });
 
     return new Hono().route('/', router);

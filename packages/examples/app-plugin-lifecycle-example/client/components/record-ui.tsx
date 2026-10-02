@@ -1,5 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { useApiClient } from '@nocobase/app-client';
+import type { UseLifecycleResult } from '@nocobase/lifecycle/react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { ChevronRight, Play } from 'lucide-react';
 
@@ -88,9 +89,12 @@ export function Field({
  */
 export function LifecyclePanel({
   detail,
+  actions,
   onChange,
 }: {
   readonly detail: RecordDetail;
+  /** The library's operator actions on this record's runs. */
+  readonly actions: Pick<UseLifecycleResult, 'retryRun' | 'cancelRun'>;
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
@@ -109,7 +113,7 @@ export function LifecyclePanel({
     runId: string,
   ): Promise<void> => {
     try {
-      await exampleApi(client)[action](runId);
+      await actions[action](runId);
       setNote('');
       await onChange();
     } catch (cause) {

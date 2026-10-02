@@ -121,28 +121,28 @@ describe('lifecycle example provider', () => {
         'lin',
       );
       const id = String(expense.id);
-      await service.fire('expenses', id, 'submit', {}, 'lin');
+      await service.runtime.fire('expenses', id, 'submit', {
+        actor: { id: 'lin' },
+        input: {},
+      });
       const waiting = await service.listExpenses('chen', 'approvals');
       expect(waiting.map((record) => record.id)).toEqual([expense.id]);
-      await service.fire(
-        'expenses',
-        id,
-        'requestInfo',
-        { reason: '请补充行程单' },
-        'chen',
-      );
+      await service.runtime.fire('expenses', id, 'requestInfo', {
+        actor: { id: 'chen' },
+        input: { reason: '请补充行程单' },
+      });
       // Sent back, it is with the applicant and leaves the approver's queue.
       expect(await service.listExpenses('chen', 'approvals')).toEqual([]);
-      await service.fire('expenses', id, 'resubmit', {}, 'lin');
-      await service.fire(
-        'expenses',
-        id,
-        'approve',
-        { comment: '同意' },
-        'chen',
-      );
+      await service.runtime.fire('expenses', id, 'resubmit', {
+        actor: { id: 'lin' },
+        input: {},
+      });
+      await service.runtime.fire('expenses', id, 'approve', {
+        actor: { id: 'chen' },
+        input: { comment: '同意' },
+      });
       const detail = await eventually(
-        () => service.detail('expenses', id, 'lin'),
+        () => service.runtime.view('expenses', id, { id: 'lin' }),
         (value) => value.record.status === 'paid',
       );
       expect(
@@ -180,20 +180,19 @@ describe('lifecycle example provider', () => {
         'customer-li',
       );
       const id = String(ticket.id);
-      await service.fire(
-        'tickets',
-        id,
-        'reply',
-        { message: '请清除缓存后重试' },
-        'agent-zhou',
-      );
+      await service.runtime.fire('tickets', id, 'reply', {
+        actor: { id: 'agent-zhou' },
+        input: { message: '请清除缓存后重试' },
+      });
       // Pretend the wait has passed instead of waiting two minutes.
       await database.repository('lifecycleExampleTickets').updateMany({
         filter: { id: Number(id) },
         values: { statusChangedAt: '2000-01-01T00:00:00.000Z' },
       });
       expect(await service.runTriggers()).toBe(1);
-      const detail = await service.detail('tickets', id, 'agent-zhou');
+      const detail = await service.runtime.view('tickets', id, {
+        id: 'agent-zhou',
+      });
       expect(detail.record).toMatchObject({
         status: 'closed',
         closedReason: 'timeout',

@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { useApiClient } from '@nocobase/app-client';
+import type { JsonObject } from '@nocobase/lifecycle/react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Plus } from 'lucide-react';
 
@@ -29,6 +30,7 @@ import {
   type RecordDetail,
 } from '../lib/api.js';
 import { ago, countdown, dateTime, NAMESPACE } from '../lib/format.js';
+import { useExampleRecord } from '../lib/use-example-record.js';
 import { useLoader } from '../lib/use-loader.js';
 import { useNow } from '../lib/use-now.js';
 import { cn } from '../lib/utils.js';
@@ -77,10 +79,7 @@ export default function TicketsPage(): ReactElement {
     () => client.list('tickets', actor),
     `tickets:${actor}`,
   );
-  const detail = useLoader(
-    selected ? () => client.detail('tickets', selected, actor) : undefined,
-    `ticket:${selected ?? ''}:${actor}`,
-  );
+  const current = useExampleRecord('tickets', selected, actor);
   const records = list.data?.records ?? [];
   const parameters = list.data?.parameters ?? {};
   const shown =
@@ -91,7 +90,7 @@ export default function TicketsPage(): ReactElement {
   // Switching to the ticket's own customer keeps it open, which is how
   // one person plays both sides of the conversation.
   const switchTo = (id: string): void => {
-    const requester = detail.data?.record.requesterId;
+    const requester = current.detail?.record.requesterId;
     if (person(id)?.role !== 'agent' && requester !== id)
       setSelected(undefined);
     setCreating(false);
@@ -99,7 +98,7 @@ export default function TicketsPage(): ReactElement {
   };
 
   const reload = async (): Promise<void> => {
-    await Promise.all([list.reload(), detail.reload()]);
+    await Promise.all([list.reload(), current.lifecycle.reload()]);
   };
 
   return (
@@ -223,19 +222,24 @@ export default function TicketsPage(): ReactElement {
                 await list.reload();
               }}
             />
-          ) : detail.data ? (
+          ) : current.detail ? (
             <>
               <TicketView
-                detail={detail.data}
+                detail={current.detail}
+                fire={current.lifecycle.fire}
                 actor={actor}
                 onChange={reload}
               />
-              <LifecyclePanel detail={detail.data} onChange={reload} />
+              <LifecyclePanel
+                detail={current.detail}
+                actions={current.lifecycle}
+                onChange={reload}
+              />
             </>
           ) : (
             <Card>
               <CardContent className='py-16 text-center text-sm text-muted-foreground'>
-                {detail.error || t('tickets.pick')}
+                {current.error || t('tickets.pick')}
               </CardContent>
             </Card>
           )}
@@ -377,15 +381,17 @@ type ThreadItem =
 
 function TicketView({
   detail,
+  fire: fireTransition,
   actor,
   onChange,
 }: {
   readonly detail: RecordDetail;
+  /** Fires on this ticket with the version on screen. */
+  readonly fire: (transition: string, input?: JsonObject) => Promise<unknown>;
   readonly actor: string;
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
-  const client = exampleApi(useApiClient());
   const actorName = useActorName();
   const now = useNow();
   const [message, setMessage] = useState('');
@@ -461,7 +467,7 @@ function TicketView({
     setBusy(true);
     setError('');
     try {
-      await client.fire('tickets', id, actor, transition, input);
+      await fireTransition(transition, input as JsonObject);
       setMessage('');
       await onChange();
     } catch (cause) {

@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { useApiClient } from '@nocobase/app-client';
+import type { JsonObject } from '@nocobase/lifecycle/react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Check, Plus, Trash2, X } from 'lucide-react';
 
@@ -36,6 +37,7 @@ import {
   type TransitionEntry,
 } from '../lib/api.js';
 import { ago, countdown, dateTime, NAMESPACE } from '../lib/format.js';
+import { useExampleRecord } from '../lib/use-example-record.js';
 import { useLoader } from '../lib/use-loader.js';
 import { useNow } from '../lib/use-now.js';
 import { cn } from '../lib/utils.js';
@@ -72,17 +74,14 @@ export default function ExpensesPage(): ReactElement {
     () => client.list('expenses', actor, view),
     `expenses:${actor}`,
   );
-  const detail = useLoader(
-    selected ? () => client.detail('expenses', selected, actor) : undefined,
-    `expense:${selected ?? ''}:${actor}`,
-  );
+  const current = useExampleRecord('expenses', selected, actor);
   const records = list.data?.records ?? [];
   const parameters = list.data?.parameters ?? {};
 
   // Switching to the report's applicant or its approver keeps it open, so
   // one person can walk a report through every hand it passes.
   const switchTo = (id: string): void => {
-    const record = detail.data?.record;
+    const record = current.detail?.record;
     if (record?.applicantId !== id && record?.approverId !== id)
       setSelected(undefined);
     setCreating(false);
@@ -91,7 +90,7 @@ export default function ExpensesPage(): ReactElement {
   };
 
   const reload = async (): Promise<void> => {
-    await Promise.all([list.reload(), detail.reload()]);
+    await Promise.all([list.reload(), current.lifecycle.reload()]);
   };
 
   return (
@@ -201,6 +200,9 @@ export default function ExpensesPage(): ReactElement {
                 <ExpenseEditor
                   actor={actor}
                   submitWith='submit'
+                  submitTo={(id, transition) =>
+                    current.client.fire('expenses', id, transition)
+                  }
                   onCancel={() => setCreating(false)}
                   onSaved={async (id, error) => {
                     setCreating(false);
@@ -211,10 +213,14 @@ export default function ExpensesPage(): ReactElement {
                 />
               </CardContent>
             </Card>
-          ) : detail.data ? (
+          ) : current.detail ? (
             <>
               <ExpenseView
-                detail={detail.data}
+                detail={current.detail}
+                fire={current.lifecycle.fire}
+                submitTo={(id, transition) =>
+                  current.client.fire('expenses', id, transition)
+                }
                 actor={actor}
                 flash={flash}
                 onChange={async () => {
@@ -222,12 +228,16 @@ export default function ExpensesPage(): ReactElement {
                   await reload();
                 }}
               />
-              <LifecyclePanel detail={detail.data} onChange={reload} />
+              <LifecyclePanel
+                detail={current.detail}
+                actions={current.lifecycle}
+                onChange={reload}
+              />
             </>
           ) : (
             <Card>
               <CardContent className='py-16 text-center text-sm text-muted-foreground'>
-                {detail.error || t('expenses.pick')}
+                {current.error || t('expenses.pick')}
               </CardContent>
             </Card>
           )}
@@ -281,6 +291,7 @@ function ExpenseEditor({
   actor,
   record,
   submitWith,
+  submitTo,
   initialError = '',
   onCancel,
   onSaved,
@@ -288,6 +299,8 @@ function ExpenseEditor({
   readonly actor: string;
   readonly record?: Plain;
   readonly submitWith: 'submit' | 'resubmit';
+  /** Fires the submission on a report, which may have just been created. */
+  readonly submitTo: (id: string, transition: string) => Promise<unknown>;
   readonly initialError?: string;
   readonly onCancel?: () => void;
   /** Called with the report's id, and the error if submitting it failed. */
@@ -333,7 +346,7 @@ function ExpenseEditor({
     let id: string | undefined;
     try {
       id = await save();
-      if (submit) await client.fire('expenses', id, actor, submitWith);
+      if (submit) await submitTo(id, submitWith);
       if (!submit) setNote(t('expenses.editor.saved'));
       await onSaved(id, '');
     } catch (cause) {
@@ -541,17 +554,21 @@ function Steps({
 
 function ExpenseView({
   detail,
+  fire: fireTransition,
+  submitTo,
   actor,
   flash,
   onChange,
 }: {
   readonly detail: RecordDetail;
+  /** Fires on this report with the version on screen. */
+  readonly fire: (transition: string, input?: JsonObject) => Promise<unknown>;
+  readonly submitTo: (id: string, transition: string) => Promise<unknown>;
   readonly actor: string;
   readonly flash: string;
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
-  const client = exampleApi(useApiClient());
   const actorName = useActorName();
   const now = useNow();
   const [comment, setComment] = useState('');
@@ -575,7 +592,7 @@ function ExpenseView({
     setBusy(true);
     setError('');
     try {
-      await client.fire('expenses', id, actor, transition, input);
+      await fireTransition(transition, input as JsonObject);
       setComment('');
       await onChange();
     } catch (cause) {
@@ -771,6 +788,7 @@ function ExpenseView({
               actor={actor}
               record={record}
               submitWith={state === 'needsInfo' ? 'resubmit' : 'submit'}
+              submitTo={submitTo}
               initialError={flash}
               onSaved={onChange}
             />
