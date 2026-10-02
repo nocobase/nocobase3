@@ -16,6 +16,7 @@ describe('isolated databases left behind by an interrupted run', () => {
     let prefix = '';
     const provisioner: TestDatabaseProvisioner = {
       dialect: 'sqlite',
+      capabilities: sqlite.capabilities,
       provision: (options) => sqlite.provision(options),
       listProvisioned: (options) => {
         prefix = options.prefix;
@@ -43,6 +44,7 @@ describe('isolated databases left behind by an interrupted run', () => {
     const sqlite = await loadTestDatabaseProvisioner('sqlite');
     const provisioner: TestDatabaseProvisioner = {
       dialect: 'sqlite',
+      capabilities: sqlite.capabilities,
       provision: (options) => sqlite.provision(options),
       listProvisioned: () => Promise.reject(new Error('permission denied')),
       dropProvisioned: () => Promise.resolve(),

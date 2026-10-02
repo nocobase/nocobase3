@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createTestDatabase,
   loadTestDatabaseProvisioner,
   TestDatabaseConfigurationError,
+  testDatabaseCapabilities,
   testDatabaseDialect,
   testDatabasePackage,
 } from '../src/index.js';
@@ -34,5 +36,18 @@ describe('the dialect a test runs on', () => {
     await expect(loadTestDatabaseProvisioner('nonexistent')).rejects.toThrow(
       /needs @nocobase\/db-nonexistent/,
     );
+  });
+});
+
+describe('testDatabaseCapabilities', () => {
+  it('matches what a connection on the selected dialect reports', async () => {
+    const testDatabase = await createTestDatabase();
+    try {
+      await expect(testDatabaseCapabilities()).resolves.toEqual(
+        testDatabase.capabilities,
+      );
+    } finally {
+      await testDatabase.destroy();
+    }
   });
 });

@@ -4,7 +4,7 @@ import type {
   TestDatabaseProvisioner,
 } from '@nocobase/db/testing';
 import type { Knex } from 'knex';
-import { postgres, type PostgresOptions } from './index.js';
+import { postgres, postgresDriver, type PostgresOptions } from './index.js';
 
 /**
  * The server a test connects to, read from the variables the dialect's
@@ -28,6 +28,7 @@ export function postgresTestConnection(
 /** Isolates each test database in its own schema of one server database. */
 export const testDatabaseProvisioner: TestDatabaseProvisioner = {
   dialect: 'postgres',
+  capabilities: postgresDriver.capabilities ?? {},
   provision: async ({ name, env }) => {
     const options = postgresTestConnection(env);
     const admin = createDatabaseManager({

@@ -72,6 +72,26 @@ The context carries `database` (the `DatabaseManager`), `connection` (its defaul
 
 `'schema'` matches what a new in-memory database in every `beforeEach` gives today. It runs the migrations again for each test, which costs little on SQLite and noticeably more on a server; choose `'none'` for a file whose tests are written to share state.
 
+## Skipping what a dialect cannot do
+
+`testDatabaseCapabilities()` resolves the selected dialect's capabilities before any database exists, so a test file can decide what to skip while its tests are being collected:
+
+```ts
+import { testDatabaseCapabilities } from '@nocobase/db-testing';
+import { test } from './fixtures.js';
+
+const capabilities = await testDatabaseCapabilities();
+
+test.skipIf(!capabilities.partialIndexes)(
+  'allows repeated empty keys',
+  async ({ connection }) => {
+    // …
+  },
+);
+```
+
+Branch on a capability rather than on a dialect name where one describes the difference, so a dialect added later is handled without editing the test. `testDatabaseDialect()` returns the name synchronously for the rare test that is about one database's behaviour.
+
 ## Testing a migration
 
 `describeMigration` declares the test every migration needs. It applies the migrations before this one, runs `before`, applies this one and runs `up`, rolls it back and checks that the tables are exactly those that existed before it ran, runs `down`, then applies it again and runs `up` once more. After every step it checks that Collection metadata and physical tables agree.
@@ -126,4 +146,4 @@ Physical names are deliberately not compared: index and constraint names are tru
 
 ## Adding a dialect
 
-A dialect package exports a `TestDatabaseProvisioner` — the interface is in `@nocobase/db/testing` — as `testDatabaseProvisioner` from a `./testing` entry. `provision({ name, env })` creates the isolated database or schema called `name` and returns its connection configuration with a `drop()` that removes it. A dialect whose databases outlive the process also implements `listProvisioned({ prefix, env })` and `dropProvisioned({ name, env })`, which the cleanup of interrupted runs uses. `provisionTestDatabases({ provisioner })` takes one directly instead of loading it by dialect, which is how a provisioner is tried before its package exports it. Everything specific to the database stays in the dialect package; this package only selects the provisioner by name.
+A dialect package exports a `TestDatabaseProvisioner` — the interface is in `@nocobase/db/testing` — as `testDatabaseProvisioner` from a `./testing` entry. `capabilities` is the capabilities its driver declares. `provision({ name, env })` creates the isolated database or schema called `name` and returns its connection configuration with a `drop()` that removes it. A dialect whose databases outlive the process also implements `listProvisioned({ prefix, env })` and `dropProvisioned({ name, env })`, which the cleanup of interrupted runs uses. `provisionTestDatabases({ provisioner })` takes one directly instead of loading it by dialect, which is how a provisioner is tried before its package exports it. Everything specific to the database stays in the dialect package; this package only selects the provisioner by name.

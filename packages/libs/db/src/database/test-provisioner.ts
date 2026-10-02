@@ -1,3 +1,4 @@
+import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { AnyConnectionConfig } from './config.js';
 
 /** Environment variables a provisioner reads its server address and credentials from. */
@@ -37,6 +38,11 @@ export interface TestDatabaseListOptions {
  */
 export interface TestDatabaseProvisioner {
   readonly dialect: string;
+  /**
+   * The capabilities the dialect's driver declares, as on its definition.
+   * Lets a test decide what to skip before any database exists.
+   */
+  readonly capabilities: Partial<DatabaseCapabilities>;
   provision(
     options: TestDatabaseProvisionOptions,
   ): Promise<ProvisionedTestDatabase>;

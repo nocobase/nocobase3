@@ -1,5 +1,5 @@
 import type { TestDatabaseProvisioner } from '@nocobase/db/testing';
-import { sqlite } from './index.js';
+import { sqlite, sqliteDriver } from './index.js';
 
 /**
  * Every Database Manager opened on `:memory:` starts from an empty database,
@@ -7,6 +7,7 @@ import { sqlite } from './index.js';
  */
 export const testDatabaseProvisioner: TestDatabaseProvisioner = {
   dialect: 'sqlite',
+  capabilities: sqliteDriver.capabilities ?? {},
   provision: () =>
     Promise.resolve({
       connection: sqlite({ filename: ':memory:' }),

@@ -4,7 +4,7 @@ import type {
   TestDatabaseProvisioner,
 } from '@nocobase/db/testing';
 import type { Knex } from 'knex';
-import { mysql, type MysqlOptions } from './index.js';
+import { mysql, mysqlDriver, type MysqlOptions } from './index.js';
 
 /**
  * The server a test connects to. The defaults are those of the MySQL service
@@ -27,6 +27,7 @@ export function mysqlTestConnection(
 /** Isolates each test database in its own MySQL database. */
 export const testDatabaseProvisioner: TestDatabaseProvisioner = {
   dialect: 'mysql',
+  capabilities: mysqlDriver.capabilities ?? {},
   provision: async ({ name, env }) => {
     const options = mysqlTestConnection(env);
     const admin = createDatabaseManager({

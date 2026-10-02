@@ -1,6 +1,8 @@
-import type {
-  TestDatabaseEnvironment,
-  TestDatabaseProvisioner,
+import type { DatabaseCapabilities } from '@nocobase/db';
+import {
+  resolveDatabaseCapabilities,
+  type TestDatabaseEnvironment,
+  type TestDatabaseProvisioner,
 } from '@nocobase/db/testing';
 
 /** The variable that selects the dialect; unset means SQLite. */
@@ -30,6 +32,23 @@ export function testDatabaseDialect(
 /** The package that owns a dialect, which also exports its test provisioner. */
 export function testDatabasePackage(dialect: string): string {
   return `@nocobase/db-${dialect}`;
+}
+
+/**
+ * The capabilities of the selected dialect, known before any database exists,
+ * so a test file can skip what the dialect cannot do while tests are being
+ * collected:
+ *
+ *     const capabilities = await testDatabaseCapabilities();
+ *     test.skipIf(!capabilities.partialIndexes)('…', async () => {});
+ */
+export async function testDatabaseCapabilities(
+  env: TestDatabaseEnvironment = process.env,
+): Promise<DatabaseCapabilities> {
+  const provisioner = await loadTestDatabaseProvisioner(
+    testDatabaseDialect(env),
+  );
+  return resolveDatabaseCapabilities(provisioner.capabilities);
 }
 
 interface ProvisionerModule {
