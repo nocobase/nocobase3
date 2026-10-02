@@ -41,7 +41,7 @@ async function fixedAgentWithTool(
   sessionId: string,
   defaultPermission?: 'ALLOW' | 'ASK',
 ) {
-  const fixture = createTestAIEmployeeFixture();
+  const fixture = await createTestAIEmployeeFixture();
   const lookup = vi.fn(async () => ({ status: 'success', content: 'found' }));
   await fixture.deps.ai.toolsManager.registerTools(
     defineTools({
@@ -154,7 +154,7 @@ describe('createAgent() tool permission', () => {
 
 describe('createAgent() under the default database persistence', () => {
   it('pauses on a tool that asks and resumes from a newly created agent', async () => {
-    const fixture = createTestAIEmployeeFixture();
+    const fixture = await createTestAIEmployeeFixture();
     const database = fixture.deps.database;
     await database.connect();
     await database.builder().createCollection('user', (collection) => {

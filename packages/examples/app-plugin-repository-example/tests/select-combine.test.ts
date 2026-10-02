@@ -17,7 +17,7 @@ beforeEach(async () => {
     .run();
 });
 afterEach(async () => {
-  await f.database.destroy();
+  await f.destroy();
 });
 async function run(key: string) {
   const definition = combineExamples.find((item) => item.key === key)!;

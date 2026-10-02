@@ -38,7 +38,7 @@ class ScriptedChatModel extends BaseChatModel {
  * persistence, so a second agent sees what the first one left behind.
  */
 async function fixedAgents(sessionId: string) {
-  const fixture = createTestAIEmployeeFixture();
+  const fixture = await createTestAIEmployeeFixture();
   const lookup = vi.fn(async () => ({ status: 'success', content: 'found' }));
   await fixture.deps.ai.toolsManager.registerTools(
     defineTools({

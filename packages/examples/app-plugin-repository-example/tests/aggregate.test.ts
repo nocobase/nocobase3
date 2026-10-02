@@ -9,7 +9,7 @@ beforeEach(async () => {
   f = await createFixture();
 });
 afterEach(async () => {
-  await f.database.destroy();
+  await f.destroy();
 });
 async function seed() {
   await f.database

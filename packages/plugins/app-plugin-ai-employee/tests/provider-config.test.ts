@@ -31,7 +31,8 @@ import { serviceFactoryToken } from '../server/factory/service-factory.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
 const providers: AIEmployeeProvider[] = [];
-const databases: ReturnType<typeof createTestAppDeps>['database'][] = [];
+const databases: Awaited<ReturnType<typeof createTestAppDeps>>['database'][] =
+  [];
 
 afterEach(async () => {
   await Promise.all(providers.splice(0).map((provider) => provider.shutdown()));
@@ -78,7 +79,7 @@ describe('AIEmployeeProvider application config', () => {
   });
 
   it('migrates initial config into the database while preserving matching user state', async () => {
-    const deps = createTestAppDeps();
+    const deps = await createTestAppDeps();
     databases.push(deps.database);
     await deps.database.connect();
     await createMigrator({
@@ -155,7 +156,7 @@ describe('AIEmployeeProvider application config', () => {
   });
 
   it('reapplies an overriding model list over the stored one on start, and keeps the enable switch', async () => {
-    const deps = createTestAppDeps();
+    const deps = await createTestAppDeps();
     databases.push(deps.database);
     await deps.database.connect();
     await createMigrator({
@@ -283,7 +284,7 @@ describe('AIEmployeeProvider application config', () => {
   });
 
   it('keeps an MCP server an administrator disabled disabled across a restart', async () => {
-    const deps = createTestAppDeps();
+    const deps = await createTestAppDeps();
     databases.push(deps.database);
     await deps.database.connect();
     await createMigrator({
@@ -320,7 +321,7 @@ describe('AIEmployeeProvider application config', () => {
 
   it('keeps an MCP tool permission an administrator set across a restart', async () => {
     const mcp = await startMCPServer(['setDefaultCity']);
-    const deps = createTestAppDeps();
+    const deps = await createTestAppDeps();
     databases.push(deps.database);
     await deps.database.connect();
     await createMigrator({
@@ -461,13 +462,13 @@ async function startMCPServer(
 
 async function createProvider(
   readConfig: () => Record<string, unknown>,
-  existingDeps?: ReturnType<typeof createTestAppDeps>,
+  existingDeps?: Awaited<ReturnType<typeof createTestAppDeps>>,
 ): Promise<{
   provider: AIEmployeeProvider;
   config: AppConfig;
   container: ServiceContainer;
 }> {
-  const deps = existingDeps ?? createTestAppDeps();
+  const deps = existingDeps ?? (await createTestAppDeps());
   if (!existingDeps) {
     databases.push(deps.database);
     await deps.database.connect();

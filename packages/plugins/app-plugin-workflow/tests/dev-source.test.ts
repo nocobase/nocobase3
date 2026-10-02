@@ -5,12 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createDatabaseManager,
-  type DatabaseManager,
-  type Row,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import type { DatabaseManager, Row } from '@nocobase/db';
+import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import { WorkflowLoader } from '../server/loader/loader.js';
@@ -32,12 +28,17 @@ import { InlineJobExecutor } from './fixtures/inline-job-executor.js';
 
 const authoringEntry = fileURLToPath(new URL('../index.ts', import.meta.url));
 const roots: string[] = [];
+const testDatabases: TestDatabase[] = [];
+/** The Database Manager of each test database, in creation order. */
 const databases: DatabaseManager[] = [];
 const services: WorkflowService[] = [];
 
 afterEach(async () => {
   await Promise.all(services.splice(0).map((service) => service.dispose()));
-  await Promise.all(databases.splice(0).map((database) => database.destroy()));
+  databases.splice(0);
+  await Promise.all(
+    testDatabases.splice(0).map((testDatabase) => testDatabase.destroy()),
+  );
   await Promise.all(
     roots
       .splice(0)
@@ -79,10 +80,9 @@ async function createService(
   root: string,
   production: boolean,
 ): Promise<WorkflowService> {
-  const database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
+  const testDatabase = await createTestDatabase();
+  testDatabases.push(testDatabase);
+  const { database } = testDatabase;
   databases.push(database);
   await database.builder().createCollections(
     workflowCollectionSchemas.map(({ name, define }) => ({

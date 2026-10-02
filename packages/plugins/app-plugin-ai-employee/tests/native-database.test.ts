@@ -1,23 +1,15 @@
-import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createDatabaseManager,
-  createMigrator,
-  type DatabaseManager,
-} from '@nocobase/db';
+import { createMigrator, type DatabaseManager } from '@nocobase/db';
+import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 import { RepositoryFactory } from '../server/factory/repository-factory.js';
 
-const managers: DatabaseManager[] = [];
+const testDatabases: TestDatabase[] = [];
 
 async function createDatabase(): Promise<DatabaseManager> {
-  const database = createDatabaseManager({
-    drivers: { sqlite },
-    default: 'main',
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  managers.push(database);
-  await database.connect();
+  const testDatabase = await createTestDatabase();
+  testDatabases.push(testDatabase);
+  const { database } = testDatabase;
   const builder = database.builder();
   await builder.createCollection('user', (collection) => {
     collection.string('id').notNull();
@@ -40,7 +32,9 @@ async function createDatabase(): Promise<DatabaseManager> {
 }
 
 afterEach(async () => {
-  await Promise.all(managers.splice(0).map((database) => database.destroy()));
+  await Promise.all(
+    testDatabases.splice(0).map((testDatabase) => testDatabase.destroy()),
+  );
 });
 
 describe('native AI employee persistence', () => {

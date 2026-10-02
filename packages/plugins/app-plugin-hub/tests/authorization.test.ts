@@ -4,12 +4,8 @@ import {
   createAppAuthorization,
   type Authorization,
 } from '@nocobase/app-plugin-authorization';
-import {
-  createDatabaseManager,
-  createMigrator,
-  type DatabaseManager,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { createMigrator, type DatabaseManager } from '@nocobase/db';
+import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -24,17 +20,13 @@ import {
 } from '../server/authorization.js';
 
 describe('Hub user role scope', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
   let authorization: Authorization & PermissionSetsAuthorizationApi;
 
   beforeEach(async () => {
-    database = createDatabaseManager({
-      drivers: { sqlite },
-      default: 'main',
-      connections: {
-        main: { dialect: 'sqlite', filename: ':memory:' },
-      },
-    });
+    testDatabase = await createTestDatabase();
+    database = testDatabase.database;
     await migratePackage(
       database,
       '@nocobase/app-plugin-authentication',
@@ -60,7 +52,7 @@ describe('Hub user role scope', () => {
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   it('leaves ownership and existing Apps unchanged when migrations run again', async () => {

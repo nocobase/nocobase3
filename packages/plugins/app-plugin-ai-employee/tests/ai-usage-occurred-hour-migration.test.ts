@@ -1,13 +1,13 @@
 import { fileURLToPath } from 'node:url';
-import sqlite from '@nocobase/db-sqlite';
 import {
-  createDatabaseManager,
   createMigrator,
   loadMigrations,
   type DatabaseManager,
   type MigrationContext,
   type MigrationDefinition,
 } from '@nocobase/db';
+import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
+import { expectCollection } from '@nocobase/db-testing/vitest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const MIGRATION_NAME = '202609300001_add_ai_usage_event_occurred_hour';
@@ -22,6 +22,7 @@ type UsageRow = {
   occurredHour: number | null;
 };
 
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
 
 async function loadOccurredHourMigration(): Promise<MigrationDefinition> {
@@ -98,12 +99,8 @@ async function readUsageEvents(): Promise<UsageRow[]> {
 }
 
 beforeEach(async () => {
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    default: 'main',
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  await database.connect();
+  testDatabase = await createTestDatabase();
+  database = testDatabase.database;
   const builder = database.builder();
   await builder.createCollection('user', (collection) => {
     collection.string('id').notNull();
@@ -121,7 +118,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.disconnect();
+  await testDatabase.destroy();
 });
 
 describe('202609300001_add_ai_usage_event_occurred_hour', () => {
@@ -171,29 +168,18 @@ describe('202609300001_add_ai_usage_event_occurred_hour', () => {
   });
 
   it('adds an index on the hour bucket and removes both on down', async () => {
-    const connection = database.connection();
+    const usageEvents = expectCollection(
+      testDatabase.connection,
+      'aiUsageEvents',
+    );
     const migration = await loadOccurredHourMigration();
 
-    const afterUp = await connection.schemaInspector.getPhysicalCollection({
-      tableName: 'ai_usage_events',
-    });
-    expect(afterUp?.columns.map((column) => column.columnName)).toContain(
-      'occurred_hour',
-    );
-    expect(afterUp?.indexes.map((index) => index.name)).toContain(
-      'idx_ai_usage_events_hour',
-    );
+    await usageEvents.toHaveField('occurredHour');
+    await usageEvents.toHaveIndex(['occurredHour'], { unique: false });
 
     await migration.down?.(migrationContext());
 
-    const afterDown = await connection.schemaInspector.getPhysicalCollection({
-      tableName: 'ai_usage_events',
-    });
-    expect(afterDown?.columns.map((column) => column.columnName)).not.toContain(
-      'occurred_hour',
-    );
-    expect(afterDown?.indexes.map((index) => index.name)).not.toContain(
-      'idx_ai_usage_events_hour',
-    );
+    await usageEvents.not.toHaveField('occurredHour');
+    await usageEvents.not.toHaveIndex(['occurredHour']);
   });
 });

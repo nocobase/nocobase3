@@ -1,4 +1,5 @@
 import type { DatabaseManager } from '@nocobase/db';
+import type { TestDatabase } from '@nocobase/db-testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkflowRepository } from '../server/repositories/workflow-repository.js';
@@ -7,7 +8,7 @@ import type { WorkflowServiceApi } from '../server/service.js';
 import type { WorkflowDistArtifact } from '../server/loader/index.js';
 import { asId, asIdFilter, serializeJson } from '../server/engine/utils.js';
 import {
-  createTestDatabase,
+  createWorkflowTestDatabase,
   createTestWorkflow,
   insertTestRun,
   testStore,
@@ -15,12 +16,14 @@ import {
 import { parseWorkflowIdentifier } from '../server/repositories/mappers.js';
 
 describe('workflow repositories', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
   let workflows: WorkflowRepository;
   let workflowRuns: WorkflowRunRepository;
 
   beforeEach(async () => {
-    database = await createTestDatabase();
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
     const service: WorkflowServiceApi = {
       trigger: async () => ({
         status: 'accepted',
@@ -39,7 +42,7 @@ describe('workflow repositories', () => {
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   it('filters and paginates workflows in the database query', async () => {
