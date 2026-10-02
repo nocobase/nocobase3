@@ -417,7 +417,7 @@ const actor = audit.read(event); // { actorId: string } | undefined
    如果按条件置空外键的取键代价不可接受，备选方案是：该部分只记 Collection 级的 `count` 变更，并在事件中如实标出，由本页更新后再评审。（结论：代价可接受，不需要这个备选方案，见“原型结论”。）
 
 1. **第一层。** 引入 `TransactionScope`，实现 `afterCommit` / `afterRollback`、savepoint 并入与丢弃、`onTransactionCallbackError`。在 `db-testkit/tests/integration/` 增加跨方言测试：提交执行、回滚丢弃、savepoint 回滚丢弃子 scope、提交失败、回调错误不影响结果、回调执行时 Registry 已应用失效。
-2. **调用方迁移。** 用 `afterCommit` 替换背景一节列出的手动通知，删除 `notifyAssignmentsChanged()` 在事务绑定下的空操作分支。
+2. **调用方迁移。** 用 `afterCommit` 替换背景一节列出的手动通知，删除 `notifyAssignmentsChanged()` 在事务绑定下的空操作分支。（已完成：permission-sets 绑定 `@nocobase/db` 事务时改为提交后通知；users 的 `onRoleScopesChanged` 改为在事务内登记 `afterCommit`。departments 示例在服务提交后才通知，in-app 通知的 store 不在事务内写入，二者无需迁移。）
 3. **第二层记录。** 先修复“原型结论”中的两个已有缺陷，其中批量写的 OR 链过长是本步的前提；再引入 `MutationRecorder` 与订阅表，实现 `inTransaction` 与 `afterCommit`、按订阅切换批量写路径、迁移与 Seed 中关闭事件。结构性测试（表快照差异对比 `RowChange`）在每个方言上运行。
 4. **第二层补全。** `defineRepositoryEventMeta`、`explainRepositoryEvents()`、递归上限。
 5. **文档转正。** 实现部分移入 `repository/` 正式文档，本页保留为演进记录。
