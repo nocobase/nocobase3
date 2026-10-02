@@ -6,19 +6,18 @@ const require = createRequire(import.meta.url);
 interface NativeConnection {
   readonly inTransaction: boolean;
   exec(sql: string): unknown;
+  // Knex's pool validation destroys a connection carrying this flag instead
+  // of handing it out again.
+  __knex__disposed?: unknown;
 }
 interface KnexTransaction {
+  client: { logger: { warn(message: string): void } };
   trxClient: {
     query(connection: NativeConnection, sql: string): Promise<unknown>;
   };
   _completed: boolean;
   _resolver(value: unknown): void;
   _rejecter(error: unknown): void;
-  _logAndDispose(
-    connection: NativeConnection,
-    message: string,
-    cause: unknown,
-  ): void;
 }
 
 const Transaction_Sqlite =
@@ -41,8 +40,11 @@ class SqliteTransaction extends Transaction_Sqlite {
         return response;
       },
       (error: unknown) => {
-        this.rollbackFailedCommit(connection);
-        this._rejecter(error);
+        try {
+          this.rollbackFailedCommit(connection);
+        } finally {
+          this._rejecter(error);
+        }
       },
     );
     this._completed = true;
@@ -56,11 +58,12 @@ class SqliteTransaction extends Transaction_Sqlite {
     try {
       connection.exec('ROLLBACK');
     } catch (error) {
-      // Marks the connection for the pool to destroy instead of reusing it.
-      this._logAndDispose(
-        connection,
-        'Failed to roll back after a failed COMMIT',
-        error,
+      // Knex 3.1 has no `_logAndDispose`, so the connection is marked here.
+      connection.__knex__disposed = error;
+      this.client.logger.warn(
+        `Failed to roll back after a failed COMMIT, discarding the connection: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
   }

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Knex } from 'knex';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
@@ -14,12 +14,34 @@ import sqlite from '../src/index.js';
 const require = createRequire(import.meta.url);
 
 interface NativeDatabase {
-  exec(sql: string): void;
+  exec(sql: string): unknown;
   close(): void;
 }
 const BetterSqlite3 = require('better-sqlite3') as new (
   filename: string,
 ) => NativeDatabase;
+
+function temporaryFile(cleanups: (() => Promise<void> | void)[], name: string) {
+  const directory = mkdtempSync(path.join(tmpdir(), 'nb-sqlite-commit-'));
+  cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+  return path.join(directory, name);
+}
+
+async function createDeferredForeignKeyTables(client: Knex) {
+  await client.raw('pragma foreign_keys = on');
+  await client.raw('create table parents (id integer primary key)');
+  await client.raw(
+    'create table children (id integer primary key, parent_id integer references parents (id) deferrable initially deferred)',
+  );
+}
+
+function insertOrphan(database: DatabaseManager) {
+  return database.transaction(async (connection) => {
+    await (
+      await connection.client<Knex>()
+    ).raw('insert into children (id, parent_id) values (1, 404)');
+  });
+}
 
 function createManager(filename: string): DatabaseManager {
   return createDatabaseManager({
@@ -48,20 +70,13 @@ describe('SQLite transaction whose COMMIT fails', () => {
   it('rolls back a deferred foreign key violation and keeps the connection usable', async () => {
     const database = createManager(':memory:');
     cleanups.push(() => database.destroy());
-    const client = await database.connection().client<Knex>();
-    await client.raw('pragma foreign_keys = on');
-    await client.raw('create table parents (id integer primary key)');
-    await client.raw(
-      'create table children (id integer primary key, parent_id integer references parents (id) deferrable initially deferred)',
+    await createDeferredForeignKeyTables(
+      await database.connection().client<Knex>(),
     );
 
-    await expect(
-      database.transaction(async (connection) => {
-        await (
-          await connection.client<Knex>()
-        ).raw('insert into children (id, parent_id) values (1, 404)');
-      }),
-    ).rejects.toThrow('FOREIGN KEY constraint failed');
+    await expect(insertOrphan(database)).rejects.toThrow(
+      'FOREIGN KEY constraint failed',
+    );
 
     expect(await count(database, 'children')).toBe(0);
     await database.transaction(async (connection) => {
@@ -73,9 +88,7 @@ describe('SQLite transaction whose COMMIT fails', () => {
   });
 
   it('rolls back a COMMIT that fails with SQLITE_BUSY', async () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'nb-sqlite-busy-'));
-    cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
-    const filename = path.join(directory, 'busy.sqlite');
+    const filename = temporaryFile(cleanups, 'busy.sqlite');
     const database = createManager(filename);
     cleanups.push(() => database.destroy());
     const client = await database.connection().client<Knex>();
@@ -100,5 +113,37 @@ describe('SQLite transaction whose COMMIT fails', () => {
       await (await connection.client<Knex>())('items').insert({ id: 2 });
     });
     expect(await count(database, 'items')).toBe(1);
+  });
+
+  it('discards the connection when the rollback fails too', async () => {
+    const database = createManager(temporaryFile(cleanups, 'rollback.sqlite'));
+    cleanups.push(() => database.destroy());
+    const client = await database.connection().client<Knex>();
+    await createDeferredForeignKeyTables(client);
+
+    const native = (await client.client.acquireConnection()) as NativeDatabase;
+    await client.client.releaseConnection(native);
+    const exec = native.exec.bind(native);
+    native.exec = (sql) => {
+      if (/^rollback\b/i.test(sql)) throw new Error('disk I/O error');
+      return exec(sql);
+    };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    cleanups.push(() => log.mockRestore());
+
+    await expect(insertOrphan(database)).rejects.toThrow(
+      'FOREIGN KEY constraint failed',
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to roll back after a failed COMMIT'),
+    );
+
+    // The pool replaces the connection; closing it discarded the open
+    // transaction, and the replacement starts transactions again.
+    expect(await count(database, 'children')).toBe(0);
+    await database.transaction(async (connection) => {
+      await (await connection.client<Knex>())('parents').insert({ id: 1 });
+    });
+    expect(await count(database, 'parents')).toBe(1);
   });
 });
