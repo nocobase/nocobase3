@@ -2,6 +2,13 @@ import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../../helpers.js';
 import { createOrders } from '../fixtures/scalar.js';
 
+/** `createMany` takes a non-empty tuple; generated rows are checked into one. */
+function nonEmpty<T>(items: T[]): [T, ...T[]] {
+  const [first, ...rest] = items;
+  if (first === undefined) throw new Error('Expected at least one row.');
+  return [first, ...rest];
+}
+
 describeIntegrationDatabases('Repository methods/bulk-returning', (context) => {
   it('returns selected records from bulk mutations in stable order', async () => {
     await createOrders(context);
@@ -76,11 +83,13 @@ describeIntegrationDatabases('Repository methods/bulk-returning', (context) => {
     const total = 1200;
     for (let start = 0; start < total; start += 200) {
       await repository.createMany({
-        values: Array.from({ length: 200 }, (_, offset) => ({
-          orderNo: `SO-${String(start + offset).padStart(5, '0')}`,
-          status: 'draft',
-          amount: start + offset,
-        })),
+        values: nonEmpty(
+          Array.from({ length: 200 }, (_, offset) => ({
+            orderNo: `SO-${String(start + offset).padStart(5, '0')}`,
+            status: 'draft',
+            amount: start + offset,
+          })),
+        ),
       });
     }
 
@@ -140,15 +149,19 @@ describeIntegrationDatabases('Repository methods/bulk-returning', (context) => {
     // Rows 201-250 are children of rows 1-50, so their parents fall in the
     // first batch of 200 and the children in the second.
     await repository.createMany({
-      values: Array.from({ length: 200 }, (_, index) => ({
-        id: id(index + 1),
-      })),
+      values: nonEmpty(
+        Array.from({ length: 200 }, (_, index) => ({
+          id: id(index + 1),
+        })),
+      ),
     });
     await repository.createMany({
-      values: Array.from({ length: 50 }, (_, index) => ({
-        id: id(index + 201),
-        parentId: id(index + 1),
-      })),
+      values: nonEmpty(
+        Array.from({ length: 50 }, (_, index) => ({
+          id: id(index + 201),
+          parentId: id(index + 1),
+        })),
+      ),
     });
 
     const deleted = await repository.deleteMany({
