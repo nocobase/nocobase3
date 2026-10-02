@@ -198,7 +198,7 @@ export function LifecyclePanel({
 
           <div className='space-y-2'>
             <h3 className='font-medium'>{t('lifecycle.parameters')}</h3>
-            <code className='block rounded-md bg-muted px-2 py-1.5 text-xs'>
+            <code className='block rounded-md bg-muted px-2 py-1.5 text-xs break-all'>
               {JSON.stringify(detail.parameters)}
             </code>
             <div className='flex flex-wrap items-center gap-2'>
@@ -303,10 +303,9 @@ export function LifecyclePanel({
                       <th className='py-1 pr-3 font-normal whitespace-nowrap'>
                         {t('lifecycle.columns.attempts')}
                       </th>
-                      <th className='py-1 pr-3 font-normal whitespace-nowrap'>
+                      <th className='py-1 font-normal whitespace-nowrap'>
                         {t('lifecycle.columns.error')}
                       </th>
-                      <th className='py-1 font-normal whitespace-nowrap' />
                     </tr>
                   </thead>
                   <tbody>
@@ -317,22 +316,12 @@ export function LifecyclePanel({
                           {transitionNames.get(run.transitionId) ?? ''}
                         </td>
                         <td className='py-1.5 pr-3 whitespace-nowrap'>
-                          {t(`runs.${run.status}`)}
-                        </td>
-                        <td className='py-1.5 pr-3'>
-                          {t('lifecycle.attempts', {
-                            attempts: run.attempts,
-                            max: run.maxAttempts,
-                          })}
-                        </td>
-                        <td className='py-1.5 pr-3 break-all text-destructive'>
-                          {run.error ?? ''}
-                        </td>
-                        <td className='py-1.5 whitespace-nowrap'>
+                          <div>{t(`runs.${run.status}`)}</div>
                           {RETRYABLE.has(run.status) ? (
                             <Button
                               size='sm'
                               variant='outline'
+                              className='mt-1'
                               onClick={() => void operate('retryRun', run.id)}
                             >
                               {t('lifecycle.retry')}
@@ -341,11 +330,21 @@ export function LifecyclePanel({
                             <Button
                               size='sm'
                               variant='ghost'
+                              className='mt-1'
                               onClick={() => void operate('cancelRun', run.id)}
                             >
                               {t('lifecycle.cancel')}
                             </Button>
                           ) : null}
+                        </td>
+                        <td className='py-1.5 pr-3'>
+                          {t('lifecycle.attempts', {
+                            attempts: run.attempts,
+                            max: run.maxAttempts,
+                          })}
+                        </td>
+                        <td className='min-w-40 py-1.5 break-words text-destructive'>
+                          {run.error ?? ''}
                         </td>
                       </tr>
                     ))}

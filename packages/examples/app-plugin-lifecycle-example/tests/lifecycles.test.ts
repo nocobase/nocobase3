@@ -14,9 +14,15 @@ function services(): ExampleServices & {
 } {
   const sent: string[] = [];
   const paid: string[] = [];
+  const calls = new Map<string, number>();
   return {
     sent,
     paid,
+    shouldFail: (key, times) => {
+      const count = (calls.get(key) ?? 0) + 1;
+      calls.set(key, count);
+      return count <= times;
+    },
     deliver: (to) => void sent.push(to),
     pay: (payee, amountCents) => {
       paid.push(`${payee}:${amountCents}`);
@@ -333,6 +339,23 @@ describe('expense report', () => {
       (run) => run.effect === 'expenses.requestPayment',
     );
     expect(payment).toMatchObject({ status: 'failed', attempts: 3 });
+  });
+
+  it('pays once someone retries a payment that gave up', async () => {
+    const { expenses, fake } = kit();
+    // Four failures: the three attempts, then the first retry's first try.
+    const created = expenses.create(report(300_000, 4));
+    await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    const failed = (await expenses.effectRuns(created)).find(
+      (run) => run.effect === 'expenses.requestPayment',
+    );
+    expect(failed?.status).toBe('failed');
+    await expenses.runtime.retryRun(failed!.id);
+    expect(expenses.get(created)).toMatchObject({
+      status: 'paid',
+      paymentRef: 'PAY-1',
+    });
+    expect(fake.paid).toHaveLength(1);
   });
 });
 
