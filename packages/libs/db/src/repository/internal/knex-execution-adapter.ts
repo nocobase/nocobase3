@@ -2423,7 +2423,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (keep) {
       existing.whereNot((query) => applyUnique(query, resolved.target, keep));
     }
-    if (this.recorder) {
+    if (this.discoversKeysOf(resolved.target)) {
       // The existence probe becomes a keyed lock, so recording the detached
       // target costs no extra statement.
       const detached = await this.lockKeys(resolved.target, existing);
@@ -2658,7 +2658,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     // Only the rows the relation scope can locate are detached; one it cannot
     // see stays attached rather than being silently let go.
     await this.applyRelationScope(clearQuery, resolved.target, scope);
-    if (this.recorder) {
+    if (this.discoversKeysOf(resolved.target)) {
       // Addressed by a condition, so the detached rows are locked first.
       await this.detachByKeys(
         resolved,
@@ -2857,7 +2857,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       if (!relationForeignKeyNullable(resolved)) {
         const current = await remaining.first();
         if (current) relationActionNotAllowed(resolved, 'replace');
-      } else if (this.recorder) {
+      } else if (this.discoversKeysOf(resolved.target)) {
         // Addressed by a condition, so the detached rows are locked first.
         await this.detachByKeys(
           resolved,
@@ -3305,6 +3305,18 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   }
 
   /**
+   * Whether a write addressed by a condition should lock and report its rows.
+   * A target whose rows have no identity cannot be written by key, so its
+   * condition write runs unchanged and those rows go unreported.
+   */
+  private discoversKeysOf(collection: CollectionDefinition): boolean {
+    return (
+      this.recorder !== undefined &&
+      eventIdentityFields(collection) !== undefined
+    );
+  }
+
+  /**
    * Key discovery for a write addressed by a condition: lock the rows it
    * matches and return their keys, so the write can be issued by key and
    * every row it changes is known.
@@ -3314,7 +3326,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     condition: Knex.QueryBuilder,
   ): Promise<UniqueSelector[]> {
     const client = this.getClient();
-    const identity = stableIdentityFields(collection);
+    const identity = eventIdentityFields(collection)!;
     const rows = (await condition
       .clone()
       .select(

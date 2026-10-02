@@ -322,6 +322,50 @@ describeIntegrationDatabases(
       );
     });
 
+    it('still detaches relation targets without a row identity, leaving them unreported', async () => {
+      await context.builder.createCollections([
+        {
+          name: 'logLines',
+          definition: (c) => {
+            c.string('ownerId').nullable();
+            c.string('message').notNull();
+          },
+        },
+        {
+          name: 'logOwners',
+          definition: (c) => {
+            c.string('id').primary().notNull();
+            c.hasMany('lines', 'logLines')
+              .sourceKey('id')
+              .foreignKey('ownerId');
+          },
+        },
+      ]);
+      await context.connection
+        .repository('logOwners')
+        .createOne({ values: { id: 'owner-1' } });
+      await context.connection.repository('logLines').createMany({
+        values: [
+          { ownerId: 'owner-1', message: 'a' },
+          { ownerId: 'owner-1', message: 'b' },
+        ],
+      });
+      const seen = collectEvents();
+      subscribe({ collections: ['logLines'] }, seen.listeners);
+
+      await context.connection.repository('logOwners').updateOne({
+        filter: { id: 'owner-1' },
+        values: { lines: { set: [] } },
+      });
+
+      expect(
+        await context.connection
+          .repository('logLines')
+          .count({ filter: { ownerId: 'owner-1' } }),
+      ).toBe(0);
+      expect(seen.inTransaction).toEqual([]);
+    });
+
     it('explains how calls run for the subscriptions matching a Collection', async () => {
       await createEventsFixture(context);
       const explain = (
