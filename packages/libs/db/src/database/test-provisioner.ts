@@ -1,5 +1,8 @@
+import type { Knex } from 'knex';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
+import { rawRows } from '../schema/inspector/shared/result.js';
 import type { AnyConnectionConfig } from './config.js';
+import { createDatabaseManager } from './manager.js';
 
 /** Environment variables a provisioner reads its server address and credentials from. */
 export type TestDatabaseEnvironment = Readonly<
@@ -54,4 +57,75 @@ export interface TestDatabaseProvisioner {
   listProvisioned?(options: TestDatabaseListOptions): Promise<string[]>;
   /** Removes one isolated database or schema named by `listProvisioned`. */
   dropProvisioned?(options: TestDatabaseProvisionOptions): Promise<void>;
+}
+
+/** The statements a server dialect isolates test databases with; `??` stands for the database's name. */
+export interface SqlTestDatabaseStatements {
+  readonly create: string;
+  readonly drop: string;
+  /** Lists every database or schema on the server as rows with a `name` column. */
+  readonly list: string;
+}
+
+export interface SqlTestDatabaseProvisionerOptions {
+  readonly dialect: string;
+  readonly capabilities: Partial<DatabaseCapabilities>;
+  /** The server itself, for the statements that create, list and drop isolated databases. */
+  readonly admin: (env: TestDatabaseEnvironment) => AnyConnectionConfig;
+  /** The isolated database named, for the tests that run on it. */
+  readonly connection: (
+    env: TestDatabaseEnvironment,
+    name: string,
+  ) => AnyConnectionConfig;
+  readonly statements: SqlTestDatabaseStatements;
+}
+
+/**
+ * A provisioner for a server dialect that isolates each test database with
+ * one statement each to create, drop and list them, so that a dialect
+ * package declares only those statements and its connection options.
+ * Every statement runs on an administrative connection opened for it and
+ * closed afterwards, so a test holds no connection beyond its own.
+ */
+export function createSqlTestDatabaseProvisioner(
+  options: SqlTestDatabaseProvisionerOptions,
+): TestDatabaseProvisioner {
+  const { statements } = options;
+  const withAdmin = async <T>(
+    env: TestDatabaseEnvironment,
+    run: (client: Knex) => Promise<T>,
+  ): Promise<T> => {
+    const admin = createDatabaseManager({
+      connections: { main: options.admin(env) },
+    });
+    try {
+      return await run(await admin.connection().client<Knex>());
+    } finally {
+      await admin.destroy();
+    }
+  };
+  const drop = (env: TestDatabaseEnvironment, name: string): Promise<void> =>
+    withAdmin(env, async (client) => {
+      await client.raw(statements.drop, [name]);
+    });
+  return {
+    dialect: options.dialect,
+    capabilities: options.capabilities,
+    provision: async ({ name, env }) => {
+      await withAdmin(env, async (client) => {
+        await client.raw(statements.create, [name]);
+      });
+      return {
+        connection: options.connection(env, name),
+        drop: () => drop(env, name),
+      };
+    },
+    listProvisioned: ({ prefix, env }) =>
+      withAdmin(env, async (client) =>
+        rawRows<{ name: string }>(await client.raw(statements.list))
+          .map((row) => row.name)
+          .filter((name) => name.startsWith(prefix)),
+      ),
+    dropProvisioned: ({ name, env }) => drop(env, name),
+  };
 }

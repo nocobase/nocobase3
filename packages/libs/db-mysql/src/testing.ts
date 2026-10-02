@@ -1,9 +1,8 @@
-import { createDatabaseManager, rawRows } from '@nocobase/db';
-import type {
-  TestDatabaseEnvironment,
-  TestDatabaseProvisioner,
+import {
+  createSqlTestDatabaseProvisioner,
+  type TestDatabaseEnvironment,
+  type TestDatabaseProvisioner,
 } from '@nocobase/db/testing';
-import type { Knex } from 'knex';
 import { mysql, mysqlDriver, type MysqlOptions } from './index.js';
 
 /**
@@ -25,58 +24,16 @@ export function mysqlTestConnection(
 }
 
 /** Isolates each test database in its own MySQL database. */
-export const testDatabaseProvisioner: TestDatabaseProvisioner = {
-  dialect: 'mysql',
-  capabilities: mysqlDriver.capabilities ?? {},
-  provision: async ({ name, env }) => {
-    const options = mysqlTestConnection(env);
-    const admin = createDatabaseManager({
-      connections: { main: mysql(options) },
-    });
-    try {
-      const client = await admin.connection().client<Knex>();
-      await client.raw('create database ??', [name]);
-      return {
-        connection: mysql({ ...options, database: name }),
-        drop: async () => {
-          try {
-            await client.raw('drop database if exists ??', [name]);
-          } finally {
-            await admin.destroy();
-          }
-        },
-      };
-    } catch (error) {
-      await admin.destroy();
-      throw error;
-    }
-  },
-  listProvisioned: ({ prefix, env }) =>
-    withAdmin(env, async (client) =>
-      rawRows<{ name: string }>(
-        await client.raw(
-          'select schema_name as name from information_schema.schemata order by schema_name',
-        ),
-      )
-        .map((row) => row.name)
-        .filter((name) => name.startsWith(prefix)),
-    ),
-  dropProvisioned: ({ name, env }) =>
-    withAdmin(env, async (client) => {
-      await client.raw('drop database if exists ??', [name]);
-    }),
-};
-
-async function withAdmin<T>(
-  env: TestDatabaseEnvironment,
-  run: (client: Knex) => Promise<T>,
-): Promise<T> {
-  const admin = createDatabaseManager({
-    connections: { main: mysql(mysqlTestConnection(env)) },
+export const testDatabaseProvisioner: TestDatabaseProvisioner =
+  createSqlTestDatabaseProvisioner({
+    dialect: 'mysql',
+    capabilities: mysqlDriver.capabilities ?? {},
+    admin: (env) => mysql(mysqlTestConnection(env)),
+    connection: (env, name) =>
+      mysql({ ...mysqlTestConnection(env), database: name }),
+    statements: {
+      create: 'create database ??',
+      drop: 'drop database if exists ??',
+      list: 'select schema_name as name from information_schema.schemata order by schema_name',
+    },
   });
-  try {
-    return await run(await admin.connection().client<Knex>());
-  } finally {
-    await admin.destroy();
-  }
-}

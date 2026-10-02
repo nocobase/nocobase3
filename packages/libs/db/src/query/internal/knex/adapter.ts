@@ -32,6 +32,7 @@ import {
   normalizeTemporalResultValue,
 } from '../../../repository/temporal.js';
 import { temporalProjection } from '../../../repository/internal/temporal-sql.js';
+import { RepositoryError } from '../../../repository/errors.js';
 import type {
   AggregateExpression,
   AliasedExpression,
@@ -726,10 +727,10 @@ class KnexInsertQuery<
 
   async execute(): Promise<InsertResult> {
     const data = this.requireValues();
-    const fields = await resolveWriteFields(this.lookup, this.tableName);
     const collection = await this.lookup?.(
       parseAliasedIdentifier(this.tableName).identifier,
     );
+    const fields = writeFieldsOf(collection);
     const fallback =
       Array.isArray(data) &&
       collection &&
@@ -838,10 +839,10 @@ class KnexUpdateQuery<
   }
 
   async execute(): Promise<UpdateResult> {
-    const fields = await resolveWriteFields(this.lookup, this.tableName);
+    const collection = await mutationCollection(this.lookup, this.tableName);
     const result = await this.buildQuery(
-      fields,
-      await mutationCollections(this.lookup, this.tableName),
+      writeFieldsOf(collection?.definition),
+      collection?.scope,
     );
     return normalizeUpdateResult(result);
   }
@@ -967,9 +968,8 @@ class KnexDeleteQuery<
   }
 
   async execute(): Promise<DeleteResult> {
-    const result = await this.buildQuery(
-      await mutationCollections(this.lookup, this.tableName),
-    );
+    const collection = await mutationCollection(this.lookup, this.tableName);
+    const result = await this.buildQuery(collection?.scope);
     return normalizeDeleteResult(result);
   }
 
@@ -2041,7 +2041,7 @@ function applyBinaryExpression(
     bool,
     lhs,
     op,
-    normalizeQueryComparisonValue(context, expression.lhs, rhs.value),
+    normalizeQueryComparisonValue(context, expression.lhs, rhs.value, op),
   );
 }
 
@@ -2050,23 +2050,65 @@ function applyBinaryExpression(
  * builder stored. Without this a temporal comparison bound the caller's string verbatim: MySQL rejects
  * `next_run_at <= '2026-10-02T03:45:25.880Z'` (`Incorrect datetime value`) although the same value is accepted
  * by `set`, which already encodes it.
+ *
+ * Only a value the Field could store is encoded. A pattern (`like`), a null test (`is`), a date without a time
+ * compared with a `datetime`, or any other string that is not a complete V1 literal is the database's to
+ * interpret and is bound as given, as every comparison was before comparisons were encoded at all.
  */
 function normalizeQueryComparisonValue(
   context: ExpressionCompileContext,
   operand: OperandNode,
   value: unknown,
+  op?: ComparisonOperator,
 ): unknown {
   if (operand.type !== 'ref') return value;
+  if (
+    op !== undefined &&
+    !ENCODED_COMPARISON_OPERATORS.has(normalizeComparisonOperator(op))
+  ) {
+    return value;
+  }
   const field = scalarSource(operand.reference, context.tableScope);
   if (!field) return value;
   const encode =
     field.type === 'boolean'
       ? (item: unknown) => encodeQueryBoolean(context.client, field, item)
       : isTemporalType(field.type)
-        ? (item: unknown) => encodeQueryTemporal(context.client, field, item)
+        ? (item: unknown) => encodeComparedTemporal(context.client, field, item)
         : undefined;
   if (!encode) return value;
   return Array.isArray(value) ? value.map(encode) : encode(value);
+}
+
+/** The operators whose value stands for what the Field stores; a pattern or a null test does not. */
+const ENCODED_COMPARISON_OPERATORS: ReadonlySet<ComparisonOperator> =
+  new Set<ComparisonOperator>([
+    '=',
+    '!=',
+    '<>',
+    '>',
+    '>=',
+    '<',
+    '<=',
+    'in',
+    'not in',
+  ]);
+
+function encodeComparedTemporal(
+  client: Knex,
+  field: FieldDefinition,
+  value: unknown,
+): unknown {
+  if (typeof value !== 'string')
+    return encodeQueryTemporal(client, field, value);
+  try {
+    return encodeQueryTemporal(client, field, value);
+  } catch (error) {
+    // Not a complete V1 literal: `'2026-01-01'` against a `datetime`, or `'2026-01-01T10:00'` without seconds. A
+    // write refuses such a value; a comparison hands it to the database, which decides what it means.
+    if (error instanceof RepositoryError) return value;
+    throw error;
+  }
 }
 
 function applyBetweenExpression(
@@ -3024,12 +3066,11 @@ function encodeQueryTemporal(
     : normalized;
 }
 
-async function resolveWriteFields(
-  lookup: CollectionLookup | undefined,
-  tableName: string,
-): Promise<WriteFields> {
-  if (!lookup) return emptyWriteFields;
-  const collection = await lookup(parseAliasedIdentifier(tableName).identifier);
+/** The Fields of a Collection a write encodes specially; nothing when the table backs no Collection. */
+function writeFieldsOf(
+  collection: CollectionDefinition | undefined,
+): WriteFields {
+  if (!collection) return emptyWriteFields;
   const json = new Set<string>();
   const boolean = new Map<string, FieldDefinition>();
   const temporal = new Map<string, FieldDefinition>();
@@ -3565,21 +3606,29 @@ async function prepareDecimalSelections(
   return result;
 }
 
-/** Prepare schema only for adapters needing aggregate input types; PG/MySQL bypass this. */
-/**
- * The Collection behind an update or delete, so its where clause binds a compared value the way a write to the
- * Field binds it, as a select's does.
- */
-async function mutationCollections(
-  lookup: CollectionLookup | undefined,
-  table: string,
-): Promise<ReadonlyMap<string, CollectionDefinition> | undefined> {
-  if (!lookup) return undefined;
-  const identifier = parseAliasedIdentifier(table).identifier;
-  const collection = await lookup(identifier);
-  return collection ? new Map([[identifier, collection]]) : undefined;
+interface MutationCollection {
+  readonly definition: CollectionDefinition;
+  /** The table scope's Collections, so a where clause resolves the Fields it compares. */
+  readonly scope: ReadonlyMap<string, CollectionDefinition>;
 }
 
+/**
+ * The Collection behind an update or delete, resolved once: its Fields decide how the written values are
+ * encoded, and its where clause binds a compared value the way a write to the Field binds it, as a select's does.
+ */
+async function mutationCollection(
+  lookup: CollectionLookup | undefined,
+  table: string,
+): Promise<MutationCollection | undefined> {
+  if (!lookup) return undefined;
+  const identifier = parseAliasedIdentifier(table).identifier;
+  const definition = await lookup(identifier);
+  return definition
+    ? { definition, scope: new Map([[identifier, definition]]) }
+    : undefined;
+}
+
+/** Prepare schema only for adapters needing aggregate input types; PG/MySQL bypass this. */
 async function collectNumericCollections(
   state: SelectState,
   table: string,

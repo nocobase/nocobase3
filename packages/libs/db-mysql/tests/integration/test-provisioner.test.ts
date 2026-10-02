@@ -48,7 +48,7 @@ describe('MySQL test database provisioner', () => {
       name,
       env: process.env,
     });
-    // Removed the way a later run removes a leftover, while the run that created it still holds a connection.
+    // Removed the way a later run removes a leftover, before the run that created it drops it itself.
     await testDatabaseProvisioner.dropProvisioned?.({ name, env: process.env });
     await expect(
       testDatabaseProvisioner.listProvisioned?.({

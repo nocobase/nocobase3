@@ -1,9 +1,8 @@
-import { createDatabaseManager, rawRows } from '@nocobase/db';
-import type {
-  TestDatabaseEnvironment,
-  TestDatabaseProvisioner,
+import {
+  createSqlTestDatabaseProvisioner,
+  type TestDatabaseEnvironment,
+  type TestDatabaseProvisioner,
 } from '@nocobase/db/testing';
-import type { Knex } from 'knex';
 import { postgres, postgresDriver, type PostgresOptions } from './index.js';
 
 /**
@@ -26,58 +25,16 @@ export function postgresTestConnection(
 }
 
 /** Isolates each test database in its own schema of one server database. */
-export const testDatabaseProvisioner: TestDatabaseProvisioner = {
-  dialect: 'postgres',
-  capabilities: postgresDriver.capabilities ?? {},
-  provision: async ({ name, env }) => {
-    const options = postgresTestConnection(env);
-    const admin = createDatabaseManager({
-      connections: { main: postgres(options) },
-    });
-    try {
-      const client = await admin.connection().client<Knex>();
-      await client.raw('create schema ??', [name]);
-      return {
-        connection: postgres({ ...options, schema: name }),
-        drop: async () => {
-          try {
-            await client.raw('drop schema if exists ?? cascade', [name]);
-          } finally {
-            await admin.destroy();
-          }
-        },
-      };
-    } catch (error) {
-      await admin.destroy();
-      throw error;
-    }
-  },
-  listProvisioned: ({ prefix, env }) =>
-    withAdmin(env, async (client) =>
-      rawRows<{ name: string }>(
-        await client.raw(
-          'select nspname as name from pg_catalog.pg_namespace order by nspname',
-        ),
-      )
-        .map((row) => row.name)
-        .filter((name) => name.startsWith(prefix)),
-    ),
-  dropProvisioned: ({ name, env }) =>
-    withAdmin(env, async (client) => {
-      await client.raw('drop schema if exists ?? cascade', [name]);
-    }),
-};
-
-async function withAdmin<T>(
-  env: TestDatabaseEnvironment,
-  run: (client: Knex) => Promise<T>,
-): Promise<T> {
-  const admin = createDatabaseManager({
-    connections: { main: postgres(postgresTestConnection(env)) },
+export const testDatabaseProvisioner: TestDatabaseProvisioner =
+  createSqlTestDatabaseProvisioner({
+    dialect: 'postgres',
+    capabilities: postgresDriver.capabilities ?? {},
+    admin: (env) => postgres(postgresTestConnection(env)),
+    connection: (env, name) =>
+      postgres({ ...postgresTestConnection(env), schema: name }),
+    statements: {
+      create: 'create schema ??',
+      drop: 'drop schema if exists ?? cascade',
+      list: 'select nspname as name from pg_catalog.pg_namespace order by nspname',
+    },
   });
-  try {
-    return await run(await admin.connection().client<Knex>());
-  } finally {
-    await admin.destroy();
-  }
-}

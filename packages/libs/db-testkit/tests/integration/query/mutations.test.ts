@@ -281,5 +281,43 @@ describeIntegrationDatabases('query mutations', (context) => {
     await expect(
       context.database.query().selectFrom(table).select(['key']).execute(),
     ).resolves.toEqual([{ key: 'late-inactive' }]);
+
+    // A value the Field could not store is not refused the way a write refuses it: a date without a time is
+    // bound as given, and every database reads it as that day's midnight in its own zone.
+    await expect(
+      context.database
+        .query()
+        .selectFrom(table)
+        .select(['key'])
+        .where('dueAt', '>=', '2026-08-13')
+        .where('dueAt', '<', '2026-08-16')
+        .execute(),
+    ).resolves.toEqual([{ key: 'late-inactive' }]);
+    await expect(
+      context.database
+        .query()
+        .updateTable(table)
+        .set({ key: 'late-inactive-today' })
+        .where('dueAt', '>=', '2026-08-13')
+        .execute(),
+    ).resolves.toEqual({ updatedCount: 1 });
+    // A pattern is never a stored value, so `like` binds it verbatim. PostgreSQL has no `like` for timestamps.
+    if (context.spec.dialect !== 'postgres') {
+      await expect(
+        context.database
+          .query()
+          .selectFrom(table)
+          .select(['key'])
+          .where('dueAt', 'like', '2026-08-1%')
+          .execute(),
+      ).resolves.toEqual([{ key: 'late-inactive-today' }]);
+      await expect(
+        context.database
+          .query()
+          .deleteFrom(table)
+          .where('dueAt', 'like', '2026-08-1%')
+          .execute(),
+      ).resolves.toEqual({ deletedCount: 1 });
+    }
   });
 });
