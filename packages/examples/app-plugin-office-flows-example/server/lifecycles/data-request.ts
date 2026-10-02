@@ -100,7 +100,7 @@ function isAcceptor({ record, actor }: Context): boolean {
 function reasonRequired(input: Record<string, unknown>): string | null {
   return typeof input.reason === 'string' && input.reason.trim()
     ? null
-    : '请填写原因';
+    : 'Give a reason.';
 }
 
 /**

@@ -271,25 +271,54 @@ describe('lifecycle concurrency', () => {
     ]);
   });
 
-  it('keeps an attempt open when recording its outcome fails, so it runs again', async () => {
-    const { make, id, controls, advance, record, keys, store } = setup();
+  it('queues an attempt again when recording its outcome fails, instead of leaving it claimed', async () => {
+    const dispatcher = new HeldDispatcher();
+    const { make, id, controls, record, keys, store } = setup({ dispatcher });
     const runtime = make();
     controls.breakRecording = true;
     await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
-    // Neither the success nor the payment it should have recorded stuck.
+    const [runId] = dispatcher.runs;
+    expect(await runtime.runEffect(runId!)).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      claimedAt: null,
+      error: expect.stringContaining('could not be recorded'),
+    });
+    // Neither the success nor the payment it should have recorded stuck,
+    // and the run was handed over again rather than waiting for a lease.
     expect(record()).toMatchObject({ status: 'approved', paymentRef: null });
-    const [stuck] = (await runtime.history('orders', id)).effectRuns;
-    expect(stuck).toMatchObject({ status: 'running', attempts: 1 });
+    expect(dispatcher.runs).toEqual([runId, runId]);
 
     controls.breakRecording = false;
-    advance(2);
-    await runtime.recover();
-    expect(record()).toMatchObject({ status: 'paid', paymentRef: 'PAY-2' });
-    expect(await store.findEffectRun(stuck!.id)).toMatchObject({
+    expect(await runtime.runEffect(runId!)).toMatchObject({
       status: 'succeeded',
       attempts: 2,
     });
+    expect(record()).toMatchObject({ status: 'paid', paymentRef: 'PAY-2' });
+    expect(await store.findEffectRun(runId!)).toMatchObject({ attempts: 2 });
     // Paid twice, under one key: the payment service makes it count once.
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it('gives up once every attempt failed to record, and a retry counts on from there', async () => {
+    const { make, id, controls, record, keys } = setup();
+    const runtime = make();
+    controls.breakRecording = true;
+    await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
+    const [run] = (await runtime.history('orders', id)).effectRuns;
+    expect(run).toMatchObject({ status: 'dead', attempts: 2 });
+    expect(record()).toMatchObject({ status: 'approved', paymentRef: null });
+    expect(keys).toHaveLength(2);
+
+    controls.breakRecording = false;
+    // A fresh budget, not a fresh count: attempt 3 cannot be mistaken for
+    // an attempt 1 that is still finishing somewhere.
+    expect(await runtime.retryRun(run!.id)).toMatchObject({
+      status: 'succeeded',
+      attempts: 3,
+      maxAttempts: 4,
+    });
+    expect(record()).toMatchObject({ status: 'paid', paymentRef: 'PAY-3' });
     expect(new Set(keys).size).toBe(1);
   });
 
@@ -314,14 +343,43 @@ describe('lifecycle concurrency', () => {
     expect(record()).toMatchObject({ status: 'approved' });
   });
   it('runs a continuation that met a conflict again instead of dropping it', async () => {
-    const { make, id, controls, advance, record } = setup();
+    const { make, id, controls, record, keys } = setup();
     const runtime = make();
     controls.conflictOnce = true;
     await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
-    expect(record()).toMatchObject({ status: 'approved' });
-    advance(2);
-    await runtime.recover();
+    // The conflict put the attempt back in the queue, and the next one paid.
     expect(record()).toMatchObject({ status: 'paid', paymentRef: 'PAY-2' });
+    const [run] = (await runtime.history('orders', id)).effectRuns;
+    expect(run).toMatchObject({ status: 'succeeded', attempts: 2 });
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it('reclaims an attempt whose lease expired without waiting for a restart', async () => {
+    const dispatcher = new HeldDispatcher();
+    const { make, id, store, advance, record } = setup({ dispatcher });
+    const runtime = make();
+    await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
+    const [runId] = dispatcher.runs;
+    // Claimed by a process that then stopped.
+    await store.updateEffectRun(
+      runId!,
+      { status: 'queued' },
+      { status: 'running', attempts: 1, claimedAt: '2026-10-01T09:00:00.000Z' },
+    );
+    expect(await runtime.reclaim()).toBe(0);
+    advance(2);
+    expect(await runtime.reclaim()).toBe(1);
+    expect(await store.findEffectRun(runId!)).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      claimedAt: null,
+    });
+    expect(dispatcher.runs).toEqual([runId, runId]);
+    expect(await runtime.runEffect(runId!)).toMatchObject({
+      status: 'succeeded',
+      attempts: 2,
+    });
+    expect(record()).toMatchObject({ status: 'paid' });
   });
 
   it('keeps sweeping past a broken record, then reports it', async () => {
@@ -376,5 +434,71 @@ describe('lifecycle concurrency', () => {
     });
     expect(store.record('items', fine.id)).toMatchObject({ status: 'done' });
     expect(store.record('items', broken.id)).toMatchObject({ status: 'idle' });
+  });
+
+  it('pages past records a trigger cannot move, so they do not starve the ones behind them', async () => {
+    type State = 'waiting' | 'done';
+    interface Item extends LifecycleRecord {
+      readonly status: State;
+      readonly stuck: boolean;
+    }
+    const items = defineLifecycle<{
+      record: Item;
+      state: State;
+      parameters: object;
+      services: object;
+    }>({
+      name: 'items',
+      initial: 'waiting',
+      states: ['waiting', { name: 'done', final: true }],
+      transitions: {
+        finish: {
+          from: 'waiting',
+          to: 'done',
+          guard: ({ record, actor }) => actor.system === true && !record.stuck,
+        },
+      },
+      triggers: {
+        finishIdle: {
+          transition: 'finish',
+          when: 'waiting',
+          after: () => 0,
+          batchSize: 3,
+        },
+      },
+    });
+    const store = new MemoryLifecycleStore();
+    const minute = 60_000;
+    const base = Date.parse('2026-10-01T09:00:00Z');
+    // Seven refused records are the oldest, more than two full pages of them.
+    for (let index = 0; index < 7; index += 1)
+      store.insertRecord('items', {
+        status: 'waiting',
+        stuck: true,
+        statusChangedAt: new Date(base + index * minute).toISOString(),
+        lifecycleVersion: 0,
+      });
+    const movable = Array.from({ length: 5 }, (_, index) =>
+      store.insertRecord('items', {
+        status: 'waiting',
+        stuck: false,
+        statusChangedAt: new Date(base + (10 + index) * minute).toISOString(),
+        lifecycleVersion: 0,
+      }),
+    );
+    const runtime = new LifecycleRuntime({
+      store,
+      clock: () => new Date(base + 60 * minute),
+    });
+    runtime.register(items);
+
+    // Three per sweep, none of them a refused one standing in the way.
+    expect(await runtime.runTriggers()).toBe(3);
+    expect(await runtime.runTriggers()).toBe(2);
+    expect(await runtime.runTriggers()).toBe(0);
+    for (const record of movable)
+      expect(store.record('items', record.id)).toMatchObject({
+        status: 'done',
+      });
   });
 });

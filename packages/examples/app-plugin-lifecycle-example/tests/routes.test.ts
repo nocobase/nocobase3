@@ -152,8 +152,14 @@ describe('lifecycle example routes', () => {
     // The page shows why, not only that it was refused.
     await expect(denied.json()).resolves.toMatchObject({
       code: 'GUARD_REJECTED',
-      message: '只有当前审批人可以处理',
-      blockers: [{ source: 'guard', message: '只有当前审批人可以处理' }],
+      message: 'Only the current approver can decide on this report.',
+      blockers: [
+        {
+          source: 'guard',
+          code: 'approverOnly',
+          message: 'Only the current approver can decide on this report.',
+        },
+      ],
     });
     const stale = await router.request(
       post('/lifecycle-example/lifecycles/expenses/1/fire?actAs=chen', {

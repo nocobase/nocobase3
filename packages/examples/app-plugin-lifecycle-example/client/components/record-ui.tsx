@@ -5,7 +5,13 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { ChevronRight, Play } from 'lucide-react';
 
 import { useActorName } from '../lib/actor.js';
-import { errorMessage, exampleApi, type RecordDetail } from '../lib/api.js';
+import {
+  blockerMessage,
+  errorMessage,
+  exampleApi,
+  type RecordDetail,
+} from '../lib/api.js';
+import { useTranslate } from '../lib/use-example-record.js';
 import { dateTime, NAMESPACE } from '../lib/format.js';
 import { cn } from '../lib/utils.js';
 import { Badge } from './ui/badge.js';
@@ -98,6 +104,7 @@ export function LifecyclePanel({
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
+  const translate = useTranslate();
   const client = useApiClient();
   const actorName = useActorName();
   const [open, setOpen] = useState(false);
@@ -117,7 +124,7 @@ export function LifecyclePanel({
       setNote('');
       await onChange();
     } catch (cause) {
-      setNote(errorMessage(cause));
+      setNote(errorMessage(cause, translate));
     }
   };
 
@@ -127,7 +134,7 @@ export function LifecyclePanel({
       setNote(t('lifecycle.swept', { count }));
       await onChange();
     } catch (cause) {
-      setNote(errorMessage(cause));
+      setNote(errorMessage(cause, translate));
     }
   };
 
@@ -189,7 +196,7 @@ export function LifecyclePanel({
                         key={blocker.code + blocker.message}
                         className='text-muted-foreground'
                       >
-                        {blocker.message}
+                        {blockerMessage(blocker, translate)}
                       </span>
                     ))}
                   </li>

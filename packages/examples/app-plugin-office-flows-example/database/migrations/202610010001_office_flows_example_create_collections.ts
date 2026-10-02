@@ -39,7 +39,7 @@ function taskColumns(table: CollectionDefinitionBuilder): void {
 const migration: MigrationDefinition = defineMigration({
   name: '202610010001_office_flows_example_create_collections',
 
-  async up({ builder }) {
+  async up({ builder, connection }) {
     await builder.createCollection('officeFlowsDataRequests', (table) => {
       table.bigInt('id').primary().autoIncrement().notNull();
       table.string('number').notNull();
@@ -223,7 +223,14 @@ const migration: MigrationDefinition = defineMigration({
       table.string('requestId');
       table.index(['lifecycle', 'recordId', 'id']);
       table.unique(['lifecycle', 'recordId', 'version']);
-      table.unique(['lifecycle', 'recordId', 'requestId']);
+      // Only entries that carry a request key: a dialect that counts NULL as
+      // a value, such as MSSQL, would otherwise allow one keyless transition
+      // per record.
+      table.unique(['lifecycle', 'recordId', 'requestId'], {
+        ...(connection.capabilities.partialIndexes
+          ? { predicate: { requestId: { $notNull: true } } }
+          : {}),
+      });
     });
 
     await builder.createCollection('officeFlowsEffectRuns', (table) => {

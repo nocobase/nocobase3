@@ -2651,6 +2651,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/jobs':
+        specifier: workspace:*
+        version: link:../jobs
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)

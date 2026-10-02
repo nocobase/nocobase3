@@ -30,7 +30,7 @@ import {
   type RecordDetail,
 } from '../lib/api.js';
 import { ago, countdown, dateTime, NAMESPACE } from '../lib/format.js';
-import { useExampleRecord } from '../lib/use-example-record.js';
+import { useExampleRecord, useTranslate } from '../lib/use-example-record.js';
 import { useLoader } from '../lib/use-loader.js';
 import { useNow } from '../lib/use-now.js';
 import { cn } from '../lib/utils.js';
@@ -259,6 +259,7 @@ function NewTicket({
   readonly onCreated: (id: string) => Promise<void>;
 }): ReactElement {
   const { t } = useTranslation(NAMESPACE);
+  const translate = useTranslate();
   const client = exampleApi(useApiClient());
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState('account');
@@ -281,7 +282,7 @@ function NewTicket({
       });
       await onCreated(text(created.id));
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(errorMessage(cause, translate));
     } finally {
       setBusy(false);
     }
@@ -392,6 +393,7 @@ function TicketView({
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
+  const translate = useTranslate();
   const actorName = useActorName();
   const now = useNow();
   const [message, setMessage] = useState('');
@@ -471,7 +473,7 @@ function TicketView({
       setMessage('');
       await onChange();
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(errorMessage(cause, translate));
     } finally {
       setBusy(false);
     }

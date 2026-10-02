@@ -27,6 +27,7 @@ let directory: string;
 let database: DatabaseManager;
 let service: OfficeFlowsService;
 let store: OfficeStore;
+let runtime: LifecycleRuntime;
 
 beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'office-flows-'));
@@ -49,7 +50,7 @@ beforeEach(async () => {
   await database
     .createSeeder({ directory: path.join(root, 'database/seeds'), packageName })
     .run();
-  const runtime = new LifecycleRuntime({
+  runtime = new LifecycleRuntime({
     store: createRepositoryLifecycleStore(database, {
       collections: {
         transitions: COLLECTIONS.transitions,
@@ -449,6 +450,110 @@ describe('incoming document', () => {
     expect(
       (await noticesOf('zhoujie')).map((notice) => notice.message),
     ).toEqual([expect.stringContaining('有异议')]);
+  });
+});
+
+describe('extraction tasks and the request they belong to', () => {
+  it('creates every manual task asked for at once, each with its own key', async () => {
+    const created = await service.createDataRequest(
+      requestForm({
+        frequency: 'other',
+        deliveryDate: '',
+        firstUseDate: today(1),
+        lastDeliveryDate: today(30),
+        frequencyNote: '按需',
+      }),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    await approveToAcceptance(id);
+    const task = {
+      topic: '临时取数',
+      requirement: '',
+      scheduledDate: today(3),
+      executorIds: [],
+    };
+    await Promise.all(
+      Array.from({ length: 3 }, () =>
+        service.createManualExtraction(id, task, 'chenjing'),
+      ),
+    );
+    const detail = await service.dataRequestDetail(id, 'chenjing');
+    const tasks = detail.extractions as Plain[];
+    expect(tasks).toHaveLength(3);
+    expect(new Set(tasks.map((item) => item.periodKey)).size).toBe(3);
+  });
+
+  it('creates no task for a request that has left acceptance', async () => {
+    const created = await service.createDataRequest(
+      requestForm({
+        frequency: 'other',
+        deliveryDate: '',
+        firstUseDate: today(1),
+        lastDeliveryDate: today(30),
+        frequencyNote: '按需',
+      }),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    await approveToAcceptance(id);
+    await service.fire('dataRequests', id, 'exit', {}, 'chenjing');
+    expect(
+      await store.createExtraction({
+        requestId: Number(id),
+        periodKey: today(),
+        origin: 'scheduled',
+        scheduledDate: today(),
+        topic: '客户画像数据',
+        requirement: '',
+        executorIds: ['sunli'],
+      }),
+    ).toBeUndefined();
+    const detail = await service.dataRequestDetail(id, 'chenjing');
+    expect(detail.extractions).toEqual([]);
+  });
+
+  it('makes a decision taken before a task was created meet a conflict', async () => {
+    const created = await service.createDataRequest(
+      requestForm({
+        frequency: 'other',
+        deliveryDate: '',
+        firstUseDate: today(1),
+        lastDeliveryDate: today(30),
+        frequencyNote: '按需',
+      }),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    await approveToAcceptance(id);
+    // The acceptor read the request with no open task and decides to complete it.
+    const seen = await runtime.view('dataRequests', id, { id: 'chenjing' });
+    expect(
+      seen.available.find((item) => item.name === 'complete'),
+    ).toMatchObject({ allowed: true });
+    // Meanwhile the sweep creates a task: the request's version moves on.
+    expect(
+      await store.createExtraction({
+        requestId: Number(id),
+        periodKey: today(),
+        origin: 'scheduled',
+        scheduledDate: today(),
+        topic: '客户画像数据',
+        requirement: '',
+        executorIds: ['sunli'],
+      }),
+    ).toBeDefined();
+    await expect(
+      runtime.fire('dataRequests', id, 'complete', {
+        actor: { id: 'chenjing' },
+        expect: { version: seen.version },
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    // Read again, the open task is what refuses it.
+    const now = await runtime.view('dataRequests', id, { id: 'chenjing' });
+    expect(
+      now.available.find((item) => item.name === 'complete'),
+    ).toMatchObject({ allowed: false });
   });
 });
 

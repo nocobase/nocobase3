@@ -26,14 +26,14 @@ export interface ExtractionTypes {
 
 /** The processing fields a task must have before it can be submitted. */
 export const EXTRACTION_REQUIRED: readonly (readonly [string, string])[] = [
-  ['category', '数据实施分类'],
-  ['complexity', '取数逻辑复杂程度'],
-  ['agreedDeliveryAt', '与用户协商一致的数据交付时间'],
-  ['sourceSystem', '数据所属系统'],
-  ['needsDownload', '是否需要下载数据'],
-  ['feedbackNote', '反馈说明'],
-  ['managerId', '抽数一级主管'],
-  ['confirmerId', '业务部门确认逻辑'],
+  ['category', 'implementation category'],
+  ['complexity', 'extraction complexity'],
+  ['agreedDeliveryAt', 'delivery time agreed with the user'],
+  ['sourceSystem', 'source system'],
+  ['needsDownload', 'whether the data is downloaded'],
+  ['feedbackNote', 'feedback note'],
+  ['managerId', 'extraction manager'],
+  ['confirmerId', 'business confirmer'],
 ];
 
 /**
@@ -69,7 +69,7 @@ export const extractionLifecycle: Lifecycle<ExtractionTypes> =
           if (missing.length)
             throw new LifecycleError(
               'INVALID_INPUT',
-              `请填写：${missing.join('、')}`,
+              `Fill in before submitting: ${missing.join(', ')}.`,
             );
           return {};
         },
@@ -82,7 +82,7 @@ export const extractionLifecycle: Lifecycle<ExtractionTypes> =
         validate: (input) =>
           typeof input.reason === 'string' && input.reason.trim()
             ? null
-            : '请填写作废原因',
+            : 'Give a reason for voiding the task.',
         set: ({ input }) => ({ voidReason: text(input.reason) }),
       },
     },

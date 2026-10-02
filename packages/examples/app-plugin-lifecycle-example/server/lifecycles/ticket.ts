@@ -33,19 +33,30 @@ export interface TicketTypes {
 
 type Context = TransitionContext<TicketTypes>;
 
-// A guard's message is what the page shows beside a button it greys out.
+// A guard's verdict is what the page shows beside a button it greys out:
+// the code is stable for the page to translate, the message says it in English.
 function isAgent({ actor }: Context): GuardVerdict {
-  return person(actor.id)?.role === 'agent' || '只有客服可以处理工单';
+  return (
+    person(actor.id)?.role === 'agent' || {
+      code: 'agentOnly',
+      message: 'Only a support agent can work on tickets.',
+    }
+  );
 }
 
 function isRequester({ record, actor }: Context): GuardVerdict {
-  return actor.id === record.requesterId || '只有提交工单的客户可以操作';
+  return (
+    actor.id === record.requesterId || {
+      code: 'requesterOnly',
+      message: 'Only the customer who filed the ticket can do this.',
+    }
+  );
 }
 
 function messageRequired(input: Record<string, unknown>): InputProblem[] {
   return typeof input.message === 'string' && input.message.trim()
     ? []
-    : [{ field: 'message', message: '请填写内容' }];
+    : [{ field: 'message', message: 'Write a message.' }];
 }
 
 /**
@@ -103,7 +114,11 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
         title: '超时自动关闭',
         from: 'awaitingCustomer',
         to: 'closed',
-        guard: ({ actor }) => actor.system === true || '超时后由系统自动关闭',
+        guard: ({ actor }) =>
+          actor.system === true || {
+            code: 'systemOnly',
+            message: 'The system closes a ticket once the wait has passed.',
+          },
         set: () => ({ closedReason: 'timeout' }),
       },
       reopen: {
@@ -116,8 +131,10 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
           if (requester !== true) return requester;
           return (
             context.now.getTime() - Date.parse(context.record.statusChangedAt) <
-              context.parameters.reopenDays * 86_400_000 ||
-            `关闭超过 ${context.parameters.reopenDays} 天，不能再重新打开，请提交新工单`
+              context.parameters.reopenDays * 86_400_000 || {
+              code: 'reopenExpired',
+              message: `Closed more than ${context.parameters.reopenDays} days ago; file a new ticket instead.`,
+            }
           );
         },
         validate: messageRequired,

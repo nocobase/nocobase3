@@ -57,6 +57,10 @@ it('creates the collections on up and removes them on down', async () => {
     expect(unique).toMatch(
       /lifecycle_example_transitions.*lifecycle.*record_id.*version/,
     );
+    // The request key is unique only where there is one.
+    expect(unique).toMatch(
+      /lifecycle_example_transitions.*request_id[^\n]*where[^\n]*request_id[^\n]*is not null/i,
+    );
 
     await migrator.rollback();
     for (const [name, physical] of Object.entries(COLLECTIONS)) {

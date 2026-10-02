@@ -12,10 +12,14 @@ import { expenseLifecycle } from '../lifecycles/expense.js';
 import { ticketLifecycle } from '../lifecycles/ticket.js';
 import type { ExampleLifecycleName, Plain } from '../tokens.js';
 
-/** A refusal the service makes before any lifecycle is involved. */
+/**
+ * A refusal the service makes before any lifecycle is involved. `reason` is
+ * stable, so a page can translate it; `message` says the same in English.
+ */
 export class ExampleError extends Error {
   public constructor(
     public readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID',
+    public readonly reason: string,
     message: string,
   ) {
     super(message);
@@ -99,13 +103,21 @@ export class LifecycleExampleService {
 
   public async createTicket(values: NewTicket, actor: string): Promise<Plain> {
     if (person(actor)?.role !== 'customer')
-      throw new ExampleError('FORBIDDEN', '只有客户可以提交工单');
+      throw new ExampleError(
+        'FORBIDDEN',
+        'customersOnly',
+        'Only a customer can file a ticket.',
+      );
     if (!values.subject.trim() || !values.description.trim())
-      throw new ExampleError('INVALID', '请填写标题和问题描述');
+      throw new ExampleError(
+        'INVALID',
+        'ticketFields',
+        'Give the ticket a subject and a description.',
+      );
     if (!TICKET_CATEGORIES.includes(values.category))
-      throw new ExampleError('INVALID', '请选择问题分类');
+      throw new ExampleError('INVALID', 'category', 'Choose a category.');
     if (!PRIORITIES.includes(values.priority as (typeof PRIORITIES)[number]))
-      throw new ExampleError('INVALID', '请选择优先级');
+      throw new ExampleError('INVALID', 'priority', 'Choose a priority.');
     return this.create(
       'tickets',
       {
@@ -122,7 +134,11 @@ export class LifecycleExampleService {
     actor: string,
   ): Promise<Plain> {
     if (person(actor)?.role !== 'applicant')
-      throw new ExampleError('FORBIDDEN', '只有员工可以发起报销');
+      throw new ExampleError(
+        'FORBIDDEN',
+        'applicantsOnly',
+        'Only an employee can file an expense report.',
+      );
     return this.create(
       'expenses',
       {
@@ -143,11 +159,24 @@ export class LifecycleExampleService {
     const current = await this.database
       .repository(expenseLifecycle.collection)
       .findOne({ filter: { id: Number(id) } });
-    if (!current) throw new ExampleError('NOT_FOUND', '报销单不存在');
+    if (!current)
+      throw new ExampleError(
+        'NOT_FOUND',
+        'expenseMissing',
+        'The expense report does not exist.',
+      );
     if (current.applicantId !== actor)
-      throw new ExampleError('FORBIDDEN', '只能修改自己的报销单');
+      throw new ExampleError(
+        'FORBIDDEN',
+        'ownExpenseOnly',
+        'Only the applicant can edit this report.',
+      );
     if (current.status !== 'draft' && current.status !== 'needsInfo')
-      throw new ExampleError('INVALID', '审批中的报销单不能修改，请先撤回');
+      throw new ExampleError(
+        'INVALID',
+        'expenseLocked',
+        'A report under review cannot be edited; withdraw it first.',
+      );
     await this.database.repository(expenseLifecycle.collection).updateMany({
       // The state and version as read: a concurrent submit wins, and this
       // edit changes nothing.

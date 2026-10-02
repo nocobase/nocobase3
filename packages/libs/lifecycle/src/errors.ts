@@ -8,6 +8,7 @@ export type LifecycleErrorCode =
   | 'INVALID_INPUT'
   | 'INVALID_ROUTE'
   | 'INVALID_SET'
+  | 'UNKNOWN_EFFECT'
   | 'CONFLICT';
 
 /**

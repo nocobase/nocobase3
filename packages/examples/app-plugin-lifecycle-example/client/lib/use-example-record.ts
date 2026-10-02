@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useApiClient } from '@nocobase/app-client';
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   createLifecycleClient,
   useLifecycle,
@@ -12,7 +13,15 @@ import {
   LIFECYCLE_ROUTES,
   type LifecycleName,
   type RecordDetail,
+  type Translate,
 } from './api.js';
+import { NAMESPACE } from './format.js';
+
+/** The page's locale as `errorMessage()` reads it. */
+export function useTranslate(): Translate {
+  const { t } = useTranslation(NAMESPACE);
+  return (key, fallback) => t(key, { defaultValue: fallback });
+}
 
 export interface ExampleRecord {
   /** The record, what the actor may do, its history and its lifecycle's description. */
@@ -34,6 +43,7 @@ export function useExampleRecord(
   actor: string,
 ): ExampleRecord {
   const api = useApiClient();
+  const translate = useTranslate();
   const client = useMemo(
     () =>
       createLifecycleClient({
@@ -47,7 +57,7 @@ export function useExampleRecord(
   const { view, description } = lifecycle;
   return {
     detail: view && description ? { ...view, ...description } : undefined,
-    error: lifecycle.error ? errorMessage(lifecycle.error) : '',
+    error: lifecycle.error ? errorMessage(lifecycle.error, translate) : '',
     lifecycle,
     client,
   };

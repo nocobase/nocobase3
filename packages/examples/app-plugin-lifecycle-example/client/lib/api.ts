@@ -1,5 +1,6 @@
 import type { ApiClient } from '@nocobase/app-client';
 import type {
+  Blocker,
   LifecycleDescriptionView,
   RecordView,
 } from '@nocobase/lifecycle/react';
@@ -71,11 +72,71 @@ export function exampleApi(client: ApiClient): {
   };
 }
 
-export function errorMessage(cause: unknown): string {
-  if (typeof cause === 'object' && cause !== null) {
-    const payload = (cause as { payload?: unknown }).payload;
-    if (typeof payload === 'object' && payload !== null && 'message' in payload)
-      return String(payload.message);
+/** Looks a key up in the page's locale, answering `fallback` when it has none. */
+export type Translate = (key: string, fallback: string) => string;
+
+const asIs: Translate = (_key, fallback) => fallback;
+
+interface RefusalPayload {
+  readonly code?: unknown;
+  readonly reason?: unknown;
+  readonly message?: unknown;
+  readonly blockers?: unknown;
+  readonly problems?: unknown;
+}
+
+function payloadOf(cause: unknown): RefusalPayload | undefined {
+  if (typeof cause !== 'object' || cause === null) return undefined;
+  const payload = (cause as { payload?: unknown }).payload;
+  return typeof payload === 'object' && payload !== null ? payload : undefined;
+}
+
+/** A guard's refusal in the page's language, by its code; its English message otherwise. */
+export function blockerMessage(
+  blocker: Blocker,
+  translate: Translate = asIs,
+): string {
+  return translate(`blockers.${blocker.code}`, blocker.message);
+}
+
+function problemMessage(
+  problem: { readonly field?: string; readonly message: string },
+  translate: Translate,
+): string {
+  return problem.field
+    ? translate(`problems.${problem.field}`, problem.message)
+    : problem.message;
+}
+
+/**
+ * What to tell the person about a failed request. The server answers in
+ * English with stable codes — a guard's `code`, a problem's `field`, the
+ * service's `reason` — and the page's locale translates what it knows.
+ */
+export function errorMessage(
+  cause: unknown,
+  translate: Translate = asIs,
+): string {
+  const payload = payloadOf(cause);
+  if (payload) {
+    const blockers = Array.isArray(payload.blockers)
+      ? (payload.blockers as Blocker[])
+      : [];
+    if (blockers.length)
+      return blockers
+        .map((blocker) => blockerMessage(blocker, translate))
+        .join(' ');
+    const problems = Array.isArray(payload.problems)
+      ? (payload.problems as { field?: string; message: string }[])
+      : [];
+    if (problems.length)
+      return problems
+        .map((problem) => problemMessage(problem, translate))
+        .join(' ');
+    if (typeof payload.message === 'string')
+      return typeof payload.reason === 'string'
+        ? translate(`errors.${payload.reason}`, payload.message)
+        : payload.message;
   }
   return cause instanceof Error ? cause.message : String(cause);
 }
