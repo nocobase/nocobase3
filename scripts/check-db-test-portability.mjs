@@ -53,6 +53,22 @@ export const RULES = [
       'imports a dialect package; take the database from @nocobase/db-testing',
   },
   {
+    id: 'dynamic-dialect-import',
+    // A dialect package named at run time, such as import(`@nocobase/db-${dialect}`).
+    pattern: /@nocobase\/db-\$\{/,
+    message:
+      'imports a dialect package chosen at run time; take the database from @nocobase/db-testing',
+  },
+  {
+    id: 'sqlite-driver',
+    pattern: new RegExp(
+      String.raw`(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|^\s*import\s+)['"\`](?:better-sqlite3|sqlite3)['"\`]|\bclient\s*:\s*['"\`](?:better-sqlite3|sqlite3)['"\`]`,
+      'm',
+    ),
+    message:
+      'opens SQLite through its driver; take the database from @nocobase/db-testing',
+  },
+  {
     id: 'memory-database',
     pattern: /['"`]:memory:['"`]/,
     message:
@@ -66,8 +82,9 @@ export const RULES = [
   },
   {
     id: 'pragma',
-    // `pragma <name>` as SQL; an HTTP `Pragma` header is a quoted name followed by a colon.
-    pattern: /\bpragma\s+[a-z_]+/i,
+    // `pragma <name>` as SQL: followed by its argument, an assignment, the end of the statement or of the string
+    // holding it. Prose that mentions PRAGMA, and an HTTP `Pragma` header, are not.
+    pattern: /\bpragma\s+[a-z_]+\s*(?:\(|=|;|['"`]|$)/im,
     message:
       'runs a SQLite PRAGMA; assert on the schema with expectCollection() or inspectCollection()',
   },
@@ -224,18 +241,35 @@ export async function checkDbTestPortability({ repositoryRoot }) {
         });
         continue;
       }
-      if (marker || violations.length === 0) {
-        if (PENDING.has(relativePath) && violations.length === 0) {
+      // Every kind of exemption only shrinks: a listed file or a marker that no longer covers a violation is
+      // reported, so the exemption cannot outlive its reason and hide a construct added later.
+      if (violations.length === 0) {
+        if (listed) {
+          problems.push({
+            file: relativePath,
+            line: 1,
+            message: `no longer chooses a dialect; remove it from ${PENDING.has(relativePath) ? 'PENDING' : 'EXEMPT'} in scripts/check-db-test-portability.mjs`,
+          });
+        } else if (marker) {
           problems.push({
             file: relativePath,
             line: 1,
             message:
-              'no longer chooses a dialect; remove it from PENDING in scripts/check-db-test-portability.mjs',
+              'no longer chooses a dialect; remove its db-test-portability marker',
           });
         }
         continue;
       }
-      if (listed) continue;
+      if (marker && listed) {
+        problems.push({
+          file: relativePath,
+          line: 1,
+          message:
+            'carries a db-test-portability marker and is also listed in scripts/check-db-test-portability.mjs; remove the entry',
+        });
+        continue;
+      }
+      if (marker || listed) continue;
       for (const violation of violations) {
         problems.push({
           file: relativePath,
