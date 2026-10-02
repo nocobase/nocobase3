@@ -3,6 +3,7 @@ import {
   createTestDatabase,
   inspectCollection,
   provisionTestDatabases,
+  testDatabaseDialect,
 } from '../src/index.js';
 import { migrations, seeds } from './fixtures/sources.js';
 
@@ -10,7 +11,7 @@ describe('createTestDatabase', () => {
   it('opens migrated and seeded databases and destroys them again', async () => {
     const testDatabase = await createTestDatabase({ migrations, seeds });
     try {
-      expect(testDatabase.dialect).toBe('sqlite');
+      expect(testDatabase.dialect).toBe(testDatabaseDialect());
       await expect(
         testDatabase.connection
           .repository('libraryAuthors')

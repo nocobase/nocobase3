@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createDatabaseTest,
   describeMigration,
+  testDatabaseDialect,
   verifyMigration,
 } from '../src/vitest.js';
 import { leakyMigrations, migrations, seeds } from './fixtures/sources.js';
@@ -14,7 +15,7 @@ describe('createDatabaseTest with schema isolation', () => {
     dialect,
     expectCollection,
   }) => {
-    expect(dialect).toBe('sqlite');
+    expect(dialect).toBe(testDatabaseDialect());
     await expectCollection('libraryAuthors').toHaveIndex(['name'], {
       unique: true,
     });

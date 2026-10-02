@@ -97,7 +97,18 @@ export async function inspectCollection(
     if (!index.fields) continue;
     addIndex(index.fields, index.db?.unique === true);
   }
-  return { name, fields, primaryKey, indexes, foreignKeys };
+  // Some databases report the index behind the primary key as a unique index or constraint of its own; it is
+  // already described by `primaryKey`, and reporting it twice would make the snapshot differ by dialect.
+  const secondaryIndexes = indexes.filter(
+    (index) => !(index.unique && sameFields(index.fields, primaryKey)),
+  );
+  return {
+    name,
+    fields,
+    primaryKey,
+    indexes: secondaryIndexes,
+    foreignKeys,
+  };
 }
 
 function sameFields(
