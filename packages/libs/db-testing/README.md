@@ -26,6 +26,12 @@ docker compose -f packages/templates/app-template-examples/docker-compose.yml up
 NOCOBASE_TEST_DB_DIALECT=postgres pnpm --filter @nocobase/app-plugin-scheduler test
 ```
 
+In this repository, `pnpm test:db` does the same with a disposable server instead: it starts the dialect from its package's Compose file on a random port, runs the filtered packages' tests one after another, and removes the server afterwards.
+
+```bash
+pnpm test:db mysql --filter @nocobase/app-plugin-scheduler -- tests/database.test.ts
+```
+
 Every test file gets databases of its own — a schema on PostgreSQL, a database on MySQL, a fresh `:memory:` database on SQLite — named `nbt_<host>_<pid>_…`, and drops them when it finishes, so files running in parallel never share state.
 
 A run that is killed cannot drop its databases. The next run on the same machine removes them: before it provisions anything, it drops every `nbt_` database whose host tag is this machine's and whose process no longer exists. Databases another machine created on a shared server, and those of runs still in progress, are left alone. A failure to clean up is reported as a warning and never fails the run.
