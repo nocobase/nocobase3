@@ -23,6 +23,18 @@ The process vocabulary — field names, options, states and steps — is Chinese
 | One reminder per person, document and level               | `OfficeStore.notify()`, a ledger with a unique key                                         |
 | Distribution traces on the root document                  | The clerk-task effects; team and executor feedback is not traced on the root               |
 
+## Patterns worth copying
+
+| Problem                                                   | Pattern                                                                                                                        | Where                                               |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| A parent waits for its children                           | Children are records with their own lifecycle; the parent's guard counts them through the transition's transaction             | `complete` in `server/lifecycles/data-request.ts`   |
+| Creating children cannot race the parent's decision       | The child's insert runs in a transaction that bumps the parent's `lifecycleVersion` while it is still in the right state       | `OfficeStore.createExtraction()`                    |
+| Dispatching several times from one state                  | A self-transition with an effect; the effect claims each row and writes children under unique keys, so a retry repeats nothing | `dispatchClerks` in `server/lifecycles/incoming.ts` |
+| A countersign: everyone agrees, or one objection ends it  | A self-transition whose `route` stays in `signing` until every assignee has signed and leaves on the first objection           | `sign` in `server/lifecycles/tasks.ts`              |
+| One approve button across several levels                  | `from` lists every level, `route` picks the next by the current state, `set` changes the approver                              | `approve` in both root lifecycles                   |
+| Something created on entering a state                     | `onEnter`                                                                                                                      | `onEnter.accepting: [createOneTimeExtraction]`      |
+| An external action that may run twice but must count once | The effect's `idempotencyKey` as the unique key of a ledger or trace row                                                       | `OfficeStore.trace()`, `OfficeStore.notify()`       |
+
 ## Assumptions
 
 The source requirements leave these open; the example takes the first reading and says so here. A date falling on a weekend or holiday moves to the next workday, or the workday before when that would pass the last delivery date. "每季度第几天" counts from the first day of the quarter. "其他固定频次" creates no task by itself. All three managers may return a request, and accepting it finishes it. A department's clerks all countersign "[C]" before its task moves on, while "[Y]" or "[B]" from any of them ends it. Voided extraction tasks do not count against returning or finishing a request. Reminders are deduplicated per root document and level.

@@ -11,6 +11,16 @@ Two lifecycles run under **Lifecycle Example** in the application menu, each beh
 
 Each page has a **Signed in as** switch over the example's people — agents and customers, or employees, managers, an executive and the finance director — so one person can play every role; a real application takes the actor from the signed-in user and authorizes the action. The waits are minutes rather than days so you can watch a trigger fire, and a demo option on each new record makes its first email deliveries or payment attempts fail on purpose, to show retries. Under each record, **Under the hood** shows its states, parameters, transition log and effect runs.
 
+## Try it
+
+Run the examples application with `pnpm --filter @nocobase/app-template-examples dev`, sign in, and open **Lifecycle Example** in the menu.
+
+1. **See why a button is greyed out.** As an employee, file a 6,000 expense report and submit it. Switch to another employee: under **Under the hood**, "What the current identity can do" lists `✗ approve` with the reason.
+2. **See an escalation.** Leave the report alone for three minutes, or click **Run triggers now**. The approver becomes the manager's manager, the log gains an `escalate` row fired by the system, and the version goes up by one.
+3. **See retries.** Create a report with "payments that fail on purpose" set to 5 and approve it. The payment run fails three times and becomes `failed`. Click **Retry**: it gets three more attempts; the fourth and fifth fail, the sixth succeeds, the report becomes `paid` and the payment reference is written onto it.
+4. **See the concurrency guard.** Open the same waiting report in two windows. Approve it in one, then send it back in the other: the second click is refused because the version it saw is stale.
+5. **See the diagram.** The panel shows the Mermaid source of the lifecycle, its parameters, its log and its effect runs.
+
 ## How it is wired
 
 | Concern                     | Where                                                                                                                                                                                                                                 |
@@ -21,6 +31,20 @@ Each page has a **Signed in as** switch over the example's people — agents and
 | Effects, triggers, recovery | `createLifecycleJobs()` from `@nocobase/lifecycle/jobs`: a `JobExecutor` job per effect run, a `ScheduleExecutor` sweep every 10 seconds that reclaims expired attempts, fires triggers and prunes old runs, and `recover()` on start |
 | Record routes               | `createLifecycleRoutes()` from `@nocobase/lifecycle/hono`, mounted at `/lifecycle-example/lifecycles`                                                                                                                                 |
 | Record pages                | `useLifecycle()` from `@nocobase/lifecycle/react`, with the API client as transport                                                                                                                                                   |
+
+## Patterns worth copying
+
+| Problem                                           | Pattern                                                                                                              | Where                                                     |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| One button, several destinations                  | `to` as an array and a `route` shared by `submit` and `resubmit`; the limits are `parameters`                        | `server/lifecycles/expense.ts`                            |
+| Telling the person why a button is greyed out     | Guards return `{ code, message }`; the client translates the code through its locales and falls back to the message  | `server/lifecycles/*.ts`, `client/lib/api.ts`             |
+| Checking the record before it may move on         | `readyToSubmit` validates the lines inside `set` and throws `INVALID_INPUT`, computing the approver at the same time | `server/lifecycles/expense.ts`                            |
+| A reason that must be given                       | `validate: reasonRequired` returning `[{ field: 'reason', message }]`                                                | `server/lifecycles/expense.ts`, `ticket.ts`               |
+| Withdraw from anywhere under way                  | `from: { except: ['draft', 'approved'] }`                                                                            | `server/lifecycles/expense.ts`                            |
+| An idle approver is passed over                   | The self-transition `escalate`, guarded to the system, fired by the trigger `escalateStale`                          | `server/lifecycles/expense.ts`                            |
+| An external call whose result moves the record on | `requestPayment` in `onEnter.approved`, with retries, a timeout and `onSuccess: 'paid'`; `paid` accepts `paymentRef` | `server/lifecycles/expense.effects.ts`, `expense.ts`      |
+| A conversation that is the history                | Every reply is the input of the transition it caused, read back from the transition log                              | `server/lifecycles/ticket.ts`, `client/pages/tickets.tsx` |
+| Reopening within a window                         | A guard that compares `statusChangedAt` with a parameter                                                             | `server/lifecycles/ticket.ts`                             |
 
 ## Testing
 
