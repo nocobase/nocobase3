@@ -59,11 +59,20 @@ export interface TestDatabaseProvisioner {
   dropProvisioned?(options: TestDatabaseProvisionOptions): Promise<void>;
 }
 
-/** The statements a server dialect isolates test databases with; `??` stands for the database's name. */
+/**
+ * The statements a server dialect isolates test databases with. Every `??`
+ * and `?` in them stands for the database's identifier, bound as an
+ * identifier or a value respectively; a step that takes several statements
+ * lists them in order.
+ */
 export interface SqlTestDatabaseStatements {
-  readonly create: string;
-  readonly drop: string;
-  /** Lists every database or schema on the server as rows with a `name` column. */
+  readonly create: string | readonly string[];
+  readonly drop: string | readonly string[];
+  /**
+   * Lists every database or schema on the server as rows with a `name`
+   * column, spelled as the test names them: in lower case where the server
+   * folds identifiers to upper case.
+   */
   readonly list: string;
 }
 
@@ -78,6 +87,12 @@ export interface SqlTestDatabaseProvisionerOptions {
     name: string,
   ) => AnyConnectionConfig;
   readonly statements: SqlTestDatabaseStatements;
+  /**
+   * The identifier the server keeps an isolated database under, for a server
+   * that folds unquoted names to upper case and whose clients log in by the
+   * folded name. Defaults to the name itself.
+   */
+  readonly identifier?: (name: string) => string;
 }
 
 /**
@@ -91,6 +106,20 @@ export function createSqlTestDatabaseProvisioner(
   options: SqlTestDatabaseProvisionerOptions,
 ): TestDatabaseProvisioner {
   const { statements } = options;
+  const identifier = options.identifier ?? ((name: string) => name);
+  const run = async (
+    client: Knex,
+    sql: string | readonly string[],
+    name: string,
+  ): Promise<void> => {
+    for (const statement of typeof sql === 'string' ? [sql] : sql) {
+      const placeholders = statement.match(/\?\??/g)?.length ?? 0;
+      await client.raw(
+        statement,
+        Array.from({ length: placeholders }, () => identifier(name)),
+      );
+    }
+  };
   const withAdmin = async <T>(
     env: TestDatabaseEnvironment,
     run: (client: Knex) => Promise<T>,
@@ -105,16 +134,12 @@ export function createSqlTestDatabaseProvisioner(
     }
   };
   const drop = (env: TestDatabaseEnvironment, name: string): Promise<void> =>
-    withAdmin(env, async (client) => {
-      await client.raw(statements.drop, [name]);
-    });
+    withAdmin(env, (client) => run(client, statements.drop, name));
   return {
     dialect: options.dialect,
     capabilities: options.capabilities,
     provision: async ({ name, env }) => {
-      await withAdmin(env, async (client) => {
-        await client.raw(statements.create, [name]);
-      });
+      await withAdmin(env, (client) => run(client, statements.create, name));
       return {
         connection: options.connection(env, name),
         drop: () => drop(env, name),

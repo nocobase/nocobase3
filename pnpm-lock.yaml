@@ -2332,9 +2332,24 @@ importers:
       '@nocobase/db':
         specifier: workspace:*
         version: link:../db
+      '@nocobase/db-dameng':
+        specifier: workspace:*
+        version: link:../db-dameng
+      '@nocobase/db-kingbase':
+        specifier: workspace:*
+        version: link:../db-kingbase
+      '@nocobase/db-mssql':
+        specifier: workspace:*
+        version: link:../db-mssql
       '@nocobase/db-mysql':
         specifier: workspace:*
         version: link:../db-mysql
+      '@nocobase/db-oceanbase':
+        specifier: workspace:*
+        version: link:../db-oceanbase
+      '@nocobase/db-oracle':
+        specifier: workspace:*
+        version: link:../db-oracle
       '@nocobase/db-postgres':
         specifier: workspace:*
         version: link:../db-postgres
