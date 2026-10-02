@@ -562,7 +562,13 @@ async function history(migrator: Migrator) {
   );
 }
 
-/** The predicate of the physical unique index over `idempotencyKey`, as the database reports it. */
+/**
+ * The predicate of the physical uniqueness over `idempotencyKey`, as the
+ * database reports it. A partial unique index is always reported as an index.
+ * Without a predicate, the migration's `table.unique` is a unique constraint:
+ * SQLite backs it with a unique index and reports it among the indexes, while
+ * PostgreSQL and MySQL report it only among the constraints.
+ */
 async function idempotencyIndexPredicate(
   connection: DatabaseConnection,
 ): Promise<unknown> {
@@ -570,12 +576,25 @@ async function idempotencyIndexPredicate(
   const resolution = await connection.collections.getResolution(
     'notificationDispatches',
   );
-  const index = resolution?.collection.indexes?.find(
+  const collection = resolution?.collection;
+  const index = collection?.indexes?.find(
     ({ fields, db }) =>
       db?.unique === true &&
       fields?.length === 1 &&
       fields[0] === 'idempotencyKey',
   );
-  expect(index, 'the unique index over idempotencyKey').toBeDefined();
-  return index?.db?.predicate;
+  if (index) {
+    return index.db?.predicate;
+  }
+  const constraint = collection?.constraints?.find(
+    (candidate) =>
+      candidate.type === 'unique' &&
+      candidate.fields.length === 1 &&
+      candidate.fields[0] === 'idempotencyKey',
+  );
+  expect(
+    constraint,
+    'the unique index or constraint over idempotencyKey',
+  ).toBeDefined();
+  return constraint?.type === 'unique' ? constraint.predicate : undefined;
 }

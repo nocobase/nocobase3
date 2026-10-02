@@ -198,12 +198,22 @@ describe('in-app notification database migration', () => {
         expect.objectContaining({ name: 'deliveryId' }),
         expect.objectContaining({ name: 'readAt' }),
       ]),
+      // The migration declares a unique constraint. PostgreSQL and MySQL
+      // report it only as a constraint; SQLite backs it with a unique index
+      // and reports both, so the constraint is the portable place to look.
+      constraints: expect.arrayContaining([
+        expect.objectContaining({
+          type: 'unique',
+          name: 'notification_in_app_delivery_unique',
+          fields: ['deliveryId'],
+        }),
+      ]),
       indexes: expect.arrayContaining([
         expect.objectContaining({
-          name: 'notification_in_app_delivery_unique',
-          db: expect.objectContaining({ unique: true }),
+          name: 'notification_in_app_user_idx',
+          fields: ['userId', 'readAt', 'createdAt'],
+          db: expect.objectContaining({ unique: false }),
         }),
-        expect.objectContaining({ name: 'notification_in_app_user_idx' }),
       ]),
     });
 
