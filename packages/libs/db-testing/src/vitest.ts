@@ -29,7 +29,7 @@ export * from './index.js';
  *
  * - `schema` (the default): every test opens a fresh Database Manager on
  *   emptied databases and runs the migrations and seeds again, the way a new
- *   in-memory SQLite database in each `beforeEach` behaves.
+ *   SQLite database in each `beforeEach` behaves.
  * - `none`: one Database Manager for the whole file; tests share its state.
  */
 export type DatabaseTestIsolation = 'schema' | 'none';

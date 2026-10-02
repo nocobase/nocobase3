@@ -43,8 +43,7 @@ export interface IntegrationDatabase {
   /**
    * Another Database Manager over the same database, as a second process
    * would open it. It reads the same Collection metadata, which the database
-   * itself stores. SQLite's in-memory database is private to one manager, so
-   * there this opens an empty one.
+   * itself stores.
    */
   open(overrides?: IntegrationConnectionOverrides): DatabaseManager;
   /** Applies the plugin's migrations, optionally stopping at a given one. */
