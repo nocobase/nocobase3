@@ -178,9 +178,13 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
         // wait starts again because every transition stamps statusChangedAt.
         from: 'awaitingManager',
         to: 'awaitingManager',
-        guard: ({ record, actor }) =>
-          actor.system === true &&
-          MANAGERS[text(record.approverId)] !== undefined,
+        guard: ({ record, actor }) => {
+          if (actor.system !== true) return '超时后由系统自动升级';
+          return (
+            MANAGERS[text(record.approverId)] !== undefined ||
+            '当前审批人已是最高一级'
+          );
+        },
         set: ({ record }) => ({
           approverId: MANAGERS[text(record.approverId)],
         }),
@@ -189,7 +193,8 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
         title: '付款完成',
         from: 'approved',
         to: 'paid',
-        guard: ({ actor }) => actor.system === true,
+        guard: ({ actor }) =>
+          actor.system === true || '付款成功后由系统自动标记',
         // The input is what the payment effect returned; its reference is
         // written onto the report with the state.
         accept: ['paymentRef'],

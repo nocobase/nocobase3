@@ -47,8 +47,8 @@ export const requestPayment: EffectDefinition<ExpenseTypes> =
     timeoutMs: 10_000,
     // Marks the expense paid with the reference the payment returned.
     onSuccess: 'paid',
-    run({ record, attempt, idempotencyKey, services }) {
-      if (attempt <= record.failPayments)
+    run({ record, idempotencyKey, services }) {
+      if (services.shouldFail(idempotencyKey, record.failPayments))
         throw new Error('The payment gateway is unavailable (simulated).');
       return {
         paymentRef: services.pay(

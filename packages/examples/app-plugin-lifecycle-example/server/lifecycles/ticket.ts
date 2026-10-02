@@ -103,7 +103,7 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
         title: '超时自动关闭',
         from: 'awaitingCustomer',
         to: 'closed',
-        guard: ({ actor }) => actor.system === true,
+        guard: ({ actor }) => actor.system === true || '超时后由系统自动关闭',
         set: () => ({ closedReason: 'timeout' }),
       },
       reopen: {
