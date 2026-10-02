@@ -8,7 +8,9 @@ import { postgres, type PostgresOptions } from './index.js';
 
 /**
  * The server a test connects to, read from the variables the dialect's
- * integration suite also uses, with the defaults of its Compose service.
+ * integration suite also uses. The defaults are those of the PostgreSQL
+ * service in the examples application's `docker-compose.yml`, which honours
+ * the same `POSTGRES_PORT`.
  */
 export function postgresTestConnection(
   env: TestDatabaseEnvironment,

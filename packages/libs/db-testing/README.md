@@ -17,13 +17,16 @@ Each dialect reads its server from the variables its own integration suite uses:
 | Dialect    | Variables and defaults                                                                                                                                                             |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `postgres` | `POSTGRES_HOST` (`127.0.0.1`), `POSTGRES_PORT` (`15432`), `POSTGRES_USER` / `POSTGRES_PASSWORD` (`nocobase`), `POSTGRES_DATABASE` (`nocobase_collection_builder`); `PG*` also work |
-| `mysql`    | `MYSQL_HOST` (`127.0.0.1`), `MYSQL_PORT` (`13306`), `MYSQL_ADMIN_USER` (`root`), `MYSQL_ADMIN_PASSWORD` or `MYSQL_ROOT_PASSWORD` (`root`)                                          |
+| `mysql`    | `MYSQL_HOST` (`127.0.0.1`), `MYSQL_PORT` (`3306`), `MYSQL_ADMIN_USER` (`root`), `MYSQL_ADMIN_PASSWORD` or `MYSQL_ROOT_PASSWORD` (`root`)                                           |
 
-Every test file gets databases of its own — a schema on PostgreSQL, a database on MySQL, a fresh `:memory:` database on SQLite — named `nbt_<pid>_<worker>_…`, and drops them when it finishes, so files running in parallel never share state.
+The defaults are those of the services in `docker-compose.yml` of `@nocobase/app-template-examples`, which also ships in every application created from that template and reads the same `POSTGRES_PORT` and `MYSQL_PORT`. Starting a service from it is enough to run tests on that dialect without setting anything else:
 
 ```bash
-NOCOBASE_TEST_DB_DIALECT=postgres POSTGRES_PORT=5432 pnpm --filter @nocobase/app-plugin-scheduler test
+docker compose -f packages/templates/app-template-examples/docker-compose.yml up -d --wait postgres
+NOCOBASE_TEST_DB_DIALECT=postgres pnpm --filter @nocobase/app-plugin-scheduler test
 ```
+
+Every test file gets databases of its own — a schema on PostgreSQL, a database on MySQL, a fresh `:memory:` database on SQLite — named `nbt_<pid>_<worker>_…`, and drops them when it finishes, so files running in parallel never share state.
 
 ## A test with a database
 
