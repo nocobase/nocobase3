@@ -26,7 +26,11 @@ export interface TransitionPlan<T extends LifecycleTypes> {
   readonly transition: string;
   readonly from: T['state'];
   readonly to: T['state'];
-  /** Every field the transition writes, the state and its timestamp included. */
+  /** The record's version as it was read; the update is conditional on it. */
+  readonly version: number | null;
+  /** The version this transition writes, also stored on its log entry. */
+  readonly nextVersion: number;
+  /** Every field the transition writes, the state, its timestamp and the version included. */
   readonly values: Readonly<Record<string, unknown>>;
   readonly input: JsonObject;
   readonly effects: readonly EffectDefinition<T>[];
@@ -37,6 +41,17 @@ export function stateOf<T extends LifecycleTypes>(
   record: T['record'],
 ): T['state'] {
   return String(record[lifecycle.stateField]);
+}
+
+/** The record's version, or null for a record written before it had one. */
+export function versionOf<T extends LifecycleTypes>(
+  lifecycle: Lifecycle<T>,
+  record: T['record'],
+): number | null {
+  const value = record[lifecycle.versionField];
+  if (value === null || value === undefined) return null;
+  const version = Number(value);
+  return Number.isSafeInteger(version) ? version : null;
 }
 
 /** Transitions that may start from the record's current state, before any guard. */
@@ -101,22 +116,32 @@ export async function planTransition<T extends LifecycleTypes>(
   const extra = definition.set
     ? await definition.set(Object.freeze({ ...base, from, to }))
     : {};
-  for (const field of ['id', lifecycle.stateField, lifecycle.changedAtField])
+  for (const field of [
+    'id',
+    lifecycle.stateField,
+    lifecycle.changedAtField,
+    lifecycle.versionField,
+  ])
     if (field in extra)
       throw new LifecycleError(
         'INVALID_SET',
         `"${transitionName}" may not set "${field}"; the lifecycle owns it.`,
       );
 
+  const version = versionOf(lifecycle, record);
+  const nextVersion = (version ?? 0) + 1;
   return {
     transition: transitionName,
     from,
     to,
     input,
+    version,
+    nextVersion,
     values: {
       ...extra,
       [lifecycle.stateField]: to,
       [lifecycle.changedAtField]: context.now.toISOString(),
+      [lifecycle.versionField]: nextVersion,
     },
     effects: [...transition.effects, ...(lifecycle.onEnter.get(to) ?? [])],
   };

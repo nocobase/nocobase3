@@ -100,6 +100,7 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
       ...values,
       [this.lifecycle.stateField]: this.lifecycle.initial,
       [this.lifecycle.changedAtField]: this.now().toISOString(),
+      [this.lifecycle.versionField]: 0,
     });
   }
 

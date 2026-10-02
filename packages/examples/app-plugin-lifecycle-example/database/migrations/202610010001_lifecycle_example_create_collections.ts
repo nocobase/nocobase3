@@ -21,6 +21,7 @@ const migration: MigrationDefinition = defineMigration({
       table.integer('failNotifications').notNull().defaultTo(0);
       table.string('status').notNull();
       table.datetimeTz('statusChangedAt').notNull();
+      table.integer('lifecycleVersion').notNull().defaultTo(0);
       table.datetimeTz('createdAt').notNull();
       table.index(['status', 'statusChangedAt']);
       table.index(['requesterId', 'id']);
@@ -38,6 +39,7 @@ const migration: MigrationDefinition = defineMigration({
       table.integer('failPayments').notNull().defaultTo(0);
       table.string('status').notNull();
       table.datetimeTz('statusChangedAt').notNull();
+      table.integer('lifecycleVersion').notNull().defaultTo(0);
       table.datetimeTz('createdAt').notNull();
       table.index(['status', 'statusChangedAt']);
       table.index(['approverId', 'status']);
@@ -54,7 +56,9 @@ const migration: MigrationDefinition = defineMigration({
       table.string('actorId').notNull();
       table.json('input').notNull().defaultTo({});
       table.datetimeTz('at').notNull();
+      table.integer('version').notNull();
       table.index(['lifecycle', 'recordId', 'id']);
+      table.unique(['lifecycle', 'recordId', 'version']);
     });
 
     await builder.createCollection('lifecycleExampleEffectRuns', (table) => {

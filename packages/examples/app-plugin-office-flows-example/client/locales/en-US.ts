@@ -90,6 +90,7 @@ const enUS = {
     running: 'Running',
     succeeded: 'Succeeded',
     failed: 'Failed',
+    dead: 'Gave up',
   },
 };
 

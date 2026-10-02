@@ -1,8 +1,9 @@
 import type {
   EffectRun,
   EffectRunChanges,
+  EffectRunCondition,
   EffectRunQuery,
-  EffectRunStatus,
+  RecordCondition,
   IdleRecordQuery,
   LifecycleStore,
   NewEffectRun,
@@ -44,6 +45,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     effectRuns: new Map(),
     sequence: 0,
   };
+  private queue: Promise<unknown> = Promise.resolve();
 
   /** Adds a record directly, the way a create form or a seed would. */
   public insertRecord(
@@ -74,16 +76,25 @@ export class MemoryLifecycleStore implements LifecycleStore {
     return this.rows(collection).get(String(id));
   }
 
-  public async transaction<R>(
+  /**
+   * Transactions run one after another, the way a database serializes
+   * writers of one row; a rollback would otherwise restore a copy taken
+   * before another transaction committed. One may not open another.
+   */
+  public transaction<R>(
     work: (store: LifecycleStore) => Promise<R>,
   ): Promise<R> {
-    const before = clone(this.state);
-    try {
-      return await work(this);
-    } catch (error) {
-      this.state = before;
-      throw error;
-    }
+    const run = this.queue.then(async () => {
+      const before = clone(this.state);
+      try {
+        return await work(this);
+      } catch (error) {
+        this.state = before;
+        throw error;
+      }
+    });
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
   public findRecord(
@@ -93,15 +104,19 @@ export class MemoryLifecycleStore implements LifecycleStore {
     return Promise.resolve(this.rows(collection).get(String(id)));
   }
 
-  public updateRecordInState(
+  public updateRecordIf(
     collection: string,
     id: RecordId,
-    stateField: string,
-    expected: string,
+    condition: RecordCondition,
     values: Readonly<Record<string, unknown>>,
   ): Promise<boolean> {
     const current = this.rows(collection).get(String(id));
-    if (!current || current[stateField] !== expected)
+    const version = current?.[condition.versionField] ?? null;
+    if (
+      !current ||
+      current[condition.stateField] !== condition.state ||
+      (version === null ? null : Number(version)) !== condition.version
+    )
       return Promise.resolve(false);
     this.rows(collection).set(
       String(id),
@@ -127,6 +142,20 @@ export class MemoryLifecycleStore implements LifecycleStore {
   }
 
   public appendTransition(entry: NewTransitionEntry): Promise<TransitionEntry> {
+    // The unique index a database store declares on (lifecycle, recordId, version).
+    if (
+      this.state.transitions.some(
+        (other) =>
+          other.lifecycle === entry.lifecycle &&
+          other.recordId === entry.recordId &&
+          other.version === entry.version,
+      )
+    )
+      return Promise.reject(
+        new Error(
+          `Duplicate transition entry for ${entry.lifecycle}/${entry.recordId} version ${entry.version}.`,
+        ),
+      );
     const saved = Object.freeze({ ...entry, id: String(this.next()) });
     this.state.transitions.push(saved);
     return Promise.resolve(saved);
@@ -161,11 +190,17 @@ export class MemoryLifecycleStore implements LifecycleStore {
 
   public updateEffectRun(
     id: string,
-    expected: EffectRunStatus,
+    condition: EffectRunCondition,
     changes: EffectRunChanges,
   ): Promise<boolean> {
     const current = this.state.effectRuns.get(id);
-    if (!current || current.status !== expected) return Promise.resolve(false);
+    if (
+      !current ||
+      current.status !== condition.status ||
+      (condition.attempts !== undefined &&
+        current.attempts !== condition.attempts)
+    )
+      return Promise.resolve(false);
     this.state.effectRuns.set(id, Object.freeze({ ...current, ...changes }));
     return Promise.resolve(true);
   }

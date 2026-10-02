@@ -33,6 +33,7 @@ async function createTables(): Promise<void> {
     table.string('customerEmail').notNull();
     table.string('status').notNull();
     table.datetimeTz('statusChangedAt').notNull();
+    table.integer('lifecycleVersion').notNull().defaultTo(0);
   });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.transitions, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -44,6 +45,8 @@ async function createTables(): Promise<void> {
     table.string('actorId').notNull();
     table.json('input').notNull().defaultTo({});
     table.datetimeTz('at').notNull();
+    table.integer('version').notNull();
+    table.unique(['lifecycle', 'recordId', 'version']);
   });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.effectRuns, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -246,6 +249,45 @@ describe('Repository lifecycle store', () => {
     expect(result.record).toMatchObject({ status: 'closed' });
   });
 
+  it('writes a record only at the version it was read at', async () => {
+    const id = await createTicket();
+    const condition = {
+      stateField: 'status',
+      state: 'open',
+      versionField: 'lifecycleVersion',
+    };
+    expect(
+      await store.updateRecordIf(
+        'tickets',
+        id,
+        { ...condition, version: 0 },
+        {
+          lifecycleVersion: 1,
+        },
+      ),
+    ).toBe(true);
+    // Same state, older version: the second writer loses.
+    expect(
+      await store.updateRecordIf(
+        'tickets',
+        id,
+        { ...condition, version: 0 },
+        {
+          lifecycleVersion: 1,
+        },
+      ),
+    ).toBe(false);
+    const result = await runtime().fire('tickets', id, 'replyToCustomer', {
+      actor: { id: 'agent' },
+      input: { message: 'Please confirm' },
+    });
+    expect(result.record).toMatchObject({ lifecycleVersion: 2 });
+    expect(result.entry.version).toBe(2);
+    expect((await runtime().history('tickets', id)).transitions).toMatchObject([
+      { version: 2 },
+    ]);
+  });
+
   it('takes back an attempt whose process stopped answering', async () => {
     const id = await createTicket();
     await runtime({ dispatch: () => Promise.resolve() }).fire(
@@ -255,11 +297,15 @@ describe('Repository lifecycle store', () => {
       { actor: { id: 'agent' }, input: { message: 'Please confirm' } },
     );
     const [run] = (await runtime().history('tickets', id)).effectRuns;
-    await store.updateEffectRun(run!.id, 'queued', {
-      status: 'running',
-      attempts: 1,
-      claimedAt: now.toISOString(),
-    });
+    await store.updateEffectRun(
+      run!.id,
+      { status: 'queued' },
+      {
+        status: 'running',
+        attempts: 1,
+        claimedAt: now.toISOString(),
+      },
+    );
     now = new Date(now.getTime() + 10 * 60_000);
     await runtime().recover();
     expect((await runtime().history('tickets', id)).effectRuns).toMatchObject([

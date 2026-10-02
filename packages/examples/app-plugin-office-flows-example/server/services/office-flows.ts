@@ -284,6 +284,7 @@ export class OfficeFlowsService {
           applicantId: actor,
           status: 'draft',
           statusChangedAt: now,
+          lifecycleVersion: 0,
           createdAt: now,
         },
       });
@@ -475,6 +476,7 @@ export class OfficeFlowsService {
           registrarId: actor,
           status: 'draft',
           statusChangedAt: now,
+          lifecycleVersion: 0,
           createdAt: now,
         } as RepositoryRecord,
       });
