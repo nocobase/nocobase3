@@ -1579,6 +1579,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         await this.detachCurrentHasOneTarget(
           resolved,
           source[resolved.sourceKey],
+          scopeNode?.scope,
         );
       }
       const target = await this.resolveMutationTarget(
@@ -1589,7 +1590,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         source,
         scopeNode,
       );
-      await this.connectRelation(resolved, source, sourceUnique, target.record);
+      await this.connectRelation(
+        resolved,
+        source,
+        sourceUnique,
+        target.record,
+        undefined,
+        scopeNode?.scope,
+      );
       return;
     }
     if (node.action === 'clear') {
@@ -1780,7 +1788,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       source,
       scopeNode,
     );
-    await this.connectRelation(resolved, source, sourceUnique, created.record);
+    await this.connectRelation(
+      resolved,
+      source,
+      sourceUnique,
+      created.record,
+      undefined,
+      scopeNode?.scope,
+    );
   }
 
   private async deleteRelatedTarget(
@@ -2068,10 +2083,16 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
    * A hasOne source holds one target. Attaching another first lets go of the
    * current one, which needs a nullable foreign key; `keep` is the target
    * being attached, when it already exists.
+   *
+   * Letting go is still reaching for a row, so the relation scope has to
+   * locate the current target as it does for every other relation write. A
+   * current target the scope cannot see is not detached, and since the new
+   * one cannot be attached while it stays, the write is refused.
    */
   private async detachCurrentHasOneTarget(
     resolved: Extract<ResolvedRepositoryRelation, { readonly type: 'hasOne' }>,
     sourceValue: unknown,
+    scope: FilterAst | undefined,
     keep?: UniqueSelector,
   ): Promise<void> {
     const existing = tableQuery(this.getClient(), resolved.target).where(
@@ -2090,9 +2111,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (!relationForeignKeyNullable(resolved)) {
       relationActionNotAllowed(resolved, 'set');
     }
-    await existing.update({
-      [column(resolved.target, resolved.targetForeignKey)]: null,
-    });
+    await this.applyRelationScope(existing, resolved.target, scope);
+    const detached = affectedCount(
+      await existing.update({
+        [column(resolved.target, resolved.targetForeignKey)]: null,
+      }),
+    );
+    if (detached === 0) relationTargetNotFound(resolved);
   }
 
   private async connectRelation(
@@ -2101,6 +2126,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     sourceUnique: UniqueSelector,
     target: RepositoryRecord,
     through?: RepositoryRecord,
+    scope?: FilterAst,
   ): Promise<void> {
     if (resolved.type === 'belongsTo') {
       const query = tableQuery(this.getClient(), resolved.source).update({
@@ -2137,6 +2163,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         await this.detachCurrentHasOneTarget(
           resolved,
           sourceValue,
+          scope,
           targetUnique,
         );
       }
