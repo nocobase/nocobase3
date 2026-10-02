@@ -229,4 +229,57 @@ describeIntegrationDatabases('query mutations', (context) => {
         .execute(),
     ).resolves.toEqual([{ orderNo: 'SO-001', status: 'matched' }]);
   });
+  it('binds compared instants and booleans in update and delete predicates the way writes bind them', async () => {
+    const table = 'temporalMutations';
+    await context.builder.createCollection(table, (collection) => {
+      collection.increments('id');
+      collection.string('key');
+      collection.datetimeTz('dueAt').nullable();
+      collection.boolean('active');
+    });
+    await context.database
+      .query()
+      .insertInto(table)
+      .values([
+        { key: 'early', dueAt: '2026-08-14T10:00:00.000Z', active: true },
+        { key: 'late', dueAt: '2026-08-14T12:00:00.000Z', active: false },
+      ])
+      .execute();
+
+    // The instants are compared as callers hold them, ISO strings with a zone. Bound verbatim, MySQL rejects one
+    // compared with a DATETIME column although the same string is accepted as a written value.
+    await expect(
+      context.database
+        .query()
+        .updateTable(table)
+        .set({ key: 'early-due' })
+        .where('dueAt', '<=', '2026-08-14T11:00:00.000Z')
+        .execute(),
+    ).resolves.toEqual({ updatedCount: 1 });
+    await expect(
+      context.database
+        .query()
+        .updateTable(table)
+        .set({ key: 'late-inactive' })
+        .where(({ eb }) =>
+          eb.and([
+            eb('active', '=', false),
+            eb('dueAt', '>', '2026-08-14T11:00:00.000Z'),
+          ]),
+        )
+        .execute(),
+    ).resolves.toEqual({ updatedCount: 1 });
+    await expect(
+      context.database
+        .query()
+        .deleteFrom(table)
+        .where('dueAt', '<', '2026-08-14T11:00:00.000Z')
+        .where('active', '=', true)
+        .execute(),
+    ).resolves.toEqual({ deletedCount: 1 });
+
+    await expect(
+      context.database.query().selectFrom(table).select(['key']).execute(),
+    ).resolves.toEqual([{ key: 'late-inactive' }]);
+  });
 });
