@@ -1,0 +1,234 @@
+// What a lifecycle tells a page before and after a click: the reasons a
+// transition is refused, the input problems, and where a record's history
+// starts.
+import { describe, expect, it } from 'vitest';
+
+import {
+  CREATE_TRANSITION,
+  defineEffect,
+  defineLifecycle,
+  type Lifecycle,
+  type LifecycleRecord,
+} from '../src/index.js';
+import { createLifecycleTestKit } from '../src/testing.js';
+
+type State = 'draft' | 'review' | 'done';
+
+interface Request extends LifecycleRecord {
+  readonly status: State;
+  readonly ownerId: string;
+  readonly note?: string;
+  readonly closedBy?: string;
+}
+
+interface RequestTypes {
+  record: Request;
+  state: State;
+  parameters: object;
+  services: { readonly welcomed: string[] };
+}
+
+const welcome = defineEffect<RequestTypes>({
+  name: 'requests.welcome',
+  run: ({ record, services }) => void services.welcomed.push(record.ownerId),
+});
+
+const requests: Lifecycle<RequestTypes> = defineLifecycle<RequestTypes>({
+  name: 'requests',
+  initial: ['draft', 'review'],
+  states: ['draft', 'review', { name: 'done', final: true }],
+  transitions: {
+    submit: {
+      from: 'draft',
+      to: 'review',
+      guard: ({ record, actor }) =>
+        actor.id === record.ownerId || {
+          code: 'NOT_OWNER',
+          message: 'Only the owner can submit it.',
+        },
+    },
+    approve: {
+      from: 'review',
+      to: 'done',
+      guard: ({ actor }) =>
+        actor.id === 'reviewer' || 'Only a reviewer can approve it.',
+      validate: (input) =>
+        typeof input.note === 'string' && input.note
+          ? []
+          : [{ field: 'note', message: 'A note is required.' }],
+      accept: ['note', 'closedBy'],
+      // set runs after accept, and wins.
+      set: ({ actor }) => ({ closedBy: actor.id }),
+    },
+    reject: {
+      from: 'review',
+      to: 'draft',
+      validate: (input) => (input.reason ? null : 'A reason is required.'),
+    },
+  },
+  onEnter: { draft: [welcome] },
+});
+
+function kit() {
+  const services = { welcomed: [] as string[] };
+  return { services, kit: createLifecycleTestKit(requests, { services }) };
+}
+
+describe('explaining refusals', () => {
+  it('lists every reason a transition is refused, and refuses the click the same way', async () => {
+    const { kit: k } = kit();
+    const request = k.create({ ownerId: 'lin' });
+    expect(await k.available(request, 'he')).toEqual([
+      {
+        name: 'submit',
+        title: 'submit',
+        to: ['review'],
+        allowed: false,
+        blockers: [
+          {
+            source: 'guard',
+            code: 'NOT_OWNER',
+            message: 'Only the owner can submit it.',
+          },
+        ],
+      },
+    ]);
+    await expect(
+      k.fire(request, 'submit', {}, { actor: 'he' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      message: 'Only the owner can submit it.',
+      blockers: [expect.objectContaining({ code: 'NOT_OWNER' })],
+    });
+    expect((await k.available(request, 'lin'))[0]).toMatchObject({
+      allowed: true,
+      blockers: [],
+    });
+  });
+
+  it('says a transition cannot start from the current state', async () => {
+    const { kit: k } = kit();
+    const request = k.create({ ownerId: 'lin' });
+    expect(await k.can(request, 'approve', 'reviewer')).toEqual({
+      allowed: false,
+      blockers: [
+        {
+          source: 'state',
+          code: 'INVALID_STATE',
+          message: '"approve" cannot start from "draft".',
+        },
+      ],
+    });
+    expect(await k.can(request, 'submit', 'lin')).toEqual({
+      allowed: true,
+      blockers: [],
+    });
+  });
+
+  it('lets other code veto a transition, and joins its reason to the others', async () => {
+    const { kit: k } = kit();
+    const request = k.create({ ownerId: 'lin' });
+    const remove = k.runtime.addGuard<RequestTypes>('requests', '*', () => ({
+      code: 'FROZEN',
+      message: 'Requests are frozen this week.',
+    }));
+    expect(await k.can(request, 'submit', 'he')).toMatchObject({
+      allowed: false,
+      blockers: [{ code: 'NOT_OWNER' }, { code: 'FROZEN' }],
+    });
+    await expect(
+      k.fire(request, 'submit', {}, { actor: 'lin' }),
+    ).rejects.toMatchObject({ blockers: [{ code: 'FROZEN' }] });
+    remove();
+    await k.fire(request, 'submit', {}, { actor: 'lin' });
+    expect(k.get(request).status).toBe('review');
+    expect(() => k.runtime.addGuard('requests', 'publish', () => true)).toThrow(
+      /no transition "publish"/,
+    );
+  });
+});
+
+describe('input', () => {
+  it('reports each input problem, and still takes a single message', async () => {
+    const { kit: k } = kit();
+    const request = await k.start({ ownerId: 'lin' }, { state: 'review' });
+    await expect(
+      k.fire(request, 'approve', {}, { actor: 'reviewer' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      problems: [{ field: 'note', message: 'A note is required.' }],
+    });
+    await expect(
+      k.fire(request, 'reject', {}, { actor: 'reviewer' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      message: 'A reason is required.',
+      problems: [{ message: 'A reason is required.' }],
+    });
+  });
+
+  it('writes accepted input fields onto the record, with set taking precedence', async () => {
+    const { kit: k } = kit();
+    const request = await k.start({ ownerId: 'lin' }, { state: 'review' });
+    await k.fire(
+      request,
+      'approve',
+      { note: 'Looks right', closedBy: 'someone else', ignored: true },
+      { actor: 'reviewer' },
+    );
+    expect(k.get(request)).toMatchObject({
+      status: 'done',
+      note: 'Looks right',
+      closedBy: 'reviewer',
+    });
+    expect(k.get(request)).not.toHaveProperty('ignored');
+  });
+
+  it('refuses to accept a field the lifecycle owns', () => {
+    expect(() =>
+      defineLifecycle<RequestTypes>({
+        name: 'bad',
+        initial: 'draft',
+        states: ['draft', { name: 'done', final: true }],
+        transitions: {
+          finish: { from: 'draft', to: 'done', accept: ['status'] },
+        },
+      }),
+    ).toThrow(/may not accept "status"/);
+  });
+});
+
+describe('creating through the lifecycle', () => {
+  it('starts the history at the creation and runs what the initial state owes', async () => {
+    const { kit: k, services } = kit();
+    const request = await k.start({ ownerId: 'lin' }, { actor: 'lin' });
+    expect(request).toMatchObject({ status: 'draft', lifecycleVersion: 1 });
+    expect(await k.transitions(request)).toMatchObject([
+      {
+        transition: CREATE_TRANSITION,
+        from: null,
+        to: 'draft',
+        actorId: 'lin',
+        version: 1,
+      },
+    ]);
+    expect(services.welcomed).toEqual(['lin']);
+    await k.fire(request, 'submit', {}, { actor: 'lin' });
+    expect(
+      (await k.transitions(request)).map((entry) => entry.version),
+    ).toEqual([1, 2]);
+  });
+
+  it('creates in another initial state only when asked, and never in any other', async () => {
+    const { kit: k, services } = kit();
+    const direct = await k.start({ ownerId: 'lin' }, { state: 'review' });
+    expect(direct.status).toBe('review');
+    expect(services.welcomed).toEqual([]);
+    await expect(
+      k.start({ ownerId: 'lin' }, { state: 'done' }),
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    await expect(
+      k.start({ ownerId: 'lin', status: 'done' }),
+    ).rejects.toMatchObject({ code: 'INVALID_SET' });
+  });
+});

@@ -1,0 +1,174 @@
+import {
+  authenticationToken,
+  type AuthEnv,
+} from '@nocobase/app-plugin-authentication';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import {
+  defineApiRoutes,
+  type AppApiRouteContribution,
+} from '@nocobase/app-server/router';
+import {
+  createLifecycleRoutes,
+  LIFECYCLE_ERROR_STATUS,
+} from '@nocobase/lifecycle/hono';
+import { LifecycleError } from '@nocobase/lifecycle';
+import { Hono, type Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+
+import { parseItems } from '../../shared/expense.js';
+import { person } from '../../shared/people.js';
+import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
+import { text } from '../../shared/text.js';
+import {
+  ExampleError,
+  type ExpenseDraft,
+} from '../services/lifecycle-example.js';
+import { lifecycleExampleServiceToken } from '../tokens.js';
+
+const EXAMPLE_STATUS: Record<ExampleError['code'], ContentfulStatusCode> = {
+  NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  INVALID: 400,
+};
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function body(context: Context): Promise<Record<string, unknown>> {
+  const parsed: unknown = await context.req.json().catch(() => ({}));
+  return isObject(parsed) ? parsed : {};
+}
+
+/**
+ * The pages switch between the example's people so one person can try every
+ * role. A real application takes the actor from `context.get('auth')` and
+ * authorizes the action.
+ */
+function actor(value: unknown): string {
+  if (!person(value))
+    throw new ExampleError('INVALID', 'actor', 'Choose who to act as.');
+  return text(value);
+}
+
+function failures(value: unknown): number {
+  const count = Number(value ?? 0);
+  if (!Number.isInteger(count) || count < 0)
+    throw new ExampleError(
+      'INVALID',
+      'failures',
+      'The number of simulated failures must be a whole number, zero or more.',
+    );
+  return count;
+}
+
+function expenseDraft(values: Record<string, unknown>): ExpenseDraft {
+  return {
+    title: text(values.title).trim(),
+    purpose: text(values.purpose),
+    items: parseItems(values.items),
+    failPayments: failures(values.failPayments),
+  };
+}
+
+export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
+  defineApiRoutes(({ container }) => {
+    const router = new Hono<AuthEnv>();
+    const authentication = container.resolve(authenticationToken);
+    const service = container.resolve(lifecycleExampleServiceToken);
+
+    router.use('/lifecycle-example/*', authentication.required());
+    router.onError((error, context) => {
+      if (error instanceof LifecycleError)
+        return context.json(
+          {
+            code: error.code,
+            message: error.message,
+            blockers: error.blockers,
+            problems: error.problems,
+          },
+          LIFECYCLE_ERROR_STATUS[error.code],
+        );
+      if (error instanceof ExampleError)
+        return context.json(
+          { code: error.code, reason: error.reason, message: error.message },
+          EXAMPLE_STATUS[error.code],
+        );
+      throw error;
+    });
+
+    // Sweeps the triggers now, so the page need not wait for the schedule.
+    router.post('/lifecycle-example/triggers/run', async (context) =>
+      context.json({ fired: await service.runTriggers() }),
+    );
+
+    // Each record's own routes — view, fire, and the operator's retry and
+    // cancel — are the library's; this plugin keeps the lists and the forms.
+    router.route(
+      `/${LIFECYCLE_ROUTES}`,
+      createLifecycleRoutes(service.runtime, {
+        lifecycles: ['tickets', 'expenses'],
+        actor: (context) => ({ id: actor(context.req.query('actAs')) }),
+        // The example lets anyone act as an operator from the record panel;
+        // an application would check a permission here.
+        authorize: () => true,
+      }),
+    );
+
+    router.get('/lifecycle-example/tickets', async (context) =>
+      context.json({
+        records: await service.listTickets(actor(context.req.query('actAs'))),
+        parameters: service.parameters('tickets'),
+      }),
+    );
+    router.post('/lifecycle-example/tickets', async (context) => {
+      const values = await body(context);
+      return context.json(
+        await service.createTicket(
+          {
+            subject: text(values.subject).trim(),
+            category: text(values.category),
+            priority: text(values.priority),
+            description: text(values.description),
+            failNotifications: failures(values.failNotifications),
+          },
+          actor(values.actAs),
+        ),
+        201,
+      );
+    });
+
+    router.get('/lifecycle-example/expenses', async (context) =>
+      context.json({
+        records: await service.listExpenses(
+          actor(context.req.query('actAs')),
+          context.req.query('view') === 'approvals' ? 'approvals' : 'mine',
+        ),
+        parameters: service.parameters('expenses'),
+      }),
+    );
+    router.post('/lifecycle-example/expenses', async (context) => {
+      const values = await body(context);
+      return context.json(
+        await service.createExpense(expenseDraft(values), actor(values.actAs)),
+        201,
+      );
+    });
+    router.put('/lifecycle-example/expenses/:id', async (context) => {
+      const values = await body(context);
+      await service.updateExpense(
+        context.req.param('id'),
+        expenseDraft(values),
+        actor(values.actAs),
+      );
+      return context.body(null, 204);
+    });
+
+    return new Hono().route('/', router);
+  });
+
+const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
+  apiRoutes,
+];
+
+export default routes;

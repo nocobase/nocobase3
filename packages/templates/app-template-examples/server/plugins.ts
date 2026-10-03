@@ -12,6 +12,8 @@ import databaseExplorer from '@nocobase/app-plugin-database-explorer/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
 import jobsExample from '@nocobase/app-plugin-jobs-example/server';
+import lifecycleExample from '@nocobase/app-plugin-lifecycle-example/server';
+import officeFlowsExample from '@nocobase/app-plugin-office-flows-example/server';
 import notification from '@nocobase/app-plugin-notification/server';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/server';
 import notificationProviders from '@nocobase/app-plugin-notification-providers/server';
@@ -54,6 +56,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   queueExample,
   realtimeExample,
   jobsExample,
+  lifecycleExample,
+  officeFlowsExample,
   routesExample,
   serviceProviderExample,
   workflow,
