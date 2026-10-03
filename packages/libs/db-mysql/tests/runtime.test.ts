@@ -46,6 +46,32 @@ describe('mysql runtime strategy', () => {
     ).toMatchObject({ sql: expect.stringContaining('convert_tz') });
   });
 
+  it('spells a text default into the column type, the only form MySQL takes', () => {
+    const { runtime } = createRuntime();
+    const columnType = (column: object) =>
+      runtime.schema!.columnType!({
+        column: column as never,
+        tablePrimaryKey: false,
+        altering: false,
+      });
+
+    expect(columnType({ type: 'text', defaultValue: "it's" })).toBe(
+      "text default ('it\\'s')",
+    );
+    expect(
+      columnType({
+        type: 'text',
+        defaultValue: '',
+        db: { nativeType: 'mediumtext' },
+      }),
+    ).toBe("mediumtext default ('')");
+    expect(columnType({ type: 'text' })).toBeUndefined();
+    expect(columnType({ type: 'text', defaultValue: null })).toBeUndefined();
+    expect(
+      columnType({ type: 'string', defaultValue: 'draft' }),
+    ).toBeUndefined();
+  });
+
   it('enforces MySQL TIMESTAMP range and renders UTC temporal projections', () => {
     const { client, runtime } = createRuntime();
     const field = {
