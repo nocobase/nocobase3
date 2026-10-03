@@ -54,6 +54,11 @@ export interface DatabaseIntegrationProfile {
     };
     readonly uniqueConstraintDropKeepsIndex: boolean;
     readonly nativeTextType: string;
+    /**
+     * Whether a TEXT column keeps a default in the table. OceanBase rejects one in any form, so a text field's
+     * `defaultValue` is applied by the Repository alone there. `supported` when omitted.
+     */
+    readonly textDefaults?: 'supported' | 'unsupported';
     readonly comments: 'complete' | 'unsupported';
     readonly booleanStorage: 'native' | 'integer' | 'decimal';
     readonly emptyStringIsNull: boolean;
