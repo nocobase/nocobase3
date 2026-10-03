@@ -118,6 +118,10 @@ export const EXEMPT = new Map([
     'packages/templates/app-template-examples/tests/components/numeric-examples.test.tsx',
     'a client component test whose mocked API data names the SQLite dialect',
   ],
+  [
+    'packages/templates/app-template-examples/tests/logic/external-crm.test.ts',
+    'the external CRM stand-in under test is a SQLite file by design; server/providers/external-crm-sample.ts creates it on SQLite only',
+  ],
 ]);
 
 /**
@@ -125,23 +129,8 @@ export const EXEMPT = new Map([
  * The check fails when one of them no longer needs to be listed, so the list only shrinks.
  */
 export const PENDING = new Set([
-  'packages/app/app-cli/tests/database-command.test.ts',
-  'packages/app/app-server/tests/database-collections-artifact.test.ts',
-  'packages/app/app-server/tests/database-collections-doctor.test.ts',
-  'packages/app/app-server/tests/database-provider-collections.test.ts',
-  'packages/app/app-server/tests/database-provider.test.ts',
-  'packages/app/app-server/tests/database-task-plan.test.ts',
-  'packages/app/app-server/tests/repository-routes.test.ts',
-  'packages/app/app-server/tests/runtime-definition.test.ts',
   'packages/templates/app-template-default/tests/logic/app-server.test.ts',
-  'packages/templates/app-template-examples/tests/logic/analytics.test.ts',
   'packages/templates/app-template-examples/tests/logic/app-server.test.ts',
-  'packages/templates/app-template-examples/tests/logic/articles-migration.test.ts',
-  'packages/templates/app-template-examples/tests/logic/articles.test.ts',
-  'packages/templates/app-template-examples/tests/logic/external-crm.test.ts',
-  'packages/templates/app-template-examples/tests/logic/numeric-examples.test.ts',
-  'packages/templates/app-template-examples/tests/logic/users-permission-seed.test.ts',
-  'packages/templates/app-template-examples/tests/logic/workflow-examples.test.ts',
   'packages/templates/app-template-hub/tests/logic/app-server.test.ts',
 ]);
 

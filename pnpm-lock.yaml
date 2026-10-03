@@ -475,6 +475,9 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/db-testing':
+        specifier: workspace:*
+        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -694,6 +697,9 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite
+      '@nocobase/db-testing':
+        specifier: workspace:*
+        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -4836,6 +4842,9 @@ importers:
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
+      '@nocobase/db-testing':
+        specifier: workspace:*
+        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
