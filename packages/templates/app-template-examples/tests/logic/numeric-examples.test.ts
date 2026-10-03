@@ -26,7 +26,9 @@ const source = (kind: string) => ({
 });
 beforeEach(async () => {
   database = createDatabase();
-  await database.createMigrator(source('migrations')).latest();
+  await database
+    .createMigrator(source('migrations'))
+    .upTo('202609100002_create_numeric_examples');
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
   const auth = new Auth({
@@ -106,7 +108,11 @@ it('creates numeric schema and metadata and reverses the migration', async () =>
     ]),
   );
   expect(
-    (await database.createMigrator(source('migrations')).latest()).executed,
+    (
+      await database
+        .createMigrator(source('migrations'))
+        .upTo('202609100002_create_numeric_examples')
+    ).executed,
   ).toEqual([]);
   await database.createMigrator(source('migrations')).rollback();
   expect(await collections.getPhysical('numericExamples')).toBeUndefined();

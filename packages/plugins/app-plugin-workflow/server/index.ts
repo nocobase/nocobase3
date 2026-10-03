@@ -11,6 +11,8 @@ export type {
 } from './engine/index.js';
 export {
   WorkflowInstruction,
+  type WorkflowInstructionApiContext,
+  type WorkflowInstructionApis,
   type WorkflowInstructionClass,
   type WorkflowInstructionContext,
   type WorkflowInstructionResult,
@@ -22,6 +24,13 @@ export type {
   WaitLookup,
   WaitResumeReceipt,
 } from './instructions/wait/api.js';
+export type {
+  ResumeRequestRejection,
+  ResumeRequestService,
+  ResumeRequestStatus,
+  SubmitResumeInput,
+  SubmitResumeResult,
+} from './engine/resume-requests.js';
 export { NODE_RUN_STATUS } from './engine/constants.js';
 
 export {

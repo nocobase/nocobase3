@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import Dispatcher from './dispatcher.js';
 import { coreInstructions } from '../instructions/index.js';
-import type { WaitInstructionApi } from '../instructions/wait/api.js';
+import type { WorkflowInstructionApis } from '../instructions/base.js';
 import type Processor from './processor.js';
 import {
   createWorkflowQueueAdapter,
@@ -41,7 +41,7 @@ export default class WorkflowEngine {
   private readonly options: WorkflowEngineOptions;
   private readonly queueAdapter: WorkflowQueueAdapter | null;
   private readonly reaper: TimeoutReaper | null;
-  private waitRecoveryTimer: ReturnType<typeof setInterval> | null = null;
+  private resumeRecoveryTimer: ReturnType<typeof setInterval> | null = null;
   constructor(options: WorkflowEngineOptions) {
     this.options = options;
     this.database = options.database;
@@ -82,6 +82,18 @@ export default class WorkflowEngine {
       ...(options.terminalObserver === undefined
         ? {}
         : { terminalObserver: options.terminalObserver }),
+      ...(options.idGenerator === undefined
+        ? {}
+        : { idGenerator: options.idGenerator }),
+      ...(options.leaseTtlMs === undefined
+        ? {}
+        : { leaseTtlMs: options.leaseTtlMs }),
+      ...(options.leaseHeartbeatMs === undefined
+        ? {}
+        : { leaseHeartbeatMs: options.leaseHeartbeatMs }),
+      ...(options.resumeRecoveryGraceMs === undefined
+        ? {}
+        : { resumeRecoveryGraceMs: options.resumeRecoveryGraceMs }),
     });
 
     this.reaper =
@@ -123,17 +135,23 @@ export default class WorkflowEngine {
     this.instructions.set(instruction.type, instruction);
   }
 
-  getInstruction(type: 'wait'): WaitInstructionApi;
-  getInstruction<T = unknown>(type: string): T;
-  getInstruction<T = unknown>(type: string): T {
+  /** The runtime API of a registered instruction, such as the Wait API. */
+  getInstructionApi<K extends keyof WorkflowInstructionApis>(
+    type: K,
+  ): WorkflowInstructionApis[K];
+  getInstructionApi<T extends object = object>(type: string): T;
+  getInstructionApi(type: string): object {
     const instruction = this.instructions.get(type);
     if (!instruction?.createApi)
       throw new Error(`Workflow instruction "${type}" has no runtime API`);
     return instruction.createApi({
       database: this.database,
-      connectionName: this.options.connectionName,
+      ...(this.options.connectionName === undefined
+        ? {}
+        : { connectionName: this.options.connectionName }),
       enqueue: (task) => this.enqueue(task),
-    }) as T;
+      resumeRequests: this.dispatcher.resumeRequests,
+    });
   }
 
   /**
@@ -150,16 +168,18 @@ export default class WorkflowEngine {
     );
     if (recovered) {
       this.logger.info(
-        `Workflow runtime re-published ${recovered} run or wait task(s)`,
+        `Workflow runtime re-published ${recovered} run or resume request task(s)`,
       );
     }
-    if (!this.waitRecoveryTimer) {
-      this.waitRecoveryTimer = setInterval(() => {
-        void this.dispatcher.recoverWaitRequests().catch((error: unknown) => {
-          this.logger.error('Workflow wait recovery failed', { error });
+    if (!this.resumeRecoveryTimer) {
+      this.resumeRecoveryTimer = setInterval(() => {
+        void this.dispatcher.recoverResumeRequests().catch((error: unknown) => {
+          this.logger.error('Workflow resume request recovery failed', {
+            error,
+          });
         });
-      }, 30_000);
-      this.waitRecoveryTimer.unref();
+      }, this.options.resumeRecoveryIntervalMs ?? 30_000);
+      this.resumeRecoveryTimer.unref();
     }
   }
 
@@ -184,9 +204,9 @@ export default class WorkflowEngine {
    * Let in-flight work finish before releasing the queue name.
    */
   async dispose(): Promise<void> {
-    if (this.waitRecoveryTimer) {
-      clearInterval(this.waitRecoveryTimer);
-      this.waitRecoveryTimer = null;
+    if (this.resumeRecoveryTimer) {
+      clearInterval(this.resumeRecoveryTimer);
+      this.resumeRecoveryTimer = null;
     }
     this.reaper?.stop();
     await this.dispatcher.drain();

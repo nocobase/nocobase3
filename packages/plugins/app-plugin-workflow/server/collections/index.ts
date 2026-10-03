@@ -2,7 +2,7 @@ import { WORKFLOW_COLLECTIONS } from './names.js';
 import type { WorkflowCollectionSchema } from './types.js';
 import { defineWorkflowNodes } from './workflow-nodes.js';
 import { defineWorkflowNodeRuns } from './workflow-node-runs.js';
-import { defineWorkflowWaitRequests } from './workflow-wait-requests.js';
+import { defineWorkflowResumeRequests } from './workflow-resume-requests.js';
 import { defineWorkflowRuns } from './workflow-runs.js';
 import { defineWorkflowStats } from './workflow-stats.js';
 import { defineWorkflowVersionStats } from './workflow-version-stats.js';
@@ -14,7 +14,7 @@ export * from './store.js';
 export * from './types.js';
 export * from './workflow-nodes.js';
 export * from './workflow-node-runs.js';
-export * from './workflow-wait-requests.js';
+export * from './workflow-resume-requests.js';
 export * from './workflow-runs.js';
 export * from './workflow-stats.js';
 export * from './workflow-version-stats.js';
@@ -34,7 +34,7 @@ export const workflowCollectionSchemas: readonly WorkflowCollectionSchema[] = [
   { name: WORKFLOW_COLLECTIONS.runs, define: defineWorkflowRuns },
   { name: WORKFLOW_COLLECTIONS.nodeRuns, define: defineWorkflowNodeRuns },
   {
-    name: WORKFLOW_COLLECTIONS.waitRequests,
-    define: defineWorkflowWaitRequests,
+    name: WORKFLOW_COLLECTIONS.resumeRequests,
+    define: defineWorkflowResumeRequests,
   },
 ];

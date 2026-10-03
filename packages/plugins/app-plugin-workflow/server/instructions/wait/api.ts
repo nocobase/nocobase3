@@ -1,15 +1,13 @@
-import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseManager } from '@nocobase/db';
 import { workflowStore, type WorkflowStore } from '../../collections/store.js';
 import { EXECUTION_STATUS, NODE_RUN_STATUS } from '../../engine/constants.js';
-import type { WorkflowId, WorkflowQueueTask } from '../../engine/types.js';
 import {
-  asIdFilter,
-  loadRun,
-  loadWorkflow,
-  nowInstant,
-  serializeJson,
-} from '../../engine/utils.js';
+  assertJsonPayload,
+  type ResumeRequestService,
+  type ResumeRequestStatus,
+} from '../../engine/resume-requests.js';
+import type { WorkflowId, WorkflowQueueTask } from '../../engine/types.js';
+import { asIdFilter, loadRun, loadWorkflow } from '../../engine/utils.js';
 
 export interface WaitTarget {
   runId: WorkflowId;
@@ -39,6 +37,13 @@ export type WaitLookup =
         | 'ambiguous';
     };
 
+/** What a wait's resume request carries, and what its `resume()` turns back into a node result. */
+export interface WaitResumePayload {
+  status: WaitDecision['status'];
+  result: unknown;
+  error: string | null;
+}
+
 export type WaitResumeReceipt =
   | { status: 'accepted' | 'duplicate'; requestId: string }
   | {
@@ -56,42 +61,6 @@ type LocatedWait =
   | Exclude<WaitLookup, { status: 'pending' }>
   | { status: 'pending'; nodeRunId: WorkflowId; correlation: unknown };
 
-function jsonDecision(value: unknown): unknown {
-  const visit = (item: unknown, ancestors: Set<object>): void => {
-    if (item === null || typeof item === 'string' || typeof item === 'boolean')
-      return;
-    if (typeof item === 'number' && Number.isFinite(item)) return;
-    if (typeof item !== 'object' || ancestors.has(item))
-      throw new TypeError('Wait result must be JSON');
-    if (
-      !Array.isArray(item) &&
-      Object.getPrototypeOf(item) !== Object.prototype &&
-      Object.getPrototypeOf(item) !== null
-    )
-      throw new TypeError('Wait result must be plain JSON');
-    ancestors.add(item);
-    for (const entry of Object.values(item)) visit(entry, ancestors);
-    ancestors.delete(item);
-  };
-  visit(value, new Set());
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined || Buffer.byteLength(encoded, 'utf8') > 65_536)
-    throw new TypeError('Wait result must be JSON within 65536 UTF-8 bytes');
-  return JSON.parse(encoded) as unknown;
-}
-
-function canonicalJson(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalJson);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([key, item]) => [key, canonicalJson(item)]),
-    );
-  }
-  return value;
-}
-
 export class WaitInstructionApi {
   private readonly store: WorkflowStore;
 
@@ -100,6 +69,7 @@ export class WaitInstructionApi {
       database: DatabaseManager;
       connectionName?: string;
       enqueue: (task: WorkflowQueueTask) => Promise<void>;
+      resumeRequests: ResumeRequestService;
     },
   ) {
     this.store = workflowStore(context.database, context.connectionName);
@@ -151,6 +121,16 @@ export class WaitInstructionApi {
     };
   }
 
+  /**
+   * Where a decision `resume()` accepted stands now. `accepted` means the
+   * decision was recorded, not applied: it is `consumed` once the wait has taken
+   * it, and `rejected` with a `reason` when it never will — the run ended, the
+   * wait finished or was rerun first, or applying it kept failing.
+   */
+  async getRequest(requestId: string): Promise<ResumeRequestStatus> {
+    return this.context.resumeRequests.get(requestId, 'wait');
+  }
+
   async resume(decision: WaitDecision): Promise<WaitResumeReceipt> {
     if (
       !decision.idempotencyKey ||
@@ -172,85 +152,33 @@ export class WaitInstructionApi {
       throw new TypeError('Unsupported wait decision status');
     if (decision.error !== undefined && typeof decision.error !== 'string')
       throw new TypeError('Wait error must be a string');
-    const result = jsonDecision(decision.result ?? null);
-    const hash = createHash('sha256')
-      .update(
-        JSON.stringify(
-          canonicalJson({
-            status: decision.status,
-            result,
-            error: decision.error ?? null,
-          }),
-        ),
-      )
-      .digest('hex');
-    const existing = await this.store.waitRequests.findOne({
-      filter: {
-        workflowRunId: asIdFilter(decision.runId),
-        nodeKey: decision.nodeKey,
-        idempotencyKey: decision.idempotencyKey,
-      },
+    const payload: WaitResumePayload = {
+      status: decision.status,
+      result: assertJsonPayload(decision.result ?? null),
+      error: decision.error ?? null,
+    };
+    const requests = this.context.resumeRequests;
+    // A repeated event is answered from what was recorded for it, even once the
+    // wait it resumed has finished.
+    const duplicate = await requests.findDuplicate({
+      runId: decision.runId,
+      nodeKey: decision.nodeKey,
+      idempotencyKey: decision.idempotencyKey,
+      payload,
     });
-    if (existing) {
-      if (existing.decisionHash !== hash)
-        throw new Error(
-          'Wait idempotency key conflicts with a different decision',
-        );
-      return { status: 'duplicate', requestId: existing.id as string };
-    }
+    if (duplicate) return duplicate;
     const lookup = await this.locate(decision);
     if (lookup.status !== 'pending') return lookup;
-    const requestId = randomUUID();
-    try {
-      await this.store.waitRequests.createOne({
-        values: {
-          id: requestId,
-          workflowRunId: asIdFilter(decision.runId),
-          nodeRunId: asIdFilter(lookup.nodeRunId),
-          nodeKey: decision.nodeKey,
-          idempotencyKey: decision.idempotencyKey,
-          decisionHash: hash,
-          status: decision.status,
-          result: serializeJson(result),
-          error: decision.error ?? null,
-          state: 'queued',
-          slot: 'active',
-          createdAt: nowInstant(),
-          claimedAt: null,
-        },
-      });
-    } catch (error) {
-      const raced = await this.store.waitRequests.findOne({
-        filter: {
-          workflowRunId: asIdFilter(decision.runId),
-          nodeKey: decision.nodeKey,
-          idempotencyKey: decision.idempotencyKey,
-        },
-      });
-      if (raced) {
-        if (raced.decisionHash !== hash)
-          throw new Error(
-            'Wait idempotency key conflicts with a different decision',
-            { cause: error },
-          );
-        return { status: 'duplicate', requestId: raced.id as string };
-      }
-      const active = await this.store.waitRequests.findOne({
-        filter: { nodeRunId: asIdFilter(lookup.nodeRunId), slot: 'active' },
-      });
-      if (active) return { status: 'busy' };
-      throw error;
-    }
-    // The durable request is authoritative. A failed publication is retried by recovery.
-    try {
-      await this.context.enqueue({
-        executionId: decision.runId,
-        nodeRunId: lookup.nodeRunId,
-        waitRequestId: requestId,
-      });
-    } catch {
-      // Recovery republishes the queued request.
-    }
-    return { status: 'accepted', requestId };
+    const receipt = await requests.submit({
+      runId: decision.runId,
+      nodeRunId: lookup.nodeRunId,
+      nodeKey: decision.nodeKey,
+      instructionType: 'wait',
+      idempotencyKey: decision.idempotencyKey,
+      payload,
+    });
+    // The node run stopped waiting between locating it and recording the
+    // request, which is what an already finished wait looks like.
+    return receipt.status === 'stale' ? { status: 'finished' } : receipt;
   }
 }

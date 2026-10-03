@@ -102,7 +102,9 @@ describe('workflow collections', () => {
     );
 
     const runIndexes = await db.raw('PRAGMA index_list(workflow_runs)');
-    expect(runIndexes).toHaveLength(6);
+    // The declared indexes, the unique event key, and now the primary key itself:
+    // an application-allocated id is an ordinary key rather than a rowid alias.
+    expect(runIndexes).toHaveLength(7);
 
     await expect(
       db.raw('PRAGMA foreign_key_list(workflow_node_runs)'),
@@ -120,13 +122,17 @@ describe('workflow collections', () => {
       workflow_id: workflowId,
       type: 'start',
     });
-    const [runId] = await db('workflow_runs').insert({
+    // Run and node run ids come from the engine, not from the database.
+    const runId = 1;
+    await db('workflow_runs').insert({
+      id: runId,
       workflow_id: workflowId,
       workflow_key: 'order-created',
       event_key: 'event-1',
       created_at: new Date().toISOString(),
     });
     await db('workflow_node_runs').insert({
+      id: 1,
       workflow_run_id: runId,
       node_id: nodeId,
       node_key: 'start',

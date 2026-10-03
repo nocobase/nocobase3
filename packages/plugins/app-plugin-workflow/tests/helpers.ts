@@ -12,6 +12,7 @@ import {
   type Row,
 } from '@nocobase/db';
 
+import { resolveIdGenerator } from '../server/engine/ids.js';
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -186,6 +187,7 @@ export async function insertTestRun(
 ): Promise<WorkflowId> {
   const created = await testStore(database).runs.createOne({
     values: {
+      id: resolveIdGenerator().generate(),
       workflowId: asIdFilter(input.workflowId),
       workflowKey: input.workflowKey,
       hash: input.hash ?? null,

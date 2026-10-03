@@ -20,7 +20,7 @@ it('creates article schema and metadata, preserves migration history, and revers
       ),
       packageName: 'articles-test',
     });
-    await migrator.latest();
+    await migrator.upTo('202609080001_create_articles');
     const connection = database.connection('main');
     const client = await connection.client<Knex>();
     const columns = await client('articles').columnInfo();
@@ -76,7 +76,9 @@ it('creates article schema and metadata, preserves migration history, and revers
         .values({ createdAt: timestamp, updatedAt: timestamp })
         .execute(),
     ).rejects.toThrow();
-    await expect(migrator.latest()).resolves.toMatchObject({ executed: [] });
+    await expect(
+      migrator.upTo('202609080001_create_articles'),
+    ).resolves.toMatchObject({ executed: [] });
     const metadata = await connection.collectionMetadata.get('articles');
     expect(metadata?.document).toMatchObject({
       name: 'articles',

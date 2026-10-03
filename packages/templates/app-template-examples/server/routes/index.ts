@@ -12,6 +12,7 @@ import { articlesRoutes } from './articles.js';
 import { numericExamplesRoutes } from './numeric-examples.js';
 import { analyticsRoutes } from './analytics.js';
 import { externalCrmRoutes } from './external-crm.js';
+import { quotationReviewTaskRoutes } from './quotation-review-tasks.js';
 
 import { appExampleServiceToken } from '../providers/index.js';
 
@@ -65,6 +66,7 @@ const routes: readonly AppRouteContribution<Application>[] = [
   analyticsRoutes,
   externalCrmRoutes,
   numericExamplesRoutes,
+  quotationReviewTaskRoutes,
 ];
 
 export default routes;

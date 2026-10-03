@@ -1,25 +1,27 @@
 import { defineMigration } from '@nocobase/db';
 
 export default defineMigration({
-  name: '202609300001_workflow_wait_requests',
+  name: '202609300001_workflow_resume_requests',
   async up({ builder }): Promise<void> {
     await builder.alterCollection('workflowRuns', (collection) => {
-      collection.string('waitLockToken');
-      collection.datetimeTz('waitLockAt');
+      collection.string('leaseToken');
+      collection.datetimeTz('leaseExpiresAt');
     });
-    await builder.createCollection('workflowWaitRequests', (collection) => {
-      collection.string('id').primary().notNull();
+    await builder.createCollection('workflowResumeRequests', (collection) => {
+      collection.bigInt('id').primary().notNull();
       collection.bigInt('workflowRunId').notNull();
       collection.bigInt('nodeRunId').notNull();
       collection.string('nodeKey').notNull();
+      collection.string('instructionType').notNull();
       collection.string('idempotencyKey').notNull();
-      collection.string('decisionHash').notNull();
-      collection.integer('status').notNull();
-      collection.json('result');
-      collection.text('error');
+      collection.json('payload');
+      collection.string('payloadHash').notNull();
       collection.string('state').notNull();
+      collection.string('reason');
+      collection.integer('attempts').notNull().defaultTo(0);
       collection.string('slot');
       collection.datetimeTz('createdAt').notNull();
+      collection.string('claimToken');
       collection.datetimeTz('claimedAt');
       collection.unique(['workflowRunId', 'nodeKey', 'idempotencyKey'], {
         mode: 'index',
@@ -29,10 +31,10 @@ export default defineMigration({
     });
   },
   async down({ builder }): Promise<void> {
-    await builder.dropCollection('workflowWaitRequests');
+    await builder.dropCollection('workflowResumeRequests');
     await builder.alterCollection('workflowRuns', (collection) => {
-      collection.dropField('waitLockAt');
-      collection.dropField('waitLockToken');
+      collection.dropField('leaseExpiresAt');
+      collection.dropField('leaseToken');
     });
   },
 });

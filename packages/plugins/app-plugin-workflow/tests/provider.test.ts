@@ -5,6 +5,8 @@ import { createLogging, createSilentLoggingConfig } from '@nocobase/logging';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { SnowflakeIdGenerator } from '@nocobase/snowflake';
 import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
@@ -64,7 +66,7 @@ describe('WorkflowProvider', () => {
     provider.register();
     const workflow = container.resolve(workflowServiceToken);
     expectTypeOf(workflow).toEqualTypeOf<WorkflowServiceContract>();
-    expect(workflow.getInstruction('wait')).toMatchObject({
+    expect(workflow.getInstructionApi('wait')).toMatchObject({
       getPending: expect.any(Function),
       resume: expect.any(Function),
     });
@@ -73,6 +75,28 @@ describe('WorkflowProvider', () => {
     expect(() => workflow.registerInstruction(echoInstruction)).toThrow(
       'Workflow instruction "echo" is already registered.',
     );
+  });
+
+  it('refuses to allocate ids without the application generator in production', async () => {
+    const { container, provider } = await createProviderWithDependencies(
+      'production-without-ids',
+      { production: true },
+    );
+    provider.register();
+    expect(() => container.resolve(workflowServiceToken)).toThrow(
+      'requires the application id generator in production',
+    );
+
+    const registered = await createProviderWithDependencies(
+      'production-with-ids',
+      { production: true },
+    );
+    registered.container.instance(
+      idGeneratorToken,
+      new SnowflakeIdGenerator({ workerId: 3 }),
+    );
+    registered.provider.register();
+    expect(registered.container.resolve(workflowServiceToken)).toBeDefined();
   });
 
   it('keeps Workflow available when Scheduler is not registered', async () => {
@@ -119,7 +143,10 @@ function recordingScheduler(): {
   return { service, registered };
 }
 
-async function createProviderWithDependencies(appName: string): Promise<{
+async function createProviderWithDependencies(
+  appName: string,
+  options: { production?: boolean } = {},
+): Promise<{
   container: ServiceContainer;
   provider: WorkflowProvider;
 }> {
@@ -132,12 +159,16 @@ async function createProviderWithDependencies(appName: string): Promise<{
   container.instance(databaseManagerToken, database);
   container.instance(queueManagerToken, queue);
   container.instance(loggingToken, logging);
-  return { container, provider: createProvider(appName, container) };
+  return {
+    container,
+    provider: createProvider(appName, container, options.production),
+  };
 }
 
 function createProvider(
   appName: string,
   container: ServiceContainer,
+  production: boolean = false,
 ): WorkflowProvider {
   const provider = new WorkflowProvider({
     appName,
@@ -160,7 +191,7 @@ function createProvider(
         sourceRoot: '/tmp/nocobase-workflow-provider-test/source',
         distRoot: '/tmp/nocobase-workflow-provider-test/dist',
         artifactDisk: 'local',
-        production: false,
+        production,
       },
     }),
   });

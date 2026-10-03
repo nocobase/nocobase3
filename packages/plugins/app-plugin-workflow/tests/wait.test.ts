@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
@@ -15,6 +15,12 @@ import {
   NODE_RUN_STATUS,
 } from '../server/engine/constants.js';
 import { WaitInstructionApi } from '../server/instructions/wait/api.js';
+import { resolveIdGenerator } from '../server/engine/ids.js';
+import {
+  MAX_RESUME_ATTEMPTS,
+  ResumeRequestService,
+} from '../server/engine/resume-requests.js';
+import type { WorkflowId, WorkflowQueueTask } from '../server/engine/types.js';
 import {
   asIdFilter,
   nowInstant,
@@ -64,7 +70,7 @@ describe('wait instruction', () => {
     database = await createTestDatabase();
     engine = new WorkflowEngine({ database, timeoutReaper: false });
     await engine.initialize();
-    wait = engine.getInstruction<WaitInstructionApi>('wait');
+    wait = engine.getInstructionApi('wait');
   });
 
   afterEach(async () => {
@@ -77,6 +83,21 @@ describe('wait instruction', () => {
     await database.destroy();
     await removeModuleRoots();
   });
+
+  /** A wait API whose requests are recorded but delivered by `enqueue` only. */
+  function apiWith(
+    enqueue: (task: WorkflowQueueTask) => Promise<void>,
+  ): WaitInstructionApi {
+    return new WaitInstructionApi({
+      database,
+      enqueue,
+      resumeRequests: new ResumeRequestService({
+        database,
+        idGenerator: resolveIdGenerator(),
+        enqueue,
+      }),
+    });
+  }
 
   async function start() {
     const workflow = await createTestWorkflow(database, {
@@ -255,6 +276,7 @@ describe('wait instruction', () => {
     expect(first.status).toBe('pending');
     await testStore(database).nodeRuns.createOne({
       values: {
+        id: resolveIdGenerator().generate(),
         workflowRunId: asIdFilter(run.id),
         nodeId: asIdFilter(workflow.nodes[0].id),
         nodeKey: 'hold',
@@ -286,11 +308,8 @@ describe('wait instruction', () => {
 
   it('recovers a persisted decision after publication fails and ignores duplicate delivery', async () => {
     const { runId } = await start();
-    const offline = new WaitInstructionApi({
-      database,
-      enqueue: async () => {
-        throw new Error('queue offline');
-      },
+    const offline = apiWith(async () => {
+      throw new Error('queue offline');
     });
     const receipt = await offline.resume({
       runId,
@@ -303,7 +322,9 @@ describe('wait instruction', () => {
     expect((await readRun(database, runId)).status).toBe(
       EXECUTION_STATUS.STARTED,
     );
-    expect(await engine.dispatcher.recoverWaitRequests()).toBe(1);
+    expect(
+      await engine.dispatcher.recoverResumeRequests({ gracePeriod: 0 }),
+    ).toBe(1);
     expect((await readRun(database, runId)).status).toBe(
       EXECUTION_STATUS.RESOLVED,
     );
@@ -318,42 +339,80 @@ describe('wait instruction', () => {
           },
         })
       )?.id as number,
-      waitRequestId: (receipt as { requestId: string }).requestId,
+      resumeRequestId: (receipt as { requestId: string }).requestId,
     });
     expect(await listNodeRuns(database, runId)).toEqual(nodeRuns);
   });
 
-  it('continues a saved node decision after a worker exits before starting its successor', async () => {
-    const { runId } = await start();
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
+  /**
+   * Makes the next `count` transactions fail, after letting `skip` through,
+   * which is how a checkpoint is lost.
+   */
+  function failTransactions(count: number, skip: number = 0): () => void {
+    const original = database.transaction.bind(database);
+    let remaining = count;
+    let skipped = 0;
+    const spy = vi.spyOn(database, 'transaction').mockImplementation(((
+      ...args: Parameters<typeof original>
+    ) => {
+      if (skipped < skip) {
+        skipped += 1;
+        return original(...args);
+      }
+      if (remaining > 0) {
+        remaining -= 1;
+        return Promise.reject(new Error('database unavailable'));
+      }
+      return original(...args);
+    }) as typeof original);
+    return () => spy.mockRestore();
+  }
+
+  async function nodeRunOf(runId: WorkflowId, nodeKey: string) {
+    const row = await testStore(database).nodeRuns.findOne({
+      filter: { workflowRunId: asIdFilter(runId), nodeKey },
     });
+    if (!row) throw new Error(`Node run "${nodeKey}" missing`);
+    return row;
+  }
+
+  it('applies a request again after its checkpoint could not be committed', async () => {
+    const { runId } = await start();
+    const queued = apiWith(async () => undefined);
     const receipt = await queued.resume({
       runId,
       nodeKey: 'await-payment',
-      idempotencyKey: 'crash-window',
+      idempotencyKey: 'lost-checkpoint',
       status: NODE_RUN_STATUS.RESOLVED,
       result: { paymentId: 'pay-1' },
     });
     if (receipt.status !== 'accepted') throw new Error('Decision not accepted');
-    const request = await testStore(database).waitRequests.findOne({
-      filter: { id: receipt.requestId },
-    });
-    if (!request) throw new Error('Request missing');
-    await testStore(database).nodeRuns.updateMany({
-      filter: { id: asIdFilter(request.nodeRunId as number) },
-      values: {
-        status: NODE_RUN_STATUS.RESOLVED,
-        result: serializeJson({ paymentId: 'pay-1' }),
-        finishedAt: nowInstant(),
-      },
-    });
-    await engine.dispatch({
+    const task = {
       executionId: runId,
-      nodeRunId: request.nodeRunId as number,
-      waitRequestId: receipt.requestId,
-    });
+      nodeRunId: (await nodeRunOf(runId, 'await-payment')).id as number,
+      resumeRequestId: Number(receipt.requestId),
+    };
+
+    const restore = failTransactions(1);
+    await expect(engine.dispatch(task)).rejects.toThrow('checkpoint');
+    restore();
+    // Nothing of the segment is visible: the wait is still pending, its
+    // successor never started, and the request can be delivered again.
+    expect(await listNodeRuns(database, runId)).toMatchObject([
+      { nodeKey: 'await-payment', status: NODE_RUN_STATUS.PENDING },
+    ]);
+    expect((await readRun(database, runId)).status).toBe(
+      EXECUTION_STATUS.STARTED,
+    );
+    expect(
+      (
+        await testStore(database).resumeRequests.findOne({
+          filter: { id: receipt.requestId },
+        })
+      )?.state,
+    ).toBe('queued');
+
+    await engine.dispatch(task);
     expect((await readRun(database, runId)).status).toBe(
       EXECUTION_STATUS.RESOLVED,
     );
@@ -364,7 +423,137 @@ describe('wait instruction', () => {
     ).toHaveLength(1);
   });
 
-  it('continues a saved wait at the end of a condition branch', async () => {
+  async function queuedDecision(runId: WorkflowId, idempotencyKey: string) {
+    const receipt = await apiWith(async () => undefined).resume({
+      runId,
+      nodeKey: 'await-payment',
+      idempotencyKey,
+      status: NODE_RUN_STATUS.RESOLVED,
+      result: { paymentId: 'pay-1' },
+    });
+    if (receipt.status !== 'accepted') throw new Error('Decision not accepted');
+    return {
+      requestId: receipt.requestId,
+      task: {
+        executionId: runId,
+        nodeRunId: (await nodeRunOf(runId, 'await-payment')).id as number,
+        resumeRequestId: Number(receipt.requestId),
+      },
+    };
+  }
+
+  it('rejects a request whose checkpoint keeps failing and ends the run in error', async () => {
+    const { runId } = await start();
+    const { requestId, task } = await queuedDecision(runId, 'never-commits');
+
+    // Every delivery fails to commit; the last one also has to record the
+    // outcome, which is a transaction of its own and is let through.
+    const restore = failTransactions(MAX_RESUME_ATTEMPTS);
+    for (let attempt = 1; attempt < MAX_RESUME_ATTEMPTS; attempt += 1) {
+      await expect(engine.dispatch(task)).rejects.toThrow('checkpoint');
+      expect(
+        await testStore(database).resumeRequests.findOne({
+          filter: { id: requestId },
+          select: (select) => select.fields('state', 'attempts'),
+        }),
+      ).toEqual({ state: 'queued', attempts: attempt });
+      expect((await readRun(database, runId)).status).toBe(
+        EXECUTION_STATUS.STARTED,
+      );
+    }
+    await engine.dispatch(task);
+    restore();
+
+    await expect(wait.getRequest(requestId)).resolves.toEqual({
+      status: 'rejected',
+      reason: 'commit-failed',
+    });
+    expect(await readRun(database, runId)).toMatchObject({
+      status: EXECUTION_STATUS.ERROR,
+      output: { message: expect.stringContaining('checkpoint') },
+    });
+    // What the failing segment produced was not written with the error.
+    expect(await listNodeRuns(database, runId)).toMatchObject([
+      { nodeKey: 'await-payment', status: NODE_RUN_STATUS.PENDING },
+    ]);
+  });
+
+  it('records the error of a first segment whose checkpoint failed, without what it could not write', async () => {
+    const definition = await createTestWorkflow(database, {
+      key: 'first-segment',
+      nodes: [{ key: 'done', type: 'terminate', config: {} }],
+    });
+    // The first transaction creates the run, the second is its checkpoint.
+    const restore = failTransactions(1, 1);
+    const run = await engine.trigger(definition, {});
+    restore();
+    if (!run || !('id' in run)) throw new Error('No run');
+
+    // Writing the same node runs again would fail the same way, so the error
+    // is recorded on its own and replaces the outcome the segment decided.
+    expect(await readRun(database, run.id)).toMatchObject({
+      status: EXECUTION_STATUS.ERROR,
+      output: { message: expect.stringContaining('checkpoint') },
+    });
+    expect(await listNodeRuns(database, run.id)).toEqual([]);
+  });
+
+  it('reports what became of an accepted decision', async () => {
+    const { runId } = await start();
+    const { requestId, task } = await queuedDecision(runId, 'tracked');
+    await expect(wait.getRequest(requestId)).resolves.toEqual({
+      status: 'queued',
+      reason: null,
+    });
+    await engine.dispatch(task);
+    await expect(wait.getRequest(requestId)).resolves.toEqual({
+      status: 'consumed',
+      reason: null,
+    });
+
+    await expect(wait.getRequest('1')).resolves.toEqual({
+      status: 'not-found',
+    });
+    await expect(wait.getRequest('not-an-id')).resolves.toEqual({
+      status: 'not-found',
+    });
+    await expect(wait.getRequest('99999999999999999999')).resolves.toEqual({
+      status: 'not-found',
+    });
+  });
+
+  it('reports a decision the run ended before applying as rejected', async () => {
+    const { runId } = await start();
+    const { requestId, task } = await queuedDecision(runId, 'too-late');
+    await testStore(database).runs.updateMany({
+      filter: { id: asIdFilter(runId) },
+      values: { status: EXECUTION_STATUS.ABORTED },
+    });
+    await engine.dispatch(task);
+    await expect(wait.getRequest(requestId)).resolves.toEqual({
+      status: 'rejected',
+      reason: 'run-ended',
+    });
+  });
+
+  it('does not report the requests of another instruction', async () => {
+    const { runId } = await start();
+    const nodeRun = await nodeRunOf(runId, 'await-payment');
+    const receipt = await engine.dispatcher.resumeRequests.submit({
+      runId,
+      nodeRunId: nodeRun.id as number,
+      nodeKey: 'await-payment',
+      instructionType: 'run',
+      idempotencyKey: 'foreign',
+      payload: null,
+    });
+    if (receipt.status !== 'accepted') throw new Error('Not accepted');
+    await expect(wait.getRequest(receipt.requestId)).resolves.toEqual({
+      status: 'not-found',
+    });
+  });
+
+  it('does not run the successor of a wait in a branch twice, whichever segment is repeated', async () => {
     const sourceRoot = await createModuleRoot({
       'branch/yes': 'export function run() { return true; }',
     });
@@ -391,10 +580,7 @@ describe('wait instruction', () => {
     });
     const run = await branchEngine.trigger(definition, {});
     if (!run || !('id' in run)) throw new Error('No run');
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
-    });
+    const queued = apiWith(async () => undefined);
     const receipt = await queued.resume({
       runId: run.id,
       nodeKey: 'hold',
@@ -402,19 +588,18 @@ describe('wait instruction', () => {
       status: NODE_RUN_STATUS.RESOLVED,
     });
     if (receipt.status !== 'accepted') throw new Error('Decision not accepted');
-    const request = await testStore(database).waitRequests.findOne({
-      filter: { id: receipt.requestId },
-    });
-    if (!request) throw new Error('Request missing');
-    await testStore(database).nodeRuns.updateMany({
-      filter: { id: asIdFilter(request.nodeRunId as number) },
-      values: { status: NODE_RUN_STATUS.RESOLVED, finishedAt: nowInstant() },
-    });
-    await branchEngine.dispatch({
+    const task = {
       executionId: run.id,
-      nodeRunId: request.nodeRunId as number,
-      waitRequestId: receipt.requestId,
-    });
+      nodeRunId: (await nodeRunOf(run.id, 'hold')).id as number,
+      resumeRequestId: Number(receipt.requestId),
+    };
+
+    const restore = failTransactions(1);
+    await expect(branchEngine.dispatch(task)).rejects.toThrow('checkpoint');
+    restore();
+    await branchEngine.dispatch(task);
+    // A duplicate delivery after the checkpoint is committed changes nothing.
+    await branchEngine.dispatch(task);
     expect((await readRun(database, run.id)).status).toBe(
       EXECUTION_STATUS.RESOLVED,
     );
@@ -427,10 +612,7 @@ describe('wait instruction', () => {
 
   it('reclaims a request and run lease left by a stopped worker', async () => {
     const { runId } = await start();
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
-    });
+    const queued = apiWith(async () => undefined);
     const receipt = await queued.resume({
       runId,
       nodeKey: 'await-payment',
@@ -439,15 +621,17 @@ describe('wait instruction', () => {
     });
     if (receipt.status !== 'accepted') throw new Error('Decision not accepted');
     const stale = new Date(Date.now() - 360_000).toISOString();
-    await testStore(database).waitRequests.updateMany({
+    await testStore(database).resumeRequests.updateMany({
       filter: { id: receipt.requestId },
       values: { state: 'processing', claimedAt: stale },
     });
     await testStore(database).runs.updateMany({
       filter: { id: asIdFilter(runId) },
-      values: { waitLockToken: 'dead-worker', waitLockAt: stale },
+      values: { leaseToken: 'dead-worker', leaseExpiresAt: stale },
     });
-    expect(await engine.dispatcher.recoverWaitRequests()).toBe(1);
+    expect(
+      await engine.dispatcher.recoverResumeRequests({ gracePeriod: 0 }),
+    ).toBe(1);
     expect((await readRun(database, runId)).status).toBe(
       EXECUTION_STATUS.RESOLVED,
     );
@@ -481,10 +665,7 @@ describe('wait instruction', () => {
 
   it('accepts one outstanding decision per node across concurrent submissions', async () => {
     const { runId } = await start();
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
-    });
+    const queued = apiWith(async () => undefined);
     const outcomes = await Promise.all([
       queued.resume({
         runId,
@@ -503,7 +684,7 @@ describe('wait instruction', () => {
       'accepted',
       'busy',
     ]);
-    expect(await testStore(database).waitRequests.count()).toBe(1);
+    expect(await testStore(database).resumeRequests.count()).toBe(1);
   });
 
   it('addresses two pending wait stages in one run by their distinct keys', async () => {
@@ -524,6 +705,7 @@ describe('wait instruction', () => {
     for (const node of definition.nodes) {
       await testStore(database).nodeRuns.createOne({
         values: {
+          id: resolveIdGenerator().generate(),
           workflowRunId: asIdFilter(runId),
           nodeId: asIdFilter(node.id),
           nodeKey: node.key,
@@ -534,10 +716,7 @@ describe('wait instruction', () => {
         },
       });
     }
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
-    });
+    const queued = apiWith(async () => undefined);
     const left = await queued.resume({
       runId,
       nodeKey: 'left',
@@ -551,7 +730,7 @@ describe('wait instruction', () => {
       status: NODE_RUN_STATUS.RESOLVED,
     });
     expect([left.status, right.status]).toEqual(['accepted', 'accepted']);
-    expect(await testStore(database).waitRequests.count()).toBe(2);
+    expect(await testStore(database).resumeRequests.count()).toBe(2);
   });
 
   it('claims a queued request once across two runtime instances', async () => {
@@ -559,10 +738,7 @@ describe('wait instruction', () => {
     additionalEngines.push(second);
     await second.initialize();
     const { runId } = await start();
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
-    });
+    const queued = apiWith(async () => undefined);
     const receipt = await queued.resume({
       runId,
       nodeKey: 'await-payment',
@@ -578,7 +754,7 @@ describe('wait instruction', () => {
     const task = {
       executionId: runId,
       nodeRunId: row.id as number,
-      waitRequestId: receipt.requestId,
+      resumeRequestId: receipt.requestId,
     };
     await Promise.all([engine.dispatch(task), second.dispatch(task)]);
     expect((await readRun(database, runId)).status).toBe(
@@ -635,7 +811,7 @@ describe('wait instruction', () => {
     });
     const run = await queuedEngine.trigger(definition, {});
     if (!run || !('id' in run)) throw new Error('No run');
-    const queuedWait = queuedEngine.getInstruction('wait');
+    const queuedWait = queuedEngine.getInstructionApi('wait');
     await waitFor(
       async () =>
         (await queuedWait.getPending({ runId: run.id, nodeKey: 'hold' }))
@@ -664,10 +840,7 @@ describe('wait instruction', () => {
 
   it('rejects new decisions after expiry and discards an already queued one', async () => {
     const { runId } = await start();
-    const queued = new WaitInstructionApi({
-      database,
-      enqueue: async () => undefined,
-    });
+    const queued = apiWith(async () => undefined);
     const receipt = await queued.resume({
       runId,
       nodeKey: 'await-payment',
@@ -682,21 +855,26 @@ describe('wait instruction', () => {
     expect(await wait.getPending({ runId, nodeKey: 'await-payment' })).toEqual({
       status: 'run-ended',
     });
-    const request = await testStore(database).waitRequests.findOne({
+    const request = await testStore(database).resumeRequests.findOne({
       filter: { id: receipt.requestId },
     });
     await engine.dispatch({
       executionId: runId,
       nodeRunId: request?.nodeRunId as number,
-      waitRequestId: receipt.requestId,
+      resumeRequestId: receipt.requestId,
     });
     expect(
       (
-        await testStore(database).waitRequests.findOne({
+        await testStore(database).resumeRequests.findOne({
           filter: { id: receipt.requestId },
         })
       )?.state,
     ).toBe('consumed');
+    // The decision is not applied: the run is closed as timed out instead.
+    expect(await readRun(database, runId)).toMatchObject({
+      status: EXECUTION_STATUS.ABORTED,
+      reason: 'timeout',
+    });
     expect(
       (await listNodeRuns(database, runId)).filter(
         (node) => node.nodeKey === 'done',
@@ -718,6 +896,6 @@ describe('wait instruction', () => {
     await expect(
       wait.resume({ ...target, result: { value: Number.NaN } }),
     ).rejects.toThrow('JSON');
-    expect(await testStore(database).waitRequests.count()).toBe(0);
+    expect(await testStore(database).resumeRequests.count()).toBe(0);
   });
 });

@@ -1,10 +1,15 @@
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { createWorkflowLogger } from './engine/logger.js';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
-import { ServiceProvider } from '@nocobase/service-provider';
+import {
+  ServiceProvider,
+  type ServiceResolver,
+} from '@nocobase/service-provider';
+import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { ScheduleTargetHandle } from '@nocobase/app-plugin-scheduler/server';
 import {
   WorkflowScheduleTarget,
@@ -34,6 +39,28 @@ export interface WorkflowProviderConfig {
 export type WorkflowProviderApplication =
   AppPluginApplication<WorkflowProviderConfig>;
 
+/**
+ * The generator runs, node runs and resume requests take their ids from.
+ *
+ * Every instance has its own worker id, which is what keeps the ids written by
+ * different instances from colliding. Without the application's generator the
+ * engine falls back to one on worker 0, which is only safe for a single
+ * process; a production application refuses to start that way rather than risk
+ * two instances allocating the same id.
+ */
+function resolveWorkflowIdGenerator(
+  container: ServiceResolver,
+  production: boolean,
+): { idGenerator?: IdGeneratorService } {
+  if (container.has(idGeneratorToken))
+    return { idGenerator: container.resolve(idGeneratorToken) };
+  if (production)
+    throw new Error(
+      'The workflow plugin requires the application id generator in production: register IdGeneratorProvider from @nocobase/app-server/id-generator',
+    );
+  return {};
+}
+
 export class WorkflowProvider<
   TApplication extends WorkflowProviderApplication =
     WorkflowProviderApplication,
@@ -59,6 +86,7 @@ export class WorkflowProvider<
           database: container.resolve(databaseManagerToken),
           queue: container.resolve(queueManagerToken),
           queueName: `workflow:${this.app.appName}`,
+          ...resolveWorkflowIdGenerator(container, workflow.production),
           services: this.app.container,
           sourceRoot: workflow.sourceRoot,
           distRoot: workflow.distRoot,

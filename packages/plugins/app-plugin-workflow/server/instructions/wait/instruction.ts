@@ -1,9 +1,9 @@
 import { NODE_RUN_STATUS } from '../../engine/constants.js';
-import { asId, asIdFilter } from '../../engine/utils.js';
 import type { JsonObject } from '../../engine/types.js';
 import { createNodeExpression } from '../../../dsl/definition.js';
 import {
   WorkflowInstruction,
+  type WorkflowInstructionApiContext,
   type WorkflowInstructionResult,
 } from '../base.js';
 import type {
@@ -11,7 +11,7 @@ import type {
   NodeExpression,
   WorkflowNodeSourceInput,
 } from '../types.js';
-import { WaitInstructionApi } from './api.js';
+import { WaitInstructionApi, type WaitResumePayload } from './api.js';
 
 export type WaitConfig = JsonObject & { correlation?: unknown };
 
@@ -20,7 +20,7 @@ export class WaitInstruction extends WorkflowInstruction<WaitConfig> {
   static readonly branches: null = null;
   static readonly result: null = null;
   static readonly createApi = (
-    context: ConstructorParameters<typeof WaitInstructionApi>[0],
+    context: WorkflowInstructionApiContext,
   ): WaitInstructionApi => new WaitInstructionApi(context);
 
   static create(source: WorkflowNodeSourceInput<WaitConfig>): NodeExpression {
@@ -50,30 +50,20 @@ export class WaitInstruction extends WorkflowInstruction<WaitConfig> {
   }
 
   async resume(): Promise<WorkflowInstructionResult> {
-    const requestId = this.processor.waitRequestId;
-    if (!requestId) throw new Error('Wait resume requires a persisted request');
-    const request = await this.processor.store.waitRequests.findOne({
-      filter: { id: requestId },
-    });
+    const request = this.processor.resumeRequest;
     if (
       !request ||
-      String(asId(request.nodeRunId)) !== String(this.nodeRun.id) ||
-      String(asId(request.workflowRunId)) !==
-        String(this.processor.execution.id) ||
-      request.state !== 'processing'
+      request.instructionType !== WaitInstruction.type ||
+      String(request.nodeRunId) !== String(this.nodeRun.id)
     )
-      throw new Error('Wait resume request is invalid');
-    const stillPending = await this.processor.store.nodeRuns.exists({
-      filter: {
-        id: asIdFilter(this.nodeRun.id),
-        status: NODE_RUN_STATUS.PENDING,
-      },
-    });
-    if (!stillPending) throw new Error('Wait node is no longer pending');
+      throw new Error('Wait resume requires its persisted request');
+    if (this.nodeRun.status !== NODE_RUN_STATUS.PENDING)
+      throw new Error('Wait node is no longer pending');
+    const payload = request.payload as WaitResumePayload;
     return {
-      status: Number(request.status),
-      result: request.result,
-      ...(request.error == null ? {} : { error: request.error as string }),
+      status: payload.status,
+      result: payload.result,
+      ...(payload.error == null ? {} : { error: payload.error }),
       meta: this.nodeRun.meta,
     };
   }
