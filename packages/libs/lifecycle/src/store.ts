@@ -96,6 +96,8 @@ export interface EffectRunQuery {
   readonly effect?: string;
   readonly status?: EffectRunStatus;
   readonly claimedBefore?: string;
+  /** Runs last changed before this instant. */
+  readonly updatedBefore?: string;
   readonly limit?: number;
 }
 

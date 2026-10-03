@@ -161,7 +161,7 @@ class JobsEffectDispatcher implements LifecycleJobs {
 /**
  * Runs a runtime's effects as jobs and its sweep as a schedule rule on the
  * application's jobs service. Effects are retried with their backoff through
- * an in-process timer, expired attempts are reclaimed on every sweep, and a
+ * an in-process timer, runs nobody is working on are reclaimed on every sweep, and a
  * start recovers what the previous process left queued.
  */
 export function createLifecycleJobs(

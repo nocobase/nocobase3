@@ -440,6 +440,26 @@ describe('Repository lifecycle store', () => {
     expect((await runtime().history('tickets', id)).effectRuns).toEqual([]);
   });
 
+  it('hands over a queued run whose dispatch was lost, on the database', async () => {
+    const lost: string[] = [];
+    const dispatcher: EffectDispatcher = {
+      dispatch: (runId) => {
+        lost.push(runId);
+        return Promise.resolve();
+      },
+    };
+    const id = await createTicket();
+    await runtime(dispatcher).fire('tickets', id, 'replyToCustomer', {
+      actor: { id: 'agent' },
+      input: { message: 'Please confirm' },
+    });
+    expect(lost).toHaveLength(1);
+    expect(await runtime(dispatcher).reclaim()).toBe(0);
+    now = new Date(now.getTime() + 6 * 60_000);
+    expect(await runtime(dispatcher).reclaim()).toBe(1);
+    expect(lost).toEqual([lost[0], lost[0]]);
+  });
+
   it('takes back an attempt whose process stopped answering', async () => {
     const id = await createTicket();
     await runtime({ dispatch: () => Promise.resolve() }).fire(

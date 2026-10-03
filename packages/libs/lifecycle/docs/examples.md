@@ -4,6 +4,8 @@ One capability, or one way of combining capabilities, per section: the business 
 
 The snippets are TypeScript-shaped pseudocode, not complete plugins. Unless one calls `defineLifecycle`, it shows entries to put inside `transitions`, `onEnter` or `triggers` as labelled; imports, type arguments and the surrounding states are left out, and every state and effect named must be declared in the full definition. `applicantOnly`, `approverOnly`, `systemOnly` and `services.*` are application code: a guard such as `systemOnly` is `({ actor }) => actor.system === true || { code: 'systemOnly', message: '…' }`, and the services are whatever the plugin registers. Authentication and authorization belong on the application's routes in every scenario.
 
+Sections 1–7, 9–12, 14, 15, 17–19, 21 and 25 are run by `tests/recipes.test.ts`, pitfalls included: if the runtime changes what a recipe says, that test fails. The others need a database, routes or the jobs service, which the store and provider tests cover.
+
 | Group                   | Sections                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Modelling transitions   | [1. Route by amount](#1-route-by-amount) · [2. Approve through several levels](#2-approve-through-several-levels) · [3. Hand over, escalate, reassign](#3-hand-over-escalate-reassign) · [4. Withdraw or reopen](#4-withdraw-or-reopen) · [5. Freeze a rule at submission](#5-freeze-a-rule-at-submission)                                                                     |
@@ -336,7 +338,7 @@ shipped:      { from: 'shipping',  to: 'done',      guard: systemOnly, accept: [
 retryReserve: { from: 'backorder', to: 'reserving', guard: clerkOnly,  effects: [reserveStock] },
 ```
 
-A process that stops between steps leaves the record in `reserving` or `shipping` with its next run recorded. A run that was queued is handed over by `recover()` when a process next starts; a run that was mid-attempt stays claimed until its lease expires, and `reclaim()` on any instance's sweep then takes it back. Either way the run carries the same idempotency key. `accept` copies `trackingNumber` from the effect's result onto the record, and the continuations are guarded to the system so a person cannot click them.
+A process that stops between steps leaves the record in `reserving` or `shipping` with its next run recorded. `reclaim()` on any instance's sweep hands the run over again once it has waited a lease — a queued run whose dispatch was lost, or an attempt that was running when its process stopped — and `recover()` does so when a process next starts. Either way the run carries the same idempotency key. `accept` copies `trackingNumber` from the effect's result onto the record, and the continuations are guarded to the system so a person cannot click them.
 
 ### 10. Pay and continue after the external call
 

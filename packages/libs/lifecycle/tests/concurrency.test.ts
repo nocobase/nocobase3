@@ -382,6 +382,63 @@ describe('lifecycle concurrency', () => {
     expect(record()).toMatchObject({ status: 'paid' });
   });
 
+  it('hands over a queued run whose dispatch was lost, once it has waited a lease', async () => {
+    // A dispatcher that loses everything it is handed, as a failed enqueue would.
+    const lost = new HeldDispatcher();
+    const { make, id, store, advance, record } = setup({ dispatcher: lost });
+    const runtime = make();
+    await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
+    const [runId] = lost.runs;
+    expect(await store.findEffectRun(runId!)).toMatchObject({
+      status: 'queued',
+    });
+
+    // Within a lease it may still be on its way: left alone.
+    expect(await runtime.reclaim()).toBe(0);
+    advance(2);
+    expect(await runtime.reclaim()).toBe(1);
+    expect(lost.runs).toEqual([runId, runId]);
+    expect(await runtime.runEffect(runId!)).toMatchObject({
+      status: 'succeeded',
+    });
+    expect(record()).toMatchObject({ status: 'paid' });
+  });
+
+  it('leaves alone a queued run whose backoff is not over, or whose effect it does not know', async () => {
+    const lost = new HeldDispatcher();
+    const { make, id, store, advance } = setup({ dispatcher: lost });
+    const runtime = make();
+    await runtime.fire('orders', id, 'approve', { actor: { id: 'a' } });
+    const [runId] = lost.runs;
+    // Requeued an hour ago with a retry due in an hour.
+    await store.updateEffectRun(
+      runId!,
+      { status: 'queued' },
+      { runAfter: '2026-10-01T11:00:00.000Z' },
+    );
+    await store.createEffectRun({
+      transitionId: '1',
+      lifecycle: 'orders',
+      recordId: String(id),
+      effect: 'orders.renamedLongAgo',
+      status: 'queued',
+      attempts: 0,
+      maxAttempts: 1,
+      result: null,
+      error: null,
+      createdAt: '2026-10-01T09:00:00.000Z',
+      updatedAt: '2026-10-01T09:00:00.000Z',
+      claimedAt: null,
+      runAfter: null,
+    });
+    advance(60);
+    expect(await runtime.reclaim()).toBe(0);
+    // Once the retry has been due for a lease, it is handed over.
+    advance(62);
+    expect(await runtime.reclaim()).toBe(1);
+    expect(lost.runs).toEqual([runId, runId]);
+  });
+
   it('keeps sweeping past a broken record, then reports it', async () => {
     type State = 'idle' | 'done';
     interface Item extends LifecycleRecord {

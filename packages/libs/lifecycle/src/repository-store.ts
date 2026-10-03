@@ -312,6 +312,9 @@ class RepositoryLifecycleStore implements LifecycleStore {
           ...(query.claimedBefore === undefined
             ? []
             : [filter.date('claimedAt').before(query.claimedBefore)]),
+          ...(query.updatedBefore === undefined
+            ? []
+            : [filter.date('updatedAt').before(query.updatedBefore)]),
         ]),
       sort: (sort) => sort.field('id').asc(),
       ...(query.limit === undefined ? {} : { limit: query.limit }),

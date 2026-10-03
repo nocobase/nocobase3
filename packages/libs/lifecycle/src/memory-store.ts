@@ -262,7 +262,9 @@ export class MemoryLifecycleStore implements LifecycleStore {
         (query.effect === undefined || run.effect === query.effect) &&
         (query.status === undefined || run.status === query.status) &&
         (query.claimedBefore === undefined ||
-          (run.claimedAt !== null && run.claimedAt < query.claimedBefore)),
+          (run.claimedAt !== null && run.claimedAt < query.claimedBefore)) &&
+        (query.updatedBefore === undefined ||
+          run.updatedAt < query.updatedBefore),
     );
     return Promise.resolve(
       query.limit === undefined ? runs : runs.slice(0, query.limit),
