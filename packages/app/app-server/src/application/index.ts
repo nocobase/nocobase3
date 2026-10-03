@@ -1,4 +1,5 @@
 import type { AppRuntimeLogging } from '../logging/config.js';
+import { loggingToken } from '../logging/token.js';
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
 import {
@@ -28,10 +29,11 @@ import {
 import { RealtimeProvider } from '../realtime/provider.js';
 import {
   createAppDatabaseTaskContributions,
-  type AppServerPluginLocalesLoader,
+  type AppServerPluginLocales,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
 import type { AppDatabaseTaskContributions } from '../database/types.js';
+import { resolveLocalesContribution } from '@nocobase/i18n';
 import { i18nToken, registerAppLocales } from '../i18n/index.js';
 
 export type ApplicationFetchHandler = (
@@ -73,7 +75,7 @@ export interface ApplicationRuntimeContributions<
   readonly plugins: ResolvedAppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
-  readonly locales?: AppServerPluginLocalesLoader;
+  readonly locales?: AppServerPluginLocales;
 }
 
 /**
@@ -123,9 +125,11 @@ export class Application<
   };
   private readonly localeContributions: {
     packageName: string;
-    load: AppServerPluginLocalesLoader;
+    locales: AppServerPluginLocales;
   }[] = [];
-  private applicationLocales: AppServerPluginLocalesLoader | undefined;
+  private applicationLocales: AppServerPluginLocales | undefined;
+  /** Plugins still declaring the removed `queue: { jobs }` contribution. */
+  private readonly queueJobPlugins: string[] = [];
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.strictStartup = options.strictStartup ?? false;
@@ -191,10 +195,13 @@ export class Application<
       for (const routes of plugin.definition.routes) {
         this.addRoutes(routes);
       }
+      if (plugin.definition.queue) {
+        this.queueJobPlugins.push(plugin.definition.packageName);
+      }
       if (plugin.definition.locales) {
         this.localeContributions.push({
           packageName: plugin.definition.packageName,
-          load: plugin.definition.locales,
+          locales: plugin.definition.locales,
         });
       }
     }
@@ -213,8 +220,8 @@ export class Application<
     }
   }
 
-  public addApplicationLocales(load: AppServerPluginLocalesLoader): void {
-    this.applicationLocales = load;
+  public addApplicationLocales(locales: AppServerPluginLocales): void {
+    this.applicationLocales = locales;
   }
 
   public addRoutes(routes: AppRouteContribution<Application<TConfig>>): void {
@@ -257,11 +264,24 @@ export class Application<
   private async startServiceProviders(): Promise<void> {
     await this.validateConfig();
     this.registerProviders();
+    this.reportQueueJobPlugins();
     await this.registerLocales();
     await this.providerRegistry.bootAll();
     await this.registerRoutes();
     await this.providerRegistry.startAll();
     await this.providerRegistry.readyAll();
+  }
+
+  /** Warns once per plugin whose `queue: { jobs }` contribution is no longer loaded. */
+  private reportQueueJobPlugins(): void {
+    const logger = this.container.has(loggingToken)
+      ? this.container.resolve(loggingToken).getLogger('plugins')
+      : undefined;
+    for (const packageName of this.queueJobPlugins) {
+      const message = `Plugin ${packageName} declares queue.jobs, which is deprecated and ignored: Job modules are no longer discovered. Register queue handlers from a service provider's boot() through queueServiceToken, or move the work to @nocobase/jobs.`;
+      if (logger) logger.warn({ packageName }, message);
+      else console.warn(message);
+    }
   }
 
   /**
@@ -292,7 +312,7 @@ export class Application<
         ? [
             {
               packageName: this.appPackageName ?? '',
-              load: this.applicationLocales,
+              locales: this.applicationLocales,
             },
           ]
         : []),
@@ -301,7 +321,7 @@ export class Application<
     const contributions = await Promise.all(
       sources.map(async (contribution) => ({
         packageName: contribution.packageName,
-        locales: await contribution.load(),
+        locales: await resolveLocalesContribution(contribution.locales),
       })),
     );
     await registerAppLocales(runtime, this.appPackageName ?? '', contributions);

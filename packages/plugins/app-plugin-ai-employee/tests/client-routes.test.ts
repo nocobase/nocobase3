@@ -1,6 +1,13 @@
+import type { AppClientSettingsRouteDefinition } from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
 import routes from '../client/routes.ts';
+
+function flattenPages(
+  pages: readonly AppClientSettingsRouteDefinition[],
+): AppClientSettingsRouteDefinition[] {
+  return pages.flatMap((page) => [page, ...flattenPages(page.children ?? [])]);
+}
 
 const expectedDemoRoutes = [
   ['ai-chat-window', '/chat', 'demo.navigation.chat'],
@@ -26,9 +33,10 @@ describe('AI Employee client routes', () => {
             { name: 'ai', path: '/ai' },
             { name: 'aiSkills', path: '/ai/skills' },
             { name: 'aiTools', path: '/ai/tools' },
-            { name: 'aiConversations', path: '/ai/conversations' },
             { name: 'aiLLMServices', path: '/ai/llm-services' },
             { name: 'aiMCPServices', path: '/ai/mcp-services' },
+            { name: 'aiUsage', path: '/ai/usage' },
+            { name: 'aiConversations', path: '/ai/conversations' },
             { name: 'aiSettings', path: '/ai/settings' },
           ],
         },
@@ -54,15 +62,42 @@ describe('AI Employee client routes', () => {
     if (settingsContribution?.parent !== 'settings') {
       throw new Error('Missing AI Employee Settings Route contribution.');
     }
+    const settingsRoutes = flattenPages(
+      settingsContribution.routes[0]?.children ?? [],
+    );
+    expect(settingsRoutes.map(({ name }) => name)).toEqual([
+      'ai',
+      'aiEmployeeProfile',
+      'aiEmployeeRole',
+      'aiEmployeeModels',
+      'aiEmployeeSkills',
+      'aiEmployeeTools',
+      'aiEmployeeKnowledge',
+      'aiEmployeeUnknownTab',
+      'aiSkills',
+      'aiSkillDetails',
+      'aiSkillInstructions',
+      'aiSkillTools',
+      'aiTools',
+      'aiToolDetails',
+      'aiLLMServices',
+      'aiLLMServiceModels',
+      'aiMCPServices',
+      'aiMCPServiceTools',
+      'aiUsage',
+      'aiConversations',
+      'aiConversationDetails',
+      'aiSettings',
+    ]);
     const settingsPages = await Promise.all(
-      (settingsContribution.routes[0]?.children ?? []).map((route) => {
+      settingsRoutes.map((route) => {
         if (!route.componentLoader) {
           throw new Error(`Missing settings page loader: ${route.name}`);
         }
         return route.componentLoader();
       }),
     );
-    expect(settingsPages).toHaveLength(7);
+    expect(settingsPages).toHaveLength(22);
     for (const page of settingsPages) {
       expect(page.default).toEqual(expect.any(Function));
     }

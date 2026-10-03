@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
-  createQueueManager,
-  queueMigrationSource,
-  type AppQueueConfig,
-  type NocoBaseQueueManager,
-} from '@nocobase/queue';
+  createJobExecutorService,
+  type ManagedJobExecutorService,
+} from '@nocobase/jobs';
 import WorkflowEngine from '../server/engine/engine.js';
 import { createWorkflowRunServices } from '../server/engine/run-services.js';
 import { createWaitInstruction, workflow } from '../dsl/index.js';
@@ -63,7 +64,8 @@ describe('wait instruction', () => {
   let database: DatabaseManager;
   let engine: WorkflowEngine;
   let wait: WaitInstructionApi;
-  let queueManager: NocoBaseQueueManager | null = null;
+  let jobs: ManagedJobExecutorService | null = null;
+  let jobsStoragePath = '';
   const additionalEngines: WorkflowEngine[] = [];
 
   beforeEach(async () => {
@@ -78,8 +80,11 @@ describe('wait instruction', () => {
       additionalEngines.splice(0).map((runtime) => runtime.dispose()),
     );
     await engine.dispose();
-    await queueManager?.close();
-    queueManager = null;
+    await jobs?.shutdown();
+    jobs = null;
+    if (jobsStoragePath)
+      await rm(jobsStoragePath, { recursive: true, force: true });
+    jobsStoragePath = '';
     await database.destroy();
     await removeModuleRoots();
   });
@@ -767,37 +772,15 @@ describe('wait instruction', () => {
     ).toHaveLength(1);
   });
 
-  it('resumes through the database queue worker', async () => {
-    await database
-      .createMigrator({
-        sources: [
-          {
-            ...queueMigrationSource,
-            parameters: {
-              jobsTable: 'queue_jobs',
-              schedulesTable: 'queue_schedules',
-            },
-            configuration: [{ driver: 'database' }],
-          },
-        ],
-      })
-      .latest();
-    const config: AppQueueConfig = {
-      default: 'database',
-      connections: {
-        database: {
-          driver: 'database',
-          table: 'queue_jobs',
-          schedulesTable: 'queue_schedules',
-        },
-      },
-      worker: { queues: ['workflow'], concurrency: 1, idleDelay: '10ms' },
-      jobs: { autoLoad: false, locations: [] },
-    };
-    queueManager = createQueueManager(config, { database });
+  it('resumes through the jobs executor', async () => {
+    jobsStoragePath = await mkdtemp(path.join(tmpdir(), 'workflow-wait-jobs-'));
+    jobs = createJobExecutorService(undefined, {
+      appName: 'workflow-wait-test',
+      storagePath: jobsStoragePath,
+    });
     const queuedEngine = new WorkflowEngine({
       database,
-      queue: queueManager,
+      executor: jobs.getJobExecutor('@nocobase/app-plugin-workflow'),
       timeoutReaper: false,
     });
     additionalEngines.push(queuedEngine);

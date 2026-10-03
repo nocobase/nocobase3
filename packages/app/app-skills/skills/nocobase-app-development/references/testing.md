@@ -51,7 +51,7 @@ Do not add a `registerRoutes(router, ...)` helper just to make a route testable.
 
 ## Testing the frontend
 
-Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md).
+Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md), including a minimal component test that renders with the real i18n runtime from `@nocobase/i18n/testing`. Do not mock `@nocobase/i18n/client`: a mocked `t` hides misspelt keys and wrong namespaces.
 
 ## Testing migrations
 
@@ -77,7 +77,7 @@ Add focused regression coverage when behavior changes. Documentation-only change
 
 Then verify the affected behavior, selecting only the applicable steps below. Green commands mean the code compiles and the assertions you wrote hold — not that the feature works:
 
-- For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took; a quick change needs only static checks.
+- For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took: a quick change runs the static checks and the related tests and looks at the changed element once in the browser; a theme change runs the theme tests and its browser check; the full workflow ends with its acceptance review.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
 - Confirm `pnpm nocobase db apply` applies cleanly.
 
@@ -87,9 +87,9 @@ Say what you ran, what passed, and what you did not run. If you could not verify
 
 ## Strict startup verification
 
-Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures, including job import failures, exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.
+Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.
 
-Use the shared Vitest presets for tests that discover queue jobs. They inline the queue loader so dynamically imported TypeScript tasks use Vitest's transformation and module registry. Do not suppress job import warnings or disable automatic discovery to make a startup test pass; assert that discovered jobs register and execute.
+In application tests that start jobs or queues, select a `jobs` or `queue` configuration key whose `persistence.path` is a temporary directory, so memory state files stay out of the working tree.
 
 ## Vite cache isolation
 

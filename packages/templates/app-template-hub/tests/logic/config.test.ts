@@ -72,6 +72,9 @@ describe('application config', () => {
     expect(runtime.config.get('hub.desiredConfigsDir')).toBe(
       path.join(storage, 'hub/desired-configs'),
     );
+    expect(runtime.config.get('hub.uploadsDir')).toBe(
+      path.join(storage, 'hub/uploads'),
+    );
     expect(runtime.config.get('hub.logging.deployments.directory')).toBe(
       path.join(storage, 'hub/logs/deployments'),
     );
@@ -125,8 +128,19 @@ describe('application config', () => {
       runtime.config.get<AppLoggingConfig>('logging')!.default,
     ).toBeUndefined();
     expect(runtime.config.get('logging.file.name')).toBe('app');
-    expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
-    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
+    // No default: queues run on the built-in memory configuration until one is named.
+    expect(runtime.config.get<AppQueueConfig>('queue')).toEqual({
+      memory: {
+        adapter: 'inMemory',
+        persistence: { path: runtime.paths.storage('queue') },
+      },
+      redis: {
+        adapter: 'redis',
+        connection: { host: '127.0.0.1', port: 6379, db: 0 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: { age: 604_800 },
+      },
+    });
     expect(runtime.config.get<AppJobsConfig>('jobs')).toEqual({
       memory: {
         adapter: 'memory',
@@ -168,9 +182,7 @@ describe('application config', () => {
     });
     expect(runtime.config.get('server.port')).toBe(14001);
     expect(runtime.config.get('server.startLog')).toBe(false);
-    expect(runtime.config.get('queue.connections.redis.host')).toBe(
-      '127.0.0.1',
-    );
+    expect(runtime.config.get('queue.redis.connection.host')).toBe('127.0.0.1');
     expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
     expect(runtime.config.get('logging.console.pretty')).toBe(false);
     expect(runtime.config.get('session.cookie.secure')).toBe(true);

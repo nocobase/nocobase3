@@ -1,6 +1,8 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
-const enUS = {
+import authUi from '../extensions/nocobase-auth-ui/locales/en-US.js';
+
+const messages = {
   workflowTasks: {
     title: 'Waiting tasks',
     description: 'Review quotation tasks created by the example workflow.',
@@ -150,50 +152,7 @@ const enUS = {
   'auth.forgotTitle': 'Forgot password',
   'auth.forgotDescription':
     'Enter your email and we will send a reset link if the account exists.',
-  'auth.resetTitle': 'Reset password',
   'auth.resetDescription': 'Choose a new password for your account.',
-  'auth.identifier': 'Username or email',
-  'auth.password': 'Password',
-  'auth.signIn': 'Sign in',
-  'auth.signInLink': 'sign in',
-  'auth.signingIn': 'Signing in…',
-  'auth.hidePassword': 'Hide password',
-  'auth.showPassword': 'Show password',
-  'auth.forgotLink': 'Forgot password?',
-  'auth.signUp': 'Sign up',
-  'auth.createAccount': 'Create account',
-  'auth.creatingAccount': 'Creating account…',
-  'auth.name': 'Name',
-  'auth.username': 'Username',
-  'auth.email': 'Email',
-  'auth.confirmPassword': 'Confirm password',
-  'auth.existingAccount': 'Already have an account?',
-  'auth.resetting': 'Resetting…',
-  'auth.newPassword': 'New password',
-  'auth.confirmNewPassword': 'Confirm new password',
-  'auth.invalidResetLink':
-    'This password reset link is invalid or has expired.',
-  'auth.returnTo': 'Return to',
-  'auth.sendResetLink': 'Send reset link',
-  'auth.sending': 'Sending…',
-  'auth.resetSent': 'If the account exists, a reset link has been sent.',
-  'auth.rememberPassword': 'Remember your password?',
-  'auth.methods': 'Authentication methods',
-  'auth.continueWith': 'Or continue with',
-  'auth.about': 'About this application',
-  'auth.marketingDescription':
-    'Give AI a flexible frontend framework to shape each experience, while NocoBase secures the data, permissions, workflows and governance underneath.',
-  'auth.platform': 'AI-native application platform',
-  'auth.frontendDescription':
-    'Compose interfaces freely on a flexible framework.',
-  'auth.frontend': 'AI-native frontend',
-  'auth.foundationDescription':
-    'Reliable data, access control, workflows and governance.',
-  'auth.foundation': 'NocoBase foundation',
-  'auth.marketingFooter': 'Freedom above. Confidence below.',
-  'auth.marketingTitleFirst': 'Let AI build freely.',
-  'auth.marketingTitleSecond': 'NocoBase keeps it',
-  'auth.marketingTitleThird': 'reliable.',
   'status.loading': 'Loading',
   'status.loadingPage': 'Loading page',
   'status.loadingSettings': 'Loading settings',
@@ -203,7 +162,6 @@ const enUS = {
   'status.retry': 'Retry',
   'navigation.brandHome': 'NocoBase home',
   'navigation.brandApps': 'NocoBase applications',
-  'auth.passwordMismatch': "Passwords don't match.",
   'routeOverlay.close': 'Close',
   'status.deniedDescription': 'You do not have permission to access {{label}}.',
   'status.routeFailedDescription':
@@ -357,11 +315,6 @@ const enUS = {
       description:
         'Try plural forms, missing-translation fallbacks and regional number, currency and date formats.',
     },
-    notifications: {
-      title: 'Notifications',
-      description:
-        'View your in-app notifications, filter unread messages, and manage their read state.',
-    },
     notificationTasks: {
       title: 'Task notifications',
       description:
@@ -419,6 +372,11 @@ const enUS = {
       title: 'File management',
       description:
         'Explore the file repository example and its upload and file management interface.',
+    },
+    templatePrint: {
+      title: 'Template printing',
+      description:
+        'Generate DOCX or PDF invoices from authorized quote data; PDF requires LibreOffice on the application server.',
     },
     workflows: {
       title: 'Workflow examples',
@@ -543,6 +501,7 @@ const enUS = {
     collapse: 'Collapse navigation',
     label: 'Application navigation',
     breadcrumb: 'Breadcrumb',
+    back: 'Back',
   },
   dataTable: {
     noResults: 'No results.',
@@ -564,6 +523,8 @@ const enUS = {
     rangePlaceholder: 'Pick a date range',
   },
 };
+
+const enUS: typeof authUi & typeof messages = { ...authUi, ...messages };
 
 /**
  * The shape every locale of this application follows, derived from the English wording above.

@@ -1,7 +1,7 @@
 import type { WorkflowLogger } from './engine/types.js';
 import path from 'node:path';
 import type { DatabaseManager } from '@nocobase/db';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { JobExecutor } from '@nocobase/jobs';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import { randomUUID } from 'node:crypto';
 import {
@@ -33,8 +33,7 @@ import type { WorkflowInstructionApis } from './instructions/base.js';
 export interface WorkflowServiceOptions {
   logger?: WorkflowLogger;
   database: DatabaseManager;
-  queue: NocoBaseQueueManager;
-  queueName?: string;
+  executor: JobExecutor;
   services: ServiceResolver;
   sourceRoot?: string;
   distRoot: string;
@@ -67,10 +66,7 @@ export class WorkflowService {
     this.engine = new WorkflowEngine({
       logger: options.logger,
       database: options.database,
-      queue: options.queue,
-      ...(options.queueName === undefined
-        ? {}
-        : { queueName: options.queueName }),
+      executor: options.executor,
       ...(options.terminalObserver === undefined
         ? {}
         : { terminalObserver: options.terminalObserver }),

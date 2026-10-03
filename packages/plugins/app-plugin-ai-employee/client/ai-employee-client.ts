@@ -7,6 +7,7 @@ import * as llmServices from './llm-service-service.js';
 import * as mcp from './mcp-service.js';
 import * as skills from './skills-management-service.js';
 import * as tools from './tools-management-service.js';
+import * as usage from './usage-statistics-service.js';
 
 /** A service function with its leading `ApiClient` already supplied. */
 type Bound<F> = F extends (api: ApiClient, ...args: infer A) => infer R
@@ -34,6 +35,12 @@ export interface AIEmployeeClient {
   readonly getManagedConversationMessages: Bound<
     typeof conversations.getManagedConversationMessages
   >;
+  readonly listConversationUsers: Bound<
+    typeof conversations.listConversationUsers
+  >;
+  readonly listConversationEmployees: Bound<
+    typeof conversations.listConversationEmployees
+  >;
   readonly listLLMServices: Bound<typeof llmServices.listLLMServices>;
   readonly listLLMProviders: Bound<typeof llmServices.listLLMProviders>;
   readonly updateLLMServiceEnabled: Bound<
@@ -52,6 +59,10 @@ export interface AIEmployeeClient {
   readonly getManagedSkillDetails: Bound<typeof skills.getManagedSkillDetails>;
   readonly listManagedTools: Bound<typeof tools.listManagedTools>;
   readonly getManagedToolDetails: Bound<typeof tools.getManagedToolDetails>;
+  readonly fetchUsageSummary: Bound<typeof usage.fetchUsageSummary>;
+  readonly fetchUsageSeries: Bound<typeof usage.fetchUsageSeries>;
+  readonly fetchUsageBreakdown: Bound<typeof usage.fetchUsageBreakdown>;
+  readonly fetchUsageFilterOptions: Bound<typeof usage.fetchUsageFilterOptions>;
 }
 
 export function createAIEmployeeClient(api: ApiClient): AIEmployeeClient {
@@ -68,6 +79,10 @@ export function createAIEmployeeClient(api: ApiClient): AIEmployeeClient {
       conversations.listManagedConversations(api, ...args),
     getManagedConversationMessages: (...args) =>
       conversations.getManagedConversationMessages(api, ...args),
+    listConversationUsers: (...args) =>
+      conversations.listConversationUsers(api, ...args),
+    listConversationEmployees: (...args) =>
+      conversations.listConversationEmployees(api, ...args),
     listLLMServices: () => llmServices.listLLMServices(api),
     listLLMProviders: () => llmServices.listLLMProviders(api),
     updateLLMServiceEnabled: (...args) =>
@@ -89,6 +104,11 @@ export function createAIEmployeeClient(api: ApiClient): AIEmployeeClient {
     listManagedTools: (...args) => tools.listManagedTools(api, ...args),
     getManagedToolDetails: (...args) =>
       tools.getManagedToolDetails(api, ...args),
+    fetchUsageSummary: (...args) => usage.fetchUsageSummary(api, ...args),
+    fetchUsageSeries: (...args) => usage.fetchUsageSeries(api, ...args),
+    fetchUsageBreakdown: (...args) => usage.fetchUsageBreakdown(api, ...args),
+    fetchUsageFilterOptions: (...args) =>
+      usage.fetchUsageFilterOptions(api, ...args),
   };
 }
 

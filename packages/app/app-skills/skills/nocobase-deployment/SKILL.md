@@ -32,7 +32,7 @@ pnpm test
 pnpm lint
 ```
 
-Run the checks that the project actually defines; do not invent a test or lint command when it is absent. Build for the destination platform:
+Run the checks that the project actually defines; do not invent a test or lint command when it is absent. Build for the destination platform, unless the destination is a Hub reached with `pnpm nocobase hub deploy`, which builds for the platform the Hub reports:
 
 ```bash
 pnpm build --target linux-x64 --node-version 24 --tar
@@ -66,7 +66,8 @@ Prepare the complete runtime configuration before starting the service. At minim
 - `APP_PUBLIC_ORIGIN` as the external scheme and host without the application path, and `APP_BASE_PATH` as the public mount path, read when the server starts; it defaults to `/main`.
 - `APP_SERVER_HOST` and `APP_SERVER_PORT`, with containers normally listening on `0.0.0.0` and the proxy controlling external exposure.
 - Persistent storage paths, file permissions, service identity, and any external database, object storage, mail, or callback settings.
-- The `jobs` backend for scheduled jobs. Without `jobs.default` they run on the built-in memory adapter, which keeps its state in the process, reads it from `storage/jobs` at startup and writes it back when the service stops: it serves one process, every other process or instance would fire its own copy, and a process that is killed rather than stopped loses what changed since it started. For more than one instance set `jobs.default` to the `redis` configuration and its `connection`; that Redis must persist its data (AOF or RDB) and use `maxmemory-policy noeviction`, and it opens connections per scheduling plugin. Set `jobs.default: memory` to keep a single-instance deployment on memory without the startup warning.
+- The `jobs` backend, which runs background tasks — Notification deliveries, Workflow runs, plugin jobs — and scheduled jobs, Scheduler's included. Without `jobs.default` they run on the built-in memory adapter, which keeps its state in the process, reads it from `storage/jobs` at startup and writes it back when the service stops: it serves one process, every other process or instance would fire its own copy, and a process that is killed rather than stopped loses what changed since it started. For more than one instance set `jobs.default` to the `redis` configuration and its `connection`; that Redis must persist its data (AOF or RDB) and use `maxmemory-policy noeviction`, and it opens connections per scheduling plugin. Set `jobs.default: memory` to keep a single-instance deployment on memory without the startup warning.
+- The `queue` backend, when the application or a plugin uses `@nocobase/queue`. Without `queue.default` queues run on the built-in memory configuration, one process, with pending jobs written under `storage/queue` when the service stops. For more than one instance set `queue.default` to the `redis` configuration, under the same Redis requirements; `queue.default: memory` keeps a single instance on memory without the warning.
 
 The reverse proxy must preserve the public `Host` and protocol headers, forward cookies, and support WebSocket `Upgrade` and `Connection` headers. For Hub, proxy the entire site to Hub; do not expose a separate Host port or proxy only `/hub`.
 
@@ -99,9 +100,9 @@ A Hub project created from the Hub template, whose source changes, deploys like 
 
 ### Publish an App to an existing Hub
 
-Publishing to a Hub uses `pnpm nocobase hub deploy` and `hub upload`, which an application has for as long as its `package.json` lists `@nocobase/hub-cli`. The Default template declares it; any other application gets the commands with `pnpm add -D @nocobase/hub-cli`. They run in the source checkout or in CI, never in a built `dist/`, because what they send is the archive `pnpm build --tar` writes beside the sources.
+Publishing to a Hub uses the `pnpm nocobase hub` commands, which an application has for as long as its `package.json` lists `@nocobase/hub-cli`. The Default template declares it; any other application gets them with `pnpm add -D @nocobase/hub-cli`. They run in the source checkout or in CI, never in a built `dist/`. `hub deploy` builds the archive for the platform the Hub reports, uploads it and deploys it, so do not run `pnpm build --tar` or choose a `--target` first.
 
-Read `.agents/skills/nocobase-hub-cli/SKILL.md`, which that package ships, before publishing: it covers the API key, the build, `--config`, waiting, exit codes and retries. `HUB_API_KEY` is created in Hub, not in the application; tell the user to create the key before the first upload rather than guessing its value. Never print an API key or put it in committed configuration.
+Read `.agents/skills/nocobase-hub-cli/SKILL.md`, which that package ships, before publishing: it covers the remote committed in `.nocobase/hub.json`, saving the API key with `hub auth login`, the build, `--config`, waiting, exit codes and retries. The API key is created in Hub, not in the application, and the user saves it with `hub auth login` themselves. Never ask for the key, print it, or put it in `.env` or committed configuration; hub-cli reads no key or Hub address from the environment.
 
 ## Handle workflow artifacts after production build
 

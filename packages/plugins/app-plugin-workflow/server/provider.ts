@@ -1,7 +1,7 @@
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { createWorkflowLogger } from './engine/logger.js';
-import { queueManagerToken } from '@nocobase/app-server/queue';
+import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
@@ -75,6 +75,7 @@ export class WorkflowProvider<
     if (!this.app.container.has(databaseManagerToken)) return;
     const workflow = this.app.config.get<WorkflowRuntimeConfig>('workflow')!;
     const drive = this.app.config.get<AppDriveConfig>('drive')!;
+    const jobsConfiguration = this.jobsConfiguration(workflow);
 
     this.app.container.singleton(
       internalWorkflowServiceToken,
@@ -84,8 +85,11 @@ export class WorkflowProvider<
             container.resolve(loggingToken).getLogger('workflow'),
           ),
           database: container.resolve(databaseManagerToken),
-          queue: container.resolve(queueManagerToken),
-          queueName: `workflow:${this.app.appName}`,
+          // The jobs namespace defaults to the application name, which keeps
+          // applications sharing one Redis apart.
+          executor: container
+            .resolve(jobExecutorServiceToken)
+            .getJobExecutor(this.name, jobsConfiguration),
           ...resolveWorkflowIdGenerator(container, workflow.production),
           services: this.app.container,
           sourceRoot: workflow.sourceRoot,
@@ -164,6 +168,28 @@ export class WorkflowProvider<
     await this.app.container
       .resolveIfCreated(internalWorkflowServiceToken)
       ?.dispose();
+  }
+
+  /**
+   * The `jobs` configuration `workflow.jobs` names. The jobs service would
+   * fall back to `jobs.default` for a name it does not know, which would put
+   * workflow tasks on another backend without a word, so an unknown name
+   * refuses to start instead.
+   */
+  private jobsConfiguration(
+    workflow: WorkflowRuntimeConfig,
+  ): string | undefined {
+    const name = workflow.jobs;
+    if (name === undefined) return undefined;
+    const jobs = this.app.config.get<Record<string, unknown>>('jobs');
+    // `jobs.default` holds a key, not a configuration, so it is rejected too.
+    const selected = jobs?.[name];
+    if (!selected || typeof selected !== 'object') {
+      throw new Error(
+        `workflow.jobs names "${name}", which is not a jobs configuration.`,
+      );
+    }
+    return name;
   }
 }
 
