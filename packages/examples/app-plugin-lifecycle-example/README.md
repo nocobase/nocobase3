@@ -30,7 +30,7 @@ Run the examples application with `pnpm --filter @nocobase/app-template-examples
 | Records and the log         | `database/migrations/`, through the Repository store                                                                                                                                                                                  |
 | Effects, triggers, recovery | `createLifecycleJobs()` from `@nocobase/lifecycle/jobs`: a `JobExecutor` job per effect run, a `ScheduleExecutor` sweep every 10 seconds that reclaims expired attempts, fires triggers and prunes old runs, and `recover()` on start |
 | Record routes               | `createLifecycleRoutes()` from `@nocobase/lifecycle/hono`, mounted at `/lifecycle-example/lifecycles`                                                                                                                                 |
-| Record pages                | `useLifecycle()` from `@nocobase/lifecycle/react`, with the API client as transport                                                                                                                                                   |
+| Record pages                | `createLifecycleHook()` from `@nocobase/lifecycle/react`, configured once in `client/lib/use-example-record.ts` with the API client as transport; the routes' path is shared with the server in `shared/routes.ts`                    |
 
 ## Patterns worth copying
 

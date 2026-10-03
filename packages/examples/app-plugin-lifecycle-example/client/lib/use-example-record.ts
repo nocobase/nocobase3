@@ -1,21 +1,29 @@
-import { useMemo } from 'react';
 import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
-  createLifecycleClient,
-  useLifecycle,
-  type LifecycleClient,
+  createLifecycleHook,
   type UseLifecycleResult,
+  type UseRecordLifecycle,
 } from '@nocobase/lifecycle/react';
 
+import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
 import {
   errorMessage,
-  LIFECYCLE_ROUTES,
   type LifecycleName,
   type RecordDetail,
   type Translate,
 } from './api.js';
 import { NAMESPACE } from './format.js';
+
+/**
+ * The library's record hook, configured once for this plugin's routes. The
+ * application's API client is the transport; the library needs nothing else
+ * from it.
+ */
+export const useExampleLifecycle: UseRecordLifecycle = createLifecycleHook({
+  useTransport: useApiClient,
+  basePath: LIFECYCLE_ROUTES,
+});
 
 /** The page's locale as `errorMessage()` reads it. */
 export function useTranslate(): Translate {
@@ -26,39 +34,27 @@ export function useTranslate(): Translate {
 export interface ExampleRecord {
   /** The record, what the actor may do, its history and its lifecycle's description. */
   readonly detail: RecordDetail | undefined;
+  /** The last load's failure, in the page's language. */
   readonly error: string;
   readonly lifecycle: UseLifecycleResult;
-  /** For firing on a record the page has not selected yet, such as one just created. */
-  readonly client: LifecycleClient;
 }
 
 /**
  * One record of the example's lifecycles, as the person the page acts as
- * sees it. The application's API client is the transport: the library needs
- * nothing else from it.
+ * sees it: the hook's view and description merged for the record panel, and
+ * its load error translated.
  */
 export function useExampleRecord(
   name: LifecycleName,
   id: string | undefined,
   actor: string,
 ): ExampleRecord {
-  const api = useApiClient();
   const translate = useTranslate();
-  const client = useMemo(
-    () =>
-      createLifecycleClient({
-        transport: api,
-        basePath: LIFECYCLE_ROUTES,
-        query: { actAs: actor },
-      }),
-    [api, actor],
-  );
-  const lifecycle = useLifecycle(client, name, id);
+  const lifecycle = useExampleLifecycle(name, id, { actAs: actor });
   const { view, description } = lifecycle;
   return {
     detail: view && description ? { ...view, ...description } : undefined,
     error: lifecycle.error ? errorMessage(lifecycle.error, translate) : '',
     lifecycle,
-    client,
   };
 }

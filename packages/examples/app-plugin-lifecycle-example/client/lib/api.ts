@@ -18,9 +18,6 @@ export type LifecycleName = 'tickets' | 'expenses';
 /** The transition name of the log entry that records a creation. */
 export const CREATE_TRANSITION = '$create';
 
-/** Where the plugin mounts the library's record routes. */
-export const LIFECYCLE_ROUTES = 'lifecycle-example/lifecycles';
-
 /** One record as a page shows it: the library's view and its lifecycle's description. */
 export type RecordDetail = RecordView & LifecycleDescriptionView;
 
@@ -31,7 +28,7 @@ export interface RecordList {
 
 const base = 'lifecycle-example';
 
-/** The plugin's own routes: lists and forms. A record's view and its transitions go through `useExampleRecord`. */
+/** The plugin's own routes: lists and forms. A record's view and its transitions go through `useExampleLifecycle`. */
 export function exampleApi(client: ApiClient): {
   list(name: LifecycleName, actAs: string, view?: string): Promise<RecordList>;
   create(name: LifecycleName, actAs: string, values: Plain): Promise<Plain>;
