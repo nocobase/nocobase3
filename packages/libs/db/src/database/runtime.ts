@@ -227,6 +227,18 @@ export interface DatabaseSchemaRuntimeStrategy {
    * Defaults to passing the value through.
    */
   readonly encodeJsonDefault?: (context: { altering: boolean }) => boolean;
+  /**
+   * The default a column is created or altered with, as an expression, in place of its `defaultValue`.
+   *
+   * Return one where the engine rejects the literal form, as MySQL does on a TEXT column, which takes a default only
+   * as `default ('…')`. Knex compiles a default only for a column it built itself, so a dialect returning one also
+   * names the column's type through `columnType`, which Knex leaves alone. `undefined` keeps the literal default.
+   */
+  readonly columnDefault?: (context: {
+    client: Knex;
+    column: ColumnSchemaDefinition;
+    altering: boolean;
+  }) => Knex.Raw | undefined;
   readonly configureForeignKey?: (context: {
     foreign: any;
     constraint: PhysicalConstraintDefinition & { type: 'foreignKey' };
