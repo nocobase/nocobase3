@@ -297,7 +297,7 @@ await db.transaction(async (connection) => {
 });
 ```
 
-It runs after the outermost commit, in registration order, and `transaction()` resolves once every callback has finished, so keep it quick and hand slow work to a job. Inside a nested `transaction()` it waits for the outer commit and is dropped if that savepoint rolls back. Outside a transaction it starts at once, so a service can call it whether or not its caller opened one. A callback that throws does not undo the commit: the error goes to the connection's `onTransactionCallbackError`, or becomes a `TRANSACTION_CALLBACK_FAILED` warning. The transaction connection is finished when the callback runs; write through `db` or a new transaction. `connection.afterRollback((error) => …)` is the counterpart for logging and cleanup after a rollback. Migration and seed contexts do not offer either.
+It runs after the outermost commit, in registration order, and `transaction()` resolves once every callback has finished, so keep it quick and hand slow work to a job. Inside a nested `transaction()` it waits for the outer commit and is dropped if that savepoint rolls back. Outside a transaction it starts at once, so a service can call it whether or not its caller opened one. A callback that throws does not undo the commit: the error goes to the connection's `onTransactionCallbackError`, or becomes a `TRANSACTION_CALLBACK_FAILED` warning whose `cause` is the error. The transaction connection is finished when the callback runs; write through `db` or a new transaction. `connection.afterRollback((error) => …)` is the counterpart for logging and cleanup after a rollback. Migration and seed contexts do not offer either.
 
 ### Observing Repository writes
 

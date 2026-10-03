@@ -91,7 +91,7 @@ interface DatabaseConnection {
 | 在 savepoint 中登记，savepoint 回滚                        | 丢弃                             | savepoint 回滚后执行               |
 | 提交本身失败                                               | 不执行                           | 执行                               |
 
-`transaction()` 返回的 Promise 在所有 `afterCommit` 回调结束后才 resolve（已定），这样测试和调用方可以依赖“`await transaction()` 之后副作用已经发生”。代价是慢回调会拖长调用方的等待时间，所以回调里只做快的事情，慢的工作交给 jobs。回调抛错不会改变事务结果，也不会让 `transaction()` reject：错误交给新的连接配置项 `onTransactionCallbackError(error, phase)`，未配置时用 `process.emitWarning`，code 为 `TRANSACTION_CALLBACK_FAILED`。这与现有的 `onCollectionMetadataInvalidationError` / `COLLECTION_METADATA_INVALIDATION_FAILED` 一致：事务已经提交，事后的错误不应再让调用方以为写入失败。
+`transaction()` 返回的 Promise 在所有 `afterCommit` 回调结束后才 resolve（已定），这样测试和调用方可以依赖“`await transaction()` 之后副作用已经发生”。代价是慢回调会拖长调用方的等待时间，所以回调里只做快的事情，慢的工作交给 jobs。回调抛错不会改变事务结果，也不会让 `transaction()` reject：错误交给新的连接配置项 `onTransactionCallbackError(error, phase)`，未配置时用 `process.emitWarning`，code 为 `TRANSACTION_CALLBACK_FAILED`，原错误放在警告的 `cause` 中。这与现有的 `onCollectionMetadataInvalidationError` / `COLLECTION_METADATA_INVALIDATION_FAILED` 一致：事务已经提交，事后的错误不应再让调用方以为写入失败。
 
 `afterCommit` 回调在事务之外执行。回调里要写库，应使用根 Connection，或自己开启新事务；事务 Connection 此时已经结束，继续使用会得到 `QUERY_TRANSACTION_COMPLETED`。
 
@@ -230,15 +230,15 @@ await db
 ```
 
 - 在根 Connection 上注册，返回取消函数 `() => void`，与 `AppEventBus`、jobs `subscribe` 一致。可选的 `id` 只用于诊断，出现在 `explainRepositoryEvents()` 的结果和日志中。订阅表由根 Connection 持有，并像 `TransactionScope` 一样传给事务 Connection 与 `PolicyBoundConnection`；事务内新建的 Connection 不另有订阅表。
-- `collections` 匹配事件中任意一条 `RowChange` 的 Collection，因此订阅 `orderItems` 也能收到 `orders.createOne` 中嵌套写入的明细行。`inTransaction` 与 `afterCommit` 收到的是完整事件，订阅方自行按 Collection 过滤 `changes`。
+- `collections` 匹配事件的根 Collection 和任意一条 `RowChange` 的 Collection，因此订阅 `orderItems` 也能收到 `orders.createOne` 中嵌套写入的明细行，订阅 `posts` 也能收到只改了 through 行的 `posts.updateOne`。`inTransaction` 与 `afterCommit` 收到的是完整事件，订阅方自行按 Collection 过滤 `changes`。
 - 不在 `DatabaseManager` 上提供跨 Connection 的订阅。不同 Connection 的事务互不相干，需要时分别注册。
 
 ### 两个阶段与错误语义
 
-| 阶段            | 时机                                           | 收到                               | 能否写库                                     | 抛错的后果                                                                                                                           | 调用失败时是否执行 |
-| --------------- | ---------------------------------------------- | ---------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
-| `inTransaction` | 本次调用的全部写入完成后、本次调用的事务结束前 | 事件 + 当前事务 Connection         | 可以，与本次调用同一事务；写入会再次触发事件 | 本次调用失败，错误传给调用方；见下方回滚范围                                                                                         | 不执行             |
-| `afterCommit`   | 最外层事务提交后（经由第一层）                 | 该事务内匹配的全部事件，按发生顺序 | 可以，在事务之外                             | 不影响调用方；交给 `onRepositoryEventError(error, context)`，未配置时 `process.emitWarning`，code `REPOSITORY_EVENT_LISTENER_FAILED` | 不执行；回滚时丢弃 |
+| 阶段            | 时机                                           | 收到                                               | 能否写库                                                  | 抛错的后果                                                                                                                           | 调用失败时是否执行 |
+| --------------- | ---------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+| `inTransaction` | 本次调用的全部写入完成后、本次调用的事务结束前 | 事件 + 当前事务 Connection                         | 可以，与本次调用同一事务；写入会再次触发事件              | 本次调用失败，错误传给调用方；见下方回滚范围                                                                                         | 不执行             |
+| `afterCommit`   | 最外层事务提交后（经由第一层）                 | 该事务内匹配的全部事件，按发生顺序 + 根 Connection | 可以，用收到的 Connection，在事务之外；写入会再次触发事件 | 不影响调用方；交给 `onRepositoryEventError(error, context)`，未配置时 `process.emitWarning`，code `REPOSITORY_EVENT_LISTENER_FAILED` | 不执行；回滚时丢弃 |
 
 补充规则：
 
@@ -248,7 +248,7 @@ await db
 - 目前不带 select 的 `updateMany`、`deleteMany` 和批量 `createMany` 只执行一条语句、不开事务。存在匹配的 `inTransaction` 监听器时，这些调用改在隐式事务中执行。
 - `inTransaction` 失败时，同一调用的 `afterCommit` 不会执行，事务回滚后已积累的事件一并丢弃。
 - 需要在写入前拒绝的检查，放在 `inTransaction` 中、在写入之后判断：此时数据已是写入后的状态，判断与写入在同一事务内，结论不会被并发写入推翻。
-- `inTransaction` 监听器内的写入产生新事件，`parentOperationId` 指向触发它的调用。嵌套深度超过上限（暂定 8）时抛 `RepositoryError('REPOSITORY_EVENT_RECURSION')`。
+- 监听器经收到的 Connection 写入会产生新事件。`inTransaction` 的写入以触发它的调用为 `parentOperationId`；`afterCommit` 的写入以这批事件的最后一个为 parent，深度取这批中最深的一个再加一。嵌套深度超过 `repositoryEventMaxDepth`（默认 8）时写入抛 `RepositoryError('REPOSITORY_EVENT_RECURSION')`；在 `afterCommit` 中，这个错误交给 `onRepositoryEventError`，调用方不受影响。直接用 `db.connection()` 写入不带这些信息，也不受上限保护。
 - 第一层的 `afterCommit` 回调与第二层的 `afterCommit` 监听器共用同一个队列，按登记或事件发生的先后执行。
 
 ### 执行策略随订阅变化
@@ -467,7 +467,7 @@ const actor = audit.read(event); // { actorId: string } | undefined
 | 8   | 隐式事务需经由 Connection 开启，监听器才能拿到 Connection                                      | 正式实现照此处理；文档写明监听器拿到的是事务 Connection，不是 Policy 绑定的 Connection            |
 | 9   | SQLite 的写锁从第一次写入才开始（延迟 BEGIN），多进程共享一个文件时，取键路径不足以防并发      | 取键路径在 SQLite 上使用 `BEGIN IMMEDIATE`                                                        |
 | 10  | 带 `keys` 的 `createMany` 退化为逐行插入                                                       | 主键由调用方给出时直接使用；支持 `RETURNING` 的方言用多行 `INSERT … RETURNING`                    |
-| 11  | 监听器写入自己订阅的 Collection 会无限递归                                                     | 正式实现必须包含递归上限（原型未实现）                                                            |
+| 11  | 监听器写入自己订阅的 Collection 会无限递归                                                     | 正式实现包含递归上限，`inTransaction` 与 `afterCommit` 监听器经收到的 Connection 写入都计入       |
 
 以上修正均已采纳。除第 9 条（见待决问题 6）外均已实现。
 
@@ -486,8 +486,6 @@ const actor = audit.read(event); // { actorId: string } | undefined
 | 批量取键的代价              | 按键写入使用每批至多 200 个键的语句。文件型 SQLite 上 1 万行的 `updateMany`：无订阅 1.4 ms，`keys: true` 约 40 ms，`keys: false` 1.4 ms                                                                           |
 | 订阅参数校验                | `collections` 为空、两个监听器都没有提供时，`onRepositoryMutation()` 抛 `TypeError`                                                                                                                               |
 | `onRepositoryEventError`    | context 为 `{ subscriptionId?, operationIds }`；它自身抛错时，两个错误合并为一条 `REPOSITORY_EVENT_LISTENER_FAILED` 进程警告                                                                                      |
-| `afterCommit` 的第二个参数  | 监听器收到根 Connection，经它写入的事件以这批事件的最后一个为 parent、以最深的一个加一为深度，受 `repositoryEventMaxDepth` 限制；设计稿中 `afterCommit` 只收事件，提交后写入自己订阅的 Collection 会无限自触发    |
-| 根 Collection 的匹配        | 事件按根 Collection 或任意一条变更所在的 Collection 匹配订阅；只改了嵌套行的调用也投递给根 Collection 的订阅，与 `explainRepositoryEvents()` 的说法一致                                                           |
 
 ## 已定决策
 

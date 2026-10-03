@@ -96,7 +96,7 @@ await db.transaction(async (connection) => {
 | 提交本身失败                          | 不执行                           | 执行                               |
 
 - `transaction()` 在所有 `afterCommit` 回调执行完之后才 resolve，`await` 之后可以依赖副作用已经发生。回调应当很快；慢的工作交给 jobs。
-- 回调抛错不改变事务结果，`transaction()` 也不会因此 reject。错误交给连接配置 `onTransactionCallbackError(error, phase)`；未配置时成为 code 为 `TRANSACTION_CALLBACK_FAILED` 的进程警告。后续回调照常执行。
+- 回调抛错不改变事务结果，`transaction()` 也不会因此 reject。错误交给连接配置 `onTransactionCallbackError(error, phase)`；未配置时成为 code 为 `TRANSACTION_CALLBACK_FAILED` 的进程警告，原错误在警告的 `cause` 中。后续回调照常执行。
 - 回调执行时事务 Connection 已经结束。回调里要写库，用外层的 `db` 或开新事务。事务结束后再在该事务 Connection 上登记回调会直接抛错，而不是悄悄丢弃。
 - 执行回调之前，事务中的 Collection 元数据变更已经生效。
 - 不在事务中调用时也能用，所以服务方法不必区分调用方是否开了事务：

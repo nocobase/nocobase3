@@ -727,9 +727,11 @@ db.connection().onRepositoryMutation(
 两张表的监听器互相写对方，就会无限循环。嵌套超过上限（默认 8 层）时抛错：
 
 ```text
-RepositoryError: REPOSITORY_EVENT_RECURSION
-Repository event listeners nested more than 8 levels (tasks → projects → tasks → …).
+RepositoryError: Repository event listeners nested writes deeper than 8 levels.
+code: REPOSITORY_EVENT_RECURSION
 ```
+
+`afterCommit` 监听器经它收到的 Connection 写入时同样计入深度。区别是超限发生在提交之后：调用方正常返回，超限的那次写入失败，错误交给 `onRepositoryEventError`。
 
 ## 第 6 层：meta 与 values
 
@@ -1019,13 +1021,14 @@ export default defineSeed({
 
 ## 错误语义速查
 
-| 出错的位置                 | 调用方看到                   | 已做的写入       | 其他监听器                                             |
-| -------------------------- | ---------------------------- | ---------------- | ------------------------------------------------------ |
-| `inTransaction`            | 调用 reject，原始错误        | 随事务回滚       | 后续 `inTransaction` 与这次调用的 `afterCommit` 不执行 |
-| `afterCommit` 监听器       | 正常返回                     | 已提交，不受影响 | 照常执行；错误交给 `onRepositoryEventError`            |
-| 第 1 层 `afterCommit` 回调 | 正常返回                     | 已提交，不受影响 | 照常执行；错误交给 `onTransactionCallbackError`        |
-| `afterRollback` 回调       | 原始错误，不被替换           | 已回滚           | 照常执行；错误交给 `onTransactionCallbackError`        |
-| 嵌套超过上限               | `REPOSITORY_EVENT_RECURSION` | 随事务回滚       | —                                                      |
+| 出错的位置                   | 调用方看到                   | 已做的写入                 | 其他监听器                                             |
+| ---------------------------- | ---------------------------- | -------------------------- | ------------------------------------------------------ |
+| `inTransaction`              | 调用 reject，原始错误        | 随事务回滚                 | 后续 `inTransaction` 与这次调用的 `afterCommit` 不执行 |
+| `afterCommit` 监听器         | 正常返回                     | 已提交，不受影响           | 照常执行；错误交给 `onRepositoryEventError`            |
+| 第 1 层 `afterCommit` 回调   | 正常返回                     | 已提交，不受影响           | 照常执行；错误交给 `onTransactionCallbackError`        |
+| `afterRollback` 回调         | 原始错误，不被替换           | 已回滚                     | 照常执行；错误交给 `onTransactionCallbackError`        |
+| `inTransaction` 嵌套超过上限 | `REPOSITORY_EVENT_RECURSION` | 随事务回滚                 | —                                                      |
+| `afterCommit` 嵌套超过上限   | 正常返回                     | 已提交；超限的那次写入失败 | 照常执行；错误交给 `onRepositoryEventError`            |
 
 ## 小结
 
