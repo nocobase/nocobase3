@@ -1,5 +1,6 @@
 import knex from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { DatabaseDriverRuntime } from '../../../../../src/database/runtime.js';
 import { KnexSchemaAdapter } from '../../../../../src/schema/internal/knex/adapter.js';
 
 describe('KnexSchemaAdapter', () => {
@@ -216,6 +217,50 @@ describe('KnexSchemaAdapter', () => {
     expect(output).toContain('alter table `orders`');
     expect(output).toContain('`status` varchar(255) not null default');
     expect(output).toContain('drop index `idx_orders_status`');
+  });
+
+  it('takes a column default from the runtime as an expression, and keeps the literal otherwise', async () => {
+    const schema: NonNullable<DatabaseDriverRuntime['schema']> = {
+      columnType: ({ column }) => (column.name === 'body' ? 'text' : undefined),
+      columnDefault: ({ client, column }) =>
+        column.name === 'body'
+          ? client.raw('(?)', [String(column.defaultValue)])
+          : undefined,
+    };
+    const adapter = new KnexSchemaAdapter(createClient('mysql2'), {
+      dialect: 'mysql',
+      runtime: { schema } as DatabaseDriverRuntime,
+    });
+
+    const sql = await adapter.compile([
+      {
+        type: 'createTable',
+        table: {
+          name: 'notes',
+          columns: [
+            {
+              name: 'body',
+              type: 'text',
+              nullable: false,
+              defaultValue: 'draft',
+            },
+            {
+              name: 'status',
+              type: 'string',
+              nullable: false,
+              defaultValue: 'open',
+            },
+          ],
+          constraints: [],
+          indexes: [],
+        },
+      },
+    ]);
+
+    const output = sql.join('\n');
+    expect(output).toContain("`body` text not null default ('draft')");
+    expect(output).toContain("`status` varchar(255) not null default 'open'");
+    expect(output.match(/default/gu)).toHaveLength(2);
   });
 
   it('compiles named SQLite primary constraints without object option artifacts', async () => {

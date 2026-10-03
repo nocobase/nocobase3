@@ -1,5 +1,4 @@
 import { createRequire } from 'node:module';
-import type { Knex } from 'knex';
 import { RepositoryError } from '@nocobase/db';
 import type {
   DatabaseCapabilities,
@@ -36,7 +35,7 @@ export const mysqlDriver: DatabaseDriverDefinition<
     comments: true,
     nativeTypes: true,
   } satisfies Partial<DatabaseCapabilities>,
-  createRuntime: ({ dialect, capabilities, config, getClient }) => ({
+  createRuntime: ({ dialect, capabilities, config }) => ({
     dialect,
     capabilities,
     numeric: {
@@ -49,7 +48,11 @@ export const mysqlDriver: DatabaseDriverDefinition<
           ? 'datetime(3)'
           : column.type === 'time'
             ? 'time(3)'
-            : textColumnWithDefault(column, getClient),
+            : textDefaultType(column),
+      columnDefault: ({ client, column }) =>
+        textDefaultType(column) === undefined
+          ? undefined
+          : client.raw('(?)', [String(column.defaultValue)]),
     },
     repository: {
       jsonResults: resolveJsonResults(config),
@@ -385,34 +388,25 @@ function resolveJsonResults(
 const TEXT_TYPES = /^(?:tiny|medium|long)?text$/iu;
 
 /**
- * A text column's type with its default spelled into it, or `undefined` when the column needs nothing special.
+ * The type of a text column that carries a default, or `undefined` for any other column.
  *
- * MySQL accepts a default on a TEXT column only in the expression form `default ('…')`, from 8.0.13. Knex compiles a
- * literal default instead, and drops any default on a TEXT or BLOB column without a word, so a Collection's
- * `defaultValue` would never reach the table: a Repository still fills it in, but anything else that inserts a row —
- * a migration's `query`, another service, a person at a SQL prompt — fails on a NOT NULL column. The default therefore
- * travels inside the type, which Knex writes as it is; the `defaultTo` it then ignores adds nothing.
+ * MySQL accepts a default on a TEXT column only in the expression form `default ('…')`, from 8.0.13, and Knex drops
+ * any default on a column it built as TEXT or BLOB without a word. A Collection's `defaultValue` therefore never
+ * reached the table: a Repository still filled it in, but anything else that inserts a row — a migration's `query`,
+ * another service, a person at a SQL prompt — failed on a NOT NULL column. Named as a type, the column is one Knex
+ * did not build, so it keeps the default that `columnDefault` turns into the expression form.
  */
-function textColumnWithDefault(
-  column: {
-    readonly type: string;
-    readonly defaultValue?: unknown;
-    readonly db?: { readonly nativeType?: string };
-  },
-  getClient: () => Knex,
-): string | undefined {
+function textDefaultType(column: {
+  readonly type: string;
+  readonly defaultValue?: unknown;
+  readonly db?: { readonly nativeType?: string };
+}): string | undefined {
   const type = column.db?.nativeType ?? (column.type === 'text' ? 'text' : '');
   const value = column.defaultValue;
-  if (
-    !TEXT_TYPES.test(type) ||
-    (typeof value !== 'string' &&
-      typeof value !== 'number' &&
-      typeof value !== 'boolean')
-  ) {
-    return undefined;
-  }
-  const literal = getClient()
-    .raw('?', [String(value)])
-    .toQuery();
-  return `${type} default (${literal})`;
+  return TEXT_TYPES.test(type) &&
+    (typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean')
+    ? type
+    : undefined;
 }

@@ -46,30 +46,39 @@ describe('mysql runtime strategy', () => {
     ).toMatchObject({ sql: expect.stringContaining('convert_tz') });
   });
 
-  it('spells a text default into the column type, the only form MySQL takes', () => {
-    const { runtime } = createRuntime();
-    const columnType = (column: object) =>
-      runtime.schema!.columnType!({
+  it('gives a text column with a default the expression form, the only one MySQL takes', () => {
+    const { client, runtime } = createRuntime();
+    const schema = runtime.schema!;
+    const describe = (column: object) => ({
+      type: schema.columnType!({
         column: column as never,
         tablePrimaryKey: false,
         altering: false,
-      });
+      }),
+      default: schema.columnDefault!({
+        client,
+        column: column as never,
+        altering: false,
+      })?.toQuery(),
+    });
 
-    expect(columnType({ type: 'text', defaultValue: "it's" })).toBe(
-      "text default ('it\\'s')",
-    );
+    expect(describe({ type: 'text', defaultValue: "it's" })).toEqual({
+      type: 'text',
+      default: "('it\\'s')",
+    });
     expect(
-      columnType({
+      describe({
         type: 'text',
         defaultValue: '',
         db: { nativeType: 'mediumtext' },
       }),
-    ).toBe("mediumtext default ('')");
-    expect(columnType({ type: 'text' })).toBeUndefined();
-    expect(columnType({ type: 'text', defaultValue: null })).toBeUndefined();
-    expect(
-      columnType({ type: 'string', defaultValue: 'draft' }),
-    ).toBeUndefined();
+    ).toEqual({ type: 'mediumtext', default: "('')" });
+    for (const column of [
+      { type: 'text' },
+      { type: 'text', defaultValue: null },
+      { type: 'string', defaultValue: 'draft' },
+    ])
+      expect(describe(column)).toEqual({ type: undefined, default: undefined });
   });
 
   it('enforces MySQL TIMESTAMP range and renders UTC temporal projections', () => {
