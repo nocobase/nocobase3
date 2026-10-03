@@ -1022,12 +1022,8 @@ describe('previewing a database command with --dry-run', () => {
         ],
       },
     });
-    // No migration ran: the database holds no Collection, only bookkeeping tables at most.
-    expect(
-      (await tables('main')).filter(
-        (table) => !table.toLowerCase().startsWith('__nocobase_'),
-      ),
-    ).toEqual([]);
+    // Nothing ran and nothing was written: not even the history and lock tables a run would create.
+    expect(await tables('main')).toEqual([]);
   });
 
   it('lists what apply would run, per connection and kind, and runs none of it', async () => {
