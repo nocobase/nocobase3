@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { validateMigrations, validateSeeds } from '@nocobase/db';
-import { describeMigration } from '@nocobase/db-testing/vitest';
+import { describeMigration } from '@nocobase/app-testing/server';
 import { describe, expect, it } from 'vitest';
 
 const migrationsDirectory = fileURLToPath(

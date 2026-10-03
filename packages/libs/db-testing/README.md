@@ -1,6 +1,6 @@
 # @nocobase/db-testing
 
-Database fixtures for tests outside the `@nocobase/db` packages — plugins, libraries, applications — that must not depend on one dialect. A test written with it runs on SQLite by default and on any other dialect when the environment names one, without changing a line.
+Database fixtures for tests outside the `@nocobase/db` packages — plugins, libraries, applications — that must not depend on one dialect. A test written with it runs on SQLite by default and on any other dialect when the environment names one, without changing a line. A plugin's or an application's tests reach all of it through `@nocobase/app-testing/server`, which re-exports `./vitest`, and depend on that package instead; a library imports this one directly.
 
 `@nocobase/db-testkit` is the other database test package and serves a different reader: it holds the shared contract suite every `@nocobase/db-<dialect>` package runs against itself. Use this package to test code that uses a database, and that one to test a database dialect.
 

@@ -50,14 +50,14 @@ export const RULES = [
       'm',
     ),
     message:
-      'imports a dialect package; take the database from @nocobase/db-testing',
+      'imports a dialect package; take the database from @nocobase/app-testing/server, or @nocobase/db-testing in a library',
   },
   {
     id: 'dynamic-dialect-import',
     // A dialect package named at run time, such as import(`@nocobase/db-${dialect}`).
     pattern: /@nocobase\/db-\$\{/,
     message:
-      'imports a dialect package chosen at run time; take the database from @nocobase/db-testing',
+      'imports a dialect package chosen at run time; take the database from @nocobase/app-testing/server, or @nocobase/db-testing in a library',
   },
   {
     id: 'sqlite-driver',
@@ -66,19 +66,19 @@ export const RULES = [
       'm',
     ),
     message:
-      'opens SQLite through its driver; take the database from @nocobase/db-testing',
+      'opens SQLite through its driver; take the database from @nocobase/app-testing/server, or @nocobase/db-testing in a library',
   },
   {
     id: 'memory-database',
     pattern: /['"`]:memory:['"`]/,
     message:
-      "configures ':memory:'; take the database from @nocobase/db-testing",
+      "configures ':memory:'; take the database from @nocobase/app-testing/server, or @nocobase/db-testing in a library",
   },
   {
     id: 'sqlite-dialect',
     pattern: /\bdialect\s*:\s*['"`]sqlite['"`]/,
     message:
-      "configures dialect: 'sqlite'; take the database from @nocobase/db-testing",
+      "configures dialect: 'sqlite'; take the database from @nocobase/app-testing/server, or @nocobase/db-testing in a library",
   },
   {
     id: 'pragma',
@@ -123,6 +123,45 @@ export const EXEMPT = new Map([
     'the external CRM stand-in under test is a SQLite file by design; server/providers/external-crm-sample.ts creates it on SQLite only',
   ],
 ]);
+
+/**
+ * Where an application's or a plugin's tests take their test fixtures from. `@nocobase/app-testing` carries
+ * everything `@nocobase/db-testing` and `@nocobase/app-cli/testing` export, so these packages depend on it alone and
+ * install one copy of `@nocobase/db-testing`, whose module state — provisioner cache, stale-database cleanup — exists
+ * once per copy. Libraries, tools and the application runtime packages themselves use the layers below directly.
+ */
+const ENTRY_GROUPS = new Set(['plugins', 'examples', 'templates']);
+
+export const ENTRY_RULES = [
+  {
+    id: 'db-testing-entry',
+    pattern:
+      /(?:\bfrom\s+|\bimport\s*\(\s*|^\s*import\s+)['"`]@nocobase\/db-testing(?:\/vitest)?['"`]/m,
+    message:
+      'imports @nocobase/db-testing; an application or a plugin imports it from @nocobase/app-testing/server',
+  },
+  {
+    id: 'app-cli-testing-entry',
+    pattern:
+      /(?:\bfrom\s+|\bimport\s*\(\s*|^\s*import\s+)['"`]@nocobase\/app-cli\/testing['"`]/m,
+    message:
+      'imports @nocobase/app-cli/testing; an application or a plugin imports it from @nocobase/app-testing/cli',
+  },
+];
+
+/** The entry rules a test of an application or a plugin breaks; no marker or listing exempts it from them. */
+export function findEntryViolations(relativePath, source) {
+  const group = relativePath.split('/')[1];
+  if (!ENTRY_GROUPS.has(group)) return [];
+  const violations = [];
+  for (const rule of ENTRY_RULES) {
+    const match = rule.pattern.exec(source);
+    if (!match) continue;
+    const line = source.slice(0, match.index).split('\n').length;
+    violations.push({ rule: rule.id, message: rule.message, line });
+  }
+  return violations;
+}
 
 /** The rules a source breaks, with the 1-based line of the first match of each. */
 export function findViolations(source) {
@@ -208,6 +247,13 @@ export async function checkDbTestPortability({ repositoryRoot }) {
         .split(path.sep)
         .join('/');
       const source = await readFile(file, 'utf8');
+      for (const violation of findEntryViolations(relativePath, source)) {
+        problems.push({
+          file: relativePath,
+          line: violation.line,
+          message: violation.message,
+        });
+      }
       const violations = findViolations(source);
       const marker = readMarker(source);
       const listed = EXEMPT.has(relativePath);

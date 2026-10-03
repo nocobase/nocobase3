@@ -432,9 +432,10 @@ async function renderManifest(
     addRuntimePeer('@nocobase/i18n');
   if (serverPlugin) addRuntimePeer('@nocobase/app-server');
   if (capabilities.database) addRuntimePeer('@nocobase/db');
-  // The generated database test takes its database from db-testing, so it runs on whichever dialect the run selects.
-  if (capabilities.database)
-    devDependencies['@nocobase/db-testing'] = 'workspace:*';
+  // A plugin's tests take their fixtures from app-testing alone: the generated database test its database, on whichever
+  // dialect the run selects, and the generated command test its command runner.
+  if (capabilities.database || capabilities.cli)
+    devDependencies['@nocobase/app-testing'] = 'workspace:*';
   if (
     capabilities.server.serviceProviders ||
     capabilities.server.jobs ||

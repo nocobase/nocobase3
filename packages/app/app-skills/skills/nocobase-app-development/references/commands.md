@@ -93,10 +93,10 @@ The command tree is assembled for `--help` too, so every command module is impor
 
 ### Test
 
-`@nocobase/app-cli/testing` runs a command without the runner:
+`@nocobase/app-testing/cli` runs a command without the runner; an application's tests take their fixtures from `@nocobase/app-testing` alone:
 
 ```ts
-import { bindAppCommand, runAppCommand } from '@nocobase/app-cli/testing';
+import { bindAppCommand, runAppCommand } from '@nocobase/app-testing/cli';
 
 const Bound = bindAppCommand(OrdersExport, {
   rootDir: fixtureRoot,
@@ -176,7 +176,7 @@ The default output is computed from `app.paths.storage()` rather than given as a
 
 ```ts
 // tests/cli/orders-export.test.ts
-import { bindAppCommand, runAppCommand } from '@nocobase/app-cli/testing';
+import { bindAppCommand, runAppCommand } from '@nocobase/app-testing/cli';
 import { expect, it, vi } from 'vitest';
 
 import OrdersExport from '../../cli/commands/orders/export.ts';

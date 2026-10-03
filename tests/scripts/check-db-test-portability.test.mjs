@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   checkDbTestPortability,
   EXEMPT,
+  findEntryViolations,
   findViolations,
   readMarker,
 } from '../../scripts/check-db-test-portability.mjs';
@@ -63,6 +64,59 @@ test('leaves portable tests and look-alikes alone', () => {
   );
   // A package name in a manifest fixture is not a driver import.
   assert.deepEqual(rules("const builds = { 'better-sqlite3': false };"), []);
+});
+
+test('sends an application or a plugin to app-testing for its fixtures', () => {
+  const entryRules = (relativePath, source) =>
+    findEntryViolations(relativePath, source).map(
+      (violation) => violation.rule,
+    );
+  const plugin = 'packages/plugins/a/tests/a.test.ts';
+
+  assert.deepEqual(
+    entryRules(
+      plugin,
+      "import { createDatabaseTest } from '@nocobase/db-testing/vitest';",
+    ),
+    ['db-testing-entry'],
+  );
+  assert.deepEqual(
+    entryRules(
+      'packages/templates/t/tests/logic/x.test.ts',
+      "import { provisionTestDatabases } from '@nocobase/db-testing';",
+    ),
+    ['db-testing-entry'],
+  );
+  assert.deepEqual(
+    entryRules(
+      'packages/examples/e/tests/cli.test.ts',
+      "const { runAppCommand } = await import('@nocobase/app-cli/testing');",
+    ),
+    ['app-cli-testing-entry'],
+  );
+  assert.deepEqual(
+    entryRules(
+      plugin,
+      "import { describeMigration } from '@nocobase/app-testing/server';\nimport { runAppCommand } from '@nocobase/app-testing/cli';",
+    ),
+    [],
+  );
+  // A library or a tool builds on the layers below app-testing directly.
+  assert.deepEqual(
+    entryRules(
+      'packages/libs/queue/tests/q.test.ts',
+      "import { createDatabaseTest } from '@nocobase/db-testing/vitest';",
+    ),
+    [],
+  );
+  // Naming the package in prose or in a list of linked packages is not an import.
+  assert.deepEqual(
+    entryRules(
+      plugin,
+      "// see @nocobase/db-testing's README\nconst links = ['@nocobase/db-testing'];",
+    ),
+    [],
+  );
 });
 
 test('reads a marker and requires a reason', () => {
@@ -148,6 +202,10 @@ test('reports unmarked tests and helpers but not marked ones or the database pac
       "const c = { dialect: 'sqlite' };\n",
     );
     write(
+      'packages/plugins/e/tests/e.test.ts',
+      "// db-test-portability: sqlite-only — the SQLite driver\nimport { createDatabaseTest } from '@nocobase/db-testing/vitest';\nconst c = { dialect: 'sqlite' };\n",
+    );
+    write(
       'packages/plugins/d/tests/d.test.ts',
       "// db-test-portability: sqlite-only — ported since\nconst c = { dialect: 'postgres' };\n",
     );
@@ -173,6 +231,14 @@ test('reports unmarked tests and helpers but not marked ones or the database pac
         (problem) =>
           problem.file === 'packages/plugins/d/tests/d.test.ts' &&
           /remove its db-test-portability marker/.test(problem.message),
+      ),
+    );
+    // A marker covers the dialect rules, never the entry rule.
+    assert.ok(
+      problems.some(
+        (problem) =>
+          problem.file === 'packages/plugins/e/tests/e.test.ts' &&
+          /@nocobase\/app-testing\/server/.test(problem.message),
       ),
     );
     // Listed files that do not exist in this synthetic repository are reported as stale entries.

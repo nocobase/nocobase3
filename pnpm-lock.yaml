@@ -828,9 +828,9 @@ importers:
       '@nocobase/app-plugin-authz-sharing-rules':
         specifier: workspace:*
         version: link:../../plugins/app-plugin-authz-sharing-rules
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -889,6 +889,9 @@ importers:
         specifier: ^4.14.0
         version: 4.14.0
     devDependencies:
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1002,12 +1005,12 @@ importers:
       '@nocobase/app-plugin-authz-sharing-rules':
         specifier: workspace:*
         version: link:../../plugins/app-plugin-authz-sharing-rules
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/caching':
         specifier: workspace:*
         version: link:../../libs/caching
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1069,12 +1072,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/db':
         specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1221,12 +1224,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/db':
         specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1465,9 +1468,9 @@ importers:
       '@nocobase/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1715,15 +1718,15 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/authorization':
         specifier: workspace:*
         version: link:../../libs/authorization
       '@nocobase/db':
         specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2820,9 +2823,9 @@ importers:
       '@nocobase/app-plugin-authz-restriction-rules':
         specifier: workspace:*
         version: link:../app-plugin-authz-restriction-rules
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2929,9 +2932,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2999,12 +3002,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/db':
         specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3117,9 +3120,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3214,9 +3217,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3299,9 +3302,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3387,9 +3390,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3466,9 +3469,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3524,12 +3527,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/db':
         specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3687,9 +3690,9 @@ importers:
         specifier: ^2.8.1
         version: 2.9.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3839,9 +3842,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3930,9 +3933,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -4064,12 +4067,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/db':
         specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -4170,9 +4173,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
-      '@nocobase/db-testing':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-testing
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -4294,12 +4297,12 @@ importers:
         specifier: 'catalog:'
         version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0)
     devDependencies:
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
