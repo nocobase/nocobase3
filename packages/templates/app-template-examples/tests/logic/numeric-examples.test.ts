@@ -65,6 +65,29 @@ afterEach(async () => {
   await testDatabase?.destroy();
 });
 
+/**
+ * A decimal as a value, without the trailing zeros a server pads it to its column's or the aggregate's scale:
+ * PostgreSQL reads `avg(1, 1, 1)` as `1.00000000000000000000` and MySQL as `1.0000`, where SQLite reads `1`. The
+ * Repository keeps each database's own text, so a portable assertion compares the value.
+ */
+function withoutDecimalPadding<T>(value: T): T {
+  if (typeof value === 'string' && /^-?\d+\.\d+$/u.test(value)) {
+    return value.replace(/\.?0+$/u, '') as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => withoutDecimalPadding(item)) as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        withoutDecimalPadding(item),
+      ]),
+    ) as T;
+  }
+  return value;
+}
+
 function request(source = 'query', sample = 'all', authenticated = true) {
   return router.request(
     `/main/api/numeric-examples?source=${source}&sample=${sample}`,
@@ -116,7 +139,9 @@ it('seeds exact adjacent integers and preserves edits on repeat runs', async () 
   const repository = database.repository('numericExamples');
   expect(await repository.count()).toBe(7);
   expect(
-    await repository.findOne({ filter: { sample: 'adjacent' } }),
+    withoutDecimalPadding(
+      await repository.findOne({ filter: { sample: 'adjacent' } }),
+    ),
   ).toMatchObject({ bigintValue: '9007199254740993', decimalValue: '0.125' });
   await repository.updateOne({
     filter: { sample: 'small' },
@@ -160,7 +185,7 @@ it.each(['query', 'repository'])(
     await database.createSeeder(source('seeds')).run();
     const response = await request(sourceName);
     expect(response.status).toBe(200);
-    const result = await response.json();
+    const result: unknown = withoutDecimalPadding(await response.json());
     expect(result).toMatchObject({
       data: {
         dialect: testDatabase.dialect,

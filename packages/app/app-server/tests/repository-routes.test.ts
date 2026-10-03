@@ -51,6 +51,29 @@ async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
   return values;
 }
 
+/**
+ * A decimal as a value, without the trailing zeros a server pads it to its column's or the aggregate's scale:
+ * PostgreSQL reads `avg(1, 1, 1)` as `1.00000000000000000000` and MySQL as `1.0000`, where SQLite reads `1`. The
+ * Repository keeps each database's own text, so a portable assertion compares the value.
+ */
+function withoutDecimalPadding<T>(value: T): T {
+  if (typeof value === 'string' && /^-?\d+\.\d+$/u.test(value)) {
+    return value.replace(/\.?0+$/u, '') as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => withoutDecimalPadding(item)) as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        withoutDecimalPadding(item),
+      ]),
+    ) as T;
+  }
+  return value;
+}
+
 const actions: RepositoryApiActions = {
   findMany: {},
   findOne: {},
@@ -952,7 +975,9 @@ describe('Repository API routes', () => {
       ],
     } as const;
     // maxLimit restricts findMany, never the input rows of an aggregate.
-    expect(await orders.aggregate({ aggregate })).toEqual({
+    expect(
+      withoutDecimalPadding(await orders.aggregate({ aggregate })),
+    ).toEqual({
       count: 3,
       total: '3',
       average: '1',
