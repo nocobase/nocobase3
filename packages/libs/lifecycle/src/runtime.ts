@@ -850,13 +850,7 @@ export class LifecycleRuntime {
     query: EffectRunQuery = {},
   ): Promise<EffectRunView[]> {
     const runs = await this.store.listEffectRuns(query);
-    return runs.map((run) => ({
-      ...run,
-      registered:
-        this.lifecycles
-          .get(run.lifecycle)
-          ?.lifecycle.effects.has(run.effect) === true,
-    }));
+    return runs.map((run) => ({ ...run, registered: this.knows(run) }));
   }
 
   /**
@@ -1026,15 +1020,18 @@ export class LifecycleRuntime {
   }
 
   /**
-   * Takes back every attempt whose lease has expired — its process stopped,
-   * or stalled past `leaseMs` — and hands it over again. Run it on the same
-   * schedule as `runTriggers()`: a run left claimed is otherwise only noticed
-   * when a process starts. Returns how many it took back.
+   * Hands over again what no process is working on, without waiting for a
+   * restart: every attempt whose lease has expired — its process stopped, or
+   * stalled past `leaseMs` — and every queued run that has been due for
+   * longer than a lease, whose dispatch was lost. Run it on the same schedule
+   * as `runTriggers()`. Returns how many runs it handed over.
    */
   public async reclaim(): Promise<number> {
     const taken = await this.takeBackStale();
     for (const run of taken) await this.handOver(run.id, null);
-    return taken.length;
+    const stranded = await this.strandedRuns();
+    for (const run of stranded) await this.handOver(run.id, null);
+    return taken.length + stranded.length;
   }
 
   /**
@@ -1046,6 +1043,34 @@ export class LifecycleRuntime {
     const queued = await this.store.listEffectRuns({ status: 'queued' });
     for (const run of queued) await this.handOver(run.id, run.runAfter);
     return queued.length;
+  }
+
+  /**
+   * Queued runs due for longer than a lease. A dispatched run is claimed long
+   * before that, so one still queued was never handed over: the dispatch
+   * failed, or the timer waiting out its backoff died with its process. A run
+   * naming an effect this process does not know stays for one that does.
+   */
+  private async strandedRuns(): Promise<EffectRun[]> {
+    const threshold = new Date(
+      this.clock().getTime() - this.leaseMs,
+    ).toISOString();
+    // updatedAt never comes after runAfter, so the query narrows and the
+    // filter decides.
+    const queued = await this.store.listEffectRuns({
+      status: 'queued',
+      updatedBefore: threshold,
+    });
+    return queued.filter(
+      (run) => (run.runAfter ?? run.updatedAt) < threshold && this.knows(run),
+    );
+  }
+
+  private knows(run: EffectRun): boolean {
+    return (
+      this.lifecycles.get(run.lifecycle)?.lifecycle.effects.has(run.effect) ===
+      true
+    );
   }
 
   private async takeBackStale(): Promise<EffectRun[]> {
@@ -1090,7 +1115,7 @@ export class LifecycleRuntime {
       await this.dispatcher.dispatch(runId, { runAfter });
     } catch (error) {
       this.logger.error(
-        `Effect run "${runId}" could not be dispatched; recover() will retry it.`,
+        `Effect run "${runId}" could not be dispatched; reclaim() hands it over once it has waited a lease, and recover() at the next start.`,
         { error },
       );
     }
