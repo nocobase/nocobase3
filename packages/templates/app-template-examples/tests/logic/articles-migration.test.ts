@@ -1,8 +1,11 @@
 // @vitest-environment node
 import path from 'node:path';
 import { createMigrator, type MigrationSource } from '@nocobase/db';
-import { createTestDatabase, inspectCollection } from '@nocobase/db-testing';
-import { describeMigration } from '@nocobase/db-testing/vitest';
+import {
+  createTestDatabase,
+  describeMigration,
+  inspectCollection,
+} from '@nocobase/app-testing/server';
 import { expect, it } from 'vitest';
 
 const sources: readonly MigrationSource[] = [

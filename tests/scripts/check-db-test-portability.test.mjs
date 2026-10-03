@@ -7,7 +7,6 @@ import {
   checkDbTestPortability,
   EXEMPT,
   findViolations,
-  PENDING,
   readMarker,
 } from '../../scripts/check-db-test-portability.mjs';
 
@@ -98,12 +97,10 @@ test('reports a listed file that is marked or no longer chooses a dialect', asyn
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, source);
     };
-    const [exempt] = EXEMPT.keys();
-    const [pending, markedPending] = PENDING;
+    const [exempt, markedExempt] = EXEMPT.keys();
     write(exempt, 'const portable = true;\n');
-    write(pending, 'const portable = true;\n');
     write(
-      markedPending,
+      markedExempt,
       "// db-test-portability: sqlite-only — the SQLite driver\nconst c = { dialect: 'sqlite' };\n",
     );
 
@@ -112,8 +109,7 @@ test('reports a listed file that is marked or no longer chooses a dialect', asyn
       problems.filter((problem) => problem.file === file).map((p) => p.message);
 
     assert.match(about(exempt).join('\n'), /remove it from EXEMPT/);
-    assert.match(about(pending).join('\n'), /remove it from PENDING/);
-    assert.match(about(markedPending).join('\n'), /also listed/);
+    assert.match(about(markedExempt).join('\n'), /also listed/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

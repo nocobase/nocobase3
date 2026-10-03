@@ -11,7 +11,7 @@
 //   // db-test-portability: sqlite-only — <why>
 //   // db-test-portability: dialect-specific — <why>
 //
-// Files that cannot carry the marker, and tests not ported yet, are listed below with the reason.
+// Files that cannot carry the marker are listed below with the reason.
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -124,16 +124,6 @@ export const EXEMPT = new Map([
   ],
 ]);
 
-/**
- * Tests that build an application or run database commands on SQLite, to be ported with `@nocobase/app-testing`.
- * The check fails when one of them no longer needs to be listed, so the list only shrinks.
- */
-export const PENDING = new Set([
-  'packages/templates/app-template-default/tests/logic/app-server.test.ts',
-  'packages/templates/app-template-examples/tests/logic/app-server.test.ts',
-  'packages/templates/app-template-hub/tests/logic/app-server.test.ts',
-]);
-
 /** The rules a source breaks, with the 1-based line of the first match of each. */
 export function findViolations(source) {
   const violations = [];
@@ -220,7 +210,7 @@ export async function checkDbTestPortability({ repositoryRoot }) {
       const source = await readFile(file, 'utf8');
       const violations = findViolations(source);
       const marker = readMarker(source);
-      const listed = EXEMPT.has(relativePath) || PENDING.has(relativePath);
+      const listed = EXEMPT.has(relativePath);
       if (listed) seen.add(relativePath);
       if (marker && !marker.reason) {
         problems.push({
@@ -237,7 +227,8 @@ export async function checkDbTestPortability({ repositoryRoot }) {
           problems.push({
             file: relativePath,
             line: 1,
-            message: `no longer chooses a dialect; remove it from ${PENDING.has(relativePath) ? 'PENDING' : 'EXEMPT'} in scripts/check-db-test-portability.mjs`,
+            message:
+              'no longer chooses a dialect; remove it from EXEMPT in scripts/check-db-test-portability.mjs',
           });
         } else if (marker) {
           problems.push({
@@ -268,7 +259,7 @@ export async function checkDbTestPortability({ repositoryRoot }) {
       }
     }
   }
-  for (const listedPath of [...EXEMPT.keys(), ...PENDING]) {
+  for (const listedPath of EXEMPT.keys()) {
     if (!seen.has(listedPath)) {
       problems.push({
         file: listedPath,

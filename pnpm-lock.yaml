@@ -4466,6 +4466,9 @@ importers:
       '@nocobase/app-skills':
         specifier: workspace:*
         version: link:../../app/app-skills
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -4839,12 +4842,12 @@ importers:
       '@nocobase/app-skills':
         specifier: workspace:*
         version: link:../../app/app-skills
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/db-testing':
-        specifier: workspace:*
-        version: link:../../libs/db-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -5149,6 +5152,9 @@ importers:
       '@nocobase/app-skills':
         specifier: workspace:*
         version: link:../../app/app-skills
+      '@nocobase/app-testing':
+        specifier: workspace:*
+        version: link:../../tools/app-testing
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket

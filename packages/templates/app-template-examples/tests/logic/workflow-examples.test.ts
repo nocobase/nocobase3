@@ -9,7 +9,7 @@ import {
   createTestDatabase,
   provisionTestDatabases,
   type ProvisionedTestDatabases,
-} from '@nocobase/db-testing';
+} from '@nocobase/app-testing/server';
 import { buildApplicationWorkflows } from '@nocobase/app-plugin-workflow/build';
 import { workflowServiceToken } from '@nocobase/app-plugin-workflow/server';
 import { afterAll, beforeAll, expect, it } from 'vitest';

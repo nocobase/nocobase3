@@ -1,5 +1,8 @@
 import type { DatabaseManager } from '@nocobase/db';
-import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
+import {
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import seed from '../../database/main/seeds/202609160001_grant_system_administrator_user_management.js';
