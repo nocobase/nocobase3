@@ -44,13 +44,13 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
 
 ## Entries
 
-| Entry                         | Provides                                                                                                                     |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@nocobase/lifecycle`         | `defineLifecycle`, `defineEffect`, `LifecycleRuntime`, `createRepositoryLifecycleStore`, `MemoryLifecycleStore`, `toMermaid` |
-| `@nocobase/lifecycle/jobs`    | `createLifecycleJobs()`, the dispatcher that runs effects on `@nocobase/jobs` and sweeps triggers on a schedule              |
-| `@nocobase/lifecycle/hono`    | `createLifecycleRoutes()`, the routes a record page needs, and `LIFECYCLE_ERROR_STATUS`                                      |
-| `@nocobase/lifecycle/react`   | `createLifecycleClient()` and `useLifecycle()`, over any transport with `request()`                                          |
-| `@nocobase/lifecycle/testing` | `createLifecycleTestKit()`: a memory store, a fake clock and in-process effects, so waits and retries are unit tests         |
+| Entry                         | Provides                                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/lifecycle`         | `defineLifecycle`, `defineEffect`, `LifecycleRuntime`, `createRepositoryLifecycleStore`, `MemoryLifecycleStore`, `toMermaid`            |
+| `@nocobase/lifecycle/jobs`    | `createLifecycleJobs()`, the dispatcher that runs effects on `@nocobase/jobs` and sweeps triggers on a schedule                         |
+| `@nocobase/lifecycle/hono`    | `createLifecycleRoutes()`, the routes a record page needs, and `LIFECYCLE_ERROR_STATUS`                                                 |
+| `@nocobase/lifecycle/react`   | `createLifecycleHook()`, configured once per plugin so a page calls one hook; `createLifecycleClient()` and `useLifecycle()` beneath it |
+| `@nocobase/lifecycle/testing` | `createLifecycleTestKit()`: a memory store, a fake clock and in-process effects, so waits and retries are unit tests                    |
 
 `@nocobase/db` is a peer; `@nocobase/jobs`, `hono` and `react` are optional peers, each needed only by the entry that imports it.
 

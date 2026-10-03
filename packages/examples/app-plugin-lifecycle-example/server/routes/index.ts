@@ -17,6 +17,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import { parseItems } from '../../shared/expense.js';
 import { person } from '../../shared/people.js';
+import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
 import { text } from '../../shared/text.js';
 import {
   ExampleError,
@@ -104,7 +105,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // Each record's own routes — view, fire, and the operator's retry and
     // cancel — are the library's; this plugin keeps the lists and the forms.
     router.route(
-      '/lifecycle-example/lifecycles',
+      `/${LIFECYCLE_ROUTES}`,
       createLifecycleRoutes(service.runtime, {
         lifecycles: ['tickets', 'expenses'],
         actor: (context) => ({ id: actor(context.req.query('actAs')) }),

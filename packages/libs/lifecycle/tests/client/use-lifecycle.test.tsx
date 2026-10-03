@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createLifecycleClient,
+  createLifecycleHook,
   LifecycleRequestError,
   useLifecycle,
 } from '../../src/react.js';
@@ -85,5 +86,50 @@ describe('useLifecycle', () => {
       refusal = await result.current.fire('close').catch((error) => error);
     });
     expect(refusal).toMatchObject({ code: 'CONFLICT' });
+  });
+});
+
+describe('createLifecycleHook', () => {
+  it('serves a page with one call, and keeps its client while the query is unchanged', async () => {
+    const { id, transport } = routesApp();
+    // A real application's useApiClient returns one client for the app's lifetime.
+    const agent = transport('agent');
+    const useTicket = createLifecycleHook({
+      useTransport: () => agent,
+      basePath: '/',
+      refreshMs: 0,
+    });
+    const { result, rerender } = renderHook(
+      ({ actAs }: { actAs: string }) =>
+        // A query written inline, as a page would.
+        useTicket('tickets', id, { actAs }),
+      { initialProps: { actAs: 'agent' } },
+    );
+    await waitFor(() =>
+      expect(result.current.view?.record.status).toBe('open'),
+    );
+    const first = result.current.client;
+    rerender({ actAs: 'agent' });
+    expect(result.current.client).toBe(first);
+    rerender({ actAs: 'customer' });
+    expect(result.current.client).not.toBe(first);
+  });
+
+  it('fires through the configured routes', async () => {
+    const { id, transport, sent } = routesApp();
+    // A real application's useApiClient returns one client for the app's lifetime.
+    const agent = transport('agent');
+    const useTicket = createLifecycleHook({
+      useTransport: () => agent,
+      basePath: '/',
+      refreshMs: 0,
+    });
+    const { result } = renderHook(() => useTicket('tickets', id));
+    await waitFor(() => expect(result.current.view).toBeDefined());
+    await act(async () => {
+      await result.current.fire('replyToCustomer', { message: 'Hello' });
+    });
+    expect(result.current.view?.state).toBe('awaitingCustomer');
+    expect(sent).toEqual(['a@example.com']);
   });
 });

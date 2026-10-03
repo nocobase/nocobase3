@@ -201,7 +201,7 @@ export default function ExpensesPage(): ReactElement {
                   actor={actor}
                   submitWith='submit'
                   submitTo={(id, transition) =>
-                    current.client.fire('expenses', id, transition)
+                    current.lifecycle.client.fire('expenses', id, transition)
                   }
                   onCancel={() => setCreating(false)}
                   onSaved={async (id, error) => {
@@ -219,7 +219,7 @@ export default function ExpensesPage(): ReactElement {
                 detail={current.detail}
                 fire={current.lifecycle.fire}
                 submitTo={(id, transition) =>
-                  current.client.fire('expenses', id, transition)
+                  current.lifecycle.client.fire('expenses', id, transition)
                 }
                 actor={actor}
                 flash={flash}

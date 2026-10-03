@@ -166,6 +166,8 @@ export interface UseLifecycleOptions {
 }
 
 export interface UseLifecycleResult {
+  /** The client the hook talks through, for firing on a record the page has not selected, such as one just created. */
+  readonly client: LifecycleClient;
   readonly description: LifecycleDescriptionView | undefined;
   /** Undefined until loaded, and while no record is selected. */
   readonly view: RecordView | undefined;
@@ -263,6 +265,7 @@ export function useLifecycle(
 
   return useMemo(
     () => ({
+      client,
       description,
       view,
       error,
@@ -284,4 +287,65 @@ export function useLifecycle(
     }),
     [description, view, error, busy, act, client, lifecycle, id, reload],
   );
+}
+
+export interface LifecycleHookOptions {
+  /**
+   * A hook returning the transport, such as an application's `useApiClient`.
+   * It is called on every render of the hook it configures, so it follows
+   * the rules of hooks like any other.
+   */
+  readonly useTransport: () => LifecycleTransport;
+  /** Where the plugin mounted `createLifecycleRoutes()`. */
+  readonly basePath: string;
+  /** How often an open record refreshes. Defaults to 4 s; 0 turns it off. */
+  readonly refreshMs?: number;
+}
+
+/** The hook `createLifecycleHook()` returns: one record of one lifecycle. */
+export type UseRecordLifecycle = (
+  lifecycle: string,
+  id: string | undefined,
+  /** Sent with every request, such as who a demo page acts as. */
+  query?: Readonly<Record<string, string>>,
+) => UseLifecycleResult;
+
+/**
+ * Configures `useLifecycle()` once for a plugin's routes, so a page needs a
+ * single call:
+ *
+ * ```ts
+ * export const useLeaveLifecycle = createLifecycleHook({
+ *   useTransport: useApiClient,
+ *   basePath: LEAVE_LIFECYCLE_ROUTES,
+ * });
+ *
+ * const { view, busy, fire } = useLeaveLifecycle('leaves', id);
+ * ```
+ *
+ * The client is built once per transport and query, so a query written
+ * inline does not reload the record on every render.
+ */
+export function createLifecycleHook(
+  options: LifecycleHookOptions,
+): UseRecordLifecycle {
+  const refresh: UseLifecycleOptions =
+    options.refreshMs === undefined ? {} : { refreshMs: options.refreshMs };
+  return function useRecordLifecycle(lifecycle, id, query) {
+    const transport = options.useTransport();
+    // An inline query is a new object every render; key the client by its content.
+    const queryKey = query === undefined ? '' : JSON.stringify(query);
+    const client = useMemo(
+      () =>
+        createLifecycleClient({
+          transport,
+          basePath: options.basePath,
+          ...(queryKey === ''
+            ? {}
+            : { query: JSON.parse(queryKey) as Record<string, string> }),
+        }),
+      [transport, queryKey],
+    );
+    return useLifecycle(client, lifecycle, id, refresh);
+  };
 }

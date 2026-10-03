@@ -202,12 +202,19 @@ Without a dispatcher, effects run in process before `fire()` returns, which is f
 
 ### 5. Mount the standard routes
 
+Keep the path in `shared/`, so the server's router and the client's hook read the same constant:
+
+```ts
+// shared/routes.ts
+export const LEAVE_LIFECYCLE_ROUTES: string = 'leaves/lifecycles';
+```
+
 ```ts
 import { createLifecycleRoutes } from '@nocobase/lifecycle/hono';
 
 router.use('/leaves/*', authentication.required());
 router.route(
-  '/leaves/lifecycles',
+  `/${LEAVE_LIFECYCLE_ROUTES}`,
   createLifecycleRoutes(runtime, {
     lifecycles: ['leaves'],
     actor: (c) => ({ id: String(c.get('auth')?.user.id) }),
@@ -219,22 +226,31 @@ router.route(
 
 ### 6. Use the hook on the page
 
-```tsx
+Configure the hook once for the plugin's routes, then call it with a lifecycle and a record:
+
+```ts
+// client/lib/lifecycle.ts
 import { useApiClient } from '@nocobase/app-client';
 import {
-  createLifecycleClient,
-  LifecycleRequestError,
-  useLifecycle,
+  createLifecycleHook,
+  type UseRecordLifecycle,
 } from '@nocobase/lifecycle/react';
 
+import { LEAVE_LIFECYCLE_ROUTES } from '../../shared/routes.js';
+
+export const useLeaveLifecycle: UseRecordLifecycle = createLifecycleHook({
+  useTransport: useApiClient,
+  basePath: LEAVE_LIFECYCLE_ROUTES,
+});
+```
+
+```tsx
+import { LifecycleRequestError } from '@nocobase/lifecycle/react';
+
+import { useLeaveLifecycle } from '../lib/lifecycle.js';
+
 function LeaveDetail({ id }: { id: string }) {
-  const api = useApiClient();
-  const client = useMemo(
-    () =>
-      createLifecycleClient({ transport: api, basePath: '/leaves/lifecycles' }),
-    [api],
-  );
-  const { view, busy, fire } = useLifecycle(client, 'leaves', id);
+  const { view, busy, fire } = useLeaveLifecycle('leaves', id);
   if (!view) return null;
   return view.available.map((t) => (
     <Button
@@ -253,7 +269,7 @@ function LeaveDetail({ id }: { id: string }) {
 }
 ```
 
-`fire` sends a fresh request key and the version on screen. The hook refreshes every 4 seconds, so the page follows effects that finish in the background.
+`fire` sends a fresh request key and the version on screen. The hook refreshes every 4 seconds, so the page follows effects that finish in the background. A third argument adds query parameters to every request, `useLeaveLifecycle('leaves', id, { tenant })`; the hook builds its client once per transport and query, so the object can be written inline. `client` on the result fires on a record the page has not selected, such as one it has just created.
 
 ### 7. Write the tests
 
@@ -400,4 +416,4 @@ Changing a definition that is already in production is covered in [design.md](de
 | `POST /:lifecycle/:id/runs/:runId/retry`                                              | `operate`       | `RecordView`                           |
 | `POST /:lifecycle/:id/runs/:runId/cancel`                                             | `operate`       | `RecordView`                           |
 
-`@nocobase/lifecycle/react` wraps them: `createLifecycleClient({ transport, basePath, query })` needs only a `request({ method, path, query, json })` function, which the application's API client is, and `useLifecycle(client, lifecycle, id, { refreshMs })` returns `{ description, view, error, busy, fire, retryRun, cancelRun, reload }`. A refusal rejects with a `LifecycleRequestError` carrying `code`, `blockers` and `problems`.
+`@nocobase/lifecycle/react` wraps them. `createLifecycleHook({ useTransport, basePath, refreshMs })` returns a hook, `(lifecycle, id, query?) => …`, that a page calls once; it is built on two lower-level pieces kept for tests and for code outside a component: `createLifecycleClient({ transport, basePath, query })`, which needs only a `request({ method, path, query, json })` function such as the application's API client, and `useLifecycle(client, lifecycle, id, { refreshMs })`. The hook returns `{ client, description, view, error, busy, fire, retryRun, cancelRun, reload }`. A refusal rejects with a `LifecycleRequestError` carrying `code`, `blockers` and `problems`.
