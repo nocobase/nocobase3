@@ -20,5 +20,11 @@
     "collapsed": true,
     "name": "management",
     "label": "Manage workflows"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "reference",
+    "label": "Reference"
   }
 ]

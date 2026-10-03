@@ -2,12 +2,12 @@
   {
     "type": "file",
     "name": "index",
-    "label": "概览"
+    "label": "与 Agent 协作开发"
   },
   {
     "type": "file",
     "name": "using-skill",
-    "label": "使用 Workflow Skill"
+    "label": "提示词手册"
   },
   {
     "type": "file",
@@ -16,23 +16,7 @@
   },
   {
     "type": "file",
-    "name": "dsl",
-    "label": "工作流定义 DSL"
-  },
-  {
-    "type": "dir",
-    "collapsed": true,
-    "name": "nodes",
-    "label": "节点"
-  },
-  {
-    "type": "file",
-    "name": "service-api",
-    "label": "Service API"
-  },
-  {
-    "type": "file",
     "name": "verification-and-diagnostics",
-    "label": "检查、构建与诊断"
+    "label": "检查、构建与发布"
   }
 ]

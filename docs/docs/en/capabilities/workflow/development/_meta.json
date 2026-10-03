@@ -16,22 +16,6 @@
   },
   {
     "type": "file",
-    "name": "dsl",
-    "label": "Workflow definition DSL"
-  },
-  {
-    "type": "dir",
-    "collapsed": true,
-    "name": "nodes",
-    "label": "Workflow nodes"
-  },
-  {
-    "type": "file",
-    "name": "service-api",
-    "label": "Workflow Service API"
-  },
-  {
-    "type": "file",
     "name": "verification-and-diagnostics",
     "label": "Validation, builds, and diagnostics"
   }
