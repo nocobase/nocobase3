@@ -68,7 +68,7 @@ test('refuses to run the whole workspace or a malformed request', () => {
   }
 });
 
-test('--all selects the packages that declare @nocobase/db-testing directly', () => {
+test('--all selects the packages that take their database from db-testing, directly or through app-testing', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'test-db-'));
   try {
     const write = (directory, manifest) => {
@@ -83,13 +83,23 @@ test('--all selects the packages that declare @nocobase/db-testing directly', ()
       name: '@nocobase/app-plugin-a',
       devDependencies: { '@nocobase/db-testing': 'workspace:*' },
     });
+    write('tools/app-testing', {
+      name: '@nocobase/app-testing',
+      dependencies: { '@nocobase/db-testing': 'workspace:*' },
+    });
     write('plugins/b', {
       name: '@nocobase/app-plugin-b',
       dependencies: { '@nocobase/app-plugin-a': 'workspace:*' },
     });
+    write('plugins/c', {
+      name: '@nocobase/app-plugin-c',
+      devDependencies: { '@nocobase/app-testing': 'workspace:*' },
+    });
     mkdirSync(path.join(root, 'packages/plugins/empty'));
     assert.deepEqual(dbTestingPackages(root), [
       '@nocobase/app-plugin-a',
+      '@nocobase/app-plugin-c',
+      '@nocobase/app-testing',
       '@nocobase/db-testing',
     ]);
   } finally {
@@ -100,6 +110,8 @@ test('--all selects the packages that declare @nocobase/db-testing directly', ()
 test('--all finds the ported packages in this repository', () => {
   const names = dbTestingPackages();
   assert.ok(names.includes('@nocobase/db-testing'));
+  assert.ok(names.includes('@nocobase/app-testing'));
   assert.ok(names.includes('@nocobase/app-plugin-scheduler'));
+  assert.ok(names.includes('@nocobase/app-template-default'));
   assert.equal(new Set(names).size, names.length);
 });

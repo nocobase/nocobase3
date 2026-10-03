@@ -1,8 +1,8 @@
 name: Database tests
 
-# Runs the tests of every package that takes its database from @nocobase/db-testing on a dialect other than the
-# default. Pull requests run them on SQLite through Quality's Test job; this workflow covers the other dialects
-# nightly, and any one of them on demand.
+# Runs the tests of every package that takes its database from @nocobase/db-testing, directly or through
+# @nocobase/app-testing, on a dialect other than the default. Pull requests run them on SQLite through Quality's Test
+# job; this workflow covers the other dialects nightly, and any one of them on demand.
 
 on:
   schedule:
@@ -23,7 +23,7 @@ on:
           - oracle
           - dameng
       filter:
-        description: Package to test, such as @nocobase/app-plugin-scheduler; leave empty for every package that uses @nocobase/db-testing
+        description: Package to test, such as @nocobase/app-plugin-scheduler; leave empty for every package that uses @nocobase/db-testing or @nocobase/app-testing
         type: string
         default: ''
 

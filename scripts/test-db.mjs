@@ -3,8 +3,9 @@
 //   pnpm test:db <dialect> --filter <package> [--filter <package>…] [-- <arguments for each package's test script>]
 //   pnpm test:db <dialect> --all [-- <arguments>]
 //
-// --all selects every package that declares @nocobase/db-testing as a dependency, and db-testing itself: the
-// packages whose tests take their database from it.
+// --all selects every package that declares @nocobase/db-testing or @nocobase/app-testing as a dependency, and those
+// two themselves: the packages whose tests take their database from db-testing, directly or, for a plugin or an
+// application, through app-testing.
 //
 // SQLite runs as is. Any other dialect is started from its package's Compose file in a disposable project with a
 // random name and port, the tests run with NOCOBASE_TEST_DB_DIALECT and the dialect's host and port variables set,
@@ -89,9 +90,15 @@ export function testDbCommand({ filters, testArguments }) {
   };
 }
 
-/** Packages that declare @nocobase/db-testing, and db-testing itself, by name. */
+/** The packages a test takes its database from: db-testing, and app-testing, which re-exports it. */
+const TEST_DATABASE_PACKAGES = [
+  '@nocobase/db-testing',
+  '@nocobase/app-testing',
+];
+
+/** Packages that are or declare one of TEST_DATABASE_PACKAGES, by name. */
 export function dbTestingPackages(root = repoRoot) {
-  const names = ['@nocobase/db-testing'];
+  const names = [];
   const packagesDirectory = path.join(root, 'packages');
   for (const group of readdirSync(packagesDirectory, { withFileTypes: true })) {
     if (!group.isDirectory()) continue;
@@ -111,7 +118,12 @@ export function dbTestingPackages(root = repoRoot) {
         ...manifest.devDependencies,
         ...manifest.peerDependencies,
       };
-      if ('@nocobase/db-testing' in declared) names.push(manifest.name);
+      if (
+        TEST_DATABASE_PACKAGES.includes(manifest.name) ||
+        TEST_DATABASE_PACKAGES.some((name) => name in declared)
+      ) {
+        names.push(manifest.name);
+      }
     }
   }
   return names.sort();
