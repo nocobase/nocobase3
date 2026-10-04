@@ -66,7 +66,10 @@ export interface RepositoryApiActions {
 }
 
 export interface RepositoryApiExposure<P = unknown> {
-  /** The name passed to api.repository(name). */
+  /**
+   * The name passed to api.repository(name), and the first segment of every
+   * endpoint, `POST /api/{name}/{action}`. camelCase, such as `salesOrders`.
+   */
   readonly name: string;
   /** Logical Collection name; defaults to name. */
   readonly collection?: string;
@@ -131,9 +134,45 @@ const allowedOptions: Record<RepositoryApiAction, readonly string[]> = {
 const repositoryStreamMediaType = 'application/x-ndjson';
 
 /**
- * Exposes only configured Repository endpoints using POST /<name>:<action>.
- * This basic adapter does not install authentication or authorization.
- * Database services are resolved only when the application creates the router.
+ * An exposure name is the first path segment of its endpoints, `POST
+ * /api/{name}/{action}`, so it follows the HTTP API rule for path segments:
+ * camelCase, starting with a lowercase letter. That also keeps it free of `/`,
+ * `:` and anything else that would need encoding.
+ */
+const exposureNamePattern = /^[a-z][a-zA-Z0-9]*$/;
+
+/**
+ * First segments the application itself answers under `/api`. An exposure with
+ * one of these names would sit beside, or behind, a route that is not a
+ * Repository endpoint.
+ */
+const reservedExposureNames: ReadonlySet<string> = new Set([
+  'auth',
+  'healthz',
+  'swagger',
+]);
+
+function assertExposureName(name: unknown): asserts name is string {
+  if (typeof name !== 'string' || !exposureNamePattern.test(name))
+    throw new Error(
+      `Repository API exposure name ${JSON.stringify(name)} is invalid. Exposure names are camelCase path segments matching /^[a-z][a-zA-Z0-9]*$/, such as "salesOrders".`,
+    );
+  if (reservedExposureNames.has(name))
+    throw new Error(
+      `Repository API exposure name "${name}" is reserved for /api/${name}. Choose another name.`,
+    );
+}
+
+/**
+ * Exposes only configured Repository endpoints using `POST /{name}/{action}`,
+ * mounted under `/api`. Every path is literal — a name and an action, no
+ * parameters — so the endpoints of one exposure cannot shadow each other. An
+ * exposure name shares the first segment with plugin namespaces, so it must not
+ * equal one: name an exposure after its Collection, such as `salesOrders`,
+ * rather than after a plugin.
+ *
+ * This basic adapter does not install authentication or authorization. Database
+ * services are resolved only when the application creates the router.
  */
 export function defineRepositoryApiRoutes<P = unknown>(
   options: DefineRepositoryApiRoutesOptions<P>,
@@ -157,16 +196,11 @@ export function defineRepositoryApiRoutes<P = unknown>(
       ['name', 'collection', 'connection', 'policy', 'actions'],
       'Repository API exposure',
     );
-    if (
-      typeof entry.name !== 'string' ||
-      !entry.name ||
-      entry.name.includes('*') ||
-      names.has(entry.name)
-    ) {
+    assertExposureName(entry.name);
+    if (names.has(entry.name))
       throw new Error(
-        'Repository API names must be non-empty, unique, and contain no wildcard.',
+        `Repository API exposure name "${entry.name}" is declared more than once. Each exposure needs a unique name.`,
       );
-    }
     names.add(entry.name);
     const collection = entry.collection ?? entry.name;
     if (typeof collection !== 'string' || !collection)
@@ -259,7 +293,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
       const buildPolicy = entry.policy;
       for (const { action, maxLimit } of entry.actions) {
         router.post(
-          `/${encodeURIComponent(entry.name)}:${action}`,
+          `/${entry.name}/${action}`,
           bodyLimit({
             maxSize: 1024 * 1024,
             onError: (context) =>

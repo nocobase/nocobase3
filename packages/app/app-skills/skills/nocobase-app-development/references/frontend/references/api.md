@@ -376,22 +376,22 @@ Get the toaster with `const toaster = useToaster()` from `@nocobase/app-client` 
 
 `api.repository(name)` is also an HTTP call from the frontend; it does not access the database directly. Use it only when the server exposes standard Repository actions with `defineRepositoryApiRoutes`: `name` is the exposed resource name, not an arbitrary table name, and the server decides which actions are exposed, as well as validation, authorization and write policy. For custom endpoints with their own contract (such as the project REST endpoints above), use `request()`.
 
-The following assumes the server has exposed `projects` as a Repository resource (`client/pages/projects/project-repository.ts`):
+The following assumes the server has exposed the projects Collection as a Repository resource named `projectRecords` (`client/pages/projects/project-repository.ts`). The name is the first path segment of every data endpoint, so it is a camelCase word that no REST route uses; naming it `projects` would put its endpoints beside `/api/projects/:id`.
 
 ```ts
 import { type ApiClient, buildFindManyOptions } from '@nocobase/app-client';
 
 import type { Project, ProjectStatus } from './types.js';
 
-// Assumes the server exposes projects as a standard Repository resource with defineRepositoryApiRoutes.
-// These requests go to paths such as POST /api/projects:findMany, not to the REST endpoints above.
+// Assumes the server exposes the projects Collection as projectRecords with defineRepositoryApiRoutes.
+// These requests go to paths such as POST /api/projectRecords/findMany, not to the REST endpoints above.
 
 export async function listProjectsByStatus(
   api: ApiClient,
   status: ProjectStatus,
 ): Promise<Project[]> {
   // The query object findMany returns sends the request only when awaited; the result is already unwrapped from data and is an array.
-  return api.repository<Project>('projects').findMany({
+  return api.repository<Project>('projectRecords').findMany({
     filter: (f) => f.string('status').eq(status),
     sort: (s) => s.field('updatedAt').desc(),
     limit: 50,
@@ -403,14 +403,14 @@ export async function findProject(
   id: number,
 ): Promise<Project | undefined> {
   // Returns undefined when nothing is found; no 404 is thrown.
-  return api.repository<Project>('projects').findOne({ filter: { id } });
+  return api.repository<Project>('projectRecords').findOne({ filter: { id } });
 }
 
 export async function createProject(
   api: ApiClient,
   name: string,
 ): Promise<Project> {
-  const { record } = await api.repository<Project>('projects').createOne({
+  const { record } = await api.repository<Project>('projectRecords').createOne({
     values: { name, owner: null, status: 'planning' },
   });
   // createOne and updateOne return { record, ... }; the record is in record.
@@ -422,7 +422,7 @@ export async function renameProject(
   id: number,
   name: string,
 ): Promise<Project> {
-  const { record } = await api.repository<Project>('projects').updateOne({
+  const { record } = await api.repository<Project>('projectRecords').updateOne({
     filter: { id },
     values: { name },
   });
@@ -430,7 +430,7 @@ export async function renameProject(
 }
 
 export async function deleteProject(api: ApiClient, id: number): Promise<void> {
-  await api.repository<Project>('projects').deleteOne({ filter: { id } });
+  await api.repository<Project>('projectRecords').deleteOne({ filter: { id } });
 }
 
 /** Sends the same query manually with request: convert the builder callbacks to JSON first. */
@@ -438,7 +438,7 @@ export async function listActiveProjectsByRequest(
   api: ApiClient,
 ): Promise<Project[]> {
   const { data } = await api.request<{ data: Project[] }>({
-    path: 'projects:findMany',
+    path: 'projectRecords/findMany',
     method: 'POST',
     json: buildFindManyOptions<Project>({
       filter: (f) => f.string('status').eq('active'),
@@ -450,7 +450,7 @@ export async function listActiveProjectsByRequest(
 }
 ```
 
-Every Repository method sends `POST /<name>:<action>` (relative to the API base URL), and its return value is already unwrapped from the response's `data`:
+Every Repository method sends `POST /{name}/{action}` (relative to the API base URL), and its return value is already unwrapped from the response's `data`:
 
 | Method                                    | Returns                                                                                                    |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |

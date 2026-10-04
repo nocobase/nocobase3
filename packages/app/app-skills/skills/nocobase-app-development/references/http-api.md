@@ -1,15 +1,18 @@
 # HTTP API design
 
-Every route under `/api` follows these rules, whether the application or a plugin owns it. They are Google's API design guidelines ([aip.dev](https://google.aip.dev)) with one change: a custom method is separated by a slash, `/apps/{appId}/deploy`, not by Google's colon, `/apps/{appId}:deploy`. Root routes (`defineRootRoutes()`) answer whatever their protocol requires, such as a payment provider's webhook, and are not bound by them. Two kinds of `/api` route are exempt, listed at the end.
+Every route under `/api` follows these rules, whether the application or a plugin owns it. They are Google's API design guidelines ([aip.dev](https://google.aip.dev)) with one change: a custom method is separated by a slash, `/apps/{appId}/deploy`, not by Google's colon, `/apps/{appId}:deploy`. Root routes (`defineRootRoutes()`) answer whatever their protocol requires, such as a payment provider's webhook, and are not bound by them. A few `/api` routes keep their own shape; they are listed at the end.
 
 See [server routes](server-routes.md) for mounting, authentication and authorization.
 
 ## URLs
 
 - **Segments are camelCase.** `/apiKeys`, `/permissionSets`, never `/api-keys` or `/api_keys`. Collections are plural nouns.
-- **A plugin's routes start with its namespace:** the package name without `app-plugin-`, in camelCase. `@nocobase/app-plugin-notification-in-app` owns `/notificationInApp/...`. When the plugin's main resource has the plugin's own name, the segment appears once: the users plugin lists users at `/users`, not `/users/users`. The application's own routes have no namespace: `/orders`.
-- **`/swagger` is reserved** for the generated API documentation.
-- **Fixed segments go before path parameters.** Hono matches in registration order and the first match wins without warning, so register `/users/options` before `/users/:userId`.
+- **A plugin's routes start with its namespace:** the package name without `app-plugin-`, in camelCase, in its singular or its plural form, whichever reads as the plugin's main resource. Every resource of the plugin lives under that one namespace. The application's own routes have no namespace: `/orders`.
+- **When the main resource has the plugin's own name, the segment appears once.** The users plugin lists users at `/users` and disables one at `/users/{userId}/disable`, never `/users/users`. The workflow plugin's workflows are `/workflows` and `/workflows/{workflowId}/enable`, and its other resources nest under the same word: `/workflows/runs`, `/workflows/runs/{runId}/nodeRuns`.
+- **When the resource word differs from the plugin's, the namespace comes first.** The scheduler plugin lists schedules at `/scheduler/schedules`. `@nocobase/app-plugin-notification-in-app` owns `/notificationInApp/...`.
+- **A plugin mounted through another plugin's dispatcher keeps the host's namespace.** The authorization rule plugins answer under `/authorization/defaultAccess`, `/authorization/sharingRules` and `/authorization/restrictionRules`, because the authorization plugin owns `/authorization` and dispatches to them. Their errors use the host's domain too.
+- **`/swagger`, `/auth` and `/healthz` are reserved** for the generated API documentation, Better Auth and the health check.
+- **Fixed segments go before path parameters.** Hono matches in registration order and the first match wins without warning, so register `/workflows/runs` before `/workflows/:workflowId`. A user-chosen id must then never equal a fixed sibling segment: reject it when the resource is created, with `400 INVALID_ARGUMENT` and a field violation. An AI employee named `skills` would otherwise be unreachable behind `/aiEmployees/skills`.
 - **The client encodes ids.** An id containing `/` or `:` reaches the route encoded and arrives decoded in `context.req.param()`.
 
 ## Standard methods
@@ -53,7 +56,7 @@ There are two pagination styles, and a list uses one of them:
 - **Cursor**, for feeds and external callers: request `pageSize` and `pageToken`; `meta` carries `nextPageToken`, absent on the last page. The token is opaque — the server builds it, the client sends it back unchanged. These are the names Google's AIP-158 uses.
 - **Page number**, for administrative tables: request `page` and `pageSize`; `meta` carries `page`, `pageSize` and `total`.
 
-`pageSize` defaults to 20 and is capped at 100. Search is `q`, ordering is `orderBy`.
+`pageSize` defaults to 20 and is capped at 100; a route that needs a larger cap keeps it and says why in a comment. Search is `q`, ordering is `orderBy`.
 
 Data formats:
 
@@ -106,6 +109,8 @@ Every failed `/api` response then has this body, with the same `requestId` in th
   | `INTERNAL`            | 500  | Never thrown on purpose; the application answers it       |
   | `UNAVAILABLE`         | 503  | A dependency is down; retrying later may succeed          |
 
+  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a body over the route's size limit and `415` for an unsupported content type. Nothing else overrides the status. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
+
 - **`reason`** is what clients branch on: UPPER_SNAKE_CASE, unique within its domain, stable once released. A client never parses `message`.
 - **`domain`** is the namespace of whoever defined the reason: the plugin namespace, or the application's name for its own routes. The framework uses `app`.
 - **`message`** is an English sentence for developers. It is never shown to users.
@@ -113,7 +118,11 @@ Every failed `/api` response then has this body, with the same `requestId` in th
 - **`fieldViolations`**, `[{ field, description }]`, names the invalid fields of an `INVALID_ARGUMENT`.
 - **`metadata`** carries further machine-readable facts about this occurrence.
 
-Check permission before existence: a caller who may not see a resource gets `403` whether it exists or not, and `404` only once allowed. Otherwise the difference leaks which ids exist.
+Which resource is missing decides the status:
+
+- **The resource the URL names does not exist:** `404 NOT_FOUND`. `PATCH /orders/42` for an order that is not there is a 404, never a 400 or a 500.
+- **A resource the body or query refers to does not exist:** `400 INVALID_ARGUMENT`, with a `fieldViolations` entry naming the field. `POST /orders` with an unknown `customerId` is a bad request, not a missing order.
+- **Permission comes before existence:** a caller who may not see a resource gets `403` whether it exists or not, and `404` only once allowed. Otherwise the difference leaks which ids exist.
 
 The application handles everything a route does not:
 
@@ -159,12 +168,18 @@ A strict body catches a misspelled field instead of silently ignoring it. So a c
 
 Field types: ids are `z.string()`, times `z.iso.datetime()`, enumerations `z.enum([...])`. "May be omitted" is `.optional()` and "may be null" is `.nullable()`; do not use one for the other.
 
+Put the schemas in the plugin's `server/routes/schemas.ts`, or a `schemas/` directory once there are many.
+
+A binary or multipart body, such as an upload, has no JSON schema to validate. Validate its path parameters, query and headers with `parseApiInput()` as above, and the body in code before using it, answering `413` or `415` as `INVALID_ARGUMENT` with `httpStatus` when it is too large or of the wrong type.
+
 ## Exceptions
 
-Two kinds of `/api` route keep their own shape. Nothing else is exempt, and code you write never imitates them.
+These `/api` routes keep their own shape. Nothing else is exempt, and code you write never imitates them.
 
-- **Repository routes from `defineRepositoryApiRoutes`** keep their actions — `findMany`, `createOne` and the rest — and are always `POST`, because their filter is a tree that only fits in a body. They report errors in the standard body, with domain `app` and the Repository error code as reason.
+- **Data endpoints from `defineRepositoryApiRoutes`** are `POST /api/{name}/{action}`, such as `POST /api/salesOrders/findMany`. They keep their actions — `findMany`, `createOne` and the rest — and are always `POST`, because their filter is a tree that only fits in a body. The exposure name is a camelCase segment, `/^[a-z][a-zA-Z0-9]*$/`, checked when the routes are declared; name it after its Collection and never after a plugin namespace, whose first segment it would share. They report errors in the standard body, with domain `app` and the Repository error code as reason.
 - **Better Auth's routes under `/api/auth/`**, such as `POST /api/auth/sign-in/email`, are defined by the library and stay as it defines them. Routes this repository writes about authentication, such as the Hub's API key management, follow the rules above.
+- **`GET /api/healthz`** keeps the body load balancers and probes read.
+- **Streaming responses**, server-sent events and NDJSON, keep their own frame format once the stream has started. Their path, method and input follow the rules above, and anything that fails before the first frame is answered with the standard error body.
 
 ## Verify
 
