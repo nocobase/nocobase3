@@ -1,3 +1,4 @@
+import type { AuthSession } from '@nocobase/app-plugin-authentication';
 import { I18nRuntime } from '@nocobase/i18n';
 import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { Hono } from 'hono';
@@ -27,9 +28,7 @@ describe('createInAppRouter', () => {
       message: { body: 'Hidden' },
       createdAt: '2026-08-26T00:00:01.000Z',
     });
-    const router = await localizedRouter(store, {
-      resolveUserId: async () => 'user-1',
-    });
+    const router = await localizedRouter(store, signedInAs('user-1'));
 
     const response = await router.request('/messages');
 
@@ -235,10 +234,11 @@ describe('createInAppRouter', () => {
     }
   });
 
-  it('answers an anonymous request with UNAUTHENTICATED', async () => {
-    const router = await localizedRouter(new MemoryInAppStore(), {
-      resolveUserId: async () => undefined,
-    });
+  it('answers UNAUTHENTICATED when the authentication middleware sets no user', async () => {
+    const router = await localizedRouter(
+      new MemoryInAppStore(),
+      signedInAs(undefined),
+    );
 
     const response = await router.request('/messages');
 
@@ -250,6 +250,49 @@ describe('createInAppRouter', () => {
         domain: 'notificationInApp',
       },
     });
+  });
+
+  it('reuses a valid CSRF cookie instead of rotating it on every GET', async () => {
+    const router = await authenticatedRouter(new MemoryInAppStore());
+    const first = await router.request('/csrfToken');
+    const token = (
+      (await first.json()) as { readonly data: { readonly token: string } }
+    ).data.token;
+    const cookie = first.headers.get('set-cookie')?.split(';')[0] ?? '';
+
+    const second = await router.request('/csrfToken', { headers: { cookie } });
+
+    expect(second.headers.get('set-cookie')).toBeNull();
+    await expect(second.json()).resolves.toEqual({ data: { token } });
+    const write = await router.request('/messages/markAllRead', {
+      method: 'POST',
+      headers: { cookie, 'x-csrf-token': token },
+    });
+    expect(write.status).toBe(200);
+  });
+
+  it('replaces a malformed CSRF cookie and still rejects a mismatched header', async () => {
+    const router = await authenticatedRouter(new MemoryInAppStore());
+
+    const response = await router.request('/csrfToken', {
+      headers: { cookie: 'notification_in_app_csrf=attacker-chosen' },
+    });
+    const token = (
+      (await response.json()) as { readonly data: { readonly token: string } }
+    ).data.token;
+
+    expect(token).not.toBe('attacker-chosen');
+    expect(response.headers.get('set-cookie')).toContain(
+      `notification_in_app_csrf=${token}`,
+    );
+    const mismatched = await router.request('/messages/markAllRead', {
+      method: 'POST',
+      headers: {
+        cookie: `notification_in_app_csrf=${token}`,
+        'x-csrf-token': crypto.randomUUID(),
+      },
+    });
+    expect(mismatched.status).toBe(403);
   });
 });
 
@@ -263,9 +306,22 @@ async function csrfHeaders(router: Hono): Promise<Record<string, string>> {
 }
 
 function authenticatedRouter(store: MemoryInAppStore): Promise<Hono> {
-  return localizedRouter(store, {
-    resolveUserId: async () => 'user-1',
-  });
+  return localizedRouter(store, signedInAs('user-1'));
+}
+
+/** Stands in for the authentication plugin's `auth.required()`, which sets `auth` before the inbox runs. */
+function signedInAs(
+  userId: string | undefined,
+): Parameters<typeof createInAppRouter>[1] {
+  return {
+    authenticate: async (context, next) => {
+      context.set(
+        'auth',
+        userId ? ({ user: { id: userId } } as unknown as AuthSession) : null,
+      );
+      await next();
+    },
+  };
 }
 
 async function localizedRouter(

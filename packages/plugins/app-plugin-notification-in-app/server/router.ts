@@ -1,9 +1,5 @@
+import type { AuthEnv } from '@nocobase/app-plugin-authentication';
 import { parseApiInput } from '@nocobase/app-server/router';
-import type {
-  NocoBaseSession,
-  SessionData,
-  SessionEnv,
-} from '@nocobase/session';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { validator } from 'hono/validator';
@@ -17,17 +13,19 @@ import type { InAppStore } from './store.js';
 import type { InAppItem } from './types.js';
 
 const CSRF_COOKIE = 'notification_in_app_csrf';
-
-export type InAppUserIdResolver = (
-  request: Request,
-) => Promise<string | undefined>;
+const CSRF_TOKEN_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface CreateInAppRouterOptions {
-  readonly resolveUserId?: InAppUserIdResolver;
+  /**
+   * Authenticates every inbox request and sets `auth` on the context, answering 401 itself when nobody is signed in.
+   * The plugin passes the authentication plugin's `auth.required()`.
+   */
+  readonly authenticate: MiddlewareHandler<AuthEnv>;
 }
 
 type InAppRouterEnv = {
-  Variables: SessionEnv['Variables'] & { notificationUserId: string };
+  Variables: AuthEnv['Variables'] & { notificationUserId: string };
 };
 
 /**
@@ -36,28 +34,30 @@ type InAppRouterEnv = {
  */
 export function createInAppRouter(
   store: InAppStore,
-  options: CreateInAppRouterOptions = {},
+  options: CreateInAppRouterOptions,
 ): Hono<InAppRouterEnv> {
   const router = new Hono<InAppRouterEnv>();
   router.onError(inAppNotificationErrorHandler);
+  router.use('*', options.authenticate);
   router.use('*', async (context, next) => {
-    const externalUserId = await options.resolveUserId?.(context.req.raw);
-    if (externalUserId && context.var.session) {
-      await context.var.session.set('userId', externalUserId);
-    }
-    const resolvedUserId =
-      externalUserId ?? (await userId(context.var.session));
-    if (!resolvedUserId)
+    // The user comes only from the authenticated session; nothing is read from or written to the NocoBase session.
+    const userId = context.get('auth')?.user.id;
+    if (!userId)
       throw inAppNotificationApiError(context as Context, {
         status: 'UNAUTHENTICATED',
         reason: 'IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED',
         key: 'authenticationRequired',
       });
-    context.set('notificationUserId', resolvedUserId);
+    context.set('notificationUserId', userId);
     await next();
   });
   // Double-submit CSRF: the token is returned and set as a cookie, and every write sends it back as `x-csrf-token`.
+  // An existing well-formed token is reused rather than rotated, so a GET does not change state and concurrent tabs keep
+  // their tokens valid; only a missing or malformed cookie is replaced.
   router.get('/csrfToken', (context) => {
+    const existing = getCookie(context, CSRF_COOKIE);
+    if (existing && CSRF_TOKEN_PATTERN.test(existing))
+      return context.json({ data: { token: existing } });
     const token = crypto.randomUUID();
     setCookie(context, CSRF_COOKIE, token, {
       httpOnly: false,
@@ -210,22 +210,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function userId(
-  session: NocoBaseSession | undefined,
-): Promise<string | undefined> {
-  const data = await session?.get();
-  return data ? sessionUser(data) : undefined;
-}
-function sessionUser(data: SessionData): string | undefined {
-  const value =
-    data.userId ??
-    (data.user && typeof data.user === 'object' && 'id' in data.user
-      ? data.user.id
-      : undefined);
-  return typeof value === 'string' || typeof value === 'number'
-    ? String(value)
-    : undefined;
-}
 function validCsrf(
   header: string | undefined,
   cookie: string | undefined,

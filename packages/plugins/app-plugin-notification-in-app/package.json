@@ -88,7 +88,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/session": "workspace:^",
     "better-auth": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"
