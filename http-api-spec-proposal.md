@@ -358,7 +358,7 @@ Hub 的发布密钥（`Authorization: Bearer hub_app_…`）不是全应用通�
 
 **2. 认证插件和 API Key 插件：访问检查、认证方式和 Better Auth 的接口。** 认证插件注册会话检查，补上 `cookieAuth`，再调用 Better Auth 自己的 OpenAPI 生成器，把它服务的全部接口（包括应用配置的 Better Auth 插件的接口）以 `/api/auth/...` 的完整路径合并进来，归入 `Authentication` 分组。只在浏览器里走的步骤，比如第三方登录跳转、OAuth 回调、邮件里的链接和错误页，不放进文档；Better Auth 自带的 `/reference` 页面也不提供，全应用只有一个文档入口。API Key 插件注册 API Key 检查，补上 `apiKeyAuth`。
 
-**3. 权限插件：分发器后面的设置接口。** `/api/authorization` 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数，文档生成器看不到后面的路由。所以规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册一个 Hono 路由，权限插件的 `authorizationApiFragment()` 读出所有注册，把每个路由以完整的 `/api/authorization/...` 路径合并进文档。直接注册一个普通函数也还能工作，但没有路由可读，会记一条警告；`undeclaredAuthorizationRoutes(authz.routes)` 会把它和没写声明的路由一起列出来，规则插件的测试断言这个列表为空。
+**3. 权限插件：分发器后面的设置接口。** `/api/authorization` 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册一个 Hono 路由，路由里的每一条都用 `describeRoute()` 声明。这样注册的路由会以完整的 `/api/authorization/...` 路径自动进入文档，也和其他路由一样接受检查。
 
 **4. 每个插件和应用：在路由上写声明。** 写法见下一节。
 
@@ -455,7 +455,7 @@ router.post(
 
 `pnpm openapi:check`（脚本 `scripts/check-openapi.mjs`）为每个应用模板生成一份文档，出现以下任何一种情况就失败：
 
-- 有没写声明的路由，包括 `/api/authorization` 分发器后面的路由（`undeclaredAuthorizationRoutes()`）。
+- 有没写声明的路由。
 - 没有隐藏的接口缺少 `tags`、`summary` 或 `operationId`。
 - `operationId` 重复。
 - `findApiDocumentSchemaProblems()` 报出问题：引用了文档里不存在的结构，或者组件名是转换器生成的（如 `__schema0`）而不是声明出来的。
