@@ -124,7 +124,7 @@ router.get('/reports/:id', async (c) => {
     resource: { type: 'composite', id: 'sales.quotes' },
     action: 'submit',
   });
-  return c.json({ effect: decision.effect });
+  return c.json({ data: { effect: decision.effect } });
 });
 ```
 

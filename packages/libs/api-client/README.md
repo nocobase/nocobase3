@@ -23,15 +23,18 @@ const upload = new FormData();
 upload.append('file', file);
 
 await api.request({
-  path: '/files',
+  path: '/attachments/uploadOne',
   method: 'POST',
   body: upload,
 });
 
 const stream = await api.stream({
-  path: '/ai/conversations:send',
+  path: `/aiEmployee/conversations/${encodeURIComponent(sessionId)}/send`,
   method: 'POST',
-  json: { message: 'Hello' },
+  json: {
+    aiEmployee: 'atlas',
+    messages: [{ role: 'user', content: { type: 'text', content: 'Hello' } }],
+  },
 });
 
 const order = await api.repository<Order>('orders').findOne({

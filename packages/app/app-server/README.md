@@ -261,11 +261,7 @@ callbacks and client-supplied `context` are not. `idempotencyKey` is currently
 rejected as an unsupported option rather than silently ignored. `ifVersion` is
 forwarded for updates and deletes.
 
-Input errors return 400, record-not-found errors return 404, and version or
-single-record cardinality conflicts return 409, with `{ code, message }` bodies.
-Malformed JSON returns 400, non-JSON content returns 415, and oversized bodies
-return 413. Unexpected/database-configuration errors propagate to the host error
-handler as server errors.
+Every failure uses the standard error body, `{ error: { code, status, reason, domain, message, requestId } }`, with domain `app`. Input errors return 400 `INVALID_ARGUMENT`, record-not-found errors return 404 `NOT_FOUND`, and version or single-record cardinality conflicts return 409 `ABORTED`, each with the Repository error code as `reason`. Malformed JSON returns 400, non-JSON content returns 415 and oversized bodies return 413 with reason `BODY_TOO_LARGE`, all with status `INVALID_ARGUMENT`. Unexpected and database-configuration errors propagate to the host error handler, which answers an opaque 500 `INTERNAL`.
 
 This basic adapter deliberately does **not** install authentication or
 authorization. Configured endpoints accept anonymous requests and have no field
@@ -279,13 +275,7 @@ Add `aggregate` and `groupBy` to an exposure's `actions` to enable
 implicitly. As with other Repository actions, the contribution installs no
 access policy: the owning application or plugin must guard its declared routes.
 
-`aggregate` accepts a required Aggregate AST and an optional `filter`.
-`groupBy` also requires a non-empty `by` array and accepts `having` and `sort`
-over grouped fields and aggregate aliases. Envelopes must be JSON objects;
-unknown options, callbacks, database context, and pagination are unsupported.
-Repository validates AST versions, expressions, aliases and field capabilities
-and returns the existing `{ code, message }` error response with status 400.
-The 1 MiB body limit also applies to both actions.
+`aggregate` accepts a required Aggregate AST and an optional `filter`. `groupBy` also requires a non-empty `by` array and accepts `having` and `sort` over grouped fields and aggregate aliases. Envelopes must be JSON objects; unknown options, callbacks, database context, and pagination are unsupported. Repository validates AST versions, expressions, aliases and field capabilities and answers an invalid input with status 400 in the standard error body, the Repository error code as `reason` and domain `app`. The 1 MiB body limit also applies to both actions.
 
 `maxLimit` applies only to `findMany`. Aggregations operate over all matching
 rows, and `groupBy` returns all matching groups without pagination. Responses

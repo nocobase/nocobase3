@@ -17,18 +17,18 @@ See [server routes](server-routes.md) for mounting, authentication and authoriza
 
 ## Standard methods
 
-| Operation                         | Method   | Path                       | Success                  |
-| --------------------------------- | -------- | -------------------------- | ------------------------ |
-| List                              | `GET`    | `/orders`                  | `200 { data: [], meta }` |
-| Get one                           | `GET`    | `/orders/{orderId}`        | `200 { data }`           |
-| Create                            | `POST`   | `/orders`                  | `201 { data }`           |
-| Update some fields                | `PATCH`  | `/orders/{orderId}`        | `200 { data }`           |
-| Replace a singleton configuration | `PUT`    | `/orders/{orderId}/config` | `200 { data }`           |
-| Delete                            | `DELETE` | `/orders/{orderId}`        | `204`, no body           |
-| Custom method on one resource     | `POST`   | `/orders/{orderId}/cancel` | `200 { data }` or `202`  |
-| Custom method on a collection     | `POST`   | `/orders/archiveCompleted` | `200 { data }` or `204`  |
+| Operation                         | Method   | Path                       | Success                        |
+| --------------------------------- | -------- | -------------------------- | ------------------------------ |
+| List                              | `GET`    | `/orders`                  | `200 { data: [], meta }`       |
+| Get one                           | `GET`    | `/orders/{orderId}`        | `200 { data }`                 |
+| Create                            | `POST`   | `/orders`                  | `201 { data }`                 |
+| Update some fields                | `PATCH`  | `/orders/{orderId}`        | `200 { data }`                 |
+| Replace a singleton configuration | `PUT`    | `/orders/{orderId}/config` | `200 { data }`                 |
+| Delete                            | `DELETE` | `/orders/{orderId}`        | `204`, no body                 |
+| Custom method on one resource     | `POST`   | `/orders/{orderId}/cancel` | `200 { data }`, `202` or `204` |
+| Custom method on a collection     | `POST`   | `/orders/archiveCompleted` | `200 { data }`, `202` or `204` |
 
-`GET` never changes data: browsers prefetch, crawlers follow links and caches replay requests without the user asking. Marking a message read when a list is opened is a separate `POST`. `DELETE` carries no body; a confirmation is a query parameter, `DELETE /users/5?confirm=true`.
+`GET` never changes state: browsers prefetch, crawlers follow links and caches replay requests without the user asking. Marking a message read when a list is opened is a separate `POST`. That includes side effects nobody asked for: a `GET` does not delete expired rows or rewrite the session or its cookies on the way. Cleanup belongs to the writers that make data stale, or to a scheduled job. `DELETE` carries no body; a confirmation is a query parameter, `DELETE /users/5?confirm=true`. A delete whose work continues after the response may answer `202`.
 
 ## Custom methods
 
@@ -45,6 +45,8 @@ The method follows the resource it acts on: `/{collection}/{id}/{verb}` for one 
 | No `Async`; a long operation returns a resource whose progress can be read            | `/deploy` returning the deployment     | `/deployAsync`              |
 | Paired operations take paired verbs                                                   | `/enable` and `/disable`               | `/enable` and `/turnOff`    |
 
+A custom method answers `200 { data }` when it has a result, `202` when the work continues asynchronously, and `204` with no body when there is nothing to return.
+
 One operation has one URL across the whole system. Enabling a workflow is `POST /workflows/{workflowId}/enable` and nothing else.
 
 ## Responses
@@ -58,10 +60,13 @@ There are two pagination styles, and a list uses one of them:
 
 `pageSize` defaults to 20 and is capped at 100; a route that needs a larger cap keeps it and says why in a comment. Search is `q`, ordering is `orderBy`.
 
+A bounded configuration list, such as providers, roles, templates or catalogs, may skip paging, but it still answers `{ data, meta }` with at least `meta.total`. Every other list pages. `meta` may carry fields beyond the standard ones when a list has more to say about itself.
+
 Data formats:
 
-- Ids are strings. Snowflake ids exceed `Number.MAX_SAFE_INTEGER`, and a JavaScript client silently rounds them as numbers.
+- Ids are strings, in responses and in inputs alike. Snowflake ids exceed `Number.MAX_SAFE_INTEGER`, and a JavaScript client silently rounds them as numbers.
 - Times are RFC 3339 strings, such as `2026-10-04T08:00:00.000Z`.
+- Booleans are `true` and `false`, never `0`, `1` or a string.
 - Field names are camelCase.
 
 ## Errors
@@ -109,10 +114,10 @@ Every failed `/api` response then has this body, with the same `requestId` in th
   | `INTERNAL`            | 500  | Never thrown on purpose; the application answers it       |
   | `UNAVAILABLE`         | 503  | A dependency is down; retrying later may succeed          |
 
-  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a body over the route's size limit and `415` for an unsupported content type. Nothing else overrides the status. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
+  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a request body over the route's size limit and `415` for an unsupported request content type. Nothing else overrides the status, and neither covers anything else: a generated output that grows too large is `400 FAILED_PRECONDITION`, and a file with the wrong extension is `400 INVALID_ARGUMENT`. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
 
 - **`reason`** is what clients branch on: UPPER_SNAKE_CASE, unique within its domain, stable once released. A client never parses `message`.
-- **`domain`** is the namespace of whoever defined the reason: the plugin namespace, or the application's name for its own routes. The framework uses `app`.
+- **`domain`** is the namespace of whoever defined the reason: the plugin namespace, or the application's name for its own routes. The framework uses `app`. A plugin has one domain even when it serves several URL prefixes: every AI employee error is `aiEmployees`, including those under `/aiEmployee/...`, and every AI knowledge base error is `aiKnowledgeBases`. An error passed through from another plugin keeps the domain of the plugin that defined its reason, so the users plugin passing on `LAST_ASSIGNMENT` answers with domain `authorization`.
 - **`message`** is an English sentence for developers. It is never shown to users.
 - **`localizedMessage`**, `{ locale, message }`, is optional user-facing text the handler has already translated with the request's i18n.
 - **`fieldViolations`**, `[{ field, description }]`, names the invalid fields of an `INVALID_ARGUMENT`.
@@ -123,6 +128,8 @@ Which resource is missing decides the status:
 - **The resource the URL names does not exist:** `404 NOT_FOUND`. `PATCH /orders/42` for an order that is not there is a 404, never a 400 or a 500.
 - **A resource the body or query refers to does not exist:** `400 INVALID_ARGUMENT`, with a `fieldViolations` entry naming the field. `POST /orders` with an unknown `customerId` is a bad request, not a missing order.
 - **Permission comes before existence:** a caller who may not see a resource gets `403` whether it exists or not, and `404` only once allowed. Otherwise the difference leaks which ids exist.
+
+Permission also comes before input validation. Put authorization in middleware ahead of `validator()`, so an unauthorized caller learns nothing about the input a route expects, and never write anything, a stored record or an uploaded file, before the permission check has passed.
 
 The application handles everything a route does not:
 
@@ -167,24 +174,54 @@ router.post(
 
 A strict body catches a misspelled field instead of silently ignoring it. So a client sends only the fields it changes, never a whole record read back from the server. Derive the service's types with `z.infer` instead of writing a second `interface`.
 
-Field types: ids are `z.string()`, times `z.iso.datetime()`, enumerations `z.enum([...])`. "May be omitted" is `.optional()` and "may be null" is `.nullable()`; do not use one for the other.
+Field types: ids are `z.string()`, times `z.iso.datetime()`, booleans `z.boolean()`, enumerations `z.enum([...])`. "May be omitted" is `.optional()` and "may be null" is `.nullable()`; do not use one for the other.
 
 Put the schemas in the plugin's `server/routes/schemas.ts`, or a `schemas/` directory once there are many.
 
 A binary or multipart body, such as an upload, has no JSON schema to validate. Validate its path parameters, query and headers with `parseApiInput()` as above, and the body in code before using it, answering `413` or `415` as `INVALID_ARGUMENT` with `httpStatus` when it is too large or of the wrong type.
+
+Every request body has a size limit, uploads and JSON routes alike. Apply Hono's `bodyLimit` and answer an oversized body in the standard shape:
+
+```ts
+import { ApiError, apiErrorHandler } from '@nocobase/app-server/router';
+import { bodyLimit } from 'hono/body-limit';
+
+router.post(
+  '/orders/:orderId/attachments',
+  auth.required(),
+  bodyLimit({
+    maxSize: 10 * 1024 * 1024,
+    onError: (context) =>
+      apiErrorHandler(
+        new ApiError({
+          status: 'INVALID_ARGUMENT',
+          reason: 'BODY_TOO_LARGE',
+          domain: 'orders',
+          message: 'The request body exceeds 10 MiB.',
+          httpStatus: 413,
+        }),
+        context,
+      ),
+  }),
+  // validators and handler
+);
+```
 
 ## Exceptions
 
 These `/api` routes keep their own shape. Nothing else is exempt, and code you write never imitates them.
 
 - **Data endpoints from `defineRepositoryApiRoutes`** are `POST /api/{name}/{action}`, such as `POST /api/salesOrders/findMany`. They keep their actions — `findMany`, `createOne` and the rest — and are always `POST`, because their filter is a tree that only fits in a body. The exposure name is a camelCase segment, `/^[a-z][a-zA-Z0-9]*$/`, checked when the routes are declared; name it after its Collection and never after a plugin namespace, whose first segment it would share. They report errors in the standard body, with domain `app` and the Repository error code as reason.
+- **The file plugin's upload actions on a file exposure**, `POST /api/{name}/uploadOne` and `POST /api/{name}/uploadMany`, belong to the data endpoints above: they take a multipart body and report errors in the standard body.
 - **Better Auth's routes under `/api/auth/`**, such as `POST /api/auth/sign-in/email`, are defined by the library and stay as it defines them. Routes this repository writes about authentication, such as the Hub's API key management, follow the rules above.
 - **`GET /api/healthz`** keeps the body load balancers and probes read.
-- **Streaming responses**, server-sent events and NDJSON, keep their own frame format once the stream has started. Their path, method and input follow the rules above, and anything that fails before the first frame is answered with the standard error body.
+- **Streaming responses**, server-sent events and NDJSON, stay streaming and keep their own frame format once the stream has started. Their path, method and input follow the rules above. Everything that can be detected before the stream opens — invalid input, a missing resource, a refused permission, an exceeded limit — is answered with the standard error body and its status before the first frame, never as an error frame inside a `200` stream.
 
 ## Verify
 
 - Every failure is the standard body. Assert `reason`, not `message`.
 - An invalid body is `400` with the offending field in `fieldViolations`, and an unknown body field is rejected.
-- A `GET` changes nothing.
+- A `GET` changes nothing, not even expired rows, the session or its cookies.
+- A caller without permission gets `403` before any input validation and before anything is written.
+- An oversized body is `413` with reason `BODY_TOO_LARGE`.
 - A list returns `{ data, meta }`, and its paging parameters are honored and capped.
