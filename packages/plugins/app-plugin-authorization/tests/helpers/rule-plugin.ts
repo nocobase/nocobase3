@@ -1,5 +1,6 @@
 import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import {
+  addSettingsRoutes,
   createRouteHandler,
   createRuleSupportRoutes,
   type AuthorizationExtensionHost,
@@ -41,7 +42,8 @@ export function testRulePlugin(
         { section: AUTHORIZATION_SETTINGS_SECTION },
       );
       const path = rulePath(rule);
-      authz.routes.add(
+      addSettingsRoutes(
+        authz.routes,
         path,
         createRouteHandler(
           createRuleSupportRoutes(

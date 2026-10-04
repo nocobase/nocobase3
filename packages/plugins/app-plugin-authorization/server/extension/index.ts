@@ -1,6 +1,9 @@
 export {
   AUTHORIZATION_ERROR_DOMAIN,
   AuthorizationInputError,
+  addSettingsRoutes,
+  authorizationApiFragment,
+  documentedSettingsRouters,
   assertRuleKeyAvailable,
   createRouteHandler,
   createSettingsRouter,
@@ -14,12 +17,25 @@ export {
 } from './http.js';
 export { parse } from './parsing.js';
 export {
+  AUTHORIZATION_API_TAGS,
   createRuleSupportRoutes,
   type RuleSupportRoutesOptions,
 } from './options.js';
 export {
+  AuthorizationOptionsSchema,
   DataScopeRuleBody,
   DataScopeRulePatchBody,
+  DataScopeRuleSchema,
+  OptionTextSchema,
+  PageMetaSchema,
+  RecordOptionSchema,
+  RecordSelectionSchema,
+  ReferenceSchema,
+  RuleActionSchema,
+  SubjectOptionSchema,
+  SubjectRuleSchema,
+  TitleSchema,
+  TotalMetaSchema,
   RecordSelectionInput,
   ReferenceInput,
   RESERVED_RULE_KEYS,

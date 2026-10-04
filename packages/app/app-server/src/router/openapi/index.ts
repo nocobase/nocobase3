@@ -32,6 +32,10 @@ export {
   type GenerateApiDocumentOptions,
 } from './document.js';
 export {
+  findApiDocumentSchemaProblems,
+  type ApiSchemaDirection,
+} from './schema.js';
+export {
   ApiDocsService,
   apiDocsToken,
   type ApiDocsAccess,

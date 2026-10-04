@@ -23,6 +23,7 @@ import {
 
 import {
   defineRepositoryApiRoutes,
+  findApiDocumentSchemaProblems,
   findUndeclaredApiRoutes,
   generateApiDocument,
   type ApiDocument,
@@ -124,7 +125,11 @@ describe('data endpoints in the API document', () => {
       }).createRouter({ container }),
     );
     expect(findUndeclaredApiRoutes(api)).toEqual([]);
-    return generateApiDocument(api, { info: { title: 'Test', version: '1' } });
+    const document = await generateApiDocument(api, {
+      info: { title: 'Test', version: '1' },
+    });
+    expect(findApiDocumentSchemaProblems(document)).toEqual([]);
+    return document;
   }
 
   it('documents every action of an exposure without a hand-written declaration', async () => {

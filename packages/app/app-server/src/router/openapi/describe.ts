@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Env, MiddlewareHandler, ValidationTargets } from 'hono';
 import {
-  resolver,
+  uniqueSymbol,
   validator,
   type ResolverReturnType,
   type ResponsesWithResolver,
@@ -14,6 +14,11 @@ import {
   apiErrorResponseNames,
   type ApiErrorResponseCode,
 } from './components.js';
+import {
+  convertApiSchema,
+  type ApiSchemaDirection,
+  type ConvertedApiSchema,
+} from './schema.js';
 
 /**
  * Route metadata for the API document. Plugins take these from `@nocobase/app-server/router` and never import
@@ -22,7 +27,6 @@ import {
  */
 export {
   describeRoute,
-  resolver,
   type DescribeRouteOptions,
   type ResolverReturnType,
 } from 'hono-openapi';
@@ -77,6 +81,77 @@ export interface ApiValidatorOptions {
  * router.post('/orders/:orderId/cancel', describeRoute({ ... }), apiValidator('param', OrderParams), apiValidator('json', CancelOrderInput), handler);
  * ```
  */
+/**
+ * A Standard Schema prepared for `describeRoute({ responses })` or `requestBody`, converted under the document's
+ * conventions: definitions become components under stable names, a property keeps its own description next to the
+ * `$ref` of a shared schema, and a response object is open unless the schema is strict. The response helpers use it
+ * already; reach for it only for content they do not cover, such as a streaming media type.
+ */
+export function resolver(
+  schema: StandardSchemaV1,
+  direction: ApiSchemaDirection = 'output',
+): ResolverReturnType {
+  return {
+    vendor: schema['~standard'].vendor,
+    validate: schema['~standard'].validate,
+    toJSONSchema: async () =>
+      (await convertApiSchema(schema, direction)).schema as never,
+    toOpenAPISchema: async () => {
+      const converted = await convertApiSchema(schema, direction);
+      return {
+        schema: converted.schema as OpenAPIV3_1.SchemaObject,
+        components: converted.components,
+      };
+    },
+  };
+}
+
+// OpenAPI ignores a header parameter with one of these names: the request body's media type and the accepted ones
+// are described by the operation, and credentials by its security requirements.
+const ignoredHeaderParameters = new Set([
+  'accept',
+  'authorization',
+  'content-type',
+]);
+
+function withoutIgnoredHeaders(
+  converted: ConvertedApiSchema,
+): ConvertedApiSchema {
+  let schema = converted.schema as OpenAPIV3_1.SchemaObject &
+    Partial<OpenAPIV3_1.ReferenceObject>;
+  const schemas = { ...converted.components?.schemas };
+  const ref = schema.$ref?.startsWith('#/components/schemas/')
+    ? schema.$ref.slice('#/components/schemas/'.length)
+    : undefined;
+  if (ref !== undefined && schemas[ref]) {
+    schema = { ...schemas[ref] };
+    delete schemas[ref];
+  }
+  const properties = Object.entries(schema.properties ?? {}).filter(
+    ([name]) => !ignoredHeaderParameters.has(name.toLowerCase()),
+  );
+  if (
+    ref === undefined &&
+    properties.length === Object.keys(schema.properties ?? {}).length
+  ) {
+    return converted;
+  }
+  const required = schema.required?.filter(
+    (name) => !ignoredHeaderParameters.has(name.toLowerCase()),
+  );
+  return {
+    schema: {
+      ...schema,
+      properties: Object.fromEntries(properties),
+      ...(required ? { required } : {}),
+    },
+    components:
+      Object.keys(schemas).length > 0
+        ? { ...converted.components, schemas }
+        : undefined,
+  };
+}
+
 export function apiValidator<
   Schema extends StandardSchemaV1,
   Target extends keyof ValidationTargets,
@@ -87,14 +162,29 @@ export function apiValidator<
   schema: Schema,
   options?: ApiValidatorOptions,
 ): MiddlewareHandler<E, P, ApiValidatorInput<Schema, Target>> {
-  return validator(
+  const middleware = validator(
     target,
     schema,
     (result) => {
       if (!result.success) throw invalidApiInputError(result.error);
     },
     options,
-  ) as unknown as MiddlewareHandler<E, P, ApiValidatorInput<Schema, Target>>;
+  );
+  // Document the schema the way the response helpers do, rather than with hono-openapi's own conversion.
+  const metadata = (
+    middleware as unknown as Record<symbol, Record<string, unknown>>
+  )[uniqueSymbol];
+  const input = resolver(schema, 'input');
+  metadata.toJSONSchema = input.toJSONSchema;
+  metadata.toOpenAPISchema = async () => {
+    const converted = await convertApiSchema(schema, 'input');
+    return target === 'header' ? withoutIgnoredHeaders(converted) : converted;
+  };
+  return middleware as unknown as MiddlewareHandler<
+    E,
+    P,
+    ApiValidatorInput<Schema, Target>
+  >;
 }
 
 function isStandardSchema(schema: ApiSchema): schema is StandardSchemaV1 {
@@ -108,7 +198,6 @@ interface ResolvedSchemas {
 
 async function resolveParts(
   parts: Readonly<Record<string, ApiSchema>>,
-  customOptions: Record<string, unknown> | undefined,
 ): Promise<ResolvedSchemas> {
   const schemas: Record<string, SchemaOrRef> = {};
   let components: OpenAPIV3_1.ComponentsObject | undefined;
@@ -118,17 +207,9 @@ async function resolveParts(
       continue;
     }
     // Responses describe what the server sends, so a schema with a transform documents its output.
-    const result = await resolver(part, {
-      options: { io: 'output' },
-    }).toOpenAPISchema(customOptions);
-    const { $defs, ...schema } = result.schema as OpenAPIV3_1.SchemaObject & {
-      $defs?: Record<string, OpenAPIV3_1.SchemaObject>;
-    };
-    schemas[key] = schema;
-    const collected = {
-      ...result.components?.schemas,
-      ...$defs,
-    };
+    const result = await convertApiSchema(part, 'output');
+    schemas[key] = result.schema;
+    const collected = { ...result.components?.schemas };
     if (Object.keys(collected).length > 0) {
       components = {
         ...components,
@@ -151,9 +232,9 @@ function composeSchema(
     vendor: 'nocobase',
     validate: (value: unknown) => ({ value }),
     toJSONSchema: async () =>
-      build((await resolveParts(parts, undefined)).schemas) as never,
-    toOpenAPISchema: async (customOptions?: Record<string, unknown>) => {
-      const resolved = await resolveParts(parts, customOptions);
+      build((await resolveParts(parts)).schemas) as never,
+    toOpenAPISchema: async () => {
+      const resolved = await resolveParts(parts);
       return {
         schema: build(resolved.schemas) as OpenAPIV3_1.SchemaObject,
         components: resolved.components,

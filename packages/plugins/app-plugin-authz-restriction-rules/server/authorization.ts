@@ -11,7 +11,10 @@ import {
   type SettingsAuthorizationApi,
   type UiAuthorizationApi,
 } from '@nocobase/app-plugin-authorization/server';
-import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/extension';
+import {
+  addSettingsRoutes,
+  DatabaseConnectionHandle,
+} from '@nocobase/app-plugin-authorization/server/extension';
 import {
   createRestrictionRulesHandler,
   RESTRICTION_RULES_PATH,
@@ -57,7 +60,8 @@ export function restrictionRules(
         { type: 'settings', id: RESTRICTION_RULES_SETTINGS },
         { section: AUTHORIZATION_SETTINGS_SECTION, order: 30 },
       );
-      authz.routes.add(
+      addSettingsRoutes(
+        authz.routes,
         RESTRICTION_RULES_PATH,
         createRestrictionRulesHandler(
           authz,

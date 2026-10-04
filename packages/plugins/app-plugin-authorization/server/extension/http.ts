@@ -1,9 +1,15 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { ApiError, apiErrorHandler } from '@nocobase/app-server/router';
+import {
+  ApiError,
+  apiErrorHandler,
+  generateApiDocument,
+  type ApiDocumentFragment,
+} from '@nocobase/app-server/router';
 import type {
   AuthorizationContext,
   AuthorizationRouteHandler,
+  AuthorizationRouteRegistry,
 } from '@nocobase/authorization/core';
 import {
   PermissionSetConflictError,
@@ -213,16 +219,57 @@ export function requireSettings(
   });
 }
 
+/** The settings router behind each handler `createRouteHandler` built, so the API document can describe its routes. */
+const settingsRouters = new WeakMap<
+  AuthorizationRouteHandler,
+  Hono<SettingsRouterEnv>
+>();
+
+/** The settings routers registered on each dispatcher with `addSettingsRoutes`, in registration order. */
+const documentedRouters = new WeakMap<
+  AuthorizationRouteRegistry,
+  Hono<SettingsRouterEnv>[]
+>();
+
 /** Adapts a settings router to `authz.routes.add`. */
 export function createRouteHandler(
   routes: Hono<SettingsRouterEnv>,
 ): AuthorizationRouteHandler {
-  return (input) =>
+  const handler: AuthorizationRouteHandler = (input) =>
     Promise.resolve(
       routes.fetch(atPath(input.request, input.path), {
         authorization: input.authorization,
       }),
     );
+  settingsRouters.set(handler, routes);
+  return handler;
+}
+
+/**
+ * Register `handler` under `path` on the `/api/authorization` dispatcher, as `authz.routes.add` does, and, when
+ * `createRouteHandler` built it, publish the settings router's routes in the application's API document. The
+ * dispatcher forwards every path below `/api/authorization` at request time, so the document cannot see the routes
+ * behind it; the authorization plugin contributes the ones registered here as a document fragment. Declare each route
+ * of the router with `describeRoute()`, or `describeRoute({ hide: true })` with a reason.
+ */
+export function addSettingsRoutes(
+  registry: AuthorizationRouteRegistry,
+  path: string,
+  handler: AuthorizationRouteHandler,
+): void {
+  registry.add(path, handler);
+  const routes = settingsRouters.get(handler);
+  if (!routes) return;
+  const documented = documentedRouters.get(registry) ?? [];
+  documented.push(routes);
+  documentedRouters.set(registry, documented);
+}
+
+/** The settings routers `addSettingsRoutes` registered on `registry`, with paths relative to `/api/authorization`. */
+export function documentedSettingsRouters(
+  registry: AuthorizationRouteRegistry,
+): readonly Hono<SettingsRouterEnv>[] {
+  return [...(documentedRouters.get(registry) ?? [])];
 }
 
 /** The request as the router sees it: at the dispatcher-relative path. */
@@ -235,4 +282,27 @@ function atPath(request: Request, path: string): Request {
     headers: request.headers,
     ...(request.body ? { body: request.body, duplex: 'half' } : {}),
   });
+}
+
+/**
+ * The API document fragment for the settings routes behind the `/api/authorization` dispatcher: every router registered
+ * with `addSettingsRoutes`, by this plugin and by the rule plugins, at its full `/api/authorization/...` path.
+ */
+export async function authorizationApiFragment(
+  registry: AuthorizationRouteRegistry,
+): Promise<ApiDocumentFragment> {
+  const router = new Hono();
+  for (const routes of documentedSettingsRouters(registry))
+    router.route('/', routes);
+  const document = await generateApiDocument(router, {
+    info: { title: '@nocobase/app-plugin-authorization', version: '0' },
+    prefix: '/api/authorization',
+  });
+  return {
+    owner: '@nocobase/app-plugin-authorization',
+    namespace: 'authorization',
+    ...(document.paths ? { paths: document.paths } : {}),
+    ...(document.components ? { components: document.components } : {}),
+    ...(document.tags ? { tags: document.tags } : {}),
+  };
 }

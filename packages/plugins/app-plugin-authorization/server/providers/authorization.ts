@@ -1,6 +1,7 @@
 import { databaseManagerToken } from '@nocobase/db';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { apiDocsToken } from '@nocobase/app-server/router';
 import {
   ServiceProvider,
   type ServiceResolver,
@@ -16,6 +17,7 @@ import {
   type AppAuthorization,
   type AuthorizationConfig,
 } from '../authorization.js';
+import { authorizationApiFragment } from '../extension/http.js';
 import { authorizationToken } from '../tokens.js';
 import { reportAuthorizationUi } from '../ui.js';
 import { reportStoredGrants, storedGrantProblems } from '../stored-grants.js';
@@ -38,6 +40,7 @@ export class AuthorizationProvider<
   private globalPermissionsChangedTopic?: RealtimePublicTopic<{
     readonly type: 'permissions-changed';
   }>;
+  private removeApiFragment?: () => void;
 
   public override register(): void {
     this.app.container.singleton(authorizationToken, (container) =>
@@ -82,6 +85,20 @@ export class AuthorizationProvider<
   }
 
   public override boot(): Promise<void> {
+    // The settings routes sit behind the `/api/authorization` dispatcher, where the document cannot see them, so they
+    // are contributed as a fragment, built from the routers registered when the document is generated.
+    if (this.app.container.has(apiDocsToken)) {
+      const container = this.app.container;
+      this.removeApiFragment?.();
+      // Resolved when the document is generated, so the authorization instance is not created any earlier than before.
+      this.removeApiFragment = container
+        .resolve(apiDocsToken)
+        .addFragment(async () =>
+          authorizationApiFragment(
+            container.resolve(authorizationToken).routes,
+          ),
+        );
+    }
     if (this.app.container.has(realtimeServiceToken)) {
       this.permissionsChangedTopic = this.app.container
         .resolve(realtimeServiceToken)
@@ -126,6 +143,8 @@ export class AuthorizationProvider<
   }
 
   public override shutdown(): Promise<void> {
+    this.removeApiFragment?.();
+    this.removeApiFragment = undefined;
     this.permissionsChangedTopic?.close();
     this.permissionsChangedTopic = undefined;
     this.globalPermissionsChangedTopic?.close();

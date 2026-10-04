@@ -13,6 +13,7 @@ import {
   defineApiRoutes,
   defineRootRoutes,
   describeRoute,
+  findApiDocumentSchemaProblems,
   findUndeclaredApiRoutes,
   generateApiDocument,
   healthCheckApiRoutes,
@@ -132,6 +133,7 @@ describe('API document', () => {
   it('lists a described route with its tags, summary, operationId, parameters, body and responses', async () => {
     const document = await documentOf(createApp());
 
+    expect(findApiDocumentSchemaProblems(document)).toEqual([]);
     expect(document.openapi).toBe('3.1.0');
     expect(document.info).toEqual({ title: 'main', version: '0.0.0' });
     expect(document.servers).toEqual([{ url: '/main' }]);

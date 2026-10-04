@@ -6,6 +6,11 @@ import {
 } from '@nocobase/authorization/core';
 import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import {
+  authorizationApiFragment,
+  documentedSettingsRouters,
+} from '@nocobase/app-plugin-authorization/server/extension';
+import { findUndeclaredApiRoutes } from '@nocobase/app-server/router';
 import { defaultAccess } from '../server/authorization.js';
 
 const PATH = '/defaultAccess';
@@ -300,5 +305,41 @@ describe('default access through the authorization dispatcher', () => {
     await expect(scopeKey.json()).resolves.toMatchObject({
       error: { fieldViolations: [{ field: 'actions.0.scopeKey' }] },
     });
+  });
+
+  it('declares its routes for the API document', async () => {
+    const { authz } = fixture();
+    const routers = documentedSettingsRouters(authz.routes);
+    expect(routers.length).toBeGreaterThan(0);
+    for (const routes of routers)
+      expect(findUndeclaredApiRoutes(routes, '/api/authorization')).toEqual([]);
+
+    const fragment = await authorizationApiFragment(authz.routes);
+    const operations = Object.entries(fragment.paths ?? {})
+      .filter(([path]) => path.startsWith('/api/authorization/defaultAccess'))
+      .flatMap(([, item]) =>
+        Object.values(item ?? {}).map(
+          (operation) => (operation as { operationId?: string }).operationId,
+        ),
+      )
+      .sort();
+    expect(operations).toEqual(
+      [
+        'authorizationCreateDefaultAccessRule',
+        'authorizationDeleteDefaultAccessRule',
+        'authorizationListDefaultAccessRuleOptions',
+        'authorizationListDefaultAccessRuleRecords',
+        'authorizationListDefaultAccessRuleSubjects',
+        'authorizationListDefaultAccessRules',
+        'authorizationResolveDefaultAccessRuleSubjects',
+        'authorizationUpdateDefaultAccessRule',
+      ].sort(),
+    );
+    expect(
+      fragment.paths?.['/api/authorization/defaultAccess']?.post?.tags,
+    ).toEqual(['Authorization']);
+    expect(fragment.components?.schemas).toHaveProperty(
+      'AuthorizationDefaultAccessRule',
+    );
   });
 });
