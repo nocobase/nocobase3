@@ -7,6 +7,7 @@ import {
 } from '@nocobase/authorization/default-access';
 import {
   AUTHORIZATION_ERROR_DOMAIN,
+  assertRuleKeyAvailable,
   createRouteHandler,
   createRuleSupportRoutes,
   createSettingsRouter,
@@ -14,6 +15,7 @@ import {
   DataScopeRulePatchBody,
   parse,
   requireSettings,
+  rethrowRuleConflict,
   settingsAccess,
   RuleParams,
   validateDataScopeRule,
@@ -70,13 +72,15 @@ export function createDefaultAccessHandler(
       settings: DEFAULT_ACCESS_SETTINGS,
     }),
   );
+  // A bounded configuration list: every rule, with `meta.total`.
   routes.get(DEFAULT_ACCESS_PATH, async (context) => {
     await requireSettings(
       context.env.authorization,
       DEFAULT_ACCESS_SETTINGS,
       'read',
     );
-    return context.json({ data: await api.list() });
+    const rules = await api.list();
+    return context.json({ data: rules, meta: { total: rules.length } });
   });
   routes.post(
     DEFAULT_ACCESS_PATH,
@@ -84,7 +88,13 @@ export function createDefaultAccessHandler(
     validator('json', (value) => parseApiInput(DataScopeRuleBody, value)),
     async (context) => {
       const rule = checked(context.req.valid('json'));
-      return context.json({ data: await api.create(rule) }, 201);
+      await assertRuleKeyAvailable((key) => api.get(key), rule.key);
+      return context.json(
+        {
+          data: await api.create(rule).catch(rethrowRuleConflict(rule.key)),
+        },
+        201,
+      );
     },
   );
   routes.patch(
@@ -98,7 +108,11 @@ export function createDefaultAccessHandler(
         ...(await existing(key)),
         ...context.req.valid('json'),
       });
-      return context.json({ data: await api.update(key, rule) });
+      // A changed `key` renames the rule, and the new key must be free.
+      await assertRuleKeyAvailable((next) => api.get(next), rule.key, key);
+      return context.json({
+        data: await api.update(key, rule).catch(rethrowRuleConflict(rule.key)),
+      });
     },
   );
   routes.delete(

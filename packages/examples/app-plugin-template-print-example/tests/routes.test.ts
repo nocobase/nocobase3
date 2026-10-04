@@ -199,6 +199,15 @@ test('requires Sales Quotes access and renders only invoices linked to readable 
   await expect(denied.json()).resolves.toMatchObject({
     error: { status: 'PERMISSION_DENIED' },
   });
+  // Permission is decided before the path and query are validated.
+  for (const pathName of [
+    'invoices?pageSize=101',
+    'invoices/print-invoice-1/print?format=xlsx',
+    'invoices/not%20valid/print',
+  ]) {
+    const deniedInvalid = await fixture.request('delivery', pathName);
+    expect(deniedInvalid.status).toBe(403);
+  }
 
   const listResponse = await fixture.request('manager', 'invoices');
   expect(listResponse.status).toBe(200);
@@ -267,4 +276,35 @@ test('requires Sales Quotes access and renders only invoices linked to readable 
   expect(documentXml).toContain('Design and planning');
   expect(documentXml).toContain('Installation support');
   expect(documentXml).not.toContain('{d.lines[i]');
+});
+
+test('answers an invoice with more lines than the example prints as a failed precondition', async ({
+  database,
+}) => {
+  const fixture = await createFixture(database);
+  await fixture.database
+    .connection()
+    .query.insertInto('templatePrintExampleInvoiceLines')
+    .values(
+      Array.from({ length: 50 }, (_, index) => ({
+        id: `extra-line-${String(index).padStart(2, '0')}`,
+        invoiceId: 'print-invoice-1',
+        description: `Extra line ${index}`,
+        quantity: 1,
+        unitPriceCents: 100,
+      })),
+    )
+    .execute();
+  const response = await fixture.request(
+    'manager',
+    'invoices/print-invoice-1/print',
+  );
+  expect(response.status).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      status: 'FAILED_PRECONDITION',
+      reason: 'OUTPUT_LIMIT_EXCEEDED',
+      domain: 'templatePrintExample',
+    },
+  });
 });

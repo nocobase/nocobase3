@@ -1,9 +1,12 @@
+import type { AuthorizationEnv } from '@nocobase/app-plugin-authorization';
 import { ApiError } from '@nocobase/app-server/router';
+import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import {
   RepositoryError,
   type DatabaseManager,
   type RepositoryPolicy,
 } from '@nocobase/db';
+import type { MiddlewareHandler } from 'hono';
 
 export function writableRepository(
   database: DatabaseManager,
@@ -65,4 +68,32 @@ export function stateConflict(error: unknown): never {
     throw stateConflictError('Record changed during the operation.');
 
   throw error;
+}
+
+/** The Repository Policies a granted sales action carries, keyed by Collection. */
+export type SalesPolicies = Readonly<Record<string, RepositoryPolicy>>;
+
+export interface SalesActionEnv {
+  Variables: AuthorizationEnv['Variables'] & { salesPolicies: SalesPolicies };
+}
+
+/**
+ * Decide a sales composite action before anything about the request is looked at. Mounted ahead of `validator()`, so a
+ * caller without the action gets 403 whatever its input holds and whether or not the record exists; the handler reads
+ * the granted Policies from `c.var.salesPolicies`.
+ */
+export function authorizeSalesAction(
+  resourceId: string,
+  action: string,
+): MiddlewareHandler<SalesActionEnv> {
+  return async (c, next) => {
+    const decision = await c.var.authz.authorize({
+      resource: { type: 'composite', id: resourceId },
+      action,
+    });
+    if (decision.effect === 'deny' || !decision.conditions?.database)
+      throw new AuthorizationDeniedError(decision);
+    c.set('salesPolicies', decision.conditions.database);
+    await next();
+  };
 }

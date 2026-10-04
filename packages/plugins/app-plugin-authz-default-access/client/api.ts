@@ -13,6 +13,12 @@ export interface DefaultAccessRule {
     selection: RecordSelection;
   }[];
 }
+/**
+ * The records a picker offers: the first page at the largest size the endpoint allows. The endpoint pages, and
+ * `meta.total` says how many there are in all.
+ */
+const RECORD_PAGE = { pageSize: 100 } as const;
+
 class DefaultAccessClient {
   constructor(private readonly api: ApiClient) {}
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
@@ -48,11 +54,15 @@ class DefaultAccessClient {
   ): Promise<readonly AuthorizationRecordOption[]> {
     return this.get<readonly AuthorizationRecordOption[]>(
       `authorization/defaultAccess/records/${encodeURIComponent(collection)}`,
+      RECORD_PAGE,
     );
   }
-  private get<T>(path: string): Promise<T> {
+  private get<T>(
+    path: string,
+    query?: Readonly<Record<string, string | number>>,
+  ): Promise<T> {
     return this.api
-      .request<{ data: T }>({ path })
+      .request<{ data: T }>({ path, ...(query ? { query } : {}) })
       .then((response) => response.data);
   }
   private send<T>(

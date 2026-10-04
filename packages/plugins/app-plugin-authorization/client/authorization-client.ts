@@ -452,8 +452,10 @@ export class AuthorizationClient {
     path: string,
     collection: string,
   ): Promise<readonly AuthorizationRecordOption[]> {
+    // The first page at the largest size the endpoint allows; `meta.total` says how many there are in all.
     return this.get(
       `authorization/${path}/records/${encodeURIComponent(collection)}`,
+      { pageSize: 100 },
     );
   }
 
@@ -481,9 +483,12 @@ export class AuthorizationClient {
       .then((response) => response.data);
   }
 
-  private get<T>(path: string): Promise<T> {
+  private get<T>(
+    path: string,
+    query?: Readonly<Record<string, string | number>>,
+  ): Promise<T> {
     return this.api
-      .request<DataResponse<T>>({ path })
+      .request<DataResponse<T>>({ path, ...(query ? { query } : {}) })
       .then((response) => response.data);
   }
 

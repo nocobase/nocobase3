@@ -50,7 +50,7 @@ it('requires both scopes of the cross-region quote handover', async () => {
       await (await fixture.request('proposal', 'sales/quotes')).json()
     ).data;
     expect(
-      data.items.find((row: { id: string }) => row.id === 'quote-7').operations
+      data.find((row: { id: string }) => row.id === 'quote-7').operations
         .submit,
     ).toBe(scopeKey === 'quotes' ? 'projectScope' : 'quoteScope');
     expect(

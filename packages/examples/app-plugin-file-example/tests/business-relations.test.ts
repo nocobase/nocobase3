@@ -15,6 +15,7 @@ import { Hono } from 'hono';
 import core from '@nocobase/app-plugin-file/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import example from '../server/index.js';
+import { registerTestAuthentication, signedIn } from './authentication.js';
 import { migrations } from './fixtures.js';
 
 const disposers: (() => Promise<unknown>)[] = [];
@@ -43,6 +44,7 @@ async function fixture() {
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, db);
   container.instance(driveManagerToken, drive);
+  registerTestAuthentication(container, db);
   const app = { container, publicBasePath: '/main' } as AppPluginApplication;
   for (const Provider of core.serviceProviders) new Provider(app).register();
   const router = new Hono();
@@ -58,7 +60,7 @@ async function fixture() {
   ): Promise<Response> =>
     router.request(`/main/api/${name}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { ...signedIn, 'content-type': 'application/json' },
       body: JSON.stringify(values),
     });
   const upload = async (
@@ -69,7 +71,7 @@ async function fixture() {
     for (const file of files) body.append('file', file);
     const response = await router.request(
       `/main/api/${name}/${files.length === 1 ? 'uploadOne' : 'uploadMany'}`,
-      { method: 'POST', body },
+      { method: 'POST', headers: signedIn, body },
     );
     expect(response.status).toBe(201);
     const payload = (await response.json()) as {

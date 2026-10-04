@@ -8,7 +8,7 @@ import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import type { DatabaseManager, RepositoryPolicy } from '@nocobase/db';
 import { buildFilter } from '@nocobase/repository-input';
 import { ApiError, parseApiInput } from '@nocobase/app-server/router';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { validator } from 'hono/validator';
 import path from 'node:path';
 
@@ -56,18 +56,22 @@ interface InvoiceListItem extends InvoiceRecord {
   readonly sourceQuoteTitle: string;
 }
 
+interface TemplatePrintEnv {
+  Variables: AuthorizationEnv['Variables'] & { quotePolicy: RepositoryPolicy };
+}
+
 export function createTemplatePrintRoutes(
   database: DatabaseManager,
-): Hono<AuthorizationEnv> {
-  const router = new Hono<AuthorizationEnv>();
+): Hono<TemplatePrintEnv> {
+  const router = new Hono<TemplatePrintEnv>();
 
   router.get(
     '/invoices',
+    requireQuoteAccess(),
     validator('query', (value) => parseApiInput(ListInvoicesQuery, value)),
     async (context) => {
-      await requireQuotePageAccess(context.var.authz);
       const { page, pageSize } = context.req.valid('query');
-      const invoices = await visibleInvoices(database, context.var.authz);
+      const invoices = await visibleInvoices(database, context.var.quotePolicy);
       return context.json({
         data: invoices.slice((page - 1) * pageSize, page * pageSize),
         meta: { page, pageSize, total: invoices.length },
@@ -78,14 +82,14 @@ export function createTemplatePrintRoutes(
   // A download, so a GET answering the document's bytes rather than `{ data }`.
   router.get(
     '/invoices/:invoiceId/print',
+    requireQuoteAccess(),
     validator('param', (value) => parseApiInput(InvoiceParams, value)),
     validator('query', (value) => parseApiInput(PrintInvoiceQuery, value)),
     async (context) => {
-      await requireQuotePageAccess(context.var.authz);
       const { invoiceId } = context.req.valid('param');
       const { format } = context.req.valid('query');
 
-      const invoices = await visibleInvoices(database, context.var.authz);
+      const invoices = await visibleInvoices(database, context.var.quotePolicy);
       const invoice = invoices.find((item) => item.id === invoiceId);
       // An invoice whose quote the caller may not view is answered like a missing one.
       if (!invoice)
@@ -139,19 +143,25 @@ export function createTemplatePrintRoutes(
   return router;
 }
 
-async function requireQuotePageAccess(
+/**
+ * Decide access before anything about the request is looked at: the quotes page, then the quotes the caller may view.
+ * Mounted ahead of `validator()`, so a caller without access is answered 403 whatever its path and query hold.
+ */
+function requireQuoteAccess(): MiddlewareHandler<TemplatePrintEnv> {
+  return async (context, next) => {
+    const quotePolicy = await quoteViewPolicy(context.var.authz);
+    context.set('quotePolicy', quotePolicy);
+    await next();
+  };
+}
+
+async function quoteViewPolicy(
   authorization: AuthorizationContext,
-): Promise<void> {
+): Promise<RepositoryPolicy> {
   await authorization.require({
     resource: { type: 'page', id: QUOTE_PAGE },
     action: 'access',
   });
-}
-
-async function visibleInvoices(
-  database: DatabaseManager,
-  authorization: AuthorizationContext,
-): Promise<InvoiceListItem[]> {
   const decision = await authorization.authorize({
     resource: { type: 'composite', id: QUOTE_RESOURCE },
     action: 'view',
@@ -162,7 +172,13 @@ async function visibleInvoices(
   const quotePolicy = decision.conditions.database[QUOTES] as
     RepositoryPolicy | undefined;
   if (!quotePolicy?.read) throw new AuthorizationDeniedError(decision);
+  return quotePolicy;
+}
 
+async function visibleInvoices(
+  database: DatabaseManager,
+  quotePolicy: RepositoryPolicy,
+): Promise<InvoiceListItem[]> {
   const quotes = await database
     .repository<QuoteRecord>(QUOTES)
     .withPolicy(quotePolicy)
@@ -205,13 +221,13 @@ async function visibleInvoices(
   });
 }
 
+/** The request is fine; the data it would print is larger than the example renders, so this is a precondition. */
 function outputLimitExceeded(): ApiError {
   return new ApiError({
-    status: 'INVALID_ARGUMENT',
+    status: 'FAILED_PRECONDITION',
     reason: 'OUTPUT_LIMIT_EXCEEDED',
     domain: DOMAIN,
     message: 'The printed output exceeds the example limits.',
-    httpStatus: 413,
   });
 }
 

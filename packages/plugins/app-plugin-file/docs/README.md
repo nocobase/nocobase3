@@ -76,7 +76,7 @@ export default routes;
 
 这是全部 action 的配置示例，实际使用只保留需要的操作。`actions` 只决定开哪些端点，能做什么由必填的 `policy` 决定，它同样管上传。
 
-上传不接受调用方的任何字段（`store()` 自己合成全部值），所以上传路径绑定的是从这份 Policy 派生出来的一份：继承 `create.scope` 和 `create.defaults`，字段白名单换成文件表自己的九列。由此有三条：`create: false` 会连上传一起拒绝；`create.defaults` 里的 `{ ownerId }` 会写进上传出来的记录；`create.scope` 同样对上传生效，越界的写入回滚并清理已上传对象。要允许上传但不允许调用方自己造文件记录，就写一个不含 `fields` 的 `create` 节点，像上例那样。
+上传不接受调用方的任何字段（`store()` 自己合成全部值），所以上传路径绑定的是从这份 Policy 派生出来的一份：继承 `create.scope` 和 `create.defaults`，字段白名单换成文件表自己的九列。由此有三条：`create: false` 会连上传一起拒绝，而且在检查请求体大小、内容类型、读取 multipart 之前就以 `403 WRITE_FORBIDDEN`（domain `app`）拒绝，不会向存储写入任何内容；`create.defaults` 里的 `{ ownerId }` 会写进上传出来的记录；`create.scope` 同样对上传生效，越界的写入回滚并清理已上传对象。要允许上传但不允许调用方自己造文件记录，就写一个不含 `fields` 的 `create` 节点，像上例那样。
 
 `accessPath` 下的内容路由是有意的例外：它在 `/api` 之外、没有认证，Policy 不覆盖它。普通 action 复用 `defineRepositoryApiRoutes()` 的协议。
 

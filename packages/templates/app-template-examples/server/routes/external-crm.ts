@@ -1,6 +1,7 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import {
+  appErrorDomain,
   defineApiRoutes,
   defineRepositoryApiRoutes,
   type AppApiRouteContribution,
@@ -12,7 +13,8 @@ import { buildRepositoryPolicy, databaseManagerToken } from '@nocobase/db';
 
 import { databaseUnavailable } from './database-unavailable.js';
 
-const DOMAIN = 'externalCrm';
+// These stand in for Repository data endpoints, which the framework defines, so they answer in its domain.
+const DOMAIN = appErrorDomain;
 
 /**
  * The CRM owns its data. This application reads it — the database account a

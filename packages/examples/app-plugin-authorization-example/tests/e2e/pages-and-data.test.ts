@@ -313,12 +313,10 @@ it('reports per-record edit eligibility and input errors without mislabeling per
     await (await fixture.request('engineer', 'sales/projects')).json()
   ).data;
   expect(
-    data.items.find((row: { id: string }) => row.id === 'project-3').operations
-      .edit,
+    data.find((row: { id: string }) => row.id === 'project-3').operations.edit,
   ).toBe('outsideScope');
   expect(
-    data.items.find((row: { id: string }) => row.id === 'project-2').operations
-      .edit,
+    data.find((row: { id: string }) => row.id === 'project-2').operations.edit,
   ).toBe('allowed');
   expect(
     (
@@ -334,7 +332,7 @@ it('reports per-record edit eligibility and input errors without mislabeling per
     await (await fixture.request('engineer', 'sales/quotes')).json()
   ).data;
   expect(
-    quotes.items.find((row: { id: string }) => row.id === 'quote-2').operations
+    quotes.find((row: { id: string }) => row.id === 'quote-2').operations
       .submit,
   ).toBe('invalidAmount');
   expect(
@@ -426,7 +424,7 @@ it('lets engineers prepare their own quotes and requires an explicit handover to
 it('separates project-region and quote-preparer scopes through the real submit endpoint', async () => {
   const response = await fixture.request('engineer', 'sales/quotes');
   const body = (await response.json()).data;
-  expect(body.items).toEqual(
+  expect(body).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         id: 'quote-2',
@@ -487,18 +485,18 @@ it('grants independent page entries and keeps delivery-only accounts out of sale
       403,
     );
   }
-  const data = (
-    await (await fixture.request('delivery', 'sales/orders')).json()
-  ).data;
+  const { data, meta } = await (
+    await fixture.request('delivery', 'sales/orders')
+  ).json();
   expect(
-    data.items.every((row: { project?: unknown }) => row.project === undefined),
+    data.every((row: { project?: unknown }) => row.project === undefined),
   ).toBe(true);
-  expect(data.navigation).toEqual({
+  expect(meta.navigation).toEqual({
     projects: false,
     quotes: false,
     orders: true,
   });
-  expect(data.items).toEqual(
+  expect(data).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         id: 'order-2',
@@ -507,4 +505,84 @@ it('grants independent page entries and keeps delivery-only accounts out of sale
       }),
     ]),
   );
+});
+
+it('pages the sales lists and carries navigation in meta', async () => {
+  const response = await fixture.request(
+    'assistant',
+    'sales/projects?page=2&pageSize=2',
+  );
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.data.map((row: { id: string }) => row.id)).toEqual(['project-3']);
+  expect(body.meta).toMatchObject({
+    page: 2,
+    pageSize: 2,
+    total: 3,
+    navigation: { projects: true },
+  });
+  const tooLarge = await fixture.request(
+    'assistant',
+    'sales/projects?pageSize=101',
+  );
+  expect(tooLarge.status).toBe(400);
+  expect((await tooLarge.json()).error).toMatchObject({
+    reason: 'INVALID_INPUT',
+    fieldViolations: [expect.objectContaining({ field: 'pageSize' })],
+  });
+});
+
+it('decides permission before validating input or looking up the record', async () => {
+  // `delivery` holds no quote action at all, so malformed input and a missing quote both answer 403, not 400 or 404.
+  for (const [path, body, method] of [
+    ['sales/quotes/quote-1', { bogus: true }, 'PATCH'],
+    ['sales/quotes/no-such-quote', { amount: -1 }, 'PATCH'],
+    ['sales/quotes/quote-1/submit', { unexpected: 1 }, 'POST'],
+    ['sales/quotes?pageSize=not-a-number', undefined, 'GET'],
+  ] as const) {
+    const response = await fixture.request('delivery', path, body, method);
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.status).toBe('PERMISSION_DENIED');
+  }
+  // `engineer` may not deliver, so a blank reference is refused as 403 before the blank-reference check.
+  const deliver = await fixture.request(
+    'engineer',
+    'sales/orders/order-1/deliver',
+    { deliveryReference: ' ' },
+  );
+  expect(deliver.status).toBe(403);
+  // Nor manage relations: an unknown relation name is still 403.
+  const relations = await fixture.request(
+    'engineer',
+    'sales/orders/order-1/relations',
+    { notARelation: {} },
+    'PATCH',
+  );
+  expect(relations.status).toBe(403);
+});
+
+it('answers a submit of a quote without an amount as a failed precondition naming no request field', async () => {
+  expect(
+    (
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-2',
+        { amount: 0 },
+        'PATCH',
+      )
+    ).status,
+  ).toBe(200);
+  const response = await fixture.request(
+    'engineer',
+    'sales/quotes/quote-2/submit',
+    {},
+  );
+  expect(response.status).toBe(400);
+  const { error } = await response.json();
+  expect(error).toMatchObject({
+    status: 'FAILED_PRECONDITION',
+    reason: 'QUOTE_AMOUNT_REQUIRED',
+    domain: 'authorizationExample',
+  });
+  expect(error.fieldViolations).toBeUndefined();
 });

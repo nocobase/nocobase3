@@ -5,7 +5,8 @@ import type {
 import type { DatabaseManager } from '@nocobase/db';
 import { Hono } from 'hono';
 import { salesRecords } from '../sales-records.js';
-import { forbidden } from './mutations.js';
+import { ApiError } from '@nocobase/app-server/router';
+import { AUTHORIZATION_EXAMPLE_DOMAIN, forbidden } from './mutations.js';
 
 import { PROJECTS, QUOTES, ORDERS } from '../sales-authorization.js';
 
@@ -56,9 +57,13 @@ export function createPracticeRoutes(
           .where('username', '=', `sales_${key}`)
           .executeTakeFirst();
         if (!user || typeof user.id !== 'string')
-          throw new Error(
-            'Example accounts are missing; run application seeds first',
-          );
+          throw new ApiError({
+            status: 'FAILED_PRECONDITION',
+            reason: 'EXAMPLE_ACCOUNTS_MISSING',
+            domain: AUTHORIZATION_EXAMPLE_DOMAIN,
+            message:
+              'Example accounts are missing; run application seeds first.',
+          });
         users[key] = user.id;
       }
 

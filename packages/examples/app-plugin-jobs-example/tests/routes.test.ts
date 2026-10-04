@@ -2,6 +2,10 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -57,11 +61,33 @@ const deny = {
   required: () => (context) => context.json({ code: 'UNAUTHORIZED' }, 401),
 } as unknown as Auth;
 
-function application(authentication: Auth) {
+/** An authorization whose `require` grants `settings:jobsExample.schedules` `update` only when `permitted`. */
+function authorization(permitted: boolean) {
+  const require = vi.fn(async () => {
+    // Shaped like the library's `AuthorizationDeniedError`, which the framework answers by its status and reason.
+    if (!permitted)
+      throw Object.assign(new Error('Authorization denied'), {
+        status: 403,
+        reason: 'AUTHORIZATION_DENIED',
+        domain: 'authorization',
+      });
+  });
+  const authz = {
+    middleware: () => async (context, next) => {
+      context.set('authz', { require });
+      await next();
+    },
+  } as unknown as AppAuthorization;
+  return { authz, require };
+}
+
+function application(authentication: Auth, permitted: boolean = true) {
   const create = vi.fn(async () => TASK);
   const status = vi.fn(() => JOB);
   const container = new ServiceContainer();
   container.instance(authenticationToken, authentication);
+  const { authz, require } = authorization(permitted);
+  container.instance(authorizationToken, authz);
   const startRule = vi.fn(async (name: string) => {
     if (name === 'heartbeat')
       throw new ScheduleExampleError('BUILT_IN_RULE', 'built in');
@@ -86,7 +112,7 @@ function application(authentication: Auth) {
     router: new Hono(),
     container,
   };
-  return { app, create, status, startRule, stopRule };
+  return { app, create, status, startRule, stopRule, require };
 }
 
 describe('jobs example routes', () => {
@@ -96,7 +122,10 @@ describe('jobs example routes', () => {
     const response = await router.request('/jobsExample/rules');
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ data: SCHEDULE.rules });
+    await expect(response.json()).resolves.toEqual({
+      data: SCHEDULE.rules,
+      meta: { total: 1 },
+    });
   });
 
   it('starts a rule with an optional interval and stops it', async () => {
@@ -171,6 +200,51 @@ describe('jobs example routes', () => {
     expect(startRule).toHaveBeenCalledTimes(2);
   });
 
+  it('requires the schedules settings item to switch a rule, before validating the request', async () => {
+    const { app, startRule, stopRule } = application(allow, false);
+    const router = await apiRoutes.createRouter(app);
+
+    for (const [path, body] of [
+      ['/jobsExample/rules/interval/start', { every: 10_000 }],
+      ['/jobsExample/rules/interval/start', { every: -1, unknown: true }],
+      ['/jobsExample/rules/cron/stop', undefined],
+      ['/jobsExample/rules/missing/stop', undefined],
+    ] as const) {
+      const response = await router.request(path, {
+        method: 'POST',
+        ...(body === undefined
+          ? {}
+          : {
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            }),
+      });
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          status: 'PERMISSION_DENIED',
+          reason: 'AUTHORIZATION_DENIED',
+          domain: 'authorization',
+        },
+      });
+    }
+    expect(startRule).not.toHaveBeenCalled();
+    expect(stopRule).not.toHaveBeenCalled();
+    // Reading the rules needs no settings item.
+    expect((await router.request('/jobsExample/rules')).status).toBe(200);
+  });
+
+  it('checks settings:jobsExample.schedules update when switching a rule', async () => {
+    const { app, require } = application(allow);
+    const router = await apiRoutes.createRouter(app);
+
+    await router.request('/jobsExample/rules/cron/stop', { method: 'POST' });
+    expect(require).toHaveBeenCalledWith({
+      resource: { type: 'settings', id: 'jobsExample.schedules' },
+      action: 'update',
+    });
+  });
+
   it("returns the signed-in user's tasks", async () => {
     const { app, status } = application(allow);
     const router = await apiRoutes.createRouter(app);
@@ -178,7 +252,10 @@ describe('jobs example routes', () => {
     const response = await router.request('/jobsExample/tasks');
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ data: JOB.tasks });
+    await expect(response.json()).resolves.toEqual({
+      data: JOB.tasks,
+      meta: { total: 1 },
+    });
     expect(status).toHaveBeenCalledExactlyOnceWith('user-1');
   });
 

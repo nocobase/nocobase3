@@ -1,8 +1,12 @@
 export {
   AUTHORIZATION_ERROR_DOMAIN,
+  AuthorizationInputError,
+  assertRuleKeyAvailable,
   createRouteHandler,
   createSettingsRouter,
   requireSettings,
+  rethrowRuleConflict,
+  ruleAlreadyExists,
   settingsAccess,
   toAuthorizationApiError,
   type AuthorizationErrorTranslator,
@@ -18,10 +22,13 @@ export {
   DataScopeRulePatchBody,
   RecordSelectionInput,
   ReferenceInput,
+  RESERVED_RULE_KEYS,
   RuleActionInput,
+  RuleKeyInput,
   RuleParams,
   SubjectRuleBody,
   SubjectRulePatchBody,
+  SubjectsInput,
   TitleInput,
 } from './schemas.js';
 export {

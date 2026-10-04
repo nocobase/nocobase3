@@ -16,7 +16,7 @@ import {
   type ApiErrorStatus,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { validator } from 'hono/validator';
 
 import { DEPARTMENTS_SETTINGS } from '../resources.js';
@@ -44,8 +44,6 @@ interface DepartmentView extends Department {
     readonly description?: string;
   } | null;
 }
-
-type RouteContext = Context<AuthorizationEnv>;
 
 /** The plugin's URL namespace, which is also the domain of every error it reports. */
 export const DEPARTMENTS_EXAMPLE_DOMAIN = 'departmentsExample';
@@ -90,14 +88,21 @@ function toDepartmentsApiError(error: OrganizationError, c: Context): ApiError {
   });
 }
 
-async function requireSettings(
-  c: RouteContext,
+/**
+ * Require the Departments settings action before anything about the request is looked at. Mounted ahead of
+ * `validator()`, so a caller without it is answered 403 whatever its input holds and whether or not the department
+ * exists.
+ */
+function requireSettings(
   action: 'read' | 'update',
-): Promise<void> {
-  await c.get('authz').require({
-    resource: { type: 'settings', id: DEPARTMENTS_SETTINGS },
-    action,
-  });
+): MiddlewareHandler<AuthorizationEnv> {
+  return async (c, next) => {
+    await c.get('authz').require({
+      resource: { type: 'settings', id: DEPARTMENTS_SETTINGS },
+      action,
+    });
+    await next();
+  };
 }
 
 /** Drops the keys a client omitted, so an omitted field and an explicit `null` stay different. */
@@ -212,17 +217,19 @@ export function createOrganizationRoutes(
     parseApiInput(MemberParams, value),
   );
 
-  routes.get('/departments', async (c) => {
-    await requireSettings(c, 'read');
+  const read = requireSettings('read');
+  const update = requireSettings('update');
+
+  routes.get('/departments', read, async (c) => {
     const departments = await withManagers(await organization.listTree());
     return c.json({ data: departments, meta: { total: departments.length } });
   });
 
   routes.post(
     '/departments',
+    update,
     validator('json', (value) => parseApiInput(CreateDepartmentInput, value)),
     async (c) => {
-      await requireSettings(c, 'update');
       const department = await organization.createDepartment(
         defined(c.req.valid('json')),
       );
@@ -237,9 +244,9 @@ export function createOrganizationRoutes(
   // Candidates for a new membership: enabled users, searched and paged by the user directory.
   routes.get(
     '/memberCandidates',
+    update,
     validator('query', (value) => parseApiInput(MemberCandidatesQuery, value)),
     async (c) => {
-      await requireSettings(c, 'update');
       const { q, page, pageSize } = c.req.valid('query');
       const result = await users.list({
         page,
@@ -258,19 +265,23 @@ export function createOrganizationRoutes(
     },
   );
 
-  routes.get('/departments/:departmentId', departmentParams, async (c) => {
-    await requireSettings(c, 'read');
-    return c.json({
-      data: await departmentView(c.req.valid('param').departmentId),
-    });
-  });
+  routes.get(
+    '/departments/:departmentId',
+    read,
+    departmentParams,
+    async (c) => {
+      return c.json({
+        data: await departmentView(c.req.valid('param').departmentId),
+      });
+    },
+  );
 
   routes.patch(
     '/departments/:departmentId',
+    update,
     departmentParams,
     validator('json', (value) => parseApiInput(UpdateDepartmentInput, value)),
     async (c) => {
-      await requireSettings(c, 'update');
       const result = await organization.updateDepartment(
         c.req.valid('param').departmentId,
         defined(c.req.valid('json')),
@@ -290,9 +301,9 @@ export function createOrganizationRoutes(
   ] as const) {
     routes.post(
       `/departments/:departmentId/${verb}`,
+      update,
       departmentParams,
       async (c) => {
-        await requireSettings(c, 'update');
         const { departmentId } = c.req.valid('param');
         await refreshUsers(await organization.setActive(departmentId, active));
         return c.json({ data: await departmentView(departmentId) });
@@ -302,9 +313,9 @@ export function createOrganizationRoutes(
 
   routes.get(
     '/departments/:departmentId/members',
+    read,
     departmentParams,
     async (c) => {
-      await requireSettings(c, 'read');
       const members = await organization.directMembers(
         c.req.valid('param').departmentId,
       );
@@ -314,10 +325,10 @@ export function createOrganizationRoutes(
 
   routes.post(
     '/departments/:departmentId/members',
+    update,
     departmentParams,
     validator('json', (value) => parseApiInput(AddMemberInput, value)),
     async (c) => {
-      await requireSettings(c, 'update');
       const { departmentId } = c.req.valid('param');
       const input = c.req.valid('json');
       await refreshUsers(
@@ -332,9 +343,9 @@ export function createOrganizationRoutes(
 
   routes.delete(
     '/departments/:departmentId/members/:userId',
+    update,
     memberParams,
     async (c) => {
-      await requireSettings(c, 'update');
       const { departmentId, userId } = c.req.valid('param');
       await refreshUsers(await organization.removeMember(departmentId, userId));
       return c.body(null, 204);
@@ -343,9 +354,9 @@ export function createOrganizationRoutes(
 
   routes.post(
     '/departments/:departmentId/members/:userId/makePrimary',
+    update,
     memberParams,
     async (c) => {
-      await requireSettings(c, 'update');
       const { departmentId, userId } = c.req.valid('param');
       await refreshUsers(await organization.setPrimary(departmentId, userId));
       return c.json({ data: await memberView(departmentId, userId) });

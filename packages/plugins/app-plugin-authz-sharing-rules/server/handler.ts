@@ -6,11 +6,13 @@ import type {
 } from '@nocobase/authorization/sharing-rules';
 import {
   AUTHORIZATION_ERROR_DOMAIN,
+  assertRuleKeyAvailable,
   createRouteHandler,
   createRuleSupportRoutes,
   createSettingsRouter,
   parse,
   requireSettings,
+  rethrowRuleConflict,
   settingsAccess,
   RuleParams,
   SubjectRuleBody,
@@ -57,21 +59,27 @@ export function createSharingRulesHandler(
       settings: SHARING_RULES_SETTINGS,
     }),
   );
+  // A bounded configuration list: every rule, with `meta.total`.
   routes.get(SHARING_RULES_PATH, async (context) => {
     await requireSettings(
       context.env.authorization,
       SHARING_RULES_SETTINGS,
       'read',
     );
-    return context.json({ data: await api.list() });
+    const rules = await api.list();
+    return context.json({ data: rules, meta: { total: rules.length } });
   });
   routes.post(
     SHARING_RULES_PATH,
     settingsAccess(SHARING_RULES_SETTINGS, 'create'),
     validator('json', (value) => parseApiInput(SubjectRuleBody, value)),
     async (context) => {
+      const rule = checked(context.req.valid('json'));
+      await assertRuleKeyAvailable((key) => api.get(key), rule.key);
       return context.json(
-        { data: await api.create(checked(context.req.valid('json'))) },
+        {
+          data: await api.create(rule).catch(rethrowRuleConflict(rule.key)),
+        },
         201,
       );
     },
@@ -87,7 +95,11 @@ export function createSharingRulesHandler(
         ...(await existing(key)),
         ...context.req.valid('json'),
       });
-      return context.json({ data: await api.update(key, rule) });
+      // A changed `key` renames the rule, and the new key must be free.
+      await assertRuleKeyAvailable((next) => api.get(next), rule.key, key);
+      return context.json({
+        data: await api.update(key, rule).catch(rethrowRuleConflict(rule.key)),
+      });
     },
   );
   routes.delete(

@@ -113,7 +113,11 @@ export function createPermissionSetHandler(
       const sets = principal
         ? await api.getEffective({ principal })
         : await api.list();
-      return context.json({ data: sets.map((set) => summarize(api, set)) });
+      // A bounded configuration list: every matching Permission Set, with `meta.total`.
+      return context.json({
+        data: sets.map((set) => summarize(api, set)),
+        meta: { total: sets.length },
+      });
     },
   );
   routes.post(
@@ -137,7 +141,11 @@ export function createPermissionSetHandler(
     async (context) => {
       const { key } = context.req.valid('param');
       if (!(await api.get(key))) throw notFound(key);
-      return context.json({ data: await api.listAssignments(key) });
+      const assignments = await api.listAssignments(key);
+      return context.json({
+        data: assignments,
+        meta: { total: assignments.length },
+      });
     },
   );
   routes.post(

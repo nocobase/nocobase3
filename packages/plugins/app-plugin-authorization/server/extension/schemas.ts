@@ -16,6 +16,45 @@ export const ReferenceInput: Strict<{ type: z.ZodString; id: z.ZodString }> =
     id: z.string().trim().min(1),
   });
 
+/**
+ * The fixed path segments a rule plugin registers beside `/:key` (`<path>/options`, `<path>/subjects/...` and
+ * `<path>/records/...`). A rule keyed by one of them could not be addressed, so create and rename refuse them.
+ */
+export const RESERVED_RULE_KEYS: readonly string[] = Object.freeze([
+  'options',
+  'subjects',
+  'records',
+]);
+
+/** A rule key: non-blank, and not one of `RESERVED_RULE_KEYS`. */
+export const RuleKeyInput: z.ZodString = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((key) => !RESERVED_RULE_KEYS.includes(key), {
+    message: `Must not be one of the reserved keys: ${RESERVED_RULE_KEYS.join(', ')}.`,
+  });
+
+/**
+ * The subjects a rule applies to. A subject listed twice is refused rather than collapsed, so the stored rule is
+ * exactly what the administrator sent; the violation names the repeated entry, such as `subjects.2`.
+ */
+export const SubjectsInput: z.ZodArray<typeof ReferenceInput> = z
+  .array(ReferenceInput)
+  .superRefine((subjects, context) => {
+    const seen = new Set<string>();
+    for (const [index, subject] of subjects.entries()) {
+      const id = JSON.stringify([subject.type, subject.id]);
+      if (seen.has(id))
+        context.addIssue({
+          code: 'custom',
+          path: [index],
+          message: `Subject ${subject.type}:${subject.id} is listed more than once.`,
+        });
+      seen.add(id);
+    }
+  });
+
 /** Plain text, or a translation descriptor rendered in the reader's language. */
 export const TitleInput: z.ZodUnion<
   readonly [z.ZodString, Strict<{ key: z.ZodString; ns: z.ZodString }>]
@@ -68,7 +107,7 @@ export const DataScopeRuleBody: Strict<{
   resource: typeof ReferenceInput;
   actions: z.ZodArray<typeof RuleActionInput>;
 }> = z.strictObject({
-  key: z.string().trim().min(1),
+  key: RuleKeyInput,
   resource: ReferenceInput,
   actions: z.array(RuleActionInput),
 });
@@ -79,7 +118,7 @@ export const DataScopeRulePatchBody: Strict<{
   resource: z.ZodOptional<typeof ReferenceInput>;
   actions: z.ZodOptional<z.ZodArray<typeof RuleActionInput>>;
 }> = z.strictObject({
-  key: z.string().trim().min(1).optional(),
+  key: RuleKeyInput.optional(),
   resource: ReferenceInput.optional(),
   actions: z.array(RuleActionInput).optional(),
 });
@@ -93,11 +132,11 @@ export const SubjectRuleBody: Strict<{
   subjects: z.ZodArray<typeof ReferenceInput>;
   reason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }> = z.strictObject({
-  key: z.string().trim().min(1),
+  key: RuleKeyInput,
   title: TitleInput.nullable().optional(),
   resource: ReferenceInput,
   actions: z.array(RuleActionInput),
-  subjects: z.array(ReferenceInput),
+  subjects: SubjectsInput,
   reason: z.string().nullable().optional(),
 });
 
@@ -110,11 +149,11 @@ export const SubjectRulePatchBody: Strict<{
   subjects: z.ZodOptional<z.ZodArray<typeof ReferenceInput>>;
   reason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }> = z.strictObject({
-  key: z.string().trim().min(1).optional(),
+  key: RuleKeyInput.optional(),
   title: TitleInput.nullable().optional(),
   resource: ReferenceInput.optional(),
   actions: z.array(RuleActionInput).optional(),
-  subjects: z.array(ReferenceInput).optional(),
+  subjects: SubjectsInput.optional(),
   reason: z.string().nullable().optional(),
 });
 
@@ -146,6 +185,15 @@ export const ResolveSubjectsBody: Strict<{
 
 export const RecordsParams: Stripped<{ collection: z.ZodString }> = z.object({
   collection: z.string().min(1),
+});
+
+/** A page of a Collection's records for a record picker. */
+export const RecordsQuery: Stripped<{
+  page: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+  pageSize: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+}> = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type DataScopeRuleBody = z.infer<typeof DataScopeRuleBody>;

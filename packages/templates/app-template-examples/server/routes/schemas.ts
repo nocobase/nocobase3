@@ -36,19 +36,63 @@ export const UpdateArticleInput = z.strictObject({
 });
 export type UpdateArticleInput = z.infer<typeof UpdateArticleInput>;
 
+/** The columns `orderBy` may name on `GET /api/numericExamples`. */
+export const numericOrderFields = [
+  'id',
+  'integerValue',
+  'bigintValue',
+  'decimalValue',
+  'floatValue',
+  'doubleValue',
+] as const;
+export type NumericOrderField = (typeof numericOrderFields)[number];
+export interface NumericOrder {
+  readonly field: NumericOrderField;
+  readonly direction: 'asc' | 'desc';
+}
+
+const orderByItem = /^([A-Za-z][A-Za-z0-9]*)(?: +(desc))?$/u;
+
+/**
+ * `orderBy` in AIP-132 form: a comma-separated list of field names, each optionally followed by ` desc`, such as
+ * `decimalValue desc,id`. Each name must be one of `numericOrderFields`, and none may repeat.
+ */
+export const NumericOrderBy = z
+  .string()
+  .default('id')
+  .transform((value, context): NumericOrder[] => {
+    const orders: NumericOrder[] = [];
+    for (const item of value.split(',').map((part) => part.trim())) {
+      const match = orderByItem.exec(item);
+      const field = match?.[1];
+      if (
+        !field ||
+        !(numericOrderFields as readonly string[]).includes(field)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: `Expected a field among ${numericOrderFields.join(', ')}, optionally followed by " desc"; got "${item}".`,
+        });
+        return z.NEVER;
+      }
+      if (orders.some((order) => order.field === field)) {
+        context.addIssue({
+          code: 'custom',
+          message: `${field} is named more than once.`,
+        });
+        return z.NEVER;
+      }
+      orders.push({
+        field: field as NumericOrderField,
+        direction: match[2] ? 'desc' : 'asc',
+      });
+    }
+    return orders;
+  });
+
 export const NumericExamplesQuery = z.object({
   source: z.enum(['query', 'repository']).default('query'),
   sample: z.enum(['all', 'null', 'empty']).default('all'),
-  sortField: z
-    .enum([
-      'id',
-      'integerValue',
-      'bigintValue',
-      'decimalValue',
-      'floatValue',
-      'doubleValue',
-    ])
-    .default('id'),
-  sortDirection: z.enum(['asc', 'desc']).default('asc'),
+  orderBy: NumericOrderBy,
 });
 export type NumericExamplesQuery = z.infer<typeof NumericExamplesQuery>;

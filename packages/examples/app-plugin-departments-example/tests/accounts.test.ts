@@ -111,10 +111,10 @@ describe('the seeded demo accounts', () => {
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      data: { items: { id: string; operations: { deliver: string } }[] };
+      data: { id: string; operations: { deliver: string } }[];
     };
     expect(
-      body.data.items
+      body.data
         .map((item) => [item.id, item.operations.deliver])
         .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
     ).toEqual([
@@ -128,12 +128,10 @@ describe('the seeded demo accounts', () => {
       { cookie: cookies.nina ?? '' },
     );
     const ninaBody = (await nina.json()) as {
-      data: { items: { operations: { deliver: string } }[] };
+      data: { operations: { deliver: string } }[];
     };
     expect(
-      ninaBody.data.items.every(
-        (item) => item.operations.deliver !== 'allowed',
-      ),
+      ninaBody.data.every((item) => item.operations.deliver !== 'allowed'),
     ).toBe(true);
   });
 

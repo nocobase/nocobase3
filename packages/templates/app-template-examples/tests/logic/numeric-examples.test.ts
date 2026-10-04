@@ -146,13 +146,20 @@ it('requires authentication, validates options, and exposes no writes', async ()
     },
   });
   expect((await request('query', 'unknown')).status).toBe(400);
-  expect(
-    (
-      await router.request('/main/api/numericExamples?sortField=sample', {
-        headers: { 'x-test-user': 'tester' },
-      })
-    ).status,
-  ).toBe(400);
+  // `orderBy` is AIP-132: known fields only, each at most once, ` desc` the only suffix.
+  for (const orderBy of ['sample', 'id asc', 'id desc,id', 'id,', '-id']) {
+    const refused = await router.request(
+      `/main/api/numericExamples?orderBy=${encodeURIComponent(orderBy)}`,
+      { headers: { 'x-test-user': 'tester' } },
+    );
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: 'orderBy' })],
+      },
+    });
+  }
   expect(
     (
       await router.request('/main/api/numericExamples', {
@@ -171,7 +178,7 @@ it('requires authentication, validates options, and exposes no writes', async ()
     error: {
       status: 'UNAVAILABLE',
       reason: 'DATABASE_UNAVAILABLE',
-      domain: 'numericExamples',
+      domain: 'examples',
     },
   });
 });
@@ -268,5 +275,26 @@ it.each(['query', 'repository'])(
         min: null,
         max: null,
       });
+  },
+);
+
+it.each(['query', 'repository'])(
+  'orders by every key of an AIP-132 orderBy through %s',
+  async (sourceName) => {
+    await database.createSeeder(source('seeds')).run();
+    const response = await router.request(
+      `/main/api/numericExamples?source=${sourceName}&orderBy=${encodeURIComponent('integerValue desc,id')}`,
+      { headers: { 'x-test-user': 'tester' } },
+    );
+    expect(response.status).toBe(200);
+    const { rows } = (await response.json()).data as {
+      rows: { id: number | string; integerValue: number | null }[];
+    };
+    const ranked = rows.filter((row) => row.integerValue !== null);
+    expect(ranked.map((row) => row.integerValue)).toEqual(
+      [...ranked.map((row) => row.integerValue)].sort(
+        (left, right) => (right ?? 0) - (left ?? 0),
+      ),
+    );
   },
 );

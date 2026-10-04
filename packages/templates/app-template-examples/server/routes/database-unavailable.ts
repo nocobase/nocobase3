@@ -3,7 +3,8 @@ import type { Context } from 'hono';
 
 /**
  * The answer every database-backed route gives while the application runs without a database, so the rest of the
- * application stays usable and no data is exposed. `domain` is the namespace of the route answering.
+ * application stays usable and no data is exposed. `domain` is that of the route answering: the application's own for a
+ * route it wrote, and `app` for a Repository data endpoint, which the framework defines.
  */
 export function databaseUnavailable(
   context: Context,

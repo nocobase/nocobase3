@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import {
   ApiError,
+  appErrorDomain,
   defineApiRoutes,
   defineRootRoutes,
   defineRepositoryApiRoutes,
@@ -204,8 +205,41 @@ export function defineFileRepositoryApiRoutes<P = unknown>(
         for (const action of ['uploadOne', 'uploadMany'] as const) {
           const config = entry[action];
           if (config === undefined) continue;
+          // Permission comes first: the principal and the exposure's `create` Policy are decided before the size
+          // limit, the content type or the multipart body is looked at, so a refused caller learns nothing about its
+          // input and nothing is ever written to storage on its behalf. The Repository that step binds reaches the
+          // handler through the request's own Context, which every handler in the chain shares.
+          const authorized = new WeakMap<Context, ServerFileRepository>();
           router.post(
             `/${entry.name}/${action}`,
+            async (c, next) => {
+              // The exposure's own Policy governs an upload, so a Policy that reads the principal has to be built
+              // here rather than when the router was.
+              let policy: RepositoryPolicy;
+              if (typeof entry.policy === 'function') {
+                const principal = await options.principal?.(c);
+                if (principal === undefined || principal === null)
+                  throw uploadError(
+                    'PERMISSION_DENIED',
+                    'PRINCIPAL_REQUIRED',
+                    'This endpoint requires a principal and none was resolved.',
+                  );
+                policy = entry.policy(principal);
+              } else {
+                policy = entry.policy;
+              }
+              // The Repository would refuse the row too, but only after the object had been stored and then removed
+              // again. The reason is the Repository's own, so a client sees the same refusal either way.
+              if (policy.create === false)
+                throw new ApiError({
+                  status: 'PERMISSION_DENIED',
+                  reason: 'WRITE_FORBIDDEN',
+                  domain: appErrorDomain,
+                  message: 'create is forbidden by Policy.',
+                });
+              authorized.set(c, resolve(app, entry, policy));
+              await next();
+            },
             bodyLimit({
               maxSize:
                 config.maxSize ??
@@ -222,22 +256,9 @@ export function defineFileRepositoryApiRoutes<P = unknown>(
                 ),
             }),
             async (c) => {
-              // The exposure's own Policy governs an upload, so a Policy that
-              // reads the principal has to be built here rather than when the
-              // router was.
-              let writable: ServerFileRepository;
-              if (typeof entry.policy === 'function') {
-                const principal = await options.principal?.(c);
-                if (principal === undefined || principal === null)
-                  throw uploadError(
-                    'PERMISSION_DENIED',
-                    'PRINCIPAL_REQUIRED',
-                    'This endpoint requires a principal and none was resolved.',
-                  );
-                writable = resolve(app, entry, entry.policy(principal));
-              } else {
-                writable = resolve(app, entry, entry.policy);
-              }
+              const writable = authorized.get(c);
+              if (!writable)
+                throw new Error('Upload reached its handler unauthorized.');
               if (
                 !c.req
                   .header('content-type')

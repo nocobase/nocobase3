@@ -1,6 +1,7 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import {
+  appErrorDomain,
   defineApiRoutes,
   defineRepositoryApiRoutes,
   type AppApiRouteContribution,
@@ -12,7 +13,8 @@ import { buildRepositoryPolicy, databaseManagerToken } from '@nocobase/db';
 
 import { databaseUnavailable } from './database-unavailable.js';
 
-const DOMAIN = 'analytics';
+// These stand in for Repository data endpoints, which the framework defines, so they answer in its domain.
+const DOMAIN = appErrorDomain;
 
 const actions: RepositoryApiActions = {
   findMany: { maxLimit: 100 },

@@ -14,12 +14,22 @@ vi.mock('@nocobase/app-client', () => ({
   useService: () => api,
 }));
 vi.mock('../client/pages/use-example.js', () => ({
-  useExample: (path: string) => ({
-    loading: false,
-    error: '',
-    reload: vi.fn(),
-    data: path.endsWith('/relations')
-      ? {
+  useExample: (requested: string) => {
+    const path = requested.split('?')[0]!;
+    const body = examples(path);
+    return {
+      loading: false,
+      error: '',
+      reload: vi.fn(),
+      data: body.data,
+      meta: body.meta,
+    };
+  },
+}));
+function examples(path: string): { data: unknown; meta?: unknown } {
+  return path.endsWith('/relations')
+    ? {
+        data: {
           id: 'o1',
           title: 'Harbor order',
           access: 'allowed',
@@ -35,50 +45,54 @@ vi.mock('../client/pages/use-example.js', () => ({
           carrier: null,
           checks: [],
           collaborators: [],
+        },
+      }
+    : path === 'sales/projects'
+      ? {
+          data: [
+            {
+              id: 'p1',
+              title: 'Harbor',
+              notes: 'Qualified',
+              operations: { edit: 'allowed' },
+            },
+          ],
         }
-      : path === 'sales/projects'
+      : path === 'sales/quotes'
         ? {
-            items: [
+            data: [
               {
-                id: 'p1',
-                title: 'Harbor',
-                notes: 'Qualified',
-                operations: { edit: 'allowed' },
+                id: 'q1',
+                title: 'Harbor quote',
+                projectId: 'p1',
+                preparedByName: 'Alex Chen',
+                operations: { edit: 'allowed', submit: 'allowed' },
+                notes: 'Draft',
+                amount: 100,
+                status: 'draft',
               },
             ],
-          }
-        : path === 'sales/quotes'
-          ? {
-              items: [
-                {
-                  id: 'q1',
-                  title: 'Harbor quote',
-                  projectId: 'p1',
-                  preparedByName: 'Alex Chen',
-                  operations: { edit: 'allowed', submit: 'allowed' },
-                  notes: 'Draft',
-                  amount: 100,
-                  status: 'draft',
-                },
-              ],
+            meta: {
               navigation: { projects: true, quotes: true, orders: true },
-            }
-          : {
-              items: [
-                {
-                  id: 'o1',
-                  title: 'Harbor order',
-                  projectId: 'p1',
-                  quoteId: 'q1',
-                  status: 'ready',
-                  deliveryReference: '',
-                  operations: { deliver: 'allowed' },
-                },
-              ],
+            },
+          }
+        : {
+            data: [
+              {
+                id: 'o1',
+                title: 'Harbor order',
+                projectId: 'p1',
+                quoteId: 'q1',
+                status: 'ready',
+                deliveryReference: '',
+                operations: { deliver: 'allowed' },
+              },
+            ],
+            meta: {
               navigation: { projects: false, quotes: false, orders: true },
             },
-  }),
-}));
+          };
+}
 import SalesPage from '../client/pages/sales-page.js';
 import enUS from '../client/locales/en-US.js';
 import {

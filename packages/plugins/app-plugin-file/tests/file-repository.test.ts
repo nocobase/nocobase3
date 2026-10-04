@@ -437,28 +437,56 @@ describe('server repository and Client API', () => {
     expect(rows).toHaveLength(1);
   });
   it('refuses a create the Policy does not grant and does not expose unconfigured actions', async () => {
-    const { client, router } = await fixture({
+    const { client, router, drive, root } = await fixture({
       policy: {
         read: true,
         create: false,
         update: true,
         delete: true,
       },
+      actions: { createOne: {}, uploadOne: { maxSize: 512 }, uploadMany: {} },
     });
     await expect(client.createOne({ values: {} })).rejects.toMatchObject({
       reason: 'WRITE_FORBIDDEN',
     });
-    // An upload creates a record too, so the same refusal answers 403 rather than an opaque 500.
-    const body = new FormData();
-    body.append('file', file());
-    const upload = await router.request('/main/api/attachments/uploadOne', {
+    const put = vi.spyOn(drive.use('local'), 'putStream');
+    // An upload creates a record too, so the same refusal answers 403 rather than an opaque 500, and it is decided
+    // before the body is read: nothing reaches storage, not even an object that would be removed again.
+    for (const action of ['uploadOne', 'uploadMany']) {
+      const body = new FormData();
+      body.append('file', file());
+      const upload = await router.request(`/main/api/attachments/${action}`, {
+        method: 'POST',
+        body,
+      });
+      expect(upload.status).toBe(403);
+      expect(await upload.json()).toMatchObject({
+        error: {
+          status: 'PERMISSION_DENIED',
+          reason: 'WRITE_FORBIDDEN',
+          domain: 'app',
+        },
+      });
+    }
+    // Permission precedes validation: an oversized body or a wrong content type is still refused as 403.
+    const oversized = new FormData();
+    oversized.append('file', file('large.txt', 'x'.repeat(1024)));
+    const tooLarge = await router.request('/main/api/attachments/uploadOne', {
       method: 'POST',
-      body,
+      body: oversized,
     });
-    expect(upload.status).toBe(403);
-    expect(await upload.json()).toMatchObject({
-      error: { status: 'PERMISSION_DENIED', reason: 'WRITE_FORBIDDEN' },
-    });
+    expect(tooLarge.status).toBe(403);
+    const notMultipart = await router.request(
+      '/main/api/attachments/uploadOne',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
+    expect(notMultipart.status).toBe(403);
+    expect(put).not.toHaveBeenCalled();
+    await expect(readdir(root)).resolves.not.toContain('objects');
     expect(
       (
         await router.request('/main/api/attachments/createMany', {

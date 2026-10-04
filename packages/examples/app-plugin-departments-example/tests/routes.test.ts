@@ -113,6 +113,10 @@ describe('organization routes', () => {
       // Permission comes before existence: a department that does not exist is still a 403.
       ['POST', `${BASE}/departments/nope/members`, { userId: reader.id }],
       ['PATCH', `${BASE}/departments/nope`, { title: 'Reader' }],
+      // And before validation: input the validator would refuse is still a 403.
+      ['POST', `${BASE}/departments`, { unknownField: true }],
+      ['PATCH', `${BASE}/departments/rt-root`, { title: 42 }],
+      ['POST', `${BASE}/departments/rt-root/members`, {}],
     ] as const)
       expect(
         (
@@ -122,13 +126,14 @@ describe('organization routes', () => {
           })
         ).status,
       ).toBe(403);
-    expect(
-      (
-        await test.request('GET', `${BASE}/memberCandidates`, {
-          cookie: reader.cookie,
-        })
-      ).status,
-    ).toBe(403);
+    for (const query of ['', '?pageSize=1000'])
+      expect(
+        (
+          await test.request('GET', `${BASE}/memberCandidates${query}`, {
+            cookie: reader.cookie,
+          })
+        ).status,
+      ).toBe(403);
   });
 
   it('lets update write, and validates input', async () => {

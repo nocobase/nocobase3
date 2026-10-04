@@ -239,7 +239,7 @@ describe('external CRM example', () => {
       error: {
         status: 'UNAVAILABLE',
         reason: 'DATABASE_UNAVAILABLE',
-        domain: 'externalCrm',
+        domain: 'app',
       },
     });
   });

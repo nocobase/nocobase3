@@ -1,4 +1,3 @@
-import type { AuthorizationEnv } from '@nocobase/app-plugin-authorization';
 import type {
   DatabaseManager,
   RepositoryRecord,
@@ -7,12 +6,13 @@ import type {
 import { ApiError, parseApiInput } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 import { validator } from 'hono/validator';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 
 import { ORDERS } from '../sales-authorization.js';
 import {
   AUTHORIZATION_EXAMPLE_DOMAIN,
+  authorizeSalesAction,
   forbidden,
+  type SalesActionEnv,
   stateConflict,
   stateConflictError,
   writableRepository,
@@ -25,24 +25,18 @@ import {
 
 export function createOrderRoutes(
   database: DatabaseManager,
-): Hono<AuthorizationEnv> {
-  const router = new Hono<AuthorizationEnv>();
+): Hono<SalesActionEnv> {
+  const router = new Hono<SalesActionEnv>();
 
   router.get(
     '/sales/orders/:orderId/relations',
+    authorizeSalesAction('example.sales.orders', 'view'),
     validator('param', (value) => parseApiInput(OrderParams, value)),
     async (c) => {
       const { orderId } = c.req.valid('param');
-      const decision = await c.var.authz.authorize({
-        resource: { type: 'composite', id: 'example.sales.orders' },
-        action: 'view',
-      });
-      if (decision.effect === 'deny' || !decision.conditions?.database)
-        throw new AuthorizationDeniedError(decision);
-
       const order = await database
         .repository(ORDERS)
-        .withPolicy(decision.conditions.database[ORDERS])
+        .withPolicy(c.var.salesPolicies[ORDERS])
         .findOne({
           filter: { id: orderId },
           select: (select) =>
@@ -139,6 +133,7 @@ export function createOrderRoutes(
 
   router.patch(
     '/sales/orders/:orderId/relations',
+    authorizeSalesAction('example.sales.orders', 'manageRelations'),
     validator('param', (value) => parseApiInput(OrderParams, value)),
     validator('json', (value) =>
       parseApiInput(UpdateOrderRelationsInput, value),
@@ -146,14 +141,7 @@ export function createOrderRoutes(
     async (c) => {
       const { orderId } = c.req.valid('param');
       const values = c.req.valid('json');
-      const decision = await c.var.authz.authorize({
-        resource: { type: 'composite', id: 'example.sales.orders' },
-        action: 'manageRelations',
-      });
-      if (decision.effect === 'deny' || !decision.conditions?.database)
-        throw new AuthorizationDeniedError(decision);
-
-      const policy = decision.conditions.database[ORDERS];
+      const policy = c.var.salesPolicies[ORDERS];
 
       const order = await writableRepository(
         database,
@@ -173,7 +161,7 @@ export function createOrderRoutes(
 
       const { record } = await database
         .repository(ORDERS)
-        .withPolicy(decision.conditions.database[ORDERS])
+        .withPolicy(policy)
         .updateOne({
           filter: { id: orderId, status: 'ready' },
           values: values as UpdateMutationValues<Partial<RepositoryRecord>>,
@@ -185,6 +173,7 @@ export function createOrderRoutes(
 
   router.post(
     '/sales/orders/:orderId/deliver',
+    authorizeSalesAction('example.sales.orders', 'deliver'),
     validator('param', (value) => parseApiInput(OrderParams, value)),
     validator('json', (value) => parseApiInput(DeliverOrderInput, value)),
     async (c) => {
@@ -200,14 +189,7 @@ export function createOrderRoutes(
             { field: 'deliveryReference', description: 'Must not be blank.' },
           ],
         });
-      const decision = await c.var.authz.authorize({
-        resource: { type: 'composite', id: 'example.sales.orders' },
-        action: 'deliver',
-      });
-      if (decision.effect === 'deny' || !decision.conditions?.database)
-        throw new AuthorizationDeniedError(decision);
-
-      const policy = decision.conditions.database[ORDERS];
+      const policy = c.var.salesPolicies[ORDERS];
 
       const order = await writableRepository(database, ORDERS, policy, [
         'status',

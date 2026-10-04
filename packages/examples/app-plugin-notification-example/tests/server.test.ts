@@ -70,9 +70,17 @@ it('sends task summaries to the related people', async () => {
   });
   expect(createdResponse.status).toBe(201);
   const created = (await createdResponse.json()) as {
-    data: { id: string; assigneeId: string };
+    data: {
+      id: string;
+      assigneeId: string;
+      createdAt: string;
+      updatedAt: string;
+    };
   };
   expect(created.data.assigneeId).toBe('u2');
+  // Times are RFC 3339 UTC timestamps, zone designator included.
+  for (const time of [created.data.createdAt, created.data.updatedAt])
+    expect(time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
   expect(sent).toHaveBeenCalledWith(
     expect.objectContaining({
       messages: {
@@ -290,9 +298,10 @@ it('does not expose or accept disabled and deleted users as assignees', async ()
 
   const usersResponse = await request(router, 'GET', 'u1', '/assignees');
   expect(usersResponse.status).toBe(200);
-  expect(
-    ((await usersResponse.json()) as { data: Array<{ id: string }> }).data,
-  ).toEqual([{ id: 'u1', name: 'Creator', email: 'creator@example.test' }]);
+  expect(await usersResponse.json()).toEqual({
+    data: [{ id: 'u1', name: 'Creator', email: 'creator@example.test' }],
+    meta: { total: 1 },
+  });
 
   for (const assigneeId of ['u2', 'u3']) {
     const response = await request(router, 'POST', 'u1', '/tasks', {

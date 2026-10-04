@@ -1072,9 +1072,15 @@ importers:
 
   packages/examples/app-plugin-file-example:
     dependencies:
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-authentication
       '@silurus/ooxml':
         specifier: 0.85.1
         version: 0.85.1
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -1127,9 +1133,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
@@ -1157,6 +1160,9 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-authorization
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
@@ -3957,9 +3963,6 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
-      '@nocobase/session':
-        specifier: workspace:^
-        version: link:../../libs/session
       better-auth:
         specifier: 'catalog:'
         version: 1.7.5(@opentelemetry/api@1.9.0)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)

@@ -14,6 +14,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { validator } from 'hono/validator';
 
 import { databaseUnavailable } from './database-unavailable.js';
+import { EXAMPLES_APP_DOMAIN } from './domain.js';
 import {
   ArticleParams,
   CreateArticleInput,
@@ -21,7 +22,7 @@ import {
   UpdateArticleInput,
 } from './schemas.js';
 
-const DOMAIN = 'articles';
+const DOMAIN = EXAMPLES_APP_DOMAIN;
 
 export const articlesRoutes: AppApiRouteContribution<Application> =
   defineApiRoutes((app) => {

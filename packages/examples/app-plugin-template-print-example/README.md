@@ -21,7 +21,7 @@ Both routes require a signed-in user with access to the Sales Quotes page and li
 | `GET`  | `/invoices?page=&pageSize=`               | `{ data, meta: { page, pageSize, total } }`, pageSize ≤ 100      |
 | `GET`  | `/invoices/{invoiceId}/print?format=docx` | The rendered document as a download; `format` is `docx` or `pdf` |
 
-Errors use the standard body with domain `templatePrintExample`. An invoice that does not exist, or whose quote the caller may not view, is `404 INVOICE_NOT_FOUND`. Output over the example's limits is `413 OUTPUT_LIMIT_EXCEEDED`, and a PDF request without LibreOffice is `503 PDF_CONVERTER_UNAVAILABLE`.
+Errors use the standard body with domain `templatePrintExample`. An invoice that does not exist, or whose quote the caller may not view, is `404 INVOICE_NOT_FOUND`. Data over the example's output limits is `400 FAILED_PRECONDITION` with reason `OUTPUT_LIMIT_EXCEEDED`, and a PDF request without LibreOffice is `503 PDF_CONVERTER_UNAVAILABLE`.
 
 This example depends on Carbone Community Edition. If you redistribute an application that includes it, notify its users and link to the current [Carbone Community License Agreement](https://github.com/carboneio/carbone/blob/master/LICENSE.md), as required by that license.
 

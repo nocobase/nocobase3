@@ -105,7 +105,14 @@ describe('the Permission Set routes', () => {
       await (
         await router.request(`${PATH}?subjectType=user&subjectId=alice`)
       ).json(),
-    ).toMatchObject({ data: [{ key: 'reader' }] });
+    ).toMatchObject({ data: [{ key: 'reader' }], meta: { total: 1 } });
+    // The assignment list is a bounded configuration list too.
+    expect(
+      await (await router.request(`${PATH}/reader/assignments`)).json(),
+    ).toMatchObject({
+      data: [{ subject: { type: 'user', id: 'alice' } }],
+      meta: { total: 1 },
+    });
   });
 
   it('answers missing sets, unknown fields and partial updates in the standard shape', async () => {
@@ -221,6 +228,7 @@ describe('the Permission Set routes', () => {
         // An ordinary set carries neither field rather than carrying them as undefined.
         { key: 'reader', grants: [] },
       ],
+      meta: { total: 3 },
     });
     expect(await (await router.request(`${PATH}/superuser`)).json()).toEqual({
       data: superuser,

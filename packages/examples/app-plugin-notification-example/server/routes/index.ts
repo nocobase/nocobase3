@@ -75,9 +75,10 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
     router.use(`${ROUTE_PREFIX}/*`, authentication.required());
 
     // The active users a task may be assigned to.
+    // A bounded list: every active user at once, with `meta.total`.
     router.get(`${ROUTE_PREFIX}/assignees`, async (context) => {
       const users = await listUsers(database);
-      return context.json({ data: users });
+      return context.json({ data: users, meta: { total: users.length } });
     });
 
     router.get(
@@ -132,8 +133,8 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
             status: 'open',
             creatorId: userId,
             assigneeId,
-            createdAt: timestamp,
-            updatedAt: timestamp,
+            createdAt: toDatabaseDatetime(timestamp),
+            updatedAt: toDatabaseDatetime(timestamp),
           })
           .execute();
 
@@ -177,7 +178,13 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
         await database
           .connection()
           .query.updateTable(TASKS)
-          .set({ title, description, status, assigneeId, updatedAt })
+          .set({
+            title,
+            description,
+            status,
+            assigneeId,
+            updatedAt: toDatabaseDatetime(updatedAt),
+          })
           .where('id', '=', id)
           .execute();
 
@@ -215,8 +222,30 @@ const routes: readonly AppApiRouteContribution<NotificationExampleApplication>[]
 
 export default routes;
 
+/** The current time as an RFC 3339 UTC timestamp, such as `2026-10-04T08:30:00.000Z`. */
 function now(): string {
-  return new Date().toISOString().replace(/Z$/u, '');
+  return new Date().toISOString();
+}
+
+/**
+ * The value a zone-less `datetime` column stores for an RFC 3339 UTC timestamp: the same UTC wall-clock time without
+ * the zone designator, which not every dialect accepts in such a column.
+ */
+function toDatabaseDatetime(timestamp: string): string {
+  return timestamp.replace(/Z$/u, '');
+}
+
+/**
+ * A stored `datetime` as the API answers it: an RFC 3339 UTC timestamp. The column holds UTC wall-clock time, which a
+ * driver returns either as a `Date` or as a zone-less string.
+ */
+function toRfc3339(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value !== 'string') return value;
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  return /(?:Z|[+-]\d{2}:?\d{2})$/u.test(normalized)
+    ? new Date(normalized).toISOString()
+    : new Date(`${normalized}Z`).toISOString();
 }
 
 function isTaskRelatedUser(task: TaskRow, userId: string): boolean {
@@ -352,6 +381,8 @@ async function toTaskViews(
   const byId = new Map(users.filter(Boolean).map((user) => [user!.id, user!]));
   return rows.map((row) => ({
     ...row,
+    createdAt: toRfc3339(row.createdAt),
+    updatedAt: toRfc3339(row.updatedAt),
     creator: byId.get(row.creatorId) ?? { id: row.creatorId },
     assignee: byId.get(row.assigneeId) ?? { id: row.assigneeId },
   }));

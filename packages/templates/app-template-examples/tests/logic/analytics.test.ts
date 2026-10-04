@@ -100,7 +100,7 @@ it('keeps database-disabled application routes available without plugin services
     error: {
       status: 'UNAVAILABLE',
       reason: 'DATABASE_UNAVAILABLE',
-      domain: 'analytics',
+      domain: 'app',
     },
   });
   expect((await unavailable.request('/unrelated')).status).toBe(200);

@@ -86,16 +86,20 @@ it('enforces target scopes and refuses direct foreign-key writes', async () => {
       )
     ).status,
   ).toBe(403);
-  expect(
-    (
-      await fixture.request(
-        'delivery',
-        path(),
-        { carrierId: 'freight' },
-        'PATCH',
-      )
-    ).status,
-  ).toBe(403);
+  // A foreign key is not a relation name, so the body schema refuses it before the Policy is consulted.
+  const foreignKey = await fixture.request(
+    'delivery',
+    path(),
+    { carrierId: 'freight' },
+    'PATCH',
+  );
+  expect(foreignKey.status).toBe(400);
+  expect((await foreignKey.json()).error).toMatchObject({
+    reason: 'INVALID_INPUT',
+    fieldViolations: expect.arrayContaining([
+      expect.objectContaining({ reason: 'unrecognized_keys' }),
+    ]),
+  });
   expect(
     (
       await fixture.request(
@@ -377,4 +381,15 @@ it('does not update or delete a check belonging to another order', async () => {
       .repository('authorizationExampleOrderChecks')
       .findOne({ filter: { id: 'foreign-check' } }),
   ).toMatchObject({ orderId: 'order-3', done: false });
+});
+
+it('accepts only the order relation names in a relations update', async () => {
+  for (const body of [{ project: { connect: { id: 'project-1' } } }, {}]) {
+    const response = await fixture.request('delivery', path(), body, 'PATCH');
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatchObject({
+      status: 'INVALID_ARGUMENT',
+      reason: 'INVALID_INPUT',
+    });
+  }
 });

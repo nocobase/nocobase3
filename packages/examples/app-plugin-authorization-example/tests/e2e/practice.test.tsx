@@ -222,3 +222,19 @@ it('answers useCan for a scoped business grant through the real client and snaps
     actions: ['submit'],
   });
 });
+
+it('answers a reset without the seeded example accounts as a failed precondition', async () => {
+  await fixture.database
+    .connection()
+    .query.updateTable('user')
+    .set({ username: 'renamed_assistant' })
+    .where('username', '=', 'sales_assistant')
+    .execute();
+  const response = await fixture.request('admin', 'reset', {});
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toMatchObject({
+    status: 'FAILED_PRECONDITION',
+    reason: 'EXAMPLE_ACCOUNTS_MISSING',
+    domain: 'authorizationExample',
+  });
+});

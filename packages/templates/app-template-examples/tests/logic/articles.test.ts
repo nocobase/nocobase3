@@ -149,7 +149,7 @@ it('creates, filters, edits and publishes articles with server timestamps', asyn
   const missing = await request('/articles/999', 'PATCH', { title: 'x' });
   expect(missing.status).toBe(404);
   expect(await missing.json()).toMatchObject({
-    error: { reason: 'ARTICLE_NOT_FOUND', domain: 'articles' },
+    error: { reason: 'ARTICLE_NOT_FOUND', domain: 'examples' },
   });
   expect((await request('/articles/abc', 'PATCH', { title: 'x' })).status).toBe(
     400,

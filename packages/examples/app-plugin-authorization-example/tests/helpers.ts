@@ -178,5 +178,5 @@ export async function listIds(
   const response = await fixture.request(user, `sales/${path}`);
   expect(response.status).toBe(200);
   const body = await response.json();
-  return body.data.items.map((item: { id: string }) => item.id);
+  return body.data.map((item: { id: string }) => item.id);
 }

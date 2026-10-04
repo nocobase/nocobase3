@@ -14,6 +14,7 @@ import {
 } from './http.js';
 import {
   RecordsParams,
+  RecordsQuery,
   ResolveSubjectsBody,
   SubjectListQuery,
   SubjectTypeParams,
@@ -84,7 +85,8 @@ export interface RuleSupportRoutesOptions {
 
 /**
  * `<path>/options`, `<path>/subjects/...` and `<path>/records/:collection`
- * for a rule plugin, each gated by `settings:<settings>` `read`.
+ * for a rule plugin, each gated by `settings:<settings>` `read`. The records list pages by `page` and `pageSize` and
+ * answers `404 COLLECTION_NOT_FOUND` for a name that is no Collection.
  */
 export function createRuleSupportRoutes(
   authz: AuthorizationExtensionHost,
@@ -102,6 +104,7 @@ export function createRuleSupportRoutes(
     `${path}/records/:collection`,
     settingsAccess(settings, 'read'),
     validator('param', (value) => parseApiInput(RecordsParams, value)),
+    validator('query', (value) => parseApiInput(RecordsQuery, value)),
     async (context) => {
       const database = databaseHost(authz.database);
       const administration = createAuthorizationAdministration({
@@ -109,10 +112,22 @@ export function createRuleSupportRoutes(
         resolveCollection: async (name) => database?.describe(name),
       });
       // Hono has already decoded the path parameter; decoding it again would corrupt a name containing `%`.
+      const { collection } = context.req.valid('param');
+      const { page, pageSize } = context.req.valid('query');
+      const result = await administration.listRecords(collection, {
+        page,
+        pageSize,
+      });
+      if (!result)
+        throw new ApiError({
+          status: 'NOT_FOUND',
+          reason: 'COLLECTION_NOT_FOUND',
+          domain: AUTHORIZATION_ERROR_DOMAIN,
+          message: `Collection ${collection} was not found.`,
+        });
       return context.json({
-        data: await administration.listRecords(
-          context.req.valid('param').collection,
-        ),
+        data: result.items,
+        meta: { page, pageSize, total: result.total },
       });
     },
   );
