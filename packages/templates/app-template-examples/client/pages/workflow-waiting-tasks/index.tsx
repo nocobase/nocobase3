@@ -36,9 +36,7 @@ import type { ReviewTask } from './types.js';
 
 interface TaskPage {
   data: ReviewTask[];
-  total: number;
-  page: number;
-  pageSize: number;
+  meta: { total: number; page: number; pageSize: number };
 }
 
 export default function WorkflowWaitingTasksPage(): ReactElement {
@@ -51,14 +49,14 @@ export default function WorkflowWaitingTasksPage(): ReactElement {
     queryKey: ['quotation-review-tasks', search, status, page],
     queryFn: ({ signal }) =>
       api.request<TaskPage>({
-        path: 'quotation-review-tasks',
-        query: { page, search: search.trim(), status },
+        path: 'quotationReviewTasks',
+        query: { page, pageSize: 12, q: search.trim(), status },
         signal,
       }),
     retry: false,
   });
   const result = query.data;
-  const pages = Math.max(1, Math.ceil((result?.total ?? 0) / 12));
+  const pages = Math.max(1, Math.ceil((result?.meta.total ?? 0) / 12));
   const amount = (cents: number) =>
     new Intl.NumberFormat(i18n.language, {
       style: 'currency',
@@ -233,7 +231,9 @@ export default function WorkflowWaitingTasksPage(): ReactElement {
         </div>
       )}
       <div className='flex items-center justify-between text-sm text-muted-foreground'>
-        <span>{t('workflowTasks.total', { count: result?.total ?? 0 })}</span>
+        <span>
+          {t('workflowTasks.total', { count: result?.meta.total ?? 0 })}
+        </span>
         <div className='flex items-center gap-2'>
           <Button
             variant='outline'

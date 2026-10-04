@@ -79,7 +79,7 @@ async function invoke(
     .poll(
       async () => {
         run = await data<RunRecord>(
-          await request(`/workflow-runs/${started.id}`),
+          await request(`/workflows/runs/${started.id}`),
         );
         return run.status;
       },
@@ -167,7 +167,7 @@ beforeAll(async function startExampleServer() {
   });
   if ((await request('/workflows')).status !== 401)
     throw new Error('Anonymous workflow access must be rejected.');
-  if ((await request('/quotation-review-tasks')).status !== 401)
+  if ((await request('/quotationReviewTasks')).status !== 401)
     throw new Error('Anonymous review task access must be rejected.');
   const signIn = await request('/auth/sign-in/username', {
     username: 'nocobase',
@@ -221,7 +221,7 @@ it.each([
         status: 'pending',
       });
     const pending = await data<RunRecord>(
-      await request(`/workflow-runs/${started.id}`),
+      await request(`/workflows/runs/${started.id}`),
     );
     expect(pending.status).toBe(0);
     expect(pending.nodeRuns.map((node) => node.nodeKey)).toEqual(
@@ -242,14 +242,14 @@ it.each([
         (node) => node.nodeKey === 'awaitRoutingConfirmation',
       )?.status,
     ).toBe(NODE_RUN_STATUS.PENDING);
-    const tasks = (await (await request('/quotation-review-tasks')).json()) as {
-      data: { id: number; runId: string; status: string }[];
+    const tasks = (await (await request('/quotationReviewTasks')).json()) as {
+      data: { id: string; runId: string; status: string }[];
     };
     const task = tasks.data.find((item) => item.runId === started.id);
     expect(task).toMatchObject({ status: 'pending' });
     expect(
       (
-        await request(`/quotation-review-tasks/${task!.id}/submit`, {
+        await request(`/quotationReviewTasks/${task!.id}/submit`, {
           decision: 'unknown',
           comment: 'Invalid',
         })
@@ -257,7 +257,7 @@ it.each([
     ).toBe(400);
     expect(
       (
-        await request(`/quotation-review-tasks/${task!.id}/submit`, {
+        await request(`/quotationReviewTasks/${task!.id}/submit`, {
           decision: 'approved',
           comment: 'Checked quotation',
         })
@@ -265,7 +265,7 @@ it.each([
     ).toBe(200);
     expect(
       (
-        await request(`/quotation-review-tasks/${task!.id}/submit`, {
+        await request(`/quotationReviewTasks/${task!.id}/submit`, {
           decision: 'rejected',
           comment: 'Changed decision',
         })
@@ -277,7 +277,7 @@ it.each([
       confirmedBy: string;
       decision: string;
       comment: string;
-    }>(await request(`/quotation-review-tasks/${task!.id}`));
+    }>(await request(`/quotationReviewTasks/${task!.id}`));
     expect(detail).toMatchObject({
       status: 'submitted',
       reviewerId: expect.any(String),
@@ -290,7 +290,7 @@ it.each([
       .poll(
         async () => {
           completed = await data<RunRecord>(
-            await request(`/workflow-runs/${started.id}`),
+            await request(`/workflows/runs/${started.id}`),
           );
           return completed.status;
         },
@@ -310,11 +310,11 @@ it.each([
       };
     }>(
       await request(
-        `/workflow-runs/${started.id}/node-runs/${summary!.id}/payload`,
+        `/workflows/runs/${started.id}/nodeRuns/${summary!.id}/payload`,
       ),
     );
     expect(payload.result).toMatchObject({
-      taskId: task!.id,
+      taskId: Number(task!.id),
       reviewerId: detail.reviewerId,
       route,
       confirmedBy: expect.any(String),
@@ -322,7 +322,7 @@ it.each([
       comment: 'Checked quotation',
     });
     expect(
-      await data(await request(`/quotation-review-tasks/${task!.id}`)),
+      await data(await request(`/quotationReviewTasks/${task!.id}`)),
     ).toMatchObject({
       resumeRequestId: expect.any(String),
       resumeRequest: { status: 'consumed', reason: null },
@@ -348,23 +348,23 @@ it('accepts only one concurrent human decision for a quotation task', async () =
       { timeout: 10000 },
     )
     .toMatchObject({ status: 'pending' });
-  const tasks = (await (await request('/quotation-review-tasks')).json()) as {
+  const tasks = (await (await request('/quotationReviewTasks')).json()) as {
     data: { id: number; runId: string }[];
   };
   const task = tasks.data.find((item) => item.runId === started.id)!;
   const [first, second] = await Promise.all([
-    request(`/quotation-review-tasks/${task.id}/submit`, {
+    request(`/quotationReviewTasks/${task.id}/submit`, {
       decision: 'approved',
       comment: 'First',
     }),
-    request(`/quotation-review-tasks/${task.id}/submit`, {
+    request(`/quotationReviewTasks/${task.id}/submit`, {
       decision: 'rejected',
       comment: 'Second',
     }),
   ]);
   expect([first.status, second.status].sort()).toEqual([200, 409]);
   const detail = await data<{ decision: string; comment: string }>(
-    await request(`/quotation-review-tasks/${task.id}`),
+    await request(`/quotationReviewTasks/${task.id}`),
   );
   expect([
     { decision: 'approved', comment: 'First' },
@@ -407,7 +407,7 @@ it('recovers a claimed decision without changing the original reviewer or payloa
   });
   expect(
     (
-      await request(`/quotation-review-tasks/${task!.id}/submit`, {
+      await request(`/quotationReviewTasks/${task!.id}/submit`, {
         decision: 'approved',
         comment: 'Changed',
       })
@@ -415,7 +415,7 @@ it('recovers a claimed decision without changing the original reviewer or payloa
   ).toBe(409);
   expect(
     (
-      await request(`/quotation-review-tasks/${task!.id}/submit`, {
+      await request(`/quotationReviewTasks/${task!.id}/submit`, {
         decision: 'rejected',
         comment: 'Needs correction',
       })
@@ -469,7 +469,7 @@ it('marks a claimed task unavailable when its workflow run has ended', async () 
   await expect
     .poll(() => wait.getPending(target), { timeout: 10000 })
     .toMatchObject({ status: 'run-ended' });
-  const response = await request(`/quotation-review-tasks/${task!.id}/submit`, {
+  const response = await request(`/quotationReviewTasks/${task!.id}/submit`, {
     decision: 'approved',
     comment: 'Ready to submit',
   });
@@ -531,7 +531,7 @@ it('persists the deliberate failure and never runs its successor', async () => {
   expect(run.nodeRuns.map((node) => node.nodeKey)).not.toContain('finish');
   const node = run.nodeRuns.find((item) => item.nodeKey === 'execute')!;
   const payload = await data<{ error: string; log: string }>(
-    await request(`/workflow-runs/${run.id}/node-runs/${node.id}/payload`),
+    await request(`/workflows/runs/${run.id}/nodeRuns/${node.id}/payload`),
   );
   expect(payload.error).toContain('Intentional example failure');
   const duplicate = await invoke(
@@ -548,13 +548,14 @@ it('persists the deliberate failure and never runs its successor', async () => {
   expect(fixed.nodeRuns.map((item) => item.nodeKey)).toContain('finish');
 });
 it('validates invocation inputs and triggers enabled workflows through the public service', async () => {
-  expect(
-    (
-      await request(`/workflows/${ids.get('example-quotation-routing')}/run`, {
-        input: { quotationId: 'Q-100', amountCents: -1 },
-      })
-    ).status,
-  ).toBe(400);
+  const invalid = await request(
+    `/workflows/${ids.get('example-quotation-routing')}/run`,
+    { input: { quotationId: 'Q-100', amountCents: -1 } },
+  );
+  expect(invalid.status).toBe(400);
+  await expect(invalid.json()).resolves.toMatchObject({
+    error: { reason: 'INVALID_INPUT', domain: 'workflows' },
+  });
   const receipt = await server.application.container
     .resolve(workflowServiceToken)
     .trigger(

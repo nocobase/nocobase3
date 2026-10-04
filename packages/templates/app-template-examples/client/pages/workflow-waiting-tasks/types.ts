@@ -1,5 +1,5 @@
 export interface ReviewTask {
-  id: number;
+  id: string;
   runId: string;
   quotationId: string;
   totalCents: number;

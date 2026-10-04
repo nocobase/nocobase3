@@ -33,7 +33,7 @@ import type { ReviewTask } from './types.js';
 
 interface TaskDetail {
   data: ReviewTask;
-  currentReviewer: { id: string; name: string };
+  meta: { currentReviewer: { id: string; name: string } };
 }
 
 export default function WorkflowWaitingTaskPage(): ReactElement {
@@ -53,7 +53,7 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
   const query = useQuery({
     queryKey: ['quotation-review-task', id],
     queryFn: ({ signal }) =>
-      api.request<TaskDetail>({ path: `quotation-review-tasks/${id}`, signal }),
+      api.request<TaskDetail>({ path: `quotationReviewTasks/${id}`, signal }),
     retry: false,
     refetchInterval: (query) => {
       const current = query.state.data?.data;
@@ -98,13 +98,13 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
     setError(false);
     try {
       const response = await api.request<{ data: ReviewTask }>({
-        path: `quotation-review-tasks/${task.id}/submit`,
+        path: `quotationReviewTasks/${task.id}/submit`,
         method: 'POST',
         json: { decision: selectedDecision, comment: enteredComment },
       });
       queryClient.setQueryData(['quotation-review-task', id], {
         data: response.data,
-        currentReviewer: query.data?.currentReviewer,
+        meta: query.data?.meta,
       });
       setSuccess(true);
       toaster.show({
@@ -118,7 +118,7 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
     } catch (submissionError) {
       if (
         submissionError instanceof ApiClientError &&
-        submissionError.reason === 'INVALID_DECISION'
+        submissionError.reason === 'INVALID_INPUT'
       ) {
         setDecisionTouched(true);
         focusDecisionAfterSaveRef.current = true;
@@ -288,7 +288,7 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
                 <p className='rounded-md border bg-muted px-3 py-2 text-sm'>
                   {retryable
                     ? task.confirmedBy
-                    : query.data?.currentReviewer.name}
+                    : query.data?.meta.currentReviewer.name}
                 </p>
               </div>
               <div className='space-y-2'>

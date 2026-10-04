@@ -94,8 +94,8 @@ it.each([
   async (outcome) => {
     getRequest.mockResolvedValue(outcome);
     for (const url of [
-      '/quotation-review-tasks',
-      `/quotation-review-tasks/${id}`,
+      '/quotationReviewTasks',
+      `/quotationReviewTasks/${id}`,
     ]) {
       const response = await router.request(url, {
         headers: { 'x-test-user': 'alice' },
@@ -118,7 +118,7 @@ it('keeps historical decisions readable without inventing a successful outcome',
     filter: { id },
     values: { resumeRequestId: null },
   });
-  const response = await router.request(`/quotation-review-tasks/${id}`, {
+  const response = await router.request(`/quotationReviewTasks/${id}`, {
     headers: { 'x-test-user': 'alice' },
   });
   expect(await response.json()).toMatchObject({
@@ -128,8 +128,70 @@ it('keeps historical decisions readable without inventing a successful outcome',
 });
 
 it('requires authentication to read submission outcomes', async () => {
-  expect((await router.request(`/quotation-review-tasks/${id}`)).status).toBe(
+  expect((await router.request(`/quotationReviewTasks/${id}`)).status).toBe(
     401,
   );
   expect(getRequest).not.toHaveBeenCalled();
+});
+
+it('returns paged tasks with string ids and reviewer metadata', async () => {
+  const headers = { 'x-test-user': 'alice' };
+  const list = await router.request(
+    '/quotationReviewTasks?pageSize=1&q=Q-100',
+    { headers },
+  );
+  expect(await list.json()).toMatchObject({
+    data: [{ id: String(id), quotationId: 'Q-100' }],
+    meta: { page: 1, pageSize: 1, total: 1 },
+  });
+  const detail = await router.request(`/quotationReviewTasks/${id}`, {
+    headers,
+  });
+  expect(await detail.json()).toMatchObject({
+    data: { id: String(id) },
+    meta: { currentReviewer: { id: 'alice', name: 'Alice' } },
+  });
+});
+
+it.each([
+  {
+    path: '/quotationReviewTasks?pageSize=0',
+    status: 400,
+    reason: 'INVALID_INPUT',
+  },
+  {
+    path: '/quotationReviewTasks/not-an-id',
+    status: 400,
+    reason: 'INVALID_INPUT',
+  },
+  { path: '/quotationReviewTasks/999999', status: 404, reason: 'NOT_FOUND' },
+])('returns a standard error for $path', async ({ path, status, reason }) => {
+  const response = await router.request(path, {
+    headers: { 'x-test-user': 'alice' },
+  });
+  expect(response.status).toBe(status);
+  expect(await response.json()).toMatchObject({
+    error: { code: status, reason },
+  });
+});
+
+it('validates decisions before writing and reports field violations', async () => {
+  const response = await router.request(`/quotationReviewTasks/${id}/submit`, {
+    method: 'POST',
+    headers: { 'x-test-user': 'alice', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      decision: 'unknown',
+      comment: '',
+      reviewerId: 'mallory',
+    }),
+  });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({
+    error: { reason: 'INVALID_INPUT', fieldViolations: expect.any(Array) },
+  });
+  expect(
+    await database
+      .repository('quotationReviewTasks')
+      .findOne({ filter: { id } }),
+  ).toMatchObject({ reviewerId: 'alice', decision: 'approved' });
 });

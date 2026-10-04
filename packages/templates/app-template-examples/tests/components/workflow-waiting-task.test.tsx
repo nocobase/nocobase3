@@ -22,7 +22,7 @@ vi.mock('@nocobase/app-client', async (importOriginal) => ({
 }));
 
 const task = {
-  id: 1,
+  id: '1',
   runId: '42',
   quotationId: 'Q-100',
   totalCents: 50000,
@@ -98,7 +98,7 @@ it('submits the decision and comment while the reviewer identity comes from the 
             comment: 'Checked',
           }
         : task,
-      currentReviewer: { id: 'user-1', name: 'Admin' },
+      meta: { currentReviewer: { id: 'user-1', name: 'Admin' } },
     };
   });
   await mount();
@@ -113,7 +113,7 @@ it('submits the decision and comment while the reviewer identity comes from the 
   await waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'quotation-review-tasks/1/submit',
+        path: 'quotationReviewTasks/1/submit',
         method: 'POST',
         json: { decision: 'approved', comment: 'Checked' },
       }),
@@ -129,7 +129,7 @@ it('submits the decision and comment while the reviewer identity comes from the 
 it('does not offer submission when the workflow wait has ended', async () => {
   request.mockResolvedValue({
     data: { ...task, waitStatus: 'run-ended' },
-    currentReviewer: { id: 'user-1', name: 'Admin' },
+    meta: { currentReviewer: { id: 'user-1', name: 'Admin' } },
   });
   await mount();
   expect(
@@ -164,7 +164,7 @@ it.each([
         decision: 'approved',
         comment: 'Checked',
       },
-      currentReviewer: { id: 'user-1', name: 'Admin' },
+      meta: { currentReviewer: { id: 'user-1', name: 'Admin' } },
     });
     await mount();
     expect(
@@ -194,7 +194,7 @@ it('refreshes an accepted decision to show its final result', async () => {
       confirmedBy: 'Admin',
       decision: 'approved',
     },
-    currentReviewer: { id: 'user-1', name: 'Admin' },
+    meta: { currentReviewer: { id: 'user-1', name: 'Admin' } },
   }));
   await mount();
   expect(
@@ -214,7 +214,10 @@ it('focuses the decision field after a delayed invalid-decision response re-enab
   });
   request.mockImplementation(async ({ method }: { method?: string } = {}) => {
     if (method === 'POST') return submission;
-    return { data: task, currentReviewer: { id: 'user-1', name: 'Admin' } };
+    return {
+      data: task,
+      meta: { currentReviewer: { id: 'user-1', name: 'Admin' } },
+    };
   });
   await mount();
   const decision = await screen.findByRole('combobox', { name: 'Decision' });
@@ -239,9 +242,9 @@ it('focuses the decision field after a delayed invalid-decision response re-enab
     rejectSubmission(
       new ApiClientError('Invalid decision', {
         status: 400,
-        reason: 'INVALID_DECISION',
+        reason: 'INVALID_INPUT',
         method: 'POST',
-        url: '/api/quotation-review-tasks/1/submit',
+        url: '/api/quotationReviewTasks/1/submit',
       }),
     );
   });
