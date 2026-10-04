@@ -464,4 +464,11 @@ export {
   type RelationWriteOperation,
 } from './repository/write-policy.js';
 
+export {
+  isManagedField,
+  writableFields,
+  writePolicyProblems,
+  type WritePolicyProblem,
+} from './repository/writable-fields.js';
+
 export type { DatabaseTaskConfig } from './task-config.js';

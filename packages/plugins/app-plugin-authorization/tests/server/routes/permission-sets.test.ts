@@ -1,11 +1,17 @@
 import { permissionSetsPlugin } from '@nocobase/authorization';
-import type { PermissionGrant } from '@nocobase/authorization/core';
-import type { Hono } from 'hono';
+import {
+  defineCompositeResource,
+  type PermissionGrant,
+} from '@nocobase/authorization/core';
+import { defineRepositoryApiRoutes } from '@nocobase/app-server/router';
+import { ServiceContainer } from '@nocobase/service-provider';
+import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { DatabaseManager } from '@nocobase/db';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 
 import {
   createAppAuthorization,
+  defineDatabasePermission,
   type AppAuthorization,
 } from '../../../server/index.js';
 import { createAuthorization } from '../../helpers/authorization-fixture.js';
@@ -529,5 +535,229 @@ describe('the subject types the root Permission Set accepts', () => {
       body.data.find((set) => set.key === key)?.protection;
     expect(protection('root')).toMatchObject({ assignableTo: ['user'] });
     expect(protection('member')).not.toHaveProperty('assignableTo');
+  });
+});
+
+describe('database write field grants', () => {
+  let testDatabase: TestDatabase;
+  let database: DatabaseManager;
+  let authz: AppAuthorization;
+  let router: Hono;
+
+  const counterAccess = defineDatabasePermission((permission) =>
+    permission.collection('counters').read('*').update('*'),
+  );
+  const counterResource = defineCompositeResource('test.counters', (resource) =>
+    resource
+      .title('Counters')
+      .action('edit', (action) => action.grant('counters', counterAccess)),
+  );
+
+  beforeEach(async () => {
+    testDatabase = await createTestDatabase();
+    database = testDatabase.database;
+    await migratePlugins(database, 'app-plugin-authorization');
+    // `id` is assigned by the database, so no write may name it.
+    await database
+      .connection()
+      .builder.createCollection('counters', (counters) => {
+        counters.increments('id').primary();
+        counters.string('title', { length: 120 });
+        counters.integer('amount');
+      });
+    authz = createAppAuthorization({ connection: database.connection() });
+    authz.database.collections.add({ name: 'counters', title: 'Counters' });
+    authz.compositeResources.define(counterResource);
+    await authz.permissionSets.create({ key: 'root', grants: [] });
+    await authz.permissionSets.assign({
+      permissionSet: 'root',
+      subject: { type: 'user', id: 'admin' },
+    });
+    router = await mountedRouter(authz);
+  });
+
+  afterEach(async () => {
+    await testDatabase.destroy();
+  });
+
+  const counters = (
+    actions: readonly { action: string; policy?: object }[],
+  ): object => ({
+    resource: { type: 'database.collection', id: 'counters' },
+    actions,
+  });
+  const write = (action: string, policy: object) => ({
+    action,
+    policy: { type: 'database', ...policy },
+  });
+
+  it('refuses a create or update grant naming a missing field, a field db assigns, or a missing relation', async () => {
+    const response = await router.request(
+      PATH,
+      json('POST', {
+        key: 'writer',
+        grants: [
+          counters([
+            // A read grant is not checked: naming a missing field only narrows what it returns.
+            write('read', { fields: ['missing'] }),
+            write('update', { fields: ['title', 'missing'] }),
+            write('create', {
+              fields: ['id', 'amount'],
+              relations: { owner: { connect: {} } },
+            }),
+          ]),
+        ],
+      }),
+    );
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error: { fieldViolations: readonly { field: string }[] };
+    };
+    expect(body).toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'INVALID_AUTHORIZATION_INPUT',
+        domain: 'authorization',
+      },
+    });
+    expect(body.error.fieldViolations).toEqual([
+      {
+        field: 'grants.0.actions.1.policy.fields.1',
+        description:
+          'Field "missing" is not a writable scalar field of "counters".',
+      },
+      {
+        field: 'grants.0.actions.2.policy.fields.0',
+        description: 'Field "id" is not a writable scalar field of "counters".',
+      },
+      {
+        field: 'grants.0.actions.2.policy.relations.owner',
+        description: 'Relation "owner" does not exist on "counters".',
+      },
+    ]);
+    expect((await router.request(`${PATH}/writer`)).status).toBe(404);
+  });
+
+  it('checks the grants a PATCH replaces, and still saves a title change alone', async () => {
+    expect(
+      (
+        await router.request(
+          PATH,
+          json('POST', {
+            key: 'writer',
+            grants: [counters([write('update', { fields: ['title'] })])],
+          }),
+        )
+      ).status,
+    ).toBe(201);
+    const replaced = await router.request(
+      `${PATH}/writer`,
+      json('PATCH', {
+        grants: [counters([write('update', { fields: ['id'] })])],
+      }),
+    );
+    expect(replaced.status).toBe(400);
+    await expect(replaced.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_AUTHORIZATION_INPUT',
+        domain: 'authorization',
+        fieldViolations: [{ field: 'grants.0.actions.0.policy.fields.0' }],
+      },
+    });
+    expect(
+      (
+        await router.request(
+          `${PATH}/writer`,
+          json('PATCH', { title: 'Writer' }),
+        )
+      ).status,
+    ).toBe(200);
+  });
+
+  it('checks permission before the grants', async () => {
+    const response = await router.request(
+      PATH,
+      json(
+        'POST',
+        {
+          key: 'writer',
+          grants: [counters([write('update', { fields: ['id'] })])],
+        },
+        'bob',
+      ),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("saves '*' grants, and a write they allow succeeds through a Repository endpoint", async () => {
+    const created = await router.request(
+      PATH,
+      json('POST', {
+        key: 'counter-editor',
+        grants: [
+          counters([
+            write('read', { fields: '*', recordAccess: ['allRecords'] }),
+            write('create', { fields: '*' }),
+            write('update', { fields: '*', recordAccess: ['allRecords'] }),
+          ]),
+          counterResource
+            .reference()
+            .grant({ edit: { counters: 'allRecords' } }),
+        ],
+      }),
+    );
+    expect(created.status).toBe(201);
+    expect(
+      (
+        await router.request(
+          `${PATH}/counter-editor/assignments`,
+          json('POST', { subject: { type: 'user', id: 'alice' } }),
+        )
+      ).status,
+    ).toBe(201);
+
+    const container = new ServiceContainer();
+    container.instance(databaseManagerToken, database);
+    const endpoints = new Hono();
+    endpoints.use('*', async (context, next) => {
+      context.set('auth', { user: { id: 'alice' } });
+      await next();
+    });
+    endpoints.use(
+      '*',
+      authz.database.authorizeRepository({
+        repository: 'counters',
+        resource: counterResource.reference(),
+        actions: { updateOne: 'edit' },
+      }),
+    );
+    endpoints.route(
+      '/',
+      await defineRepositoryApiRoutes({
+        repositories: [
+          {
+            name: 'counters',
+            collection: 'counters',
+            policy: { read: true, update: true, create: false, delete: false },
+            actions: { updateOne: {} },
+          },
+        ],
+      }).createRouter({ container }),
+    );
+    const row = await database
+      .repository('counters')
+      .createOne({ values: { title: 'Visits', amount: 1 } });
+    const updated = await endpoints.request('/counters/updateOne', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filter: { id: row.record.id },
+        values: { amount: 2 },
+      }),
+    });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({
+      data: { record: { amount: 2 } },
+    });
   });
 });

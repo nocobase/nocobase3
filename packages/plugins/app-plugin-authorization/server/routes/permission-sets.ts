@@ -27,6 +27,8 @@ import {
   settingsAccess,
   type SettingsRouterEnv,
 } from '../extension/http.js';
+import { databaseHost } from '../database/api.js';
+import { databaseGrantViolations } from '../database/grant-validation.js';
 import { createSubjectRoutes } from '../extension/options.js';
 import type { AuthorizationExtensionHost } from '../host.js';
 import { authorizationOptions } from '../options.js';
@@ -127,6 +129,7 @@ export function createPermissionSetHandler(
     async (context) => {
       const input = permissionSetInput(context.req.valid('json'));
       validateGrants(host, input);
+      await validateWriteGrants(host, input.grants);
       api.assertWritable(input.key, 'create');
       return context.json(
         { data: summarize(api, await api.create(input)) },
@@ -213,6 +216,10 @@ export function createPermissionSetHandler(
         grants: changes.grants ?? existing.grants,
       });
       validateGrants(host, input);
+      // Stored grants are checked only when the body replaces them, so a title change still saves a set whose grants a
+      // later schema change invalidated; startup reports those.
+      if (changes.grants !== undefined)
+        await validateWriteGrants(host, input.grants);
       api.assertWritable(key, 'update');
       if (input.key !== key)
         for (const candidate of [key, input.key]) {
@@ -315,6 +322,27 @@ function validateGrants(
       }
     }
   }
+}
+
+/**
+ * A `database.collection` create or update grant may name only fields and relations a write can use; otherwise every
+ * write it allows would fail. Answers `400 INVALID_ARGUMENT` with one field violation per offending member.
+ */
+async function validateWriteGrants(
+  host: Pick<AuthorizationExtensionHost, 'database'>,
+  grants: readonly PermissionGrant[],
+): Promise<void> {
+  const checker = databaseHost(host.database);
+  if (!checker) return;
+  const violations = await databaseGrantViolations(checker, grants);
+  if (!violations.length) return;
+  throw new ApiError({
+    status: 'INVALID_ARGUMENT',
+    reason: 'INVALID_AUTHORIZATION_INPUT',
+    domain: AUTHORIZATION_ERROR_DOMAIN,
+    message: `A create or update grant names fields or relations a write cannot use: ${violations[0].description}`,
+    fieldViolations: violations,
+  });
 }
 
 /** The validated body as the Permission Set API takes it; a cleared title is omitted. */

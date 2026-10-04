@@ -216,6 +216,58 @@ describe('policyFor', () => {
   });
 });
 
+describe('an all-fields write grant', () => {
+  it('allows only the fields db accepts, so a write through the Policy succeeds', async () => {
+    const write = (action: string) => ({
+      action,
+      policy: { type: 'database', fields: '*', recordAccess: ['allRecords'] },
+    });
+    const store = new MockPermissionSetStore({
+      permissionSets: [
+        {
+          key: 'order-writer',
+          grants: [
+            {
+              resource,
+              actions: ['read', 'create', 'update'].map(write),
+            },
+          ],
+        },
+      ],
+      assignments: [
+        {
+          id: 'writer-assignment',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'order-writer',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      connection,
+      plugins: [permissionSetsPlugin({ store }), databasePlugin()],
+    });
+    const policy = await authorization.database.policyFor(
+      'orders',
+      authorization.for({ principal: { type: 'user', id: 'alice' } }),
+    );
+    // `id` is an `increments` column: db assigns it, so neither write may name it.
+    const writable = orderFields.filter((field) => field !== 'id');
+    expect(policy.create).toMatchObject({ fields: writable });
+    expect(policy.update).toMatchObject({ fields: writable });
+
+    const orders = database.repository('orders').withPolicy(policy);
+    const created = await orders.createOne({
+      values: { ownerId: 'alice', amount: 10 },
+    });
+    await expect(
+      orders.updateOne({
+        filter: { id: created.record.id },
+        values: { amount: 20 },
+      }),
+    ).resolves.toMatchObject({ record: { amount: 20 } });
+  });
+});
+
 describe('a data scope that reaches no records', () => {
   function setup() {
     const policy = (action: string) => ({
