@@ -11,23 +11,27 @@ import {
 describe('in-app notification Client API', () => {
   it('uses relative paths on the injected application client', async () => {
     const responses: unknown[] = [
-      { data: [], nextCursor: 'next' },
-      { count: 3 },
+      { data: [], meta: { nextPageToken: 'next' } },
+      { data: { count: 3 } },
     ];
     const request = vi.fn(async <T>(): Promise<T> => responses.shift() as T);
     const client = createClient(request);
 
     await expect(
-      fetchInbox(client, { unreadOnly: true, limit: 10, cursor: 'cursor' }),
-    ).resolves.toEqual({ data: [], nextCursor: 'next' });
+      fetchInbox(client, {
+        unreadOnly: true,
+        pageSize: 10,
+        pageToken: 'token',
+      }),
+    ).resolves.toEqual({ data: [], nextPageToken: 'next' });
     await expect(fetchUnreadCount(client)).resolves.toBe(3);
 
     expect(request).toHaveBeenNthCalledWith(1, {
-      path: 'notifications/in-app?limit=10&unreadOnly=true&cursor=cursor',
+      path: 'notificationInApp/messages?pageSize=10&unreadOnly=true&pageToken=token',
       signal: undefined,
     });
     expect(request).toHaveBeenNthCalledWith(2, {
-      path: 'notifications/in-app/unread-count',
+      path: 'notificationInApp/messages/unreadCount',
       signal: undefined,
     });
   });
@@ -42,10 +46,12 @@ describe('in-app notification Client API', () => {
       createdAt: '2026-09-02T00:00:00.000Z',
     };
     const responses: unknown[] = [
-      { token: 'csrf-1' },
+      { data: { token: 'csrf-1' } },
       { data: item },
-      { token: 'csrf-2' },
-      { updated: 4 },
+      { data: { token: 'csrf-2' } },
+      { data: { updated: 4 } },
+      { data: { token: 'csrf-3' } },
+      undefined,
     ];
     const request = vi.fn(async <T>(): Promise<T> => responses.shift() as T);
     const client = createClient(request);
@@ -54,18 +60,27 @@ describe('in-app notification Client API', () => {
       item,
     );
     await expect(markInboxRead(client)).resolves.toBe(4);
+    await expect(
+      mutateInboxItem(client, 'item/1', 'delete'),
+    ).resolves.toBeUndefined();
 
+    expect(request).toHaveBeenNthCalledWith(1, {
+      path: 'notificationInApp/csrfToken',
+    });
     expect(request).toHaveBeenNthCalledWith(2, {
-      path: 'notifications/in-app/item%2F1',
+      path: 'notificationInApp/messages/item%2F1/markRead',
       method: 'POST',
       headers: { 'x-csrf-token': 'csrf-1' },
-      json: { action: 'read' },
     });
     expect(request).toHaveBeenNthCalledWith(4, {
-      path: 'notifications/in-app/read-all',
+      path: 'notificationInApp/messages/markAllRead',
       method: 'POST',
       headers: { 'x-csrf-token': 'csrf-2' },
-      json: {},
+    });
+    expect(request).toHaveBeenNthCalledWith(6, {
+      path: 'notificationInApp/messages/item%2F1',
+      method: 'DELETE',
+      headers: { 'x-csrf-token': 'csrf-3' },
     });
   });
 });

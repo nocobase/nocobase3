@@ -31,7 +31,7 @@ describe('createInAppRouter', () => {
       resolveUserId: async () => 'user-1',
     });
 
-    const response = await router.request('/');
+    const response = await router.request('/messages');
 
     expect(response.status).toBe(200);
     const result = (await response.json()) as {
@@ -44,7 +44,7 @@ describe('createInAppRouter', () => {
     });
   });
 
-  it('returns a stable cursor and accepts it for the next page', async () => {
+  it('returns a stable page token and accepts it for the next page', async () => {
     const store = new MemoryInAppStore();
     for (let index = 0; index < 3; index++) {
       await store.deliver({
@@ -57,77 +57,85 @@ describe('createInAppRouter', () => {
     }
     const router = await authenticatedRouter(store);
 
-    const firstResponse = await router.request('/?limit=2');
+    const firstResponse = await router.request('/messages?pageSize=2');
     const first = (await firstResponse.json()) as {
       readonly data: readonly { readonly id: string }[];
-      readonly nextCursor: string;
+      readonly meta: { readonly nextPageToken: string };
     };
     const secondResponse = await router.request(
-      `/?limit=2&cursor=${encodeURIComponent(first.nextCursor)}`,
+      `/messages?pageSize=2&pageToken=${encodeURIComponent(first.meta.nextPageToken)}`,
     );
     const second = (await secondResponse.json()) as {
       readonly data: readonly { readonly id: string }[];
+      readonly meta: { readonly nextPageToken?: string };
     };
 
     expect(first.data).toHaveLength(2);
-    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(first.meta.nextPageToken).toEqual(expect.any(String));
     expect(second.data).toHaveLength(1);
+    expect(second.meta.nextPageToken).toBeUndefined();
     expect(second.data[0]?.id).not.toBe(first.data[0]?.id);
     expect(second.data[0]?.id).not.toBe(first.data[1]?.id);
   });
 
   it.each(['0', '-1', '1.5', 'NaN', '101', '9007199254740992'])(
-    'rejects invalid limit %s',
-    async (limit) => {
+    'rejects invalid pageSize %s',
+    async (pageSize) => {
       const router = await authenticatedRouter(new MemoryInAppStore());
       const response = await router.request(
-        `/?limit=${encodeURIComponent(limit)}`,
+        `/messages?pageSize=${encodeURIComponent(pageSize)}`,
       );
 
       expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({
+      expect(await response.json()).toMatchObject({
         error: {
-          code: 'IN_APP_NOTIFICATION_INVALID_LIMIT',
-          message: 'limit must be an integer between 1 and 100.',
-          ns: IN_APP_NOTIFICATION_NAMESPACE,
-          key: 'errors.invalidLimit',
-          params: { max: 100 },
+          status: 'INVALID_ARGUMENT',
+          reason: 'INVALID_INPUT',
+          fieldViolations: expect.arrayContaining([
+            expect.objectContaining({ field: 'pageSize' }),
+          ]),
         },
       });
     },
   );
 
-  it('rejects an invalid cursor', async () => {
+  it('rejects an invalid page token', async () => {
     const router = await authenticatedRouter(new MemoryInAppStore());
-    const response = await router.request('/?cursor=not-a-cursor');
-    const nonCanonicalCursor = Buffer.from(
+    const response = await router.request('/messages?pageToken=not-a-token');
+    const nonCanonicalToken = Buffer.from(
       JSON.stringify({ createdAt: '2026-08-26T08:00:00+08:00', id: 'item-1' }),
     ).toString('base64url');
     const nonCanonicalResponse = await router.request(
-      `/?cursor=${nonCanonicalCursor}`,
+      `/messages?pageToken=${nonCanonicalToken}`,
     );
 
+    const expected = {
+      error: {
+        code: 400,
+        status: 'INVALID_ARGUMENT',
+        reason: 'IN_APP_NOTIFICATION_INVALID_PAGE_TOKEN',
+        domain: 'notificationInApp',
+        message: 'pageToken is not a token this list returned.',
+        localizedMessage: {
+          locale: 'en-US',
+          message: 'pageToken is not a token this list returned.',
+        },
+        fieldViolations: [
+          {
+            field: 'pageToken',
+            description: 'pageToken is not a token this list returned.',
+          },
+        ],
+        requestId: expect.any(String),
+      },
+    };
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error: {
-        code: 'IN_APP_NOTIFICATION_INVALID_CURSOR',
-        message: 'cursor is invalid.',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.invalidCursor',
-      },
-    });
+    expect(await response.json()).toEqual(expected);
     expect(nonCanonicalResponse.status).toBe(400);
-    expect(await nonCanonicalResponse.json()).toEqual({
-      error: {
-        code: 'IN_APP_NOTIFICATION_INVALID_CURSOR',
-        message: 'cursor is invalid.',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.invalidCursor',
-      },
-    });
+    expect(await nonCanonicalResponse.json()).toEqual(expected);
   });
 
-  it('rejects malformed JSON and unknown mutation actions', async () => {
+  it('marks messages read and unread, counts unread, and deletes, all behind the CSRF token', async () => {
     const store = new MemoryInAppStore();
     const delivered = await store.deliver({
       deliveryId: 'delivery-1',
@@ -137,89 +145,122 @@ describe('createInAppRouter', () => {
       createdAt: '2026-08-26T00:00:00.000Z',
     });
     const router = await authenticatedRouter(store);
-    const csrf = await router.request('/csrf');
-    const token = ((await csrf.json()) as { readonly token: string }).token;
-    const cookie = csrf.headers.get('set-cookie')?.split(';')[0];
-    const headers = {
-      cookie: cookie ?? '',
-      'content-type': 'application/json',
-      'x-csrf-token': token,
+    const headers = await csrfHeaders(router);
+    const unreadCount = async (): Promise<unknown> =>
+      (await router.request('/messages/unreadCount')).json();
+
+    await expect(unreadCount()).resolves.toEqual({ data: { count: 1 } });
+
+    const read = await router.request(`/messages/${delivered.id}/markRead`, {
+      method: 'POST',
+      headers,
+    });
+    expect(read.status).toBe(200);
+    await expect(read.json()).resolves.toMatchObject({
+      data: { id: delivered.id, readAt: expect.any(String) },
+    });
+    await expect(unreadCount()).resolves.toEqual({ data: { count: 0 } });
+
+    const unread = await router.request(
+      `/messages/${delivered.id}/markUnread`,
+      { method: 'POST', headers },
+    );
+    expect(unread.status).toBe(200);
+    await expect(unreadCount()).resolves.toEqual({ data: { count: 1 } });
+
+    const allRead = await router.request('/messages/markAllRead', {
+      method: 'POST',
+      headers,
+    });
+    await expect(allRead.json()).resolves.toEqual({ data: { updated: 1 } });
+
+    const deleted = await router.request(`/messages/${delivered.id}`, {
+      method: 'DELETE',
+      headers,
+    });
+    expect(deleted.status).toBe(204);
+    expect(await deleted.text()).toBe('');
+    expect(await store.list({ userId: 'user-1', limit: 10 })).toEqual([]);
+  });
+
+  it('returns a csrf token in the standard body and sets the matching cookie', async () => {
+    const router = await authenticatedRouter(new MemoryInAppStore());
+    const response = await router.request('/csrfToken');
+    const body = (await response.json()) as {
+      readonly data: { readonly token: string };
     };
 
-    const malformed = await router.request(`/${delivered.id}`, {
-      method: 'POST',
-      headers,
-      body: '{',
-    });
-    const unknown = await router.request(`/${delivered.id}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ action: 'archive' }),
-    });
-
-    expect(malformed.status).toBe(400);
-    expect(await malformed.json()).toEqual({
-      error: {
-        code: 'IN_APP_NOTIFICATION_INVALID_BODY',
-        message: 'Request body must be a JSON object.',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.invalidBody',
-      },
-    });
-    expect(unknown.status).toBe(400);
-    expect(await unknown.json()).toEqual({
-      error: {
-        code: 'IN_APP_NOTIFICATION_INVALID_ACTION',
-        message: 'action must be read, unread, or delete.',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.invalidAction',
-      },
-    });
-    const items = await store.list({ userId: 'user-1', limit: 10 });
-    expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe(delivered.id);
-    expect(items[0]?.readAt).toBeUndefined();
+    expect(body.data.token).toEqual(expect.any(String));
+    expect(response.headers.get('set-cookie')).toContain(
+      `notification_in_app_csrf=${body.data.token}`,
+    );
   });
 
   it('returns stable errors for invalid CSRF and missing items', async () => {
     const router = await authenticatedRouter(new MemoryInAppStore());
 
-    const invalidCsrf = await router.request('/read-all', { method: 'POST' });
+    const invalidCsrf = await router.request('/messages/markAllRead', {
+      method: 'POST',
+      headers: { 'accept-language': 'zh-CN' },
+    });
 
     expect(invalidCsrf.status).toBe(403);
     await expect(invalidCsrf.json()).resolves.toEqual({
       error: {
-        code: 'IN_APP_NOTIFICATION_INVALID_CSRF',
+        code: 403,
+        status: 'PERMISSION_DENIED',
+        reason: 'IN_APP_NOTIFICATION_INVALID_CSRF',
+        domain: 'notificationInApp',
         message: 'Invalid CSRF token.',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.invalidCsrf',
+        localizedMessage: { locale: 'zh-CN', message: 'CSRF token 无效。' },
+        requestId: expect.any(String),
       },
     });
 
-    const csrf = await router.request('/csrf');
-    const token = ((await csrf.json()) as { readonly token: string }).token;
-    const cookie = csrf.headers.get('set-cookie')?.split(';')[0];
-    const missing = await router.request('/missing', {
-      method: 'POST',
-      headers: {
-        cookie: cookie ?? '',
-        'content-type': 'application/json',
-        'x-csrf-token': token,
-      },
-      body: JSON.stringify({ action: 'read' }),
+    const headers = await csrfHeaders(router);
+    for (const [path, method] of [
+      ['/messages/missing/markRead', 'POST'],
+      ['/messages/missing/markUnread', 'POST'],
+      ['/messages/missing', 'DELETE'],
+    ] as const) {
+      const missing = await router.request(path, { method, headers });
+      expect(missing.status).toBe(404);
+      await expect(missing.json()).resolves.toMatchObject({
+        error: {
+          status: 'NOT_FOUND',
+          reason: 'IN_APP_NOTIFICATION_NOT_FOUND',
+          domain: 'notificationInApp',
+        },
+      });
+    }
+  });
+
+  it('answers an anonymous request with UNAUTHENTICATED', async () => {
+    const router = await localizedRouter(new MemoryInAppStore(), {
+      resolveUserId: async () => undefined,
     });
 
-    expect(missing.status).toBe(404);
-    await expect(missing.json()).resolves.toEqual({
+    const response = await router.request('/messages');
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
       error: {
-        code: 'IN_APP_NOTIFICATION_NOT_FOUND',
-        message: 'Not found.',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.notFound',
+        status: 'UNAUTHENTICATED',
+        reason: 'IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED',
+        domain: 'notificationInApp',
       },
     });
   });
 });
+
+async function csrfHeaders(router: Hono): Promise<Record<string, string>> {
+  const csrf = await router.request('/csrfToken');
+  const token = (
+    (await csrf.json()) as { readonly data: { readonly token: string } }
+  ).data.token;
+  const cookie = csrf.headers.get('set-cookie')?.split(';')[0];
+  return { cookie: cookie ?? '', 'x-csrf-token': token };
+}
 
 function authenticatedRouter(store: MemoryInAppStore): Promise<Hono> {
   return localizedRouter(store, {

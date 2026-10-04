@@ -85,7 +85,7 @@ Secondary confirmation template:
 Rollback guidance:
 
 - Revert application registration changes through version control and restore the previous Client/Server composition.
-- For an unintended read-state mutation, use the authenticated `unread` action when the affected item ids are known; deleted inbox items are not restored by this package.
+- For an unintended read-state mutation, call the authenticated `POST /api/notificationInApp/messages/{messageId}/markUnread` when the affected message ids are known; deleted inbox items are not restored by this package.
 - If realtime refresh regresses, keep the HTTP page usable and remove only the faulty subscription integration while preserving durable routes.
 
 # Verification Checklist
@@ -101,7 +101,7 @@ Rollback guidance:
 - Malformed or unrelated realtime payloads do not alter inbox state.
 - Reads and writes remain scoped to the authenticated user.
 - Mutations obtain and send the CSRF token; anonymous and invalid-token requests are denied.
-- Pagination treats cursors as opaque and preserves stable ordering.
+- Pagination passes `meta.nextPageToken` back as `pageToken` unchanged, treats it as opaque, and preserves stable ordering.
 - Plugin and application lint, typecheck, tests, and builds pass.
 
 # Minimal Test Scenarios
@@ -110,7 +110,7 @@ Rollback guidance:
 2. Custom host: an application with a non-default API base sends inbox HTTP and WebSocket traffic to its configured backend.
 3. Recovery: a reopened realtime connection refetches durable unread state even when no event arrived while offline.
 4. Isolation and safety: another user cannot read or mutate the first user's item, and a missing or invalid CSRF token is rejected.
-5. Invalid input: a malformed cursor, unsupported mutation action, or unrelated realtime payload is rejected or ignored without corrupting displayed state.
+5. Invalid input: a malformed `pageToken`, an out-of-range `pageSize`, or an unrelated realtime payload is rejected or ignored without corrupting displayed state.
 
 # Output Contract
 

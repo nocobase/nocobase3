@@ -16,9 +16,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const store = container.resolve(inAppNotificationStoreToken);
     const auth = container.resolve(authenticationToken);
 
-    const routes = new Hono();
-    routes.route(
-      '/',
+    router.route(
+      '/notificationInApp',
       createInAppRouter(store, {
         resolveUserId: async (request): Promise<string | undefined> => {
           try {
@@ -32,7 +31,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         },
       }),
     );
-    router.route('/notifications/in-app', routes);
     return router;
   });
 

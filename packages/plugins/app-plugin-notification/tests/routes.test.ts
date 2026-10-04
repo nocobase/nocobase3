@@ -22,6 +22,7 @@ import {
 import {
   NOTIFICATION_NAMESPACE,
   notificationI18nText,
+  notificationTestError,
 } from '../server/types.js';
 
 describe('@nocobase/app-plugin-notification routes', () => {
@@ -47,10 +48,16 @@ describe('@nocobase/app-plugin-notification routes', () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
       error: {
-        code: 'NOTIFICATION_LOGS_FORBIDDEN',
-        message: '需要通知日志访问权限。',
-        ns: NOTIFICATION_NAMESPACE,
-        key: 'errors.logsForbidden',
+        code: 403,
+        status: 'PERMISSION_DENIED',
+        reason: 'NOTIFICATION_LOGS_FORBIDDEN',
+        domain: 'notifications',
+        message: 'Notification logs access is required.',
+        localizedMessage: {
+          locale: 'zh-CN',
+          message: '需要通知日志访问权限。',
+        },
+        requestId: expect.any(String),
       },
     });
   });
@@ -81,7 +88,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
       targets,
     });
 
-    const response = await router.request('/notifications/test/targets', {
+    const response = await router.request('/notifications/testTargets', {
       headers: { 'x-nocobase-notification-test': '1' },
     });
 
@@ -106,7 +113,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
       values: { recipient: 'test@example.com' },
     };
 
-    const response = await router.request('/notifications/test/send', {
+    const response = await router.request('/notifications/testSends', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -122,7 +129,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
   it('rejects legacy or extended test request shapes', async () => {
     const { router, sendTest } = await createRouter();
     const request = (body: object): Promise<Response> =>
-      router.request('/notifications/test/send', {
+      router.request('/notifications/testSends', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -143,18 +150,59 @@ describe('@nocobase/app-plugin-notification routes', () => {
     });
 
     expect(legacy.status).toBe(400);
+    await expect(legacy.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: '' })],
+      },
+    });
     expect(extended.status).toBe(400);
     expect(sendTest).not.toHaveBeenCalled();
+  });
+
+  it('reports an invalid test field as a field violation with a localized message', async () => {
+    const { router, sendTest } = await createRouter();
+    sendTest.mockRejectedValueOnce(
+      notificationTestError(
+        'NOTIFICATION_TEST_UNKNOWN_FIELD',
+        'errors.testUnknownField',
+        { params: { name: 'cc' } },
+      ),
+    );
+
+    const response = await router.request('/notifications/testSends', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-nocobase-notification-test': '1',
+      },
+      body: JSON.stringify({ channel: 'email', values: { cc: 'x' } }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'NOTIFICATION_TEST_UNKNOWN_FIELD',
+        domain: 'notifications',
+        message: 'Unknown notification test field "cc".',
+        fieldViolations: [{ field: 'values.cc' }],
+        metadata: { name: 'cc' },
+      },
+    });
   });
 
   it('restricts status lookup to the actor through the manager interface', async () => {
     const { router, getTestStatus } = await createRouter();
 
-    const response = await router.request('/notifications/test/test-1/status', {
+    const response = await router.request('/notifications/testSends/test-1', {
       headers: { 'x-nocobase-notification-test': '1' },
     });
 
     expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { reason: 'NOTIFICATION_TEST_NOT_FOUND', domain: 'notifications' },
+    });
     expect(getTestStatus).toHaveBeenCalledWith('test-1', {
       userId: 'user-1',
     });
@@ -164,21 +212,29 @@ describe('@nocobase/app-plugin-notification routes', () => {
     const anonymous = await createRouter({ authenticated: false });
     expect(
       (
-        await anonymous.router.request('/notifications/test/targets', {
+        await anonymous.router.request('/notifications/testTargets', {
           headers: { 'x-nocobase-notification-test': '1' },
         })
       ).status,
     ).toBe(401);
 
     const enabled = await createRouter();
-    expect(
-      (await enabled.router.request('/notifications/test/targets')).status,
-    ).toBe(403);
+    const missingHeader = await enabled.router.request(
+      '/notifications/testTargets',
+    );
+    expect(missingHeader.status).toBe(403);
+    await expect(missingHeader.json()).resolves.toMatchObject({
+      error: { reason: 'NOTIFICATION_TEST_HEADER_REQUIRED' },
+    });
+    // The test header guards only the test routes, never the logs that share the prefix.
+    expect((await enabled.router.request('/notifications/logs')).status).toBe(
+      200,
+    );
 
     const denied = await createRouter({ allowed: false });
     await expect(
       (
-        await denied.router.request('/notifications/test/send', {
+        await denied.router.request('/notifications/testSends', {
           method: 'POST',
           headers: {
             'accept-language': 'zh-CN',
@@ -193,16 +249,22 @@ describe('@nocobase/app-plugin-notification routes', () => {
       ).json(),
     ).resolves.toEqual({
       error: {
-        code: 'NOTIFICATION_TEST_FORBIDDEN',
-        message: '需要发送通知测试的权限。',
-        ns: NOTIFICATION_NAMESPACE,
-        key: 'errors.testForbidden',
+        code: 403,
+        status: 'PERMISSION_DENIED',
+        reason: 'NOTIFICATION_TEST_FORBIDDEN',
+        domain: 'notifications',
+        message: 'Notification test send permission is required.',
+        localizedMessage: {
+          locale: 'zh-CN',
+          message: '需要发送通知测试的权限。',
+        },
+        requestId: expect.any(String),
       },
     });
 
     expect(
       (
-        await denied.router.request('/notifications/test/send', {
+        await denied.router.request('/notifications/testSends', {
           method: 'POST',
           headers: {
             'content-type': 'application/json',

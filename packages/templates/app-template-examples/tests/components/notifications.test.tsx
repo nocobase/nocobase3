@@ -62,19 +62,12 @@ it('loads the current inbox, persists read state with CSRF, filters unread, and 
   mocks.subscribe.mockReturnValue(mocks.cleanup);
   mocks.onOpen.mockReturnValue(mocks.cleanup);
   mocks.request.mockImplementation(
-    async ({
-      path,
-      method,
-      json,
-    }: {
-      path: string;
-      method?: string;
-      json?: { action?: string };
-    }) => {
-      if (path.endsWith('/csrf')) return { token: 'test-csrf' };
-      if (path.endsWith('/unread-count')) return { count: readAt ? 0 : 1 };
+    async ({ path, method }: { path: string; method?: string }) => {
+      if (path.endsWith('/csrfToken')) return { data: { token: 'test-csrf' } };
+      if (path.endsWith('/unreadCount'))
+        return { data: { count: readAt ? 0 : 1 } };
       if (method === 'POST') {
-        if (json?.action === 'read') readAt = new Date().toISOString();
+        if (path.endsWith('/markRead')) readAt = new Date().toISOString();
         return { data: { id: 'message-1', readAt } };
       }
       return {
@@ -106,10 +99,9 @@ it('loads the current inbox, persists read state with CSRF, filters unread, and 
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'notifications/in-app/message-1',
+        path: 'notificationInApp/messages/message-1/markRead',
         method: 'POST',
         headers: { 'x-csrf-token': 'test-csrf' },
-        json: { action: 'read' },
       }),
     ),
   );
@@ -156,8 +148,8 @@ it('automatically loads the last page once when the bottom becomes visible', asy
   );
   mocks.request.mockReset();
   mocks.request.mockImplementation(async ({ path }: { path: string }) => {
-    if (path.endsWith('/unread-count')) return { count: 0 };
-    const lastPage = path.includes('cursor=next');
+    if (path.endsWith('/unreadCount')) return { data: { count: 0 } };
+    const lastPage = path.includes('pageToken=next');
     return {
       data: [
         {
@@ -167,7 +159,7 @@ it('automatically loads the last page once when the bottom becomes visible', asy
           createdAt: '2026-09-17T12:00:00Z',
         },
       ],
-      nextCursor: lastPage ? undefined : 'next',
+      meta: lastPage ? {} : { nextPageToken: 'next' },
     };
   });
   render(
@@ -196,7 +188,7 @@ it('automatically loads the last page once when the bottom becomes visible', asy
   await screen.findByText('Older message');
   expect(
     mocks.request.mock.calls.filter(([request]) =>
-      request.path.includes('cursor=next'),
+      request.path.includes('pageToken=next'),
     ),
   ).toHaveLength(1);
   expect(screen.getByText('Latest message')).toBeInTheDocument();
@@ -225,7 +217,7 @@ it('expands and collapses overflowing message bodies independently', async () =>
   );
   mocks.request.mockReset();
   mocks.request.mockImplementation(async ({ path }: { path: string }) => {
-    if (path.endsWith('/unread-count')) return { count: 0 };
+    if (path.endsWith('/unreadCount')) return { data: { count: 0 } };
     return {
       data: ['Long message body', 'Short message'].map((body) => ({
         id: body,

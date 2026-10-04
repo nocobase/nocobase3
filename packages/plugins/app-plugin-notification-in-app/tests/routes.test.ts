@@ -43,16 +43,22 @@ describe('@nocobase/app-plugin-notification-in-app routes', () => {
     localizedRouter.use('*', createI18nMiddleware(runtime));
     localizedRouter.route('/', contributionRouter);
 
-    const response = await localizedRouter.request('/notifications/in-app', {
-      headers: { 'accept-language': 'zh-CN' },
-    });
+    const response = await localizedRouter.request(
+      '/notificationInApp/messages',
+      {
+        headers: { 'accept-language': 'zh-CN' },
+      },
+    );
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
       error: {
-        code: 'IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED',
-        message: '需要登录。',
-        ns: IN_APP_NOTIFICATION_NAMESPACE,
-        key: 'errors.authenticationRequired',
+        code: 401,
+        status: 'UNAUTHENTICATED',
+        reason: 'IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED',
+        domain: 'notificationInApp',
+        message: 'Authentication required.',
+        localizedMessage: { locale: 'zh-CN', message: '需要登录。' },
+        requestId: expect.any(String),
       },
     });
     expect(auth.getSession).toHaveBeenCalledOnce();
