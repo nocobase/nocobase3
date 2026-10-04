@@ -21,7 +21,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiClientError, useApiClient, useToaster } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState, type FormEvent, type ReactElement } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement,
+} from 'react';
 import { Link, useParams } from 'react-router';
 import type { ReviewTask } from './types.js';
 
@@ -38,6 +44,7 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
   const { t, i18n } = useTranslation();
   const [decision, setDecision] = useState('');
   const [decisionTouched, setDecisionTouched] = useState(false);
+  const focusDecisionAfterSaveRef = useRef(false);
   const decisionRef = useRef<HTMLButtonElement>(null);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -72,6 +79,13 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
     query.error !== null &&
     'status' in query.error &&
     query.error.status === 404;
+  useEffect(() => {
+    if (!saving && focusDecisionAfterSaveRef.current) {
+      focusDecisionAfterSaveRef.current = false;
+      decisionRef.current?.focus();
+    }
+  }, [saving]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!task || !canSubmit) return;
@@ -107,7 +121,7 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
         submissionError.reason === 'INVALID_DECISION'
       ) {
         setDecisionTouched(true);
-        decisionRef.current?.focus();
+        focusDecisionAfterSaveRef.current = true;
       } else {
         setError(true);
       }

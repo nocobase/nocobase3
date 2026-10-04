@@ -1,6 +1,12 @@
 import { ApiClientError } from '@nocobase/app-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider, NamespaceScope, APP_NS } from '@nocobase/i18n/client';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -201,24 +207,51 @@ it('refreshes an accepted decision to show its final result', async () => {
   ).toBeVisible();
 });
 
-it('focuses the decision field for the standard API invalid-decision reason', async () => {
+it('focuses the decision field after a delayed invalid-decision response re-enables it', async () => {
+  let rejectSubmission!: (error: Error) => void;
+  const submission = new Promise<never>((_, reject) => {
+    rejectSubmission = reject;
+  });
   request.mockImplementation(async ({ method }: { method?: string } = {}) => {
-    if (method === 'POST') {
-      throw new ApiClientError('Invalid decision', {
-        status: 400,
-        reason: 'INVALID_DECISION',
-        method: 'POST',
-        url: '/api/quotation-review-tasks/1/submit',
-      });
-    }
+    if (method === 'POST') return submission;
     return { data: task, currentReviewer: { id: 'user-1', name: 'Admin' } };
   });
   await mount();
   const decision = await screen.findByRole('combobox', { name: 'Decision' });
   fireEvent.click(decision);
   fireEvent.click(await screen.findByRole('option', { name: 'Approved' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Submit decision' }));
-  await waitFor(() => expect(decision).toHaveFocus());
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('option', { name: 'Approved' }),
+    ).not.toBeInTheDocument(),
+  );
+  const submit = screen.getByRole('button', { name: 'Submit decision' });
+  submit.focus();
+  fireEvent.click(submit);
+  await waitFor(() => expect(decision).toBeDisabled());
+  const focusWhileDisabled: boolean[] = [];
+  const nativeFocus = decision.focus.bind(decision);
+  const focus = vi.spyOn(decision, 'focus').mockImplementation((options) => {
+    focusWhileDisabled.push((decision as HTMLButtonElement).disabled);
+    nativeFocus(options);
+  });
+  await act(async () => {
+    rejectSubmission(
+      new ApiClientError('Invalid decision', {
+        status: 400,
+        reason: 'INVALID_DECISION',
+        method: 'POST',
+        url: '/api/quotation-review-tasks/1/submit',
+      }),
+    );
+  });
+  await waitFor(() => {
+    expect(decision).toBeEnabled();
+    expect(decision).toHaveFocus();
+    expect(focus).toHaveBeenCalled();
+  });
+  expect(focusWhileDisabled).not.toContain(true);
+  focus.mockRestore();
   expect(request).toHaveBeenCalledWith(
     expect.objectContaining({ method: 'POST' }),
   );
