@@ -10,11 +10,12 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { describeRoute, emptyResponse } from '@nocobase/app-server/router';
 import { describe, expect, it } from 'vitest';
 
+import { Hono } from 'hono';
+
 import {
-  authorizationApiFragment,
   createRouteHandler,
   createSettingsRouter,
-  undeclaredAuthorizationRoutes,
+  documentAuthorizationRoutes,
 } from '../../../server/extension/http.js';
 import {
   AuthorizationProvider,
@@ -106,6 +107,25 @@ async function generateApiDocumentFrom(
   return { ...document, paths };
 }
 
+/**
+ * The API documentation service with every `authz.routes` registration registered on it, as the provider does, and an
+ * empty `/api` router: what it documents and reports is only what sits behind the dispatcher.
+ */
+function dispatcherDocs(
+  authorization: AppAuthorization,
+  warnings: string[] = [],
+): ApiDocsService {
+  const docs = new ApiDocsService();
+  documentAuthorizationRoutes(docs, authorization.routes, (message) =>
+    warnings.push(message),
+  );
+  docs.attach({
+    api: new Hono(),
+    describe: () => ({ info: { title: 'Test', version: '1.0.0' } }),
+  });
+  return docs;
+}
+
 describe('the API document', () => {
   it('declares the routes the application mounts and every route behind the dispatcher', async () => {
     const authorization = createAppAuthorization({
@@ -120,7 +140,7 @@ describe('the API document', () => {
       '/permissionSets',
       '/sharingRules',
     ]);
-    expect(undeclaredAuthorizationRoutes(authorization.routes)).toEqual([]);
+    expect(findUndeclaredApiRoutes(dispatcherDocs(authorization))).toEqual([]);
     expect(findUndeclaredApiRoutes(mounted, '')).toEqual([]);
   });
 
@@ -131,13 +151,13 @@ describe('the API document', () => {
     });
     await mountedRouter(authorization);
     const warnings: string[] = [];
-    const fragment = await authorizationApiFragment(
-      authorization.routes,
-      (message) => warnings.push(message),
-    );
+    const document = await dispatcherDocs(
+      authorization,
+      warnings,
+    ).getDocument();
 
     expect(warnings).toEqual([]);
-    expect(Object.keys(fragment.paths ?? {}).sort()).toEqual([
+    expect(Object.keys(document.paths ?? {}).sort()).toEqual([
       '/api/authorization/inspector/batchDecide',
       '/api/authorization/inspector/configuredAccess',
       '/api/authorization/inspector/decide',
@@ -156,7 +176,7 @@ describe('the API document', () => {
       '/api/authorization/sharingRules/subjects/{type}',
       '/api/authorization/sharingRules/subjects/{type}/resolve',
     ]);
-    expect(fragment.tags?.map((tag) => tag.name)).toEqual(['Authorization']);
+    expect(document.tags?.map((tag) => tag.name)).toEqual(['Authorization']);
   });
 
   it('reports a handler it cannot describe and a route the dispatcher never reaches', async () => {
@@ -183,19 +203,19 @@ describe('the API document', () => {
     );
     authorization.routes.add('/misplaced', createRouteHandler(misplaced));
 
-    expect(undeclaredAuthorizationRoutes(authorization.routes)).toEqual([
-      { method: 'ALL', path: '/api/authorization/handWritten' },
-      { method: 'GET', path: '/api/authorization/misplaced/undeclared' },
-    ]);
-
     const warnings: string[] = [];
-    const fragment = await authorizationApiFragment(
-      authorization.routes,
-      (message) => warnings.push(message),
-    );
-    // The administration routes `createAppAuthorization` registers are documented as usual; the two defects are not.
+    const docs = dispatcherDocs(authorization, warnings);
+
+    expect(findUndeclaredApiRoutes(docs)).toEqual([
+      { method: 'POST', path: '/api/authorization/elsewhere/reset' },
+      { method: 'GET', path: '/api/authorization/misplaced/undeclared' },
+      { method: 'ALL', path: '/api/authorization/handWritten' },
+    ]);
+    // The administration routes `createAppAuthorization` registers are documented as usual; the route the dispatcher
+    // never reaches and the plain function are not.
+    const document = await docs.getDocument();
     expect(
-      Object.keys(fragment.paths ?? {}).filter(
+      Object.keys(document.paths ?? {}).filter(
         (path) =>
           !/^\/api\/authorization\/(inspector|permissionSets)\//.test(
             `${path}/`,
@@ -207,12 +227,12 @@ describe('the API document', () => {
         '/api/authorization/handWritten is handled by a function createRouteHandler did not build',
       ),
       expect.stringContaining(
-        '/api/authorization/elsewhere/reset is declared by the router registered under /api/authorization/misplaced',
+        'POST /api/authorization/elsewhere/reset is declared by the router registered under /api/authorization/misplaced',
       ),
     ]);
   });
 
-  it('lists every operation once the provider contributes the settings routes', async () => {
+  it('lists every operation once the provider registers the settings routes', async () => {
     const warnings: string[] = [];
     const document = await documentOf(
       createAppAuthorization({

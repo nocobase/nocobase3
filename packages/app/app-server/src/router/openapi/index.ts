@@ -27,8 +27,11 @@ export {
   type ApiDocument,
   type ApiDocumentFragment,
   type ApiDocumentInfo,
+  type ApiForwardedRouter,
+  type ApiForwardedRoutes,
   type ApiRouteDeclaration,
   type ApiRouterSource,
+  type ApiUndeclaredRoute,
   type GenerateApiDocumentOptions,
 } from './document.js';
 export {

@@ -248,7 +248,9 @@ export function createOrganizationRoutes(
       description: `Every department, ordered by \`sortOrder\` and then title. A bounded list: it is not paged and answers \`meta.total\`. ${READ}`,
       responses: {
         200: listResponse(DepartmentSchema),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        403: apiErrorResponse(403),
+        500: apiErrorResponse(500),
       },
     }),
     async (c) => {

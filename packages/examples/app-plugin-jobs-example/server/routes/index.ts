@@ -79,7 +79,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           'Every recurring rule with its state, next firing and recent runs. A bounded list: it is not paged and answers `meta.total`.',
         responses: {
           200: listResponse(ScheduleRule),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       async (context) => {
@@ -154,7 +155,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           "The signed-in user's recent one-off tasks. A bounded list: it is not paged and answers `meta.total`.",
         responses: {
           200: listResponse(JobTask),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       (context) => {
@@ -172,7 +174,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           'Submits one progress task for the signed-in user. `202` means the job backend accepted it; later changes arrive over the realtime topic and in `GET /api/jobsExample/tasks`.',
         responses: {
           202: dataResponse(JobTask, 'The task was accepted.'),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       async (context) =>

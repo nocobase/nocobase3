@@ -16,15 +16,15 @@ Templates ship their tests into generated applications. Keep them runnable from 
 
 ## What to test, by change
 
-| You changed      | Test at least                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload            |
-| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                         |
-| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                    |
-| A seed           | First run, run against existing data, repeat run                                                  |
-| A service        | Its domain behavior, with its dependencies supplied directly                                      |
-| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended       |
-| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy |
+| You changed      | Test at least                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload; the route is declared in the API document |
+| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                                                         |
+| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                                                    |
+| A seed           | First run, run against existing data, repeat run                                                                                  |
+| A service        | Its domain behavior, with its dependencies supplied directly                                                                      |
+| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended                                       |
+| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy                                 |
 
 ## Testing a route
 
@@ -71,6 +71,29 @@ test('lists orders for an administrator only', async ({ testApp, request }) => {
 ```
 
 The application starts as `pnpm start` starts it and installs its migrations and seeds on start; one application serves the test file. A user other than the administrator is one a seed of the application created, signed in the same way.
+
+### The API document
+
+The same started application proves that every route declares itself for the [API document](http-api.md#api-documentation):
+
+```ts
+import {
+  apiDocsToken,
+  findApiDocumentSchemaProblems,
+  findUndeclaredApiRoutes,
+} from '@nocobase/app-server/router';
+
+test('declares its routes in the API document', async ({ testApp }) => {
+  expect(findUndeclaredApiRoutes(testApp.application)).toEqual([]);
+  const document = await testApp.application.container
+    .resolve(apiDocsToken)
+    .getDocument();
+  expect(findApiDocumentSchemaProblems(document)).toEqual([]);
+  expect(
+    document.paths?.['/api/orders/{orderId}/cancel']?.post?.operationId,
+  ).toBe('cancelOrder');
+});
+```
 
 ## Test databases
 

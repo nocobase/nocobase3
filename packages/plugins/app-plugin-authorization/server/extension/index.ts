@@ -1,7 +1,6 @@
 export {
   AUTHORIZATION_ERROR_DOMAIN,
   AuthorizationInputError,
-  authorizationApiFragment,
   assertRuleKeyAvailable,
   createRouteHandler,
   createSettingsRouter,
@@ -10,9 +9,8 @@ export {
   ruleAlreadyExists,
   settingsAccess,
   toAuthorizationApiError,
-  undeclaredAuthorizationRoutes,
+  documentAuthorizationRoutes,
   type AuthorizationErrorTranslator,
-  type UndeclaredAuthorizationRoute,
   type SettingsRouterEnv,
 } from './http.js';
 export { parse } from './parsing.js';

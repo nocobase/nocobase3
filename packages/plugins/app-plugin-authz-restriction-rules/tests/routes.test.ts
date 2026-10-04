@@ -7,9 +7,14 @@ import {
 import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import {
-  authorizationApiFragment,
-  undeclaredAuthorizationRoutes,
+  createSettingsRouter,
+  documentAuthorizationRoutes,
 } from '@nocobase/app-plugin-authorization/server/extension';
+import {
+  ApiDocsService,
+  findUndeclaredApiRoutes,
+  type ApiDocsTarget,
+} from '@nocobase/app-server/router';
 import { restrictionRules } from '../server/authorization.js';
 
 const PATH = '/restrictionRules';
@@ -343,14 +348,22 @@ describe('restriction rules through the authorization dispatcher', () => {
 
   it('declares its routes for the API document', async () => {
     const { authz } = fixture();
-    expect(undeclaredAuthorizationRoutes(authz.routes)).toEqual([]);
-
     const warnings: string[] = [];
-    const fragment = await authorizationApiFragment(authz.routes, (message) =>
+    // The routes behind the `/api/authorization` dispatcher, registered as the authorization plugin does, below an empty
+    // `/api` router.
+    const docs = new ApiDocsService();
+    documentAuthorizationRoutes(docs, authz.routes, (message) =>
       warnings.push(message),
     );
+    docs.attach({
+      api: createSettingsRouter() as unknown as ApiDocsTarget['api'],
+      describe: () => ({ info: { title: 'Test', version: '1.0.0' } }),
+    });
+    expect(findUndeclaredApiRoutes(docs)).toEqual([]);
+
+    const document = await docs.getDocument();
     expect(warnings).toEqual([]);
-    const operations = Object.entries(fragment.paths ?? {})
+    const operations = Object.entries(document.paths ?? {})
       .filter(([path]) =>
         path.startsWith('/api/authorization/restrictionRules'),
       )
@@ -373,9 +386,9 @@ describe('restriction rules through the authorization dispatcher', () => {
       ].sort(),
     );
     expect(
-      fragment.paths?.['/api/authorization/restrictionRules']?.post?.tags,
+      document.paths?.['/api/authorization/restrictionRules']?.post?.tags,
     ).toEqual(['Authorization']);
-    expect(fragment.components?.schemas).toHaveProperty(
+    expect(document.components?.schemas).toHaveProperty(
       'AuthorizationRestrictionRule',
     );
   });

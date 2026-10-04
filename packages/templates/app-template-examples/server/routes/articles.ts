@@ -6,7 +6,6 @@ import {
   ApiError,
   apiErrorHandler,
   apiErrorResponse,
-  apiErrorResponses,
   apiValidator,
   dataResponse,
   defineApiRoutes,
@@ -81,7 +80,9 @@ export const articlesRoutes: AppApiRouteContribution<Application> =
           'Articles whose title matches `q`, optionally of one `status`, paged by `page` and `pageSize`.',
         responses: {
           200: listResponse(Article),
-          ...apiErrorResponses,
+          400: apiErrorResponse(400),
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       apiValidator('query', ListArticlesQuery),
@@ -96,7 +97,9 @@ export const articlesRoutes: AppApiRouteContribution<Application> =
         description: 'A published article records when it was published.',
         responses: {
           201: dataResponse(Article, 'The created article.'),
-          ...apiErrorResponses,
+          400: apiErrorResponse(400),
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
           413: bodyTooLarge,
         },
       }),
@@ -113,7 +116,9 @@ export const articlesRoutes: AppApiRouteContribution<Application> =
         description: 'Changes only the fields the body names.',
         responses: {
           200: dataResponse(Article),
-          ...apiErrorResponses,
+          400: apiErrorResponse(400),
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
           404: apiErrorResponse(
             404,
             'The article does not exist (`ARTICLE_NOT_FOUND`).',

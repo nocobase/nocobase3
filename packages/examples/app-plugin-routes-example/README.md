@@ -73,14 +73,15 @@ router.get(
     operationId: 'routesExampleGetGreeting',
     responses: {
       200: dataResponse(RoutesExampleGreeting),
-      ...apiErrorResponses,
+      401: apiErrorResponse(401),
+      500: apiErrorResponse(500),
     },
   }),
   (context) => context.json({ data: { scope: 'api', ... } }),
 );
 ```
 
-The tag is the plugin's namespace in PascalCase and the `operationId` is the namespace, a verb and the resource in camelCase, unique across the application. A route that reads input validates it with `apiValidator(target, schema)`, which answers `400 INVALID_INPUT` and documents the schema at once; the Root Route is outside `/api` and is not part of the document.
+The tag is the plugin's namespace in PascalCase and the `operationId` is the namespace, a verb and the resource in camelCase, unique across the application. The route takes no input and checks no permission, so it lists only `401` and `500` rather than spreading `apiErrorResponses`. A route that reads input validates it with `apiValidator(target, schema)`, which answers `400 INVALID_INPUT` and documents the schema at once; the Root Route is outside `/api` and is not part of the document.
 
 The two small Server Routes are declared directly inside their production
 contribution factories, and their tests execute the real `createRouter()`

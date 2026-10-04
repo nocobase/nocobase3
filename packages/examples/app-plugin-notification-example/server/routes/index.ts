@@ -99,7 +99,8 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
           'Every active user a task may be assigned to, by name. A bounded list: it is not paged and answers `meta.total`.',
         responses: {
           200: listResponse(TaskUser),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       async (context) => {
@@ -118,7 +119,9 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
           'The tasks the signed-in user created or is assigned, most recently updated first, paged by `page` and `pageSize`. A page past the last answers the last page.',
         responses: {
           200: listResponse(Task),
-          ...apiErrorResponses,
+          400: apiErrorResponse(400),
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       apiValidator('query', ListTasksQuery),
@@ -171,7 +174,8 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
           'Creates an open task created by the signed-in user and sends its assignee an in-app notification.',
         responses: {
           201: dataResponse(Task, 'The created task.'),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
           400: apiErrorResponse(
             400,
             'The input is invalid (`INVALID_INPUT`), or the assignee is not an active user (`ASSIGNEE_NOT_FOUND`).',

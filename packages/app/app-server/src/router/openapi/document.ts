@@ -54,6 +54,11 @@ export interface GenerateApiDocumentOptions {
   readonly prefix?: string;
   readonly servers?: readonly OpenAPIV3_1.ServerObject[];
   readonly fragments?: readonly ApiDocumentFragment[];
+  /**
+   * Routes behind runtime dispatchers, documented like declared routes at their own prefix. Defaults to the source's
+   * `forwardedApiRoutes`.
+   */
+  readonly forwarded?: ApiForwardedRoutes;
   /** Receives what the merge had to drop or rename, such as a fragment operation colliding with a declared route. */
   readonly onWarning?: (message: string) => void;
 }
@@ -70,11 +75,55 @@ export interface ApiRouteDeclaration {
   readonly operationId?: string;
   readonly tags?: readonly string[];
   readonly summary?: string;
+  /** For an endpoint registered with `addUndeclaredApiRoute`, why it cannot be described. */
+  readonly reason?: string;
+}
+
+/**
+ * A Hono router a runtime dispatcher forwards requests to. The dispatcher is a single catch-all on the `/api` router,
+ * so the router's routes are invisible there; registering it lets the document and the route inspection treat them
+ * exactly like routes mounted on `/api`.
+ */
+export interface ApiForwardedRouter {
+  /** Who registers the router, such as a plugin's package name. Named in warnings and duplicate-route errors. */
+  readonly owner: string;
+  /** The full path the router's own paths are appended to, `/api` or below it, such as `/api/authorization`. */
+  readonly prefix: string;
+  /**
+   * The sub-path below `prefix` the dispatcher actually forwards to this router, such as `/sharingRules`, when the
+   * router's paths include it. A route the router declares outside `prefix` + `scope` is never reached: it is left out
+   * of the document and the duplicate-route check and reported as undeclared. Defaults to all of `prefix`.
+   */
+  readonly scope?: string;
+  readonly router: Hono;
+}
+
+/**
+ * An endpoint a runtime dispatcher forwards to that the framework cannot see into, such as a plain function handler.
+ * It always counts as undeclared and never appears in the document.
+ */
+export interface ApiUndeclaredRoute {
+  /** Who registers the endpoint, such as a plugin's package name. */
+  readonly owner: string;
+  /** The HTTP method, or `ALL` for a handler answering every method. */
+  readonly method: string;
+  /** The full path, such as `/api/authorization/handWritten`. */
+  readonly path: string;
+  /** Why the endpoint cannot be described, reported with it. */
+  readonly reason?: string;
+}
+
+/** What runtime dispatchers forward to, as registered on the `ApiDocsService`. */
+export interface ApiForwardedRoutes {
+  readonly routers: readonly ApiForwardedRouter[];
+  readonly undeclared: readonly ApiUndeclaredRoute[];
 }
 
 /** An application whose API router can be inspected once its routes are registered. */
 export interface ApiRouterSource {
   readonly apiRouter: Hono | undefined;
+  /** Routes behind runtime dispatchers, inspected and documented along with `apiRouter`'s own. */
+  readonly forwardedApiRoutes?: ApiForwardedRoutes;
 }
 
 const httpMethods = [
@@ -88,8 +137,20 @@ const httpMethods = [
   'trace',
 ] as const;
 
+function isRouterSource(
+  source: Hono | ApiRouterSource,
+): source is ApiRouterSource {
+  return 'apiRouter' in source;
+}
+
+function forwardedOf(
+  source: Hono | ApiRouterSource,
+): ApiForwardedRoutes | undefined {
+  return isRouterSource(source) ? source.forwardedApiRoutes : undefined;
+}
+
 function resolveApiRouter(source: Hono | ApiRouterSource): Hono {
-  const router = 'apiRouter' in source ? source.apiRouter : source;
+  const router = isRouterSource(source) ? source.apiRouter : source;
   if (!router) {
     throw new Error(
       'The application has not registered its routes yet. Start it before inspecting its API.',
@@ -116,12 +177,66 @@ function pathPrefixOf(path: string): string {
  * Every endpoint of an API router with what `describeRoute()` declares for it, in registration order. The application's
  * catch-all for unknown paths is not an endpoint and is left out. A declaration applied with `router.use()` counts for
  * the paths below it, as it does in the document.
+ *
+ * For an application, or anything else carrying `forwardedApiRoutes`, the routes of every router registered with
+ * `addApiRouter` follow at their own prefix, judged the same way, and every endpoint registered with
+ * `addUndeclaredApiRoute` follows as undeclared.
  */
 export function inspectApiRoutes(
   source: Hono | ApiRouterSource,
   prefix: string = '/api',
 ): ApiRouteDeclaration[] {
-  const router = resolveApiRouter(source);
+  const declarations = inspectRouter(resolveApiRouter(source), prefix);
+  const forwarded = forwardedOf(source);
+  for (const registration of forwarded?.routers ?? []) {
+    const base = forwardedPath(registration);
+    for (const route of inspectRouter(
+      registration.router,
+      registration.prefix,
+    )) {
+      declarations.push(
+        isForwardedTo(registration, route.path)
+          ? route
+          : {
+              method: route.method,
+              path: route.path,
+              declared: false,
+              hidden: false,
+              reason: `Declared outside the forwarded path ${base}, which the dispatcher never forwards to this router.`,
+            },
+      );
+    }
+  }
+  for (const { method, path, reason } of forwarded?.undeclared ?? [])
+    declarations.push({
+      method,
+      path,
+      declared: false,
+      hidden: false,
+      ...(reason ? { reason } : {}),
+    });
+  return declarations;
+}
+
+/** The full path a dispatcher forwards to a registered router: its prefix followed by its scope. */
+export function forwardedPath(registration: ApiForwardedRouter): string {
+  return joinPath(registration.prefix, registration.scope ?? '/');
+}
+
+/** Whether the dispatcher forwards a request for `path`, a full path such as `/api/authorization/x`, to the router. */
+export function isForwardedTo(
+  registration: ApiForwardedRouter,
+  path: string,
+): boolean {
+  const base = forwardedPath(registration);
+  return path === base || path.startsWith(base === '/' ? '/' : `${base}/`);
+}
+
+function joinPath(prefix: string, path: string): string {
+  return `${prefix}${path === '/' ? '' : path}` || '/';
+}
+
+function inspectRouter(router: Hono, prefix: string): ApiRouteDeclaration[] {
   const contexts: { readonly prefix: string; spec: DescribeRouteOptions }[] =
     [];
   const endpoints = new Map<
@@ -177,7 +292,7 @@ export function inspectApiRoutes(
     }
     declarations.push({
       method: endpoint.method,
-      path: `${prefix}${endpoint.path === '/' ? '' : endpoint.path}` || '/',
+      path: joinPath(prefix, endpoint.path),
       declared: applicable.length > 0,
       hidden,
       ...(operationId ? { operationId } : {}),
@@ -189,8 +304,9 @@ export function inspectApiRoutes(
 }
 
 /**
- * The endpoints that declare nothing: neither `describeRoute({...})` nor `describeRoute({ hide: true })`. Each is a
- * defect the API document check reports.
+ * The endpoints that declare nothing: neither `describeRoute({...})` nor `describeRoute({ hide: true })`. For an
+ * application this includes the routes behind runtime dispatchers, and every endpoint registered with
+ * `addUndeclaredApiRoute`. Each is a defect the API document check reports.
  */
 export function findUndeclaredApiRoutes(
   source: Hono | ApiRouterSource,
@@ -212,24 +328,10 @@ export async function generateApiDocument(
   const router = resolveApiRouter(source);
   const prefix = options.prefix ?? '/api';
   const base = apiDocumentBaseComponents();
-  const generated = await generateSpecs(router, {
-    documentation: {
-      info: {
-        title: options.info.title,
-        version: options.info.version,
-        ...(options.info.description
-          ? { description: options.info.description }
-          : {}),
-      },
-      ...(options.servers ? { servers: [...options.servers] } : {}),
-      components: base,
-    },
-    defaultValidationErrorResponse: validationErrorResponse(),
-    excludeMethods: ['OPTIONS'],
-  });
+  const generated = await generateRouterSpecs(router, options, base);
   const paths: OpenAPIV3_1.PathsObject = {};
   for (const [path, item] of Object.entries(generated.paths)) {
-    paths[`${prefix}${path === '/' ? '' : path}` || '/'] = item;
+    paths[joinPath(prefix, path)] = item;
   }
   const document: ApiDocument = {
     openapi: '3.1.0',
@@ -251,11 +353,61 @@ export async function generateApiDocument(
   };
   await expandRepositoryOperations(document);
   const warn = options.onWarning ?? (() => undefined);
+  // Routes behind a runtime dispatcher are declared routes too: merged before the fragments, so a fragment operation on
+  // the same method and path is the one dropped. Their components are generated from the same base, so the shared
+  // ones are identical and stay shared.
+  for (const forwarded of (options.forwarded ?? forwardedOf(source))?.routers ??
+    []) {
+    const specs = await generateRouterSpecs(
+      forwarded.router,
+      options,
+      apiDocumentBaseComponents(),
+    );
+    const forwardedPaths: OpenAPIV3_1.PathsObject = {};
+    for (const [path, item] of Object.entries(specs.paths)) {
+      const full = joinPath(forwarded.prefix, path);
+      // A route outside the forwarded path is never reached; `inspectApiRoutes` reports it instead.
+      if (isForwardedTo(forwarded, full)) forwardedPaths[full] = item;
+    }
+    mergeApiDocumentFragment(
+      document,
+      {
+        owner: forwarded.owner,
+        paths: forwardedPaths,
+        components: specs.components,
+      },
+      warn,
+    );
+  }
   for (const fragment of options.fragments ?? []) {
     mergeApiDocumentFragment(document, fragment, warn);
   }
   document.tags = collectTags(document, options.fragments ?? []);
   return document;
+}
+
+type GeneratedSpecs = Awaited<ReturnType<typeof generateSpecs>>;
+
+function generateRouterSpecs(
+  router: Hono,
+  options: GenerateApiDocumentOptions,
+  base: OpenAPIV3_1.ComponentsObject,
+): Promise<GeneratedSpecs> {
+  return generateSpecs(router, {
+    documentation: {
+      info: {
+        title: options.info.title,
+        version: options.info.version,
+        ...(options.info.description
+          ? { description: options.info.description }
+          : {}),
+      },
+      ...(options.servers ? { servers: [...options.servers] } : {}),
+      components: base,
+    },
+    defaultValidationErrorResponse: validationErrorResponse(),
+    excludeMethods: ['OPTIONS'],
+  });
 }
 
 function collectTags(

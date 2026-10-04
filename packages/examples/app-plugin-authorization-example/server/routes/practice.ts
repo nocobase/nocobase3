@@ -37,7 +37,8 @@ export function createPracticeRoutes(
         'The permission sets in effect for the caller, the assignments each comes from, and whether the caller may reset the example data.',
       responses: {
         200: dataResponse(PracticeContext),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     async (c) => {

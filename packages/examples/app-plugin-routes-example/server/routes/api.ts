@@ -1,7 +1,7 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
-  apiErrorResponses,
+  apiErrorResponse,
   dataResponse,
   defineApiRoutes,
   describeRoute,
@@ -26,7 +26,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         operationId: 'routesExampleGetGreeting',
         responses: {
           200: dataResponse(RoutesExampleGreeting),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       (context) =>

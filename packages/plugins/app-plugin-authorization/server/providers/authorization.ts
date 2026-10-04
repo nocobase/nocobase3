@@ -17,7 +17,7 @@ import {
   type AppAuthorization,
   type AuthorizationConfig,
 } from '../authorization.js';
-import { authorizationApiFragment } from '../extension/http.js';
+import { documentAuthorizationRoutes } from '../extension/http.js';
 import { authorizationToken } from '../tokens.js';
 import { reportAuthorizationUi } from '../ui.js';
 import { reportStoredGrants, storedGrantProblems } from '../stored-grants.js';
@@ -40,7 +40,7 @@ export class AuthorizationProvider<
   private globalPermissionsChangedTopic?: RealtimePublicTopic<{
     readonly type: 'permissions-changed';
   }>;
-  private removeApiFragment?: () => void;
+  private removeApiRoutes?: () => void;
 
   public override register(): void {
     this.app.container.singleton(authorizationToken, (container) =>
@@ -85,21 +85,20 @@ export class AuthorizationProvider<
   }
 
   public override boot(): Promise<void> {
-    // The settings routes sit behind the `/api/authorization` dispatcher, where the document cannot see them, so they
-    // are contributed as a fragment, built from every `authz.routes` registration when the document is generated. A
-    // handler the fragment cannot describe is logged as a warning.
-    if (this.app.container.has(apiDocsToken)) {
-      const container = this.app.container;
-      this.removeApiFragment?.();
-      // Resolved when the document is generated, so the authorization instance is not created any earlier than before.
-      this.removeApiFragment = container
-        .resolve(apiDocsToken)
-        .addFragment(async () =>
-          authorizationApiFragment(
-            container.resolve(authorizationToken).routes,
-            (message) => this.warn(message),
-          ),
-        );
+    // The settings routes sit behind the `/api/authorization` dispatcher, where the document generator cannot see them,
+    // so every `authz.routes` registration is registered with the API documentation: each router forwarded to, and each
+    // plain function as an undeclared route the API document check reports. Every rule plugin registers its routes
+    // while the authorization instance is created, so they are all there by now.
+    if (
+      this.app.container.has(apiDocsToken) &&
+      this.app.container.has(authorizationToken)
+    ) {
+      this.removeApiRoutes?.();
+      this.removeApiRoutes = documentAuthorizationRoutes(
+        this.app.container.resolve(apiDocsToken),
+        this.app.container.resolve(authorizationToken).routes,
+        (message) => this.warn(message),
+      );
     }
     if (this.app.container.has(realtimeServiceToken)) {
       this.permissionsChangedTopic = this.app.container
@@ -145,8 +144,8 @@ export class AuthorizationProvider<
   }
 
   public override shutdown(): Promise<void> {
-    this.removeApiFragment?.();
-    this.removeApiFragment = undefined;
+    this.removeApiRoutes?.();
+    this.removeApiRoutes = undefined;
     this.permissionsChangedTopic?.close();
     this.permissionsChangedTopic = undefined;
     this.globalPermissionsChangedTopic?.close();

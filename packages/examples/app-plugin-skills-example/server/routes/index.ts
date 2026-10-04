@@ -1,7 +1,7 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
-  apiErrorResponses,
+  apiErrorResponse,
   dataResponse,
   defineApiRoutes,
   describeRoute,
@@ -29,7 +29,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           'The fixed notice the `AppNotice` component shows. Requires a session or an API key and no further permission, because the notice is not sensitive.',
         responses: {
           200: dataResponse(AppNotice),
-          ...apiErrorResponses,
+          401: apiErrorResponse(401),
+          500: apiErrorResponse(500),
         },
       }),
       (context) => context.json({ data: notice.getDefaultNotice() }),

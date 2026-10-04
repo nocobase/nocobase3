@@ -42,8 +42,8 @@ export function createAuthorizationRoutes(
       context.json({ data: await context.get('authz').snapshot() }),
   );
   // The dispatcher is middleware for every path below `/api/authorization`, not an endpoint, so it declares nothing: a
-  // `describeRoute()` here would apply to every route below it. The settings routes it forwards to are documented by the
-  // fragment `authorizationApiFragment` builds from every `authz.routes` registration, which the provider contributes.
+  // `describeRoute()` here would apply to every route below it. The provider registers the settings routers it forwards
+  // to with the API documentation (`documentAuthorizationRoutes`), which documents and checks them at their full paths.
   routes.all('*', async (context, next) => {
     const response = authorization.routes.handle({
       request: withRequestId(context.req.raw, getRequestId(context)),

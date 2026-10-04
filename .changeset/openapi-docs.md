@@ -1,0 +1,7 @@
+---
+'@nocobase/create-plugin': patch
+'@nocobase/app-template-default': patch
+'@nocobase/app-template-hub': patch
+---
+
+Document the application's OpenAPI document for the agents and people who work on generated plugins and applications. A generated plugin's `AGENTS.md` now says that every `/api` route declares itself with `describeRoute()` and validates its input with `apiValidator()`, lists only the error statuses it can produce, declares `security: []` when it needs no credential and is hidden only for the listed reasons, that a plugin with its own runtime dispatcher registers its routers with `addApiRouter({ owner, prefix, scope?, router })` and any other target with `addUndeclaredApiRoute()`, and that its tests expect `findUndeclaredApiRoutes()` and `findApiDocumentSchemaProblems()` to be empty; it also says how to read an application's document at `<APP_BASE_PATH>/api/swagger` with an API key. The comment in a generated plugin's `server/routes/index.ts` names `apiValidator()` and `describeRoute()` instead of `parseApiInput()`. The default and Hub templates' `AGENTS.md` and `README.MD`, like the examples template's, explain where the Swagger UI and the JSON document are served, that reading them needs a signed-in session or an API key, the `curl -H "x-api-key: <key>"` form, and that an agent learns the endpoints from the document; their server route example uses `describeRoute()` and `apiValidator()`.

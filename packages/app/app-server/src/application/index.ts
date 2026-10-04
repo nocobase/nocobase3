@@ -27,6 +27,10 @@ import {
 import { createApiDocsRouter } from '../router/openapi/docs-routes.js';
 import type { ApiDocsDescription } from '../router/openapi/service.js';
 import { apiDocsToken } from '../router/openapi/service.js';
+import {
+  isForwardedTo,
+  type ApiForwardedRoutes,
+} from '../router/openapi/document.js';
 import { readFile } from 'node:fs/promises';
 import { normalizeBasePath, resolveAppName } from '../support/index.js';
 import {
@@ -194,6 +198,17 @@ export class Application<
    */
   public get apiRouter(): Hono | undefined {
     return this.apiRouterValue;
+  }
+
+  /**
+   * The routes behind runtime dispatchers that plugins registered with the API documentation service, inspected by
+   * `inspectApiRoutes(app)` and documented along with `apiRouter`'s own. Empty when the application has no API
+   * documentation service.
+   */
+  public get forwardedApiRoutes(): ApiForwardedRoutes {
+    return this.container.has(apiDocsToken)
+      ? this.container.resolve(apiDocsToken).forwardedApiRoutes
+      : { routers: [], undeclared: [] };
   }
 
   public addServiceProvider<TArguments extends readonly unknown[]>(
@@ -408,10 +423,21 @@ export class Application<
         router: createApiDocsRouter(apiDocs),
       });
     }
+    // Routers a runtime dispatcher forwards to are checked with the rest, at the paths they answer below `/api`. Only
+    // those registered by now, during boot, are seen; they are checked here and never mounted.
+    const forwardedRouters: OwnedApiRouter[] = (
+      apiDocs?.forwardedApiRoutes.routers ?? []
+    ).map((registration) => ({
+      owner: registration.owner,
+      router: registration.router,
+      mount: registration.prefix.slice('/api'.length),
+      // A route outside the forwarded path is never reached, so it cannot shadow anything.
+      includes: (path: string) => isForwardedTo(registration, `/api${path}`),
+    }));
     // Hono lets the first matching route win without a word, so a second contribution answering the same method and
     // path would be dead code nobody notices. Checked before anything mounts, so a failed start leaves no half-built
     // router behind.
-    assertNoDuplicateApiRoutes(apiRouters);
+    assertNoDuplicateApiRoutes([...apiRouters, ...forwardedRouters]);
     for (const { router } of apiRouters) api.route('/', router);
     api.all('*', apiNotFoundHandler);
     this.router.route('/api', api);

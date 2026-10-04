@@ -3,12 +3,8 @@ import { createMiddleware } from 'hono/factory';
 import {
   ApiError,
   apiErrorHandler,
-  findUndeclaredApiRoutes,
-  generateApiDocument,
-  mergeApiDocumentFragment,
-  type ApiDocument,
-  type ApiDocumentFragment,
-  type OpenAPIV3_1,
+  inspectApiRoutes,
+  type ApiDocsService,
 } from '@nocobase/app-server/router';
 import type {
   AuthorizationContext,
@@ -232,7 +228,8 @@ const settingsRouters = new WeakMap<
 /**
  * Adapts a settings router to `authz.routes.add`. The router declares its routes at their dispatcher-relative paths,
  * which start with the path it is registered under, such as `/sharingRules/options` for `/sharingRules`. A handler
- * built here is documented in the application's API document automatically; declare each route with `describeRoute()`.
+ * built here is registered with the application's API documentation as a forwarded router, so its routes are
+ * documented and checked like any other; declare each route with `describeRoute()`.
  */
 export function createRouteHandler(
   routes: Hono<SettingsRouterEnv>,
@@ -262,102 +259,61 @@ function atPath(request: Request, path: string): Request {
 /** Where the application mounts the dispatcher the settings routes are registered on. */
 const AUTHORIZATION_API_PREFIX = '/api/authorization';
 
-/** An endpoint behind the `/api/authorization` dispatcher that the API document cannot describe. */
-export interface UndeclaredAuthorizationRoute {
-  readonly method: string;
-  /** The full path, such as `/api/authorization/sharingRules/options`. */
-  readonly path: string;
-}
+const AUTHORIZATION_PLUGIN = '@nocobase/app-plugin-authorization';
 
 /**
- * The endpoints behind the `/api/authorization` dispatcher that the API document cannot describe: a handler registered
- * with `authz.routes.add` that `createRouteHandler` did not build, as `ALL` at its registered path, because a plain
- * function has no routes to read; and every route of a `createRouteHandler` router that declares neither
- * `describeRoute({...})` nor `describeRoute({ hide: true })`. Each is a defect, as `findUndeclaredApiRoutes` reports
- * for the routes the application mounts directly.
+ * Registers every handler on `registry` with the application's API documentation, which cannot see past the
+ * `/api/authorization` dispatcher on its own: a handler `createRouteHandler` built as a router forwarded to under
+ * `/api/authorization`, so its routes are documented and checked like routes mounted on `/api`; any other handler as an
+ * undeclared `ALL` route at its registered path, so `findUndeclaredApiRoutes(app)` reports it. A router route outside
+ * the path its handler is registered under, which the dispatcher never forwards to, is left out of the document,
+ * reported as undeclared, and reported through `onWarning`.
+ * Reads the registrations once; returns a function that removes them all.
  */
-export function undeclaredAuthorizationRoutes(
-  registry: AuthorizationRouteRegistry,
-): UndeclaredAuthorizationRoute[] {
-  return registry.entries().flatMap(({ path, handler }) => {
-    const routes = settingsRouters.get(handler);
-    if (!routes) return [{ method: 'ALL', path: fullPath(path) }];
-    return findUndeclaredApiRoutes(
-      documentable(routes),
-      AUTHORIZATION_API_PREFIX,
-    );
-  });
-}
-
-/**
- * The API document fragment for the settings routes behind the `/api/authorization` dispatcher, which forwards every
- * path below it at request time and so hides them from the document generator. It reads every registration on
- * `registry`, by this plugin and by the rule plugins alike, and documents the router behind each handler
- * `createRouteHandler` built at its full `/api/authorization/...` path. A hand-written handler has no routes to
- * describe and is reported through `onWarning`, as is a router route outside the path its handler is registered under,
- * which the dispatcher never forwards to it.
- */
-export async function authorizationApiFragment(
+export function documentAuthorizationRoutes(
+  apiDocs: ApiDocsService,
   registry: AuthorizationRouteRegistry,
   onWarning: (message: string) => void = () => undefined,
-): Promise<ApiDocumentFragment> {
-  const owner = '@nocobase/app-plugin-authorization';
-  const document: ApiDocument = {
-    openapi: '3.1.0',
-    info: { title: owner, version: '0' },
-    paths: {},
-  };
-  // `mergeApiDocumentFragment` leaves tags to the caller; the first description of a tag wins, as in the document.
-  const tags = new Map<string, OpenAPIV3_1.TagObject>();
+): () => void {
+  const removals: (() => void)[] = [];
   for (const { path, handler } of registry.entries()) {
     const routes = settingsRouters.get(handler);
-    const mounted = fullPath(path);
+    const mounted = `${AUTHORIZATION_API_PREFIX}${path}`;
     if (!routes) {
+      const reason =
+        'Handled by a function createRouteHandler did not build, so the API document cannot describe it. Register a settings router with authz.routes.add(path, createRouteHandler(router)).';
       onWarning(
-        `${owner}: ${mounted} is handled by a function createRouteHandler did not build, so the API document cannot describe it. Register a settings router with authz.routes.add(path, createRouteHandler(router)).`,
+        `${AUTHORIZATION_PLUGIN}: ${mounted} is handled by a function createRouteHandler did not build, so the API document cannot describe it. Register a settings router with authz.routes.add(path, createRouteHandler(router)).`,
+      );
+      removals.push(
+        apiDocs.addUndeclaredApiRoute({
+          owner: AUTHORIZATION_PLUGIN,
+          method: 'ALL',
+          path: mounted,
+          reason,
+        }),
       );
       continue;
     }
-    const generated = await generateApiDocument(documentable(routes), {
-      info: document.info,
-      prefix: AUTHORIZATION_API_PREFIX,
-    });
-    const paths: NonNullable<ApiDocument['paths']> = {};
-    for (const [route, item] of Object.entries(generated.paths ?? {})) {
-      if (route === mounted || route.startsWith(`${mounted}/`))
-        paths[route] = item;
-      else
+    // The router as the document tools take it: its routes, without the bindings only a request supplies.
+    const router = new Hono().route('/', routes);
+    for (const route of inspectApiRoutes(router, AUTHORIZATION_API_PREFIX)) {
+      if (route.path !== mounted && !route.path.startsWith(`${mounted}/`))
         onWarning(
-          `${owner}: ${route} is declared by the router registered under ${mounted}, which the dispatcher never forwards it to, and was left out of the API document.`,
+          `${AUTHORIZATION_PLUGIN}: ${route.method} ${route.path} is declared by the router registered under ${mounted}, which the dispatcher never forwards it to.`,
         );
     }
-    mergeApiDocumentFragment(
-      document,
-      {
-        owner,
-        paths,
-        ...(generated.components ? { components: generated.components } : {}),
-      },
-      onWarning,
+    removals.push(
+      apiDocs.addApiRouter({
+        owner: AUTHORIZATION_PLUGIN,
+        prefix: AUTHORIZATION_API_PREFIX,
+        // The dispatcher forwards only the registered path and below; a route elsewhere is reported, not documented.
+        scope: path,
+        router,
+      }),
     );
-    for (const tag of generated.tags ?? [])
-      if (!tags.get(tag.name)?.description) tags.set(tag.name, tag);
   }
-  return {
-    owner,
-    namespace: 'authorization',
-    ...(document.paths ? { paths: document.paths } : {}),
-    ...(document.components ? { components: document.components } : {}),
-    ...(tags.size > 0 ? { tags: [...tags.values()] } : {}),
+  return () => {
+    for (const remove of removals.splice(0)) remove();
   };
-}
-
-/** The router as the document tools take it: its routes, without the bindings only a request supplies. */
-function documentable(routes: Hono<SettingsRouterEnv>): Hono {
-  return new Hono().route('/', routes);
-}
-
-/** A path registered on the dispatcher as the application serves it. */
-function fullPath(path: string): string {
-  return `${AUTHORIZATION_API_PREFIX}${path}`;
 }
