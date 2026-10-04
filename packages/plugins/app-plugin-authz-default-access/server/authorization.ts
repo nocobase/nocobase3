@@ -11,10 +11,7 @@ import {
   type SettingsAuthorizationApi,
   type UiAuthorizationApi,
 } from '@nocobase/app-plugin-authorization/server';
-import {
-  addSettingsRoutes,
-  DatabaseConnectionHandle,
-} from '@nocobase/app-plugin-authorization/server/extension';
+import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/extension';
 import {
   createDefaultAccessHandler,
   DEFAULT_ACCESS_PATH,
@@ -59,8 +56,7 @@ export function defaultAccess(
         { type: 'settings', id: DEFAULT_ACCESS_SETTINGS },
         { section: AUTHORIZATION_SETTINGS_SECTION, order: 10 },
       );
-      addSettingsRoutes(
-        authz.routes,
+      authz.routes.add(
         DEFAULT_ACCESS_PATH,
         createDefaultAccessHandler(
           authz,

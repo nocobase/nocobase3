@@ -11,10 +11,7 @@ import {
   type SettingsAuthorizationApi,
   type UiAuthorizationApi,
 } from '@nocobase/app-plugin-authorization/server';
-import {
-  addSettingsRoutes,
-  DatabaseConnectionHandle,
-} from '@nocobase/app-plugin-authorization/server/extension';
+import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/extension';
 import {
   createSharingRulesHandler,
   SHARING_RULES_PATH,
@@ -59,8 +56,7 @@ export function sharingRules(
         { type: 'settings', id: SHARING_RULES_SETTINGS },
         { section: AUTHORIZATION_SETTINGS_SECTION, order: 20 },
       );
-      addSettingsRoutes(
-        authz.routes,
+      authz.routes.add(
         SHARING_RULES_PATH,
         createSharingRulesHandler(authz, plugin.authorizationApi!.sharingRules),
       );

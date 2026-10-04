@@ -86,7 +86,8 @@ export class AuthorizationProvider<
 
   public override boot(): Promise<void> {
     // The settings routes sit behind the `/api/authorization` dispatcher, where the document cannot see them, so they
-    // are contributed as a fragment, built from the routers registered when the document is generated.
+    // are contributed as a fragment, built from every `authz.routes` registration when the document is generated. A
+    // handler the fragment cannot describe is logged as a warning.
     if (this.app.container.has(apiDocsToken)) {
       const container = this.app.container;
       this.removeApiFragment?.();
@@ -96,6 +97,7 @@ export class AuthorizationProvider<
         .addFragment(async () =>
           authorizationApiFragment(
             container.resolve(authorizationToken).routes,
+            (message) => this.warn(message),
           ),
         );
     }

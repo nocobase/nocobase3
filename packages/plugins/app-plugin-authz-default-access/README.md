@@ -42,7 +42,7 @@ import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server'
 export default { plugins: [defaultAccess()] };
 ```
 
-`defaultAccess({ store? })` wraps `defaultAccessPlugin` from `@nocobase/authorization/default-access` with the bundled database store; a replacement store implements `DefaultAccessStore<DatabaseConnection>`. During setup it registers the settings item `authorization.default-access`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `addSettingsRoutes(authz.routes, '/defaultAccess', handler)`, which also puts its routes in the application's API document. Without the factory in the configuration the plugin adds no API and no route.
+`defaultAccess({ store? })` wraps `defaultAccessPlugin` from `@nocobase/authorization/default-access` with the bundled database store; a replacement store implements `DefaultAccessStore<DatabaseConnection>`. During setup it registers the settings item `authorization.default-access`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/defaultAccess', createRouteHandler(router))`, so its routes are served at `/api/authorization/defaultAccess` and documented in the application's API document automatically. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 

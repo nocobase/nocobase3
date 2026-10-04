@@ -3259,9 +3259,6 @@ importers:
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -3350,9 +3347,6 @@ importers:
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -3441,9 +3435,6 @@ importers:
       clsx:
         specifier: 'catalog:'
         version: 2.1.1
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)

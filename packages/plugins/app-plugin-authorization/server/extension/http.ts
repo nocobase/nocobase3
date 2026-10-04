@@ -3,8 +3,12 @@ import { createMiddleware } from 'hono/factory';
 import {
   ApiError,
   apiErrorHandler,
+  findUndeclaredApiRoutes,
   generateApiDocument,
+  mergeApiDocumentFragment,
+  type ApiDocument,
   type ApiDocumentFragment,
+  type OpenAPIV3_1,
 } from '@nocobase/app-server/router';
 import type {
   AuthorizationContext,
@@ -225,13 +229,11 @@ const settingsRouters = new WeakMap<
   Hono<SettingsRouterEnv>
 >();
 
-/** The settings routers registered on each dispatcher with `addSettingsRoutes`, in registration order. */
-const documentedRouters = new WeakMap<
-  AuthorizationRouteRegistry,
-  Hono<SettingsRouterEnv>[]
->();
-
-/** Adapts a settings router to `authz.routes.add`. */
+/**
+ * Adapts a settings router to `authz.routes.add`. The router declares its routes at their dispatcher-relative paths,
+ * which start with the path it is registered under, such as `/sharingRules/options` for `/sharingRules`. A handler
+ * built here is documented in the application's API document automatically; declare each route with `describeRoute()`.
+ */
 export function createRouteHandler(
   routes: Hono<SettingsRouterEnv>,
 ): AuthorizationRouteHandler {
@@ -243,33 +245,6 @@ export function createRouteHandler(
     );
   settingsRouters.set(handler, routes);
   return handler;
-}
-
-/**
- * Register `handler` under `path` on the `/api/authorization` dispatcher, as `authz.routes.add` does, and, when
- * `createRouteHandler` built it, publish the settings router's routes in the application's API document. The
- * dispatcher forwards every path below `/api/authorization` at request time, so the document cannot see the routes
- * behind it; the authorization plugin contributes the ones registered here as a document fragment. Declare each route
- * of the router with `describeRoute()`, or `describeRoute({ hide: true })` with a reason.
- */
-export function addSettingsRoutes(
-  registry: AuthorizationRouteRegistry,
-  path: string,
-  handler: AuthorizationRouteHandler,
-): void {
-  registry.add(path, handler);
-  const routes = settingsRouters.get(handler);
-  if (!routes) return;
-  const documented = documentedRouters.get(registry) ?? [];
-  documented.push(routes);
-  documentedRouters.set(registry, documented);
-}
-
-/** The settings routers `addSettingsRoutes` registered on `registry`, with paths relative to `/api/authorization`. */
-export function documentedSettingsRouters(
-  registry: AuthorizationRouteRegistry,
-): readonly Hono<SettingsRouterEnv>[] {
-  return [...(documentedRouters.get(registry) ?? [])];
 }
 
 /** The request as the router sees it: at the dispatcher-relative path. */
@@ -284,25 +259,105 @@ function atPath(request: Request, path: string): Request {
   });
 }
 
+/** Where the application mounts the dispatcher the settings routes are registered on. */
+const AUTHORIZATION_API_PREFIX = '/api/authorization';
+
+/** An endpoint behind the `/api/authorization` dispatcher that the API document cannot describe. */
+export interface UndeclaredAuthorizationRoute {
+  readonly method: string;
+  /** The full path, such as `/api/authorization/sharingRules/options`. */
+  readonly path: string;
+}
+
 /**
- * The API document fragment for the settings routes behind the `/api/authorization` dispatcher: every router registered
- * with `addSettingsRoutes`, by this plugin and by the rule plugins, at its full `/api/authorization/...` path.
+ * The endpoints behind the `/api/authorization` dispatcher that the API document cannot describe: a handler registered
+ * with `authz.routes.add` that `createRouteHandler` did not build, as `ALL` at its registered path, because a plain
+ * function has no routes to read; and every route of a `createRouteHandler` router that declares neither
+ * `describeRoute({...})` nor `describeRoute({ hide: true })`. Each is a defect, as `findUndeclaredApiRoutes` reports
+ * for the routes the application mounts directly.
+ */
+export function undeclaredAuthorizationRoutes(
+  registry: AuthorizationRouteRegistry,
+): UndeclaredAuthorizationRoute[] {
+  return registry.entries().flatMap(({ path, handler }) => {
+    const routes = settingsRouters.get(handler);
+    if (!routes) return [{ method: 'ALL', path: fullPath(path) }];
+    return findUndeclaredApiRoutes(
+      documentable(routes),
+      AUTHORIZATION_API_PREFIX,
+    );
+  });
+}
+
+/**
+ * The API document fragment for the settings routes behind the `/api/authorization` dispatcher, which forwards every
+ * path below it at request time and so hides them from the document generator. It reads every registration on
+ * `registry`, by this plugin and by the rule plugins alike, and documents the router behind each handler
+ * `createRouteHandler` built at its full `/api/authorization/...` path. A hand-written handler has no routes to
+ * describe and is reported through `onWarning`, as is a router route outside the path its handler is registered under,
+ * which the dispatcher never forwards to it.
  */
 export async function authorizationApiFragment(
   registry: AuthorizationRouteRegistry,
+  onWarning: (message: string) => void = () => undefined,
 ): Promise<ApiDocumentFragment> {
-  const router = new Hono();
-  for (const routes of documentedSettingsRouters(registry))
-    router.route('/', routes);
-  const document = await generateApiDocument(router, {
-    info: { title: '@nocobase/app-plugin-authorization', version: '0' },
-    prefix: '/api/authorization',
-  });
+  const owner = '@nocobase/app-plugin-authorization';
+  const document: ApiDocument = {
+    openapi: '3.1.0',
+    info: { title: owner, version: '0' },
+    paths: {},
+  };
+  // `mergeApiDocumentFragment` leaves tags to the caller; the first description of a tag wins, as in the document.
+  const tags = new Map<string, OpenAPIV3_1.TagObject>();
+  for (const { path, handler } of registry.entries()) {
+    const routes = settingsRouters.get(handler);
+    const mounted = fullPath(path);
+    if (!routes) {
+      onWarning(
+        `${owner}: ${mounted} is handled by a function createRouteHandler did not build, so the API document cannot describe it. Register a settings router with authz.routes.add(path, createRouteHandler(router)).`,
+      );
+      continue;
+    }
+    const generated = await generateApiDocument(documentable(routes), {
+      info: document.info,
+      prefix: AUTHORIZATION_API_PREFIX,
+    });
+    const paths: NonNullable<ApiDocument['paths']> = {};
+    for (const [route, item] of Object.entries(generated.paths ?? {})) {
+      if (route === mounted || route.startsWith(`${mounted}/`))
+        paths[route] = item;
+      else
+        onWarning(
+          `${owner}: ${route} is declared by the router registered under ${mounted}, which the dispatcher never forwards it to, and was left out of the API document.`,
+        );
+    }
+    mergeApiDocumentFragment(
+      document,
+      {
+        owner,
+        paths,
+        ...(generated.components ? { components: generated.components } : {}),
+      },
+      onWarning,
+    );
+    for (const tag of generated.tags ?? [])
+      if (!tags.get(tag.name)?.description) tags.set(tag.name, tag);
+  }
   return {
-    owner: '@nocobase/app-plugin-authorization',
+    owner,
     namespace: 'authorization',
     ...(document.paths ? { paths: document.paths } : {}),
     ...(document.components ? { components: document.components } : {}),
-    ...(document.tags ? { tags: document.tags } : {}),
+    ...(tags.size > 0 ? { tags: [...tags.values()] } : {}),
   };
+}
+
+/** The router as the document tools take it: its routes, without the bindings only a request supplies. */
+function documentable(routes: Hono<SettingsRouterEnv>): Hono {
+  return new Hono().route('/', routes);
+}
+
+/** A path registered on the dispatcher as the application serves it. */
+function fullPath(path: string): string {
+  return `${AUTHORIZATION_API_PREFIX}${path}`;
 }

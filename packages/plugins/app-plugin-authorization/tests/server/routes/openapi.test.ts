@@ -7,9 +7,15 @@ import {
   type ApiDocument,
 } from '@nocobase/app-server/router';
 import { ServiceContainer } from '@nocobase/service-provider';
+import { describeRoute, emptyResponse } from '@nocobase/app-server/router';
 import { describe, expect, it } from 'vitest';
 
-import { documentedSettingsRouters } from '../../../server/extension/http.js';
+import {
+  authorizationApiFragment,
+  createRouteHandler,
+  createSettingsRouter,
+  undeclaredAuthorizationRoutes,
+} from '../../../server/extension/http.js';
 import {
   AuthorizationProvider,
   createAppAuthorization,
@@ -101,19 +107,109 @@ async function generateApiDocumentFrom(
 }
 
 describe('the API document', () => {
-  it('declares the routes the application mounts and the settings routes behind the dispatcher', async () => {
+  it('declares the routes the application mounts and every route behind the dispatcher', async () => {
     const authorization = createAppAuthorization({
       connection,
       config: { plugins: [testRulePlugin('sharing-rules')] },
     });
-    const routers = documentedSettingsRouters(authorization.routes);
+    // The administration routes `mountedRouter` registers are part of the check once they are registered.
+    const mounted = await mountedRouter(authorization);
 
-    expect(routers).toHaveLength(3);
-    for (const routes of routers)
-      expect(findUndeclaredApiRoutes(routes, '/api/authorization')).toEqual([]);
+    expect(authorization.routes.list()).toEqual([
+      '/inspector',
+      '/permissionSets',
+      '/sharingRules',
+    ]);
+    expect(undeclaredAuthorizationRoutes(authorization.routes)).toEqual([]);
+    expect(findUndeclaredApiRoutes(mounted, '')).toEqual([]);
+  });
+
+  it('documents each registered router at its full path below /api/authorization', async () => {
+    const authorization = createAppAuthorization({
+      connection,
+      config: { plugins: [testRulePlugin('sharing-rules')] },
+    });
+    await mountedRouter(authorization);
+    const warnings: string[] = [];
+    const fragment = await authorizationApiFragment(
+      authorization.routes,
+      (message) => warnings.push(message),
+    );
+
+    expect(warnings).toEqual([]);
+    expect(Object.keys(fragment.paths ?? {}).sort()).toEqual([
+      '/api/authorization/inspector/batchDecide',
+      '/api/authorization/inspector/configuredAccess',
+      '/api/authorization/inspector/decide',
+      '/api/authorization/inspector/options',
+      '/api/authorization/inspector/subjects/{type}',
+      '/api/authorization/inspector/subjects/{type}/resolve',
+      '/api/authorization/permissionSets',
+      '/api/authorization/permissionSets/options',
+      '/api/authorization/permissionSets/subjects/{type}',
+      '/api/authorization/permissionSets/subjects/{type}/resolve',
+      '/api/authorization/permissionSets/{key}',
+      '/api/authorization/permissionSets/{key}/assignments',
+      '/api/authorization/permissionSets/{key}/assignments/{assignmentId}',
+      '/api/authorization/sharingRules/options',
+      '/api/authorization/sharingRules/records/{collection}',
+      '/api/authorization/sharingRules/subjects/{type}',
+      '/api/authorization/sharingRules/subjects/{type}/resolve',
+    ]);
+    expect(fragment.tags?.map((tag) => tag.name)).toEqual(['Authorization']);
+  });
+
+  it('reports a handler it cannot describe and a route the dispatcher never reaches', async () => {
+    const authorization = createAppAuthorization({
+      connection,
+      config: { plugins: [] },
+    });
+    authorization.routes.add('/handWritten', () =>
+      Promise.resolve(new Response(null, { status: 204 })),
+    );
+    const misplaced = createSettingsRouter();
+    misplaced.post(
+      '/elsewhere/reset',
+      describeRoute({
+        tags: ['Authorization'],
+        summary: 'Reset',
+        operationId: 'authorizationTestReset',
+        responses: { 204: emptyResponse() },
+      }),
+      (context) => context.body(null, 204),
+    );
+    misplaced.get('/misplaced/undeclared', (context) =>
+      context.body(null, 204),
+    );
+    authorization.routes.add('/misplaced', createRouteHandler(misplaced));
+
+    expect(undeclaredAuthorizationRoutes(authorization.routes)).toEqual([
+      { method: 'ALL', path: '/api/authorization/handWritten' },
+      { method: 'GET', path: '/api/authorization/misplaced/undeclared' },
+    ]);
+
+    const warnings: string[] = [];
+    const fragment = await authorizationApiFragment(
+      authorization.routes,
+      (message) => warnings.push(message),
+    );
+    // The administration routes `createAppAuthorization` registers are documented as usual; the two defects are not.
     expect(
-      findUndeclaredApiRoutes(await mountedRouter(authorization), ''),
+      Object.keys(fragment.paths ?? {}).filter(
+        (path) =>
+          !/^\/api\/authorization\/(inspector|permissionSets)\//.test(
+            `${path}/`,
+          ),
+      ),
     ).toEqual([]);
+    expect(warnings).toEqual([
+      expect.stringContaining(
+        '/api/authorization/handWritten is handled by a function createRouteHandler did not build',
+      ),
+      expect.stringContaining(
+        '/api/authorization/elsewhere/reset is declared by the router registered under /api/authorization/misplaced',
+      ),
+    ]);
   });
 
   it('lists every operation once the provider contributes the settings routes', async () => {

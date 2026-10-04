@@ -8,9 +8,8 @@ import type { RestrictionRule } from '@nocobase/authorization/restriction-rules'
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import {
   authorizationApiFragment,
-  documentedSettingsRouters,
+  undeclaredAuthorizationRoutes,
 } from '@nocobase/app-plugin-authorization/server/extension';
-import { findUndeclaredApiRoutes } from '@nocobase/app-server/router';
 import { restrictionRules } from '../server/authorization.js';
 
 const PATH = '/restrictionRules';
@@ -344,12 +343,13 @@ describe('restriction rules through the authorization dispatcher', () => {
 
   it('declares its routes for the API document', async () => {
     const { authz } = fixture();
-    const routers = documentedSettingsRouters(authz.routes);
-    expect(routers.length).toBeGreaterThan(0);
-    for (const routes of routers)
-      expect(findUndeclaredApiRoutes(routes, '/api/authorization')).toEqual([]);
+    expect(undeclaredAuthorizationRoutes(authz.routes)).toEqual([]);
 
-    const fragment = await authorizationApiFragment(authz.routes);
+    const warnings: string[] = [];
+    const fragment = await authorizationApiFragment(authz.routes, (message) =>
+      warnings.push(message),
+    );
+    expect(warnings).toEqual([]);
     const operations = Object.entries(fragment.paths ?? {})
       .filter(([path]) =>
         path.startsWith('/api/authorization/restrictionRules'),

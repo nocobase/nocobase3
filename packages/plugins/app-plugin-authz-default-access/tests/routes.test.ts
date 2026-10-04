@@ -8,9 +8,8 @@ import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import {
   authorizationApiFragment,
-  documentedSettingsRouters,
+  undeclaredAuthorizationRoutes,
 } from '@nocobase/app-plugin-authorization/server/extension';
-import { findUndeclaredApiRoutes } from '@nocobase/app-server/router';
 import { defaultAccess } from '../server/authorization.js';
 
 const PATH = '/defaultAccess';
@@ -309,12 +308,13 @@ describe('default access through the authorization dispatcher', () => {
 
   it('declares its routes for the API document', async () => {
     const { authz } = fixture();
-    const routers = documentedSettingsRouters(authz.routes);
-    expect(routers.length).toBeGreaterThan(0);
-    for (const routes of routers)
-      expect(findUndeclaredApiRoutes(routes, '/api/authorization')).toEqual([]);
+    expect(undeclaredAuthorizationRoutes(authz.routes)).toEqual([]);
 
-    const fragment = await authorizationApiFragment(authz.routes);
+    const warnings: string[] = [];
+    const fragment = await authorizationApiFragment(authz.routes, (message) =>
+      warnings.push(message),
+    );
+    expect(warnings).toEqual([]);
     const operations = Object.entries(fragment.paths ?? {})
       .filter(([path]) => path.startsWith('/api/authorization/defaultAccess'))
       .flatMap(([, item]) =>

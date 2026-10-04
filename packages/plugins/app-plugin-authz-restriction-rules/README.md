@@ -43,7 +43,7 @@ import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/s
 export default { plugins: [restrictionRules()] };
 ```
 
-`restrictionRules({ store? })` wraps `restrictionRulesPlugin` from `@nocobase/authorization/restriction-rules` with the bundled database store; a replacement store implements `RestrictionRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.restriction-rules`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `addSettingsRoutes(authz.routes, '/restrictionRules', handler)`, which also puts its routes in the application's API document. Without the factory in the configuration the plugin adds no API and no route.
+`restrictionRules({ store? })` wraps `restrictionRulesPlugin` from `@nocobase/authorization/restriction-rules` with the bundled database store; a replacement store implements `RestrictionRuleStore<DatabaseConnection>`. During setup it registers the settings item `authorization.restriction-rules`, placed in the `authorization` subsection with `authz.ui.place`, with actions `read`, `create`, `update` and `delete`, and registers its HTTP handler with `authz.routes.add('/restrictionRules', createRouteHandler(router))`, so its routes are served at `/api/authorization/restrictionRules` and documented in the application's API document automatically. Without the factory in the configuration the plugin adds no API and no route.
 
 ## Service API
 

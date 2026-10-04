@@ -1,7 +1,6 @@
 import type { Authorization } from '@nocobase/authorization/core';
 import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permission-sets';
 import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
-import { addSettingsRoutes } from '../extension/http.js';
 import type { AuthorizationExtensionHost } from '../host.js';
 import type { SettingsAuthorizationApi } from '../settings.js';
 import { AUTHORIZATION_SETTINGS_SECTION } from '../ui.js';
@@ -43,13 +42,11 @@ export function installAuthorizationAdministration(
     { type: 'settings', id: INSPECTOR_SETTINGS },
     { section: AUTHORIZATION_SETTINGS_SECTION, order: 1000 },
   );
-  addSettingsRoutes(
-    authz.routes,
+  authz.routes.add(
     '/permissionSets',
     createPermissionSetHandler(authz, authz.permissionSets),
   );
-  addSettingsRoutes(
-    authz.routes,
+  authz.routes.add(
     '/inspector',
     createInspectorHandler(authz, authz.permissionSets),
   );
