@@ -29,13 +29,14 @@ import {
 } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { Outlet, MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import applicationRoutes from '../../client/routes.ts';
 import clientPlugins from '../../client/plugins.ts';
 import { AppRouter } from '../../client/routing/app-router.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
+afterEach(() => vi.unstubAllGlobals());
 describe('application shell', () => {
   beforeEach(() => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -62,12 +63,10 @@ describe('application shell', () => {
       screen.queryByRole('link', { name: 'Home' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('complementary', { name: 'Application navigation' }),
-    ).toHaveClass(
-      'bg-sidebar',
-      'text-sidebar-foreground',
-      'border-sidebar-border',
-    );
+      screen
+        .getByRole('complementary', { name: 'Application navigation' })
+        .querySelector('[data-sidebar="sidebar"]'),
+    ).toHaveClass('bg-sidebar');
     // The account menu exposes user details in its panel without a native tooltip.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
@@ -200,16 +199,23 @@ describe('application shell', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Collapse navigation' }),
     );
-    expect(sidebar).toHaveClass('w-16');
+    expect(sidebar.closest('[data-state]')).toHaveAttribute(
+      'data-state',
+      'collapsed',
+    );
     expect(
       screen.getByRole('button', { name: 'Expand navigation' }),
     ).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }));
-    expect(sidebar).toHaveClass('w-64');
+    expect(sidebar.closest('[data-state]')).toHaveAttribute(
+      'data-state',
+      'expanded',
+    );
   });
 
   it('opens and closes the mobile navigation without changing the route', async () => {
+    vi.stubGlobal('innerWidth', 390);
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -228,9 +234,11 @@ describe('application shell', () => {
       await screen.findByRole('dialog', { name: 'Application navigation' }),
     ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Close navigation' }));
-    expect(
-      screen.queryByRole('dialog', { name: 'Application navigation' }),
-    ).toBeNull();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Application navigation' }),
+      ).toBeNull(),
+    );
   });
 
   it('keeps guest pages outside the application shell', async () => {

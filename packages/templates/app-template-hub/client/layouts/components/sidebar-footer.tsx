@@ -4,11 +4,10 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { ShieldCheck } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-export function SidebarFooter({
-  collapsed,
-}: {
-  readonly collapsed: boolean;
-}): ReactElement {
+import { SidebarFooter } from '@/components/ui/sidebar';
+
+/** The application's sidebar footer: the NocoBase line and the template's name and version. */
+export function AppSidebarFooter(): ReactElement {
   const { t } = useTranslation();
   // Published by the server from the application's package.json.
   const publicConfig = useClientApplication().config.public;
@@ -27,35 +26,31 @@ export function SidebarFooter({
   );
 
   return (
-    <footer className='shrink-0 border-t border-sidebar-border/70'>
-      <div
-        className={`flex min-h-20 items-center gap-3 px-5 py-3 ${collapsed ? 'md:min-h-16 md:justify-center md:px-2' : ''}`}
-        title={templateLabel}
-      >
-        <ShieldCheck className='size-4 shrink-0 text-sidebar-foreground/80' />
-        <div
-          className={`min-w-0 text-xs leading-4 ${collapsed ? 'md:hidden' : ''}`}
-        >
-          <div className='font-semibold text-sidebar-foreground'>
-            {t('shell.buildFreely', { defaultValue: 'AI builds freely.' })}
-          </div>
-          <div className='text-sidebar-foreground/80'>
-            <Trans
-              t={t}
-              i18nKey='shell.reliability'
-              defaults='<brand>NocoBase</brand> keeps it reliable.'
-              components={{
-                brand: brandLink,
-              }}
-            >
-              {brandLink} keeps it reliable.
-            </Trans>
-          </div>
-          <div className='mt-1 font-mono text-xs text-sidebar-foreground/70'>
-            {templateLabel}
-          </div>
+    <SidebarFooter
+      className='min-h-20 shrink-0 flex-row items-center gap-3 border-t border-sidebar-border/70 px-5 py-3 group-data-[collapsible=icon]:min-h-16 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2'
+      title={templateLabel}
+    >
+      <ShieldCheck className='size-4 shrink-0 text-sidebar-foreground/80' />
+      <div className='min-w-0 text-xs leading-4 group-data-[collapsible=icon]:hidden'>
+        <div className='font-semibold text-sidebar-foreground'>
+          {t('shell.buildFreely', { defaultValue: 'AI builds freely.' })}
+        </div>
+        <div className='text-sidebar-foreground/80'>
+          <Trans
+            t={t}
+            i18nKey='shell.reliability'
+            defaults='<brand>NocoBase</brand> keeps it reliable.'
+            components={{
+              brand: brandLink,
+            }}
+          >
+            {brandLink} keeps it reliable.
+          </Trans>
+        </div>
+        <div className='mt-1 font-mono text-xs text-sidebar-foreground/70'>
+          {templateLabel}
         </div>
       </div>
-    </footer>
+    </SidebarFooter>
   );
 }

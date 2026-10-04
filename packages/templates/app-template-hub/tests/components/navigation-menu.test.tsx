@@ -1,5 +1,6 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -19,14 +20,26 @@ import {
   routeKey,
   type RouteNavigationItem,
 } from '../../client/routing/route-navigation.js';
-import { NavigationTree } from '../../client/layouts/components/navigation-tree.js';
+import {
+  AppSidebar,
+  AppSidebarProvider,
+  AppSidebarToggle,
+} from '../../client/layouts/components/app-sidebar.js';
+import { NavigationMenu } from '../../client/layouts/components/navigation-menu.js';
 
-// Navigation titles are route data, not keys any namespace owns: the tree translates each through its package's
+// Navigation titles are route data, not keys any namespace owns: the menu translates each through its package's
 // namespace with the title itself as `defaultValue`, so the runtime is not strict.
 const runtime = await createTestI18nRuntime({ strict: false });
 
 function I18n({ children }: { readonly children: ReactNode }) {
   return <TestI18nProvider runtime={runtime}>{children}</TestI18nProvider>;
+}
+
+const preferenceKey = 'nocobase:sidebar:collapsed';
+
+function setCollapsed(collapsed: boolean) {
+  localStorage.setItem(preferenceKey, String(collapsed));
+  window.dispatchEvent(new Event('nocobase:sidebar-preference-change'));
 }
 
 function page(name: string): AppClientRegisteredRoute {
@@ -45,6 +58,33 @@ function page(name: string): AppClientRegisteredRoute {
 const child = page('child');
 const sibling = page('sibling');
 
+function shell(items: readonly RouteNavigationItem[], selectedKey?: string) {
+  return (
+    <MemoryRouter>
+      <AppSidebarProvider>
+        <AppSidebar label='Navigation'>
+          <NavigationMenu
+            items={items}
+            label='Menu'
+            selectedKey={selectedKey}
+          />
+        </AppSidebar>
+        <AppSidebarToggle />
+      </AppSidebarProvider>
+    </MemoryRouter>
+  );
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+});
+afterEach(() => vi.unstubAllGlobals());
+
 describe.each([
   { title: 'navigation group', clickable: false },
   { title: 'clickable parent', clickable: true },
@@ -59,29 +99,12 @@ describe.each([
       { route: sibling, children: [] },
     ],
   };
-  function tree(selectedKey: string | undefined) {
-    return (
-      <MemoryRouter>
-        <NavigationTree
-          item={item}
-          collapsed={false}
-          selectedKey={selectedKey}
-          onNavigate={() => {}}
-        />
-      </MemoryRouter>
-    );
-  }
+  const tree = (selectedKey: string | undefined) => shell([item], selectedKey);
   function toggle() {
-    return clickable
-      ? screen.getByRole('button', { name: 'Group' })
-      : screen
-          .getByText('Group', { selector: 'summary span.truncate' })
-          .closest('summary')!;
+    return screen.getByRole('button', { name: 'Group' });
   }
   function expectExpanded(expanded: boolean) {
-    if (clickable)
-      expect(toggle()).toHaveAttribute('aria-expanded', String(expanded));
-    else expect(toggle().closest('details')!.open).toBe(expanded);
+    expect(toggle()).toHaveAttribute('aria-expanded', String(expanded));
   }
 
   it('keeps an active group open when navigating to another group', () => {
@@ -117,30 +140,27 @@ describe.each([
   });
 });
 
-describe('collapsed navigation', () => {
-  beforeEach(() => {
-    vi.stubGlobal('matchMedia', () => ({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
-  });
-  afterEach(() => vi.unstubAllGlobals());
+it('marks the selected page with the selected navigation colors', () => {
+  render(
+    shell([{ route: page('Home'), children: [] }], routeKey(page('Home'))),
+    {
+      wrapper: I18n,
+    },
+  );
+  const link = screen.getByRole('link', { name: 'Home' });
+  expect(link).toHaveAttribute('aria-current', 'page');
+  expect(link).toHaveAttribute('data-active');
+  expect(link).toHaveClass(
+    'data-active:bg-sidebar-primary',
+    'data-active:text-sidebar-primary-foreground',
+  );
+});
 
-  function show(item: RouteNavigationItem, collapsed = true) {
-    const onNavigate = vi.fn();
-    render(
-      <MemoryRouter>
-        <NavigationTree
-          item={item}
-          collapsed={collapsed}
-          selectedKey={routeKey(child)}
-          onNavigate={onNavigate}
-        />
-      </MemoryRouter>,
-      { wrapper: I18n },
-    );
-    return onNavigate;
+describe('collapsed navigation', () => {
+  beforeEach(() => setCollapsed(true));
+
+  function show(item: RouteNavigationItem, selectedKey = routeKey(child)) {
+    return render(shell([item], selectedKey), { wrapper: I18n });
   }
 
   it('shows a leaf label immediately on hover and dismisses it on leave', async () => {
@@ -160,7 +180,7 @@ describe('collapsed navigation', () => {
     'opens a group list immediately on hover (clickable parent: %s)',
     async (clickable) => {
       const user = userEvent.setup();
-      const onNavigate = show({
+      show({
         route: {
           ...page('Group'),
           componentLoader: clickable
@@ -172,6 +192,8 @@ describe('collapsed navigation', () => {
       const trigger = screen.getByRole(clickable ? 'link' : 'button', {
         name: 'Group',
       });
+      // The group holding the selected page is highlighted.
+      expect(trigger).toHaveAttribute('data-active');
       fireEvent.mouseEnter(trigger);
       const popup = screen.getByRole('dialog', { name: 'Group' });
       const link = within(popup).getByRole('link', { name: 'child' });
@@ -182,7 +204,6 @@ describe('collapsed navigation', () => {
       fireEvent.mouseLeave(trigger, { relatedTarget: popup });
       await user.hover(popup);
       await user.click(link);
-      expect(onNavigate).toHaveBeenCalledOnce();
       await waitFor(() =>
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
       );
@@ -195,6 +216,8 @@ describe('collapsed navigation', () => {
       route: { ...page('Group'), componentLoader: undefined },
       children: [{ route: child, children: [] }],
     });
+    // The brand link comes first in the sidebar.
+    await user.tab();
     await user.tab();
     expect(await screen.findByRole('dialog', { name: 'Group' })).toBeVisible();
     await user.tab();
@@ -207,7 +230,7 @@ describe('collapsed navigation', () => {
 
   it('keeps a parent link navigable and expands nested groups inside the popup', async () => {
     const user = userEvent.setup();
-    const onNavigate = show({
+    show({
       route: page('Parent'),
       children: [
         {
@@ -225,7 +248,6 @@ describe('collapsed navigation', () => {
     await user.click(within(popup).getByText('Nested'));
     expect(within(popup).getByRole('link', { name: 'sibling' })).toBeVisible();
     await user.click(parent);
-    expect(onNavigate).toHaveBeenCalledOnce();
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
@@ -233,43 +255,101 @@ describe('collapsed navigation', () => {
 
   it('does not reopen an old popup after expanding and collapsing the sidebar', async () => {
     const user = userEvent.setup();
-    const item = {
-      route: { ...page('Group'), componentLoader: undefined },
-      children: [{ route: child, children: [] }],
-    };
-    const tree = (collapsed: boolean) => (
-      <MemoryRouter>
-        <NavigationTree
-          item={item}
-          collapsed={collapsed}
-          selectedKey={undefined}
-          onNavigate={() => {}}
-        />
-      </MemoryRouter>
+    show(
+      {
+        route: { ...page('Group'), componentLoader: undefined },
+        children: [{ route: child, children: [] }],
+      },
+      'elsewhere',
     );
-    const { rerender } = render(tree(true), { wrapper: I18n });
     await user.hover(screen.getByRole('button', { name: 'Group' }));
     expect(await screen.findByRole('dialog')).toBeVisible();
-    rerender(tree(false));
+    act(() => setCollapsed(false));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    rerender(tree(true));
+    act(() => setCollapsed(true));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it.each(['expanded', 'mobile'])(
     'does not add hover overlays when %s',
     async (mode) => {
-      if (mode === 'mobile')
-        vi.stubGlobal('matchMedia', () => ({
-          matches: false,
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-        }));
+      if (mode === 'expanded') setCollapsed(false);
+      else vi.stubGlobal('innerWidth', 390);
       const user = userEvent.setup();
-      show({ route: page('Home'), children: [] }, mode !== 'expanded');
+      show({ route: page('Home'), children: [] });
+      if (mode === 'mobile')
+        await user.click(
+          screen.getByRole('button', { name: 'Open navigation' }),
+        );
       await user.hover(screen.getByRole('link', { name: 'Home' }));
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'Home' }),
+      ).not.toBeInTheDocument();
     },
   );
+});
+
+describe('sidebar shell', () => {
+  it('collapses from the header toggle into the shared preference', async () => {
+    const user = userEvent.setup();
+    render(shell([{ route: page('Home'), children: [] }]), { wrapper: I18n });
+    const sidebar = screen.getByRole('complementary', { name: 'Navigation' });
+    await user.click(
+      screen.getByRole('button', { name: 'Collapse navigation' }),
+    );
+    expect(localStorage.getItem(preferenceKey)).toBe('true');
+    expect(sidebar.closest('[data-state]')).toHaveAttribute(
+      'data-state',
+      'collapsed',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Expand navigation' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('ignores Ctrl/Cmd+B, leaving the key to whatever is focused', async () => {
+    const user = userEvent.setup();
+    const onKeyDown = vi.fn<(key: string) => void>();
+    render(
+      <>
+        {shell([{ route: page('Home'), children: [] }])}
+        <textarea
+          aria-label='Editor'
+          onKeyDown={(event) => onKeyDown(event.key)}
+        />
+      </>,
+      { wrapper: I18n },
+    );
+    await user.click(screen.getByRole('textbox', { name: 'Editor' }));
+    await user.keyboard('{Control>}b{/Control}');
+    await user.keyboard('{Meta>}b{/Meta}');
+    expect(onKeyDown.mock.calls.filter(([key]) => key === 'b')).toHaveLength(2);
+    expect(localStorage.getItem(preferenceKey)).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Collapse navigation' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens the phone sheet with a translated title and closes it on navigation', async () => {
+    vi.stubGlobal('innerWidth', 390);
+    const user = userEvent.setup();
+    render(shell([{ route: page('Home'), children: [] }]), { wrapper: I18n });
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Navigation' });
+    expect(sheet).toHaveAttribute('data-sidebar', 'sidebar');
+    await user.click(within(sheet).getByRole('link', { name: 'Home' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Close navigation',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+  });
 });

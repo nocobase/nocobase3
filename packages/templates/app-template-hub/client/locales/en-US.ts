@@ -85,6 +85,7 @@ const messages = {
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
     label: 'Application navigation',
+    description: 'Go to a page of this application.',
     breadcrumb: 'Breadcrumb',
     back: 'Back',
     console: 'Hub console',
