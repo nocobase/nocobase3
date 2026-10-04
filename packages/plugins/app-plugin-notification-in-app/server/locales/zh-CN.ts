@@ -4,7 +4,6 @@ const zhCN: InAppNotificationResource = {
   errors: {
     authenticationRequired: '需要登录。',
     invalidPageToken: 'pageToken 不是此列表返回的分页标记。',
-    invalidCsrf: 'CSRF token 无效。',
     notFound: '未找到该站内信。',
   },
   test: {

@@ -134,7 +134,7 @@ describe('createInAppRouter', () => {
     expect(await nonCanonicalResponse.json()).toEqual(expected);
   });
 
-  it('marks messages read and unread, counts unread, and deletes, all behind the CSRF token', async () => {
+  it('marks messages read and unread, counts unread, and deletes, without any CSRF header', async () => {
     const store = new MemoryInAppStore();
     const delivered = await store.deliver({
       deliveryId: 'delivery-1',
@@ -144,7 +144,6 @@ describe('createInAppRouter', () => {
       createdAt: '2026-08-26T00:00:00.000Z',
     });
     const router = await authenticatedRouter(store);
-    const headers = await csrfHeaders(router);
     const unreadCount = async (): Promise<unknown> =>
       (await router.request('/messages/unreadCount')).json();
 
@@ -152,7 +151,6 @@ describe('createInAppRouter', () => {
 
     const read = await router.request(`/messages/${delivered.id}/markRead`, {
       method: 'POST',
-      headers,
     });
     expect(read.status).toBe(200);
     await expect(read.json()).resolves.toMatchObject({
@@ -162,73 +160,43 @@ describe('createInAppRouter', () => {
 
     const unread = await router.request(
       `/messages/${delivered.id}/markUnread`,
-      { method: 'POST', headers },
+      { method: 'POST' },
     );
     expect(unread.status).toBe(200);
     await expect(unreadCount()).resolves.toEqual({ data: { count: 1 } });
 
     const allRead = await router.request('/messages/markAllRead', {
       method: 'POST',
-      headers,
     });
     await expect(allRead.json()).resolves.toEqual({ data: { updated: 1 } });
 
     const deleted = await router.request(`/messages/${delivered.id}`, {
       method: 'DELETE',
-      headers,
     });
     expect(deleted.status).toBe(204);
     expect(await deleted.text()).toBe('');
     expect(await store.list({ userId: 'user-1', limit: 10 })).toEqual([]);
   });
 
-  it('returns a csrf token in the standard body and sets the matching cookie', async () => {
-    const router = await authenticatedRouter(new MemoryInAppStore());
-    const response = await router.request('/csrfToken');
-    const body = (await response.json()) as {
-      readonly data: { readonly token: string };
-    };
-
-    expect(body.data.token).toEqual(expect.any(String));
-    expect(response.headers.get('set-cookie')).toContain(
-      `notification_in_app_csrf=${body.data.token}`,
-    );
-  });
-
-  it('returns stable errors for invalid CSRF and missing items', async () => {
+  it('returns a stable, localized error for missing items', async () => {
     const router = await authenticatedRouter(new MemoryInAppStore());
 
-    const invalidCsrf = await router.request('/messages/markAllRead', {
-      method: 'POST',
-      headers: { 'accept-language': 'zh-CN' },
-    });
-
-    expect(invalidCsrf.status).toBe(403);
-    await expect(invalidCsrf.json()).resolves.toEqual({
-      error: {
-        code: 403,
-        status: 'PERMISSION_DENIED',
-        reason: 'IN_APP_NOTIFICATION_INVALID_CSRF',
-        domain: 'notificationInApp',
-        message: 'Invalid CSRF token.',
-        localizedMessage: { locale: 'zh-CN', message: 'CSRF token 无效。' },
-        requestId: expect.any(String),
-      },
-    });
-
-    const headers = await csrfHeaders(router);
     for (const [path, method] of [
       ['/messages/missing/markRead', 'POST'],
       ['/messages/missing/markUnread', 'POST'],
       ['/messages/missing', 'DELETE'],
     ] as const) {
-      const missing = await router.request(path, { method, headers });
+      const missing = await router.request(path, {
+        method,
+        headers: { 'accept-language': 'zh-CN' },
+      });
       expect(missing.status).toBe(404);
       await expect(missing.json()).resolves.toMatchObject({
         error: {
           status: 'NOT_FOUND',
           reason: 'IN_APP_NOTIFICATION_NOT_FOUND',
           domain: 'notificationInApp',
+          localizedMessage: { locale: 'zh-CN', message: '未找到该站内信。' },
         },
       });
     }
@@ -251,59 +219,7 @@ describe('createInAppRouter', () => {
       },
     });
   });
-
-  it('reuses a valid CSRF cookie instead of rotating it on every GET', async () => {
-    const router = await authenticatedRouter(new MemoryInAppStore());
-    const first = await router.request('/csrfToken');
-    const token = (
-      (await first.json()) as { readonly data: { readonly token: string } }
-    ).data.token;
-    const cookie = first.headers.get('set-cookie')?.split(';')[0] ?? '';
-
-    const second = await router.request('/csrfToken', { headers: { cookie } });
-
-    expect(second.headers.get('set-cookie')).toBeNull();
-    await expect(second.json()).resolves.toEqual({ data: { token } });
-    const write = await router.request('/messages/markAllRead', {
-      method: 'POST',
-      headers: { cookie, 'x-csrf-token': token },
-    });
-    expect(write.status).toBe(200);
-  });
-
-  it('replaces a malformed CSRF cookie and still rejects a mismatched header', async () => {
-    const router = await authenticatedRouter(new MemoryInAppStore());
-
-    const response = await router.request('/csrfToken', {
-      headers: { cookie: 'notification_in_app_csrf=attacker-chosen' },
-    });
-    const token = (
-      (await response.json()) as { readonly data: { readonly token: string } }
-    ).data.token;
-
-    expect(token).not.toBe('attacker-chosen');
-    expect(response.headers.get('set-cookie')).toContain(
-      `notification_in_app_csrf=${token}`,
-    );
-    const mismatched = await router.request('/messages/markAllRead', {
-      method: 'POST',
-      headers: {
-        cookie: `notification_in_app_csrf=${token}`,
-        'x-csrf-token': crypto.randomUUID(),
-      },
-    });
-    expect(mismatched.status).toBe(403);
-  });
 });
-
-async function csrfHeaders(router: Hono): Promise<Record<string, string>> {
-  const csrf = await router.request('/csrfToken');
-  const token = (
-    (await csrf.json()) as { readonly data: { readonly token: string } }
-  ).data.token;
-  const cookie = csrf.headers.get('set-cookie')?.split(';')[0];
-  return { cookie: cookie ?? '', 'x-csrf-token': token };
-}
 
 function authenticatedRouter(store: MemoryInAppStore): Promise<Hono> {
   return localizedRouter(store, signedInAs('user-1'));

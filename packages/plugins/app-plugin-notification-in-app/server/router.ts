@@ -1,7 +1,6 @@
 import type { AuthEnv } from '@nocobase/app-plugin-authentication';
 import { parseApiInput } from '@nocobase/app-server/router';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
 import { validator } from 'hono/validator';
 
 import {
@@ -12,14 +11,11 @@ import { InboxListQuery, InboxMessageParams } from './routes/schemas.js';
 import type { InAppStore } from './store.js';
 import type { InAppItem } from './types.js';
 
-const CSRF_COOKIE = 'notification_in_app_csrf';
-const CSRF_TOKEN_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 export interface CreateInAppRouterOptions {
   /**
    * Authenticates every inbox request and sets `auth` on the context, answering 401 itself when nobody is signed in.
-   * The plugin passes the authentication plugin's `auth.required()`.
+   * The plugin passes the authentication plugin's `auth.required()`, which also rejects a cookie-authenticated write from an
+   * untrusted origin (`INVALID_CSRF_ORIGIN`); the inbox has no CSRF mechanism of its own.
    */
   readonly authenticate: MiddlewareHandler<AuthEnv>;
 }
@@ -50,21 +46,6 @@ export function createInAppRouter(
       });
     context.set('notificationUserId', userId);
     await next();
-  });
-  // Double-submit CSRF: the token is returned and set as a cookie, and every write sends it back as `x-csrf-token`.
-  // An existing well-formed token is reused rather than rotated, so a GET does not change state and concurrent tabs keep
-  // their tokens valid; only a missing or malformed cookie is replaced.
-  router.get('/csrfToken', (context) => {
-    const existing = getCookie(context, CSRF_COOKIE);
-    if (existing && CSRF_TOKEN_PATTERN.test(existing))
-      return context.json({ data: { token: existing } });
-    const token = crypto.randomUUID();
-    setCookie(context, CSRF_COOKIE, token, {
-      httpOnly: false,
-      sameSite: 'Strict',
-      path: '/',
-    });
-    return context.json({ data: { token } });
   });
   router.get(
     '/messages',
@@ -102,7 +83,7 @@ export function createInAppRouter(
       data: { count: await store.countUnread(context.var.notificationUserId) },
     }),
   );
-  router.post('/messages/markAllRead', requireCsrf(), async (context) =>
+  router.post('/messages/markAllRead', async (context) =>
     context.json({
       data: {
         updated: await store.markAllRead(context.var.notificationUserId),
@@ -115,7 +96,6 @@ export function createInAppRouter(
   ] as const) {
     router.post(
       `/messages/:messageId/${verb}`,
-      requireCsrf(),
       validator('param', (value) => parseApiInput(InboxMessageParams, value)),
       async (context) => {
         const { messageId } = context.req.valid('param');
@@ -131,7 +111,6 @@ export function createInAppRouter(
   }
   router.delete(
     '/messages/:messageId',
-    requireCsrf(),
     validator('param', (value) => parseApiInput(InboxMessageParams, value)),
     async (context) => {
       const { messageId } = context.req.valid('param');
@@ -145,23 +124,6 @@ export function createInAppRouter(
     },
   );
   return router;
-}
-
-function requireCsrf(): MiddlewareHandler<InAppRouterEnv> {
-  return async (context, next) => {
-    if (
-      !validCsrf(
-        context.req.header('x-csrf-token'),
-        getCookie(context, CSRF_COOKIE),
-      )
-    )
-      throw inAppNotificationApiError(context as Context, {
-        status: 'PERMISSION_DENIED',
-        reason: 'IN_APP_NOTIFICATION_INVALID_CSRF',
-        key: 'invalidCsrf',
-      });
-    await next();
-  };
 }
 
 function messageNotFound(context: Context): Error {
@@ -208,11 +170,4 @@ function isCanonicalTimestamp(value: string): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function validCsrf(
-  header: string | undefined,
-  cookie: string | undefined,
-): boolean {
-  return Boolean(header && cookie && header === cookie);
 }

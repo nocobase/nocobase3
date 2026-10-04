@@ -10,7 +10,7 @@
 #   defaultLocale: zh-CN
 
 # Limits every /api request meets before its route, each off until set. bodyLimit refuses a larger body with 413
-# BODY_TOO_LARGE; routes keep their own, usually smaller, limit. timeout answers 503 REQUEST_TIMEOUT when a handler
+# BODY_TOO_LARGE; a route may set its own, usually smaller, limit. timeout answers 503 REQUEST_TIMEOUT when a handler
 # has not produced its response in time; a streaming response that has started is not cut off. rateLimit allows max
 # requests per window from each client address and answers 429 RATE_LIMITED with Retry-After; GET /api/healthz is
 # exempt. Counters live in each process, so every instance counts on its own, and behind a reverse proxy the proxy is

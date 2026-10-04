@@ -57,13 +57,12 @@ function I18n({ children }: { readonly children: ReactNode }) {
   );
 }
 
-it('loads the current inbox, persists read state with CSRF, filters unread, and cleans up subscriptions', async () => {
+it('loads the current inbox, persists read state, filters unread, and cleans up subscriptions', async () => {
   let readAt: string | undefined;
   mocks.subscribe.mockReturnValue(mocks.cleanup);
   mocks.onOpen.mockReturnValue(mocks.cleanup);
   mocks.request.mockImplementation(
     async ({ path, method }: { path: string; method?: string }) => {
-      if (path.endsWith('/csrfToken')) return { data: { token: 'test-csrf' } };
       if (path.endsWith('/unreadCount'))
         return { data: { count: readAt ? 0 : 1 } };
       if (method === 'POST') {
@@ -97,13 +96,10 @@ it('loads the current inbox, persists read state with CSRF, filters unread, and 
     screen.getByRole('button', { name: 'Mark read', exact: true }),
   );
   await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: 'notificationInApp/messages/message-1/markRead',
-        method: 'POST',
-        headers: { 'x-csrf-token': 'test-csrf' },
-      }),
-    ),
+    expect(mocks.request).toHaveBeenCalledWith({
+      path: 'notificationInApp/messages/message-1/markRead',
+      method: 'POST',
+    }),
   );
   await screen.findByRole('button', { name: 'Mark unread' });
   fireEvent.click(screen.getByRole('button', { name: 'Unread', exact: true }));

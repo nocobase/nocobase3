@@ -114,16 +114,8 @@ async function mutation<T>(
   path: string,
   method: 'POST' | 'DELETE',
 ): Promise<T> {
-  const csrf = await client.request<{
-    readonly data: { readonly token: string };
-  }>({
-    path: 'notificationInApp/csrfToken',
-  });
-  return client.request<T>({
-    path,
-    method,
-    headers: { 'x-csrf-token': csrf.data.token },
-  });
+  // Cross-site writes are rejected by the authentication plugin's origin check, so no CSRF token is sent.
+  return client.request<T>({ path, method });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

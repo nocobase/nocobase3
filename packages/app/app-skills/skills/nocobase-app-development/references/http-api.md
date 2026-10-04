@@ -115,7 +115,7 @@ Every failed `/api` response then has this body, with the same `requestId` in th
   | `INTERNAL`            | 500  | Never thrown on purpose; the application answers it       |
   | `UNAVAILABLE`         | 503  | A dependency is down; retrying later may succeed          |
 
-  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a request body over the route's size limit or the application's `api.bodyLimit` and `415` for an unsupported request content type. Nothing else overrides the status, and neither covers anything else: a generated output that grows too large is `400 FAILED_PRECONDITION`, and a file with the wrong extension is `400 INVALID_ARGUMENT`. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
+  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a request body over a size limit the route sets or the application's `api.bodyLimit` and `415` for an unsupported request content type. Nothing else overrides the status, and neither covers anything else: a generated output that grows too large is `400 FAILED_PRECONDITION`, and a file with the wrong extension is `400 INVALID_ARGUMENT`. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
 
 - **`reason`** is what clients branch on: UPPER_SNAKE_CASE, unique within its domain, stable once released. A client never parses `message`.
 - **`domain`** is the namespace of whoever defined the reason: the plugin namespace, or the application's name for its own routes. The framework uses `app`. A plugin has one domain even when it serves several URL prefixes: every AI employee error is `aiEmployees`, including those under `/aiEmployee/...`, and every AI knowledge base error is `aiKnowledgeBases`. An error passed through from another plugin keeps the domain of the plugin that defined its reason, so the users plugin passing on `LAST_ASSIGNMENT` answers with domain `authorization`.
@@ -181,7 +181,7 @@ Put the schemas in the plugin's `server/routes/schemas.ts`, or a `schemas/` dire
 
 A binary or multipart body, such as an upload, has no JSON schema to validate. Validate its path parameters, query and headers with `parseApiInput()` as above, and the body in code before using it, answering `413` or `415` as `INVALID_ARGUMENT` with `httpStatus` when it is too large or of the wrong type.
 
-Every request body has a size limit, uploads and JSON routes alike. Apply Hono's `bodyLimit` and answer an oversized body in the standard shape:
+A size limit on the request body is optional. Set one on a route that needs it, such as an upload or a route whose input should stay small, with Hono's `bodyLimit`, and answer an oversized body in the standard shape:
 
 ```ts
 import { ApiError, apiErrorHandler } from '@nocobase/app-server/router';
@@ -210,7 +210,7 @@ router.post(
 
 ## Limits
 
-The application may also set limits that every `/api` request meets before its route, in the `api` section of `config.yml`. They are all off by default and nothing is installed for one that is unset, so a route never relies on them: its own `bodyLimit` above stays required, and the global one is only a ceiling over all routes.
+The application may also set limits that every `/api` request meets before its route, in the `api` section of `config.yml`. They are all off by default and nothing is installed for one that is unset, so a route never relies on them. `api.bodyLimit` is a ceiling over all routes; a route's own `bodyLimit` above, where it sets one, is usually smaller.
 
 ```yaml
 api:
@@ -239,5 +239,5 @@ These `/api` routes keep their own shape. Nothing else is exempt, and code you w
 - An invalid body is `400` with the offending field in `fieldViolations`, and an unknown body field is rejected.
 - A `GET` changes nothing, not even expired rows, the session or its cookies.
 - A caller without permission gets `403` before any input validation and before anything is written.
-- An oversized body is `413` with reason `BODY_TOO_LARGE`.
+- Where a route sets a body limit, a body over it is `413` with reason `BODY_TOO_LARGE`.
 - A list returns `{ data, meta }`, and its paging parameters are honored and capped.

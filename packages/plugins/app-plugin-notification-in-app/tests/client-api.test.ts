@@ -36,7 +36,7 @@ describe('in-app notification Client API', () => {
     });
   });
 
-  it('uses the injected client and CSRF token for mutations', async () => {
+  it('sends mutations through the injected client without a CSRF token', async () => {
     const item = {
       id: 'item/1',
       deliveryId: 'delivery-1',
@@ -46,11 +46,8 @@ describe('in-app notification Client API', () => {
       createdAt: '2026-09-02T00:00:00.000Z',
     };
     const responses: unknown[] = [
-      { data: { token: 'csrf-1' } },
       { data: item },
-      { data: { token: 'csrf-2' } },
       { data: { updated: 4 } },
-      { data: { token: 'csrf-3' } },
       undefined,
     ];
     const request = vi.fn(async <T>(): Promise<T> => responses.shift() as T);
@@ -64,24 +61,16 @@ describe('in-app notification Client API', () => {
       mutateInboxItem(client, 'item/1', 'delete'),
     ).resolves.toBeUndefined();
 
-    expect(request).toHaveBeenNthCalledWith(1, {
-      path: 'notificationInApp/csrfToken',
-    });
-    expect(request).toHaveBeenNthCalledWith(2, {
-      path: 'notificationInApp/messages/item%2F1/markRead',
-      method: 'POST',
-      headers: { 'x-csrf-token': 'csrf-1' },
-    });
-    expect(request).toHaveBeenNthCalledWith(4, {
-      path: 'notificationInApp/messages/markAllRead',
-      method: 'POST',
-      headers: { 'x-csrf-token': 'csrf-2' },
-    });
-    expect(request).toHaveBeenNthCalledWith(6, {
-      path: 'notificationInApp/messages/item%2F1',
-      method: 'DELETE',
-      headers: { 'x-csrf-token': 'csrf-3' },
-    });
+    expect(request.mock.calls).toEqual([
+      [
+        {
+          path: 'notificationInApp/messages/item%2F1/markRead',
+          method: 'POST',
+        },
+      ],
+      [{ path: 'notificationInApp/messages/markAllRead', method: 'POST' }],
+      [{ path: 'notificationInApp/messages/item%2F1', method: 'DELETE' }],
+    ]);
   });
 });
 

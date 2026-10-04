@@ -4,7 +4,6 @@ const enUS = {
   errors: {
     authenticationRequired: 'Authentication required.',
     invalidPageToken: 'pageToken is not a token this list returned.',
-    invalidCsrf: 'Invalid CSRF token.',
     notFound: 'Notification message was not found.',
   },
   test: {

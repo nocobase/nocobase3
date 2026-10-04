@@ -95,7 +95,7 @@ router.post(
 
 Keep schemas in `server/routes/schemas.ts`, or a `server/routes/schemas/` directory, and derive service types with `z.infer` rather than a second interface. Never use `z.any()`; use `z.unknown()` only for a value that is genuinely free-form, such as a user-defined JSON payload, with a comment saying why it cannot be described precisely. `zod` is a `dependency` of the plugin. A binary or multipart body validates its headers, path parameters and query the same way and its body in code, answering `413` or `415` through `httpStatus` when it is too large or of the wrong type.
 
-Every request body has a size limit, uploads and JSON routes alike. Apply `bodyLimit` from `hono/body-limit` and answer an oversized body in the standard shape:
+A size limit on the request body is optional. Set one on a route that needs it, such as an upload or a route whose input should stay small, with `bodyLimit` from `hono/body-limit`, and answer an oversized body in the standard shape; the application may also set a ceiling over every route with `api.bodyLimit` in `config.yml`, off by default. A route applies its own like this:
 
 ```ts
 bodyLimit({
@@ -131,5 +131,5 @@ bodyLimit({
 - An invalid body is `400` with the field in `fieldViolations`, and an unknown body field is rejected.
 - A missing path resource is `404`, a missing referenced resource is `400`, and a forbidden one is `403` whether it exists or not.
 - A caller without permission gets `403` before input validation and before anything is written.
-- An oversized body is `413` with reason `BODY_TOO_LARGE`.
+- Where a route sets a body limit, a body over it is `413` with reason `BODY_TOO_LARGE`.
 - A `GET` changes nothing, not even expired rows or the session, and a list returns `{ data, meta }` with its paging parameters honored and capped.
