@@ -29,6 +29,7 @@ MCP servers, skills, tools, files and usage:
 - `GET aiMcpServers:list` / `get?key=` / `listTools` → `GET /api/aiEmployee/mcpServers`, `.../mcpServers/{name}`, `.../mcpServers/tools`
 - `POST aiMcpServers:testConnection` → `POST /api/aiEmployee/mcpServers/{name}/testConnection` for a configured server, `POST /api/aiEmployee/mcpServers/testConnection` for unsaved remote values
 - `POST aiMcpServers:updateEnabled` → `POST /api/aiEmployee/mcpServers/{name}/enable` and `.../disable`
+- `tools` and `testConnection` are fixed segments beside `/api/aiEmployee/mcpServers/{name}`, so an MCP server configured under either name in `ai.mcpServers` is now a configuration error: `config check` reports it and the plugin refuses to start until it is renamed.
 - `POST aiMcpServers:updateToolPermission` `{ toolName, permission }` → `PATCH /api/aiEmployee/mcpServers/{name}/tools/{toolName}` `{ permission }`
 - `GET aiSkills:list` and `listAll` → `GET /api/aiEmployee/skills`; `GET aiSkills:get?key=` and `getDetails?name=` → `GET /api/aiEmployee/skills/{name}`; create, update and destroy → `POST` (201, `409 SKILL_ALREADY_EXISTS`), `PATCH` and `DELETE` (204) on the same paths. The list and detail are the management summary, now with `about`, `scope` and `source`.
 - The same for tools at `/api/aiEmployee/tools`, whose summary now carries `defaultPermission`; `409 TOOL_ALREADY_EXISTS`.

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AI_EMPLOYEE_RESERVED_USERNAMES } from './reserved-names.js';
 import { USAGE_BREAKDOWN_DIMENSIONS } from '../service/ai-usage-statistics-service.js';
 import {
   MAX_RANGE_HOURS,
@@ -40,14 +41,7 @@ function pageSize(max: number, fallback: number) {
 // ---------------------------------------------------------------------------------------------------------------------
 // Employees: /aiEmployees
 
-/**
- * Fixed segments registered beside `/aiEmployees/{username}`. Hono matches the first registered route, so an employee
- * with one of these usernames could never be read, and creating one is refused.
- */
-export const AI_EMPLOYEE_RESERVED_USERNAMES: readonly string[] = [
-  'roster',
-  'templates',
-];
+export { AI_EMPLOYEE_RESERVED_USERNAMES };
 
 export const AIEmployeeParams = z.object({ username: Name });
 

@@ -23,7 +23,10 @@ import {
   createAIRequestMiddleware,
 } from './utils.js';
 
-export { AI_EMPLOYEE_RESERVED_USERNAMES } from './schemas.js';
+export {
+  AI_EMPLOYEE_RESERVED_USERNAMES,
+  MCP_SERVER_RESERVED_NAMES,
+} from './reserved-names.js';
 export {
   listAIRouteAccess,
   type AIRouteAccess,

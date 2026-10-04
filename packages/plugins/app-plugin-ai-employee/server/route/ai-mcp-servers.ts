@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import { validator } from 'hono/validator';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
+import { MCP_SERVER_FIXED_SEGMENTS } from './reserved-names.js';
 import type { AIRouteGuards } from './settings-access.js';
 import {
   MCPCandidateInput,
@@ -26,14 +27,18 @@ export function createAIMCPServersRouter(
   });
 
   // The tools of every connected server, keyed by server name.
-  app.get('/aiEmployee/mcpServers/tools', settings, async (context) => {
-    const data = await services.mcpServerService.listTools();
-    return context.json({ data });
-  });
+  app.get(
+    `/aiEmployee/mcpServers/${MCP_SERVER_FIXED_SEGMENTS.tools}`,
+    settings,
+    async (context) => {
+      const data = await services.mcpServerService.listTools();
+      return context.json({ data });
+    },
+  );
 
   // A remote server's values, tested before they are saved anywhere.
   app.post(
-    '/aiEmployee/mcpServers/testConnection',
+    `/aiEmployee/mcpServers/${MCP_SERVER_FIXED_SEGMENTS.testConnection}`,
     settings,
     validator('json', (value) => parseApiInput(MCPCandidateInput, value)),
     async (context) => {

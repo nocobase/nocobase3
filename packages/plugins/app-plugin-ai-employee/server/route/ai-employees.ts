@@ -4,6 +4,7 @@ import { validator } from 'hono/validator';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
 import { identityTranslate } from '../types.js';
+import { AI_EMPLOYEE_FIXED_SEGMENTS } from './reserved-names.js';
 import type { AIRouteGuards } from './settings-access.js';
 import {
   AIEmployeeParams,
@@ -23,16 +24,23 @@ export function createAIEmployeeRouter(
 ): void {
   // The employees this user may chat with, with this user's own prompt for each. Every signed-in user reads it, which
   // is why it is a resource of its own rather than a view of the settings list.
-  app.get('/aiEmployees/roster', signedIn, async (context) => {
-    const data = await services.employeeService.listByUser({
-      actor: context.var.currentUser,
-      translate: identityTranslate,
-    });
-    return context.json({ data });
-  });
+  app.get(
+    `/aiEmployees/${AI_EMPLOYEE_FIXED_SEGMENTS.roster}`,
+    signedIn,
+    async (context) => {
+      const data = await services.employeeService.listByUser({
+        actor: context.var.currentUser,
+        translate: identityTranslate,
+      });
+      return context.json({ data });
+    },
+  );
 
-  app.get('/aiEmployees/templates', settings, (context) =>
-    context.json({ data: services.employeeService.getTemplates({}) }),
+  app.get(
+    `/aiEmployees/${AI_EMPLOYEE_FIXED_SEGMENTS.templates}`,
+    settings,
+    (context) =>
+      context.json({ data: services.employeeService.getTemplates({}) }),
   );
 
   app.get('/aiEmployees', settings, async (context) => {

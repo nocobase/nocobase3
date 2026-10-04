@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   AI_EMPLOYEE_RESERVED_USERNAMES,
+  MCP_SERVER_RESERVED_NAMES,
   createAIEmployeeRoutes,
 } from '../../server/route/index.js';
 import { conversationNotFound } from '../../server/service/ai-conversation-service.js';
@@ -87,14 +88,31 @@ describe('AI employee HTTP routes', () => {
     }
   });
 
-  it('reserves every fixed segment under /aiEmployees as a username', () => {
-    const fixed = AI_ROUTES.map(([, path]) =>
-      /^\/aiEmployees\/([^/:]+)$/.exec(path),
-    ).flatMap((match) => (match ? [match[1]] : []));
+  // A name chosen by a user or in config.yml sits beside these fixed segments, so each must be a reserved name.
+  function fixedSegmentsBeside(collection: string): string[] {
+    const pattern = new RegExp(`^${collection}/([^/:]+)$`);
+    return [
+      ...new Set(
+        AI_ROUTES.flatMap(([, path]) => pattern.exec(path)?.slice(1) ?? []),
+      ),
+    ].sort();
+  }
 
-    expect([...new Set(fixed)].sort()).toEqual(
+  it('reserves every fixed segment under /aiEmployees as a username', () => {
+    expect(fixedSegmentsBeside('/aiEmployees')).toEqual(
       [...AI_EMPLOYEE_RESERVED_USERNAMES].sort(),
     );
+  });
+
+  it('reserves every fixed segment under /aiEmployee/mcpServers as a server name', () => {
+    expect(fixedSegmentsBeside('/aiEmployee/mcpServers')).toEqual(
+      [...MCP_SERVER_RESERVED_NAMES].sort(),
+    );
+  });
+
+  it('has no fixed segment beside a configured LLM service name', () => {
+    // Should one be added, LLM service names need the same reservation as MCP server names.
+    expect(fixedSegmentsBeside('/aiEmployee/llmServices')).toEqual([]);
   });
 
   it('rejects every route without a session before it reaches a service', async () => {

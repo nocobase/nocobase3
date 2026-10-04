@@ -74,4 +74,14 @@ describe('AIMCPServerService connection tests', () => {
       url: 'https://example.test/mcp',
     });
   });
+
+  it('refuses to synchronize a configured server named like a fixed route segment', async () => {
+    const { service } = await createService();
+
+    await expect(
+      service.syncConfiguredMCPServers({
+        tools: { transport: 'http', url: 'https://example.test/mcp' },
+      }),
+    ).rejects.toThrow(/MCP server "tools" uses a reserved name/);
+  });
 });

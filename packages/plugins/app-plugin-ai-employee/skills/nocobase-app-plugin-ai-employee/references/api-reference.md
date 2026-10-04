@@ -781,7 +781,7 @@ MCP servers are configured only in `config.yml` `ai.mcpServers`; there is no rou
 - `POST /api/aiEmployee/mcpServers/{name}/testConnection`: tests that configured server using only its saved configuration; no body.
 - `POST /api/aiEmployee/mcpServers/testConnection`: tests a remote server that is not saved, from `{ transport: 'http' | 'sse', url, headers? }`. A `stdio` server runs a local command, so it can only be tested by name; an inline `transport: 'stdio'` body is refused with 400.
 
-An unknown `{name}` is 404 `MCP_SERVER_NOT_FOUND`. A configured server as returned:
+An unknown `{name}` is 404 `MCP_SERVER_NOT_FOUND`. `tools` and `testConnection` are fixed segments beside `{name}`, so a server configured under either name is a configuration error: `pnpm nocobase config check` reports it and the plugin refuses to start until it is renamed. A configured server as returned:
 
 ```ts
 {

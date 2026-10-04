@@ -7,6 +7,10 @@ import type {
 } from '@nocobase/ai-employee';
 import type { z } from 'zod';
 
+import {
+  findReservedMCPServerNames,
+  reservedMCPServerNameMessage,
+} from '../route/reserved-names.js';
 import type { MCPCandidateInput } from '../route/schemas.js';
 import {
   asRecord,
@@ -32,6 +36,9 @@ export class AIMCPServerService {
     configured: Readonly<Record<string, MCPOptions>> | undefined,
   ): Promise<void> {
     const desired = configured ?? {};
+    const reserved = findReservedMCPServerNames(desired);
+    if (reserved.length > 0)
+      throw new Error(reserved.map(reservedMCPServerNameMessage).join(' '));
     const current = await this.ai.mcpServerManager.listMCP({});
     for (const server of current) {
       if (!(server.name in desired))
