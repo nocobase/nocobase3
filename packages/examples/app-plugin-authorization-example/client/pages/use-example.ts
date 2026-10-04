@@ -27,7 +27,7 @@ export function useExample<T>(path: string): {
     void api
       .request<{ data: T }>({
         method: 'GET',
-        path: `/authorization-example/${path}`,
+        path: `/authorizationExample/${path}`,
       })
       .then((result) => {
         if (active)

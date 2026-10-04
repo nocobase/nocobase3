@@ -302,7 +302,7 @@ export async function readSales(
 ): Promise<{ status: number; ids: string[] }> {
   const response = await test.request(
     'GET',
-    `/api/authorization-example/sales/${list}`,
+    `/api/authorizationExample/sales/${list}`,
     { cookie },
   );
   if (response.status !== 200) return { status: response.status, ids: [] };

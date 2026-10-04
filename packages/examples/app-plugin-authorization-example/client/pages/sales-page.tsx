@@ -103,14 +103,15 @@ function SalesTable({
     try {
       await api.request({
         method: 'POST',
-        path: `/authorization-example/sales/${path}/${encodeURIComponent(row.id)}/${action}`,
-        json:
-          action === 'deliver'
-            ? {
+        path: `/authorizationExample/sales/${path}/${encodeURIComponent(row.id)}/${action}`,
+        ...(action === 'deliver'
+          ? {
+              json: {
                 deliveryReference:
                   references[row.id] ?? row.deliveryReference ?? '',
-              }
-            : {},
+              },
+            }
+          : {}),
       });
       clearDraft(row);
       state.reload();
@@ -130,14 +131,18 @@ function SalesTable({
         notes: notes[row.id] ?? row.notes,
         ...(path === 'quotes' ? { amount: amounts[row.id] ?? row.amount } : {}),
       };
-      await api.request({
-        method: 'POST',
-        path:
-          path === 'projects'
-            ? '/authorization-example/salesProjects:updateOne'
-            : `/authorization-example/sales/${path}/${encodeURIComponent(row.id)}`,
-        json: path === 'projects' ? { filter: { id: row.id }, values } : values,
-      });
+      if (path === 'projects')
+        await api.request({
+          method: 'POST',
+          path: '/authorizationExample/salesProjects/updateOne',
+          json: { filter: { id: row.id }, values },
+        });
+      else
+        await api.request({
+          method: 'PATCH',
+          path: `/authorizationExample/sales/${path}/${encodeURIComponent(row.id)}`,
+          json: values,
+        });
       setMessage('sales.saved');
       clearDraft(row);
       state.reload();

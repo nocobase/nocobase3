@@ -87,7 +87,7 @@ export default function NumericExamplesPage(): ReactElement {
     queryKey: ['numeric-examples', source, sample, sortField, sortDirection],
     queryFn: ({ signal }) =>
       api.request<NumericExamplesResponse>({
-        path: 'numeric-examples',
+        path: 'numericExamples',
         query: { source, sample, sortField, sortDirection },
         signal,
       }),

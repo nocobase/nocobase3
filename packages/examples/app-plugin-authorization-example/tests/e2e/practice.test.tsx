@@ -46,7 +46,7 @@ const ids = (user: string, path?: string) => listIds(fixture, user, path);
 it('only lets administrators restore practice records, resetting only practice orders and preserving authorization edits and additional orders', async () => {
   expect(
     (
-      await fixture.router.request('/api/authorization-example/reset', {
+      await fixture.router.request('/api/authorizationExample/reset', {
         method: 'POST',
       })
     ).status,

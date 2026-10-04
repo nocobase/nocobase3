@@ -52,7 +52,7 @@ it('grants page entry separately while data rules govern real endpoints, indepen
   expect(await ids('manager')).toEqual(['project-3']);
   expect(
     (
-      await fixture.request('assistant', 'salesProjects:updateOne', {
+      await fixture.request('assistant', 'salesProjects/updateOne', {
         filter: { id: 'project-2' },
         values: {
           notes: 'Not allowed',
@@ -62,7 +62,7 @@ it('grants page entry separately while data rules govern real endpoints, indepen
   ).toBe(403);
   expect(
     (
-      await fixture.request('engineer', 'salesProjects:updateOne', {
+      await fixture.request('engineer', 'salesProjects/updateOne', {
         filter: { id: 'project-2' },
         values: {
           notes: 'Updated',
@@ -72,7 +72,7 @@ it('grants page entry separately while data rules govern real endpoints, indepen
   ).toBe(200);
   expect(
     (
-      await fixture.request('engineer', 'salesProjects:updateOne', {
+      await fixture.request('engineer', 'salesProjects/updateOne', {
         filter: { id: 'project-4' },
         values: {
           notes: 'Secret',
@@ -89,7 +89,7 @@ it('grants page entry separately while data rules govern real endpoints, indepen
       }),
   ).toBe(true);
   expect(
-    (await fixture.router.request('/api/authorization-example/sales/projects'))
+    (await fixture.router.request('/api/authorizationExample/sales/projects'))
       .status,
   ).toBe(401);
   const identity = { principal: { type: 'user', id: fixture.users.assistant } };
@@ -146,7 +146,7 @@ it('keeps all-region read separate from engineer edit, including direct reposito
   ]);
   expect(
     (
-      await fixture.request('engineer', 'salesProjects:updateOne', {
+      await fixture.request('engineer', 'salesProjects/updateOne', {
         filter: { id: 'project-3' },
         values: {
           notes: 'Cross-region',
@@ -172,7 +172,7 @@ it('keeps all-region read separate from engineer edit, including direct reposito
 it('separates project editing, quote submission and delivery with server-side state transitions', async () => {
   expect(
     (
-      await fixture.request('engineer', 'salesProjects:updateOne', {
+      await fixture.request('engineer', 'salesProjects/updateOne', {
         filter: { id: 'project-2' },
         values: {
           title: 'Revised project',
@@ -183,7 +183,7 @@ it('separates project editing, quote submission and delivery with server-side st
   ).toBe(200);
   expect(
     (
-      await fixture.request('engineer', 'salesProjects:updateOne', {
+      await fixture.request('engineer', 'salesProjects/updateOne', {
         filter: { id: 'project-2' },
         values: {
           ownerId: fixture.users.assistant,
@@ -193,10 +193,15 @@ it('separates project editing, quote submission and delivery with server-side st
   ).toBe(400);
   expect(
     (
-      await fixture.request('engineer', 'sales/quotes/quote-2', {
-        amount: 15000,
-        notes: 'Final price',
-      })
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-2',
+        {
+          amount: 15000,
+          notes: 'Final price',
+        },
+        'PATCH',
+      )
     ).status,
   ).toBe(200);
   expect(
@@ -208,13 +213,19 @@ it('separates project editing, quote submission and delivery with server-side st
       .status,
   ).toBe(200);
   expect(
-    (await fixture.request('engineer', 'sales/quotes/quote-2', { amount: 1 }))
-      .status,
-  ).toBe(409);
+    (
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-2',
+        { amount: 1 },
+        'PATCH',
+      )
+    ).status,
+  ).toBe(400);
   expect(
     (await fixture.request('engineer', 'sales/quotes/quote-2/submit', {}))
       .status,
-  ).toBe(409);
+  ).toBe(400);
   expect(await ids('delivery', 'orders')).toEqual(['order-1', 'order-2']);
   expect((await fixture.request('delivery', 'sales/projects')).status).toBe(
     403,
@@ -241,7 +252,7 @@ it('separates project editing, quote submission and delivery with server-side st
         deliveryReference: 'SHIP-201',
       })
     ).status,
-  ).toBe(409);
+  ).toBe(400);
   expect(
     (
       await fixture.request('delivery', 'sales/orders/order-3/deliver', {
@@ -249,6 +260,52 @@ it('separates project editing, quote submission and delivery with server-side st
       })
     ).status,
   ).toBe(403);
+  // Each failure names its reason in the standard error body.
+  const blank = await fixture.request(
+    'delivery',
+    'sales/orders/order-1/deliver',
+    { deliveryReference: '   ' },
+  );
+  expect((await blank.json()).error).toMatchObject({
+    status: 'INVALID_ARGUMENT',
+    reason: 'DELIVERY_REFERENCE_REQUIRED',
+    domain: 'authorizationExample',
+    fieldViolations: [expect.objectContaining({ field: 'deliveryReference' })],
+  });
+  const delivered = await fixture.request(
+    'delivery',
+    'sales/orders/order-2/deliver',
+    { deliveryReference: 'SHIP-202' },
+  );
+  expect(delivered.status).toBe(400);
+  expect((await delivered.json()).error).toMatchObject({
+    status: 'FAILED_PRECONDITION',
+    reason: 'STATE_CONFLICT',
+    domain: 'authorizationExample',
+  });
+  const hidden = await fixture.request(
+    'delivery',
+    'sales/orders/order-3/deliver',
+    { deliveryReference: 'SHIP-301' },
+  );
+  expect((await hidden.json()).error).toMatchObject({
+    status: 'PERMISSION_DENIED',
+    reason: 'FORBIDDEN',
+    domain: 'authorizationExample',
+  });
+  const missing = await fixture.request(
+    'delivery',
+    'sales/orders/no-such-order/deliver',
+    { deliveryReference: 'SHIP-404' },
+  );
+  expect(missing.status).toBe(403);
+  const extra = await fixture.request(
+    'delivery',
+    'sales/orders/order-1/deliver',
+    { deliveryReference: 'SHIP-1', status: 'delivered' },
+  );
+  expect(extra.status).toBe(400);
+  expect((await extra.json()).error.reason).toBe('INVALID_INPUT');
 });
 
 it('reports per-record edit eligibility and input errors without mislabeling permission denial', async () => {
@@ -264,8 +321,14 @@ it('reports per-record edit eligibility and input errors without mislabeling per
       .edit,
   ).toBe('allowed');
   expect(
-    (await fixture.request('engineer', 'sales/quotes/quote-2', { amount: 0 }))
-      .status,
+    (
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-2',
+        { amount: 0 },
+        'PATCH',
+      )
+    ).status,
   ).toBe(200);
   const quotes = (
     await (await fixture.request('engineer', 'sales/quotes')).json()
@@ -283,16 +346,26 @@ it('reports per-record edit eligibility and input errors without mislabeling per
 it('lets engineers prepare their own quotes and requires an explicit handover to edit a colleague quote', async () => {
   expect(
     (
-      await fixture.request('engineer', 'sales/quotes/quote-5', {
-        amount: 16000,
-      })
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-5',
+        {
+          amount: 16000,
+        },
+        'PATCH',
+      )
     ).status,
   ).toBe(403);
   expect(
     (
-      await fixture.request('engineer', 'sales/quotes/quote-6', {
-        amount: 19000,
-      })
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-6',
+        {
+          amount: 19000,
+        },
+        'PATCH',
+      )
     ).status,
   ).toBe(200);
   expect(
@@ -301,9 +374,14 @@ it('lets engineers prepare their own quotes and requires an explicit handover to
   ).toBe(403);
   expect(
     (
-      await fixture.request('proposal', 'sales/quotes/quote-7', {
-        amount: 22000,
-      })
+      await fixture.request(
+        'proposal',
+        'sales/quotes/quote-7',
+        {
+          amount: 22000,
+        },
+        'PATCH',
+      )
     ).status,
   ).toBe(200);
   const rule = (await authz.sharingRules.get('example-proposal-handover'))!;
@@ -317,9 +395,14 @@ it('lets engineers prepare their own quotes and requires an explicit handover to
   ).toBe(200);
   expect(
     (
-      await fixture.request('proposal', 'sales/quotes/quote-7', {
-        amount: 23000,
-      })
+      await fixture.request(
+        'proposal',
+        'sales/quotes/quote-7',
+        {
+          amount: 23000,
+        },
+        'PATCH',
+      )
     ).status,
   ).toBe(403);
   expect(
@@ -328,9 +411,14 @@ it('lets engineers prepare their own quotes and requires an explicit handover to
   ).toBe(403);
   expect(
     (
-      await fixture.request('engineer', 'sales/quotes/quote-2', {
-        amount: 13000,
-      })
+      await fixture.request(
+        'engineer',
+        'sales/quotes/quote-2',
+        {
+          amount: 13000,
+        },
+        'PATCH',
+      )
     ).status,
   ).toBe(200);
 });

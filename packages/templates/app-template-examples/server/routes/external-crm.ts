@@ -10,6 +10,10 @@ import {
 import { Hono } from 'hono';
 import { buildRepositoryPolicy, databaseManagerToken } from '@nocobase/db';
 
+import { databaseUnavailable } from './database-unavailable.js';
+
+const DOMAIN = 'externalCrm';
+
 /**
  * The CRM owns its data. This application reads it — the database account a
  * real deployment uses would typically be read-only anyway — so only query
@@ -50,8 +54,8 @@ export const externalCrmRoutes: AppApiRouteContribution<Application> =
     if (!app.container.has(databaseManagerToken)) {
       for (const { name, actions: enabledActions } of repositories) {
         for (const action of Object.keys(enabledActions)) {
-          router.post(`/${name}:${action}`, (c) =>
-            c.json({ code: 'DATABASE_UNAVAILABLE' }, 503),
+          router.post(`/${name}/${action}`, (c) =>
+            databaseUnavailable(c, DOMAIN),
           );
         }
       }
@@ -60,7 +64,7 @@ export const externalCrmRoutes: AppApiRouteContribution<Application> =
     const authentication = app.container.resolve(authenticationToken);
     for (const { name, actions: enabledActions } of repositories) {
       for (const action of Object.keys(enabledActions)) {
-        router.use(`/${name}:${action}`, authentication.required());
+        router.use(`/${name}/${action}`, authentication.required());
       }
     }
     router.route('/', await repositoryRoutes.createRouter(app));

@@ -132,14 +132,20 @@ async function seedFixture(database: DatabaseManager) {
     authorization,
     users,
     router,
-    request: (user: string, path: string, body?: unknown) =>
-      router.request(`/api/authorization-example/${path}`, {
-        method: body ? 'POST' : 'GET',
+    /** A request as `user`; it is a `GET` without a body and a `POST` with one, unless `method` says otherwise. */
+    request: (
+      user: string,
+      path: string,
+      body?: unknown,
+      method: string = body === undefined ? 'GET' : 'POST',
+    ) =>
+      router.request(`/api/authorizationExample/${path}`, {
+        method,
         headers: {
           'x-test-user': users[user] ?? user,
           'Content-Type': 'application/json',
         },
-        ...(body ? { body: JSON.stringify(body) } : {}),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
   };
 }

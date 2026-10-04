@@ -111,8 +111,8 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
     expect(api.request).toHaveBeenCalledWith({
-      method: 'POST',
-      path: '/authorization-example/sales/quotes/q1',
+      method: 'PATCH',
+      path: '/authorizationExample/sales/quotes/q1',
       json: { amount: 250, notes: 'Draft' },
     }),
   );
@@ -123,8 +123,7 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
   await waitFor(() =>
     expect(api.request).toHaveBeenCalledWith({
       method: 'POST',
-      path: '/authorization-example/sales/quotes/q1/submit',
-      json: {},
+      path: '/authorizationExample/sales/quotes/q1/submit',
     }),
   );
   page.unmount();
@@ -144,7 +143,7 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
   await waitFor(() =>
     expect(api.request).toHaveBeenCalledWith({
       method: 'POST',
-      path: '/authorization-example/sales/orders/o1/deliver',
+      path: '/authorizationExample/sales/orders/o1/deliver',
       json: { deliveryReference: 'SHIP-42' },
     }),
   );
@@ -159,8 +158,8 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Assign carrier' }));
   await waitFor(() =>
     expect(api.request).toHaveBeenCalledWith({
-      method: 'POST',
-      path: '/authorization-example/sales/orders/o1/relations',
+      method: 'PATCH',
+      path: '/authorizationExample/sales/orders/o1/relations',
       json: { carrier: { connect: { id: 'express' } } },
     }),
   );
@@ -178,8 +177,8 @@ it('submits pricing, quotes and delivery to their distinct endpoints', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Add selected carrier' }));
   await waitFor(() =>
     expect(api.request).toHaveBeenCalledWith({
-      method: 'POST',
-      path: '/authorization-example/sales/orders/o1/relations',
+      method: 'PATCH',
+      path: '/authorizationExample/sales/orders/o1/relations',
       json: {
         collaborators: {
           connect: [

@@ -30,7 +30,7 @@ const ENGINEER = {
 };
 
 async function quoteIds(session: TestSession): Promise<string[]> {
-  const response = await session.fetch('/authorization-example/sales/quotes');
+  const response = await session.fetch('/authorizationExample/sales/quotes');
   expect(response.status).toBe(200);
   const body = (await response.json()) as {
     data: { items: { id: string }[] };
@@ -40,7 +40,7 @@ async function quoteIds(session: TestSession): Promise<string[]> {
 
 describe('the sales confidentiality restriction, through a signed-in session', () => {
   test('rejects a request without a session', async ({ request }) => {
-    const response = await request('/authorization-example/sales/quotes');
+    const response = await request('/authorizationExample/sales/quotes');
     expect(response.status).toBe(401);
   });
 

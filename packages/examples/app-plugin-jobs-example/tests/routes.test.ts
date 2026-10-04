@@ -93,28 +93,25 @@ describe('jobs example routes', () => {
   it('returns the heartbeat status to a signed-in user', async () => {
     const router = await apiRoutes.createRouter(application(allow).app);
 
-    const response = await router.request('/jobs-example/schedule');
+    const response = await router.request('/jobsExample/rules');
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(SCHEDULE);
+    await expect(response.json()).resolves.toEqual({ data: SCHEDULE.rules });
   });
 
   it('starts a rule with an optional interval and stops it', async () => {
     const { app, startRule, stopRule } = application(allow);
     const router = await apiRoutes.createRouter(app);
 
-    const started = await router.request(
-      '/jobs-example/schedule/interval/start',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ every: 10_000 }),
-      },
-    );
-    const plain = await router.request('/jobs-example/schedule/cron/start', {
+    const started = await router.request('/jobsExample/rules/interval/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ every: 10_000 }),
+    });
+    const plain = await router.request('/jobsExample/rules/cron/start', {
       method: 'POST',
     });
-    const stopped = await router.request('/jobs-example/schedule/cron/stop', {
+    const stopped = await router.request('/jobsExample/rules/cron/stop', {
       method: 'POST',
     });
 
@@ -142,16 +139,35 @@ describe('jobs example routes', () => {
             }),
       });
 
-    expect((await post('/jobs-example/schedule/heartbeat/start')).status).toBe(
-      400,
-    );
-    expect((await post('/jobs-example/schedule/missing/start')).status).toBe(
-      404,
-    );
-    const invalid = await post('/jobs-example/schedule/interval/start', {
+    const builtIn = await post('/jobsExample/rules/heartbeat/start');
+    expect(builtIn.status).toBe(400);
+    await expect(builtIn.json()).resolves.toMatchObject({
+      error: {
+        status: 'FAILED_PRECONDITION',
+        reason: 'BUILT_IN_RULE',
+        domain: 'jobsExample',
+      },
+    });
+    const missing = await post('/jobsExample/rules/missing/start');
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { reason: 'UNKNOWN_RULE', domain: 'jobsExample' },
+    });
+    const invalid = await post('/jobsExample/rules/interval/start', {
       every: '5s',
     });
     expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: 'every' })],
+      },
+    });
+    const unknownField = await post('/jobsExample/rules/interval/start', {
+      every: 10_000,
+      limit: 3,
+    });
+    expect(unknownField.status).toBe(400);
     expect(startRule).toHaveBeenCalledTimes(2);
   });
 
@@ -159,10 +175,10 @@ describe('jobs example routes', () => {
     const { app, status } = application(allow);
     const router = await apiRoutes.createRouter(app);
 
-    const response = await router.request('/jobs-example/job');
+    const response = await router.request('/jobsExample/tasks');
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(JOB);
+    await expect(response.json()).resolves.toEqual({ data: JOB.tasks });
     expect(status).toHaveBeenCalledExactlyOnceWith('user-1');
   });
 
@@ -170,23 +186,30 @@ describe('jobs example routes', () => {
     const { app, create } = application(allow);
     const router = await apiRoutes.createRouter(app);
 
-    const response = await router.request('/jobs-example/job', {
+    const response = await router.request('/jobsExample/tasks', {
       method: 'POST',
     });
 
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toEqual(TASK);
+    await expect(response.json()).resolves.toEqual({ data: TASK });
     expect(create).toHaveBeenCalledExactlyOnceWith('user-1');
   });
 
-  it.each(['/jobs-example/schedule', '/jobs-example/job'])(
-    'rejects anonymous requests to %s',
-    async (path) => {
-      const router = await apiRoutes.createRouter(application(deny).app);
+  it.each([
+    ['GET', '/jobsExample/rules'],
+    ['POST', '/jobsExample/rules/interval/start'],
+    ['POST', '/jobsExample/rules/interval/stop'],
+    ['GET', '/jobsExample/tasks'],
+    ['POST', '/jobsExample/tasks'],
+  ])('rejects anonymous %s %s', async (method, path) => {
+    const { app, create, startRule, stopRule } = application(deny);
+    const router = await apiRoutes.createRouter(app);
 
-      expect((await router.request(path)).status).toBe(401);
-    },
-  );
+    expect((await router.request(path, { method })).status).toBe(401);
+    expect(create).not.toHaveBeenCalled();
+    expect(startRule).not.toHaveBeenCalled();
+    expect(stopRule).not.toHaveBeenCalled();
+  });
 
   it('declares an API Route contribution', () => {
     expect(apiRoutes).toMatchObject({ scope: 'api' });

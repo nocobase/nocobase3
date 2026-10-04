@@ -10,6 +10,10 @@ import {
 import { Hono } from 'hono';
 import { buildRepositoryPolicy, databaseManagerToken } from '@nocobase/db';
 
+import { databaseUnavailable } from './database-unavailable.js';
+
+const DOMAIN = 'analytics';
+
 const actions: RepositoryApiActions = {
   findMany: { maxLimit: 100 },
   findOne: {},
@@ -111,8 +115,8 @@ export const analyticsRoutes: AppApiRouteContribution<Application> =
     if (!app.container.has(databaseManagerToken)) {
       for (const { name, actions: enabledActions } of repositories) {
         for (const action of Object.keys(enabledActions)) {
-          router.post(`/${name}:${action}`, (c) =>
-            c.json({ code: 'DATABASE_UNAVAILABLE' }, 503),
+          router.post(`/${name}/${action}`, (c) =>
+            databaseUnavailable(c, DOMAIN),
           );
         }
       }
@@ -121,7 +125,7 @@ export const analyticsRoutes: AppApiRouteContribution<Application> =
     const authentication = app.container.resolve(authenticationToken);
     for (const { name, actions: enabledActions } of repositories) {
       for (const action of Object.keys(enabledActions)) {
-        router.use(`/${name}:${action}`, authentication.required());
+        router.use(`/${name}/${action}`, authentication.required());
       }
     }
     router.route('/', await repositoryRoutes.createRouter(app));

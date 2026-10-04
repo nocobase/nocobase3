@@ -4,16 +4,24 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
+  ApiError,
+  apiErrorHandler,
   defineApiRoutes,
+  parseApiInput,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
+import { validator } from 'hono/validator';
 
 import { jobExampleServiceToken } from '../job/service.js';
 import {
   ScheduleExampleError,
   scheduleExampleServiceToken,
 } from '../schedule/service.js';
+import { RuleParams, StartRuleInput } from './schemas.js';
+
+/** The namespace of every route this plugin owns, and the domain of its errors. */
+export const JOBS_EXAMPLE_DOMAIN = 'jobsExample';
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
@@ -22,40 +30,51 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const schedule = container.resolve(scheduleExampleServiceToken);
     const job = container.resolve(jobExampleServiceToken);
 
-    router.use('/jobs-example/*', authentication.required());
+    router.use('/jobsExample/*', authentication.required());
 
     // The recurring rules: their state, next firing and recent runs, and the
     // start and stop actions of the ones a user may switch.
-    router.get('/jobs-example/schedule', async (context) =>
-      context.json(await schedule.status()),
+    router.get('/jobsExample/rules', async (context) =>
+      context.json({ data: (await schedule.status()).rules }),
     );
-    router.post('/jobs-example/schedule/:name/start', async (context) => {
-      const body: unknown = await context.req.json().catch(() => ({}));
-      const every =
-        typeof body === 'object' && body !== null && 'every' in body
-          ? body.every
-          : undefined;
-      if (every !== undefined && typeof every !== 'number')
-        return context.json(
-          { code: 'INVALID_INTERVAL', message: 'every must be a number.' },
-          400,
-        );
-      return respond(context, () =>
-        schedule.startRule(context.req.param('name'), every),
-      );
-    });
-    router.post('/jobs-example/schedule/:name/stop', (context) =>
-      respond(context, () => schedule.stopRule(context.req.param('name'))),
+    router.post(
+      '/jobsExample/rules/:ruleName/start',
+      validator('param', (value) => parseApiInput(RuleParams, value)),
+      validator('json', (value) => parseApiInput(StartRuleInput, value)),
+      async (context) => {
+        const { ruleName } = context.req.valid('param');
+        const { every } = context.req.valid('json');
+        await schedule.startRule(ruleName, every);
+        return context.body(null, 204);
+      },
+    );
+    router.post(
+      '/jobsExample/rules/:ruleName/stop',
+      validator('param', (value) => parseApiInput(RuleParams, value)),
+      async (context) => {
+        await schedule.stopRule(context.req.valid('param').ruleName);
+        return context.body(null, 204);
+      },
     );
 
     // One-off tasks: create one, or list the signed-in user's recent ones.
     // The page receives every later change over the realtime topic.
-    router.get('/jobs-example/job', (context) =>
-      context.json(job.status(context.get('auth')!.user.id)),
+    router.get('/jobsExample/tasks', (context) =>
+      context.json({ data: job.status(context.get('auth')!.user.id).tasks }),
     );
-    router.post('/jobs-example/job', async (context) =>
+    router.post('/jobsExample/tasks', async (context) =>
       // 202: the task is accepted, not done.
-      context.json(await job.create(context.get('auth')!.user.id), 202),
+      context.json(
+        { data: await job.create(context.get('auth')!.user.id) },
+        202,
+      ),
+    );
+
+    router.onError((error, context) =>
+      apiErrorHandler(
+        error instanceof ScheduleExampleError ? toApiError(error) : error,
+        context,
+      ),
     );
 
     // The factory returns a plain Hono; mounting keeps AuthEnv typed inside.
@@ -68,19 +87,23 @@ const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
 
 export default routes;
 
-/** Answers the rule's new state, or a 4xx for a request the service refused. */
-async function respond(
-  context: Context,
-  action: () => Promise<void>,
-): Promise<Response> {
-  try {
-    await action();
-  } catch (error) {
-    if (!(error instanceof ScheduleExampleError)) throw error;
-    return context.json(
-      { code: error.code, message: error.message },
-      error.code === 'UNKNOWN_RULE' ? 404 : 400,
-    );
+function toApiError(error: ScheduleExampleError): ApiError {
+  const common = {
+    reason: error.code,
+    domain: JOBS_EXAMPLE_DOMAIN,
+    message: error.message,
+    cause: error,
+  };
+  switch (error.code) {
+    case 'UNKNOWN_RULE':
+      return new ApiError({ status: 'NOT_FOUND', ...common });
+    case 'BUILT_IN_RULE':
+      return new ApiError({ status: 'FAILED_PRECONDITION', ...common });
+    case 'INVALID_INTERVAL':
+      return new ApiError({
+        status: 'INVALID_ARGUMENT',
+        ...common,
+        fieldViolations: [{ field: 'every', description: error.message }],
+      });
   }
-  return context.body(null, 204);
 }

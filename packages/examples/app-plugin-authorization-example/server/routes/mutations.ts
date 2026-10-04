@@ -1,3 +1,4 @@
+import { ApiError } from '@nocobase/app-server/router';
 import {
   RepositoryError,
   type DatabaseManager,
@@ -29,42 +30,39 @@ export function writableRepository(
     .narrow({ read: write === true ? true : { scope: write.scope } });
 }
 
-export function editableValues(
-  body: unknown,
-  fields: readonly string[],
-): Record<string, string | number> {
-  if (
-    !body ||
-    typeof body !== 'object' ||
-    Array.isArray(body) ||
-    !Object.keys(body).length
-  )
-    throw new TypeError('Expected fields');
+export const AUTHORIZATION_EXAMPLE_DOMAIN = 'authorizationExample';
 
-  const values: Record<string, string | number> = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (!fields.includes(key)) throw new TypeError('Unexpected field');
-    if (key === 'amount') {
-      if (
-        typeof value !== 'number' ||
-        !Number.isSafeInteger(value) ||
-        value < 0
-      )
-        throw new TypeError('Invalid amount');
-    } else if (typeof value !== 'string' || value.length > 500)
-      throw new TypeError('Invalid text');
-
-    values[key] = value;
-  }
-
-  return values;
+/** Not allowed, whether or not the record exists, so the answer reveals nothing about records outside the caller's scope. */
+export function forbidden(
+  message: string = 'This operation is not allowed.',
+): ApiError {
+  return new ApiError({
+    status: 'PERMISSION_DENIED',
+    reason: 'FORBIDDEN',
+    domain: AUTHORIZATION_EXAMPLE_DOMAIN,
+    message,
+  });
 }
 
-export class StateConflictError extends Error {}
+/** The record is visible and the caller may act on it, but its business state forbids the operation. */
+export function stateConflictError(
+  message: string = 'The record is no longer in a state that allows this operation.',
+): ApiError {
+  return new ApiError({
+    status: 'FAILED_PRECONDITION',
+    reason: 'STATE_CONFLICT',
+    domain: AUTHORIZATION_EXAMPLE_DOMAIN,
+    message,
+  });
+}
 
+/**
+ * Turn the Repository's `RECORD_NOT_FOUND` from a write whose filter repeats the state checked before it into a state
+ * conflict: the record changed between the check and the write.
+ */
 export function stateConflict(error: unknown): never {
   if (error instanceof RepositoryError && error.code === 'RECORD_NOT_FOUND')
-    throw new StateConflictError('Record changed during the operation');
+    throw stateConflictError('Record changed during the operation.');
 
   throw error;
 }

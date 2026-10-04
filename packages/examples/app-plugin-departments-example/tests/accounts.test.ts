@@ -106,7 +106,7 @@ describe('the seeded demo accounts', () => {
     // Delivery's set, scoped to his South region by the sharing rule: he may deliver the South orders.
     const response = await test.request(
       'GET',
-      '/api/authorization-example/sales/orders',
+      '/api/authorizationExample/sales/orders',
       { cookie: cookies.chen ?? '' },
     );
     expect(response.status).toBe(200);
@@ -124,7 +124,7 @@ describe('the seeded demo accounts', () => {
     // Nina reads the same kind of list without the delivery set.
     const nina = await test.request(
       'GET',
-      '/api/authorization-example/sales/orders',
+      '/api/authorizationExample/sales/orders',
       { cookie: cookies.nina ?? '' },
     );
     const ninaBody = (await nina.json()) as {

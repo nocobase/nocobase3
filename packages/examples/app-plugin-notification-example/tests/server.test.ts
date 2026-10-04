@@ -112,9 +112,49 @@ it('sends task summaries to the related people', async () => {
     }),
   );
 
-  expect(
-    (await request(router, 'GET', 'u3', `/tasks/${created.data.id}`)).status,
-  ).toBe(404);
+  // Permission before existence: a foreign task and a missing one answer alike.
+  for (const taskPath of [`/tasks/${created.data.id}`, '/tasks/missing']) {
+    const denied = await request(router, 'GET', 'u3', taskPath);
+    expect(denied.status).toBe(403);
+    await expect(denied.json()).resolves.toMatchObject({
+      error: { reason: 'TASK_ACCESS_DENIED', domain: 'notificationExample' },
+    });
+  }
+  const deniedUpdate = await request(
+    router,
+    'PATCH',
+    'u3',
+    `/tasks/${created.data.id}`,
+    { status: 'done' },
+  );
+  expect(deniedUpdate.status).toBe(403);
+
+  const forbiddenReassignment = await request(
+    router,
+    'PATCH',
+    'u2',
+    `/tasks/${created.data.id}`,
+    { assigneeId: 'u3' },
+  );
+  expect(forbiddenReassignment.status).toBe(403);
+  await expect(forbiddenReassignment.json()).resolves.toMatchObject({
+    error: { reason: 'TASK_ASSIGNMENT_FORBIDDEN' },
+  });
+
+  const unknownField = await request(
+    router,
+    'PATCH',
+    'u1',
+    `/tasks/${created.data.id}`,
+    { priority: 'high' },
+  );
+  expect(unknownField.status).toBe(400);
+  await expect(unknownField.json()).resolves.toMatchObject({
+    error: {
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: '' })],
+    },
+  });
 
   const reassignedResponse = await request(
     router,
@@ -159,14 +199,10 @@ it('paginates tasks visible to the current user', async () => {
   );
   const firstPageBody = (await firstPage.json()) as {
     data: unknown[];
-    total: number;
-    page: number;
-    pageSize: number;
+    meta: { page: number; pageSize: number; total: number };
   };
   expect(firstPageBody).toMatchObject({
-    total: 3,
-    page: 1,
-    pageSize: 2,
+    meta: { total: 3, page: 1, pageSize: 2 },
     data: expect.arrayContaining([
       expect.objectContaining({ title: expect.any(String) }),
     ]),
@@ -181,14 +217,10 @@ it('paginates tasks visible to the current user', async () => {
   );
   const secondPageBody = (await secondPage.json()) as {
     data: unknown[];
-    total: number;
-    page: number;
-    pageSize: number;
+    meta: { page: number; pageSize: number; total: number };
   };
   expect(secondPageBody).toMatchObject({
-    total: 3,
-    page: 2,
-    pageSize: 2,
+    meta: { total: 3, page: 2, pageSize: 2 },
   });
   expect(secondPageBody.data).toHaveLength(1);
 
@@ -196,7 +228,48 @@ it('paginates tasks visible to the current user', async () => {
     request(router, 'GET', 'u3', '/tasks?page=1&pageSize=2').then((response) =>
       response.json(),
     ),
-  ).resolves.toMatchObject({ total: 0, page: 1, pageSize: 2, data: [] });
+  ).resolves.toMatchObject({
+    meta: { total: 0, page: 1, pageSize: 2 },
+    data: [],
+  });
+
+  const defaults = await request(router, 'GET', 'u1', '/tasks');
+  await expect(defaults.json()).resolves.toMatchObject({
+    meta: { page: 1, pageSize: 20, total: 3 },
+  });
+  const oversized = await request(router, 'GET', 'u1', '/tasks?pageSize=101');
+  expect(oversized.status).toBe(400);
+  await expect(oversized.json()).resolves.toMatchObject({
+    error: {
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: 'pageSize' })],
+    },
+  });
+});
+
+it('rejects anonymous requests to every task route', async () => {
+  const database = await createFixture();
+  const router = await createRouter(
+    database,
+    vi.fn(async () => undefined),
+  );
+  for (const [method, taskPath] of [
+    ['GET', '/assignees'],
+    ['GET', '/tasks'],
+    ['POST', '/tasks'],
+    ['GET', '/tasks/task-1'],
+    ['PATCH', '/tasks/task-1'],
+  ] as const) {
+    const response = await router.request(
+      `/api/notificationExample${taskPath}`,
+      {
+        method,
+        headers: { 'Content-Type': 'application/json', 'x-anonymous': '1' },
+        ...(method === 'GET' ? {} : { body: '{}' }),
+      },
+    );
+    expect(response.status).toBe(401);
+  }
 });
 
 it('does not expose or accept disabled and deleted users as assignees', async () => {
@@ -215,7 +288,7 @@ it('does not expose or accept disabled and deleted users as assignees', async ()
     vi.fn(async () => undefined),
   );
 
-  const usersResponse = await request(router, 'GET', 'u1', '/users');
+  const usersResponse = await request(router, 'GET', 'u1', '/assignees');
   expect(usersResponse.status).toBe(200);
   expect(
     ((await usersResponse.json()) as { data: Array<{ id: string }> }).data,
@@ -229,7 +302,12 @@ it('does not expose or accept disabled and deleted users as assignees', async ()
     });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
-      code: 'ASSIGNEE_NOT_FOUND',
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'ASSIGNEE_NOT_FOUND',
+        domain: 'notificationExample',
+        fieldViolations: [expect.objectContaining({ field: 'assigneeId' })],
+      },
     });
   }
 });
@@ -279,6 +357,16 @@ async function createRouter(
   container.instance(notificationServiceToken, { send });
   container.instance(authenticationToken, {
     required: () => async (context: Context<AuthEnv>, next: Next) => {
+      if (context.req.header('x-anonymous'))
+        return context.json(
+          {
+            error: {
+              status: 'UNAUTHENTICATED',
+              reason: 'AUTHENTICATION_REQUIRED',
+            },
+          },
+          401,
+        );
       const id = context.req.header('x-test-user') ?? 'u1';
       context.set('auth', { user: { id } } as never);
       await next();
@@ -297,7 +385,7 @@ function request(
   pathName: string,
   body?: unknown,
 ): Promise<Response> {
-  return router.request(`/api/notification-example${pathName}`, {
+  return router.request(`/api/notificationExample${pathName}`, {
     method,
     headers: {
       'Content-Type': 'application/json',

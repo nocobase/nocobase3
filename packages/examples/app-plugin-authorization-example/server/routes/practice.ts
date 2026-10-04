@@ -5,6 +5,7 @@ import type {
 import type { DatabaseManager } from '@nocobase/db';
 import { Hono } from 'hono';
 import { salesRecords } from '../sales-records.js';
+import { forbidden } from './mutations.js';
 
 import { PROJECTS, QUOTES, ORDERS } from '../sales-authorization.js';
 
@@ -44,7 +45,7 @@ export function createPracticeRoutes(
 
   router.post('/reset', async (c) => {
     if (!(await c.var.authz.snapshot()).unrestricted)
-      return c.json({ code: 'FORBIDDEN' }, 403);
+      throw forbidden('Only an unrestricted user may reset the example.');
 
     await database.transaction(async (connection) => {
       const users: Record<string, string> = {};

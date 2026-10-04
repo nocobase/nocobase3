@@ -69,8 +69,8 @@ function RelationEditor({ id }: { id: string }): ReactElement {
     setMessage('');
     try {
       await api.request({
-        method: 'POST',
-        path: `/authorization-example/sales/orders/${encodeURIComponent(id)}/relations`,
+        method: 'PATCH',
+        path: `/authorizationExample/sales/orders/${encodeURIComponent(id)}/relations`,
         json: values,
       });
       state.reload();

@@ -67,7 +67,7 @@ afterEach(async () => {
 
 function request(source = 'query', sample = 'all', authenticated = true) {
   return router.request(
-    `/main/api/numeric-examples?source=${source}&sample=${sample}`,
+    `/main/api/numericExamples?source=${source}&sample=${sample}`,
     {
       headers: authenticated ? { 'x-test-user': 'tester' } : {},
     },
@@ -137,11 +137,25 @@ it('seeds exact adjacent integers and preserves edits on repeat runs', async () 
 
 it('requires authentication, validates options, and exposes no writes', async () => {
   expect((await request('query', 'all', false)).status).toBe(401);
-  expect((await request('raw')).status).toBe(400);
+  const invalid = await request('raw');
+  expect(invalid.status).toBe(400);
+  expect(await invalid.json()).toMatchObject({
+    error: {
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: 'source' })],
+    },
+  });
   expect((await request('query', 'unknown')).status).toBe(400);
   expect(
     (
-      await router.request('/main/api/numeric-examples', {
+      await router.request('/main/api/numericExamples?sortField=sample', {
+        headers: { 'x-test-user': 'tester' },
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await router.request('/main/api/numericExamples', {
         method: 'POST',
         headers: { 'x-test-user': 'tester' },
       })
@@ -151,7 +165,15 @@ it('requires authentication, validates options, and exposes no writes', async ()
   const unavailable = await numericExamplesRoutes.createRouter({
     container: new ServiceContainer(),
   } as Application);
-  expect((await unavailable.request('/numeric-examples')).status).toBe(503);
+  const response = await unavailable.request('/numericExamples');
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    error: {
+      status: 'UNAVAILABLE',
+      reason: 'DATABASE_UNAVAILABLE',
+      domain: 'numericExamples',
+    },
+  });
 });
 
 it.each(['query', 'repository'])(
