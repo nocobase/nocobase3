@@ -511,6 +511,8 @@ routes.post(
 - **存量迁移**：Hub 和 hub-cli、用户、认证、权限（含三个规则插件）、API Key、工作流、定时任务、多语言、通知、站内信、文件、数据库浏览器、AI 员工，以及所有示例插件和应用模板，前端同步改好。
 - **数据接口**：分隔符由冒号改为斜杠，暴露名改为必须是 camelCase。
 - **前端**：`ApiClientError` 只读标准错误体里的 `reason`，旧的 `{ code }` 兼容去掉了。
+- **框架层限制**：已在 #532 实现（提交 94ec6b816），在 `config.yml` 的 `api` 段配置，三项默认都不开启。`api.bodyLimit` 是全局请求内容大小上限，超出返回 413 `BODY_TOO_LARGE`；`api.timeout` 是请求超时，处理函数到期还没返回时答 503 `REQUEST_TIMEOUT`，已经开始的流式返回不会被切断；`api.rateLimit` 是限流，超出返回 429 `RATE_LIMITED` 并带 `Retry-After`，按连接 IP 计数，每个实例在自己的进程内存里各算各的，`GET /api/healthz` 不计，认证路由照常计数。反向代理后面所有客户端共用代理的 IP，可信代理的支持还没做。环境变量 `API_BODY_LIMIT`、`API_TIMEOUT` 可以设置前两项。
+- **重复路由检查**：请求方式和地址完全相同的重复注册，应用启动时直接报错，同在 #532 实现（提交 94ec6b816）。
 - **发布**：#532 合并后立即发布，改动过的插件统一发布大版本，changeset 里附改动对照说明。
 - **pro 仓库**：邮件和 AI 知识库插件的迁移 PR 已经开出，跟在 #532 之后合并。
 
@@ -518,7 +520,6 @@ routes.post(
 
 - **接口文档生成**：单独一个 PR，做法见第 04 节，包括 `check-openapi` 自动检查。
 - **前端类型自动生成**：从接口文档生成，不再手写。
-- **框架层限制**：计划在 `config.yml` 里加一个 `api` 段，配置全局请求内容大小上限、请求超时和限流，默认都不限制、不开启；正在设计中。
 
 ## 08 请确认
 
@@ -567,7 +568,7 @@ routes.post(
 - **domain**：一个插件一个 `domain`，即它的命名空间；转交的错误保留原插件的 `domain`（如 `LAST_ASSIGNMENT` 仍是 `authorization`）；框架和数据仓库的错误用 `app`。
 - **数据仓库错误**：每个错误码在 `@nocobase/db` 的 `repositoryErrorStatuses` 里声明自己的状态；状态为 `INTERNAL` 的（服务端自己的问题，如 Policy 不合法）按不透明的 500 返回；其余保留错误码作为 `reason`，`path` 和 `details` 放进 `metadata`，`INVALID_ARGUMENT` 类还会在 `fieldViolations` 里指出字段。`RELATION_TARGET_NOT_FOUND` 是 400，因为缺的是请求内容里引用的目标。
 - **框架兜底**：`/api` 下的未知地址返回 JSON 格式的 404 `ROUTE_NOT_FOUND`，不返回前端页面；意外错误返回 500 `INTERNAL_ERROR`；每个响应都带 `x-request-id`；错误体字段包括 `fieldViolations` 和 `metadata`。
-- **框架层限制**：计划在 `config.yml` 的 `api` 段配置全局请求内容上限、请求超时和限流，默认都不限制、不开启，正在设计中。
+- **框架层限制**：已在 #532 实现，`config.yml` 的 `api` 段配置 `bodyLimit`（413 `BODY_TOO_LARGE`）、`timeout`（503 `REQUEST_TIMEOUT`，已开始的流式返回不切断）和 `rateLimit`（429 `RATE_LIMITED` 带 `Retry-After`，按连接 IP、每个实例在进程内存里计数，`healthz` 不计、认证路由计数；反向代理后所有客户端共用代理 IP，可信代理尚未支持），默认都不开启；环境变量 `API_BODY_LIMIT`、`API_TIMEOUT` 可设前两项。
 
 ---
 

@@ -1957,6 +1957,18 @@ routes.post(
           >
         </div>
         <div class="task">
+          <b>框架层限制</b
+          ><span
+            >已在 #532 实现（提交 94ec6b816），在 <code>config.yml</code> 的 <code>api</code> 段配置，三项默认都不开启。<code>api.bodyLimit</code> 是全局请求内容大小上限，超出返回 413 <code>BODY_TOO_LARGE</code>；<code>api.timeout</code> 是请求超时，处理函数到期还没返回时答 503 <code>REQUEST_TIMEOUT</code>，已经开始的流式返回不会被切断；<code>api.rateLimit</code> 是限流，超出返回 429 <code>RATE_LIMITED</code> 并带 <code>Retry-After</code>，按连接 IP 计数，每个实例在自己的进程内存里各算各的，<code>GET /api/healthz</code> 不计，认证路由照常计数。反向代理后面所有客户端共用代理的 IP，可信代理的支持还没做。环境变量 <code>API_BODY_LIMIT</code>、<code>API_TIMEOUT</code> 可以设置前两项。</span
+          >
+        </div>
+        <div class="task">
+          <b>重复路由检查</b
+          ><span
+            >请求方式和地址完全相同的重复注册，应用启动时直接报错，同在 #532 实现（提交 94ec6b816）。</span
+          >
+        </div>
+        <div class="task">
           <b>发布</b
           ><span
             >#532 合并后立即发布，改动过的插件统一发布大版本，changeset
@@ -1981,14 +1993,6 @@ routes.post(
         </div>
         <div class="task">
           <b>前端类型自动生成</b><span>从接口文档生成，不再手写。</span>
-        </div>
-        <div class="task">
-          <b>框架层限制</b
-          ><span
-            >计划在 <code>config.yml</code> 里加一个
-            <code>api</code>
-            段，配置全局请求内容大小上限、请求超时和限流，默认都不限制、不开启；正在设计中。</span
-          >
         </div>
       </div>
     </div>
@@ -2262,9 +2266,7 @@ routes.post(
             <code>fieldViolations</code> 和 <code>metadata</code>。
           </li>
           <li>
-            <b>框架层限制</b>：计划在 <code>config.yml</code> 的
-            <code>api</code>
-            段配置全局请求内容上限、请求超时和限流，默认都不限制、不开启，正在设计中。
+            <b>框架层限制</b>：已在 #532 实现，<code>config.yml</code> 的 <code>api</code> 段配置 <code>bodyLimit</code>（413 <code>BODY_TOO_LARGE</code>）、<code>timeout</code>（503 <code>REQUEST_TIMEOUT</code>，已开始的流式返回不切断）和 <code>rateLimit</code>（429 <code>RATE_LIMITED</code> 带 <code>Retry-After</code>，按连接 IP、每个实例在进程内存里计数，<code>healthz</code> 不计、认证路由计数；反向代理后所有客户端共用代理 IP，可信代理尚未支持），默认都不开启；环境变量 <code>API_BODY_LIMIT</code>、<code>API_TIMEOUT</code> 可设前两项。
           </li>
         </ul>
       </div>
