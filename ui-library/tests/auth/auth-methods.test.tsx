@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AuthMethods } from '../../registry/auth/auth-methods';
+import { AuthMethods } from '../../registry/auth/auth-methods/auth-methods';
 
 const icon = <svg />;
 

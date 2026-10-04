@@ -45,21 +45,21 @@ The dry run lists every file shadcn would create or overwrite and every dependen
 4. **Add the translations.** shadcn does not touch your locale resources. A block ships its translations in its `locales/` directory: spread each file into the matching file in `client/locales/`, before your own keys so that yours can reword them, as its README shows. A component ships none; add the keys its README lists. Without this step the item renders its English defaults in every language.
 5. **Run the application's checks**: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build`.
 
-An application created from one of the templates already contains the `page-container`, `page-header`, `route-dialog`, `route-drawer`, `route-child-page` and `back-button` components, and the `auth-forms`, `auth-methods` and `auth-split-layout` components its sign-in pages use, in `client/components/`. Do not add them again; to take a newer version, see [Upgrading an item](#upgrading-an-item).
+An application created from one of the templates already contains the `page-container`, `page-header`, `route-dialog`, `route-drawer`, `route-child-page` and `back-button` components in `client/components/`, and the `auth-forms`, `auth-methods` and `auth-split-layout` blocks its sign-in pages use in `client/extensions/nocobase-<item>/`. Do not add them again; to take a newer version, see [Upgrading an item](#upgrading-an-item).
 
 ## Add an item to a plugin
 
 A plugin compiles `client/` with `tsc` using NodeNext resolution and publishes the output as `dist/`, which the installing application resolves again. An installed item therefore needs more work in a plugin than in an application.
 
 1. **Install it.** Declare the registry in the plugin's `components.json` and run the same command from the plugin's directory. For a plugin in this repository, copy the item instead, as [Inside this repository](#inside-this-repository) describes. A component lands in the plugin's `client/components/` and a block in its `client/extensions/nocobase-<item>/`, with any missing primitive in `client/components/ui/`. You may move a block's directory, for example to `client/components/<item>/`, as long as it stays under `client/`.
-2. **Replace the `@/` imports with relative `.js` paths.** TypeScript does not rewrite `paths` aliases in the JavaScript it emits, and in the application that installs the plugin, `@/` resolves to the application's own `client/`, so an `@/` import either fails there or binds to the wrong file. From `client/components/auth-forms/`, for example:
+2. **Replace the `@/` imports with relative `.js` paths.** TypeScript does not rewrite `paths` aliases in the JavaScript it emits, and in the application that installs the plugin, `@/` resolves to the application's own `client/`, so an `@/` import either fails there or binds to the wrong file. From `client/extensions/nocobase-auth-forms/`, for example:
 
    ```ts
    // As installed:
    import { Button } from '@/components/ui/button';
    import { cn } from '@/lib/utils';
    // In a plugin:
-   import { Button } from '../ui/button.js';
+   import { Button } from '../../components/ui/button.js';
    import { cn } from '../../lib/utils.js';
    ```
 

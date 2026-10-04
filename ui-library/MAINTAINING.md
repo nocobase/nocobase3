@@ -9,7 +9,7 @@ Put a component here when the applications and plugins that use it should own an
 An item is one of two kinds, and its kind decides where it installs:
 
 - **A component** is a single business component that pages are composed from, such as `page-header` or `route-dialog`. It installs beside the consumer's own components in `client/components/`, the way shadcn installs its primitives into `client/components/ui/`, and is imported like one of them: `@/components/page-header`. Keep it to one component — its own file plus only the files it cannot work without, such as the `route-overlay.tsx` that `route-dialog` and `route-drawer` share, or the parts that exist only to be used with it. `data-table` is the second case: its column header, pagination and view menu mean nothing without the table, so the item installs all four into a directory of their own, `client/components/data-table/`, imported as `@/components/data-table`. A consumer that wants two components installs two items.
-- **A block** is a complete feature assembled from several components: pages, forms, layout and translations that only make sense together. The library has none at the moment. It installs into a directory of its own, `client/extensions/nocobase-<item>/`, which is where consumers find it and the directory they delete to remove it.
+- **A block** is a feature that a page wires up rather than a single building block, such as the authentication forms, methods and layouts. It installs into a directory of its own, `client/extensions/nocobase-<item>/`, which is where consumers find it and the directory they delete to remove it.
 
 Two neighbours look similar and are not the same thing:
 
@@ -22,8 +22,7 @@ Two neighbours look similar and are not the same thing:
 ui-library/
 ├── registry.json               registry index: name, homepage, and one include per group
 ├── registry/
-│   ├── auth/                   the authentication components: registry.json, a README, and their
-│   │                           files as they land in client/components/
+│   ├── auth/                   a group of blocks: registry.json, a README, and one directory per block
 │   └── components/             the group of components: registry.json, a README, and every
 │                               component's files side by side, as they land in client/components/
 ├── tests/<group>/              each item's tests, rendering its sources the way the preview does
@@ -104,7 +103,7 @@ Every installed copy belongs to its project, and nothing in this repository can 
 - A merge to `develop` publishes the item at once, but packages are published only when someone runs a release. An item that relies on a package change is therefore live before that package is, and installing it in between compiles against the old published version. When you can, land and release the package change first, then change the item and raise the floor of its range to the released version.
 - A plugin change that breaks an export an item uses fails `typecheck` here, in the plugin's own pull request, because both TypeScript programs resolve the real workspace package. Prefer a compatible change: add the new export, and remove the old one once the items have moved. When the break is unavoidable, update the item in the same pull request, release the plugin soon after merging, and then raise the item's range floor.
 
-The three application templates ship installed copies of some items, and this library is the source of truth for all of them. The components their pages are built from — `page-container`, `page-header`, `route-dialog`, `route-drawer`, `route-child-page` and `back-button` — are preinstalled in `client/components/`, together with `auth-forms`, `auth-methods` and `auth-split-layout`, which each template's `client/pages/auth/` wires to the authentication plugin and translates. Each template carries exactly the files those items install, and `tests/scripts/template-ui-library.test.mjs` fails until a change to one of them has been copied into all three templates. That part of the pull request changes published packages, so it needs a changeset. A feature the templates need goes into the item first and reaches them as a copy, never the other way round: an edit made only in a template's copy fails the same check.
+The three application templates ship installed copies of some items, and this library is the source of truth for all of them. The components their pages are built from — `page-container`, `page-header`, `route-dialog`, `route-drawer`, `route-child-page` and `back-button` — are preinstalled in `client/components/`, and the `auth-forms`, `auth-methods` and `auth-split-layout` blocks in `client/extensions/nocobase-<item>/`, which each template's `client/pages/auth/` wires to the authentication plugin and translates. Each template carries exactly the files those items install, and `tests/scripts/template-ui-library.test.mjs` fails until a change to one of them has been copied into all three templates. That part of the pull request changes published packages, so it needs a changeset. A feature the templates need goes into the item first and reaches them as a copy, never the other way round: an edit made only in a template's copy fails the same check.
 
 ## Local development
 

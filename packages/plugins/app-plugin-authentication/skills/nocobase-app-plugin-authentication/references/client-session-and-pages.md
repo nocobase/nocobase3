@@ -80,9 +80,9 @@ owns their components:
 client/routes.ts                        /login /register /forgot-password /reset-password
 client/pages/auth/*.tsx                 one page per route: wires a form to its headless action
 client/pages/auth/shared.tsx            AuthPage: logo, name and the brand panel every page shares
-client/components/auth-forms/           four presentational password forms
-client/components/auth-methods.tsx      method tabs and SSO buttons
-client/components/auth-split-layout.tsx the page frame, with an aside slot
+client/extensions/nocobase-auth-forms/         four presentational password forms
+client/extensions/nocobase-auth-methods/       method tabs and SSO buttons
+client/extensions/nocobase-auth-split-layout/  the page frame, with an aside slot
 ```
 
 The components come from the NocoBase UI Library and are presentational: they call no plugin API and take every string as a prop with an English default. The pages own the wiring and the translations. Customize the pages and `shared.tsx` first; prefer the components' props and slots, and when they cannot express the change, write a new component under `client/components/auth/` and import it from the page. Edit the installed components only if explicitly requested or composition is impractical, and explain the reason. Preserve original pages and components when disabling a feature so it can be re-enabled without reconstruction.

@@ -6,12 +6,12 @@ import { PasswordLoginForm } from '../../../registry/auth/auth-forms/password-lo
 import { PasswordRegistrationForm } from '../../../registry/auth/auth-forms/password-registration-form';
 import { PasswordResetForm } from '../../../registry/auth/auth-forms/password-reset-form';
 import { PasswordResetRequestForm } from '../../../registry/auth/auth-forms/password-reset-request-form';
-import { AuthCenteredLayout } from '../../../registry/auth/auth-centered-layout';
-import { AuthSplitLayout } from '../../../registry/auth/auth-split-layout';
+import { AuthCenteredLayout } from '../../../registry/auth/auth-centered-layout/auth-centered-layout';
+import { AuthSplitLayout } from '../../../registry/auth/auth-split-layout/auth-split-layout';
 import {
   AuthMethods,
   type AuthSsoProvider,
-} from '../../../registry/auth/auth-methods';
+} from '../../../registry/auth/auth-methods/auth-methods';
 import { SimpleIconGlyph } from './simple-icon';
 
 // The demos stand in for an application page: the forms are presentational, so each one is wired here to a fake

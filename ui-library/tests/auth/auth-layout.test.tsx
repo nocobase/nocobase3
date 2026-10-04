@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { AuthCenteredLayout } from '../../registry/auth/auth-centered-layout';
-import { AuthSplitLayout } from '../../registry/auth/auth-split-layout';
+import { AuthCenteredLayout } from '../../registry/auth/auth-centered-layout/auth-centered-layout';
+import { AuthSplitLayout } from '../../registry/auth/auth-split-layout/auth-split-layout';
 
 describe('auth layouts', () => {
   it('centres the form in a card under the brand', () => {
