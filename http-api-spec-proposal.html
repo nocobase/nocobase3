@@ -444,7 +444,7 @@
   /* Plan */
   .lanes {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
   }
   .lane {
@@ -614,8 +614,7 @@
       <span
         >当前进度
         <b
-          >第一步已完成（PR #530），存量迁移在 PR #532
-          中完成、待合并，接口文档生成另起 PR</b
+          >规范和框架兜底已完成（PR #530），存量迁移已合并（PR #532），接口文档生成在 PR #533 中实现、待合并</b
         ></span
       >
     </div>
@@ -953,7 +952,7 @@
             请求，参数和请求头照样校验，请求内容在代码里校验。请求内容的大小上限是可选的：插件按需给路由加
             <code>bodyLimit</code>，比如上传或输入本应很小的接口，超出时返回 413
             <code>BODY_TOO_LARGE</code>；应用也可以在 <code>config.yml</code> 里用
-            <code>api.bodyLimit</code> 设一个全局上限，默认不开启。不要求每个路由都配。这份声明将来同时是接口文档的来源，写一次，校验和文档两用（见第 04
+            <code>api.bodyLimit</code> 设一个全局上限，默认不开启。不要求每个路由都配。这份声明同时是接口文档的来源，写一次，校验和文档两用（见第 04
             节）。
           </p>
         </div>
@@ -1257,493 +1256,361 @@
       <h2>接口文档怎么生成</h2>
     </div>
     <div class="ask">
-      <div class="label">计划中 · 尚未实现</div>
-      <p>
-        本节是后续 OpenAPI PR 的计划，尚未实现。当前代码用
-        <code
-          >validator('json', (value) =&gt; parseApiInput(Schema, value))</code
-        >
-        校验输入，文档生成接入时会机械地换成下面的写法。
-      </p>
+      <div class="label">已实现 · PR #533</div>
+      <p>本节记录的是 PR #533（分支 <code>feat/openapi</code>）里已经实现的做法。原稿里的待定事项都已有结论，汇总在本节末尾。</p>
     </div>
-    <p>
-      接口文档（Swagger，正式名称是
-      OpenAPI）不靠人手写，而是从代码里自动产出。开发者写接口时声明「接受什么、返回什么」，这份声明同时用来校验请求和生成文档。代码改了，文档跟着变，不会出现文档和实际不一致。
-    </p>
-
-    <h3>文档的三个来源</h3>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>接口类型</th>
-            <th>文档从哪来</th>
-            <th>开发者要做什么</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>插件手写的接口</td>
-            <td>
-              每个接口用 zod 声明输入和输出的结构，通过
-              <code>@nocobase/app-server/router</code> 转出的辅助函数读取
-            </td>
-            <td>写接口时顺手声明；这份声明同时负责校验请求</td>
-          </tr>
-          <tr>
-            <td>自动生成的数据接口（约 150 个）</td>
-            <td>从数据表的暴露配置和字段定义自动推导</td>
-            <td>什么都不用做</td>
-          </tr>
-          <tr>
-            <td>登录相关接口（Better Auth）</td>
-            <td>Better Auth 自带的 OpenAPI 插件产出，合并进来</td>
-            <td>什么都不用做</td>
-          </tr>
-        </tbody>
-      </table>
+<p>接口文档（Swagger，正式名称是 OpenAPI）不靠人手写，而是从代码里自动产出。开发者写接口时声明「接受什么、返回什么」，这份声明同时用来校验请求和生成文档。代码改了，文档跟着变，不会出现文档和实际不一致。</p>
+<h3>文档的四个来源</h3>
+<div class="tbl-wrap">
+<table>
+<thead>
+<tr>
+<th>接口类型</th>
+<th>文档从哪来</th>
+<th>开发者要做什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>插件和应用手写的接口</td>
+<td>每个接口用 <code>describeRoute()</code> 写说明，用 <code>apiValidator()</code> 声明输入，用 zod 声明返回结构，都从 <code>@nocobase/app-server/router</code> 导入</td>
+<td>写接口时顺手声明；输入声明同时负责校验请求</td>
+</tr>
+<tr>
+<td>自动生成的数据接口</td>
+<td>框架从暴露配置和数据表的字段定义逐个字段推导</td>
+<td>什么都不用做；暴露额外加在记录上的字段时，用 <code>computedFields</code> 声明一下</td>
+</tr>
+<tr>
+<td>权限插件分发器后面的设置接口</td>
+<td>规则插件用 <code>authz.routes.add(path, createRouteHandler(router))</code> 注册的路由，由权限插件读出来，合并成 <code>/api/authorization/...</code> 下的接口</td>
+<td>和手写接口一样，在路由上写 <code>describeRoute()</code></td>
+</tr>
+<tr>
+<td>登录相关接口（Better Auth）</td>
+<td>Better Auth 自己的 OpenAPI 生成器产出，由认证插件通过 <code>addFragment()</code> 合并进来，归入 <code>Authentication</code> 分组</td>
+<td>什么都不用做</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>生成流程</h3>
+<div class="flow">
+      <div><b>声明</b><span>每个手写接口写明分组、一句说明、<code>operationId</code>、输入和每个状态码的返回。</span></div>
+      <div><b>收集</b><span>应用在 <code>registerRoutes()</code> 里组装好唯一的 <code>/api</code> 路由后交给文档服务，文档服务读出每个路由上的声明，加上数据接口和插件补充的片段。</span></div>
+      <div><b>合并</b><span>合成一份标准的 OpenAPI 3.1 文档。<code>info</code> 取应用的名称和版本，<code>servers</code> 是应用的挂载路径（如 <code>/main</code>），路径都写成 <code>/api/...</code>。每个应用装的插件不同，文档也只包含它实际拥有的接口。</span></div>
+      <div><b>缓存</b><span>文档在第一次请求时生成并缓存，插件补充片段或调用 <code>invalidate()</code> 时丢掉缓存、下次重新生成；生成失败不缓存，下次请求重试。</span></div>
     </div>
-
-    <h3>生成流程</h3>
-    <div class="flow">
-      <div>
-        <b>声明</b><span>每个接口写明输入、输出、所属插件和一句说明。</span>
-      </div>
-      <div>
-        <b>收集</b
-        ><span
-          >应用启动时，框架收集所有已启用插件的接口声明，加上数据接口和登录接口。</span
-        >
-      </div>
-      <div>
-        <b>合并</b
-        ><span
-          >合成一份标准的 OpenAPI 3.1
-          文档，按插件分组。每个应用装的插件不同，文档也只包含它实际拥有的接口。</span
-        >
-      </div>
-      <div>
-        <b>输出</b
-        ><span>在线文档页、可下载的文档文件、前端类型定义、自动检查。</span>
-      </div>
-    </div>
-
-    <h3>谁在哪里看到文档</h3>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>给谁</th>
-            <th>在哪里</th>
-            <th>说明</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>开发者、外部合作方</td>
-            <td class="m">GET /api/swagger/docs</td>
-            <td>
-              给人看的在线文档页，按插件分组列出所有接口，可以直接在页面上填参数试调
-            </td>
-          </tr>
-          <tr>
-            <td>AI Agent、各类工具</td>
-            <td class="m">GET /api/swagger</td>
-            <td>
-              同一份文档的原始数据（JSON
-              格式），给程序读；上面的在线页面也是读它来显示的。也可以直接下载这个文件发给合作方
-            </td>
-          </tr>
-          <tr>
-            <td>前端开发</td>
-            <td>自动生成的类型定义</td>
-            <td>
-              前端调用接口时，参数和返回值的类型从文档生成，写错会在编译时报错
-            </td>
-          </tr>
-          <tr>
-            <td>代码审核</td>
-            <td>每次提交自动比对</td>
-            <td>
-              接口有变化时列出差异，删字段、改类型这类破坏性改动必须明确确认；没写声明的接口直接拦下
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="muted">
-      两个地址都放在
-      <code>/api/swagger</code> 下，这一段由框架保留：数据接口的暴露名不能叫
-      <code>swagger</code>，声明时就会报错。
-    </p>
-
-    <h3>谁能访问</h3>
-    <p>下表是方案原稿的设想，最终做法还没定，见本节末尾的「待定事项」。</p>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>环境</th>
-            <th>文档数据 <code>/api/swagger</code></th>
-            <th>文档页面 <code>/api/swagger/docs</code></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>开发环境</td>
-            <td>无需登录</td>
-            <td>无需登录</td>
-          </tr>
-          <tr>
-            <td>生产环境（默认）</td>
-            <td>
-              已登录用户，或带有效 API Key 的请求，都可以访问；未登录、无 Key
-              返回 401
-            </td>
-            <td>
-              页面本身可以打开，但不含任何接口信息。已登录时直接显示文档；未登录时提示填入
-              API Key，填入后再加载
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="muted">
-      这样外部合作方拿到 API Key
-      就能看文档、直接试调，不需要管理员账号。看到文档不等于能调用：每个接口在被调用时仍然会单独检查权限。
-    </p>
-
-    <h3>原始数据长什么样</h3>
-    <p>
-      <code>GET /api/swagger</code> 返回的是一份标准 OpenAPI 3.1 文档。以「部署
-      Hub 应用」这一个接口为例，截取其中一段：
-    </p>
-    <pre class="snip">{
+<h3>两个地址和谁能访问</h3>
+<div class="tbl-wrap">
+<table>
+<thead>
+<tr>
+<th>地址</th>
+<th>给谁</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/swagger/docs</code></td>
+<td>开发者、外部合作方</td>
+<td>Swagger UI 页面，按插件分组列出所有接口，可以直接在页面上填参数试调</td>
+</tr>
+<tr>
+<td><code>GET /api/swagger</code></td>
+<td>AI Agent、各类工具、要导入文档的合作方</td>
+<td>同一份文档的 JSON，Swagger UI 也是读它来显示的；Postman、Apifox 等工具可以直接导入</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>两个地址都在 <code>/api/swagger</code> 下，这一段由框架保留：插件注册 <code>/api/swagger</code> 下的路由会在启动时按重复路由报错，数据接口的暴露名也不能叫 <code>swagger</code>。</p>
+<p>Swagger UI 的页面资源（<code>swagger-ui-bundle.js</code>、<code>swagger-ui.css</code> 和图标）来自 <code>swagger-ui-dist</code>，它是 <code>@nocobase/app-server</code> 的开发依赖，构建时只把这几个文件复制进 <code>dist/swagger-ui</code>，由应用自己在 <code>/api/swagger/docs/*</code> 下提供。不从 CDN 加载，内网和离线部署也能打开，模板什么都不用声明。</p>
+<p>访问规则只有一条：<strong>已登录的会话，或者带有效 API Key 的请求，才能看文档</strong>，开发环境和生产环境一样，没有「公开文档」的开关。</p>
+<ul class="notes">
+<li><code>@nocobase/app-server</code> 不懂认证，只提供 <code>apiDocsToken</code> 这个服务，插件用 <code>addAccess({ name, check })</code> 注册访问检查，多个检查之间是「或」的关系。</li>
+<li>认证插件注册的检查认登录会话，API Key 插件注册的检查认 API Key。检查时都不延长会话、不写 Cookie，读文档不改变任何状态。</li>
+<li>一个检查都没注册时，两个地址返回 404 <code>ROUTE_NOT_FOUND</code>，和不存在的地址一样：应用没法判断来者是谁，就不公开接口。</li>
+<li>注册了检查但都不放行时，返回 401，<code>reason</code> 为 <code>API_DOCS_UNAUTHENTICATED</code>。</li>
+</ul>
+<p>看到文档不等于能调用：每个接口被调用时仍然单独检查权限。外部合作方拿到 API Key 就能看文档、在页面上试调，不需要管理员账号。</p>
+<h3>文档怎么看</h3>
+<p>给人看：在浏览器里登录应用后，打开 <code>&lt;origin&gt;&lt;APP_BASE_PATH&gt;/api/swagger/docs</code>，比如本地开发时的 <code>http://127.0.0.1:13000/main/api/swagger/docs</code>。浏览器会自动带上会话 Cookie，不用另外填什么。没有登录时，可以在页面右上角的「Authorize」里填 API Key，页面会记住它，刷新后不用再填。</p>
+<p>给程序看：请求 <code>&lt;origin&gt;&lt;APP_BASE_PATH&gt;/api/swagger</code>，用 API Key 认证：</p>
+<pre class="snip">curl -H "x-api-key: &lt;key&gt;" http://127.0.0.1:13000/main/api/swagger</pre>
+<p><code>/main</code> 是应用的挂载路径，也就是 <code>APP_BASE_PATH</code>，没设置时默认是 <code>/main</code>，挂在别的路径上就换成那个路径。API Key 在 API Key 插件的设置页面里创建，也可以调用 <code>/api/auth/api-key/create</code> 创建，它以创建者的身份生效。</p>
+<p>给 AI Agent 的约定：Agent 要了解一个应用有哪些接口时，先用 API Key 拉取 <code>/api/swagger</code> 这份 JSON，而不是去读路由源码。文档里有每个接口的地址、输入、返回、错误状态和说明，数据接口还列出了每个字段和可用的筛选条件，比读源码准确，也覆盖了装进应用的所有插件。</p>
+<h3>认证方式在文档里怎么写</h3>
+<p>文档声明了两种认证方式，满足任意一种即可：</p>
+<ul class="notes">
+<li><code>cookieAuth</code>：会话 Cookie，Cookie 名取 Better Auth 在当前配置下实际设置的名字，包括前缀和 <code>__Secure-</code>。浏览器自己会带，Swagger UI 里不用填。</li>
+<li><code>apiKeyAuth</code>：请求头里的 API Key，请求头名取 API Key 插件读取 Key 的第一个请求头，默认是 <code>x-api-key</code>。Swagger UI 的「Authorize」填的就是它。</li>
+</ul>
+<p>这两种方式由认证插件和 API Key 插件以片段的形式加进文档顶层的 <code>security</code>，作为两个可选项；没有插件提供时，文档就没有顶层 <code>security</code>。不需要任何凭证的接口在 <code>describeRoute()</code> 里写 <code>security: []</code>，比如 <code>GET /api/healthz</code>、登录页在登录前就要读的 <code>GET /api/i18n/locales</code>，以及 Better Auth 的登录、注册、找回密码等接口。</p>
+<p>Hub 的发布密钥（<code>Authorization: Bearer hub_app_…</code>）不是全应用通用的凭证，所以没有做成认证方式，而是写在接受它的那些接口的说明里：哪个接口接受发布密钥、需要哪个权限范围，都在该接口的 <code>description</code> 里说明，Hub 自己的 401 和 403 也写明了发布密钥被拒时的 <code>reason</code>。</p>
+<h3>原始数据长什么样</h3>
+<p><code>GET /api/swagger</code> 返回的是一份标准 OpenAPI 3.1 文档。以「部署 Hub 应用」这一个接口为例，截取其中一段并做了简化：</p>
+<pre class="snip">{
   "openapi": "3.1.0",
-  "info": { "title": "NocoBase API", "version": "2.0.0-beta.0" },   <span class="c">// 应用名称和版本</span>
-  "servers": [{ "url": "/api" }],
-  "tags": [{ "name": "Hub", "description": "Manage Hub apps, releases and deployments." }],   <span class="c">// 按插件分组</span>
+  "info": { "title": "NocoBase Hub", "version": "1.0.0-beta.43" }, <span class="c">// 应用名称和版本，取自应用的 package.json</span>
+  "servers": [{ "url": "/main" }], <span class="c">// 应用的挂载路径</span>
+  "security": [{ "cookieAuth": [] }, { "apiKeyAuth": [] }], <span class="c">// 会话或 API Key，任选其一</span>
+  "tags": [{ "name": "Hub" }], <span class="c">// 按插件分组</span>
   "paths": {
-    "/hub/apps/{appId}/deploy": {                                    <span class="c">// 接口地址</span>
-      "post": {                                                      <span class="c">// 请求方式</span>
+    "/api/hub/apps/{appId}/deploy": {
+      "post": {
         "tags": ["Hub"],
-        "summary": "Deploy an app",
+        "summary": "Deploy a Release",
         "operationId": "hubDeployApp",
-        "parameters": [{ "name": "appId", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "requestBody": {                                             <span class="c">// 要传什么</span>
-          "content": { "application/json": { "schema": {
-            "type": "object", "required": ["releaseId"],
-            "properties": { "releaseId": { "type": "string" } } } } }
+        "description": "Starts deploying a stored Release … A Hub publishing key bound to the App may call this as well, as `Authorization: Bearer hub_app_…`, with the `deploy` scope.",
+        "parameters": [
+          {
+            "name": "appId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["releaseId"],
+                "properties": {
+                  "releaseId": {
+                    "type": "string",
+                    "description": "The stored Release to deploy.",
+                  },
+                },
+                "additionalProperties": false, <span class="c">// 请求内容用 z.strictObject，多余字段会被拒绝</span>
+              },
+            },
+          },
         },
-        "responses": {                                               <span class="c">// 会收到什么</span>
-          "202": { "description": "Deployment started", "content": { "application/json": { "schema": {
-            "type": "object", "properties": { "data": { "$ref": "#/components/schemas/HubDeployment" } } } } } },
-          "404": { "$ref": "#/components/responses/NotFound" }       <span class="c">// 统一错误格式，全文档共用</span>
+        "responses": {
+          "202": {
+            "description": "The deployment operation, accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": { "data": { "type": "object" } },
+                },
+              },
+            },
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" }, <span class="c">// 统一错误格式，全文档共用</span>
+          "404": {
+            "description": "No App has this ID (`APP_NOT_FOUND`).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApiErrorBody" },
+              },
+            },
+          },
         },
-        "security": [{ "session": [] }, { "apiKey": [] }]            <span class="c">// 登录或 API Key 均可调用</span>
-      }
-    }
+      },
+    },
   },
   "components": {
-    "schemas": {
-      "HubDeployment": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "status": { "type": "string", "enum": ["pending", "running", "succeeded", "failed"] }
-        }
-      }
-    }
-  }
-}</pre>
-    <p class="muted">
-      这份文件对人来说不好读，但所有工具都认：文档页读它生成在线页面，前端读它生成类型定义，Postman、Apifox
-      等工具可以直接导入它。
-    </p>
-
-    <h3>代码里怎么接起来</h3>
-    <p>
-      整条链路分三块：框架负责出文档和页面，每个插件只负责声明自己的接口，登录库
-      Better Auth
-      的接口由认证插件转交过来。插件开发者只需要做第三块里「写声明」这一件事。
-    </p>
-
-    <p>
-      <b>1. 框架内置：两个地址，插件不用写。</b>放在
-      <code>@nocobase/app-server</code> 里，应用启动后自动存在。
-    </p>
-    <pre
-      class="snip"
-    ><span class="c">// packages/app/app-server/src/router/swagger.ts（框架内置，示意）</span>
-import { generateSpecs } from 'hono-openapi';
-
-router.get('/swagger', requireDocsAccess(app), async (c) =&gt; {
-  <span class="c">// ① 扫描所有插件的手写路由，读取每个路由上的 describeRoute 和输入声明</span>
-  const spec = await generateSpecs(apiRouter, {
-    documentation: {
-      info: { title: app.name, version: app.version },
-      servers: [{ url: `${app.basePath}/api` }],
-      components: standardComponents,   <span class="c">// 统一错误体、session 和 API Key 两种认证方式</span>
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+      },
+      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "x-api-key" },
     },
-    exclude: ['/swagger', '/swagger/docs', '/swagger/assets/*', '/auth/*'],
-  });
-  <span class="c">// ② 合并不走 describeRoute 的来源：自动生成的数据接口、Better Auth</span>
-  for (const contribute of openApiContributions) mergeDocument(spec, await contribute(app));
-  return c.json(spec);
-});
-
-<span class="c">// ③ 文档页面：读取上面的 JSON 渲染；页面资源由应用自己提供，内网和离线部署也能打开</span>
-router.get('/swagger/docs', renderDocsPage);
-router.get('/swagger/assets/*', serveDocsAssets());</pre>
-    <p class="muted">
-      文档页面用哪个界面还没定（见「待定事项」）。不管用哪个，页面资源都由应用自己提供，不从
-      CDN
-      加载，否则内网或离线部署的应用会打不开。文档在第一次请求时生成并缓存，应用重启前路由不会变。
-    </p>
-
-    <p>
-      <b>2. 认证插件：把 Better Auth 的接口转交给框架。</b>Better Auth 自带
-      OpenAPI 插件，能直接产出它全部接口的描述，包括登录、注册、会话，以及个人
-      API Key 的增删改查。认证插件打开它，再把结果交给框架合并。
-    </p>
-    <pre
-      class="snip"
-    ><span class="c">// packages/plugins/app-plugin-authentication/server</span>
-import { openAPI } from 'better-auth/plugins';
-
-betterAuth({
-  plugins: [...plugins, openAPI({ disableDefaultReference: true })],   <span class="c">// 关掉它自带的页面，全应用只保留一个文档入口</span>
-});
-
-export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
-  const auth = app.container.resolve(authenticationToken);
-  const document = await auth.generateOpenAPISchema();   <span class="c">// 内部调用 Better Auth 的 auth.api.generateOpenAPISchema()</span>
-  return withTag(withPathPrefix(document, '/auth'), 'Authentication');   <span class="c">// 挂到 /api/auth 下，归入「认证」分组</span>
-});</pre>
-    <p class="muted">
-      自动生成的数据接口走同一个
-      <code>defineOpenApiContribution</code>
-      入口，由框架根据暴露配置和字段定义产出，插件不用写。<code>defineOpenApiContribution</code>、<code
-        >withPathPrefix</code
-      >
-      等是要在框架里新增的函数，名字在实现时再定。Better Auth
-      产出的路径是否已经带
-      <code>/api/auth</code> 前缀，需要在实现时对照实际输出确认。
-    </p>
-
-    <p>
-      <b>3. 每个插件：在路由上写声明。</b
-      >这是插件开发者唯一要做的事，写法按下面的规范。
-    </p>
-
-    <h3>接口类型声明规范</h3>
-    <p>
-      每个 <code>/api</code> 下的手写接口都必须按以下规则声明，CI 会检查。声明用
-      zod 写，同一份声明同时产生 TypeScript
-      类型、运行时校验和文档。所有辅助函数都从
-      <code>@nocobase/app-server/router</code> 导入，插件不直接导入
-      <code>hono-openapi</code>：一旦插件装进第二份
-      <code>hono-openapi</code>，它挂在路由上的声明框架就读不到了。
-    </p>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>项目</th>
-            <th>规则</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>接口说明</td>
-            <td>
-              必须有 <code>describeRoute</code>，至少包含
-              <code>tags</code>（插件名，PascalCase，如
-              <code>Hub</code>）、<code>summary</code>（一句英文动宾短语，如
-              <code>Deploy an app</code>）、<code>operationId</code>（命名空间 +
-              动词 + 资源，camelCase，全应用唯一，如
-              <code>hubDeployApp</code>，前端生成的方法名就用它）
-            </td>
-          </tr>
-          <tr>
-            <td>输入</td>
-            <td>
-              路径参数、查询参数、请求内容三类，用到哪类就用
-              <code>apiValidator('param' | 'query' | 'json', Schema)</code>
-              声明哪类，它取代现在的 <code>validator()</code> +
-              <code>parseApiInput()</code>，校验失败照样返回 400
-              <code>INVALID_INPUT</code> 和字段级错误。处理函数只能用
-              <code>c.req.valid()</code> 取值，禁止
-              <code>c.req.json&lt;T&gt;()</code>、<code>c.req.query()</code>
-              直接读
-            </td>
-          </tr>
-          <tr>
-            <td>输入对象</td>
-            <td>
-              按输入类别区分（这一条现在已经生效）：<b>请求内容</b>用
-              <code>z.strictObject</code>，多余字段返回 400
-              并指出字段名，防止拼错字段被悄悄忽略、防止偷塞字段（与谷歌云 API
-              的做法一致，未知字段报
-              <code>Unknown name</code>）；<b>查询参数</b>用
-              <code>z.object</code
-              >，多余参数悄悄去掉、不报错，避免误伤前端库和代理自动加的
-              <code>?_t=…</code> 等参数；<b>路径参数</b>用
-              <code>z.object</code
-              >，路由已限定参数，不会有多余。两种写法下处理函数都只拿得到声明过的字段。前端提交修改时只传要改的字段，不要把查询结果整个提交回来
-            </td>
-          </tr>
-          <tr>
-            <td>成功返回</td>
-            <td>
-              每个成功状态码都声明结构，用框架提供的
-              <code>dataResponse(Schema)</code>、<code
-                >listResponse(Schema)</code
-              >
-              包出 <code>{ data }</code> /
-              <code>{ data, meta }</code>，没有内容的 204 用
-              <code>emptyResponse()</code>，不手写外层
-            </td>
-          </tr>
-          <tr>
-            <td>错误返回</td>
-            <td>
-              引用框架统一的错误响应
-              <code>apiErrorResponses</code>，不自己描述错误结构
-            </td>
-          </tr>
-          <tr>
-            <td>字段类型</td>
-            <td>
-              字段名 camelCase；ID 一律 <code>z.string()</code>；时间
-              <code>z.iso.datetime()</code>；布尔 <code>z.boolean()</code>；枚举
-              <code>z.enum([...])</code>；「可以不传」用
-              <code>.optional()</code>，「可以为空」用
-              <code>.nullable()</code>，两者不混用；禁止
-              <code>z.any()</code>，<code>z.unknown()</code> 只用于确实任意的
-              JSON 并写明理由
-            </td>
-          </tr>
-          <tr>
-            <td>字段说明</td>
-            <td>
-              对外可见的字段用
-              <code>.meta({ description })</code> 写一句英文说明
-            </td>
-          </tr>
-          <tr>
-            <td>复用的结构</td>
-            <td>
-              被多个接口共用的对象加
-              <code>.meta({ ref })</code>，名字以插件名开头，如
-              <code>HubDeployment</code>，避免不同插件重名
-            </td>
-          </tr>
-          <tr>
-            <td>存放位置</td>
-            <td>
-              声明放在插件的 <code>server/routes/schemas.ts</code>（接口多时拆成
-              <code>schemas/</code> 目录）。服务层需要的类型用
-              <code>z.infer</code> 从声明导出，不再另写一份
-              <code>interface</code>
-            </td>
-          </tr>
-          <tr>
-            <td>特殊返回</td>
-            <td>
-              流式返回、文件下载声明各自的类型（<code>application/x-ndjson</code>、<code>text/event-stream</code>、<code>application/octet-stream</code>），不写成
-              JSON
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p>按规范写出来的一个完整接口（辅助函数的名字和签名以实现为准）：</p>
-    <pre
-      class="snip"
-    ><span class="c">// packages/plugins/app-plugin-hub/server/routes/schemas.ts</span>
+  },
+}</pre>
+<h3>代码里怎么接起来</h3>
+<p>整条链路分四块，插件开发者只需要做第四块里「写声明」这一件事。</p>
+<p><strong>1. 框架：文档服务和两个地址。</strong> <code>@nocobase/app-server</code> 在 <code>RouterProvider</code> 里注册 <code>apiDocsToken</code> 对应的 <code>ApiDocsService</code>，应用组装好 <code>/api</code> 路由后把它交给这个服务，并挂上 <code>/api/swagger</code>、<code>/api/swagger/docs</code> 和页面资源这几个路由，它们本身在文档里是隐藏的。<code>ApiDocsService</code> 对插件开放四个方法：</p>
+<div class="tbl-wrap">
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>addAccess({ name, check })</code></td>
+<td>注册访问检查，任何一个放行即可读文档</td>
+</tr>
+<tr>
+<td><code>addFragment(fragment)</code></td>
+<td>合并路由声明之外的接口、组件、分组和认证方式，片段里的路径写完整的 <code>/api/...</code></td>
+</tr>
+<tr>
+<td><code>getDocument()</code></td>
+<td>取当前文档，第一次调用时生成</td>
+</tr>
+<tr>
+<td><code>invalidate()</code></td>
+<td>丢掉缓存，下次请求重新生成</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>合并片段时，和已有组件重名但内容不同的组件、重复的 <code>operationId</code> 会加上片段的命名空间前缀；和已声明路由同方法同路径的操作会被丢掉并给出警告，因为真正响应请求的是声明过的路由。</p>
+<p><strong>2. 认证插件和 API Key 插件：访问检查、认证方式和 Better Auth 的接口。</strong> 认证插件注册会话检查，补上 <code>cookieAuth</code>，再调用 Better Auth 自己的 OpenAPI 生成器，把它服务的全部接口（包括应用配置的 Better Auth 插件的接口）以 <code>/api/auth/...</code> 的完整路径合并进来，归入 <code>Authentication</code> 分组。只在浏览器里走的步骤，比如第三方登录跳转、OAuth 回调、邮件里的链接和错误页，不放进文档；Better Auth 自带的 <code>/reference</code> 页面也不提供，全应用只有一个文档入口。API Key 插件注册 API Key 检查，补上 <code>apiKeyAuth</code>。</p>
+<p><strong>3. 权限插件：分发器后面的设置接口。</strong> <code>/api/authorization</code> 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数，文档生成器看不到后面的路由。所以规则插件用 <code>authz.routes.add(path, createRouteHandler(router))</code> 注册一个 Hono 路由，权限插件的 <code>authorizationApiFragment()</code> 读出所有注册，把每个路由以完整的 <code>/api/authorization/...</code> 路径合并进文档。直接注册一个普通函数也还能工作，但没有路由可读，会记一条警告；<code>undeclaredAuthorizationRoutes(authz.routes)</code> 会把它和没写声明的路由一起列出来，规则插件的测试断言这个列表为空。</p>
+<p><strong>4. 每个插件和应用：在路由上写声明。</strong> 写法见下一节。</p>
+<h3>接口声明规范</h3>
+<p>每个 <code>/api</code> 下的手写接口都必须按以下规则声明，CI 会检查。声明用 zod 写，同一份声明同时产生 TypeScript 类型、运行时校验和文档。所有辅助函数都从 <code>@nocobase/app-server/router</code> 导入，插件不直接导入也不声明 <code>hono-openapi</code>：声明是挂在中间件上的，键是 <code>hono-openapi</code> 模块自己的一个 symbol，插件一旦装进第二份 <code>hono-openapi</code>，它挂上的声明框架就读不到了。<code>pnpm peers:check</code> 会拦下声明了 <code>hono-openapi</code> 的插件。</p>
+<div class="tbl-wrap">
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接口说明</td>
+<td>必须有 <code>describeRoute()</code>，至少包含 <code>tags</code>（插件名的 PascalCase，如 <code>Hub</code>、<code>Users</code>、<code>AiEmployee</code>）、<code>summary</code>（一句英文动宾短语，如 <code>Deploy a Release</code>）、<code>operationId</code>（命名空间 + 动词 + 资源，camelCase，全应用唯一，如 <code>hubDeployApp</code>）。应用自己的接口以资源名或应用名为分组</td>
+</tr>
+<tr>
+<td>位置</td>
+<td><code>describeRoute()</code> 放在登录和权限中间件之后、<code>apiValidator()</code> 之前</td>
+</tr>
+<tr>
+<td>输入</td>
+<td>路径参数、查询参数、请求内容、请求头，用到哪类就用 <code>apiValidator('param' | 'query' | 'json' | 'header', Schema)</code> 声明哪类。它取代 <code>validator()</code> + <code>parseApiInput()</code>，校验失败照样返回 400 <code>INVALID_INPUT</code> 和字段级错误。处理函数只能用 <code>c.req.valid()</code> 取值</td>
+</tr>
+<tr>
+<td>输入对象</td>
+<td>请求内容用 <code>z.strictObject</code>，多余字段返回 400 并指出字段名，文档里也写成封闭对象；查询参数和路径参数用 <code>z.object</code></td>
+</tr>
+<tr>
+<td>成功返回</td>
+<td>每个成功状态码都声明结构：<code>dataResponse(Schema)</code> 包出 <code>{ data }</code>，<code>listResponse(ItemSchema, MetaSchema?)</code> 包出 <code>{ data, meta }</code>，没有内容的 204 用 <code>emptyResponse()</code>，不手写外层</td>
+</tr>
+<tr>
+<td>错误返回</td>
+<td>只列这个接口真的会返回的状态：常见的 400、401、403、500 用 <code>...apiErrorResponses</code> 一次展开，其余用 <code>apiErrorResponse(404)</code> 这样逐个加，需要说明 <code>reason</code> 时写成 <code>apiErrorResponse(409, '…')</code>。错误结构都是统一的错误体，不自己描述</td>
+</tr>
+<tr>
+<td>返回结构</td>
+<td>返回结构对着处理函数实际返回的视图类型写，并用视图类型标注，如 <code>export const DeploymentAcceptedSchema: z.ZodType&lt;DeploymentAcceptedResponse&gt; = z.object({...})</code>，返回值和文档一旦不一致，类型检查就会报错。返回对象在文档里是开放的，以后加字段不算破坏性变化，除非用了 <code>z.strictObject()</code></td>
+</tr>
+<tr>
+<td>字段类型</td>
+<td>字段名 camelCase；ID 一律 <code>z.string()</code>；时间 <code>z.iso.datetime()</code>；布尔 <code>z.boolean()</code>；枚举 <code>z.enum([...])</code>；「可以不传」用 <code>.optional()</code>，「可以为空」用 <code>.nullable()</code>，两者不混用；禁止 <code>z.any()</code>，<code>z.unknown()</code> 只用于确实任意的 JSON 并写明理由</td>
+</tr>
+<tr>
+<td>字段说明</td>
+<td>对外可见的字段用 <code>.meta({ description })</code> 写一句英文说明，引用共用结构的字段也保留自己的说明</td>
+</tr>
+<tr>
+<td>复用的结构</td>
+<td>被多个接口共用的对象加 <code>.meta({ ref })</code>，名字以插件名开头，如 <code>HubDeployment</code>，成为文档里的一个命名组件；<code>z.json()</code> 这类递归结构也会自动成为组件，不用特殊处理</td>
+</tr>
+<tr>
+<td>存放位置</td>
+<td>声明放在插件的 <code>server/routes/schemas.ts</code>（接口多时拆成 <code>schemas/</code> 目录）</td>
+</tr>
+<tr>
+<td>不需要凭证</td>
+<td>公开接口在 <code>describeRoute()</code> 里写 <code>security: []</code></td>
+</tr>
+<tr>
+<td>流式返回</td>
+<td>声明 <code>text/event-stream</code> 或 <code>application/x-ndjson</code> 内容，并说明帧格式；开流前会返回的错误照常列出</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>按规范写出来的一个完整接口：</p>
+<pre class="snip"><span class="c">// server/routes/schemas.ts</span>
 import { z } from 'zod';
 
-export const AppParams = z.object({ appId: z.string() });                  <span class="c">// 路径参数：z.object</span>
-
-export const DeployAppInput = z.strictObject({                                <span class="c">// 请求内容：z.strictObject</span>
-  releaseId: z.string().meta({ description: 'The release to deploy.' }),
+export const OrderParams = z.object({ orderId: z.string() }); <span class="c">// 路径参数：z.object</span>
+export const CancelOrderInput = z.strictObject({
+  reason: z
+    .string()
+    .min(1)
+    .meta({ description: 'Why the order is cancelled.' }), <span class="c">// 请求内容：z.strictObject</span>
 });
+export const OrderSchema: z.ZodType&lt;OrderView&gt; = z <span class="c">// 用服务层返回的视图类型标注</span>
+  .object({ id: z.string(), status: z.enum(['open', 'cancelled']) })
+  .meta({ ref: 'Order' });
 
-export const HubDeployment = z.object({
-  id: z.string(),
-  status: z.enum(['pending', 'running', 'succeeded', 'failed']),
-  createdAt: z.iso.datetime(),
-}).meta({ ref: 'HubDeployment' });
-
-export type DeployAppInput = z.infer&lt;typeof DeployAppInput&gt;;   <span class="c">// 服务层直接用这个类型</span>
-export type HubDeployment = z.infer&lt;typeof HubDeployment&gt;;
-
-<span class="c">// packages/plugins/app-plugin-hub/server/routes/apps.ts</span>
+<span class="c">// server/routes/orders.ts</span>
 import {
+  apiErrorResponse,
   apiErrorResponses,
   apiValidator,
   dataResponse,
   describeRoute,
-} from '@nocobase/app-server/router';   <span class="c">// 框架提供（待实现），插件不直接导入 hono-openapi</span>
+} from '@nocobase/app-server/router'; <span class="c">// 插件不直接导入 hono-openapi</span>
 
-routes.post(
-  '/apps/:appId/deploy',
-  auth.required(),   <span class="c">// 权限检查排在输入校验之前</span>
+router.post(
+  '/orders/:orderId/cancel',
+  auth.required(), <span class="c">// 登录和权限检查排在最前</span>
   describeRoute({
-    tags: ['Hub'],
-    operationId: 'hubDeployApp',
-    summary: 'Deploy an app',
+    tags: ['Orders'],
+    summary: 'Cancel an order',
+    operationId: 'cancelOrder',
     responses: {
-      202: dataResponse(HubDeployment),
+      200: dataResponse(OrderSchema, 'The cancelled order.'),
       ...apiErrorResponses,
+      404: apiErrorResponse(404),
     },
   }),
-  apiValidator('param', AppParams),
-  apiValidator('json', DeployAppInput),
+  apiValidator('param', OrderParams),
+  apiValidator('json', CancelOrderInput),
   async (c) =&gt; {
-    const { appId } = c.req.valid('param');   <span class="c">// 已校验、带类型</span>
+    const { orderId } = c.req.valid('param'); <span class="c">// 已校验、带类型</span>
     const input = c.req.valid('json');
-    return c.json({ data: await deployments.deploy(appId, input) }, 202);
+    return c.json({ data: await orders.cancel(orderId, input) });
   },
 );</pre>
-
-    <p>
-      <b>CI 怎么检查：</b>新增一个
-      <code>check-openapi</code>
-      脚本，为每个应用模板生成一份文档，然后依次检查：每个接口都有
-      <code>tags</code>、<code>summary</code>、<code>operationId</code>，且
-      <code>operationId</code> 不重复；没有声明的
-      <code>/api</code> 路由直接报错；生成结果和每个模板提交在仓库里的
-      <code>openapi.json</code> 快照一致；再用
-      <code>oasdiff</code> 找出破坏性变化，有破坏性变化时必须在 PR 里明确确认。
-    </p>
-
-    <h3>待定事项</h3>
-    <p>以下问题还没有结论，在 OpenAPI PR 里定：</p>
-    <div class="panel">
-      <ul>
-        <li>
-          <b>文档页面用哪个界面</b>：建议用 Swagger
-          UI，页面资源由应用自己提供，因为从 CDN
-          加载会让内网和离线部署的应用打不开。
-        </li>
-        <li>
-          <b>谁能访问</b
-          >：一种是要求登录，再加一个配置开关；另一种是上文原稿的设想，外部合作方凭
-          API Key 访问。两种都待定。
-        </li>
-        <li>
-          <b>数据接口在第一期是否按字段生成结构</b
-          >，还是先只描述通用的请求和返回外形。
-        </li>
-        <li><b>插件补声明时的 changeset 级别。</b></li>
-        <li>
-          <b>Better Auth 文档的合并、前端类型生成是否和文档生成放在同一期。</b>
-        </li>
-      </ul>
-    </div>
+<h3>隐藏的接口</h3>
+<p>每个手写接口要么写 <code>describeRoute({...})</code>，要么写 <code>describeRoute({ hide: true })</code> 并附一行注释说明原因，两样都没有就是缺陷，检查会点名报出来。只有以下五类可以隐藏，凡是外部调用方（脚本、集成、带 API Key 的 Agent）可能依赖的接口都要写进文档，管理和设置类接口也一样：</p>
+<ol>
+<li>服务应用自身外壳或构建产物的路由，不是对外约定：前端启动配置、语言包、构建产物和静态资源、只在开发环境存在的路由。</li>
+<li>只在浏览器里走、脚本没法单独调用的流程：第三方登录跳转和回调、只改浏览器会话的握手，比如切换语言的 <code>PUT /api/i18n/locale</code>。</li>
+<li>文档自己的几个路由。</li>
+<li>不是 HTTP 请求和响应的传输通道，比如 WebSocket 升级。</li>
+<li>插件在未配置时才注册的兜底路由，对每个路径都返回 503，配置好以后会换成真正的接口，比如工作流服务未配置时的兜底路由、示例应用没有数据库时的替身路由。</li>
+</ol>
+<h3>数据接口</h3>
+<p><code>defineRepositoryApiRoutes</code> 生成的数据接口（<code>POST /api/{name}/{action}</code>）由框架自动写进文档，每个暴露的每个动作一个操作，不需要逐个声明：</p>
+<ul class="notes">
+<li><strong>记录和 <code>values</code> 逐个字段展开</strong>：字段结构从数据表定义读出。字符串类是 <code>string</code>，整数是 <code>integer</code>，bigint 和雪花 ID 这类长整数是 <code>string</code>，decimal 是保持精度的 <code>string</code>，布尔是 <code>boolean</code>，日期时间是 RFC 3339 的 <code>string</code>，枚举列出取值，JSON 不约束。<code>values</code> 只列 <code>@nocobase/db</code> 的 <code>writableFields()</code> 认为可写的字段；数据库或数据仓库自己赋值的字段，比如自增主键、乐观锁版本号，在记录里标为只读。</li>
+<li><strong>筛选条件按真实语法写</strong>：数据仓库只接受两种写法。一种是根字段的标量简写 <code>{ "status": "active" }</code>，多个条件按「且」组合；另一种是完整的 Filter AST，<code>{ "kind": "filter", "version": 1, "root": { "kind": "group", "logic": "and", "items": [...] } }</code>。<code>{ "budget": { "$gte": 100 } }</code> 这种运算符对象不是合法语法，要用 AST。文档里有一个共用的 <code>RepositoryFilter</code> 组件说明整套语法，每种字段类型可用的运算符直接取自 <code>@nocobase/db</code> 的 <code>filterOperatorsForFieldType()</code>，不手抄；每个接口另有一份按数据表生成的筛选结构，列出每个可筛选字段的运算符和取值类型。</li>
+<li><strong>关联和 JSON 路径保持通用</strong>：<code>values</code> 里的关联只列外键字段，嵌套写入关联记录是一个通用对象；记录里的关联也是通用对象，只在 <code>select</code> 包含时返回。关联条件（<code>some</code>、<code>none</code>、<code>exists</code>、<code>notExists</code>）和 JSON 路径条件在每个接口的筛选结构里是通用的，指向共用的 <code>RepositoryFilter</code> 组件。<code>select</code>、<code>sort</code> 和分页是带说明的通用结构。</li>
+<li><strong>权限策略</strong>：暴露的固定策略不允许读写的字段直接不列；策略随调用者变化时，列出全部字段并注明实际权限会进一步限制。</li>
+<li><strong>额外加在记录上的字段</strong>：暴露自己在每条返回记录上加、数据表里却没有的字段，比如文件插件的 <code>contentUrl</code>，在暴露配置里用 <code>computedFields: { contentUrl: schema }</code> 声明。它只影响文档：在记录结构里标为只读，不出现在 <code>values</code>、<code>filter</code>、<code>sort</code> 里；和数据表字段重名会在创建路由时报错。</li>
+</ul>
+<h3>CI 检查</h3>
+<p><code>pnpm openapi:check</code>（脚本 <code>scripts/check-openapi.mjs</code>）为每个应用模板生成一份文档，出现以下任何一种情况就失败：</p>
+<ul class="notes">
+<li>有没写声明的路由，包括 <code>/api/authorization</code> 分发器后面的路由（<code>undeclaredAuthorizationRoutes()</code>）。</li>
+<li>没有隐藏的接口缺少 <code>tags</code>、<code>summary</code> 或 <code>operationId</code>。</li>
+<li><code>operationId</code> 重复。</li>
+<li><code>findApiDocumentSchemaProblems()</code> 报出问题：引用了文档里不存在的结构，或者组件名是转换器生成的（如 <code>__schema0</code>）而不是声明出来的。</li>
+</ul>
+<p>不提交每个模板的 <code>openapi.json</code> 快照，也不用 <code>oasdiff</code> 比对破坏性变化。各插件的测试里也做同样的断言：应用启动后 <code>findUndeclaredApiRoutes(app)</code> 不含本插件的路由，<code>findApiDocumentSchemaProblems(document)</code> 为空，文档里有本插件的 <code>operationId</code>。</p>
+<h3>原来的待定事项，现在的结论</h3>
+<ul class="notes">
+<li><strong>文档页面用哪个界面</strong>：用 Swagger UI。<code>swagger-ui-dist</code> 是 <code>@nocobase/app-server</code> 的开发依赖，构建时只复制需要的文件进它的 <code>dist</code>，由应用自己提供，不走 CDN。</li>
+<li><strong>谁能访问</strong>：已登录会话或有效 API Key，开发和生产环境一样，没有公开开关。访问检查由认证插件和 API Key 插件通过 <code>apiDocsToken</code> 的 <code>addAccess()</code> 注册；一个都没注册时返回 404，注册了但都不放行时返回 401 <code>API_DOCS_UNAUTHENTICATED</code>。</li>
+<li><strong>数据接口是否按字段生成结构</strong>：第一期就按字段生成记录、<code>values</code> 和筛选结构，筛选按真实语法写，运算符从代码取；关联和 JSON 路径先保持通用；额外字段用 <code>computedFields</code> 声明。</li>
+<li><strong>Better Auth 的接口</strong>：合并进同一份文档，由认证插件用 Better Auth 自己的生成器产出，通过 <code>addFragment()</code> 加入；浏览器专用的步骤不放进来，不需要凭证的接口写 <code>security: []</code>。</li>
+<li><strong>认证方式</strong>：<code>cookieAuth</code> 和 <code>apiKeyAuth</code>（请求头 <code>x-api-key</code>）两个可选项，公开接口写 <code>security: []</code>。Hub 的发布密钥写在接受它的接口说明里，不单独作为认证方式。</li>
+<li><strong>隐藏接口</strong>：只限上面列出的五类，每处都附一行注释说明原因。</li>
+<li><strong>CI 检查</strong>：<code>pnpm openapi:check</code>，不做快照，不做 <code>oasdiff</code>。</li>
+<li><strong>前端类型生成</strong>：不在这一期，下一期从这份文档生成。</li>
+<li><strong>changeset 级别</strong>：<code>@nocobase/app-server</code> 和 <code>@nocobase/db</code> 是 minor（新能力，当前是 beta 线）；认证、API Key、权限插件和 <code>@nocobase/authorization</code> 是 minor，因为它们新增了导出或行为；只补声明、行为不变的插件、示例和模板是 patch；<code>@nocobase/app-skills</code> 是 patch。</li>
+</ul>
   </section>
 
   <section class="stack-lg">
@@ -1854,8 +1721,7 @@ routes.post(
         <h3>能得到什么</h3>
         <ul>
           <li>
-            <b>自动生成的接口文档（Swagger）</b
-            >，外部开发者和合作方可以直接查阅、在线试调，不用再读源码。
+            <b>自动生成的接口文档（Swagger）</b>，外部开发者和合作方凭登录会话或 API Key 直接查阅、在线试调，不用再读源码；AI Agent 拉取同一份 JSON 就能知道应用有哪些接口。
           </li>
           <li>
             <b>对外接入门槛下降</b>：所有接口一个格式，学会一个就会用全部。
@@ -1865,7 +1731,7 @@ routes.post(
             >：它们照着机器可读的规范写接口，不再模仿各插件的不同写法。
           </li>
           <li>
-            <b>前端代码更少出错</b>：接口类型可以从文档自动生成，不用手写。
+            <b>前端代码更少出错</b>：下一期从文档自动生成接口类型，不用手写。
           </li>
           <li>
             <b>不会再退化</b>：规范写进自动检查，新代码不合规就过不了合并。
@@ -1887,8 +1753,7 @@ routes.post(
             Hub、工作流、用户）会直接进入 2.0 测试版。
           </li>
           <li>
-            <b>工程投入</b>：规范和框架兜底、存量迁移已经完成（PR
-            #530、#532），剩下的是接口文档生成、前端类型生成和框架层的限制配置。
+            <b>工程投入</b>：规范和框架兜底、存量迁移、框架层限制已经完成（PR #530、#532），接口文档生成在 PR #533 中完成，剩下的是前端类型生成。
           </li>
           <li>
             <b>暂不做接口版本号</b
@@ -1935,7 +1800,7 @@ routes.post(
       </div>
       <div class="lane">
         <div class="lane-head">
-          <b>第二步 · 迁移</b><span>#532 已完成 · 待合并</span>
+          <b>第二步 · 迁移</b><span>已完成 · #532 已合并</span>
         </div>
         <div class="task">
           <b>存量迁移</b
@@ -1971,28 +1836,46 @@ routes.post(
         <div class="task">
           <b>发布</b
           ><span
-            >#532 合并后立即发布，改动过的插件统一发布大版本，changeset
-            里附改动对照说明。</span
+            >改动过的插件统一发布大版本，changeset 里附改动对照说明。</span
           >
         </div>
         <div class="task">
           <b>pro 仓库</b
           ><span
-            >邮件和 AI 知识库插件的迁移 PR 已经开出，跟在 #532 之后合并。</span
+            >邮件和 AI 知识库插件的迁移已合并（pro 仓库 #60）。</span
           >
         </div>
       </div>
       <div class="lane">
-        <div class="lane-head"><b>第三步 · 守住</b><span>后续</span></div>
-        <div class="task">
-          <b>接口文档生成</b
-          ><span
-            >单独一个 PR，做法见第 04 节，包括
-            <code>check-openapi</code> 自动检查。</span
-          >
+        <div class="lane-head">
+          <b>第三步 · 接口文档</b><span>已完成 · #533 待合并</span>
         </div>
         <div class="task">
+          <b>框架</b><span><code>@nocobase/app-server</code> 生成 OpenAPI 3.1 文档，在 <code>/api/swagger</code> 提供 JSON、在 <code>/api/swagger/docs</code> 提供 Swagger UI，页面资源随包发布；提供 <code>describeRoute()</code>、<code>apiValidator()</code>、<code>dataResponse()</code>、<code>listResponse()</code>、<code>emptyResponse()</code>、<code>apiErrorResponse()</code>、<code>apiErrorResponses</code> 这些声明工具，以及 <code>apiDocsToken</code>、<code>findUndeclaredApiRoutes()</code>、<code>findApiDocumentSchemaProblems()</code>；数据接口按字段自动写进文档，暴露配置支持 <code>computedFields</code>。</span>
+        </div>
+        <div class="task">
+          <b>访问和认证方式</b><span>认证插件和 API Key 插件注册访问检查，补上 <code>cookieAuth</code> 和 <code>apiKeyAuth</code> 两种认证方式；Better Auth 的接口合并进同一份文档。</span>
+        </div>
+        <div class="task">
+          <b>声明补齐</b><span>默认模板的全部插件（用户、认证、权限和三个规则插件、多语言、文件、通知、站内信、定时任务、数据库浏览器、工作流、AI 员工）、Hub、所有示例插件和示例应用的手写接口都已声明，各自的测试断言没有漏声明的路由、没有结构问题。权限分发器后面的设置接口通过 <code>createRouteHandler</code> 自动写进文档。</span>
+        </div>
+        <div class="task">
+          <b>文档和规范</b><span>根目录 <code>AGENTS.md</code>、<code>@nocobase/app-skills</code> 的 <code>references/http-api.md</code>、<code>create-plugin</code> 生成的插件说明和三个模板的 <code>AGENTS.md</code> 都写明了声明规则和怎么读文档。</span>
+        </div>
+        <div class="task">
+          <b>自动检查</b><span><code>pnpm openapi:check</code> 为每个模板生成文档，拦下没写声明的路由、缺少 <code>tags</code> / <code>summary</code> / <code>operationId</code> 的接口、重复的 <code>operationId</code> 和结构问题，不做快照比对。</span>
+        </div>
+        <div class="task">
+          <b>pro 仓库</b><span>邮件、AI 知识库插件和 pro 示例的接口声明已在 pro 仓库的 <code>feat/openapi</code> 分支按同一套规则补齐。</span>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-head"><b>第四步 · 后续</b><span>下一期</span></div>
+        <div class="task">
           <b>前端类型自动生成</b><span>从接口文档生成，不再手写。</span>
+        </div>
+        <div class="task">
+          <b>数据接口的关联和 JSON 路径</b><span>目前在文档里是通用结构，以后再按关联目标展开。</span>
         </div>
       </div>
     </div>
@@ -2023,7 +1906,7 @@ routes.post(
       </li>
       <li>
         <span
-          >接口文档（Swagger）从代码自动生成，不手写，在后续 PR 里实现。</span
+          >接口文档（Swagger）从代码自动生成，不手写，只对已登录会话和 API Key 开放，按第 04 节的做法在 PR #533 实现。</span
         >
       </li>
       <li>
@@ -2035,8 +1918,7 @@ routes.post(
       <li><span>现阶段不做接口版本号。</span></li>
       <li>
         <span
-          >按第 07 节的进度继续：#532 合并后立即发布，接口文档生成另起
-          PR。</span
+          >按第 07 节的进度继续：#533 合并后发布，前端类型生成放到下一期。</span
         >
       </li>
     </ul>
@@ -2214,8 +2096,7 @@ routes.post(
             3339；布尔值是真正的布尔值。
           </li>
           <li>
-            <b>输入</b>：用 zod 通过 <code>validator()</code> +
-            <code>parseApiInput()</code> 校验，请求内容用
+            <b>输入</b>：用 zod 通过 <code>apiValidator()</code> 校验并同时写进文档，请求内容用
             <code>z.strictObject</code>，查询和路径参数用
             <code>z.object</code>；禁止 <code>z.any()</code>，<code
               >z.unknown()</code
@@ -2224,9 +2105,7 @@ routes.post(
             <code>bodyLimit</code>，超出返回 413 <code>BODY_TOO_LARGE</code>，不要求每个路由都配。
           </li>
           <li>
-            <b>权限</b>：权限检查放在
-            <code>validator()</code>
-            之前的中间件里，先于「是否存在」判断；权限通过之前不写入任何东西。
+            <b>权限</b>：权限检查放在 <code>apiValidator()</code> 之前的中间件里，先于「是否存在」判断；权限通过之前不写入任何东西。
           </li>
           <li>
             <b>错误</b>：抛 <code>ApiError</code>，不手写错误体。插件只用
