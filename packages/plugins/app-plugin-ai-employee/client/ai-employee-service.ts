@@ -252,8 +252,9 @@ export async function listEnabledKnowledgeBases(
     aiPath('aiKnowledgeBases'),
     { query: { pageSize: 100 }, signal },
   );
+  // Only a real `true` counts as enabled: a knowledge base whose flag is missing or not a boolean is not offered.
   return (Array.isArray(items) ? items : []).flatMap((item) =>
-    typeof item.key === 'string' && item.enabled !== false
+    typeof item.key === 'string' && item.enabled === true
       ? [
           {
             key: item.key,

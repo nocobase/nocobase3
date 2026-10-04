@@ -4,6 +4,7 @@ import { validator } from 'hono/validator';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { AIRouteGuards } from './settings-access.js';
+import { boundedList, jsonBody } from './utils.js';
 import { CreateSkillInput, NameParams, UpdateSkillInput } from './schemas.js';
 
 /** `/aiEmployee/skills`: what the AI settings page manages, and what the employee editor offers. */
@@ -16,12 +17,13 @@ export function createAISkillsRouter(
     const data = await services.skillService.list({
       actor: context.var.aiSettingsActor,
     });
-    return context.json({ data });
+    return context.json(boundedList(data));
   });
 
   app.post(
     '/aiEmployee/skills',
     settings,
+    jsonBody,
     validator('json', (value) => parseApiInput(CreateSkillInput, value)),
     async (context) => {
       const data = await services.skillService.create({
@@ -49,6 +51,7 @@ export function createAISkillsRouter(
     '/aiEmployee/skills/:name',
     settings,
     validator('param', (value) => parseApiInput(NameParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(UpdateSkillInput, value)),
     async (context) => {
       const data = await services.skillService.update({

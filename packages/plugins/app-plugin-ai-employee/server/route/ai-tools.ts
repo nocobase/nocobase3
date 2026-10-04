@@ -4,6 +4,7 @@ import { validator } from 'hono/validator';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { AIRouteGuards } from './settings-access.js';
+import { boundedList, jsonBody } from './utils.js';
 import { CreateToolInput, NameParams, UpdateToolInput } from './schemas.js';
 
 /** `/aiEmployee/tools`: what the AI settings page manages, and what the employee editor offers. */
@@ -16,12 +17,13 @@ export function createAIToolsRouter(
     const data = await services.toolService.list({
       actor: context.var.aiSettingsActor,
     });
-    return context.json({ data });
+    return context.json(boundedList(data));
   });
 
   app.post(
     '/aiEmployee/tools',
     settings,
+    jsonBody,
     validator('json', (value) => parseApiInput(CreateToolInput, value)),
     async (context) => {
       const data = await services.toolService.create({
@@ -49,6 +51,7 @@ export function createAIToolsRouter(
     '/aiEmployee/tools/:name',
     settings,
     validator('param', (value) => parseApiInput(NameParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(UpdateToolInput, value)),
     async (context) => {
       const data = await services.toolService.update({

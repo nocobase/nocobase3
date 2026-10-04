@@ -141,18 +141,17 @@ describe('AI Employee application client transport', () => {
       data: [
         { key: 'test-kb', name: 'Test1', enabled: true },
         { key: 'disabled-kb', name: 'Disabled', enabled: false },
-        { key: 'default-enabled' },
+        { key: 'missing-flag' },
+        { key: 'string-flag', enabled: 'true' },
         { name: 'Missing key', enabled: true },
       ],
-      meta: { page: 1, pageSize: 100, total: 4 },
+      meta: { page: 1, pageSize: 100, total: 5 },
     });
 
+    // Only a real boolean `true` is enabled; a missing or non-boolean flag is not.
     await expect(
       listEnabledKnowledgeBases(client, controller.signal),
-    ).resolves.toEqual([
-      { key: 'test-kb', name: 'Test1', enabled: true },
-      { key: 'default-enabled', name: 'default-enabled', enabled: true },
-    ]);
+    ).resolves.toEqual([{ key: 'test-kb', name: 'Test1', enabled: true }]);
     expect(request).toHaveBeenCalledWith({
       path: 'aiKnowledgeBases',
       method: 'GET',

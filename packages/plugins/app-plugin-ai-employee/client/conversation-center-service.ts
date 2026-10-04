@@ -102,6 +102,7 @@ export function listConversationUsers(
     api,
     aiPath('aiEmployee', 'conversationOwners'),
     {
+      // The first page of matches: the picker narrows by typing rather than paging further.
       query: withoutEmpty({ q: options.keyword, userId: options.userId }),
       signal: options.signal,
     },

@@ -99,23 +99,24 @@ export class AIFileService {
     canReadAnyFile?: () => Promise<boolean>;
   }): Promise<AIFilePreviewResult> {
     const metadata = await this.fileMetadata.findById(id);
-    if (!metadata)
-      throw notFoundError(`AI file ${id} was not found.`, 'FILE_NOT_FOUND');
-
-    const record = metadata.entity;
     // Only the uploader reads a file by default. Anyone else — including for a
     // file that records no uploader — needs what the conversation center needs,
     // never a role name or root flag carried on the session. Decided before the
-    // content is opened, so a refused request reads nothing from storage.
+    // content is opened, so a refused request reads nothing from storage, and
+    // before existence is reported, so a caller who may read only their own
+    // files is refused alike for a missing id and for someone else's file and
+    // cannot probe which ids exist.
+    const createdById = metadata?.entity.createdById;
     const ownFile =
-      record.createdById != null &&
-      String(record.createdById) === String(actor.id);
+      createdById != null && String(createdById) === String(actor.id);
     if (!ownFile && !(await canReadAnyFile?.())) {
       throw forbiddenError(
         'Only the uploader, or a user with AI settings access, may read this file.',
         'FILE_ACCESS_DENIED',
       );
     }
+    if (!metadata)
+      throw notFoundError(`AI file ${id} was not found.`, 'FILE_NOT_FOUND');
 
     let opened;
     try {

@@ -7,6 +7,7 @@ import { createMigrator } from '@nocobase/db';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { AI_FILE_UPLOAD_MAX_BYTES } from '../../server/route/index.js';
 import { aiEmployeeApiRoutes } from '../../server/route/plugin.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
 
@@ -116,6 +117,62 @@ describe('AI file preview access', async () => {
     expect(response.status).toBe(403);
     expect((await response.json()).error).toMatchObject({
       reason: 'FILE_ACCESS_DENIED',
+      domain: 'aiEmployees',
+    });
+  });
+
+  it('refuses a missing file to a user who may read only their own, as it refuses one of another user', async () => {
+    sessionUser = { id: 'member' };
+    const response = await app.request(
+      '/api/aiEmployee/files/999999999/preview',
+    );
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toMatchObject({
+      reason: 'FILE_ACCESS_DENIED',
+      domain: 'aiEmployees',
+    });
+  });
+
+  it('reports a missing file only to a user with AI settings access', async () => {
+    sessionUser = { id: 'settings-admin' };
+    const response = await app.request(
+      '/api/aiEmployee/files/999999999/preview',
+    );
+    expect(response.status).toBe(404);
+    expect((await response.json()).error).toMatchObject({
+      reason: 'FILE_NOT_FOUND',
+      domain: 'aiEmployees',
+    });
+  });
+
+  it('refuses an upload larger than the limit with 413', async () => {
+    sessionUser = { id: 'uploader' };
+    const form = new FormData();
+    form.set(
+      'file',
+      new File([new Uint8Array(AI_FILE_UPLOAD_MAX_BYTES + 1)], 'big.bin'),
+    );
+    const response = await app.request('/api/aiEmployee/files', {
+      method: 'POST',
+      body: form,
+    });
+    expect(response.status).toBe(413);
+    expect((await response.json()).error).toMatchObject({
+      status: 'INVALID_ARGUMENT',
+      reason: 'BODY_TOO_LARGE',
+      domain: 'aiEmployees',
+    });
+  });
+
+  it('refuses an upload without a content type as an unsupported media type', async () => {
+    sessionUser = { id: 'uploader' };
+    const response = await app.request('/api/aiEmployee/files', {
+      method: 'POST',
+      body: new Uint8Array([1, 2, 3]),
+    });
+    expect(response.status).toBe(415);
+    expect((await response.json()).error).toMatchObject({
+      reason: 'UNSUPPORTED_MEDIA_TYPE',
       domain: 'aiEmployees',
     });
   });

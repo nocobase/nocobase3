@@ -4,48 +4,64 @@ import type { Hono } from 'hono';
 import { validator } from 'hono/validator';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
-import { FileParams } from './schemas.js';
+import { FileParams, UploadHeaders } from './schemas.js';
 import type { AIRouteGuards } from './settings-access.js';
-import { AI_EMPLOYEE_ERROR_DOMAIN } from './utils.js';
+import {
+  AI_EMPLOYEE_ERROR_DOMAIN,
+  AI_FILE_UPLOAD_MAX_BYTES,
+  aiBodyLimit,
+} from './utils.js';
 
 /** `/aiEmployee/files`: attachments uploaded into a conversation, read back only by their uploader or an AI admin. */
 export function createAIFilesRouter(
   app: Hono,
   services: ServiceFactory,
   { signedIn }: AIRouteGuards,
+  uploadMaxSize: number = AI_FILE_UPLOAD_MAX_BYTES,
 ): void {
-  app.post('/aiEmployee/files', signedIn, async (context) => {
-    // A multipart body has no JSON schema; its one field is checked here.
-    if (
-      !context.req.header('content-type')?.startsWith('multipart/form-data')
-    ) {
-      throw new ApiError({
-        status: 'INVALID_ARGUMENT',
-        reason: 'UNSUPPORTED_MEDIA_TYPE',
-        domain: AI_EMPLOYEE_ERROR_DOMAIN,
-        message: 'Upload a file as multipart/form-data.',
-        httpStatus: 415,
+  app.post(
+    '/aiEmployee/files',
+    signedIn,
+    aiBodyLimit(uploadMaxSize),
+    validator('header', (value) => {
+      const headers = parseApiInput(UploadHeaders, value);
+      if (
+        !headers['content-type']
+          ?.toLowerCase()
+          .startsWith('multipart/form-data')
+      ) {
+        throw new ApiError({
+          status: 'INVALID_ARGUMENT',
+          reason: 'UNSUPPORTED_MEDIA_TYPE',
+          domain: AI_EMPLOYEE_ERROR_DOMAIN,
+          message: 'Upload a file as multipart/form-data.',
+          httpStatus: 415,
+        });
+      }
+      return headers;
+    }),
+    async (context) => {
+      // A multipart body has no JSON schema; its one field is checked here.
+      const form = await context.req.formData();
+      const file = form.get('file');
+      if (!(file instanceof File)) {
+        throw new ApiError({
+          status: 'INVALID_ARGUMENT',
+          reason: 'INVALID_INPUT',
+          domain: AI_EMPLOYEE_ERROR_DOMAIN,
+          message: 'The form must carry the upload in its "file" field.',
+          fieldViolations: [
+            { field: 'file', description: 'A file is required.' },
+          ],
+        });
+      }
+      const data = await services.fileService.create({
+        actor: context.var.currentUser,
+        file,
       });
-    }
-    const form = await context.req.formData();
-    const file = form.get('file');
-    if (!(file instanceof File)) {
-      throw new ApiError({
-        status: 'INVALID_ARGUMENT',
-        reason: 'INVALID_INPUT',
-        domain: AI_EMPLOYEE_ERROR_DOMAIN,
-        message: 'The form must carry the upload in its "file" field.',
-        fieldViolations: [
-          { field: 'file', description: 'A file is required.' },
-        ],
-      });
-    }
-    const data = await services.fileService.create({
-      actor: context.var.currentUser,
-      file,
-    });
-    return context.json({ data }, 201);
-  });
+      return context.json({ data }, 201);
+    },
+  );
 
   app.get(
     '/aiEmployee/files/:fileId/preview',

@@ -28,6 +28,11 @@ export {
   MCP_SERVER_RESERVED_NAMES,
 } from './reserved-names.js';
 export {
+  AI_FILE_UPLOAD_MAX_BYTES,
+  AI_JSON_BODY_MAX_BYTES,
+  AI_RUN_BODY_MAX_BYTES,
+} from './utils.js';
+export {
   listAIRouteAccess,
   type AIRouteAccess,
   type AIRouteGuards,
@@ -38,6 +43,8 @@ export interface CreateAIEmployeeRoutesOptions {
   readonly authorization: Authorization;
   readonly services: ServiceFactory;
   readonly logger: Logger;
+  /** The largest upload `POST /aiEmployee/files` accepts, in bytes; `AI_FILE_UPLOAD_MAX_BYTES` by default. */
+  readonly uploadMaxSize?: number;
 }
 
 /** The two path prefixes the plugin owns under `/api`: the employees, and every other AI resource. */
@@ -75,7 +82,7 @@ export function createAIEmployeeRoutes(
   );
   createAIEmployeeRouter(routes, options.services, guards);
   createAIConversationsRouter(routes, options.services, guards);
-  createAIFilesRouter(routes, options.services, guards);
+  createAIFilesRouter(routes, options.services, guards, options.uploadMaxSize);
   createAIToolsRouter(routes, options.services, guards);
   createAISkillsRouter(routes, options.services, guards);
   createLLMServicesRouter(routes, options.services, guards);

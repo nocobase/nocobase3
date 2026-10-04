@@ -430,28 +430,38 @@ describe('app-wide conversation center', async () => {
       expect(response.status, query).toBe(200);
       return response.json();
     }
+    const page = (total: number, pageSize = 20, number = 1) => ({
+      page: number,
+      pageSize,
+      total,
+    });
     expect(await users()).toEqual({
-      meta: {},
+      meta: page(2),
       data: [
         { id: member.id, name: 'Mia Member', username: 'mia' },
         { id: root.id, name: 'Root Admin', username: 'root' },
       ],
     });
     expect(await users('q=Root')).toEqual({
-      meta: {},
+      meta: page(1),
       data: [{ id: root.id, name: 'Root Admin', username: 'root' }],
     });
     expect(await users('q=mia')).toEqual({
-      meta: {},
+      meta: page(1),
       data: [{ id: member.id, name: 'Mia Member', username: 'mia' }],
     });
     expect(await users(`userId=${member.id}`)).toEqual({
-      meta: {},
+      meta: page(1),
       data: [{ id: member.id, name: 'Mia Member', username: 'mia' }],
     });
+    // A short page still reports every match, so a caller can tell there is more and ask for it.
     expect(await users('pageSize=1')).toEqual({
-      meta: {},
+      meta: page(2, 1),
       data: [{ id: member.id, name: 'Mia Member', username: 'mia' }],
+    });
+    expect(await users('pageSize=1&page=2')).toEqual({
+      meta: page(2, 1, 2),
+      data: [{ id: root.id, name: 'Root Admin', username: 'root' }],
     });
     for (const query of [
       'q=Quinn',
@@ -460,7 +470,7 @@ describe('app-wide conversation center', async () => {
       `userId=${delegate}`,
       'q=%27%20OR%201%3D1--',
     ]) {
-      expect(await users(query), query).toEqual({ data: [], meta: {} });
+      expect(await users(query), query).toEqual({ data: [], meta: page(0) });
     }
   });
 
@@ -776,7 +786,9 @@ describe('app-wide conversation center', async () => {
     }
     for (const query of [
       'pageSize=0',
-      'pageSize=51',
+      'pageSize=101',
+      'page=0',
+      'page=1.5',
       'pageSize=1.5',
       'pageSize=',
       'pageSize=1&pageSize=2',
@@ -820,5 +832,169 @@ describe('app-wide conversation center', async () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ data: [], meta: {} });
     }
+  });
+
+  describe('runs checked before the stream opens', () => {
+    async function run(
+      sessionId: string,
+      verb: 'send' | 'resend' | 'resumeToolCall',
+      body: Record<string, unknown>,
+    ): Promise<Response> {
+      return app.request(
+        `/api/aiEmployee/conversations/${encodeURIComponent(sessionId)}/${verb}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+    }
+    const userMessage = {
+      role: 'user',
+      content: { type: 'text', content: 'Hello' },
+    };
+
+    async function expectError(
+      response: Response,
+      status: number,
+      error: Record<string, unknown>,
+    ): Promise<void> {
+      expect(response.status).toBe(status);
+      expect(response.headers.get('content-type')).toContain(
+        'application/json',
+      );
+      expect((await response.json()).error).toMatchObject({
+        domain: 'aiEmployees',
+        ...error,
+      });
+    }
+
+    it('names an employee the body refers to that does not exist', async () => {
+      sessionUser = { id: root.id };
+      await expectError(
+        await run(sessions.root, 'send', {
+          aiEmployee: 'nobody',
+          messages: [userMessage],
+        }),
+        400,
+        {
+          status: 'INVALID_ARGUMENT',
+          reason: 'AI_EMPLOYEE_NOT_FOUND',
+          fieldViolations: [expect.objectContaining({ field: 'aiEmployee' })],
+        },
+      );
+    });
+
+    it('requires a user message to send', async () => {
+      sessionUser = { id: root.id };
+      await expectError(
+        await run(sessions.root, 'send', {
+          aiEmployee: 'ada',
+          messages: [{ ...userMessage, role: 'assistant' }],
+        }),
+        400,
+        {
+          reason: 'INVALID_INPUT',
+          fieldViolations: [expect.objectContaining({ field: 'messages' })],
+        },
+      );
+    });
+
+    it('answers 404 for a conversation that is not a chat of the caller', async () => {
+      for (const [user, sessionId] of [
+        [member.id, sessions.historical],
+        [member.id, sessions.root],
+        [root.id, randomUUID()],
+      ] as const) {
+        sessionUser = { id: user };
+        for (const verb of ['send', 'resend', 'resumeToolCall'] as const) {
+          await expectError(
+            await run(
+              sessionId,
+              verb,
+              verb === 'send'
+                ? { aiEmployee: 'ada', messages: [userMessage] }
+                : {},
+            ),
+            404,
+            { reason: 'CONVERSATION_NOT_FOUND' },
+          );
+        }
+      }
+    });
+
+    it('names a message the body refers to that the conversation does not have', async () => {
+      sessionUser = { id: member.id };
+      for (const verb of ['resend', 'resumeToolCall'] as const) {
+        await expectError(
+          await run(sessions.member, verb, { messageId: '999999' }),
+          400,
+          {
+            status: 'INVALID_ARGUMENT',
+            reason: 'MESSAGE_NOT_FOUND',
+            fieldViolations: [expect.objectContaining({ field: 'messageId' })],
+          },
+        );
+      }
+    });
+
+    it('refuses to rerun an empty conversation or resume a message with no tool calls', async () => {
+      sessionUser = { id: root.id };
+      await expectError(await run(sessions.root, 'resend', {}), 400, {
+        status: 'FAILED_PRECONDITION',
+        reason: 'CONVERSATION_EMPTY',
+      });
+      sessionUser = { id: member.id };
+      await expectError(
+        await run(sessions.member, 'resumeToolCall', { messageId: '1000' }),
+        400,
+        { status: 'FAILED_PRECONDITION', reason: 'NO_TOOL_CALLS' },
+      );
+    });
+
+    it('answers 429 at the parallel run limit, keeping the user message of a send', async () => {
+      const busy = Array.from({ length: 3 }, () => randomUUID());
+      await repositories.aiConversations.create({
+        values: busy.map((sessionId) => ({
+          sessionId,
+          userId: root.id,
+          aiEmployeeUsername: 'ada',
+          title: 'Busy',
+          category: 'chat',
+          from: 'main-agent',
+          llmActiveState: 'streaming',
+        })),
+      });
+      try {
+        sessionUser = { id: root.id };
+        await expectError(
+          await run(sessions.root, 'send', {
+            aiEmployee: 'ada',
+            messages: [userMessage],
+          }),
+          429,
+          {
+            status: 'RESOURCE_EXHAUSTED',
+            reason: 'CONVERSATION_LIMIT_REACHED',
+          },
+        );
+        const saved = await repositories.aiMessages.find({
+          filter: { sessionId: sessions.root },
+        });
+        expect(saved).toMatchObject([
+          { role: 'user', content: userMessage.content },
+        ]);
+        await expectError(await run(sessions.root, 'resend', {}), 429, {
+          reason: 'CONVERSATION_LIMIT_REACHED',
+        });
+      } finally {
+        await repositories.aiConversations.destroy({
+          filter: { sessionId: busy },
+        });
+        await repositories.aiMessages.destroy({
+          filter: { sessionId: sessions.root },
+        });
+      }
+    });
   });
 });

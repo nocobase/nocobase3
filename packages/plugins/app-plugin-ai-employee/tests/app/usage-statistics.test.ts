@@ -79,6 +79,7 @@ const fixtures: readonly UsageFixture[] = [
 ];
 
 const rangeStart = ANCHOR;
+const iso = (epochMs: number): string => new Date(epochMs).toISOString();
 const rangeEnd = ANCHOR + 47 * HOUR_IN_MS;
 
 describe('AI usage statistics', async () => {
@@ -229,8 +230,8 @@ describe('AI usage statistics', async () => {
 
   function request(action: string, query: Record<string, string> = {}) {
     const search = new URLSearchParams({
-      start: String(rangeStart),
-      end: String(rangeEnd),
+      start: iso(rangeStart),
+      end: iso(rangeEnd),
       ...query,
     });
     return app.request(`/api/aiEmployee/usage/${action}?${search.toString()}`);
@@ -265,8 +266,8 @@ describe('AI usage statistics', async () => {
       },
       previous: { eventCount: 1, totalTokens: 2 },
       previousRange: {
-        start: rangeStart - 48 * HOUR_IN_MS,
-        end: rangeStart - 1,
+        start: iso(rangeStart - 48 * HOUR_IN_MS),
+        end: iso(rangeStart - 1),
       },
     });
   });
@@ -274,12 +275,16 @@ describe('AI usage statistics', async () => {
   it('moves the comparison window back by a whole period when asked', async () => {
     const response = await request('summary', { compareShiftHours: '24' });
     const body = ((await response.json()) as { data: unknown }).data as {
-      previousRange: { start: number; end: number };
+      previousRange: { start: string; end: string };
       previous: { eventCount: number; totalTokens: number };
-      range: { start: number; end: number };
+      range: { start: string; end: string };
     };
-    expect(body.previousRange.start).toBe(body.range.start - 24 * HOUR_IN_MS);
-    expect(body.previousRange.end).toBe(body.range.end - 24 * HOUR_IN_MS);
+    expect(body.previousRange.start).toBe(
+      iso(Date.parse(body.range.start) - 24 * HOUR_IN_MS),
+    );
+    expect(body.previousRange.end).toBe(
+      iso(Date.parse(body.range.end) - 24 * HOUR_IN_MS),
+    );
     // A day earlier the window covers the +0h, +1h and +13h events only.
     expect(body.previous).toMatchObject({ eventCount: 3, totalTokens: 770 });
   });
@@ -305,13 +310,13 @@ describe('AI usage statistics', async () => {
     const response = await request('series', { granularity: 'day' });
     const body = ((await response.json()) as { data: unknown }).data as {
       granularity: string;
-      buckets: { start: number; totalTokens: number; eventCount: number }[];
+      buckets: { start: string; totalTokens: number; eventCount: number }[];
     };
     expect(body.granularity).toBe('day');
     expect(body.buckets.map((bucket) => bucket.start)).toEqual([
-      Date.parse('2026-09-20T00:00:00Z'),
-      Date.parse('2026-09-21T00:00:00Z'),
-      Date.parse('2026-09-22T00:00:00Z'),
+      '2026-09-20T00:00:00.000Z',
+      '2026-09-21T00:00:00.000Z',
+      '2026-09-22T00:00:00.000Z',
     ]);
     // In UTC the 01:00Z and 18:00Z events share 2026-09-21, and nothing falls
     // on 2026-09-22 — the offset test below splits the same events differently.
@@ -327,15 +332,15 @@ describe('AI usage statistics', async () => {
     });
     const body = ((await response.json()) as { data: unknown }).data as {
       range: { timezoneOffsetHours: number };
-      buckets: { start: number; totalTokens: number }[];
+      buckets: { start: string; totalTokens: number }[];
     };
     expect(body.range.timezoneOffsetHours).toBe(8);
     // In UTC+8 the 12:00Z and 13:00Z events fall on 2026-09-20 local, the
     // 01:00Z event on 2026-09-21 local, and the 18:00Z event on 2026-09-22.
     expect(body.buckets.map((bucket) => bucket.start)).toEqual([
-      Date.parse('2026-09-19T16:00:00Z'),
-      Date.parse('2026-09-20T16:00:00Z'),
-      Date.parse('2026-09-21T16:00:00Z'),
+      '2026-09-19T16:00:00.000Z',
+      '2026-09-20T16:00:00.000Z',
+      '2026-09-21T16:00:00.000Z',
     ]);
     expect(body.buckets.map((bucket) => bucket.totalTokens)).toEqual([
       330, 440, 880,
@@ -376,6 +381,46 @@ describe('AI usage statistics', async () => {
     });
   });
 
+  it('returns only the top rows a breakdown asks for, and no longer reads `limit`', async () => {
+    const response = await request('breakdown', {
+      dimension: 'model',
+      top: '1',
+    });
+    expect((await response.json()).data).toMatchObject({
+      rows: [{ key: 'claude-opus-5' }],
+      totals: { totalTokens: 1650 },
+    });
+    const legacy = await request('breakdown', {
+      dimension: 'model',
+      limit: '1',
+    });
+    expect(
+      ((await legacy.json()) as { data: { rows: unknown[] } }).data.rows,
+    ).toHaveLength(2);
+    for (const top of ['0', '51', '1.5']) {
+      const invalid = await request('breakdown', { dimension: 'model', top });
+      expect([top, invalid.status]).toEqual([top, 400]);
+    }
+  });
+
+  it('takes the range only as RFC 3339 times', async () => {
+    for (const start of [String(rangeStart), '2026-09-20', 'yesterday']) {
+      const response = await request('summary', { start });
+      expect([start, response.status]).toEqual([start, 400]);
+      expect(
+        ((await response.json()) as { error: { reason: string } }).error.reason,
+      ).toBe('INVALID_INPUT');
+    }
+    const offset = await request('summary', {
+      start: '2026-09-20T08:00:00+08:00',
+    });
+    expect(offset.status).toBe(200);
+    expect(
+      ((await offset.json()) as { data: { range: { start: string } } }).data
+        .range.start,
+    ).toBe('2026-09-20T00:00:00.000Z');
+  });
+
   it('rejects an unknown breakdown dimension', async () => {
     const response = await request('breakdown', { dimension: 'sessionId' });
     expect(response.status).toBe(400);
@@ -394,7 +439,7 @@ describe('AI usage statistics', async () => {
 
   it('rejects a range longer than a year', async () => {
     const response = await app.request(
-      `/api/aiEmployee/usage/summary?start=${rangeStart - 400 * 24 * HOUR_IN_MS}&end=${rangeEnd}`,
+      `/api/aiEmployee/usage/summary?start=${iso(rangeStart - 400 * 24 * HOUR_IN_MS)}&end=${iso(rangeEnd)}`,
     );
     expect(response.status).toBe(400);
   });

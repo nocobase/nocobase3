@@ -4,7 +4,7 @@ Read this only when the App must call the AI employee routes directly. The insta
 
 When you do write one, preserve current-user scope, abort signals, SSE framing, approval and resume, and error handling. The plugin owns two prefixes: the employees themselves are under `/api/aiEmployees`, and every other AI resource — conversations, files, models, LLM services, MCP servers, skills, tools and usage — under `/api/aiEmployee`. Paths below are written in full, with `{name}` marking a path parameter; encode every parameter as one URL segment (`encodeURIComponent`).
 
-Every JSON success is `{ data }`, and a list is `{ data: [...], meta }`. Every failure is the standard error body described in [Errors and security](#errors-and-security); branch on its `reason`, never on `message`.
+Every JSON success is `{ data }`, and a list is `{ data: [...], meta }`: a paged list reports its paging in `meta`, and a list read whole — the roster, templates, employees, Skills, tools, models, LLM providers and services, provider models, MCP servers, and a user's own conversations — reports `meta: { total }`. Times in query parameters and in answers are RFC 3339 strings. A JSON body is limited to 1 MiB, and a run body (`send`, `resend`, `resumeToolCall`) to 5 MiB; a larger one answers 413 `BODY_TOO_LARGE`. Every failure is the standard error body described in [Errors and security](#errors-and-security); branch on its `reason`, never on `message`.
 
 ## Table of contents
 
@@ -88,7 +88,7 @@ The actual interface uses `unknown` for raw streaming bodies so custom transport
 
 ### `GET /api/aiEmployees/roster`
 
-No query. Returns `{ data: AIEmployee[] }`: every enabled employee — there is no per-user or per-role filter — ordered by the user's own sort, then the employee's `sort`, with this user's own prompt for each. Every signed-in user may read it; the full employee records are the settings list at `GET /api/aiEmployees`.
+No query. Returns `{ data: AIEmployee[], meta: { total } }`: every enabled employee — there is no per-user or per-role filter — ordered by the user's own sort, then the employee's `sort`, with this user's own prompt for each. Every signed-in user may read it; the full employee records are the settings list at `GET /api/aiEmployees`.
 
 ```ts
 type AIEmployee = {
@@ -142,8 +142,8 @@ With `type=LLM`, `enabledModels` are the chat models chosen on the settings page
 
 Other model routes:
 
-- `GET /api/aiEmployee/llmProviders`: no input; returns `{ data }` with the installed provider metadata.
-- `GET /api/aiEmployee/llmServices/{name}/providerModels?q=<search>`: the chat models the provider itself offers, as `{ data: { id: string }[] }`, optionally filtered by `q`. It calls the provider with the service's stored key, so it requires AI settings access like the [management resources](#management-resources); a provider that cannot be reached answers 503 `PROVIDER_MODELS_UNAVAILABLE`.
+- `GET /api/aiEmployee/llmProviders`: no input; returns `{ data, meta: { total } }` with the installed provider metadata.
+- `GET /api/aiEmployee/llmServices/{name}/providerModels?q=<search>`: the chat models the provider itself offers, as `{ data: { id: string }[], meta: { total } }`, optionally filtered by `q`. It calls the provider with the service's stored key, so it requires AI settings access like the [management resources](#management-resources); a provider that cannot be reached answers 503 `PROVIDER_MODELS_UNAVAILABLE`.
 
 For setup-time model discovery and callability checks, follow [Configure LLM services](llm-configuration.md); do not recreate the CLI flow with raw HTTP requests.
 
@@ -169,7 +169,7 @@ type CreateConversationRequest = {
 
 ### `GET /api/aiEmployee/conversations`
 
-Query `{ q?: string }`, matching part of the title. Returns `{ data, meta: {} }`: all of the current user's main-agent chat conversation records, newest `updatedAt` first. A user's own chat list is read whole and is not paged. Records use `sessionId`, `aiEmployeeUsername`, `read`, and `options.modelSettings`; `title` can be `null` before the first text prompt. The Registry normalizes each item to:
+Query `{ q?: string }`, matching part of the title. Returns `{ data, meta: { total } }`: all of the current user's main-agent chat conversation records, newest `updatedAt` first. A user's own chat list is read whole and is not paged. Records use `sessionId`, `aiEmployeeUsername`, `read`, and `options.modelSettings`; `title` can be `null` before the first text prompt. The Registry normalizes each item to:
 
 ```ts
 type AIConversation = {
@@ -410,7 +410,7 @@ Example response when this is the user's only conversation:
       "updatedAt": "2026-04-09T10:00:00.000Z"
     }
   ],
-  "meta": {}
+  "meta": { "total": 1 }
 }
 ```
 
@@ -439,7 +439,7 @@ curl -N -b /tmp/nocobase-ai.cookies \
   "$BASE_URL/api/aiEmployee/conversations/$SESSION_ID/send"
 ```
 
-The body and the conversation are checked before the stream opens, so a malformed body answers 400 and an unknown conversation 404 in the standard error body. After that the response is an SSE stream, HTTP 200, whatever the run does: read [SSE](#sse) frames until the stream closes, and treat an `error` frame as the failure, since the status alone does not prove execution succeeded. Do not call `response.json()` on it. Do not resend automatically if the request disconnects or the result is uncertain; read the persisted history instead.
+The request is checked before the stream opens, so these answer in the standard error body rather than on the stream: a malformed body 400 `INVALID_INPUT`, a body without a user message 400 `INVALID_INPUT` on `messages`, an employee the body names that does not exist 400 `AI_EMPLOYEE_NOT_FOUND` on `aiEmployee`, an unknown conversation or one that is not the caller's chat 404 `CONVERSATION_NOT_FOUND`, and three runs of the caller already streaming 429 `CONVERSATION_LIMIT_REACHED`. A `send` refused for that limit keeps its user message, so a later `resend` runs it. After that the response is an SSE stream, HTTP 200, whatever the run does: read [SSE](#sse) frames until the stream closes, and treat an `error` frame as the failure, since the status alone does not prove execution succeeded. Do not call `response.json()` on it. Do not resend automatically if the request disconnects or the result is uncertain; read the persisted history instead.
 
 A stream that closes without a reply has not necessarily finished. A run that paused for a tool decision closes the same way, and history is where the difference shows: its tool calls are recorded as `interrupted` rather than completed, and the assistant turn carries the interrupt id. Answer them with [the user decision](#put-apiaiemployeeconversationssessionidmessagesmessageidtoolcallstoolcallididuserdecision) and continue with [`resumeToolCall`](#post-apiaiemployeeconversationssessionidresumetoolcall) rather than treating the tool-calling turn as the reply.
 
@@ -626,11 +626,11 @@ Body `{ args: unknown }`. Replaces the persisted arguments of that tool call and
 
 ### `POST /api/aiEmployee/files`
 
-Multipart form data with exactly one field named `file` whose value is a browser `File`; another content type answers 415, and a form without `file` 400. Answers 201 with `{ data: { id, filename, size, mimetype, extname, disk, path, url, preview, data, source: { collectionName: 'aiFiles' } } }`, where `url` and `preview` are both the preview address below. `filename` is the name the file was uploaded with, in any script, minus any directory part and control characters, and at most 128 characters with the extension kept. The Registry resolves returned relative URLs.
+Multipart form data with exactly one field named `file` whose value is a browser `File`; another content type, or none, answers 415 `UNSUPPORTED_MEDIA_TYPE`, a form without `file` 400, and a request body over 20 MiB 413 `BODY_TOO_LARGE`. Answers 201 with `{ data: { id, filename, size, mimetype, extname, disk, path, url, preview, data, source: { collectionName: 'aiFiles' } } }`, where `url` and `preview` are both the preview address below. `filename` is the name the file was uploaded with, in any script, minus any directory part and control characters, and at most 128 characters with the extension kept. The Registry resolves returned relative URLs.
 
 ### `GET /api/aiEmployee/files/{fileId}/preview`
 
-Returns the file itself, not a JSON envelope, served inline with the original file name in `Content-Disposition`. An attachment stored by an upload comes back in history with `preview` pointing here, and with `url` pointing here too unless its disk gives the file a URL of its own; an address stored by releases before these routes is replaced with the current one. On send, an `aiFiles` attachment the sender did not upload is dropped. The user who uploaded the file can preview it; anyone else, and anyone previewing a file that records no uploader, needs AI settings access, and gets 403 `FILE_ACCESS_DENIED` without it. An unknown file is 404 `FILE_NOT_FOUND`.
+Returns the file itself, not a JSON envelope, served inline with the original file name in `Content-Disposition`. An attachment stored by an upload comes back in history with `preview` pointing here, and with `url` pointing here too unless its disk gives the file a URL of its own; an address stored by releases before these routes is replaced with the current one. On send, an `aiFiles` attachment the sender did not upload is dropped. The user who uploaded the file can preview it; anyone else, and anyone previewing a file that records no uploader, needs AI settings access, and gets 403 `FILE_ACCESS_DENIED` without it. An unknown file is 404 `FILE_NOT_FOUND` only for a caller with AI settings access; anyone else gets the same 403 `FILE_ACCESS_DENIED` as for another user's file, so ids cannot be probed.
 
 ## Management resources
 
@@ -638,8 +638,8 @@ The routes behind the AI settings page. Besides a signed-in session, every route
 
 ### Employees
 
-- `GET /api/aiEmployees`: every employee record.
-- `GET /api/aiEmployees/templates`
+- `GET /api/aiEmployees`: every employee record, with `meta: { total }`.
+- `GET /api/aiEmployees/templates`: with `meta: { total }`.
 - `GET /api/aiEmployees/{username}`
 - `POST /api/aiEmployees`: body `{ username, ...fields }`; 201 with the created record. An existing username is 409 `AI_EMPLOYEE_ALREADY_EXISTS`, and a username equal to a fixed segment beside `{username}` (`roster`, `templates`) is refused with 400.
 - `PATCH /api/aiEmployees/{username}`: the fields to change; 404 `AI_EMPLOYEE_NOT_FOUND` for an unknown employee.
@@ -774,11 +774,11 @@ A managed backend tool cannot be created from JSON alone without an existing exe
 
 MCP servers are configured only in `config.yml` `ai.mcpServers`; there is no route that creates, edits, or deletes one. The enable switch and tool permissions these routes change are stored and survive a restart; a tool is named `mcp-<server>-<tool>`.
 
-- `GET /api/aiEmployee/mcpServers` and `GET /api/aiEmployee/mcpServers/{name}`: configured servers, with secret-like environment/header values redacted.
+- `GET /api/aiEmployee/mcpServers` and `GET /api/aiEmployee/mcpServers/{name}`: configured servers, with secret-like environment/header values redacted; the list with `meta: { total }`.
 - `GET /api/aiEmployee/mcpServers/tools`: `{ data: Record<serverName, MCPToolEntry[]> }`, the tools of every connected server.
 - `POST /api/aiEmployee/mcpServers/{name}/enable` and `.../disable`: return `{ data }`, the server.
 - `PATCH /api/aiEmployee/mcpServers/{name}/tools/{toolName}`: body `{ permission: 'ASK' | 'ALLOW' }`, where `toolName` is the exposed `mcp-<server>-<tool>` name; returns `{ data }`, the tool entry. 404 `MCP_TOOL_NOT_FOUND` when that server has no such connected tool.
-- `POST /api/aiEmployee/mcpServers/{name}/testConnection`: tests that configured server using only its saved configuration; no body.
+- `POST /api/aiEmployee/mcpServers/{name}/testConnection`: tests that configured server using only its saved configuration; no body. Both test routes answer 200 with `{ data: { success: boolean; error?: string } }`: a server that cannot be reached is the result of the test, not a failed request.
 - `POST /api/aiEmployee/mcpServers/testConnection`: tests a remote server that is not saved, from `{ transport: 'http' | 'sse', url, headers? }`. A `stdio` server runs a local command, so it can only be tested by name; an inline `transport: 'stdio'` body is refused with 400.
 
 An unknown `{name}` is 404 `MCP_SERVER_NOT_FOUND`. `tools` and `testConnection` are fixed segments beside `{name}`, so a server configured under either name is a configuration error: `pnpm nocobase config check` reports it and the plugin refuses to start until it is renamed. A configured server as returned:
@@ -805,7 +805,7 @@ An unknown `{name}` is 404 `MCP_SERVER_NOT_FOUND`. `tools` and `testConnection` 
 
 LLM services are defined only in `config.yml` `ai.llmServices`; there is no route that creates, deletes, or reconfigures one.
 
-- `GET /api/aiEmployee/llmServices` and `GET /api/aiEmployee/llmServices/{name}`
+- `GET /api/aiEmployee/llmServices` (with `meta: { total }`) and `GET /api/aiEmployee/llmServices/{name}`
 - `POST /api/aiEmployee/llmServices/{name}/enable` and `.../disable`
 - `PUT /api/aiEmployee/llmServices/{name}/enabledModels` with `{ mode: 'provider' | 'custom'; models: { label?: string; value: string }[] }`
 - `GET /api/aiEmployee/llmServices/{name}/providerModels?q=`, described under [Employees and models](#employees-and-models)
@@ -833,8 +833,8 @@ Each change touches only its one field, returns `{ data }` with the updated serv
 Every user's conversations, read-only, for the settings page:
 
 - `GET /api/aiEmployee/managedConversations`: query `q` (part of the title, at most 200 characters), `userId`, `aiEmployeeUsername`, `page` (1–10000) and `pageSize` (1–100, default 20). Returns `{ data, meta: { page, pageSize, total } }`: main conversations only, newest first, each row carrying `user` (`id`, `name`, `username`) and `aiEmployee` (`username`, `nickname`, `avatar`), or `null` when either no longer exists.
-- `GET /api/aiEmployee/managedConversations/{sessionId}/messages`: one history page, in the same shape and with the same `pageToken`/`pageSize` as a user's own history; 404 for an unknown session.
-- `GET /api/aiEmployee/conversationOwners`: query `q` (part of the name or username), `userId` and `pageSize` (1–50, default 20). Returns `{ data: { id, name, username }[], meta: {} }`, only users who own a main conversation.
+- `GET /api/aiEmployee/managedConversations/{sessionId}/messages`: one history page, in the same shape and with the same `pageToken`/`pageSize` as a user's own history. `sessionId` must be a UUID (400 `INVALID_INPUT` otherwise), and an unknown session is 404.
+- `GET /api/aiEmployee/conversationOwners`: query `q` (part of the name or username), `userId`, `page` (1–10000) and `pageSize` (1–100, default 20). Returns `{ data: { id, name, username }[], meta: { page, pageSize, total } }`, only users who own a main conversation, ordered by name.
 
 ### Usage statistics
 
@@ -845,7 +845,7 @@ Read-only aggregation over `aiUsageEvents`. Each route returns `{ data }`.
 - `GET /api/aiEmployee/usage/breakdown`
 - `GET /api/aiEmployee/usage/filterOptions`
 
-Shared query parameters: `start` and `end` (inclusive, epoch milliseconds; the range defaults to the last 7 days and may not exceed 366 days), `timezoneOffset` (east-positive minutes, rounded to whole hours), and the equality filters `model`, `provider`, `llmService`, `aiEmployeeUsername`, `userId`, `category`, `from`. `series` also takes `granularity` (`hour`, `day`, `week`, `month`, or `auto`); `breakdown` takes `dimension` (one of `model`, `provider`, `llmService`, `aiEmployeeUsername`, `userId`, `category`, `from`) and `limit` (1–50, default 10).
+Shared query parameters: `start` and `end` (inclusive, RFC 3339 times with an offset such as `2026-09-20T00:00:00Z`; the range defaults to the last 7 days and may not exceed 366 days), `timezoneOffset` (east-positive minutes, rounded to whole hours), and the equality filters `model`, `provider`, `llmService`, `aiEmployeeUsername`, `userId`, `category`, `from`. `series` also takes `granularity` (`hour`, `day`, `week`, `month`, or `auto`); `breakdown` takes `dimension` (one of `model`, `provider`, `llmService`, `aiEmployeeUsername`, `userId`, `category`, `from`) and `top` (1–50, default 10), how many of the largest rows to return. `top` ranks rather than pages: there is no next page, and `totals` lets the caller show the remainder.
 
 ```ts
 interface UsageTotals {
@@ -860,9 +860,9 @@ interface UsageTotals {
 }
 ```
 
-`summary` also takes `compareShiftHours` (1 to 8784), the whole-period offset its comparison window moves back by; it returns `{ range, totals, previous, previousRange }`, where `previous` is `range` shifted back by that many hours. Without it the comparison falls back to the equally long window immediately before `range`, which skews whenever the range ends midway through a period — a range covering today so far would otherwise be measured against the stretch that just ended rather than against the same hours yesterday. `series` returns `{ range, granularity, buckets }` with one bucket per period in the range, empty periods included as zeros and `start` as epoch milliseconds. `breakdown` returns `{ range, dimension, rows, totals }`, rows sorted by `totalTokens` descending and labelled with an employee nickname or user name where one resolves. `filterOptions` returns the `models` and `aiEmployees` present in the range, ignoring the filters so a narrowed dimension still lists its alternatives.
+`summary` also takes `compareShiftHours` (1 to 8784), the whole-period offset its comparison window moves back by; it returns `{ range, totals, previous, previousRange }`, where `previous` is `range` shifted back by that many hours. Without it the comparison falls back to the equally long window immediately before `range`, which skews whenever the range ends midway through a period — a range covering today so far would otherwise be measured against the stretch that just ended rather than against the same hours yesterday. `series` returns `{ range, granularity, buckets }` with one bucket per period in the range, empty periods included as zeros. Every time in an answer — `range.start`, `range.end`, `previousRange` and each bucket's `start` — is an RFC 3339 string in UTC. `breakdown` returns `{ range, dimension, rows, totals }`, rows sorted by `totalTokens` descending and labelled with an employee nickname or user name where one resolves. `filterOptions` returns the `models` and `aiEmployees` present in the range, ignoring the filters so a narrowed dimension still lists its alternatives.
 
-From client code, call these through `useAIEmployeeClient()` from `@nocobase/app-plugin-ai-employee/client`: `fetchUsageSummary`, `fetchUsageSeries`, `fetchUsageBreakdown` and `fetchUsageFilterOptions` take the query object and an optional `AbortSignal`.
+From client code, call these through `useAIEmployeeClient()` from `@nocobase/app-plugin-ai-employee/client`: `fetchUsageSummary`, `fetchUsageSeries`, `fetchUsageBreakdown` and `fetchUsageFilterOptions` take the query object, with `start` and `end` in epoch milliseconds, and an optional `AbortSignal`; they send RFC 3339 times and read the answer's times back as epoch milliseconds.
 
 Grouping by period relies on `aiUsageEvents.occurredHour`, a UTC hour index written alongside `occurredAt`. Coarser buckets and the timezone shift are applied to that index in the service, so the SQL stays one portable `GROUP BY`.
 
@@ -893,7 +893,7 @@ Frame types include `stream_start`, `stream_end`, content, reasoning and web sea
 }
 ```
 
-The run routes answer HTTP 200 once the stream opens, whatever the run does afterwards, so the status never tells a failed run from a successful one; only what is checked before the stream opens — the path, the body, and that the conversation is the caller's — answers with the standard error body. When the failure is the agent's — on `send`, `resend` or `resumeToolCall` — `code` carries its `AgentServiceErrorCode` and `body` its root message — `CONFIGURATION_ERROR` for a missing or disabled model or service, `PROVIDER_ERROR` for a provider failure, and the rest as listed in [server-runs.md § Failures a caller has to tell apart](server-runs.md#failures-a-caller-has-to-tell-apart) — so branch on `code`, never on the text of `body`. A failure before the agent runs, such as a missing user message, has no `code`, and neither does a failure replaying a stream through `resumeStream`.
+The run routes answer HTTP 200 once the stream opens, whatever the run does afterwards, so the status never tells a failed run from a successful one; only what is checked before the stream opens — the path, the body, the conversation, the employee and message the body names, and the parallel run limit — answers with the standard error body. When the failure is the agent's — on `send`, `resend` or `resumeToolCall` — `code` carries its `AgentServiceErrorCode` and `body` its root message — `CONFIGURATION_ERROR` for a missing or disabled model or service, `PROVIDER_ERROR` for a provider failure, and the rest as listed in [server-runs.md § Failures a caller has to tell apart](server-runs.md#failures-a-caller-has-to-tell-apart) — so branch on `code`, never on the text of `body`. A failure on the stream before the agent runs, such as a conversation removed after the stream opened, has no `code`, and neither does a failure replaying a stream through `resumeStream`.
 
 Always pass an `AbortSignal`. After disconnect, inspect active state/history and use resume; never blindly duplicate a mutation.
 
@@ -917,17 +917,20 @@ Every failure outside an open SSE stream is the standard error body, with the sa
 
 From the App's `ApiClient`, a failure is an `ApiClientError` carrying `status`, `reason` and `domain`. The reasons this plugin reports, all with domain `aiEmployees`:
 
-| Status | Reason                                                                                                                                                                                                                                                | When                                                                                      |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 403    | `AI_SETTINGS_ACCESS_REQUIRED`                                                                                                                                                                                                                         | A management route without `page:ai.settings` access                                      |
-| 403    | `FILE_ACCESS_DENIED`                                                                                                                                                                                                                                  | Previewing a file someone else uploaded without AI settings access                        |
-| 404    | `AI_EMPLOYEE_NOT_FOUND`, `SKILL_NOT_FOUND`, `TOOL_NOT_FOUND`, `LLM_SERVICE_NOT_FOUND`, `MCP_SERVER_NOT_FOUND`, `MCP_TOOL_NOT_FOUND`, `CONVERSATION_NOT_FOUND`, `MESSAGE_NOT_FOUND`, `TOOL_CALL_NOT_FOUND`, `FILE_NOT_FOUND`, `FILE_CONTENT_NOT_FOUND` | The resource the path names does not exist, or is a conversation that is not the caller's |
-| 409    | `AI_EMPLOYEE_ALREADY_EXISTS`, `SKILL_ALREADY_EXISTS`, `TOOL_ALREADY_EXISTS`                                                                                                                                                                           | Creating one with a name already taken                                                    |
-| 400    | `AI_EMPLOYEE_NOT_FOUND` with a field violation                                                                                                                                                                                                        | A conversation body naming an employee that does not exist                                |
-| 400    | `AI_EMPLOYEE_DISABLED`, `FRONTEND_TOOL_UNAVAILABLE`, `LLM_PROVIDER_NOT_FOUND` (`FAILED_PRECONDITION`)                                                                                                                                                 | The request is valid but the state it depends on forbids it                               |
-| 400    | `INVALID_REQUEST`                                                                                                                                                                                                                                     | Any other request the service refuses, such as a range longer than a year                 |
-| 415    | `UNSUPPORTED_MEDIA_TYPE`                                                                                                                                                                                                                              | An upload that is not `multipart/form-data`                                               |
-| 503    | `PROVIDER_MODELS_UNAVAILABLE`                                                                                                                                                                                                                         | The LLM provider could not list its models                                                |
+| Status | Reason                                                                                                                                                                                                                                                | When                                                                                                                                      |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 403    | `AI_SETTINGS_ACCESS_REQUIRED`                                                                                                                                                                                                                         | A management route without `page:ai.settings` access                                                                                      |
+| 403    | `FILE_ACCESS_DENIED`                                                                                                                                                                                                                                  | Previewing a file someone else uploaded without AI settings access                                                                        |
+| 404    | `AI_EMPLOYEE_NOT_FOUND`, `SKILL_NOT_FOUND`, `TOOL_NOT_FOUND`, `LLM_SERVICE_NOT_FOUND`, `MCP_SERVER_NOT_FOUND`, `MCP_TOOL_NOT_FOUND`, `CONVERSATION_NOT_FOUND`, `MESSAGE_NOT_FOUND`, `TOOL_CALL_NOT_FOUND`, `FILE_NOT_FOUND`, `FILE_CONTENT_NOT_FOUND` | The resource the path names does not exist, or is a conversation that is not the caller's                                                 |
+| 409    | `AI_EMPLOYEE_ALREADY_EXISTS`, `SKILL_ALREADY_EXISTS`, `TOOL_ALREADY_EXISTS`                                                                                                                                                                           | Creating one with a name already taken                                                                                                    |
+| 400    | `AI_EMPLOYEE_NOT_FOUND`, `MESSAGE_NOT_FOUND` with a field violation                                                                                                                                                                                   | A conversation or run body naming an employee or message that does not exist                                                              |
+| 400    | `AI_EMPLOYEE_NOT_FOUND`, `CONVERSATION_EMPTY`, `NO_TOOL_CALLS` (`FAILED_PRECONDITION`)                                                                                                                                                                | A `resend` or `resumeToolCall` whose conversation's employee is gone, that has no message to run from, or whose message has no tool calls |
+| 400    | `AI_EMPLOYEE_DISABLED`, `FRONTEND_TOOL_UNAVAILABLE`, `LLM_PROVIDER_NOT_FOUND` (`FAILED_PRECONDITION`)                                                                                                                                                 | The request is valid but the state it depends on forbids it                                                                               |
+| 400    | `INVALID_REQUEST`                                                                                                                                                                                                                                     | Any other request the service refuses, such as a range longer than a year                                                                 |
+| 413    | `BODY_TOO_LARGE`                                                                                                                                                                                                                                      | A request body over its route's limit                                                                                                     |
+| 415    | `UNSUPPORTED_MEDIA_TYPE`                                                                                                                                                                                                                              | An upload that is not `multipart/form-data`                                                                                               |
+| 429    | `CONVERSATION_LIMIT_REACHED` (`RESOURCE_EXHAUSTED`)                                                                                                                                                                                                   | A `send` or `resend` while three runs of the caller are already streaming                                                                 |
+| 503    | `PROVIDER_MODELS_UNAVAILABLE`                                                                                                                                                                                                                         | The LLM provider could not list its models                                                                                                |
 
 Two kinds come from the framework rather than this plugin: an invalid path, query or body answers 400 `INVALID_INPUT` with domain `app` and a field violation for each problem (an unknown body field included), and a missing session answers 401 `AUTHENTICATION_REQUIRED` with domain `authentication`. An unknown `/api` path is 404 `ROUTE_NOT_FOUND`, and an unexpected failure 500 `INTERNAL_ERROR` with nothing about its cause.
 

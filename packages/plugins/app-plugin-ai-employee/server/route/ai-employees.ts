@@ -6,6 +6,7 @@ import type { ServiceFactory } from '../factory/service-factory.js';
 import { identityTranslate } from '../types.js';
 import { AI_EMPLOYEE_FIXED_SEGMENTS } from './reserved-names.js';
 import type { AIRouteGuards } from './settings-access.js';
+import { boundedList, jsonBody } from './utils.js';
 import {
   AIEmployeeParams,
   CreateAIEmployeeInput,
@@ -32,7 +33,7 @@ export function createAIEmployeeRouter(
         actor: context.var.currentUser,
         translate: identityTranslate,
       });
-      return context.json({ data });
+      return context.json(boundedList(data));
     },
   );
 
@@ -40,19 +41,20 @@ export function createAIEmployeeRouter(
     `/aiEmployees/${AI_EMPLOYEE_FIXED_SEGMENTS.templates}`,
     settings,
     (context) =>
-      context.json({ data: services.employeeService.getTemplates({}) }),
+      context.json(boundedList(services.employeeService.getTemplates({}))),
   );
 
   app.get('/aiEmployees', settings, async (context) => {
     const data = await services.employeeService.list({
       translate: identityTranslate,
     });
-    return context.json({ data });
+    return context.json(boundedList(data));
   });
 
   app.post(
     '/aiEmployees',
     settings,
+    jsonBody,
     validator('json', (value) => parseApiInput(CreateAIEmployeeInput, value)),
     async (context) => {
       const data = await services.employeeService.create({
@@ -80,6 +82,7 @@ export function createAIEmployeeRouter(
     '/aiEmployees/:username',
     settings,
     validator('param', (value) => parseApiInput(AIEmployeeParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(UpdateAIEmployeeInput, value)),
     async (context) => {
       const data = await services.employeeService.update({
@@ -108,6 +111,7 @@ export function createAIEmployeeRouter(
     '/aiEmployees/:username/userPrompt',
     signedIn,
     validator('param', (value) => parseApiInput(AIEmployeeParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(UserPromptInput, value)),
     async (context) => {
       const data = await services.employeeService.updateUserPrompt({

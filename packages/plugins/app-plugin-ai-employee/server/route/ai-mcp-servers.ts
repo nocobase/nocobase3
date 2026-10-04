@@ -5,6 +5,7 @@ import { validator } from 'hono/validator';
 import type { ServiceFactory } from '../factory/service-factory.js';
 import { MCP_SERVER_FIXED_SEGMENTS } from './reserved-names.js';
 import type { AIRouteGuards } from './settings-access.js';
+import { boundedList, jsonBody } from './utils.js';
 import {
   MCPCandidateInput,
   MCPToolParams,
@@ -23,7 +24,7 @@ export function createAIMCPServersRouter(
 ): void {
   app.get('/aiEmployee/mcpServers', settings, async (context) => {
     const data = await services.mcpServerService.list({});
-    return context.json({ data });
+    return context.json(boundedList(data));
   });
 
   // The tools of every connected server, keyed by server name.
@@ -40,11 +41,13 @@ export function createAIMCPServersRouter(
   app.post(
     `/aiEmployee/mcpServers/${MCP_SERVER_FIXED_SEGMENTS.testConnection}`,
     settings,
+    jsonBody,
     validator('json', (value) => parseApiInput(MCPCandidateInput, value)),
     async (context) => {
       const data = await services.mcpServerService.testCandidate({
         values: context.req.valid('json'),
       });
+      // A failed connection is the answer to the test, not a failed request, so `{ success, error }` is data.
       return context.json({ data });
     },
   );
@@ -69,6 +72,7 @@ export function createAIMCPServersRouter(
       const data = await services.mcpServerService.testConnection({
         name: context.req.valid('param').name,
       });
+      // As above: the outcome of the test is the result, reported as `{ success, error }`.
       return context.json({ data });
     },
   );
@@ -95,6 +99,7 @@ export function createAIMCPServersRouter(
     '/aiEmployee/mcpServers/:name/tools/:toolName',
     settings,
     validator('param', (value) => parseApiInput(MCPToolParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(MCPToolPermissionInput, value)),
     async (context) => {
       const { name, toolName } = context.req.valid('param');

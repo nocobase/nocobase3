@@ -4,6 +4,7 @@ import { validator } from 'hono/validator';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { AIRouteGuards } from './settings-access.js';
+import { boundedList, jsonBody } from './utils.js';
 import {
   EnabledModelsInput,
   ModelsQuery,
@@ -32,18 +33,18 @@ export function createLLMServicesRouter(
         context.req.valid('query').type === 'EMBEDDING'
           ? await services.modelService.listEmbeddingModels({})
           : await services.modelService.listEnabled({});
-      return context.json({ data });
+      return context.json(boundedList(data));
     },
   );
 
   app.get('/aiEmployee/llmProviders', signedIn, async (context) => {
     const data = await services.modelService.listLLMProviders({});
-    return context.json({ data });
+    return context.json(boundedList(data));
   });
 
   app.get('/aiEmployee/llmServices', settings, async (context) => {
     const data = await services.llmService.list({});
-    return context.json({ data });
+    return context.json(boundedList(data));
   });
 
   app.get(
@@ -80,6 +81,7 @@ export function createLLMServicesRouter(
     '/aiEmployee/llmServices/:name/enabledModels',
     settings,
     validator('param', (value) => parseApiInput(NameParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(EnabledModelsInput, value)),
     async (context) => {
       const data = await services.llmService.updateEnabledModels({
@@ -103,7 +105,7 @@ export function createLLMServicesRouter(
           search: context.req.valid('query').q,
         },
       });
-      return context.json({ data });
+      return context.json(boundedList(data));
     },
   );
 }

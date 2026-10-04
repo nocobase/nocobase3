@@ -304,6 +304,7 @@ describe('Skills management API', async () => {
         data: [...summaries].sort((left, right) =>
           left.name.localeCompare(right.name),
         ),
+        meta: { total: summaries.length },
       });
       for (const [index, skill] of skills.entries()) {
         const response = await request(skill.name);
@@ -425,7 +426,7 @@ describe('Skills management API', async () => {
     try {
       const response = await request();
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ data: [] });
+      expect(await response.json()).toEqual({ data: [], meta: { total: 0 } });
     } finally {
       for (const skill of skills)
         await deps.ai.skillsManager.registerSkills(skill);

@@ -109,7 +109,7 @@ it.each([
 it('returns no rows for an unmatched search', async () => {
   const response = await app.request('/aiEmployee/conversations?q=not-found');
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ data: [], meta: {} });
+  expect(await response.json()).toEqual({ data: [], meta: { total: 0 } });
 });
 
 it('keeps the unfiltered list scoped and includes untitled conversations', async () => {

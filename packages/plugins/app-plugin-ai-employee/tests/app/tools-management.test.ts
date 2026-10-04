@@ -248,7 +248,10 @@ describe('Tools management API', async () => {
       const detail = vi.spyOn(services.toolService, 'get');
       const response = await request();
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ data: summaries });
+      expect(await response.json()).toEqual({
+        data: summaries,
+        meta: { total: summaries.length },
+      });
       for (const summary of summaries) {
         const response = await request(summary.name);
         expect(response.status).toBe(200);
@@ -382,7 +385,7 @@ describe('Tools management API', async () => {
     try {
       const response = await request();
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ data: [] });
+      expect(await response.json()).toEqual({ data: [], meta: { total: 0 } });
     } finally {
       await deps.ai.toolsManager.registerTools(tools);
       dynamicEnabled = true;
@@ -413,6 +416,7 @@ describe('Tools management API', async () => {
           defaultPermission: 'ASK',
         },
       ],
+      meta: { total: 1 },
     });
     expect(await (await request('no-source')).json()).toEqual({
       data: {

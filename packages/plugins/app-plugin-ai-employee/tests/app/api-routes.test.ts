@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   AI_EMPLOYEE_RESERVED_USERNAMES,
+  AI_JSON_BODY_MAX_BYTES,
+  AI_RUN_BODY_MAX_BYTES,
   MCP_SERVER_RESERVED_NAMES,
   createAIEmployeeRoutes,
 } from '../../server/route/index.js';
@@ -168,7 +170,7 @@ describe('AI employee HTTP routes', () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get('x-local-ai')).toBe('1');
-    expect(await response.json()).toEqual({ data: [] });
+    expect(await response.json()).toEqual({ data: [], meta: { total: 0 } });
 
     const unread = await app.request(
       'http://localhost/api/aiEmployee/conversations/unreadCount',
@@ -212,8 +214,8 @@ describe('AI employee HTTP routes', () => {
     fixture.services.ready = async () => undefined;
     const sendMessages = vi.fn(async () => undefined);
     fixture.services.conversationService.sendMessages = sendMessages as never;
-    fixture.services.conversationService.requireOwnConversation = vi.fn(
-      async () => ({ sessionId: 'session-1' }),
+    fixture.services.conversationService.checkRun = vi.fn(
+      async () => undefined,
     ) as never;
     const app = mount(fixture);
 
@@ -284,6 +286,87 @@ describe('AI employee HTTP routes', () => {
     expect(response.status).toBe(404);
     expect((await response.json()).error.reason).toBe('CONVERSATION_NOT_FOUND');
     expect(sendMessages).not.toHaveBeenCalled();
+  });
+
+  it('refuses a JSON body over the limit with 413, and a run body only over its larger limit', async () => {
+    const fixture = await createTestAIEmployeeFixture();
+    signIn(fixture.deps);
+    fixture.services.ready = async () => undefined;
+    const updateUserPrompt = vi.fn(async () => ({}));
+    fixture.services.employeeService.updateUserPrompt =
+      updateUserPrompt as never;
+    const checkRun = vi.fn(async () => undefined);
+    fixture.services.conversationService.checkRun = checkRun as never;
+    fixture.services.conversationService.sendMessages = vi.fn(
+      async () => undefined,
+    ) as never;
+    const app = mount(fixture);
+    const post = (path: string, body: unknown, method = 'POST') =>
+      app.request(`http://localhost/api${path}`, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    const tooLarge = await post(
+      '/aiEmployees/dara/userPrompt',
+      { prompt: 'x'.repeat(AI_JSON_BODY_MAX_BYTES) },
+      'PUT',
+    );
+    expect(tooLarge.status).toBe(413);
+    expect((await tooLarge.json()).error).toMatchObject({
+      status: 'INVALID_ARGUMENT',
+      reason: 'BODY_TOO_LARGE',
+      domain: 'aiEmployees',
+    });
+    expect(updateUserPrompt).not.toHaveBeenCalled();
+
+    const message = {
+      role: 'user',
+      content: { type: 'text', content: 'x'.repeat(AI_JSON_BODY_MAX_BYTES) },
+    };
+    const run = await post('/aiEmployee/conversations/session-1/send', {
+      aiEmployee: 'dara',
+      messages: [message],
+    });
+    expect(run.status).toBe(200);
+    await run.text();
+    const runTooLarge = await post('/aiEmployee/conversations/session-1/send', {
+      aiEmployee: 'dara',
+      messages: [
+        {
+          ...message,
+          content: { type: 'text', content: 'x'.repeat(AI_RUN_BODY_MAX_BYTES) },
+        },
+      ],
+    });
+    expect(runTooLarge.status).toBe(413);
+    expect(checkRun).toHaveBeenCalledOnce();
+  });
+
+  it('refuses unknown fields in nested request objects', async () => {
+    const fixture = await createTestAIEmployeeFixture();
+    signIn(fixture.deps);
+    fixture.services.ready = async () => undefined;
+    const create = vi.fn(async () => ({}));
+    fixture.services.conversationService.create = create as never;
+    const app = mount(fixture);
+
+    const response = await app.request(
+      'http://localhost/api/aiEmployee/conversations',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          aiEmployee: { username: 'dara', nickname: 'Dara' },
+        }),
+      },
+    );
+    expect(response.status).toBe(400);
+    const { error } = await response.json();
+    expect(error).toMatchObject({ reason: 'INVALID_INPUT' });
+    expect(error.fieldViolations[0].field).toMatch(/^aiEmployee/);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('wires each managed resource to a dedicated service instance', async () => {

@@ -15,6 +15,7 @@ import {
   ConversationParams,
   ConversationsQuery,
   CreateConversationInput,
+  ManagedConversationParams,
   ManagedConversationsQuery,
   MessagesQuery,
   ResendMessagesInput,
@@ -26,7 +27,7 @@ import {
   UserDecisionInput,
   type AgentStateInput,
 } from './schemas.js';
-import { createAISSEStreamResponse } from './utils.js';
+import { createAISSEStreamResponse, jsonBody, runBody } from './utils.js';
 
 /**
  * Conversations. `/aiEmployee/conversations` is the signed-in user's own chat; `/aiEmployee/managedConversations` and
@@ -72,7 +73,9 @@ export function createAIConversationsRouter(
   app.get(
     '/aiEmployee/managedConversations/:sessionId/messages',
     settings,
-    validator('param', (value) => parseApiInput(ConversationParams, value)),
+    validator('param', (value) =>
+      parseApiInput(ManagedConversationParams, value),
+    ),
     validator('query', (value) => parseApiInput(MessagesQuery, value)),
     async (context) => {
       const query = context.req.valid('query');
@@ -99,9 +102,17 @@ export function createAIConversationsRouter(
         actor: context.var.aiSettingsActor,
         keyword: query.q,
         userId: query.userId,
-        limit: query.pageSize,
+        page: query.page,
+        pageSize: query.pageSize,
       });
-      return context.json({ data: result.rows, meta: {} });
+      return context.json({
+        data: result.rows,
+        meta: {
+          page: query.page,
+          pageSize: query.pageSize,
+          total: result.count,
+        },
+      });
     },
   );
 
@@ -119,13 +130,14 @@ export function createAIConversationsRouter(
         options: { keyword: context.req.valid('query').q || undefined },
       });
       // A user's own chat list is read whole; it is not paged.
-      return context.json({ data, meta: {} });
+      return context.json({ data, meta: { total: data.length } });
     },
   );
 
   app.post(
     '/aiEmployee/conversations',
     signedIn,
+    jsonBody,
     validator('json', (value) => parseApiInput(CreateConversationInput, value)),
     async (context) => {
       const data = await conversations.create({
@@ -165,6 +177,7 @@ export function createAIConversationsRouter(
     '/aiEmployee/conversations/:sessionId',
     signedIn,
     validator('param', (value) => parseApiInput(ConversationParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(UpdateConversationInput, value)),
     async (context) => {
       const data = await conversations.update({
@@ -193,6 +206,7 @@ export function createAIConversationsRouter(
     '/aiEmployee/conversations/:sessionId/options',
     signedIn,
     validator('param', (value) => parseApiInput(ConversationParams, value)),
+    jsonBody,
     validator('json', (value) =>
       parseApiInput(ConversationOptionsInput, value),
     ),
@@ -258,6 +272,7 @@ export function createAIConversationsRouter(
     '/aiEmployee/conversations/:sessionId/messages/:messageId/toolCalls/:toolCallId/userDecision',
     signedIn,
     validator('param', (value) => parseApiInput(ToolCallParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(UserDecisionInput, value)),
     async (context) => {
       const { sessionId, messageId, toolCallId } = context.req.valid('param');
@@ -277,6 +292,7 @@ export function createAIConversationsRouter(
     '/aiEmployee/conversations/:sessionId/messages/:messageId/toolCalls/:toolCallId',
     signedIn,
     validator('param', (value) => parseApiInput(ToolCallParams, value)),
+    jsonBody,
     validator('json', (value) => parseApiInput(ToolCallArgsInput, value)),
     async (context) => {
       const { sessionId, messageId, toolCallId } = context.req.valid('param');
@@ -292,21 +308,27 @@ export function createAIConversationsRouter(
   );
 
   // ---- Runs, answered as server-sent events ----
-  // The path and body are checked, and the conversation looked up, before the stream opens, so those failures are the
-  // standard error body. Once it is open, a failure is an `error` event on the stream.
+  // The path and body are checked before the stream opens — the conversation, the employee and message the body names,
+  // and the caller's limit on parallel runs — so those failures are the standard error body. Once it is open, a failure
+  // is an `error` event on the stream.
 
   app.post(
     '/aiEmployee/conversations/:sessionId/send',
     signedIn,
     validator('param', (value) => parseApiInput(ConversationParams, value)),
+    runBody,
     validator('json', (value) => parseApiInput(SendMessagesInput, value)),
     async (context) => {
       const { sessionId } = context.req.valid('param');
       const input = context.req.valid('json');
-      await conversations.requireOwnConversation(
-        context.var.currentUser.id,
+      await conversations.checkRun({
+        kind: 'send',
+        actor: context.var.currentUser,
         sessionId,
-      );
+        aiEmployee: input.aiEmployee,
+        messages: input.messages as never,
+        messageId: input.messageId ?? input.editingMessageId,
+      });
       return createAISSEStreamResponse(context, 'send', (target) =>
         conversations.sendMessages({
           actor: context.var.currentUser,
@@ -327,14 +349,17 @@ export function createAIConversationsRouter(
     '/aiEmployee/conversations/:sessionId/resend',
     signedIn,
     validator('param', (value) => parseApiInput(ConversationParams, value)),
+    runBody,
     validator('json', (value) => parseApiInput(ResendMessagesInput, value)),
     async (context) => {
       const { sessionId } = context.req.valid('param');
       const input = context.req.valid('json');
-      await conversations.requireOwnConversation(
-        context.var.currentUser.id,
+      await conversations.checkRun({
+        kind: 'resend',
+        actor: context.var.currentUser,
         sessionId,
-      );
+        messageId: input.messageId,
+      });
       return createAISSEStreamResponse(context, 'resend', (target) =>
         conversations.resendMessages({
           actor: context.var.currentUser,
@@ -350,14 +375,17 @@ export function createAIConversationsRouter(
     '/aiEmployee/conversations/:sessionId/resumeToolCall',
     signedIn,
     validator('param', (value) => parseApiInput(ConversationParams, value)),
+    runBody,
     validator('json', (value) => parseApiInput(ResumeToolCallInput, value)),
     async (context) => {
       const { sessionId } = context.req.valid('param');
       const input = context.req.valid('json');
-      await conversations.requireOwnConversation(
-        context.var.currentUser.id,
+      await conversations.checkRun({
+        kind: 'resumeToolCall',
+        actor: context.var.currentUser,
         sessionId,
-      );
+        messageId: input.messageId,
+      });
       return createAISSEStreamResponse(context, 'resumeToolCall', (target) =>
         conversations.resumeToolCall({
           actor: context.var.currentUser,

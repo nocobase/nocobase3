@@ -207,9 +207,33 @@ describe('AIFileService', () => {
         canReadAnyFile: async () => false,
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    // A caller who may read only their own files is refused alike for a missing id, so ids cannot be probed.
     await expect(
       serviceFor(null).preview({ actor: member, id: '42' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 });
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      status: 403,
+      reason: 'FILE_ACCESS_DENIED',
+    });
+    await expect(
+      serviceFor(null).preview({
+        actor: member,
+        id: '42',
+        canReadAnyFile: async () => false,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    // Only a caller who may read any file learns that it does not exist.
+    await expect(
+      serviceFor(null).preview({
+        actor: member,
+        id: '42',
+        canReadAnyFile: async () => true,
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      status: 404,
+      reason: 'FILE_NOT_FOUND',
+    });
     expect(opened).toEqual([]);
 
     await serviceFor(metadata).preview({ actor: member, id: '42' });

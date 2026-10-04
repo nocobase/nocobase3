@@ -9,6 +9,7 @@ import type {
   ErrorHandler,
   MiddlewareHandler,
 } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { SSEStreamTarget, sseResponseHeaders } from './sse.js';
 
 declare module 'hono' {
@@ -19,6 +20,53 @@ declare module 'hono' {
 
 /** The `domain` of every error the AI employee routes report, whether about employees or any other AI resource. */
 export const AI_EMPLOYEE_ERROR_DOMAIN = 'aiEmployees';
+
+/** The largest JSON body an AI route accepts: settings, prompts and tool arguments are far below it. */
+export const AI_JSON_BODY_MAX_BYTES: number = 1024 * 1024;
+
+/**
+ * The largest body a run (`send`, `resend`, `resumeToolCall`) accepts. Larger than other JSON routes because a run
+ * carries the page's work context and frontend tool schemas besides its messages; attachments are uploaded separately.
+ */
+export const AI_RUN_BODY_MAX_BYTES: number = 5 * 1024 * 1024;
+
+/** The largest file `POST /aiEmployee/files` accepts, including the multipart framing around it. */
+export const AI_FILE_UPLOAD_MAX_BYTES: number = 20 * 1024 * 1024;
+
+/**
+ * Refuses a body larger than `maxSize` with a 413 in the standard body. Each route names it after its access guard,
+ * so a caller who may not call the route is refused before the size of what it sent matters.
+ */
+export function aiBodyLimit(maxSize: number): MiddlewareHandler {
+  return bodyLimit({
+    maxSize,
+    onError: (context) =>
+      apiErrorHandler(
+        new ApiError({
+          status: 'INVALID_ARGUMENT',
+          reason: 'BODY_TOO_LARGE',
+          domain: AI_EMPLOYEE_ERROR_DOMAIN,
+          message: `The request body exceeds ${maxSize} bytes.`,
+          httpStatus: 413,
+        }),
+        context,
+      ),
+  });
+}
+
+/** The body limit of an ordinary JSON route. */
+export const jsonBody: MiddlewareHandler = aiBodyLimit(AI_JSON_BODY_MAX_BYTES);
+
+/** The body limit of a run, which streams its answer. */
+export const runBody: MiddlewareHandler = aiBodyLimit(AI_RUN_BODY_MAX_BYTES);
+
+/** A bounded list, read whole rather than paged: its rows and how many there are. */
+export function boundedList<T>(data: readonly T[]): {
+  data: readonly T[];
+  meta: { total: number };
+} {
+  return { data, meta: { total: data.length } };
+}
 
 export interface AIRequestMiddlewareOptions {
   readonly ready: () => Promise<void>;

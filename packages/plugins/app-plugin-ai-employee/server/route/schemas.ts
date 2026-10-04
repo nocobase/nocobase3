@@ -51,7 +51,10 @@ const SkillSettingsInput = z.strictObject({
   skills: z.array(z.string()).optional(),
   tools: z
     .array(
-      z.object({ name: z.string().min(1), autoCall: z.boolean().optional() }),
+      z.strictObject({
+        name: z.string().min(1),
+        autoCall: z.boolean().optional(),
+      }),
     )
     .optional(),
 });
@@ -175,16 +178,29 @@ export const MCPCandidateInput = z.strictObject({
 
 export const FileParams = z.object({ fileId: z.string().min(1).max(255) });
 
+/** An upload is a multipart form; the content type is required here and its media type checked by the route (415). */
+export const UploadHeaders = z.object({
+  'content-type': z.string().max(1000).optional(),
+});
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Usage statistics: /aiEmployee/usage
 
-const EpochNumber = z.string().regex(/^-?\d+(\.\d+)?$/, 'Must be a number.');
+/** An RFC 3339 time with an explicit offset, read as epoch milliseconds. */
+const Time = z.iso
+  .datetime({ offset: true })
+  .transform((value) => Date.parse(value));
 const UsageFilter = z.string().max(200).optional();
 
 export const UsageQuery = z.object({
-  start: EpochNumber.optional(),
-  end: EpochNumber.optional(),
-  timezoneOffset: EpochNumber.optional(),
+  start: Time.optional(),
+  end: Time.optional(),
+  /** East-positive minutes, as `-new Date().getTimezoneOffset()` reports. */
+  timezoneOffset: z
+    .string()
+    .regex(/^-?\d{1,4}$/, 'Must be a whole number of minutes.')
+    .transform(Number)
+    .optional(),
   model: UsageFilter,
   provider: UsageFilter,
   llmService: UsageFilter,
@@ -204,7 +220,9 @@ export const UsageSeriesQuery = UsageQuery.extend({
 
 export const UsageBreakdownQuery = UsageQuery.extend({
   dimension: z.enum(USAGE_BREAKDOWN_DIMENSIONS),
-  limit: queryInteger(50).optional(),
+  // The N largest rows by tokens, beside the range totals so the rest shows as a remainder. It ranks rather than pages:
+  // there is no next page to ask for, so it is `top` rather than `pageSize`.
+  top: queryInteger(50).optional(),
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -212,6 +230,10 @@ export const UsageBreakdownQuery = UsageQuery.extend({
 
 export const ConversationParams = z.object({ sessionId: Name });
 export const MessageParams = ConversationParams.extend({ messageId: Name });
+/** The conversation center addresses a conversation by its UUID session id only. */
+export const ManagedConversationParams = z.object({
+  sessionId: z.guid(),
+});
 export const ToolCallParams = MessageParams.extend({ toolCallId: Name });
 
 export const ConversationsQuery = z.object({ q: Search.optional() });
@@ -227,7 +249,8 @@ export const ManagedConversationsQuery = z.object({
 export const ConversationOwnersQuery = z.object({
   q: Search.optional(),
   userId: Identifier.optional(),
-  pageSize: pageSize(50, 20),
+  page: queryInteger(10000).default(1),
+  pageSize: pageSize(100, 20),
 });
 
 export const MessagesQuery = z.object({
@@ -240,7 +263,7 @@ export const MessagesQuery = z.object({
 });
 
 export const CreateConversationInput = z.strictObject({
-  aiEmployee: z.object({ username: Name }),
+  aiEmployee: z.strictObject({ username: Name }),
   systemMessage: z.string().optional(),
   skillSettings: JsonRecord.optional(),
   conversationSettings: JsonRecord.optional(),

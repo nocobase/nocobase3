@@ -31,6 +31,7 @@ import type {
 } from '../types.js';
 import {
   AI_API_BASE_PATH,
+  preconditionError,
   ResourceActionError,
   sendStreamError,
 } from '../types.js';
@@ -92,6 +93,8 @@ export type ManagedConversationEntity = Omit<
 
 export interface ConversationUsersResult {
   rows: ConversationUserSummary[];
+  /** How many users match, across every page. */
+  count: number;
 }
 
 export interface AllConversationsResult {
@@ -637,18 +640,23 @@ export class AIConversationService {
     actor,
     keyword,
     userId,
-    limit = 20,
+    page = 1,
+    pageSize = 20,
   }: {
     actor: ConversationManagementActor;
     /** Matches part of the name or the username. */
     keyword?: string;
     /** Resolves one user, such as the one a restored filter names. */
     userId?: string;
-    limit?: number;
+    page?: number;
+    pageSize?: number;
   }): Promise<ConversationUsersResult> {
     requireConversationReadAccess(actor);
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
-      throw new ResourceActionError(400, 'Invalid limit');
+    if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw new ResourceActionError(400, 'Invalid pageSize');
+    }
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw new ResourceActionError(400, 'Invalid page');
     }
     if (
       keyword !== undefined &&
@@ -679,12 +687,22 @@ export class AIConversationService {
         ]),
       );
     }
-    const rows = await query
-      .orderBy('name')
-      .orderBy('id')
-      .limit(limit)
-      .execute<ConversationUserSummary>();
-    return { rows: rows.map(toConversationUserSummary) };
+    const [rows, total] = await Promise.all([
+      query
+        .orderBy('name')
+        .orderBy('id')
+        .limit(pageSize)
+        .offset((page - 1) * pageSize)
+        .execute<ConversationUserSummary>(),
+      query
+        .clearSelect()
+        .select((eb) => [eb.fn.countAll<number | string>().as('count')])
+        .executeTakeFirst<{ count: number | string }>(),
+    ]);
+    return {
+      rows: rows.map(toConversationUserSummary),
+      count: Number(total?.count ?? 0),
+    };
   }
 
   /** Two batched reads per page, whatever its length, instead of one per row. */
@@ -751,15 +769,8 @@ export class AIConversationService {
     cursor?: string;
     pageSize?: number;
   }): Promise<GetAIConversationMessagesResult> {
+    // The route's parameter schema admits only a UUID session id.
     requireConversationReadAccess(actor);
-    if (
-      typeof sessionId !== 'string' ||
-      !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
-        sessionId,
-      )
-    ) {
-      throw new ResourceActionError(400, 'Invalid sessionId');
-    }
     if (
       cursor !== undefined &&
       (typeof cursor !== 'string' ||
@@ -995,6 +1006,126 @@ export class AIConversationService {
       values: { toolCalls },
     });
     return toolCalls[index] as Record<string, unknown>;
+  }
+
+  /**
+   * Checks a run before its stream opens, so that what the request itself gets wrong is answered with the standard
+   * error body rather than as an event on a stream that already answered 200: the conversation the path names, the
+   * employee and message the body names, and the caller's limit on parallel runs. The run checks again once it starts,
+   * since another run may begin in between; only what changes in that window reaches the stream as an error event.
+   *
+   * A `send` refused for the limit still keeps its user messages, as the run itself does, so the next `resend` sends
+   * them without the user typing them again.
+   */
+  async checkRun(
+    input:
+      | {
+          readonly kind: 'send';
+          readonly actor: Actor;
+          readonly sessionId: string;
+          readonly aiEmployee: string;
+          readonly messages: readonly AIMessageInput[];
+          readonly messageId?: string;
+        }
+      | {
+          readonly kind: 'resend' | 'resumeToolCall';
+          readonly actor: Actor;
+          readonly sessionId: string;
+          readonly messageId?: string;
+        },
+  ): Promise<void> {
+    const { actor, sessionId } = input;
+    const conversation = await this.requireOwnConversation(actor.id, sessionId);
+    if (input.kind === 'send') {
+      if (!input.messages.some((message) => message.role === 'user')) {
+        throw new ResourceActionError(400, 'A user message is required.', {
+          reason: 'INVALID_INPUT',
+          fieldViolations: [
+            {
+              field: 'messages',
+              description: 'At least one message must have the role "user".',
+            },
+          ],
+        });
+      }
+      if (!(await getAIEmployee(this.repositories, input.aiEmployee))) {
+        throw new ResourceActionError(
+          400,
+          `AI employee ${input.aiEmployee} was not found.`,
+          {
+            reason: 'AI_EMPLOYEE_NOT_FOUND',
+            fieldViolations: [
+              {
+                field: 'aiEmployee',
+                description: 'No AI employee has this username.',
+              },
+            ],
+          },
+        );
+      }
+    } else {
+      const username = conversation.aiEmployeeUsername ?? '';
+      if (!(await getAIEmployee(this.repositories, username))) {
+        throw preconditionError(
+          `The AI employee of conversation ${sessionId} no longer exists.`,
+          'AI_EMPLOYEE_NOT_FOUND',
+        );
+      }
+      const message = input.messageId
+        ? await this.repositories.aiMessages.findOne({
+            filter: { sessionId, messageId: input.messageId },
+          })
+        : await this.repositories.aiMessages.findOne({
+            filter: { sessionId },
+            sort: ['-messageId'],
+          });
+      if (!message && input.messageId) {
+        throw new ResourceActionError(
+          400,
+          `Message ${input.messageId} was not found in conversation ${sessionId}.`,
+          {
+            reason: 'MESSAGE_NOT_FOUND',
+            fieldViolations: [
+              {
+                field: 'messageId',
+                description: 'No message of this conversation has this id.',
+              },
+            ],
+          },
+        );
+      }
+      if (!message) {
+        throw preconditionError(
+          `Conversation ${sessionId} has no message to run from.`,
+          'CONVERSATION_EMPTY',
+        );
+      }
+      if (input.kind === 'resumeToolCall' && !message.toolCalls?.length) {
+        throw preconditionError(
+          `Message ${message.messageId} has no tool calls to resume.`,
+          'NO_TOOL_CALLS',
+        );
+      }
+      // Resuming continues a run that was already counted when it started.
+      if (input.kind === 'resumeToolCall') return;
+    }
+    if (await isReachParallelLimit(this.repositories, actor.id)) {
+      if (input.kind === 'send') {
+        await saveUserMessages(
+          this.repositories,
+          this.database,
+          this.snowflake,
+          sessionId,
+          [...input.messages],
+          input.messageId,
+        );
+      }
+      throw new ResourceActionError(
+        429,
+        'There are conversations in progress. Please try again later.',
+        { reason: 'CONVERSATION_LIMIT_REACHED' },
+      );
+    }
   }
 
   async sendMessages({
