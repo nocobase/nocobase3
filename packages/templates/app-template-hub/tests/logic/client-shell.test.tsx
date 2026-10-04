@@ -80,7 +80,15 @@ describe('application shell', () => {
       'href',
       'https://www.nocobase.com',
     );
-    expect(screen.getByText('NocoBase Hub v0.0.0')).toBeVisible();
+    expect(
+      screen.getByText('NocoBase', { selector: 'a' }).parentElement,
+    ).toHaveTextContent('NocoBase keeps it reliable.');
+    expect(screen.getByText('NocoBase Hub')).toHaveClass('truncate');
+    expect(screen.getByText('v0.0.0')).toHaveClass('truncate');
+    // shadcn's edge rail, with a translated label in place of its built-in one.
+    expect(
+      screen.getByRole('button', { name: 'Expand or collapse navigation' }),
+    ).toHaveAttribute('title', 'Expand or collapse navigation');
     expect(screen.getByText('Hub console')).toBeVisible();
     expect(
       await screen.findByRole('heading', { name: 'App client is ready' }),
@@ -206,12 +214,28 @@ describe('application shell', () => {
     expect(
       screen.getByRole('button', { name: 'Expand navigation' }),
     ).toHaveAttribute('aria-pressed', 'true');
+    // The footer keeps only its shield; focusing it shows the slogan, name and version.
+    const footerIcon = screen.getByRole('img', {
+      name: 'AI builds freely. NocoBase keeps it reliable. NocoBase Hub v0.0.0',
+    });
+    act(() => footerIcon.focus());
+    expect(
+      await screen.findByText('NocoBase Hub v0.0.0', {
+        selector: '[data-slot="tooltip-content"] span',
+      }),
+    ).toBeVisible();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }));
+    // The edge rail switches the mode back.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand or collapse navigation' }),
+    );
     expect(sidebar.closest('[data-state]')).toHaveAttribute(
       'data-state',
       'expanded',
     );
+    expect(
+      screen.queryByRole('img', { name: /NocoBase Hub v/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('opens and closes the mobile navigation without changing the route', async () => {

@@ -407,6 +407,7 @@ const messages = {
     close: 'Close navigation',
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
+    toggle: 'Expand or collapse navigation',
     label: 'Application navigation',
     description: 'Go to a page of this application.',
     breadcrumb: 'Breadcrumb',

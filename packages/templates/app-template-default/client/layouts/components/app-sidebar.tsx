@@ -20,6 +20,7 @@ import {
   SidebarContent,
   SidebarHeader,
   SidebarProvider,
+  SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -129,6 +130,10 @@ export function AppSidebar({
     </>
   );
 
+  const railLabel = t('navigation.toggle', {
+    defaultValue: 'Expand or collapse navigation',
+  });
+
   if (isMobile)
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile}>
@@ -160,6 +165,8 @@ export function AppSidebar({
   return (
     <Sidebar collapsible='icon' role='complementary' aria-label={label}>
       {content}
+      {/* The primitive's edge handle; its built-in label is untranslated, and the props given here replace it. */}
+      <SidebarRail aria-label={railLabel} title={railLabel} />
     </Sidebar>
   );
 }
