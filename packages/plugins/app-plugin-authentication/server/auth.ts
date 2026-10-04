@@ -260,12 +260,7 @@ export class Auth {
       try {
         context.set('auth', await this.getSession(context.req.raw.headers));
       } catch (error) {
-        if (error instanceof APIError) {
-          return context.json(
-            error.body ?? { code: error.status, message: error.message },
-            error.statusCode as ContentfulStatusCode,
-          );
-        }
+        if (error instanceof APIError) return rejectedCredential(context, error);
         throw error;
       }
       await next();
@@ -283,24 +278,9 @@ export class Auth {
       let auth: AuthSession;
       try {
         auth = await this.getSession(context.req.raw.headers);
-        // A refused credential is Better Auth's APIError; answer with its own status and body.
+        // A refused credential is Better Auth's APIError; answer with its status, and its code as the reason.
       } catch (error) {
-        if (error instanceof APIError) {
-          return apiErrorResponse(
-            context,
-            new ApiError({
-              status: apiErrorStatusFromHttp(error.statusCode),
-              reason:
-                typeof error.body?.code === 'string'
-                  ? error.body.code
-                  : 'AUTHENTICATION_FAILED',
-              domain: 'authentication',
-              message: error.message,
-              httpStatus: error.statusCode as ContentfulStatusCode,
-              cause: error,
-            }),
-          );
-        }
+        if (error instanceof APIError) return rejectedCredential(context, error);
         throw error;
       }
       if (!auth) {
@@ -330,4 +310,22 @@ export function createAuthentication(
     ...options,
     connection: options.connection,
   });
+}
+
+/** A credential Better Auth refused, answered in the standard API error body with Better Auth's code as the reason. */
+function rejectedCredential(context: Context, error: APIError): Response {
+  return apiErrorResponse(
+    context,
+    new ApiError({
+      status: apiErrorStatusFromHttp(error.statusCode),
+      reason:
+        typeof error.body?.code === 'string'
+          ? error.body.code
+          : 'AUTHENTICATION_FAILED',
+      domain: 'authentication',
+      message: error.message,
+      httpStatus: error.statusCode as ContentfulStatusCode,
+      cause: error,
+    }),
+  );
 }

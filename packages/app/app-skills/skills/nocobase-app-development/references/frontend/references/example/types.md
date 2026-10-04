@@ -10,7 +10,7 @@ The example assumes the backend provides these endpoints:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/projects`        | Parameters `search` and `status` (optional); returns `{ data: Project[] }`                                                      |
 | `GET /api/projects/:id`    | Returns `{ data: Project }`; 404 if it does not exist                                                                           |
-| `POST /api/projects`       | Request body `{ name, owner, status }`; returns `{ data: Project }`; 409 with `code: 'PROJECT_NAME_TAKEN'` for a duplicate name |
+| `POST /api/projects`       | Request body `{ name, owner, status }`; returns `{ data: Project }`; 409 `ALREADY_EXISTS` with reason `PROJECT_NAME_TAKEN` for a duplicate name |
 | `PATCH /api/projects/:id`  | Changes only the fields sent; returns `{ data: Project }`; 404 if it does not exist                                             |
 | `DELETE /api/projects/:id` | 204 on success; 404 if it does not exist                                                                                        |
 

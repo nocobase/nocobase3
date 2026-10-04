@@ -28,14 +28,14 @@ vi.mock('@nocobase/app-client', () => {
   const api = { request: mocks.request };
   class ApiClientError extends Error {
     public readonly status: number;
-    public readonly code?: string;
+    public readonly reason?: string;
     public constructor(
       message: string,
-      options: { status: number; code?: string },
+      options: { status: number; reason?: string },
     ) {
       super(message);
       this.status = options.status;
-      this.code = options.code;
+      this.reason = options.reason;
     }
   }
   return { useApiClient: () => api, ApiClientError };

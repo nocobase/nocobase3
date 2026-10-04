@@ -19,6 +19,7 @@ import {
 import type { ServiceContainer } from '@nocobase/service-provider';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { HTTPException } from 'hono/http-exception';
 import { stream } from 'hono/streaming';
 
 import {
@@ -230,9 +231,17 @@ export function defineRepositoryApiRoutes<P = unknown>(
 
   return defineApiRoutes((app: RepositoryApiRoutesApplication): Hono => {
     const router = new Hono();
-    router.onError((error, context) =>
-      apiErrorResponse(context, repositoryApiError(error) ?? error),
-    );
+    // Render what this router knows; rethrow the rest so an enclosing router's
+    // handler, and the request log, still see it.
+    router.onError((error, context) => {
+      const known =
+        repositoryApiError(error) ??
+        (error instanceof ApiError || error instanceof HTTPException
+          ? error
+          : undefined);
+      if (known) return apiErrorResponse(context, known);
+      throw error;
+    });
 
     for (const entry of repositories) {
       if (entry.actions.length === 0) continue;
