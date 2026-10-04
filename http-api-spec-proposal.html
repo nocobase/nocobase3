@@ -589,6 +589,14 @@
       grid-template-columns: 1fr;
     }
   }
+  /* Lists inside rules and the engineering notes */
+  .rule .body ul,
+  ul.notes {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+  }
 </style>
 
 <div class="wrap">
@@ -597,13 +605,19 @@
     <h1>NocoBase 3 接口规范方案</h1>
     <p class="lede">
       我们约 380
-      个接口现在各写各的，没有统一格式，也没有对外文档。本方案采用谷歌公开的 API
-      设计规范作为统一标准，一次性把所有插件改到同一套写法上，并据此自动生成对外的接口文档（Swagger）。
+      个接口原先各写各的，没有统一格式，也没有对外文档。本方案采用谷歌公开的 API
+      设计规范作为统一标准，一次性把所有插件改到同一套写法上，并据此自动生成对外的接口文档（Swagger）。本稿已按实际定下和实现的规范更新。
     </p>
     <div class="meta">
       <span>依据 <b>HTTP API 体检报告（2026-09-29）</b></span>
-      <span>日期 <b>2026-09-30</b></span>
-      <span>预计周期 <b>约 2 个月，分三步</b></span>
+      <span>日期 <b>2026-09-30，2026-10-04 按实现更新</b></span>
+      <span
+        >当前进度
+        <b
+          >第一步已完成（PR #530），存量迁移在 PR #532
+          中完成、待合并，接口文档生成另起 PR</b
+        ></span
+      >
     </div>
     <div class="ask">
       <div class="label">需要拍板</div>
@@ -614,7 +628,7 @@
         <li>
           现有接口<b>一次性改到新规范</b>，不保留旧地址；改动过的插件按破坏性更新发布大版本。
         </li>
-        <li>按第 07 节的三步计划投入执行。</li>
+        <li>按第 07 节的计划执行，当前进度见第 07 节。</li>
       </ul>
     </div>
   </header>
@@ -698,8 +712,10 @@
       <h2>新规范的核心规则</h2>
     </div>
     <p>
-      完整细则会写进开发规范和 AI Agent
-      使用的技能文档。下面是影响最大的几条，每条都附了改动前后的对比。
+      完整细则已经写进开发规范（根目录 <code>AGENTS.md</code>）和 AI Agent
+      使用的技能文档（<code>@nocobase/app-skills</code> 里的
+      <code>references/http-api.md</code
+      >）。下面是影响最大的几条，每条都附了改动前后的对比。
     </p>
     <ol class="rules">
       <li class="rule">
@@ -708,23 +724,72 @@
           <p>
             地址一律用同一种命名风格（camelCase，即
             <code>apiKeys</code>
-            这种首字母小写、后续单词首字母大写的写法）。每个插件的接口放在以插件名开头的地址下，避免不同插件抢同一个地址。插件的主要资源和插件同名时，省掉重复的一层，比如用户插件的用户列表就是
-            <code>/api/users</code>，而不是
-            <code>/api/users/users</code
-            >。两个插件占用同一个地址时，系统启动直接报错，不再悄悄覆盖。
+            这种首字母小写、后续单词首字母大写的写法）。每个插件的接口放在自己的命名空间下，避免不同插件抢同一个地址：
+          </p>
+          <ul>
+            <li>
+              <b>命名空间就是包名</b>：去掉 <code>app-plugin-</code> 后转成
+              camelCase，单数或复数都可以，取读起来像插件主要资源的那个。插件的所有资源都放在这一个命名空间下。
+            </li>
+            <li>
+              <b>主要资源和插件同名时只写一次</b>：用户插件的用户列表就是
+              <code>/api/users</code>，停用用户是
+              <code>/api/users/{userId}/disable</code>，而不是
+              <code>/api/users/users</code
+              >；工作流插件的其他资源也挂在同一个词下，如
+              <code>/api/workflows/runs</code>。
+            </li>
+            <li>
+              <b>资源名和插件名不同时，命名空间在前</b>：定时任务插件的计划是
+              <code>/api/scheduler/schedules</code>。
+            </li>
+            <li>
+              <b>挂在别的插件分发器下的插件，沿用宿主的命名空间</b
+              >：权限插件的地址前缀由 <code>/api/authz</code> 改为
+              <code>/api/authorization</code
+              >，三个权限规则插件挂在它下面，分别是
+              <code>/api/authorization/defaultAccess</code
+              >、<code>/api/authorization/sharingRules</code>、<code>/api/authorization/restrictionRules</code>。
+            </li>
+            <li>
+              <b>保留段</b
+              >：<code>/api/swagger</code>、<code>/api/auth</code>、<code
+                >/api/healthz</code
+              >
+              分别留给接口文档、Better Auth 和健康检查。
+            </li>
+            <li>
+              <b>AI 员工是一个特例</b>：AI 员工本身在
+              <code>/api/aiEmployees</code>，其余 AI
+              资源（技能、工具、模型、对话等）都在
+              <code>/api/aiEmployee/...</code> 下，不再重复
+              <code>ai</code> 前缀。
+            </li>
+          </ul>
+          <p>
+            两个路由注册了完全相同的请求方式和地址时，应用启动直接报错，不再悄悄让后注册的失效（PR
+            #532 中正在实现）。只是参数名不同不算不同的路由，<code
+              >/orders/:id</code
+            >
+            和 <code>/orders/:orderId</code> 是同一个；<code
+              >/users/{userId}</code
+            >
+            和
+            <code>/users/findMany</code>
+            这种「固定段和参数段重叠」不算冲突，按约定固定段先注册即可，见下文「自定义动作怎么写」。
           </p>
           <div class="ba">
             <div class="was">
               <span class="h">现在</span
               ><span class="line">/api/hub/api-keys</span
-              ><span class="line">/api/permission-sets</span
-              ><span class="line">/api/aiSkills</span>
+              ><span class="line">/api/authz/permission-sets</span
+              ><span class="line">GET /api/ai/aiSkills:get?key=x</span>
             </div>
             <div class="now">
               <span class="h">改为</span
               ><span class="line">/api/hub/apiKeys</span
               ><span class="line">/api/authorization/permissionSets</span
-              ><span class="line">/api/aiEmployees/skills</span>
+              ><span class="line">GET /api/aiEmployee/skills/x</span>
             </div>
           </div>
         </div>
@@ -754,7 +819,11 @@
         <div class="body">
           <h3>「查看」类请求不能改数据</h3>
           <p>
-            现在有几个接口在「查看」时顺手改了数据，比如打开消息列表就标记已读。浏览器预加载、搜索引擎、缓存都可能在用户不知情时触发它们。新规范里，改数据的操作必须明确发起。
+            现在有几个接口在「查看」时顺手改了数据，比如打开消息列表就标记已读。浏览器预加载、搜索引擎、缓存都可能在用户不知情时触发它们。新规范里，改数据的操作必须明确发起；<code
+              >GET</code
+            >
+            连顺手的副作用也不能有，比如顺带删除过期数据、改写会话或
+            Cookie。清理工作交给产生过期数据的写操作，或者交给定时任务。
           </p>
         </div>
       </li>
@@ -791,6 +860,12 @@
             <code>cursor</code> 不是一回事，所以不沿用
             <code>nextCursor</code> 这个旧名字。
           </p>
+          <p class="muted">
+            条数有限的配置类列表（如服务商、角色、模板、目录）可以不分页，但仍然返回
+            <code>{ data, meta }</code>，<code>meta</code> 里至少有
+            <code>total</code>；其余列表都要分页。<code>meta</code>
+            里可以带标准字段之外的信息。
+          </p>
         </div>
       </li>
       <li class="rule">
@@ -798,27 +873,88 @@
           <h3>出错时的返回格式统一</h3>
           <p>
             7
-            种错误格式合并成一种，按谷歌规范设计：既告诉程序「是哪一类错误」（程序据此做处理），也给出面向用户的翻译文案，还附带请求编号，用户反馈问题时可以直接定位到日志。任何意外错误也会返回这个格式，不再出现纯文本的「Internal
+            种错误格式合并成一种，按谷歌规范设计：告诉程序「是哪一类错误」和「具体原因」（程序据此做处理），还附带请求编号，用户反馈问题时可以直接定位到日志；需要时还可以带上面向用户的翻译文案。任何意外错误也会返回这个格式，不再出现纯文本的「Internal
             Server Error」。
           </p>
           <pre class="snip">{
   "error": {
     "code": 404,                        <span class="c">// HTTP 状态码</span>
-    "status": "NOT_FOUND",              <span class="c">// 错误大类，全系统固定十几种</span>
+    "status": "NOT_FOUND",              <span class="c">// 错误大类，全系统固定 10 种</span>
     "reason": "WORKFLOW_NOT_FOUND",     <span class="c">// 具体原因，程序按它判断</span>
-    "domain": "workflow",               <span class="c">// 哪个插件定义的这个错误</span>
-    "message": "Workflow 42 was not found.",
-    "localizedMessage": { "locale": "zh-CN", "message": "工作流 42 不存在。" },
-    "requestId": "7f1c9a…"              <span class="c">// 用于排查日志</span>
+    "domain": "workflows",              <span class="c">// 哪个插件定义的这个原因</span>
+    "message": "Workflow 42 was not found.",   <span class="c">// 给开发者看的英文，不展示给用户</span>
+    "localizedMessage": { "locale": "zh-CN", "message": "工作流 42 不存在。" },   <span class="c">// 可选</span>
+    "requestId": "7f1c9a…"              <span class="c">// 用于排查日志，也在 x-request-id 响应头里</span>
   }
 }</pre>
+          <ul>
+            <li>
+              <b><code>status</code> 固定 10 种</b
+              >：<code>INVALID_ARGUMENT</code>、<code>FAILED_PRECONDITION</code>、<code>UNAUTHENTICATED</code>、<code>PERMISSION_DENIED</code>、<code>NOT_FOUND</code>、<code>ALREADY_EXISTS</code>、<code>ABORTED</code>、<code>RESOURCE_EXHAUSTED</code>、<code>INTERNAL</code>、<code>UNAVAILABLE</code>，对应关系见文末附录。不再使用
+              422（改用 400 的 <code>INVALID_ARGUMENT</code> 或
+              <code>FAILED_PRECONDITION</code>），也不再使用 502（改用 503
+              <code>UNAVAILABLE</code>）。413 只用于请求内容超过大小限制，415
+              只用于不支持的请求内容类型，两者都是
+              <code>INVALID_ARGUMENT</code> 加上
+              <code>httpStatus</code> 得到的，没有别的状态码能这样覆盖。
+            </li>
+            <li>
+              <b><code>reason</code> 是程序判断的依据</b>，前端只认
+              <code>reason</code>，不解析 <code>message</code>。
+            </li>
+            <li>
+              <b>一个插件只有一个 <code>domain</code></b
+              >，即它的命名空间，哪怕它用了几个地址前缀：AI 员工的错误一律是
+              <code>aiEmployees</code>。转交别的插件的错误时保留原插件的
+              <code>domain</code>，比如用户插件转交的
+              <code>LAST_ASSIGNMENT</code> 仍然是
+              <code>authorization</code>。框架和数据仓库的错误用
+              <code>app</code>。
+            </li>
+            <li>
+              <b><code>localizedMessage</code> 是可选的</b>，<code
+                >message</code
+              >
+              只给开发者看。
+            </li>
+            <li>
+              <b>另有两个可选字段</b>：<code>fieldViolations</code>
+              指出哪些字段不合法，<code>metadata</code>
+              放这次出错的其他机器可读信息。
+            </li>
+          </ul>
+          <p>
+            「找不到」分两种情况：地址里指名的资源不存在，返回
+            404；请求内容或查询参数里引用的资源不存在，返回 400 并在
+            <code>fieldViolations</code> 里指出是哪个字段。比如
+            <code>POST /api/hub/apps/7/deploy</code> 里的应用 7 不存在是
+            404，请求内容里的 <code>releaseId</code> 不存在是 400。
+          </p>
+        </div>
+      </li>
+      <li class="rule">
+        <div class="body">
+          <h3>先查权限，再看别的</h3>
+          <p>
+            权限检查放在中间件里，排在输入校验之前，也排在「资源是否存在」之前：没有权限的调用方一律得到
+            403，既不会知道接口要什么参数，也不会知道某个 ID
+            是否存在。权限检查通过之前，什么都不能写，包括数据库记录和上传的文件。
+          </p>
         </div>
       </li>
       <li class="rule">
         <div class="body">
           <h3>所有输入先校验再处理</h3>
           <p>
-            每个接口声明自己接受什么数据，不合格的请求在进入业务逻辑前就被拒绝，并指出哪个字段有问题。这份声明同时就是接口文档的来源，写一次，校验和文档两用。
+            每个接口声明自己接受什么数据，不合格的请求在进入业务逻辑前就被拒绝，返回
+            400 并指出哪个字段有问题。声明用 zod 写：请求内容用
+            <code>z.strictObject</code>，多余字段直接报错；查询参数和路径参数用
+            <code>z.object</code>。上传这类二进制或 multipart
+            请求，参数和请求头照样校验，请求内容在代码里校验。每个请求内容都有大小上限，超出时返回
+            413
+            <code>BODY_TOO_LARGE</code
+            >。这份声明将来同时是接口文档的来源，写一次，校验和文档两用（见第 04
+            节）。
           </p>
         </div>
       </li>
@@ -826,10 +962,11 @@
         <div class="body">
           <h3>数据格式细节统一</h3>
           <p>
-            ID 一律以文字形式返回。我们的 ID 位数很长，按数字返回时，外部
-            JavaScript
-            程序会悄悄算错最后几位。时间统一用国际标准格式。字段名统一为
-            camelCase。
+            ID 一律以文字形式传递，返回和传入都是。我们的 ID
+            位数很长，按数字处理时，外部 JavaScript
+            程序会悄悄算错最后几位。时间统一用国际标准格式（RFC
+            3339）。布尔值就是 <code>true</code> / <code>false</code>，不用
+            <code>0</code>、<code>1</code> 或字符串。字段名统一为 camelCase。
           </p>
         </div>
       </li>
@@ -879,20 +1016,30 @@
             </tr>
             <tr>
               <td>不针对任何已有对象的计算类操作</td>
-              <td class="m">/范围/动作名词</td>
-              <td class="m">POST /api/ai/translateText</td>
+              <td class="m">/命名空间/动作名词</td>
+              <td class="m">POST /api/translation/translateText</td>
             </tr>
           </tbody>
         </table>
       </div>
+      <p class="muted">
+        第三种形态同样遵守命名空间规则：<code>translation</code>
+        是插件的命名空间，<code>translateText</code> 是「动词 +
+        名词」形式的动作名。应用自己的计算类操作没有命名空间，直接写
+        <code>/api/translateText</code>。
+      </p>
 
       <p>
-        <b>3. 用什么请求方式。</b>只有两种选择：会改数据或有副作用的，用
-        <code>POST</code>，这是绝大多数情况；纯查看、不改任何东西的，用
-        <code>GET</code>，但如果查询条件太复杂、放不进地址，也可以用
-        <code>POST</code>。参数放在请求内容里，返回照常是
-        <code>{ data }</code
-        >：可以返回被操作后的对象，也可以返回这个动作专门的结果。
+        <b>3. 用什么请求方式，返回什么。</b
+        >只有两种选择：会改数据或有副作用的，用
+        <code>POST</code
+        >，这是绝大多数情况；纯查看、不改任何东西、参数放得进地址的，用
+        <code>GET</code>。有结果时返回
+        <code>200 { data }</code
+        >，可以是被操作后的对象，也可以是这个动作专门的结果；工作在后台继续进行时返回
+        <code>202</code>；没有任何内容可返回时返回
+        <code>204</code>。删除操作如果在返回后仍在后台继续，也可以返回
+        <code>202</code>。
       </p>
 
       <p><b>4. 动作怎么起名。</b></p>
@@ -935,7 +1082,7 @@
                 冒充自定义动作，这些应该用标准操作
               </td>
               <td class="m">
-                <span class="now">GET /api/aiEmployees/skills/x</span>
+                <span class="now">GET /api/aiEmployee/skills/x</span>
               </td>
               <td class="m">
                 <span class="was">/getDetails</span>　<span class="was"
@@ -993,18 +1140,29 @@
         <code>PUT /repos/{owner}/{repo}/pulls/{number}/merge</code>。
       </p>
       <p class="muted">
-        斜杠带来一个需要框架兜住的问题：<code>/users/options</code>
-        这种固定名字和
-        <code>/users/{id}</code>
-        会在同一层竞争，谁先注册谁生效且不报错。框架会自动让固定名字优先，并在启动时检测冲突直接报错。另外，地址里的
+        斜杠带来一个需要兜住的问题：<code>/workflows/runs</code> 这种固定段和
+        <code>/workflows/{workflowId}</code> 会在同一层竞争，Hono
+        按注册顺序匹配，谁先注册谁生效且不报错。规则是插件把固定段注册在
+        <code>/:id</code> 之前；如果 ID
+        是用户自己起的名字，创建时就拒绝和固定段同名的 ID，返回 400
+        <code>INVALID_ARGUMENT</code> 并指出字段，比如 AI 员工的用户名不能叫
+        <code>roster</code> 或
+        <code>templates</code
+        >。请求方式和地址完全相同的重复注册，应用启动时直接报错。另外，地址里的
         ID 如果含有 <code>/</code>、<code>:</code>
         等特殊字符，客户端会自动编码，开发者不需要处理。
       </p>
     </div>
 
     <div class="stack">
-      <h3>两类例外</h3>
-      <p>以下两类接口不完全按上面的规则写。除此之外，所有接口都没有例外。</p>
+      <h3>几类例外</h3>
+      <p>
+        以下几类
+        <code>/api</code>
+        接口不完全按上面的规则写，除此之外没有例外，新写的代码也不得模仿它们。不在
+        <code>/api</code>
+        下的根路由（例如支付服务商的回调）按各自协议的要求返回，不受本规范约束。
+      </p>
     </div>
 
     <div class="exception">
@@ -1014,27 +1172,47 @@
         个）保留自己的一套动作，只跟随全系统把冒号换成斜杠：<code
           >POST /api/users:findMany</code
         >
-        改为 <code>POST /api/users/findMany</code>。
+        改为 <code>POST /api/users/findMany</code>。旧的冒号写法不再路由，返回
+        404 <code>ROUTE_NOT_FOUND</code>。
       </p>
       <ul>
         <li>
-          <b>只改分隔符，请求方式、动作名、请求参数都不变。</b
-          >这个改动由框架的生成逻辑和前端的数据接口客户端各改一处完成，业务代码不用动。
+          <b>请求方式、动作名、请求参数都不变。</b
+          >改动集中在框架的生成逻辑和前端的数据接口客户端。
+        </li>
+        <li>
+          <b>暴露名必须是一个 camelCase 路径段</b>，即符合
+          <code>/^[a-z][a-zA-Z0-9]*$/</code>，并且不能是
+          <code>auth</code
+          >、<code>healthz</code>、<code>swagger</code>，声明时就会检查。应用里如果用了
+          <code>sales/orders</code>、<code>sales-orders</code>
+          这类暴露名，需要改名，调用方也要跟着改。
         </li>
         <li>
           这批接口的查询条件是一棵复杂的筛选结构，只能放在请求内容里，所以统一用
           POST 发送。谷歌规范对这种情况是允许的。
         </li>
-        <li>它们是框架统一生成的，本身已经很整齐，不存在各写各的问题。</li>
+        <li>
+          它们的错误同样是统一的错误格式，<code>domain</code> 是
+          <code>app</code>，<code>reason</code> 是数据仓库的错误码。
+        </li>
         <li>
           这条例外只给自动生成的接口。插件手写的接口不得模仿这套写法，一律遵守上面的规则。
         </li>
-        <li>它们同样会出现在自动生成的接口文档里。</li>
       </ul>
     </div>
 
     <div class="exception">
-      <h3>例外二：第三方登录库自带的接口 <span class="pill">保持不变</span></h3>
+      <h3>例外二：文件插件的上传动作 <span class="pill">归入数据接口</span></h3>
+      <p>
+        文件插件在文件类暴露上提供的 <code>POST /api/{name}/uploadOne</code> 和
+        <code>POST /api/{name}/uploadMany</code> 属于上面的数据接口，接收
+        multipart 请求内容，错误同样是统一格式。
+      </p>
+    </div>
+
+    <div class="exception">
+      <h3>例外三：第三方登录库自带的接口 <span class="pill">保持不变</span></h3>
       <p>
         登录、注册、会话、个人 API Key 等功能由第三方登录库 Better Auth
         提供，它的接口统一在 <code>/api/auth/</code> 下，形如
@@ -1046,7 +1224,7 @@
           >，我们改不了；如果为了统一格式再包一层转发，只会多一套要维护的接口，还会跟不上它的升级。
         </li>
         <li>
-          它们在接口文档里单独归为「认证」一类，并注明来自 Better
+          计划在接口文档里单独归为「认证」一类，并注明来自 Better
           Auth，外部开发者可以直接查阅它的官方文档。
         </li>
         <li>
@@ -1057,12 +1235,36 @@
         </li>
       </ul>
     </div>
+
+    <div class="exception">
+      <h3>例外四：健康检查 <span class="pill">保持不变</span></h3>
+      <p><code>GET /api/healthz</code> 保持负载均衡和探针读取的返回格式。</p>
+    </div>
+
+    <div class="exception">
+      <h3>例外五：流式返回 <span class="pill">保留帧格式</span></h3>
+      <p>
+        服务端推送事件和 NDJSON
+        这类流式返回保持流式，流开始之后按各自的帧格式输出。它们的地址、请求方式和输入照常遵守上面的规则。凡是能在开流之前发现的问题，比如输入不合法、资源不存在、没有权限、超出限制，都先用统一的错误格式和对应状态码返回，不能放进一个
+        200 的流里当作错误帧。
+      </p>
+    </div>
   </section>
 
   <section class="stack-lg">
     <div class="sec-head">
       <span class="idx">04</span>
       <h2>接口文档怎么生成</h2>
+    </div>
+    <div class="ask">
+      <div class="label">计划中 · 尚未实现</div>
+      <p>
+        本节是后续 OpenAPI PR 的计划，尚未实现。当前代码用
+        <code
+          >validator('json', (value) =&gt; parseApiInput(Schema, value))</code
+        >
+        校验输入，文档生成接入时会机械地换成下面的写法。
+      </p>
     </div>
     <p>
       接口文档（Swagger，正式名称是
@@ -1083,8 +1285,8 @@
           <tr>
             <td>插件手写的接口</td>
             <td>
-              每个接口用 zod 声明输入和输出的结构，由
-              <code>hono-openapi</code> 读取
+              每个接口用 zod 声明输入和输出的结构，通过
+              <code>@nocobase/app-server/router</code> 转出的辅助函数读取
             </td>
             <td>写接口时顺手声明；这份声明同时负责校验请求</td>
           </tr>
@@ -1141,8 +1343,7 @@
             <td>开发者、外部合作方</td>
             <td class="m">GET /api/swagger/docs</td>
             <td>
-              给人看的在线文档页（Swagger
-              UI），按插件分组列出所有接口，可以直接在页面上填参数试调
+              给人看的在线文档页，按插件分组列出所有接口，可以直接在页面上填参数试调
             </td>
           </tr>
           <tr>
@@ -1172,11 +1373,12 @@
     </div>
     <p class="muted">
       两个地址都放在
-      <code>/api/swagger</code>
-      下，这一段由框架保留，插件和数据表暴露名都不能占用，启动时检测到冲突直接报错。
+      <code>/api/swagger</code> 下，这一段由框架保留：数据接口的暴露名不能叫
+      <code>swagger</code>，声明时就会报错。
     </p>
 
     <h3>谁能访问</h3>
+    <p>下表是方案原稿的设想，最终做法还没定，见本节末尾的「待定事项」。</p>
     <div class="tbl-wrap">
       <table>
         <thead>
@@ -1208,9 +1410,7 @@
     </div>
     <p class="muted">
       这样外部合作方拿到 API Key
-      就能看文档、直接试调，不需要管理员账号。应用也可以通过配置把文档完全公开（比如
-      Hub
-      想让所有人都能看），或者在生产环境完全关闭。看到文档不等于能调用：每个接口在被调用时仍然会单独检查权限。
+      就能看文档、直接试调，不需要管理员账号。看到文档不等于能调用：每个接口在被调用时仍然会单独检查权限。
     </p>
 
     <h3>原始数据长什么样</h3>
@@ -1228,6 +1428,7 @@
       "post": {                                                      <span class="c">// 请求方式</span>
         "tags": ["Hub"],
         "summary": "Deploy an app",
+        "operationId": "hubDeployApp",
         "parameters": [{ "name": "appId", "in": "path", "required": true, "schema": { "type": "string" } }],
         "requestBody": {                                             <span class="c">// 要传什么</span>
           "content": { "application/json": { "schema": {
@@ -1256,8 +1457,7 @@
   }
 }</pre>
     <p class="muted">
-      这份文件对人来说不好读，但所有工具都认：Swagger UI
-      读它生成上面的在线页面，前端读它生成类型定义，Postman、Apifox
+      这份文件对人来说不好读，但所有工具都认：文档页读它生成在线页面，前端读它生成类型定义，Postman、Apifox
       等工具可以直接导入它。
     </p>
 
@@ -1274,12 +1474,11 @@
     </p>
     <pre
       class="snip"
-    ><span class="c">// packages/app/app-server/src/router/swagger.ts（框架内置）</span>
+    ><span class="c">// packages/app/app-server/src/router/swagger.ts（框架内置，示意）</span>
 import { generateSpecs } from 'hono-openapi';
-import { swaggerUI } from '@hono/swagger-ui';
 
 router.get('/swagger', requireDocsAccess(app), async (c) =&gt; {
-  <span class="c">// ① 扫描所有插件的手写路由，读取每个路由上的 describeRoute 和 validator</span>
+  <span class="c">// ① 扫描所有插件的手写路由，读取每个路由上的 describeRoute 和输入声明</span>
   const spec = await generateSpecs(apiRouter, {
     documentation: {
       info: { title: app.name, version: app.version },
@@ -1293,19 +1492,13 @@ router.get('/swagger', requireDocsAccess(app), async (c) =&gt; {
   return c.json(spec);
 });
 
-<span class="c">// ③ Swagger UI 页面：读取上面的 JSON 渲染；静态资源由我们自己的服务提供，内网部署也能打开</span>
-router.get('/swagger/docs', swaggerUI({
-  url: `${app.basePath}/api/swagger`,
-  baseUrl: `${app.basePath}/api/swagger/assets`,
-  manuallySwaggerUIHtml: renderDocsPage,   <span class="c">// 未登录时先提示填入 API Key，再加载文档</span>
-}));
-router.get('/swagger/assets/*', serveSwaggerUiDist());   <span class="c">// swagger-ui-dist 包里的 js / css</span></pre>
+<span class="c">// ③ 文档页面：读取上面的 JSON 渲染；页面资源由应用自己提供，内网和离线部署也能打开</span>
+router.get('/swagger/docs', renderDocsPage);
+router.get('/swagger/assets/*', serveDocsAssets());</pre>
     <p class="muted">
-      <code>@hono/swagger-ui</code> 默认从 jsDelivr CDN
-      加载页面资源，内网或离线部署的应用会打不开，所以改为用它的
-      <code>baseUrl</code> 选项指向我们自己提供的
-      <code>swagger-ui-dist</code>
-      文件。文档在第一次请求时生成并缓存，应用重启前路由不会变。
+      文档页面用哪个界面还没定（见「待定事项」）。不管用哪个，页面资源都由应用自己提供，不从
+      CDN
+      加载，否则内网或离线部署的应用会打不开。文档在第一次请求时生成并缓存，应用重启前路由不会变。
     </p>
 
     <p>
@@ -1333,7 +1526,7 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
       入口，由框架根据暴露配置和字段定义产出，插件不用写。<code>defineOpenApiContribution</code>、<code
         >withPathPrefix</code
       >
-      等是本方案要在框架里新增的函数，名字在实现时再定。Better Auth
+      等是要在框架里新增的函数，名字在实现时再定。Better Auth
       产出的路径是否已经带
       <code>/api/auth</code> 前缀，需要在实现时对照实际输出确认。
     </p>
@@ -1346,7 +1539,11 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
     <h3>接口类型声明规范</h3>
     <p>
       每个 <code>/api</code> 下的手写接口都必须按以下规则声明，CI 会检查。声明用
-      zod 写，同一份声明同时产生 TypeScript 类型、运行时校验和文档。
+      zod 写，同一份声明同时产生 TypeScript
+      类型、运行时校验和文档。所有辅助函数都从
+      <code>@nocobase/app-server/router</code> 导入，插件不直接导入
+      <code>hono-openapi</code>：一旦插件装进第二份
+      <code>hono-openapi</code>，它挂在路由上的声明框架就读不到了。
     </p>
     <div class="tbl-wrap">
       <table>
@@ -1363,8 +1560,8 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
               必须有 <code>describeRoute</code>，至少包含
               <code>tags</code>（插件名，PascalCase，如
               <code>Hub</code>）、<code>summary</code>（一句英文动宾短语，如
-              <code>Deploy an app</code>）、<code>operationId</code>（插件短名 +
-              动词 + 资源，camelCase，全局唯一，如
+              <code>Deploy an app</code>）、<code>operationId</code>（命名空间 +
+              动词 + 资源，camelCase，全应用唯一，如
               <code>hubDeployApp</code>，前端生成的方法名就用它）
             </td>
           </tr>
@@ -1372,8 +1569,11 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
             <td>输入</td>
             <td>
               路径参数、查询参数、请求内容三类，用到哪类就用
-              <code>validator('param' | 'query' | 'json', Schema)</code>
-              声明哪类。处理函数只能用 <code>c.req.valid()</code> 取值，禁止
+              <code>apiValidator('param' | 'query' | 'json', Schema)</code>
+              声明哪类，它取代现在的 <code>validator()</code> +
+              <code>parseApiInput()</code>，校验失败照样返回 400
+              <code>INVALID_INPUT</code> 和字段级错误。处理函数只能用
+              <code>c.req.valid()</code> 取值，禁止
               <code>c.req.json&lt;T&gt;()</code>、<code>c.req.query()</code>
               直接读
             </td>
@@ -1381,7 +1581,7 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
           <tr>
             <td>输入对象</td>
             <td>
-              按输入类别区分：<b>请求内容</b>用
+              按输入类别区分（这一条现在已经生效）：<b>请求内容</b>用
               <code>z.strictObject</code>，多余字段返回 400
               并指出字段名，防止拼错字段被悄悄忽略、防止偷塞字段（与谷歌云 API
               的做法一致，未知字段报
@@ -1397,28 +1597,31 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
             <td>成功返回</td>
             <td>
               每个成功状态码都声明结构，用框架提供的
-              <code>dataOf(Schema)</code>、<code>listOf(Schema)</code> 包出
-              <code>{ data }</code> / <code>{ data, meta }</code>，不手写外层
+              <code>dataResponse(Schema)</code>、<code
+                >listResponse(Schema)</code
+              >
+              包出 <code>{ data }</code> /
+              <code>{ data, meta }</code>，没有内容的 204 用
+              <code>emptyResponse()</code>，不手写外层
             </td>
           </tr>
           <tr>
             <td>错误返回</td>
             <td>
-              引用框架统一的错误组件（如
-              <code>errorResponses(400, 403, 404)</code
-              >），不自己描述错误结构；校验失败由框架统一返回 400 和字段级错误
+              引用框架统一的错误响应
+              <code>apiErrorResponses</code>，不自己描述错误结构
             </td>
           </tr>
           <tr>
             <td>字段类型</td>
             <td>
               字段名 camelCase；ID 一律 <code>z.string()</code>；时间
-              <code>z.iso.datetime()</code>；枚举
+              <code>z.iso.datetime()</code>；布尔 <code>z.boolean()</code>；枚举
               <code>z.enum([...])</code>；「可以不传」用
               <code>.optional()</code>，「可以为空」用
               <code>.nullable()</code>，两者不混用；禁止
               <code>z.any()</code>，<code>z.unknown()</code> 只用于确实任意的
-              JSON 并写明说明
+              JSON 并写明理由
             </td>
           </tr>
           <tr>
@@ -1456,7 +1659,7 @@ export const authOpenApi = defineOpenApiContribution(async (app) =&gt; {
       </table>
     </div>
 
-    <p>按规范写出来的一个完整接口：</p>
+    <p>按规范写出来的一个完整接口（辅助函数的名字和签名以实现为准）：</p>
     <pre
       class="snip"
     ><span class="c">// packages/plugins/app-plugin-hub/server/routes/schemas.ts</span>
@@ -1478,22 +1681,27 @@ export type DeployAppInput = z.infer&lt;typeof DeployAppInput&gt;;   <span class
 export type HubDeployment = z.infer&lt;typeof HubDeployment&gt;;
 
 <span class="c">// packages/plugins/app-plugin-hub/server/routes/apps.ts</span>
-import { describeRoute, validator } from 'hono-openapi';
-import { dataOf, errorResponses } from '@nocobase/app-server/openapi';   <span class="c">// 框架提供（待实现）</span>
+import {
+  apiErrorResponses,
+  apiValidator,
+  dataResponse,
+  describeRoute,
+} from '@nocobase/app-server/router';   <span class="c">// 框架提供（待实现），插件不直接导入 hono-openapi</span>
 
 routes.post(
   '/apps/:appId/deploy',
+  auth.required(),   <span class="c">// 权限检查排在输入校验之前</span>
   describeRoute({
     tags: ['Hub'],
     operationId: 'hubDeployApp',
     summary: 'Deploy an app',
     responses: {
-      202: dataOf(HubDeployment, 'Deployment started'),
-      ...errorResponses(400, 403, 404),
+      202: dataResponse(HubDeployment),
+      ...apiErrorResponses,
     },
   }),
-  validator('param', AppParams),
-  validator('json', DeployAppInput),
+  apiValidator('param', AppParams),
+  apiValidator('json', DeployAppInput),
   async (c) =&gt; {
     const { appId } = c.req.valid('param');   <span class="c">// 已校验、带类型</span>
     const input = c.req.valid('json');
@@ -1502,13 +1710,40 @@ routes.post(
 );</pre>
 
     <p>
-      <b>CI 怎么检查：</b>用 <code>hono-openapi</code> 的
-      <code>includeEmptyPaths</code> 选项列出所有没有声明的
-      <code>/api</code> 路由，列表不为空就失败；再检查每个接口都有
+      <b>CI 怎么检查：</b>新增一个
+      <code>check-openapi</code>
+      脚本，为每个应用模板生成一份文档，然后依次检查：每个接口都有
       <code>tags</code>、<code>summary</code>、<code>operationId</code>，且
-      <code>operationId</code>
-      不重复；最后把生成的文档和上一版比对，有破坏性变化时必须在 PR 里明确确认。
+      <code>operationId</code> 不重复；没有声明的
+      <code>/api</code> 路由直接报错；生成结果和每个模板提交在仓库里的
+      <code>openapi.json</code> 快照一致；再用
+      <code>oasdiff</code> 找出破坏性变化，有破坏性变化时必须在 PR 里明确确认。
     </p>
+
+    <h3>待定事项</h3>
+    <p>以下问题还没有结论，在 OpenAPI PR 里定：</p>
+    <div class="panel">
+      <ul>
+        <li>
+          <b>文档页面用哪个界面</b>：建议用 Swagger
+          UI，页面资源由应用自己提供，因为从 CDN
+          加载会让内网和离线部署的应用打不开。
+        </li>
+        <li>
+          <b>谁能访问</b
+          >：一种是要求登录，再加一个配置开关；另一种是上文原稿的设想，外部合作方凭
+          API Key 访问。两种都待定。
+        </li>
+        <li>
+          <b>数据接口在第一期是否按字段生成结构</b
+          >，还是先只描述通用的请求和返回外形。
+        </li>
+        <li><b>插件补声明时的 changeset 级别。</b></li>
+        <li>
+          <b>Better Auth 文档的合并、前端类型生成是否和文档生成放在同一期。</b>
+        </li>
+      </ul>
+    </div>
   </section>
 
   <section class="stack-lg">
@@ -1566,12 +1801,21 @@ routes.post(
             </td>
           </tr>
           <tr>
-            <td>查看 AI 技能</td>
+            <td>查看权限集</td>
             <td class="m">
-              <span class="was">GET /api/aiSkills:get?key=x</span>
+              <span class="was">GET /api/authz/permission-sets</span>
             </td>
             <td class="m">
-              <span class="now">GET /api/aiEmployees/skills/x</span>
+              <span class="now">GET /api/authorization/permissionSets</span>
+            </td>
+          </tr>
+          <tr>
+            <td>查看 AI 技能</td>
+            <td class="m">
+              <span class="was">GET /api/ai/aiSkills:get?key=x</span>
+            </td>
+            <td class="m">
+              <span class="now">GET /api/aiEmployee/skills/x</span>
             </td>
           </tr>
           <tr>
@@ -1591,7 +1835,7 @@ routes.post(
             <td class="m"><span class="now">POST /api/users/findMany</span></td>
           </tr>
           <tr>
-            <td>创建个人 API Key（例外二）</td>
+            <td>创建个人 API Key（例外三）</td>
             <td class="m">POST /api/auth/api-key/create</td>
             <td class="m">不变</td>
           </tr>
@@ -1633,15 +1877,18 @@ routes.post(
         <ul>
           <li>
             <b>一次性的破坏性改动</b
-            >：旧地址不保留。我们自己的前端会在同一批改动里同步改好；已经在 beta
-            版上做了集成的外部用户需要按对照表调整。
+            >：旧地址不保留。我们自己的前端在同一批改动里已经同步改好；已经在
+            beta 版上做了集成的外部用户需要按对照表调整。Hub 和 hub-cli
+            需要一起升级；应用里从 Registry 安装的
+            <code>nocobase-ai</code> 前端代码，需要和 AI 员工插件一起更新。
           </li>
           <li>
             <b>版本号跳变</b>：改动过的插件发布大版本。目前 1.0 测试版的包（如
             Hub、工作流、用户）会直接进入 2.0 测试版。
           </li>
           <li>
-            <b>约 2 个月的工程投入</b>，第一步 1–2 周即可让新代码不再扩大混乱。
+            <b>工程投入</b>：规范和框架兜底、存量迁移已经完成（PR
+            #530、#532），剩下的是接口文档生成、前端类型生成和框架层的限制配置。
           </li>
           <li>
             <b>暂不做接口版本号</b
@@ -1655,61 +1902,93 @@ routes.post(
   <section class="stack-lg">
     <div class="sec-head">
       <span class="idx">07</span>
-      <h2>执行计划</h2>
+      <h2>执行计划与当前进度</h2>
     </div>
     <p>
-      先定规范、打好底，让新写的代码不再增加混乱；再按对外影响从大到小迁移存量接口；最后把规范放进自动检查，防止回退。
+      先定规范、打好底，让新写的代码不再增加混乱；再迁移存量接口；最后把规范放进自动检查，防止回退。
     </p>
     <div class="lanes">
       <div class="lane">
-        <div class="lane-head"><b>第一步 · 定规矩</b><span>1–2 周</span></div>
+        <div class="lane-head">
+          <b>第一步 · 定规矩</b><span>已完成 · #530 已合并</span>
+        </div>
         <div class="task">
           <b>规范成文</b
-          ><span>写入开发规范和 AI Agent 的技能文档，修正其中的错误示例。</span>
+          ><span
+            >写入根目录 <code>AGENTS.md</code> 和
+            <code>@nocobase/app-skills</code> 的技能文档
+            <code>references/http-api.md</code>。</span
+          >
         </div>
         <div class="task">
           <b>框架兜底</b
-          ><span>所有意外错误都返回统一格式；每个请求带可追踪的编号。</span>
+          ><span
+            >统一的错误格式；所有意外错误都返回不透明的 500；每个响应都带
+            <code>x-request-id</code>；<code>/api</code> 下的未知地址返回 JSON
+            格式的 404 <code>ROUTE_NOT_FOUND</code>，不再返回前端页面。</span
+          >
         </div>
         <div class="task">
           <b>插件模板更新</b
-          ><span>新建插件自带接口规范说明，并指向完整示例。</span>
+          ><span><code>create-plugin</code> 生成的插件自带接口规范说明。</span>
         </div>
       </div>
       <div class="lane">
-        <div class="lane-head"><b>第二步 · 迁移</b><span>约 1 个月</span></div>
+        <div class="lane-head">
+          <b>第二步 · 迁移</b><span>#532 已完成 · 待合并</span>
+        </div>
         <div class="task">
-          <b>接口文档上线</b
+          <b>存量迁移</b
           ><span
-            >框架接入文档生成，数据接口和登录接口直接覆盖，手写接口随迁移逐个补上声明。</span
+            >Hub 和 hub-cli、用户、认证、权限（含三个规则插件）、API
+            Key、工作流、定时任务、多语言、通知、站内信、文件、数据库浏览器、AI
+            员工，以及所有示例插件和应用模板，前端同步改好。</span
           >
         </div>
         <div class="task">
-          <b>先迁 Hub</b><span>它已有外部调用方，收益最大。</span>
+          <b>数据接口</b
+          ><span>分隔符由冒号改为斜杠，暴露名改为必须是 camelCase。</span>
         </div>
         <div class="task">
-          <b>再迁其余插件</b
+          <b>前端</b
           ><span
-            >用户、权限、通知、定时任务、多语言、工作流、AI
-            员工，前端同步改好。</span
+            ><code>ApiClientError</code> 只读标准错误体里的
+            <code>reason</code>，旧的 <code>{ code }</code> 兼容去掉了。</span
           >
         </div>
         <div class="task">
-          <b>发布</b><span>改动过的插件统一发布大版本，附改动对照说明。</span>
+          <b>发布</b
+          ><span
+            >#532 合并后立即发布，改动过的插件统一发布大版本，changeset
+            里附改动对照说明。</span
+          >
+        </div>
+        <div class="task">
+          <b>pro 仓库</b
+          ><span
+            >邮件和 AI 知识库插件的迁移 PR 已经开出，跟在 #532 之后合并。</span
+          >
         </div>
       </div>
       <div class="lane">
-        <div class="lane-head"><b>第三步 · 守住</b><span>季度内</span></div>
+        <div class="lane-head"><b>第三步 · 守住</b><span>后续</span></div>
         <div class="task">
-          <b>自动检查</b
-          ><span>每次提交都比对接口文档，不合规或意外改动接口会被拦下。</span>
+          <b>接口文档生成</b
+          ><span
+            >单独一个 PR，做法见第 04 节，包括
+            <code>check-openapi</code> 自动检查。</span
+          >
         </div>
         <div class="task">
           <b>前端类型自动生成</b><span>从接口文档生成，不再手写。</span>
         </div>
         <div class="task">
-          <b>安全与稳定性</b
-          ><span>请求大小限制、超时、限流等统一在框架层实现。</span>
+          <b>框架层限制</b
+          ><span
+            >计划在 <code>config.yml</code> 里加一个
+            <code>api</code>
+            段，配置全局请求内容大小上限、请求超时和限流，默认都不限制、不开启；正在设计中。</span
+          >
         </div>
       </div>
     </div>
@@ -1729,10 +2008,20 @@ routes.post(
       </li>
       <li>
         <span
-          >自动生成的数据接口保留原有动作（只换分隔符），第三方登录库自带的接口保持原样，作为两类例外。</span
+          >以下五类接口作为例外：自动生成的数据接口保留原有动作（只换分隔符）；文件插件的
+          <code>uploadOne</code> /
+          <code>uploadMany</code> 归入数据接口；第三方登录库在
+          <code>/api/auth/</code> 下的接口保持原样；<code
+            >GET /api/healthz</code
+          >
+          保持原样；流式返回保持各自的帧格式，开流前能发现的错误先按统一格式返回。</span
         >
       </li>
-      <li><span>接口文档（Swagger）从代码自动生成，不手写。</span></li>
+      <li>
+        <span
+          >接口文档（Swagger）从代码自动生成，不手写，在后续 PR 里实现。</span
+        >
+      </li>
       <li>
         <span
           >现有接口一次性迁移，不保留旧地址；改动过的插件发布大版本，接受 1.0
@@ -1740,16 +2029,21 @@ routes.post(
         >
       </li>
       <li><span>现阶段不做接口版本号。</span></li>
-      <li><span>按三步计划执行，第一步立即启动。</span></li>
+      <li>
+        <span
+          >按第 07 节的进度继续：#532 合并后立即发布，接口文档生成另起
+          PR。</span
+        >
+      </li>
     </ul>
 
     <details>
       <summary>附：给工程师的细则摘要</summary>
       <div class="stack">
         <p class="muted">
-          完整细则见仓库根目录
-          <code>http-api-spec-proposal.md</code>，定稿后收入
-          <code>AGENTS.md</code> 和插件开发技能文档。
+          完整细则见 <code>@nocobase/app-skills</code> 的
+          <code>references/http-api.md</code> 和根目录
+          <code>AGENTS.md</code>，下面是摘要。
         </p>
         <div class="tbl-wrap">
           <table>
@@ -1796,19 +2090,19 @@ routes.post(
                 <td>删除</td>
                 <td class="m">DELETE</td>
                 <td class="m">/api/hub/apps/{appId}</td>
-                <td class="m">204 无内容</td>
+                <td class="m">204 无内容，后台继续时 202</td>
               </tr>
               <tr>
                 <td>资源上的动作</td>
                 <td class="m">POST</td>
                 <td class="m">/api/hub/apps/{appId}/deploy</td>
-                <td class="m">200 {data} / 202</td>
+                <td class="m">200 {data} / 202 / 204</td>
               </tr>
               <tr>
                 <td>集合上的动作</td>
                 <td class="m">POST</td>
                 <td class="m">/api/notificationInApp/messages/markAllRead</td>
-                <td class="m">200 {data} / 204</td>
+                <td class="m">200 {data} / 202 / 204</td>
               </tr>
             </tbody>
           </table>
@@ -1826,7 +2120,7 @@ routes.post(
               <tr>
                 <td class="m">400</td>
                 <td class="m">INVALID_ARGUMENT / FAILED_PRECONDITION</td>
-                <td>参数不合法 / 当前状态不允许该操作</td>
+                <td>参数不合法 / 当前状态不允许该操作；不再有 422</td>
               </tr>
               <tr>
                 <td class="m">401</td>
@@ -1836,17 +2130,30 @@ routes.post(
               <tr>
                 <td class="m">403</td>
                 <td class="m">PERMISSION_DENIED</td>
-                <td>无权限；先于「是否存在」判断</td>
+                <td>无权限；先于输入校验和「是否存在」判断</td>
               </tr>
               <tr>
                 <td class="m">404</td>
                 <td class="m">NOT_FOUND</td>
-                <td>有权限但资源不存在</td>
+                <td>有权限，但地址里指名的资源不存在</td>
               </tr>
               <tr>
                 <td class="m">409</td>
                 <td class="m">ALREADY_EXISTS / ABORTED</td>
                 <td>重复 / 并发修改冲突</td>
+              </tr>
+              <tr>
+                <td class="m">413</td>
+                <td class="m">INVALID_ARGUMENT + httpStatus</td>
+                <td>
+                  只用于请求内容超过大小上限，<code>reason</code> 为
+                  <code>BODY_TOO_LARGE</code>
+                </td>
+              </tr>
+              <tr>
+                <td class="m">415</td>
+                <td class="m">INVALID_ARGUMENT + httpStatus</td>
+                <td>只用于不支持的请求内容类型</td>
               </tr>
               <tr>
                 <td class="m">429</td>
@@ -1856,26 +2163,110 @@ routes.post(
               <tr>
                 <td class="m">500</td>
                 <td class="m">INTERNAL</td>
-                <td>意外错误，不回显内部信息</td>
+                <td>
+                  意外错误，<code>reason</code> 为
+                  <code>INTERNAL_ERROR</code>，不回显内部信息
+                </td>
               </tr>
               <tr>
                 <td class="m">503</td>
                 <td class="m">UNAVAILABLE</td>
-                <td>依赖服务不可用</td>
+                <td>依赖服务不可用；不再有 502</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="muted">
-          其他要点：「查看」类请求不得修改数据；删除请求不带请求体；分页参数为
-          <code>pageSize</code> + <code>pageToken</code>（返回
-          <code>nextPageToken</code>，均为 AIP-158 规定的名字）或
-          <code>page</code> + <code>pageSize</code>，每页默认 20、最多 100；ID
-          以字符串返回；时间用 RFC 3339；搜索参数统一为 <code>q</code>，排序为
-          <code>orderBy</code>；路径中的 ID 由客户端
-          <code>encodeURIComponent</code> 编码；固定路径段优先于
-          <code>{id}</code>，冲突启动即报错。
-        </p>
+        <p class="muted">其他要点：</p>
+        <ul class="notes">
+          <li>
+            <b>地址</b>：命名空间是包名去掉 <code>app-plugin-</code> 后的
+            camelCase，单复数均可；资源名和插件名不同时写成「命名空间 +
+            资源」（<code>/api/scheduler/schedules</code>）；挂在别的插件分发器下的插件沿用宿主的命名空间；<code>/swagger</code>、<code>/auth</code>、<code
+              >/healthz</code
+            >
+            为保留段。固定段注册在 <code>/:id</code> 之前，用户自起的 ID
+            与固定段同名时在创建时返回 400
+            <code>INVALID_ARGUMENT</code>
+            和字段错误；请求方式和地址完全相同的重复注册，启动即报错。路径中的
+            ID 由客户端 <code>encodeURIComponent</code> 编码。
+          </li>
+          <li>
+            <b>请求方式</b
+            >：「查看」类请求不得修改任何状态，包括顺带删除过期数据、改写会话或
+            Cookie；删除请求不带请求体，需要确认时用
+            <code>?confirm=true</code>。
+          </li>
+          <li>
+            <b>分页</b>：<code>pageSize</code> + <code>pageToken</code>（返回
+            <code>nextPageToken</code>，均为 AIP-158 规定的名字）或
+            <code>page</code> + <code>pageSize</code>，每页默认 20、最多
+            100；条数有限的配置类列表可以不分页，但仍返回
+            <code>meta.total</code>；<code>meta</code>
+            可以带额外字段。搜索参数为 <code>q</code>，排序为
+            <code>orderBy</code>。
+          </li>
+          <li>
+            <b>数据格式</b>：ID 在返回和传入时都是字符串；时间用 RFC
+            3339；布尔值是真正的布尔值。
+          </li>
+          <li>
+            <b>输入</b>：用 zod 通过 <code>validator()</code> +
+            <code>parseApiInput()</code> 校验，请求内容用
+            <code>z.strictObject</code>，查询和路径参数用
+            <code>z.object</code>；禁止 <code>z.any()</code>，<code
+              >z.unknown()</code
+            >
+            只在写明理由时使用。每个请求内容都配
+            <code>bodyLimit</code>，超出返回 413 <code>BODY_TOO_LARGE</code>。
+          </li>
+          <li>
+            <b>权限</b>：权限检查放在
+            <code>validator()</code>
+            之前的中间件里，先于「是否存在」判断；权限通过之前不写入任何东西。
+          </li>
+          <li>
+            <b>错误</b>：抛 <code>ApiError</code>，不手写错误体。插件只用
+            <code>apiErrorHandler(error, context)</code>
+            这一个错误接口：路由自己的
+            <code>onError</code> 只负责把本插件的领域错误转成
+            <code>ApiError</code>，其余一律交给它；框架认得
+            <code>ApiError</code>、<code>HTTPException</code>、带 4xx
+            <code>status</code> 的错误，以及状态不是
+            <code>INTERNAL</code> 的数据仓库错误，其余重新抛出、按 500
+            处理。插件不自己翻译数据仓库错误。
+          </li>
+          <li>
+            <b>domain</b>：一个插件一个
+            <code>domain</code>，即它的命名空间；转交的错误保留原插件的
+            <code>domain</code>（如 <code>LAST_ASSIGNMENT</code> 仍是
+            <code>authorization</code>）；框架和数据仓库的错误用
+            <code>app</code>。
+          </li>
+          <li>
+            <b>数据仓库错误</b>：每个错误码在 <code>@nocobase/db</code> 的
+            <code>repositoryErrorStatuses</code> 里声明自己的状态；状态为
+            <code>INTERNAL</code> 的（服务端自己的问题，如 Policy
+            不合法）按不透明的 500 返回；其余保留错误码作为
+            <code>reason</code>，<code>path</code> 和 <code>details</code> 放进
+            <code>metadata</code>，<code>INVALID_ARGUMENT</code> 类还会在
+            <code>fieldViolations</code> 里指出字段。<code
+              >RELATION_TARGET_NOT_FOUND</code
+            >
+            是 400，因为缺的是请求内容里引用的目标。
+          </li>
+          <li>
+            <b>框架兜底</b>：<code>/api</code> 下的未知地址返回 JSON 格式的 404
+            <code>ROUTE_NOT_FOUND</code>，不返回前端页面；意外错误返回 500
+            <code>INTERNAL_ERROR</code>；每个响应都带
+            <code>x-request-id</code>；错误体字段包括
+            <code>fieldViolations</code> 和 <code>metadata</code>。
+          </li>
+          <li>
+            <b>框架层限制</b>：计划在 <code>config.yml</code> 的
+            <code>api</code>
+            段配置全局请求内容上限、请求超时和限流，默认都不限制、不开启，正在设计中。
+          </li>
+        </ul>
       </div>
     </details>
   </section>
@@ -1888,7 +2279,9 @@ routes.post(
     >
     <span
       >现状数据来自 HTTP API 体检报告，基于 develop @ fac3d58f
-      的静态代码阅读。</span
+      的静态代码阅读。实现以 <code>@nocobase/app-skills</code> 的
+      <code>references/http-api.md</code> 和根目录
+      <code>AGENTS.md</code> 为准。</span
     >
   </footer>
 </div>
