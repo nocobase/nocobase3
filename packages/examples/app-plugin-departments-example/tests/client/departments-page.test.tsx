@@ -143,10 +143,10 @@ function respond(options: RequestOptions): Promise<unknown> {
   return Promise.resolve({ data: {} });
 }
 
-function failure(status: number, code: string): ApiClientError {
+function failure(status: number, reason: string): ApiClientError {
   return new ApiClientError('Request failed', {
     status,
-    code,
+    reason,
     method: 'PUT',
     url: '/api',
   });

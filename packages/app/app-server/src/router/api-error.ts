@@ -242,6 +242,42 @@ export const apiNotFoundHandler: NotFoundHandler = (context) =>
     }),
   );
 
+/** One problem a schema reported, as zod and Standard Schema issues are shaped. */
+export interface ApiInputIssue {
+  readonly path: readonly PropertyKey[];
+  readonly message: string;
+  readonly code?: string;
+}
+
+/** A schema with zod's `safeParse`, matched by shape so the framework does not depend on a zod version. */
+export interface ApiInputSchema<T> {
+  safeParse(
+    value: unknown,
+  ):
+    | { readonly success: true; readonly data: T }
+    | { readonly success: false; readonly error: { readonly issues: readonly ApiInputIssue[] } };
+}
+
+/**
+ * Validate request input against a schema, returning the parsed value or throwing a 400 `INVALID_ARGUMENT` that names
+ * every invalid field. Use it inside Hono's `validator()` so handlers read only `context.req.valid(...)`.
+ */
+export function parseApiInput<T>(schema: ApiInputSchema<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  throw new ApiError({
+    status: 'INVALID_ARGUMENT',
+    reason: 'INVALID_INPUT',
+    domain: appErrorDomain,
+    message: 'The request contains invalid fields.',
+    fieldViolations: result.error.issues.map((issue) => ({
+      field: issue.path.map(String).join('.'),
+      description: issue.message,
+      ...(issue.code ? { reason: issue.code } : {}),
+    })),
+  });
+}
+
 export const requestIdHeader = 'x-request-id';
 
 declare module 'hono' {

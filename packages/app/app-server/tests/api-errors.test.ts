@@ -4,8 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import { Application } from '../src/application/index.js';
 import { AppConfig, createAppPaths } from '../src/config/index.js';
+import { validator } from 'hono/validator';
+
 import {
   ApiError,
+  type ApiInputSchema,
+  parseApiInput,
   defineApiRoutes,
   defineRootRoutes,
 } from '../src/router/index.js';
@@ -15,6 +19,19 @@ await config.loadAll();
 config.mergeDefaults({
   app: { name: 'main', publicBasePath: '/main', internalBasePath: '', publicApiUrl: '/main/api' },
 });
+
+// Shaped like zod's `safeParse`, which `parseApiInput` matches structurally.
+const deployInput: ApiInputSchema<{ releaseId: string }> = {
+  safeParse(value) {
+    const releaseId = (value as { releaseId?: unknown } | null)?.releaseId;
+    return typeof releaseId === 'string'
+      ? { success: true, data: { releaseId } }
+      : {
+          success: false,
+          error: { issues: [{ path: ['releaseId'], message: 'Expected a string.', code: 'invalid_type' }] },
+        };
+  },
+};
 
 function createApp(): Application {
   const app = new Application({ config, paths: createAppPaths({ rootDir: '/test/app' }) });
@@ -60,6 +77,11 @@ function createApp(): Application {
         throw new Error('database password is hunter2');
       });
       router.get('/ok', (context) => context.json({ data: true }));
+      router.post(
+        '/apps/:appId/deploy',
+        validator('json', (value) => parseApiInput(deployInput, value)),
+        (context) => context.json({ data: context.req.valid('json') }, 202),
+      );
       return router;
     }),
   );
@@ -163,5 +185,29 @@ describe('/api errors', () => {
 
     expect(generated.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
     expect(unsafe.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('validates input and names the invalid fields', async () => {
+    const deploy = (body: unknown) =>
+      request(createApp(), '/api/apps/7/deploy', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    const accepted = await deploy({ releaseId: 'r1' });
+    expect(accepted.status).toBe(202);
+    expect(await accepted.json()).toEqual({ data: { releaseId: 'r1' } });
+
+    const rejected = await deploy({});
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'INVALID_INPUT',
+        domain: 'app',
+        fieldViolations: [{ field: 'releaseId', description: 'Expected a string.', reason: 'invalid_type' }],
+      },
+    });
   });
 });
