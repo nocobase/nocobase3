@@ -2,11 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { RepositoryError } from '@nocobase/db';
 
-import type {
-  Context,
-  MiddlewareHandler,
-  NotFoundHandler,
-} from 'hono';
+import type { Context, MiddlewareHandler, NotFoundHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
