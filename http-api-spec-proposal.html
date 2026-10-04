@@ -1283,7 +1283,7 @@
 </tr>
 <tr>
 <td>权限插件分发器后面的设置接口</td>
-<td>规则插件用 <code>authz.routes.add(path, createRouteHandler(router))</code> 注册的路由，由权限插件读出来，合并成 <code>/api/authorization/...</code> 下的接口</td>
+<td>规则插件用 <code>authz.routes.add(path, createRouteHandler(router))</code> 注册的路由，由权限插件启动时通过 <code>addApiRouter()</code> 登记，以 <code>/api/authorization/...</code> 下的接口进入文档</td>
 <td>和手写接口一样，在路由上写 <code>describeRoute()</code></td>
 </tr>
 <tr>
@@ -1428,7 +1428,7 @@
 }</pre>
 <h3>代码里怎么接起来</h3>
 <p>整条链路分四块，插件开发者只需要做第四块里「写声明」这一件事。</p>
-<p><strong>1. 框架：文档服务和两个地址。</strong> <code>@nocobase/app-server</code> 在 <code>RouterProvider</code> 里注册 <code>apiDocsToken</code> 对应的 <code>ApiDocsService</code>，应用组装好 <code>/api</code> 路由后把它交给这个服务，并挂上 <code>/api/swagger</code>、<code>/api/swagger/docs</code> 和页面资源这几个路由，它们本身在文档里是隐藏的。<code>ApiDocsService</code> 对插件开放四个方法：</p>
+<p><strong>1. 框架：文档服务和两个地址。</strong> <code>@nocobase/app-server</code> 在 <code>RouterProvider</code> 里注册 <code>apiDocsToken</code> 对应的 <code>ApiDocsService</code>，应用组装好 <code>/api</code> 路由后把它交给这个服务，并挂上 <code>/api/swagger</code>、<code>/api/swagger/docs</code> 和页面资源这几个路由，它们本身在文档里是隐藏的。<code>ApiDocsService</code> 对插件开放六个方法：</p>
 <div class="tbl-wrap">
 <table>
 <thead>
@@ -1447,6 +1447,14 @@
 <td>合并路由声明之外的接口、组件、分组和认证方式，片段里的路径写完整的 <code>/api/...</code></td>
 </tr>
 <tr>
+<td><code>addApiRouter({ owner, prefix, scope?, router })</code></td>
+<td>登记运行时分发器转发请求的 Hono 路由器，它的路由按 <code>prefix</code> 加自身路径进入文档和检查；<code>scope</code> 是分发器实际转给它的子路径，在它之外声明的路由永远到不了，不进文档、报为未声明</td>
+</tr>
+<tr>
+<td><code>addUndeclaredApiRoute({ owner, method, path, reason })</code></td>
+<td>登记看不进去的转发目标，比如一个普通函数：它总被报告为未声明，<code>pnpm openapi:check</code> 会打印 <code>reason</code>，也不进文档</td>
+</tr>
+<tr>
 <td><code>getDocument()</code></td>
 <td>取当前文档，第一次调用时生成</td>
 </tr>
@@ -1459,7 +1467,7 @@
 </div>
 <p>合并片段时，和已有组件重名但内容不同的组件、重复的 <code>operationId</code> 会加上片段的命名空间前缀；和已声明路由同方法同路径的操作会被丢掉并给出警告，因为真正响应请求的是声明过的路由。</p>
 <p><strong>2. 认证插件和 API Key 插件：访问检查、认证方式和 Better Auth 的接口。</strong> 认证插件注册会话检查，补上 <code>cookieAuth</code>，再调用 Better Auth 自己的 OpenAPI 生成器，把它服务的全部接口（包括应用配置的 Better Auth 插件的接口）以 <code>/api/auth/...</code> 的完整路径合并进来，归入 <code>Authentication</code> 分组。只在浏览器里走的步骤，比如第三方登录跳转、OAuth 回调、邮件里的链接和错误页，不放进文档；Better Auth 自带的 <code>/reference</code> 页面也不提供，全应用只有一个文档入口。API Key 插件注册 API Key 检查，补上 <code>apiKeyAuth</code>。</p>
-<p><strong>3. 权限插件：分发器后面的设置接口。</strong> <code>/api/authorization</code> 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 <code>authz.routes.add(path, createRouteHandler(router))</code> 注册一个 Hono 路由，路由里的每一条都用 <code>describeRoute()</code> 声明。这样注册的路由会以完整的 <code>/api/authorization/...</code> 路径自动进入文档，也和其他路由一样接受检查。这背后是 app-server 提供的通用机制：任何通过运行时分发器转发请求的插件，都用 <code>apiDocsToken</code> 的 <code>addApiRouter()</code> 登记被转发的路由器，用 <code>addUndeclaredApiRoute()</code> 登记看不进去的转发目标（比如一个普通函数，它总是被报告为未声明），权限插件启动时调用的 <code>documentAuthorizationRoutes()</code> 就是基于它们实现的。</p>
+<p><strong>3. 权限插件：分发器后面的设置接口。</strong> <code>/api/authorization</code> 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 <code>authz.routes.add(path, createRouteHandler(router))</code> 注册一个 Hono 路由，路由里的每一条都用 <code>describeRoute()</code> 声明。这样注册的路由会以完整的 <code>/api/authorization/...</code> 路径自动进入文档，也和其他路由一样接受检查。这背后是 app-server 提供的通用机制：任何通过运行时分发器转发请求的插件，都用 <code>apiDocsToken</code> 的 <code>addApiRouter()</code> 登记被转发的路由器，用 <code>addUndeclaredApiRoute()</code> 登记看不进去的转发目标（比如一个普通函数，它总是被报告为未声明），权限插件启动时调用的 <code>documentAuthorizationRoutes()</code> 就是基于它们实现的，每个注册路径都作为 <code>scope</code> 传进去，路由器在注册路径之外声明的路由会被报出来。</p>
 <p><strong>4. 每个插件和应用：在路由上写声明。</strong> 写法见下一节。</p>
 <h3>接口声明规范</h3>
 <p>每个 <code>/api</code> 下的手写接口都必须按以下规则声明，CI 会检查。声明用 zod 写，同一份声明同时产生 TypeScript 类型、运行时校验和文档。所有辅助函数都从 <code>@nocobase/app-server/router</code> 导入，插件不直接导入也不声明 <code>hono-openapi</code>：声明是挂在中间件上的，键是 <code>hono-openapi</code> 模块自己的一个 symbol，插件一旦装进第二份 <code>hono-openapi</code>，它挂上的声明框架就读不到了。<code>pnpm peers:check</code> 会拦下声明了 <code>hono-openapi</code> 的插件。</p>
@@ -1494,7 +1502,7 @@
 </tr>
 <tr>
 <td>错误返回</td>
-<td>只列这个接口真的会返回的状态：常见的 400、401、403、500 用 <code>...apiErrorResponses</code> 一次展开，其余用 <code>apiErrorResponse(404)</code> 这样逐个加，需要说明 <code>reason</code> 时写成 <code>apiErrorResponse(409, '…')</code>。错误结构都是统一的错误体，不自己描述</td>
+<td>只列这个接口真的会返回的状态：既校验输入又检查权限的接口，400、401、403、500 用 <code>...apiErrorResponses</code> 一次展开；没有输入就不列 400，不查权限就不列 403，改成逐个写 <code>apiErrorResponse()</code>；其余用 <code>apiErrorResponse(404)</code> 这样逐个加，需要说明 <code>reason</code> 时写成 <code>apiErrorResponse(409, '…')</code>。错误结构都是统一的错误体，不自己描述</td>
 </tr>
 <tr>
 <td>返回结构</td>
@@ -1554,6 +1562,7 @@ import {
 router.post(
   '/orders/:orderId/cancel',
   auth.required(), <span class="c">// 登录和权限检查排在最前</span>
+  ordersAccess('cancel'), <span class="c">// 权限中间件：没有权限时返回 403，所以下面列了 403</span>
   describeRoute({
     tags: ['Orders'],
     summary: 'Cancel an order',
@@ -1591,14 +1600,14 @@ router.post(
 <li><strong>额外加在记录上的字段</strong>：暴露自己在每条返回记录上加、数据表里却没有的字段，比如文件插件的 <code>contentUrl</code>，在暴露配置里用 <code>computedFields: { contentUrl: schema }</code> 声明。它只影响文档：在记录结构里标为只读，不出现在 <code>values</code>、<code>filter</code>、<code>sort</code> 里；和数据表字段重名会在创建路由时报错。</li>
 </ul>
 <h3>CI 检查</h3>
-<p><code>pnpm openapi:check</code>（脚本 <code>scripts/check-openapi.mjs</code>）为每个应用模板生成一份文档，出现以下任何一种情况就失败：</p>
+<p><code>pnpm openapi:check</code>（脚本 <code>scripts/check-openapi.mjs</code>）把默认、示例和 Hub 三个模板各自在 SQLite 测试数据库上启动起来（不需要数据库服务，也不需要先构建），生成各自的文档，出现以下任何一种情况就失败：</p>
 <ul class="notes">
 <li>有没写声明的路由。</li>
 <li>没有隐藏的接口缺少 <code>tags</code>、<code>summary</code> 或 <code>operationId</code>。</li>
 <li><code>operationId</code> 重复。</li>
 <li><code>findApiDocumentSchemaProblems()</code> 报出问题：引用了文档里不存在的结构，或者组件名是转换器生成的（如 <code>__schema0</code>）而不是声明出来的。</li>
 </ul>
-<p>不提交每个模板的 <code>openapi.json</code> 快照，也不用 <code>oasdiff</code> 比对破坏性变化。各插件的测试里也做同样的断言：应用启动后 <code>findUndeclaredApiRoutes(app)</code> 不含本插件的路由，<code>findApiDocumentSchemaProblems(document)</code> 为空，文档里有本插件的 <code>operationId</code>。</p>
+<p>每个问题下面都会打印怎么修；通过 <code>addUndeclaredApiRoute()</code> 登记的路由、在 <code>scope</code> 之外声明的路由，会连同各自的原因一起打印。它在 CI 的 Quality 工作流（Typecheck 那一项）里运行，也是 <code>pnpm check</code> 的一部分；<code>node scripts/check-openapi.mjs default</code> 只检查一个模板。pro 仓库用同一个脚本检查默认模板加上商业插件组成的应用。不提交每个模板的 <code>openapi.json</code> 快照，也不用 <code>oasdiff</code> 比对破坏性变化。各插件的测试里也做同样的断言：应用启动后 <code>findUndeclaredApiRoutes(app)</code> 不含本插件的路由，<code>findApiDocumentSchemaProblems(document)</code> 为空，文档里有本插件的 <code>operationId</code>。</p>
 <h3>原来的待定事项，现在的结论</h3>
 <ul class="notes">
 <li><strong>文档页面用哪个界面</strong>：用 Swagger UI。<code>swagger-ui-dist</code> 是 <code>@nocobase/app-server</code> 的开发依赖，构建时只复制需要的文件进它的 <code>dist</code>，由应用自己提供，不走 CDN。</li>

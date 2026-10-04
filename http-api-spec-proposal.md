@@ -200,12 +200,12 @@ ID 一律以文字形式传递，返回和传入都是。我们的 ID 位数很�
 
 ### 文档的四个来源
 
-| 接口类型                     | 文档从哪来                                                                                                                             | 开发者要做什么                                                         |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 插件和应用手写的接口         | 每个接口用 `describeRoute()` 写说明，用 `apiValidator()` 声明输入，用 zod 声明返回结构，都从 `@nocobase/app-server/router` 导入        | 写接口时顺手声明；输入声明同时负责校验请求                             |
-| 自动生成的数据接口           | 框架从暴露配置和数据表的字段定义逐个字段推导                                                                                           | 什么都不用做；暴露额外加在记录上的字段时，用 `computedFields` 声明一下 |
-| 权限插件分发器后面的设置接口 | 规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册的路由，由权限插件读出来，合并成 `/api/authorization/...` 下的接口 | 和手写接口一样，在路由上写 `describeRoute()`                           |
-| 登录相关接口（Better Auth）  | Better Auth 自己的 OpenAPI 生成器产出，由认证插件通过 `addFragment()` 合并进来，归入 `Authentication` 分组                             | 什么都不用做                                                           |
+| 接口类型                     | 文档从哪来                                                                                                                                                           | 开发者要做什么                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 插件和应用手写的接口         | 每个接口用 `describeRoute()` 写说明，用 `apiValidator()` 声明输入，用 zod 声明返回结构，都从 `@nocobase/app-server/router` 导入                                      | 写接口时顺手声明；输入声明同时负责校验请求                             |
+| 自动生成的数据接口           | 框架从暴露配置和数据表的字段定义逐个字段推导                                                                                                                         | 什么都不用做；暴露额外加在记录上的字段时，用 `computedFields` 声明一下 |
+| 权限插件分发器后面的设置接口 | 规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册的路由，由权限插件启动时通过 `addApiRouter()` 登记，以 `/api/authorization/...` 下的接口进入文档 | 和手写接口一样，在路由上写 `describeRoute()`                           |
+| 登录相关接口（Better Auth）  | Better Auth 自己的 OpenAPI 生成器产出，由认证插件通过 `addFragment()` 合并进来，归入 `Authentication` 分组                                                           | 什么都不用做                                                           |
 
 ### 生成流程
 
@@ -345,20 +345,22 @@ Hub 的发布密钥（`Authorization: Bearer hub_app_…`）不是全应用通�
 
 整条链路分四块，插件开发者只需要做第四块里「写声明」这一件事。
 
-**1. 框架：文档服务和两个地址。** `@nocobase/app-server` 在 `RouterProvider` 里注册 `apiDocsToken` 对应的 `ApiDocsService`，应用组装好 `/api` 路由后把它交给这个服务，并挂上 `/api/swagger`、`/api/swagger/docs` 和页面资源这几个路由，它们本身在文档里是隐藏的。`ApiDocsService` 对插件开放四个方法：
+**1. 框架：文档服务和两个地址。** `@nocobase/app-server` 在 `RouterProvider` 里注册 `apiDocsToken` 对应的 `ApiDocsService`，应用组装好 `/api` 路由后把它交给这个服务，并挂上 `/api/swagger`、`/api/swagger/docs` 和页面资源这几个路由，它们本身在文档里是隐藏的。`ApiDocsService` 对插件开放六个方法：
 
-| 方法                         | 用途                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `addAccess({ name, check })` | 注册访问检查，任何一个放行即可读文档                                          |
-| `addFragment(fragment)`      | 合并路由声明之外的接口、组件、分组和认证方式，片段里的路径写完整的 `/api/...` |
-| `getDocument()`              | 取当前文档，第一次调用时生成                                                  |
-| `invalidate()`               | 丢掉缓存，下次请求重新生成                                                    |
+| 方法                                                     | 用途                                                                                                                                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addAccess({ name, check })`                             | 注册访问检查，任何一个放行即可读文档                                                                                                                                         |
+| `addFragment(fragment)`                                  | 合并路由声明之外的接口、组件、分组和认证方式，片段里的路径写完整的 `/api/...`                                                                                                |
+| `addApiRouter({ owner, prefix, scope?, router })`        | 登记运行时分发器转发请求的 Hono 路由器，它的路由按 `prefix` 加自身路径进入文档和检查；`scope` 是分发器实际转给它的子路径，在它之外声明的路由永远到不了，不进文档、报为未声明 |
+| `addUndeclaredApiRoute({ owner, method, path, reason })` | 登记看不进去的转发目标，比如一个普通函数：它总被报告为未声明，`pnpm openapi:check` 会打印 `reason`，也不进文档                                                               |
+| `getDocument()`                                          | 取当前文档，第一次调用时生成                                                                                                                                                 |
+| `invalidate()`                                           | 丢掉缓存，下次请求重新生成                                                                                                                                                   |
 
 合并片段时，和已有组件重名但内容不同的组件、重复的 `operationId` 会加上片段的命名空间前缀；和已声明路由同方法同路径的操作会被丢掉并给出警告，因为真正响应请求的是声明过的路由。
 
 **2. 认证插件和 API Key 插件：访问检查、认证方式和 Better Auth 的接口。** 认证插件注册会话检查，补上 `cookieAuth`，再调用 Better Auth 自己的 OpenAPI 生成器，把它服务的全部接口（包括应用配置的 Better Auth 插件的接口）以 `/api/auth/...` 的完整路径合并进来，归入 `Authentication` 分组。只在浏览器里走的步骤，比如第三方登录跳转、OAuth 回调、邮件里的链接和错误页，不放进文档；Better Auth 自带的 `/reference` 页面也不提供，全应用只有一个文档入口。API Key 插件注册 API Key 检查，补上 `apiKeyAuth`。
 
-**3. 权限插件：分发器后面的设置接口。** `/api/authorization` 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册一个 Hono 路由，路由里的每一条都用 `describeRoute()` 声明。这样注册的路由会以完整的 `/api/authorization/...` 路径自动进入文档，也和其他路由一样接受检查。这背后是 app-server 提供的通用机制：任何通过运行时分发器转发请求的插件，都用 `apiDocsToken` 的 `addApiRouter()` 登记被转发的路由器，用 `addUndeclaredApiRoute()` 登记看不进去的转发目标（比如一个普通函数，它总是被报告为未声明），权限插件启动时调用的 `documentAuthorizationRoutes()` 就是基于它们实现的。
+**3. 权限插件：分发器后面的设置接口。** `/api/authorization` 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册一个 Hono 路由，路由里的每一条都用 `describeRoute()` 声明。这样注册的路由会以完整的 `/api/authorization/...` 路径自动进入文档，也和其他路由一样接受检查。这背后是 app-server 提供的通用机制：任何通过运行时分发器转发请求的插件，都用 `apiDocsToken` 的 `addApiRouter()` 登记被转发的路由器，用 `addUndeclaredApiRoute()` 登记看不进去的转发目标（比如一个普通函数，它总是被报告为未声明），权限插件启动时调用的 `documentAuthorizationRoutes()` 就是基于它们实现的，每个注册路径都作为 `scope` 传进去，路由器在注册路径之外声明的路由会被报出来。
 
 **4. 每个插件和应用：在路由上写声明。** 写法见下一节。
 
@@ -366,21 +368,21 @@ Hub 的发布密钥（`Authorization: Bearer hub_app_…`）不是全应用通�
 
 每个 `/api` 下的手写接口都必须按以下规则声明，CI 会检查。声明用 zod 写，同一份声明同时产生 TypeScript 类型、运行时校验和文档。所有辅助函数都从 `@nocobase/app-server/router` 导入，插件不直接导入也不声明 `hono-openapi`：声明是挂在中间件上的，键是 `hono-openapi` 模块自己的一个 symbol，插件一旦装进第二份 `hono-openapi`，它挂上的声明框架就读不到了。`pnpm peers:check` 会拦下声明了 `hono-openapi` 的插件。
 
-| 项目       | 规则                                                                                                                                                                                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 接口说明   | 必须有 `describeRoute()`，至少包含 `tags`（插件名的 PascalCase，如 `Hub`、`Users`、`AiEmployee`）、`summary`（一句英文动宾短语，如 `Deploy a Release`）、`operationId`（命名空间 + 动词 + 资源，camelCase，全应用唯一，如 `hubDeployApp`）。应用自己的接口以资源名或应用名为分组           |
-| 位置       | `describeRoute()` 放在登录和权限中间件之后、`apiValidator()` 之前                                                                                                                                                                                                                          |
-| 输入       | 路径参数、查询参数、请求内容、请求头，用到哪类就用 `apiValidator('param' \| 'query' \| 'json' \| 'header', Schema)` 声明哪类。它取代 `validator()` + `parseApiInput()`，校验失败照样返回 400 `INVALID_INPUT` 和字段级错误。处理函数只能用 `c.req.valid()` 取值                             |
-| 输入对象   | 请求内容用 `z.strictObject`，多余字段返回 400 并指出字段名，文档里也写成封闭对象；查询参数和路径参数用 `z.object`                                                                                                                                                                          |
-| 成功返回   | 每个成功状态码都声明结构：`dataResponse(Schema)` 包出 `{ data }`，`listResponse(ItemSchema, MetaSchema?)` 包出 `{ data, meta }`，没有内容的 204 用 `emptyResponse()`，不手写外层                                                                                                           |
-| 错误返回   | 只列这个接口真的会返回的状态：常见的 400、401、403、500 用 `...apiErrorResponses` 一次展开，其余用 `apiErrorResponse(404)` 这样逐个加，需要说明 `reason` 时写成 `apiErrorResponse(409, '…')`。错误结构都是统一的错误体，不自己描述                                                         |
-| 返回结构   | 返回结构对着处理函数实际返回的视图类型写，并用视图类型标注，如 `export const DeploymentAcceptedSchema: z.ZodType<DeploymentAcceptedResponse> = z.object({...})`，返回值和文档一旦不一致，类型检查就会报错。返回对象在文档里是开放的，以后加字段不算破坏性变化，除非用了 `z.strictObject()` |
-| 字段类型   | 字段名 camelCase；ID 一律 `z.string()`；时间 `z.iso.datetime()`；布尔 `z.boolean()`；枚举 `z.enum([...])`；「可以不传」用 `.optional()`，「可以为空」用 `.nullable()`，两者不混用；禁止 `z.any()`，`z.unknown()` 只用于确实任意的 JSON 并写明理由                                          |
-| 字段说明   | 对外可见的字段用 `.meta({ description })` 写一句英文说明，引用共用结构的字段也保留自己的说明                                                                                                                                                                                               |
-| 复用的结构 | 被多个接口共用的对象加 `.meta({ ref })`，名字以插件名开头，如 `HubDeployment`，成为文档里的一个命名组件；`z.json()` 这类递归结构也会自动成为组件，不用特殊处理                                                                                                                             |
-| 存放位置   | 声明放在插件的 `server/routes/schemas.ts`（接口多时拆成 `schemas/` 目录）                                                                                                                                                                                                                  |
-| 不需要凭证 | 公开接口在 `describeRoute()` 里写 `security: []`                                                                                                                                                                                                                                           |
-| 流式返回   | 声明 `text/event-stream` 或 `application/x-ndjson` 内容，并说明帧格式；开流前会返回的错误照常列出                                                                                                                                                                                          |
+| 项目       | 规则                                                                                                                                                                                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 接口说明   | 必须有 `describeRoute()`，至少包含 `tags`（插件名的 PascalCase，如 `Hub`、`Users`、`AiEmployee`）、`summary`（一句英文动宾短语，如 `Deploy a Release`）、`operationId`（命名空间 + 动词 + 资源，camelCase，全应用唯一，如 `hubDeployApp`）。应用自己的接口以资源名或应用名为分组                                                 |
+| 位置       | `describeRoute()` 放在登录和权限中间件之后、`apiValidator()` 之前                                                                                                                                                                                                                                                                |
+| 输入       | 路径参数、查询参数、请求内容、请求头，用到哪类就用 `apiValidator('param' \| 'query' \| 'json' \| 'header', Schema)` 声明哪类。它取代 `validator()` + `parseApiInput()`，校验失败照样返回 400 `INVALID_INPUT` 和字段级错误。处理函数只能用 `c.req.valid()` 取值                                                                   |
+| 输入对象   | 请求内容用 `z.strictObject`，多余字段返回 400 并指出字段名，文档里也写成封闭对象；查询参数和路径参数用 `z.object`                                                                                                                                                                                                                |
+| 成功返回   | 每个成功状态码都声明结构：`dataResponse(Schema)` 包出 `{ data }`，`listResponse(ItemSchema, MetaSchema?)` 包出 `{ data, meta }`，没有内容的 204 用 `emptyResponse()`，不手写外层                                                                                                                                                 |
+| 错误返回   | 只列这个接口真的会返回的状态：既校验输入又检查权限的接口，400、401、403、500 用 `...apiErrorResponses` 一次展开；没有输入就不列 400，不查权限就不列 403，改成逐个写 `apiErrorResponse()`；其余用 `apiErrorResponse(404)` 这样逐个加，需要说明 `reason` 时写成 `apiErrorResponse(409, '…')`。错误结构都是统一的错误体，不自己描述 |
+| 返回结构   | 返回结构对着处理函数实际返回的视图类型写，并用视图类型标注，如 `export const DeploymentAcceptedSchema: z.ZodType<DeploymentAcceptedResponse> = z.object({...})`，返回值和文档一旦不一致，类型检查就会报错。返回对象在文档里是开放的，以后加字段不算破坏性变化，除非用了 `z.strictObject()`                                       |
+| 字段类型   | 字段名 camelCase；ID 一律 `z.string()`；时间 `z.iso.datetime()`；布尔 `z.boolean()`；枚举 `z.enum([...])`；「可以不传」用 `.optional()`，「可以为空」用 `.nullable()`，两者不混用；禁止 `z.any()`，`z.unknown()` 只用于确实任意的 JSON 并写明理由                                                                                |
+| 字段说明   | 对外可见的字段用 `.meta({ description })` 写一句英文说明，引用共用结构的字段也保留自己的说明                                                                                                                                                                                                                                     |
+| 复用的结构 | 被多个接口共用的对象加 `.meta({ ref })`，名字以插件名开头，如 `HubDeployment`，成为文档里的一个命名组件；`z.json()` 这类递归结构也会自动成为组件，不用特殊处理                                                                                                                                                                   |
+| 存放位置   | 声明放在插件的 `server/routes/schemas.ts`（接口多时拆成 `schemas/` 目录）                                                                                                                                                                                                                                                        |
+| 不需要凭证 | 公开接口在 `describeRoute()` 里写 `security: []`                                                                                                                                                                                                                                                                                 |
+| 流式返回   | 声明 `text/event-stream` 或 `application/x-ndjson` 内容，并说明帧格式；开流前会返回的错误照常列出                                                                                                                                                                                                                                |
 
 按规范写出来的一个完整接口：
 
@@ -411,6 +413,7 @@ import {
 router.post(
   '/orders/:orderId/cancel',
   auth.required(), // 登录和权限检查排在最前
+  ordersAccess('cancel'), // 权限中间件：没有权限时返回 403，所以下面列了 403
   describeRoute({
     tags: ['Orders'],
     summary: 'Cancel an order',
@@ -453,14 +456,14 @@ router.post(
 
 ### CI 检查
 
-`pnpm openapi:check`（脚本 `scripts/check-openapi.mjs`）为每个应用模板生成一份文档，出现以下任何一种情况就失败：
+`pnpm openapi:check`（脚本 `scripts/check-openapi.mjs`）把默认、示例和 Hub 三个模板各自在 SQLite 测试数据库上启动起来（不需要数据库服务，也不需要先构建），生成各自的文档，出现以下任何一种情况就失败：
 
 - 有没写声明的路由。
 - 没有隐藏的接口缺少 `tags`、`summary` 或 `operationId`。
 - `operationId` 重复。
 - `findApiDocumentSchemaProblems()` 报出问题：引用了文档里不存在的结构，或者组件名是转换器生成的（如 `__schema0`）而不是声明出来的。
 
-不提交每个模板的 `openapi.json` 快照，也不用 `oasdiff` 比对破坏性变化。各插件的测试里也做同样的断言：应用启动后 `findUndeclaredApiRoutes(app)` 不含本插件的路由，`findApiDocumentSchemaProblems(document)` 为空，文档里有本插件的 `operationId`。
+每个问题下面都会打印怎么修；通过 `addUndeclaredApiRoute()` 登记的路由、在 `scope` 之外声明的路由，会连同各自的原因一起打印。它在 CI 的 Quality 工作流（Typecheck 那一项）里运行，也是 `pnpm check` 的一部分；`node scripts/check-openapi.mjs default` 只检查一个模板。pro 仓库用同一个脚本检查默认模板加上商业插件组成的应用。不提交每个模板的 `openapi.json` 快照，也不用 `oasdiff` 比对破坏性变化。各插件的测试里也做同样的断言：应用启动后 `findUndeclaredApiRoutes(app)` 不含本插件的路由，`findApiDocumentSchemaProblems(document)` 为空，文档里有本插件的 `operationId`。
 
 ### 原来的待定事项，现在的结论
 
