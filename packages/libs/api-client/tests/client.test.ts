@@ -152,15 +152,21 @@ describe('createApiClient', () => {
     expect(headers.get('content-type')).toBe('application/json');
   });
 
-  it('reads the reason of a route not yet on the standard error body', async () => {
-    const request = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        Response.json(
-          { code: 'STREAM_DENIED', message: 'Stream denied' },
-          { status: 403, headers: { 'x-request-id': 'request-2' } },
-        ),
-      );
+  it('uses the same structured errors for failed streams', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            reason: 'STREAM_DENIED',
+            domain: 'ai',
+            message: 'Stream denied',
+          },
+        },
+        { status: 403, headers: { 'x-request-id': 'request-2' } },
+      ),
+    );
     const api = createApiClient({ baseURL: '/api', fetch: request });
 
     await expect(api.stream({ path: 'ai/stream' })).rejects.toMatchObject<
@@ -170,6 +176,7 @@ describe('createApiClient', () => {
       message: 'Stream denied',
       status: 403,
       reason: 'STREAM_DENIED',
+      domain: 'ai',
       requestId: 'request-2',
       method: 'GET',
       url: '/api/ai/stream',
@@ -523,5 +530,20 @@ describe('remote aggregate queries', () => {
         aggregate: { kind: 'aggregate', version: 1, items: [] },
       }),
     ).rejects.toMatchObject({ status: 400, reason: 'INVALID_AGGREGATE' });
+  });
+
+  it('reads a reason only from the standard error body', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ code: 'LEGACY', message: 'Legacy' }, { status: 400 }),
+      );
+    const api = createApiClient({ baseURL: '/api', fetch: request });
+
+    await expect(api.request({ path: 'legacy' })).rejects.toMatchObject({
+      status: 400,
+      reason: undefined,
+      message: 'Legacy',
+    });
   });
 });
