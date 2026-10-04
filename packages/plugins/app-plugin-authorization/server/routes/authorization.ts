@@ -1,8 +1,5 @@
 import type { Auth } from '@nocobase/app-plugin-authentication';
-import {
-  AuthorizationDeniedError,
-  type AuthorizationEnv,
-} from '@nocobase/authorization/core';
+import { type AuthorizationEnv } from '@nocobase/authorization/core';
 import { Hono, type Context } from 'hono';
 import type { AppAuthorization } from '../authorization.js';
 
@@ -15,11 +12,6 @@ export function createAuthorizationRoutes(
   authorization: AppAuthorization,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
-  routes.onError((error, context) => {
-    if (error instanceof AuthorizationDeniedError)
-      return context.json({ code: 'FORBIDDEN', message: error.message }, 403);
-    throw error;
-  });
   routes.use('*', auth.required());
   routes.use('*', authorization.middleware());
   routes.get('/permissions', async (context) =>

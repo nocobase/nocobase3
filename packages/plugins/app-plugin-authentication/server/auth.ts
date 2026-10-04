@@ -13,6 +13,11 @@ import {
 import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import {
+  ApiError,
+  apiErrorResponse,
+  apiErrorStatusFromHttp,
+} from '@nocobase/app-server/router';
 import { databaseAdapter } from './better-auth/database-adapter.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
@@ -281,20 +286,32 @@ export class Auth {
         // A refused credential is Better Auth's APIError; answer with its own status and body.
       } catch (error) {
         if (error instanceof APIError) {
-          return context.json(
-            error.body ?? { code: error.status, message: error.message },
-            error.statusCode as ContentfulStatusCode,
+          return apiErrorResponse(
+            context,
+            new ApiError({
+              status: apiErrorStatusFromHttp(error.statusCode),
+              reason:
+                typeof error.body?.code === 'string'
+                  ? error.body.code
+                  : 'AUTHENTICATION_FAILED',
+              domain: 'authentication',
+              message: error.message,
+              httpStatus: error.statusCode as ContentfulStatusCode,
+              cause: error,
+            }),
           );
         }
         throw error;
       }
       if (!auth) {
-        return context.json(
-          {
-            code: 'UNAUTHORIZED',
-            message: 'Authentication required',
-          },
-          401,
+        return apiErrorResponse(
+          context,
+          new ApiError({
+            status: 'UNAUTHENTICATED',
+            reason: 'AUTHENTICATION_REQUIRED',
+            domain: 'authentication',
+            message: 'Authentication required.',
+          }),
         );
       }
       context.set('auth', auth);

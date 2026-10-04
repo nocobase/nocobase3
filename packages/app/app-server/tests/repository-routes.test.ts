@@ -460,18 +460,18 @@ describe('Repository API routes', () => {
           },
         },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'FIELD_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({ status: 403, reason: 'FIELD_WRITE_FORBIDDEN' });
     await expect(
       parents.updateOne({
         filter: { id: 'parent' },
         values: { children: { create: { id: 'second' } } },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'RELATION_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({ status: 403, reason: 'RELATION_WRITE_FORBIDDEN' });
     await expect(
       api.repository('policyClosed').createOne({
         values: { id: 'closed', children: { create: { id: 'denied' } } },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({ status: 403, reason: 'WRITE_FORBIDDEN' });
     const rejected = await router.request('/api/policyClosed:updateOne', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -481,7 +481,7 @@ describe('Repository API routes', () => {
       }),
     });
     expect(rejected.status).toBe(403);
-    expect(await rejected.json()).toMatchObject({ code: 'WRITE_FORBIDDEN' });
+    expect(await rejected.json()).toMatchObject({ error: { reason: 'WRITE_FORBIDDEN' } });
     for (const action of ['createOne', 'updateOne']) {
       const response = await router.request(`/api/policyClosed:${action}`, {
         method: 'POST',
@@ -493,9 +493,7 @@ describe('Repository API routes', () => {
         }),
       });
       expect(response.status).toBe(400);
-      expect(await response.json()).toMatchObject({
-        code: 'UNSUPPORTED_REPOSITORY_OPTION',
-      });
+      expect(await response.json()).toMatchObject({ error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' } });
     }
     expect(await database.repository('policyParents').count()).toBe(1);
     expect(await database.repository('policyChildren').findMany()).toEqual([
@@ -575,7 +573,7 @@ describe('Repository API routes', () => {
           },
         },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'FIELD_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({ status: 403, reason: 'FIELD_WRITE_FORBIDDEN' });
     expect(await database.repository('policyLinks').count()).toBe(0);
     await owners.updateOne({
       filter: { id: 'parent' },
@@ -635,9 +633,7 @@ describe('Repository API routes', () => {
           }),
         });
         expect(response.status).toBe(403);
-        expect(await response.json()).toMatchObject({
-          code: 'WRITE_FORBIDDEN',
-        });
+        expect(await response.json()).toMatchObject({ error: { reason: 'WRITE_FORBIDDEN' } });
       }
     }
     // A node with no `fields` is not the same as `false`: it grants nothing to
@@ -652,9 +648,7 @@ describe('Repository API routes', () => {
       },
     );
     expect(nothingAllowed.status).toBe(403);
-    expect(await nothingAllowed.json()).toMatchObject({
-      code: 'FIELD_WRITE_FORBIDDEN',
-    });
+    expect(await nothingAllowed.json()).toMatchObject({ error: { reason: 'FIELD_WRITE_FORBIDDEN' } });
     const response = await router.request('/api/fieldsPolicy:createOne', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -662,9 +656,13 @@ describe('Repository API routes', () => {
     });
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
-      code: 'FIELD_WRITE_FORBIDDEN',
-      path: ['values', 'status'],
-      details: { field: 'status', allowedFields: ['id'] },
+      error: {
+        reason: 'FIELD_WRITE_FORBIDDEN',
+        metadata: {
+          path: ['values', 'status'],
+          details: { field: 'status', allowedFields: ['id'] },
+        },
+      },
     });
     expect(
       await database
@@ -878,7 +876,7 @@ describe('Repository API routes', () => {
           },
         },
       }),
-    ).rejects.toMatchObject({ status: 400, code: 'INVALID_MUTATION' });
+    ).rejects.toMatchObject({ status: 400, reason: 'INVALID_MUTATION' });
   });
 
   it('supports anonymous client calls for all seven actions against a real database', async () => {
@@ -914,7 +912,7 @@ describe('Repository API routes', () => {
         values: { status: 'draft' },
         ifVersion: 1,
       }),
-    ).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
+    ).rejects.toMatchObject({ status: 409, reason: 'VERSION_CONFLICT' });
     expect(
       await orders.deleteOne({
         filter: { id: 'one' },
@@ -928,7 +926,7 @@ describe('Repository API routes', () => {
     expect(await orders.exists({ filter: { id: 'one' } })).toBe(false);
     await expect(
       orders.deleteOne({ filter: { id: 'one' } }),
-    ).rejects.toMatchObject({ status: 404, code: 'RECORD_NOT_FOUND' });
+    ).rejects.toMatchObject({ status: 404, reason: 'RECORD_NOT_FOUND' });
   });
 
   it('aggregates all matching rows and groups with HAVING and sort through the HTTP client', async () => {
@@ -1258,8 +1256,7 @@ describe('Repository API routes', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      code: 'FIELD_NOT_FOUND',
-      message: expect.any(String),
+      error: { reason: 'FIELD_NOT_FOUND', message: expect.any(String) },
     });
   });
 
@@ -1308,7 +1305,10 @@ describe('Repository API routes', () => {
       {
         type: 'error',
         error: {
-          code: 'INVALID_FILTER',
+          code: 400,
+          status: 'INVALID_ARGUMENT',
+          reason: 'INVALID_FILTER',
+          domain: 'app',
           message: 'Streaming query failed.',
         },
       },
@@ -1358,7 +1358,7 @@ describe('Repository API routes', () => {
 
       expect({ code, status: response.status }).toEqual({ code, status });
       expect(response.status).toBe(status);
-      expect(await response.json()).toMatchObject({ code });
+      expect(await response.json()).toMatchObject({ error: { reason: code } });
       vi.restoreAllMocks();
     }
   });
@@ -1427,9 +1427,7 @@ describe('Repository API routes', () => {
         },
       );
       expect(smuggled.status).toBe(400);
-      expect(await smuggled.json()).toMatchObject({
-        code: 'UNSUPPORTED_REPOSITORY_OPTION',
-      });
+      expect(await smuggled.json()).toMatchObject({ error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' } });
     }
   });
 
@@ -1489,9 +1487,7 @@ describe('Repository API routes', () => {
     // an unrestricted Repository.
     const anonymous = await request();
     expect(anonymous.status).toBe(403);
-    expect(await anonymous.json()).toMatchObject({
-      code: 'PRINCIPAL_REQUIRED',
-    });
+    expect(await anonymous.json()).toMatchObject({ error: { reason: 'PRINCIPAL_REQUIRED' } });
   });
 
   it('rejects a reference in a Policy built from the principal', async () => {
@@ -1599,8 +1595,11 @@ describe('Repository API routes', () => {
     const response = await request(action as string, input);
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      code: expect.any(String),
-      message: expect.any(String),
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: expect.any(String),
+        message: expect.any(String),
+      },
     });
     expect(await database.repository('orders').count()).toBe(0);
   });
@@ -1630,12 +1629,6 @@ describe('Repository API routes', () => {
   });
 
   it('keeps unexpected failures as server errors rather than invalid input', async () => {
-    router.onError((_error, context) =>
-      context.json(
-        { code: 'INTERNAL_ERROR', message: 'Internal server error' },
-        500,
-      ),
-    );
     vi.spyOn(stubScopedRepository(database), 'count').mockRejectedValue(
       new Error('Database unavailable'),
     );
@@ -1647,8 +1640,8 @@ describe('Repository API routes', () => {
       client().repository('broken').count(),
     ).rejects.toMatchObject<ApiClientError>({
       status: 500,
-      code: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      reason: 'INTERNAL_ERROR',
+      message: 'Internal server error.',
     });
   });
 

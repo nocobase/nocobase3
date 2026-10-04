@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
+import { ApiError } from '@nocobase/app-server/router';
 import {
-  AuthorizationDeniedError,
   type AuthorizationContext,
   type AuthorizationRouteHandler,
 } from '@nocobase/authorization/core';
@@ -12,19 +12,22 @@ export interface SettingsRouterEnv {
 }
 
 /**
- * A router for one authorization settings surface. Denied requests answer
- * `403 FORBIDDEN` and malformed input `400 INVALID_AUTHORIZATION_INPUT`.
+ * A router for one authorization settings surface. Malformed input becomes
+ * `400 INVALID_AUTHORIZATION_INPUT`; every error, a denial included, is
+ * rethrown so the application's `/api` error handler renders it with the
+ * request's id.
  */
 export function createSettingsRouter(): Hono<SettingsRouterEnv> {
   const routes = new Hono<SettingsRouterEnv>();
-  routes.onError((error, context) => {
-    if (error instanceof AuthorizationDeniedError)
-      return context.json({ code: 'FORBIDDEN', message: error.message }, 403);
+  routes.onError((error) => {
     if (error instanceof TypeError)
-      return context.json(
-        { code: 'INVALID_AUTHORIZATION_INPUT', message: error.message },
-        400,
-      );
+      throw new ApiError({
+        status: 'INVALID_ARGUMENT',
+        reason: 'INVALID_AUTHORIZATION_INPUT',
+        domain: 'authorization',
+        message: error.message,
+        cause: error,
+      });
     throw error;
   });
   return routes;
