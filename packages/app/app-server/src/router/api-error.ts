@@ -177,8 +177,9 @@ export function apiErrorStatusFromHttp(code: number): ApiErrorStatus {
  * - Hono's `HTTPException`, and any error that carries a 4xx `status` the way Hono's `getResponse()` convention does
  *   (such as `AuthorizationDeniedError`), with their status and message, and a string `reason` and `domain` on such an
  *   error kept too;
- * - a `RepositoryError` the caller may see (a refused write, a missing record, a version conflict), with its code as
- *   `reason` and domain `app`. One that is the server's own fault, such as an invalid Policy, is not recognized.
+ * - a `RepositoryError` whose `status` is not `INTERNAL` (a refused write, a missing record, a version conflict), with
+ *   that status, its code as `reason`, domain `app`, and its `path` and `details` as `metadata`. One that is the
+ *   server's own fault, such as an invalid Policy, is not recognized.
  */
 export function recognizeApiError(error: unknown): ApiError | undefined {
   if (error instanceof ApiError) return error;
@@ -374,75 +375,33 @@ export function requestIdMiddleware(): MiddlewareHandler {
 
 /**
  * The standard API error for a Repository error the caller may see, or `undefined` for one that is the server's own
- * fault and must surface as an opaque 500. Any route that lets a Repository error propagate answers this way.
+ * fault and must surface as an opaque 500. The error's own `status` decides which, so a code added to the Repository
+ * needs nothing here. Any route that lets a Repository error propagate answers this way.
  */
 function repositoryApiError(error: unknown): ApiError | undefined {
-  if (!(error instanceof RepositoryError)) return undefined;
-  const httpStatus = repositoryErrorStatus(error);
-  if (httpStatus === undefined) return undefined;
-  const exposesTarget = [
-    'WRITE_FORBIDDEN',
-    'FIELD_WRITE_FORBIDDEN',
-    'RELATION_WRITE_FORBIDDEN',
-  ].includes(error.code);
+  if (!(error instanceof RepositoryError) || error.status === 'INTERNAL')
+    return undefined;
+  const field = error.path?.map(String).join('.');
   return new ApiError({
-    status: apiErrorStatusFromHttp(httpStatus),
+    status: error.status,
     reason: error.code,
     domain: appErrorDomain,
     message: error.message,
-    ...(exposesTarget
+    ...(error.status === 'INVALID_ARGUMENT' && field
       ? {
+          fieldViolations: [
+            { field, description: error.message, reason: error.code },
+          ],
+        }
+      : {}),
+    ...(error.path === undefined && error.details === undefined
+      ? {}
+      : {
           metadata: {
             ...(error.path === undefined ? {} : { path: error.path }),
             ...(error.details === undefined ? {} : { details: error.details }),
           },
-        }
-      : {}),
+        }),
     cause: error,
   });
-}
-
-function repositoryErrorStatus(
-  error: RepositoryError,
-): 400 | 403 | 404 | 409 | undefined {
-  // SCOPE_VIOLATION is 403 rather than 404 because the caller can see the
-  // record; it was their own values that pushed it out of scope. Saying so
-  // leaks nothing about anyone else's data, and the request cannot be
-  // repaired without being told. A scope that simply does not match is a
-  // different thing and never reaches here: it is mapped to 404 or an empty
-  // result, so that forbidden and absent stay indistinguishable.
-  switch (error.code) {
-    case 'WRITE_FORBIDDEN':
-    case 'FIELD_WRITE_FORBIDDEN':
-    case 'RELATION_WRITE_FORBIDDEN':
-    case 'READ_FORBIDDEN':
-    case 'FIELD_READ_FORBIDDEN':
-    case 'RELATION_READ_FORBIDDEN':
-    case 'SCOPE_VIOLATION':
-      return 403;
-    case 'RECORD_NOT_FOUND':
-    case 'RELATION_TARGET_NOT_FOUND':
-      return 404;
-    case 'VERSION_CONFLICT':
-    case 'MULTIPLE_RECORDS_MATCHED':
-    case 'MULTIPLE_RELATION_TARGETS_MATCHED':
-    case 'RELATION_UPSERT_TARGET_OUTSIDE_SCOPE':
-    case 'RECORD_OUTSIDE_SCOPE':
-    case 'RELATION_REASSIGNMENT_REQUIRED':
-      return 409;
-    // A Policy is server-owned, so a Policy this router could not build or
-    // bind is a misconfiguration rather than something the caller got wrong.
-    // Reporting it as 400 would blame the request for the server's mistake.
-    // Event listeners nesting writes too deep is a server-side defect too.
-    case 'INVALID_POLICY':
-    case 'POLICY_REQUIRED':
-    case 'COLLECTION_NOT_FOUND':
-    case 'INVALID_STORED_VALUE':
-    case 'QUERY_ALREADY_CONSUMED':
-    case 'QUERY_TRANSACTION_COMPLETED':
-    case 'REPOSITORY_EVENT_RECURSION':
-      return undefined;
-    default:
-      return 400;
-  }
 }

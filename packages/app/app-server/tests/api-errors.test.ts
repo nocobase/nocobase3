@@ -94,6 +94,13 @@ function createApp(): Application {
       router.post('/orders/:orderId/close', () => {
         throw new RepositoryError('VERSION_CONFLICT', 'The order changed.');
       });
+      router.post('/orders/relink', () => {
+        throw new RepositoryError(
+          'RELATION_TARGET_NOT_FOUND',
+          'The customer was not found.',
+          { path: ['values', 'customer'], details: { relation: 'customer' } },
+        );
+      });
       router.post('/orders/broken', () => {
         throw new RepositoryError('INVALID_POLICY', 'Policy secret detail.');
       });
@@ -279,6 +286,27 @@ describe('/api errors', () => {
       error: { status: 'ABORTED', reason: 'VERSION_CONFLICT', domain: 'app' },
     });
 
+    const relink = await request(createApp(), '/api/orders/relink', {
+      method: 'POST',
+    });
+    expect(relink.status).toBe(400);
+    expect(await relink.json()).toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'RELATION_TARGET_NOT_FOUND',
+        domain: 'app',
+        fieldViolations: [
+          {
+            field: 'values.customer',
+            reason: 'RELATION_TARGET_NOT_FOUND',
+          },
+        ],
+        metadata: {
+          path: ['values', 'customer'],
+          details: { relation: 'customer' },
+        },
+      },
+    });
     const broken = await request(createApp(), '/api/orders/broken', {
       method: 'POST',
     });
