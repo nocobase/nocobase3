@@ -72,7 +72,8 @@
     "openai": "6.49.0",
     "pdf-parse": "^1.1.1",
     "word-extractor": "^1.0.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
