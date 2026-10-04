@@ -196,7 +196,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     await service.createApp({ id: 'tms-bob', name: 'TMS' }, 'bob');
     await expect(
       service.createApp({ id: 'tms-alice', name: 'Another name' }, 'bob'),
-    ).rejects.toMatchObject({ code: 'APP_EXISTS', status: 409 });
+    ).rejects.toMatchObject({ reason: 'APP_EXISTS', status: 'ALREADY_EXISTS' });
     expect(
       (await service.listAppsPage({ createdBy: 'bob' })).items.map(
         ({ app }) => app.id,
@@ -215,7 +215,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(
       results.find((result) => result.status === 'rejected'),
     ).toMatchObject({
-      reason: { code: 'APP_EXISTS', status: 409 },
+      reason: { reason: 'APP_EXISTS', status: 'ALREADY_EXISTS' },
     });
     expect((await service.listAppsPage()).total).toBe(1);
   });
@@ -289,7 +289,7 @@ describe('@nocobase/app-plugin-hub service', () => {
         bytes: changed,
         idempotencyKey: 'ci-1',
       }),
-    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    ).rejects.toMatchObject({ reason: 'IDEMPOTENCY_CONFLICT' });
     expect(
       (await service.createRelease('customer', { bytes: changed })).id,
     ).not.toBe(first.id);
@@ -397,11 +397,21 @@ describe('@nocobase/app-plugin-hub service', () => {
         everDeployed: true,
       },
     ]);
+    const firstPage = await service.listReleasesPage('customer', {
+      pageSize: 2,
+    });
+    expect(firstPage.items.map(({ id }) => id)).toEqual([third.id, second.id]);
+    expect(firstPage).toMatchObject({ total: 3, page: 1, pageSize: 2 });
+    const secondPage = await service.listReleasesPage('customer', {
+      page: 2,
+      pageSize: 2,
+    });
+    expect(secondPage.items.map(({ id }) => id)).toEqual([first.id]);
+    // A page past the last one answers the last page.
     expect(
-      (await service.listReleases('customer', { limit: 2 })).map(
-        ({ id }) => id,
-      ),
-    ).toEqual([third.id, second.id]);
+      (await service.listReleasesPage('customer', { page: 9, pageSize: 2 }))
+        .page,
+    ).toBe(2);
     expect(await service.getReleaseSummary('customer', first.id)).toMatchObject(
       {
         id: first.id,
@@ -413,18 +423,28 @@ describe('@nocobase/app-plugin-hub service', () => {
     );
     await expect(
       service.getReleaseSummary('other', first.id),
-    ).rejects.toMatchObject({ code: 'RELEASE_NOT_FOUND', status: 404 });
+    ).rejects.toMatchObject({
+      reason: 'RELEASE_NOT_FOUND',
+      status: 'NOT_FOUND',
+    });
   });
 
-  it.each([0, 101, 1.5, Number.NaN])(
-    'rejects the Release list limit %s',
-    async (limit) => {
-      await service.createApp({ id: 'customer', name: 'Customer' });
-      await expect(
-        service.listReleases('customer', { limit }),
-      ).rejects.toMatchObject({ code: 'INVALID_LIMIT', status: 400 });
-    },
-  );
+  it.each([
+    { page: 0 },
+    { page: 1.5 },
+    { pageSize: 0 },
+    { pageSize: 101 },
+    { pageSize: 1.5 },
+    { pageSize: Number.NaN },
+  ])('rejects the Release page options %o', async (options) => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await expect(
+      service.listReleasesPage('customer', options),
+    ).rejects.toMatchObject({
+      reason: 'INVALID_PAGINATION',
+      status: 'INVALID_ARGUMENT',
+    });
+  });
 
   it('accepts an archive whose build target matches the Host or that records none', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
@@ -468,7 +488,7 @@ describe('@nocobase/app-plugin-hub service', () => {
         }),
       }),
     ).rejects.toMatchObject({
-      code: 'BUILD_TARGET_MISMATCH',
+      reason: 'BUILD_TARGET_MISMATCH',
       message: expect.stringContaining(
         'Archive targets linux-x64-musl Node 24; this Hub runs linux-x64 Node 24.',
       ),
@@ -531,8 +551,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         .catch((reason: unknown) => reason);
       expect(error).toBeInstanceOf(HubError);
       expect(error).toMatchObject({
-        status: 422,
-        code: 'BUILD_TARGET_MISMATCH',
+        status: 'FAILED_PRECONDITION',
+        reason: 'BUILD_TARGET_MISMATCH',
         message: expect.stringContaining(
           `Archive targets ${described}; this Hub runs linux-x64 Node 24.`,
         ),
@@ -634,7 +654,10 @@ describe('@nocobase/app-plugin-hub service', () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     await expect(
       service.deploy('customer', { releaseId: '' }),
-    ).rejects.toMatchObject({ status: 400, code: 'INVALID_DEPLOYMENT_INPUT' });
+    ).rejects.toMatchObject({
+      status: 'INVALID_ARGUMENT',
+      reason: 'INVALID_DEPLOYMENT_INPUT',
+    });
     expect((await service.listDeployments('customer')).total).toBe(0);
   });
 
@@ -659,7 +682,7 @@ describe('@nocobase/app-plugin-hub service', () => {
         releaseId: 'changed',
         idempotencyKey: 'deploy-1',
       }),
-    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    ).rejects.toMatchObject({ reason: 'IDEMPOTENCY_CONFLICT' });
     await waitForDeployment(service, 'customer', first.id);
     expect((await service.listDeployments('customer')).total).toBe(1);
   });
@@ -757,7 +780,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     ]) {
       await expect(
         service.listDeployments('customer', options),
-      ).rejects.toMatchObject({ code: 'INVALID_PAGINATION' });
+      ).rejects.toMatchObject({ reason: 'INVALID_PAGINATION' });
     }
   });
 
@@ -802,7 +825,10 @@ describe('@nocobase/app-plugin-hub service', () => {
       });
       await expect(
         service.createApp({ id: 'hub', name: 'Conflict' }),
-      ).rejects.toMatchObject({ code: 'INVALID_APP_ID', status: 422 });
+      ).rejects.toMatchObject({
+        reason: 'INVALID_APP_ID',
+        status: 'INVALID_ARGUMENT',
+      });
       expect(await service.listApps()).toEqual([]);
       const detail = await service.createApp({ id: 'hubble', name: 'Hubble' });
       expect(detail.hostUrl).toBe('/');
@@ -824,8 +850,8 @@ describe('@nocobase/app-plugin-hub service', () => {
       await expect(
         service.createApp({ id, name: 'Reserved' }),
       ).rejects.toMatchObject({
-        code: 'INVALID_APP_ID',
-        status: 422,
+        reason: 'INVALID_APP_ID',
+        status: 'INVALID_ARGUMENT',
       });
       expect(await service.listApps()).toEqual([]);
     },
@@ -842,7 +868,7 @@ describe('@nocobase/app-plugin-hub service', () => {
   it('restarts only the requested App without creating a deployment', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     await expect(service.restart('customer')).rejects.toMatchObject({
-      code: 'APP_NOT_DEPLOYED',
+      reason: 'APP_NOT_DEPLOYED',
     });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3'),
@@ -862,7 +888,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect((await service.listDeployments('customer')).items).toHaveLength(1);
     await service.stop('customer');
     await expect(service.restart('customer')).rejects.toMatchObject({
-      code: 'APP_NOT_RUNNING',
+      reason: 'APP_NOT_RUNNING',
     });
   });
 
@@ -953,7 +979,7 @@ describe('@nocobase/app-plugin-hub service', () => {
       { search: 'x'.repeat(101) },
     ]) {
       await expect(service.listAppsPage(options)).rejects.toMatchObject({
-        code: options.search ? 'INVALID_SEARCH' : 'INVALID_PAGINATION',
+        reason: options.search ? 'INVALID_SEARCH' : 'INVALID_PAGINATION',
       });
     }
   });
@@ -1051,7 +1077,10 @@ describe('@nocobase/app-plugin-hub service', () => {
           name,
           activation: 'lazy',
         } as never),
-      ).rejects.toMatchObject({ code: 'INVALID_APP_NAME', status: 422 });
+      ).rejects.toMatchObject({
+        reason: 'INVALID_APP_NAME',
+        status: 'INVALID_ARGUMENT',
+      });
       expect((await service.getApp('customer')).app).toEqual(before.app);
     },
   );
@@ -1123,7 +1152,7 @@ describe('@nocobase/app-plugin-hub service', () => {
 
     await expect(service.getApp('customer')).rejects.toMatchObject<
       Partial<HubError>
-    >({ code: 'APP_NOT_FOUND' });
+    >({ reason: 'APP_NOT_FOUND' });
     expect(host.targetedOperations.at(-1)).toBe('remove:customer');
     expect(removeAppKeys).toHaveBeenCalledExactlyOnceWith('customer');
   });
@@ -1201,21 +1230,21 @@ describe('@nocobase/app-plugin-hub service', () => {
     {
       path: 'dist/server/embedded.js',
       type: 'SymbolicLink' as const,
-      code: 'INVALID_ARTIFACT',
+      reason: 'INVALID_ARTIFACT',
     },
     {
       path: 'dist/server/embedded.js',
       type: 'Link' as const,
-      code: 'INVALID_ARTIFACT',
+      reason: 'INVALID_ARTIFACT',
     },
     {
       path: 'config.example.yml',
       type: 'File' as const,
       size: 16 * 1024 * 1024 + 1,
-      code: 'INVALID_ARTIFACT',
+      reason: 'INVALID_ARTIFACT',
     },
-    { path: '../outside.js', type: 'File' as const, code: 'UNSAFE_ARTIFACT' },
-    { path: '/outside.js', type: 'File' as const, code: 'UNSAFE_ARTIFACT' },
+    { path: '../outside.js', type: 'File' as const, reason: 'UNSAFE_ARTIFACT' },
+    { path: '/outside.js', type: 'File' as const, reason: 'UNSAFE_ARTIFACT' },
   ])(
     'rejects malformed $type entry $path without breaking subsequent uploads',
     async (invalid) => {
@@ -1255,7 +1284,10 @@ describe('@nocobase/app-plugin-hub service', () => {
         );
         await expect(
           service.createRelease('customer', { bytes }),
-        ).rejects.toMatchObject({ code: invalid.code, status: 422 });
+        ).rejects.toMatchObject({
+          reason: invalid.reason,
+          status: 'INVALID_ARGUMENT',
+        });
         expect(await service.listReleases('customer')).toEqual([]);
         expect((await service.listDeployments('customer')).total).toBe(0);
         expect(host.targetedOperations).toEqual([]);
@@ -1351,8 +1383,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         }),
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'INVALID_ARTIFACT',
-      status: 422,
+      reason: 'INVALID_ARTIFACT',
+      status: 'INVALID_ARGUMENT',
     });
   });
 
@@ -1364,8 +1396,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         bytes: await createArtifact(rootDir, 'invalid version'),
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'INVALID_ARTIFACT_VERSION',
-      status: 422,
+      reason: 'INVALID_ARTIFACT_VERSION',
+      status: 'INVALID_ARGUMENT',
     });
   });
 
@@ -1393,8 +1425,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         }),
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'BASE_PATH_MISMATCH',
-      status: 422,
+      reason: 'BASE_PATH_MISMATCH',
+      status: 'FAILED_PRECONDITION',
     });
   });
 
@@ -1668,7 +1700,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     );
     await expect(
       service.updateConfig('customer', { content: 'feature: false\n' }),
-    ).rejects.toMatchObject({ code: 'CONFIG_RELOAD_FAILED' });
+    ).rejects.toMatchObject({ reason: 'CONFIG_RELOAD_FAILED' });
     expect(
       parseYaml(await readFile(deployment.config.path!, 'utf8')),
     ).toMatchObject({
@@ -1723,8 +1755,8 @@ describe('@nocobase/app-plugin-hub service', () => {
     await expect(
       service.updateConfig('customer', { content: 'feature: [' }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'INVALID_CONFIG_FILE',
-      status: 422,
+      reason: 'INVALID_CONFIG_FILE',
+      status: 'INVALID_ARGUMENT',
     });
   });
 
@@ -1742,8 +1774,8 @@ describe('@nocobase/app-plugin-hub service', () => {
     await expect(
       service.updateConfig('customer', { content: 'feature: true\n' }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'CONFIG_NOT_EDITABLE',
-      status: 409,
+      reason: 'CONFIG_NOT_EDITABLE',
+      status: 'FAILED_PRECONDITION',
     });
   });
 
@@ -1781,8 +1813,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         config: { mode: 'file', content: 'feature: [' },
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'INVALID_CONFIG_FILE',
-      status: 422,
+      reason: 'INVALID_CONFIG_FILE',
+      status: 'INVALID_ARGUMENT',
     });
     await expect(
       service.deploy('customer', {
@@ -1790,8 +1822,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         config: { mode: 'file', content: '- one\n- two\n' },
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'INVALID_CONFIG_FILE',
-      status: 422,
+      reason: 'INVALID_CONFIG_FILE',
+      status: 'INVALID_ARGUMENT',
     });
   });
 
@@ -2049,8 +2081,8 @@ describe('@nocobase/app-plugin-hub service', () => {
         config: { mode: 'file', content: 'feature: true\n' },
       }),
     ).rejects.toMatchObject<Partial<HubError>>({
-      code: 'ROLLBACK_CONFIG_MODE_MISMATCH',
-      status: 409,
+      reason: 'ROLLBACK_CONFIG_MODE_MISMATCH',
+      status: 'INVALID_ARGUMENT',
     });
   });
 
