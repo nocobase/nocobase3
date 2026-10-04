@@ -118,7 +118,7 @@
 
 ### 7. 所有输入先校验再处理
 
-每个接口声明自己接受什么数据，不合格的请求在进入业务逻辑前就被拒绝，返回 400 并指出哪个字段有问题。声明用 zod 写：请求内容用 `z.strictObject`，多余字段直接报错；查询参数和路径参数用 `z.object`。上传这类二进制或 multipart 请求，参数和请求头照样校验，请求内容在代码里校验。每个请求内容都有大小上限，超出时返回 413 `BODY_TOO_LARGE`。这份声明将来同时是接口文档的来源，写一次，校验和文档两用（见第 04 节）。
+每个接口声明自己接受什么数据，不合格的请求在进入业务逻辑前就被拒绝，返回 400 并指出哪个字段有问题。声明用 zod 写：请求内容用 `z.strictObject`，多余字段直接报错；查询参数和路径参数用 `z.object`。上传这类二进制或 multipart 请求，参数和请求头照样校验，请求内容在代码里校验。请求内容的大小上限是可选的：插件按需给路由加 `bodyLimit`，比如上传或输入本应很小的接口，超出时返回 413 `BODY_TOO_LARGE`；应用也可以在 `config.yml` 里用 `api.bodyLimit` 设一个全局上限，默认不开启。不要求每个路由都配。这份声明将来同时是接口文档的来源，写一次，校验和文档两用（见第 04 节）。
 
 ### 8. 数据格式细节统一
 
@@ -561,7 +561,7 @@ routes.post(
 - **请求方式**：「查看」类请求不得修改任何状态，包括顺带删除过期数据、改写会话或 Cookie；删除请求不带请求体，需要确认时用 `?confirm=true`。
 - **分页**：`pageSize` + `pageToken`（返回 `nextPageToken`，均为 AIP-158 规定的名字）或 `page` + `pageSize`，每页默认 20、最多 100；条数有限的配置类列表可以不分页，但仍返回 `meta.total`；`meta` 可以带额外字段。搜索参数为 `q`，排序为 `orderBy`。
 - **数据格式**：ID 在返回和传入时都是字符串；时间用 RFC 3339；布尔值是真正的布尔值。
-- **输入**：用 zod 通过 `validator()` + `parseApiInput()` 校验，请求内容用 `z.strictObject`，查询和路径参数用 `z.object`；禁止 `z.any()`，`z.unknown()` 只在写明理由时使用。每个请求内容都配 `bodyLimit`，超出返回 413 `BODY_TOO_LARGE`。
+- **输入**：用 zod 通过 `validator()` + `parseApiInput()` 校验，请求内容用 `z.strictObject`，查询和路径参数用 `z.object`；禁止 `z.any()`，`z.unknown()` 只在写明理由时使用。需要限制请求内容大小的路由按需配 `bodyLimit`，超出返回 413 `BODY_TOO_LARGE`，不要求每个路由都配。
 - **权限**：权限检查放在 `validator()` 之前的中间件里，先于「是否存在」判断；权限通过之前不写入任何东西。
 - **错误**：抛 `ApiError`，不手写错误体。插件只用 `apiErrorHandler(error, context)` 这一个错误接口：路由自己的 `onError` 只负责把本插件的领域错误转成 `ApiError`，其余一律交给它；框架认得 `ApiError`、`HTTPException`、带 4xx `status` 的错误，以及状态不是 `INTERNAL` 的数据仓库错误，其余重新抛出、按 500 处理。插件不自己翻译数据仓库错误。
 - **domain**：一个插件一个 `domain`，即它的命名空间；转交的错误保留原插件的 `domain`（如 `LAST_ASSIGNMENT` 仍是 `authorization`）；框架和数据仓库的错误用 `app`。

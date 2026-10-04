@@ -950,10 +950,10 @@
             400 并指出哪个字段有问题。声明用 zod 写：请求内容用
             <code>z.strictObject</code>，多余字段直接报错；查询参数和路径参数用
             <code>z.object</code>。上传这类二进制或 multipart
-            请求，参数和请求头照样校验，请求内容在代码里校验。每个请求内容都有大小上限，超出时返回
-            413
-            <code>BODY_TOO_LARGE</code
-            >。这份声明将来同时是接口文档的来源，写一次，校验和文档两用（见第 04
+            请求，参数和请求头照样校验，请求内容在代码里校验。请求内容的大小上限是可选的：插件按需给路由加
+            <code>bodyLimit</code>，比如上传或输入本应很小的接口，超出时返回 413
+            <code>BODY_TOO_LARGE</code>；应用也可以在 <code>config.yml</code> 里用
+            <code>api.bodyLimit</code> 设一个全局上限，默认不开启。不要求每个路由都配。这份声明将来同时是接口文档的来源，写一次，校验和文档两用（见第 04
             节）。
           </p>
         </div>
@@ -2216,8 +2216,8 @@ routes.post(
             <code>z.object</code>；禁止 <code>z.any()</code>，<code
               >z.unknown()</code
             >
-            只在写明理由时使用。每个请求内容都配
-            <code>bodyLimit</code>，超出返回 413 <code>BODY_TOO_LARGE</code>。
+            只在写明理由时使用。需要限制请求内容大小的路由按需配
+            <code>bodyLimit</code>，超出返回 413 <code>BODY_TOO_LARGE</code>，不要求每个路由都配。
           </li>
           <li>
             <b>权限</b>：权限检查放在
