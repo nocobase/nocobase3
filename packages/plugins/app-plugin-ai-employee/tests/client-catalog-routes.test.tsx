@@ -170,7 +170,7 @@ describe('catalog child routes', () => {
         expect(router.state.location.pathname).toBe(`/settings/ai/${catalog}`),
       );
       expect(router.state.location.search).toBe('?filter=recent');
-      expect(screen.getByRole('alert')).toHaveTextContent(
+      expect(await screen.findByRole('alert')).toHaveTextContent(
         catalog === 'skills'
           ? 'Unable to load skills.'
           : 'Unable to load tools.',
