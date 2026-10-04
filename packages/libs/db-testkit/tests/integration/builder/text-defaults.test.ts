@@ -61,6 +61,48 @@ describeIntegrationDatabases('text field defaults', (context) => {
           .repository('textDefaultsAdded')
           .findOne({ filter: { id: 'raw' } }),
       ).toEqual({ id: 'raw', note: "it's here" });
+      // The inspector reads the default back from the table. MySQL reports the expression form with its quotes
+      // backslash-escaped, so a quote inside the value is what exercises that decoding.
+      const resolved = await context.database
+        .connection()
+        .collections.get('textDefaultsAdded');
+      expect(
+        resolved?.fields.find((field) => field.name === 'note')?.defaultValue,
+      ).toBe("it's here");
+    },
+  );
+
+  it.runIf(supported)(
+    'gives a row inserted without the column the default an altered text field gained',
+    async () => {
+      await context.builder.createCollection(
+        'textDefaultsAltered',
+        (collection) => {
+          collection.string('id').primary();
+          collection.text('body').notNull();
+        },
+      );
+      await context.builder.alterField('textDefaultsAltered', 'body', {
+        type: 'text',
+        nullable: false,
+        defaultValue: 'pending',
+      });
+
+      await context
+        .db(context.table('textDefaultsAltered'))
+        .insert({ id: 'raw' });
+
+      expect(
+        await context.database
+          .repository('textDefaultsAltered')
+          .findOne({ filter: { id: 'raw' } }),
+      ).toEqual({ id: 'raw', body: 'pending' });
+      const resolved = await context.database
+        .connection()
+        .collections.get('textDefaultsAltered');
+      expect(
+        resolved?.fields.find((field) => field.name === 'body')?.defaultValue,
+      ).toBe('pending');
     },
   );
 });

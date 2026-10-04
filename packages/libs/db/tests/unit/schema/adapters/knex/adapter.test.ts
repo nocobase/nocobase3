@@ -261,6 +261,29 @@ describe('KnexSchemaAdapter', () => {
     expect(output).toContain("`body` text not null default ('draft')");
     expect(output).toContain("`status` varchar(255) not null default 'open'");
     expect(output.match(/default/gu)).toHaveLength(2);
+
+    // Altering a column rebuilds its whole definition, so the expression has to survive that path as well.
+    const altered = await adapter.compile([
+      {
+        type: 'alterTable',
+        tableName: 'notes',
+        operations: [
+          {
+            type: 'alterColumn',
+            column: 'body',
+            changes: {
+              name: 'body',
+              type: 'text',
+              nullable: false,
+              defaultValue: 'pending',
+            },
+          },
+        ],
+      },
+    ]);
+    expect(altered.join('\n')).toContain(
+      "modify `body` text not null default ('pending')",
+    );
   });
 
   it('compiles named SQLite primary constraints without object option artifacts', async () => {
