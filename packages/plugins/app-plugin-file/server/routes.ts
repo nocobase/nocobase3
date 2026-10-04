@@ -5,7 +5,7 @@ import {
   defineApiRoutes,
   defineRootRoutes,
   defineRepositoryApiRoutes,
-  renderKnownApiErrors,
+  apiErrorHandler,
   type ApiErrorStatus,
   type AppRouteContribution,
   type RepositoryApiActions,
@@ -433,7 +433,7 @@ function fileRouter(): Hono {
   router.onError((error, c) => {
     if (error instanceof FileRepositoryError)
       return apiErrorResponse(c, toFileApiError(error));
-    return renderKnownApiErrors(error, c);
+    return apiErrorHandler(error, c);
   });
   return router;
 }

@@ -130,7 +130,7 @@ The application handles everything a route does not:
 - Hono's `HTTPException`, and an error carrying a 4xx `status` such as `AuthorizationDeniedError`, keep their status.
 - A Repository error the caller can act on keeps its code as `reason` with domain `app`: a refused write is `403`, a missing record `404`, a version conflict `409`, invalid input `400`. One that is the server's own fault, such as an invalid Policy, is an opaque `500`. A route that calls a Repository lets these errors propagate instead of translating them.
 - An unknown `/api` path is `404 NOT_FOUND` with reason `ROUTE_NOT_FOUND`, never the application page.
-- A route's own `onError` still runs first. Use one only to turn the plugin's own domain errors into `ApiError`, then hand everything else to `renderKnownApiErrors` from `@nocobase/app-server/router`, which renders what the framework recognizes and rethrows the rest: `router.onError((error, context) => error instanceof OrderError ? apiErrorResponse(context, toOrderApiError(error)) : renderKnownApiErrors(error, context))`. A router with no domain errors of its own that is also tested on a bare Hono uses `router.onError(renderKnownApiErrors)`.
+- A route's own `onError` still runs first. Use one only to turn the plugin's own domain errors into `ApiError`, then hand everything else to `apiErrorHandler` from `@nocobase/app-server/router`, which renders what the framework recognizes and rethrows the rest: `router.onError((error, context) => error instanceof OrderError ? apiErrorResponse(context, toOrderApiError(error)) : apiErrorHandler(error, context))`. A router with no domain errors of its own that is also tested on a bare Hono uses `router.onError(apiErrorHandler)`.
 
 ## Input
 

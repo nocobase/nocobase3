@@ -24,7 +24,7 @@ import {
   ApiError,
   apiErrorResponse,
   appErrorDomain,
-  renderKnownApiErrors,
+  apiErrorHandler,
   toApiError,
 } from './api-error.js';
 import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
@@ -263,7 +263,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
 
   return defineApiRoutes((app: RepositoryApiRoutesApplication): Hono => {
     const router = new Hono();
-    router.onError(renderKnownApiErrors);
+    router.onError(apiErrorHandler);
 
     for (const entry of repositories) {
       if (entry.actions.length === 0) continue;

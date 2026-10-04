@@ -11,7 +11,7 @@ import {
   ApiError,
   type ApiInputSchema,
   parseApiInput,
-  renderKnownApiErrors,
+  apiErrorHandler,
   defineApiRoutes,
   defineRootRoutes,
 } from '../src/router/index.js';
@@ -290,7 +290,7 @@ describe('/api errors', () => {
 
   it('renders recognized errors from a router mounted on a bare Hono and rethrows the rest', async () => {
     const router = new Hono();
-    router.onError(renderKnownApiErrors);
+    router.onError(apiErrorHandler);
     router.get('/missing', () => {
       throw new RepositoryError('RECORD_NOT_FOUND', 'No such order.');
     });

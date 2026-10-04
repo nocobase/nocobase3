@@ -270,17 +270,13 @@ export function apiErrorResponse(context: Context, error: unknown): Response {
   );
 }
 
-/** The `onError` handler for `/api`, installed by the application. Exported for routers tested on their own. */
-export const apiErrorHandler: ErrorHandler = (error, context) =>
-  apiErrorResponse(context, error);
-
 /**
- * The `onError` for a router that may be mounted outside an application's `/api`, such as one tested on a bare Hono:
- * it answers every error `recognizeApiError` recognizes in the standard body and rethrows the rest, so the enclosing
- * handler, and the request log, still see an unexpected failure. A router that translates its own domain errors does
- * that first and then delegates here.
+ * The `onError` for a plugin's router: it answers every error `recognizeApiError` recognizes in the standard body and
+ * rethrows the rest, so an enclosing router can still translate it and the application answers an unexpected failure
+ * with an opaque 500. A router that translates its own domain errors does that first and then delegates here. Install
+ * it even though the application renders the same errors: a router tested on a bare Hono has no `/api` handler.
  */
-export const renderKnownApiErrors: ErrorHandler = (error, context) => {
+export const apiErrorHandler: ErrorHandler = (error, context) => {
   const known = recognizeApiError(error);
   if (known) return apiErrorResponse(context, known);
   throw error;
