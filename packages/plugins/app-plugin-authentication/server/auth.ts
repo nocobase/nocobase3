@@ -198,7 +198,7 @@ export class Auth {
       origin ??
       context.req.header('referer');
     if (!source || source === 'null') {
-      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+      return invalidCsrfOrigin(context);
     }
 
     // Better Auth also accepts per-request trusted origins. Its static context contains the
@@ -220,7 +220,7 @@ export class Auth {
       allowRelativePaths: false,
     });
     if (!trustedByAuth) {
-      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+      return invalidCsrfOrigin(context);
     }
   }
 
@@ -312,6 +312,20 @@ export function createAuthentication(
     ...options,
     connection: options.connection,
   });
+}
+
+/** A cookie-bearing write whose origin is neither the application's own nor a trusted one. */
+function invalidCsrfOrigin(context: Context): Response {
+  return apiErrorResponse(
+    context,
+    new ApiError({
+      status: 'PERMISSION_DENIED',
+      reason: 'INVALID_CSRF_ORIGIN',
+      domain: 'authentication',
+      message:
+        'The request origin is not trusted for a cookie-authenticated write.',
+    }),
+  );
 }
 
 /** A credential Better Auth refused, answered in the standard API error body with Better Auth's code as the reason. */

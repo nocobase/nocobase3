@@ -23,14 +23,17 @@ it('offers a settings page the labelled records of a collection, and nothing for
     const authz = createAppAuthorization({ connection, database });
     authz.database.collections.add({ name: 'customers', title: 'Customers' });
     authz.database.collections.add({ name: 'orders', title: 'Orders' });
-    const routes = createRuleSupportRoutes(authz, 'sharing-rules');
+    const routes = createRuleSupportRoutes(authz, {
+      path: '/sharingRules',
+      settings: 'authorization.sharing-rules',
+    });
     const authorization = {
       require: () => Promise.resolve(),
     } as unknown as AuthorizationContext;
     const records = async (collection: string): Promise<unknown> =>
       (
         await routes.request(
-          `/sharing-rules/records/${collection}`,
+          `/sharingRules/records/${collection}`,
           {},
           { authorization },
         )

@@ -1,11 +1,29 @@
 export {
+  AUTHORIZATION_ERROR_DOMAIN,
   createRouteHandler,
   createSettingsRouter,
   requireSettings,
+  settingsAccess,
+  toAuthorizationApiError,
+  type AuthorizationErrorTranslator,
   type SettingsRouterEnv,
 } from './http.js';
 export { parse } from './parsing.js';
-export { createRuleSupportRoutes } from './options.js';
+export {
+  createRuleSupportRoutes,
+  type RuleSupportRoutesOptions,
+} from './options.js';
+export {
+  DataScopeRuleBody,
+  DataScopeRulePatchBody,
+  RecordSelectionInput,
+  ReferenceInput,
+  RuleActionInput,
+  RuleParams,
+  SubjectRuleBody,
+  SubjectRulePatchBody,
+  TitleInput,
+} from './schemas.js';
 export {
   validateDataScopeRule,
   type DataScopeRuleInput,

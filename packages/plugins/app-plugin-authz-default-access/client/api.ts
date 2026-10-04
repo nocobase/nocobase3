@@ -16,24 +16,30 @@ export interface DefaultAccessRule {
 class DefaultAccessClient {
   constructor(private readonly api: ApiClient) {}
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
-    return this.get<readonly DefaultAccessRule[]>('authz/default-access');
+    return this.get<readonly DefaultAccessRule[]>(
+      'authorization/defaultAccess',
+    );
   }
   createDefaultAccess(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
-    return this.send<DefaultAccessRule>('authz/default-access', 'POST', rule);
+    return this.send<DefaultAccessRule>(
+      'authorization/defaultAccess',
+      'POST',
+      rule,
+    );
   }
   updateDefaultAccess(
     key: string,
     rule: DefaultAccessRule,
   ): Promise<DefaultAccessRule> {
     return this.send<DefaultAccessRule>(
-      `authz/default-access/${encodeURIComponent(key)}`,
-      'PUT',
+      `authorization/defaultAccess/${encodeURIComponent(key)}`,
+      'PATCH',
       rule,
     );
   }
   async deleteDefaultAccess(key: string): Promise<void> {
     await this.api.request({
-      path: `authz/default-access/${encodeURIComponent(key)}`,
+      path: `authorization/defaultAccess/${encodeURIComponent(key)}`,
       method: 'DELETE',
     });
   }
@@ -41,7 +47,7 @@ class DefaultAccessClient {
     collection: string,
   ): Promise<readonly AuthorizationRecordOption[]> {
     return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/default-access/records/${encodeURIComponent(collection)}`,
+      `authorization/defaultAccess/records/${encodeURIComponent(collection)}`,
     );
   }
   private get<T>(path: string): Promise<T> {
@@ -51,7 +57,7 @@ class DefaultAccessClient {
   }
   private send<T>(
     path: string,
-    method: 'POST' | 'PUT',
+    method: 'POST' | 'PATCH',
     json: unknown,
   ): Promise<T> {
     return this.api

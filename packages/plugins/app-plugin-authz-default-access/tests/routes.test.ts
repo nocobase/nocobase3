@@ -8,7 +8,7 @@ import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import { defaultAccess } from '../server/authorization.js';
 
-const PATH = '/default-access';
+const PATH = '/defaultAccess';
 const SETTINGS = { type: 'settings', id: 'authorization.default-access' };
 
 class MemoryStore {
@@ -48,7 +48,7 @@ function fixture(permitted = true) {
   });
   const call = async (path: string, init?: RequestInit): Promise<Response> => {
     const response = await authz.routes.handle({
-      request: new Request(`http://app/api/authz${path}`, init),
+      request: new Request(`http://app/api/authorization${path}`, init),
       path,
       authorization: { require } as unknown as AuthorizationContext,
     });
@@ -93,10 +93,13 @@ describe('default access through the authorization dispatcher', () => {
     expect((await call(`${PATH}/subjects/user`)).status).toBe(404);
   });
 
-  it('answers 403 when the settings check fails', async () => {
-    const { call } = fixture(false);
+  it('answers 403 when the settings check fails, before reading the body', async () => {
+    const { call, json } = fixture(false);
     expect((await call(PATH)).status).toBe(403);
     expect((await call(`${PATH}/options`)).status).toBe(403);
+    expect((await call(PATH, json('POST', { unknown: true }))).status).toBe(
+      403,
+    );
   });
 
   it('creates, lists, updates and deletes a rule with settings checks', async () => {
@@ -113,18 +116,27 @@ describe('default access through the authorization dispatcher', () => {
       actions: [{ action: 'read', selection: selection.records(['o2']) }],
     };
     expect(
-      (await call(`${PATH}/orders-rule`, json('PUT', updated))).status,
+      (await call(`${PATH}/orders-rule`, json('PATCH', updated))).status,
     ).toBe(200);
     expect(require).toHaveBeenLastCalledWith({
       resource: SETTINGS,
       action: 'update',
     });
-    expect((await call(`${PATH}/missing`, json('PUT', updated))).status).toBe(
+    expect((await call(`${PATH}/missing`, json('PATCH', updated))).status).toBe(
       404,
     );
     expect(
       (await call(`${PATH}/orders-rule`, { method: 'DELETE' })).status,
     ).toBe(204);
+    const gone = await call(`${PATH}/orders-rule`, { method: 'DELETE' });
+    expect(gone.status).toBe(404);
+    await expect(gone.json()).resolves.toMatchObject({
+      error: {
+        status: 'NOT_FOUND',
+        reason: 'RULE_NOT_FOUND',
+        domain: 'authorization',
+      },
+    });
     expect(require).toHaveBeenLastCalledWith({
       resource: SETTINGS,
       action: 'delete',
@@ -134,9 +146,16 @@ describe('default access through the authorization dispatcher', () => {
 
   it('rejects malformed rules and rules outside the model', async () => {
     const { call, json } = fixture();
+    const malformed = await call(
+      PATH,
+      json('POST', { resource: { type: 'x', id: 'y' } }),
+    );
+    expect(malformed.status).toBe(400);
+    await expect(malformed.json()).resolves.toMatchObject({
+      error: { status: 'INVALID_ARGUMENT', reason: 'INVALID_INPUT' },
+    });
     expect(
-      (await call(PATH, json('POST', { resource: { type: 'x', id: 'y' } })))
-        .status,
+      (await call(PATH, json('POST', { ...rule, subjects: [] }))).status,
     ).toBe(400);
     expect(
       (
@@ -157,14 +176,18 @@ describe('default access through the authorization dispatcher', () => {
     const second = await call(PATH, json('POST', { ...rule, key: 'again' }));
     expect(second.status).toBe(409);
     expect(await second.json()).toMatchObject({
-      code: 'DEFAULT_ACCESS_CONFLICT',
+      error: {
+        status: 'ALREADY_EXISTS',
+        reason: 'DEFAULT_ACCESS_CONFLICT',
+        domain: 'authorization',
+      },
     });
     // Updating the rule in place, even under a new key, is not a conflict.
     expect(
       (
         await call(
           `${PATH}/orders-rule`,
-          json('PUT', { ...rule, key: 'orders-renamed' }),
+          json('PATCH', { ...rule, key: 'orders-renamed' }),
         )
       ).status,
     ).toBe(200);

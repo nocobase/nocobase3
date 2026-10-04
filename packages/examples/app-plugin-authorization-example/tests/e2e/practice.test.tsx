@@ -213,7 +213,7 @@ it('answers useCan for a scoped business grant through the real client and snaps
   // Both hooks share one snapshot from the real route.
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(String(fetch.mock.calls[0]![0])).toBe(
-    'http://example.test/api/authz/permissions',
+    'http://example.test/api/authorization/permissions',
   );
   const snapshot = await client.snapshot();
   expect(snapshot.unrestricted).toBe(false);

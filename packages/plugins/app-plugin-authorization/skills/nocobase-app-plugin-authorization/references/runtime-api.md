@@ -114,6 +114,8 @@ Use [code versus seeds](code-and-seeds.md) for the engineer permission set and i
 Every route installs authentication and `authz.middleware()`. For a business action, authorize once and bind every resulting collection policy before executing queries. Validate input and business transitions separately.
 
 ```ts
+import { AuthorizationDeniedError } from '@nocobase/authorization/core';
+
 router.use('*', authentication.required(), authz.middleware());
 router.get('/quotes', async (c) => {
   const decision = await c.get('authz').authorize({
@@ -121,8 +123,9 @@ router.get('/quotes', async (c) => {
     action: 'view',
   });
   const policy = decision.conditions?.database?.quotes;
+  // The application answers it as 403 PERMISSION_DENIED in the standard error body.
   if (decision.effect === 'deny' || !policy)
-    return c.json({ code: 'FORBIDDEN' }, 403);
+    throw new AuthorizationDeniedError(decision);
   const records = await database
     .repository('quotes')
     .withPolicy(policy)

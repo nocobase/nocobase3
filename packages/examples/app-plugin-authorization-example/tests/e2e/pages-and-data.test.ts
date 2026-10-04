@@ -309,7 +309,7 @@ it('lets engineers prepare their own quotes and requires an explicit handover to
   const rule = (await authz.sharingRules.get('example-proposal-handover'))!;
   expect(
     (
-      await admin('sharing-rules/example-proposal-handover', 'PUT', {
+      await admin('sharingRules/example-proposal-handover', 'PATCH', {
         ...rule,
         subjects: [],
       })

@@ -2,7 +2,7 @@
 
 Use `authz.database.authorizeRepository({ repository, resource, actions })` for simple single-collection business operations. Keep `defineRepositoryApiRoutes({ repositories })`, its static `policy`, and its enabled `actions` unchanged. The authorization middleware adds a request constraint; the router intersects it with the static policy or principal-derived policy before executing. It does not grant fields missing from either policy.
 
-`repository` is the exposure name, `resource` is a typed composite reference, and `actions` maps Repository methods to declared composite action names. No additional collection CRUD grant is required. Register the collections and composite in the provider first, then configure business grants and scopes through seed/backend. The middleware itself registers and assigns nothing. A method with no mapping, or a decision without exactly that collection's policy, answers `403 { code: 'FORBIDDEN' }`.
+`repository` is the exposure name, `resource` is a typed composite reference, and `actions` maps Repository methods to declared composite action names. No additional collection CRUD grant is required. Register the collections and composite in the provider first, then configure business grants and scopes through seed/backend. The middleware itself registers and assigns nothing. A method with no mapping, or a decision without exactly that collection's policy, answers `403 PERMISSION_DENIED` in the standard error body, reason `AUTHORIZATION_DENIED`, domain `authorization`.
 
 ## Choose the route boundary
 
@@ -112,7 +112,7 @@ export async function createProjectRoutes(
     }),
   );
 
-  router.use('/salesProjects:updateOne', async (c, next) => {
+  router.use('/salesProjects/updateOne', async (c, next) => {
     // Leave the original stream for the Repository body limit and parser.
     const body: unknown = await c.req.raw
       .clone()
@@ -161,7 +161,7 @@ export function editableValues(body: unknown, fields: readonly string[]): void {
 
 Use App-owned collection/resource modules. This `server/routes/projects.ts` contribution exposes paths relative to the App API base; if the App adds a route prefix, use that same prefix in client requests. The resource declaration uses `defineCompositeResource` and `defineDatabasePermission`, described in the bundled runtime and fluent references. Do not import private files from an installed example package.
 
-The resulting endpoints are POST `salesProjects:findMany`, `salesProjects:findOne`, `salesProjects:count` and `salesProjects:updateOne`. Update input is `{ filter: { id }, values: { notes } }`; the response is Repository's `{ data }` envelope containing the updated record. Hidden/out-of-scope update targets return 404; missing action grants return 403. Client code should refresh data and handle both outcomes. Reading a cloned request in validation leaves the original stream available for the generated route's body-size check and parser; install a body limit before custom validation too.
+The resulting endpoints are `POST /api/salesProjects/findMany`, `/api/salesProjects/findOne`, `/api/salesProjects/count` and `/api/salesProjects/updateOne`. Update input is `{ filter: { id }, values: { notes } }`; the response is Repository's `{ data }` envelope containing the updated record. Hidden/out-of-scope update targets return 404; missing action grants return 403; branch on `error.reason`, never on `message`. Client code should refresh data and handle both outcomes. Reading a cloned request in validation leaves the original stream available for the generated route's body-size check and parser; install a body limit before custom validation too.
 
 ## Enforcement and limits
 

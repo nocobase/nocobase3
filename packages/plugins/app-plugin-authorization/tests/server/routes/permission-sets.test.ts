@@ -21,7 +21,7 @@ import {
   testIdentity,
 } from '../../helpers/mounted-router.js';
 
-const PATH = '/api/authz/permission-sets';
+const PATH = '/api/authorization/permissionSets';
 
 const settings = (
   id: string,
@@ -102,8 +102,59 @@ describe('the Permission Set routes', () => {
       ).status,
     ).toBe(201);
     expect(
-      await (await router.request(`${PATH}/effective/user/alice`)).json(),
+      await (
+        await router.request(`${PATH}?subjectType=user&subjectId=alice`)
+      ).json(),
     ).toMatchObject({ data: [{ key: 'reader' }] });
+  });
+
+  it('answers missing sets, unknown fields and partial updates in the standard shape', async () => {
+    const authz = authorization();
+    await holding(authz, 'admin', [settings('authorization.permission-sets')]);
+    await authz.permissionSets.create({
+      key: 'target',
+      title: 'Target',
+      grants: [settings('reports', ['read'])],
+    });
+    const router = await mountedRouter(authz);
+
+    const missing = await router.request(`${PATH}/missing`);
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: {
+        status: 'NOT_FOUND',
+        reason: 'PERMISSION_SET_NOT_FOUND',
+        domain: 'authorization',
+      },
+    });
+    const revoked = await router.request(
+      `${PATH}/target/assignments/nobody`,
+      json('DELETE'),
+    );
+    expect(revoked.status).toBe(404);
+    await expect(revoked.json()).resolves.toMatchObject({
+      error: { reason: 'ASSIGNMENT_NOT_FOUND' },
+    });
+    const unknownField = await router.request(
+      PATH,
+      json('POST', { key: 'extra', grants: [], owner: 'me' }),
+    );
+    expect(unknownField.status).toBe(400);
+    await expect(unknownField.json()).resolves.toMatchObject({
+      error: { reason: 'INVALID_INPUT', domain: 'app' },
+    });
+    const halfSubject = await router.request(`${PATH}?subjectType=user`);
+    expect(halfSubject.status).toBe(400);
+
+    const patched = await router.request(
+      `${PATH}/target`,
+      json('PATCH', { title: 'Renamed' }),
+    );
+    expect(patched.status).toBe(200);
+    expect(await authz.permissionSets.get('target')).toMatchObject({
+      title: 'Renamed',
+      grants: [settings('reports', ['read'])],
+    });
   });
 
   it('separates editing permission sets from managing assignments', async () => {
@@ -117,7 +168,7 @@ describe('the Permission Set routes', () => {
     const edit = (user: string) =>
       router.request(
         `${PATH}/target`,
-        json('PUT', { key: 'target', title: 'Edited', grants: [] }, user),
+        json('PATCH', { key: 'target', title: 'Edited', grants: [] }, user),
       );
     const assign = (user: string) =>
       router.request(
@@ -215,12 +266,12 @@ describe('the Permission Set routes', () => {
       .data;
     const updated = await router.request(
       `${PATH}/localized`,
-      json('PUT', record),
+      json('PATCH', record),
     );
     expect(await updated.json()).toMatchObject({ data: { title } });
     await router.request(
       `${PATH}/localized`,
-      json('PUT', { ...record, title: 'My custom title' }),
+      json('PATCH', { ...record, title: 'My custom title' }),
     );
     expect(
       await (await router.request(`${PATH}/localized`)).json(),
@@ -262,7 +313,7 @@ describe('protected Permission Sets', () => {
     const update = (
       key: string,
       input: { key: string; title?: string; grants: readonly unknown[] },
-    ) => router.request(`${PATH}/${key}`, json('PUT', input));
+    ) => router.request(`${PATH}/${key}`, json('PATCH', input));
     const grants = [settings('authorization.permission-sets', ['read'])];
 
     const edited = await update('member', {
@@ -274,9 +325,9 @@ describe('protected Permission Sets', () => {
     expect(await api.get('member')).toMatchObject({ title: 'Members', grants });
 
     const renamed = await update('member', { key: 'escaped', grants: [] });
-    expect(renamed.status).toBe(403);
+    expect(renamed.status).toBe(400);
     expect(await renamed.json()).toMatchObject({
-      code: 'PROTECTED_PERMISSION_SET',
+      error: { reason: 'PROTECTED_PERMISSION_SET' },
     });
     expect(await api.get('escaped')).toBeUndefined();
     expect(await api.get('member')).toMatchObject({ title: 'Members', grants });
@@ -293,9 +344,9 @@ describe('protected Permission Sets', () => {
       key: 'reserved',
       grants: [],
     });
-    expect(ontoProtected.status).toBe(403);
+    expect(ontoProtected.status).toBe(400);
     expect(await ontoProtected.json()).toMatchObject({
-      code: 'PROTECTED_PERMISSION_SET',
+      error: { reason: 'PROTECTED_PERMISSION_SET' },
     });
     expect(await api.get('reserved')).toBeUndefined();
     expect((await update('plain', { key: 'renamed', grants: [] })).status).toBe(
@@ -323,7 +374,7 @@ describe('protected Permission Sets', () => {
     const responses = await Promise.all([
       router.request(
         `${PATH}/hub-viewer`,
-        json('PUT', { key: 'hub-viewer', grants: [] }),
+        json('PATCH', { key: 'hub-viewer', grants: [] }),
       ),
       router.request(
         `${PATH}/hub-viewer/assignments`,
@@ -338,11 +389,11 @@ describe('protected Permission Sets', () => {
     ]);
 
     expect(responses.map(({ status }) => status)).toEqual([
-      403, 403, 403, 403, 403,
+      400, 400, 400, 400, 400,
     ]);
     for (const response of responses) {
       await expect(response.json()).resolves.toMatchObject({
-        code: 'PROTECTED_PERMISSION_SET',
+        error: { reason: 'PROTECTED_PERMISSION_SET' },
       });
     }
     expect(
@@ -416,9 +467,9 @@ describe('protected Permission Sets', () => {
       `${PATH}/admin-set/assignments/user:admin:admin-set`,
       json('DELETE'),
     );
-    expect(last.status).toBe(409);
+    expect(last.status).toBe(400);
     await expect(last.json()).resolves.toMatchObject({
-      code: 'LAST_ASSIGNMENT',
+      error: { reason: 'LAST_ASSIGNMENT' },
     });
   });
 });
@@ -454,9 +505,9 @@ describe('the subject types the root Permission Set accepts', () => {
       router.request(`${PATH}/root/assignments`, json('POST', { subject }));
 
     const audience = await assign({ type: 'authenticated', id: '*' });
-    expect(audience.status).toBe(403);
+    expect(audience.status).toBe(400);
     await expect(audience.json()).resolves.toMatchObject({
-      code: 'PERMISSION_SET_SUBJECT_NOT_ALLOWED',
+      error: { reason: 'PERMISSION_SET_SUBJECT_NOT_ALLOWED' },
     });
     expect((await assign({ type: 'user', id: 'alice' })).status).toBe(201);
 

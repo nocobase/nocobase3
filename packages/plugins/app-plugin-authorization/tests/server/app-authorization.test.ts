@@ -143,9 +143,9 @@ describe('what an application configures about its own authorization', () => {
     );
 
     const [installed, rule, missing] = await Promise.all([
-      router.request('/portal/api/authz/permission-sets/options'),
-      router.request('/portal/api/authz/restriction-rules/options'),
-      router.request('/portal/api/authz/sharing-rules'),
+      router.request('/portal/api/authorization/permissionSets/options'),
+      router.request('/portal/api/authorization/restrictionRules/options'),
+      router.request('/portal/api/authorization/sharingRules'),
     ]);
 
     expect([installed.status, rule.status, missing.status]).toEqual([

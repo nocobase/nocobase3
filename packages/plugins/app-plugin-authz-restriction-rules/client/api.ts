@@ -20,31 +20,37 @@ export interface RestrictionRule {
 class RestrictionRulesClient {
   constructor(private readonly api: ApiClient) {}
   listRestrictionRules(): Promise<readonly RestrictionRule[]> {
-    return this.get<readonly RestrictionRule[]>('authz/restriction-rules');
+    return this.get<readonly RestrictionRule[]>(
+      'authorization/restrictionRules',
+    );
   }
   listRestrictionRecords(
     collection: string,
   ): Promise<readonly AuthorizationRecordOption[]> {
     return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/restriction-rules/records/${encodeURIComponent(collection)}`,
+      `authorization/restrictionRules/records/${encodeURIComponent(collection)}`,
     );
   }
   createRestrictionRule(rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.send<RestrictionRule>('authz/restriction-rules', 'POST', rule);
+    return this.send<RestrictionRule>(
+      'authorization/restrictionRules',
+      'POST',
+      rule,
+    );
   }
   updateRestrictionRule(
     key: string,
     rule: RestrictionRule,
   ): Promise<RestrictionRule> {
     return this.send<RestrictionRule>(
-      `authz/restriction-rules/${encodeURIComponent(key)}`,
-      'PUT',
+      `authorization/restrictionRules/${encodeURIComponent(key)}`,
+      'PATCH',
       rule,
     );
   }
   async deleteRestrictionRule(key: string): Promise<void> {
     await this.api.request({
-      path: `authz/restriction-rules/${encodeURIComponent(key)}`,
+      path: `authorization/restrictionRules/${encodeURIComponent(key)}`,
       method: 'DELETE',
     });
   }
@@ -56,7 +62,7 @@ class RestrictionRulesClient {
   }
   private send<T>(
     path: string,
-    method: 'POST' | 'PUT',
+    method: 'POST' | 'PATCH',
     json: unknown,
   ): Promise<T> {
     return this.api

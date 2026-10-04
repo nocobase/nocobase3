@@ -146,14 +146,14 @@ async function seedFixture(database: DatabaseManager) {
 
 export type SalesFixture = Awaited<ReturnType<typeof createFixture>>;
 
-/** A request to `/api/authz/<path>` as the seeded administrator. */
+/** A request to `/api/authorization/<path>` as the seeded administrator. */
 export function adminRequest(
   fixture: SalesFixture,
   path: string,
   method = 'GET',
   body?: unknown,
 ): Promise<Response> {
-  return fixture.router.request(`/api/authz/${path}`, {
+  return fixture.router.request(`/api/authorization/${path}`, {
     method,
     headers: {
       'x-test-user': fixture.users.admin,

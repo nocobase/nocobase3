@@ -99,7 +99,7 @@ describe('department heads', () => {
   it('is announced as a fixed, localized subject type', async () => {
     const response = await test.request(
       'GET',
-      '/api/authz/permission-sets/options',
+      '/api/authorization/permissionSets/options',
       { cookie: await test.signIn(ADMIN.email, ADMIN.password) },
     );
     const body = (await response.json()) as {

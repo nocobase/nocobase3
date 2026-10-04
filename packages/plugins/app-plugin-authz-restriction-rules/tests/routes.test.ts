@@ -8,7 +8,7 @@ import type { RestrictionRule } from '@nocobase/authorization/restriction-rules'
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import { restrictionRules } from '../server/authorization.js';
 
-const PATH = '/restriction-rules';
+const PATH = '/restrictionRules';
 const SETTINGS = { type: 'settings', id: 'authorization.restriction-rules' };
 
 class MemoryStore {
@@ -49,7 +49,7 @@ function fixture(permitted = true) {
   });
   const call = async (path: string, init?: RequestInit): Promise<Response> => {
     const response = await authz.routes.handle({
-      request: new Request(`http://app/api/authz${path}`, init),
+      request: new Request(`http://app/api/authorization${path}`, init),
       path,
       authorization: { require } as unknown as AuthorizationContext,
     });
@@ -114,13 +114,13 @@ describe('restriction rules through the authorization dispatcher', () => {
       actions: [{ action: 'read', selection: selection.records(['o2']) }],
     };
     expect(
-      (await call(`${PATH}/orders-rule`, json('PUT', updated))).status,
+      (await call(`${PATH}/orders-rule`, json('PATCH', updated))).status,
     ).toBe(200);
     expect(require).toHaveBeenLastCalledWith({
       resource: SETTINGS,
       action: 'update',
     });
-    expect((await call(`${PATH}/missing`, json('PUT', updated))).status).toBe(
+    expect((await call(`${PATH}/missing`, json('PATCH', updated))).status).toBe(
       404,
     );
     expect(
@@ -172,14 +172,34 @@ describe('restriction rules through the authorization dispatcher', () => {
     expect(created.status).toBe(201);
     expect(await created.json()).toMatchObject({ data: { title } });
     const [saved] = (await (await call(PATH)).json()).data;
-    const updated = await call(`${PATH}/orders-rule`, json('PUT', saved));
+    const updated = await call(`${PATH}/orders-rule`, json('PATCH', saved));
     expect(await updated.json()).toMatchObject({ data: { title } });
     await call(
       `${PATH}/orders-rule`,
-      json('PUT', { ...saved, title: 'My custom title' }),
+      json('PATCH', { ...saved, title: 'My custom title' }),
     );
     expect(await (await call(PATH)).json()).toMatchObject({
       data: [{ key: 'orders-rule', title: 'My custom title' }],
+    });
+    // A partial update changes only the fields it names.
+    expect(
+      (await call(`${PATH}/orders-rule`, json('PATCH', { reason: 'Audit' })))
+        .status,
+    ).toBe(200);
+    expect(await (await call(PATH)).json()).toMatchObject({
+      data: [
+        {
+          key: 'orders-rule',
+          title: 'My custom title',
+          subjects: rule.subjects,
+          reason: 'Audit',
+        },
+      ],
+    });
+    const missing = await call(`${PATH}/missing`, { method: 'DELETE' });
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { reason: 'RULE_NOT_FOUND', domain: 'authorization' },
     });
     expect(
       (
