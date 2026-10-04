@@ -24,6 +24,10 @@ import {
   assertNoDuplicateApiRoutes,
   type OwnedApiRouter,
 } from '../router/duplicate-routes.js';
+import { createApiDocsRouter } from '../router/openapi/docs-routes.js';
+import type { ApiDocsDescription } from '../router/openapi/service.js';
+import { apiDocsToken } from '../router/openapi/service.js';
+import { readFile } from 'node:fs/promises';
 import { normalizeBasePath, resolveAppName } from '../support/index.js';
 import {
   ServiceContainer,
@@ -126,6 +130,7 @@ export class Application<
   private readonly usesDefaultWebSocket: boolean;
   private serviceProvidersRegistered = false;
   private routesRegistered = false;
+  private apiRouterValue: Hono | undefined;
   private readonly httpMiddleware: AppHttpMiddleware<Application<TConfig>>[] =
     [];
   private readonly routes: {
@@ -181,6 +186,14 @@ export class Application<
 
   public get router(): Hono {
     return this.container.resolve(routerToken);
+  }
+
+  /**
+   * The router every `/api` contribution is mounted into, once the application has started and registered its routes.
+   * The API document is generated from it, and `inspectApiRoutes(app)` reads it.
+   */
+  public get apiRouter(): Hono | undefined {
+    return this.apiRouterValue;
   }
 
   public addServiceProvider<TArguments extends readonly unknown[]>(
@@ -384,6 +397,17 @@ export class Application<
         });
       } else roots.push(router);
     }
+    // The API documentation, mounted with the contributions so a plugin route under `/swagger` fails start as a
+    // duplicate rather than shadowing it.
+    const apiDocs = this.container.has(apiDocsToken)
+      ? this.container.resolve(apiDocsToken)
+      : undefined;
+    if (apiDocs) {
+      apiRouters.push({
+        owner: '@nocobase/app-server',
+        router: createApiDocsRouter(apiDocs),
+      });
+    }
     // Hono lets the first matching route win without a word, so a second contribution answering the same method and
     // path would be dead code nobody notices. Checked before anything mounts, so a failed start leaves no half-built
     // router behind.
@@ -392,7 +416,53 @@ export class Application<
     api.all('*', apiNotFoundHandler);
     this.router.route('/api', api);
     for (const router of roots) this.router.route('/', router);
+    this.apiRouterValue = api;
+    apiDocs?.attach({
+      api,
+      describe: () => this.describeApiDocument(),
+      onWarning: (message) => {
+        if (this.container.has(loggingToken)) {
+          this.container
+            .resolve(loggingToken)
+            .getLogger('api-docs')
+            .warn(message);
+        } else console.warn(message);
+      },
+    });
     this.routesRegistered = true;
+  }
+
+  /**
+   * The document's title and version, from the application's `package.json` or else its name, and its server: the
+   * public base path the API is served under.
+   */
+  private async describeApiDocument(): Promise<ApiDocsDescription> {
+    let manifest: {
+      readonly name?: unknown;
+      readonly displayName?: unknown;
+      readonly version?: unknown;
+    } = {};
+    try {
+      manifest = JSON.parse(
+        await readFile(this.paths.root('package.json'), 'utf8'),
+      ) as typeof manifest;
+    } catch {
+      // An application assembled without a manifest, such as one in a test, is named by its configuration.
+    }
+    const text = (value: unknown): string | undefined =>
+      typeof value === 'string' && value ? value : undefined;
+    const identity = this.config.get<AppIdentityConfig>('app');
+    return {
+      info: {
+        title:
+          text(manifest.displayName) ??
+          text(manifest.name) ??
+          this.appPackageName ??
+          (identity ? this.appName : 'NocoBase application'),
+        version: text(manifest.version) ?? '0.0.0',
+      },
+      servers: [{ url: (identity && this.publicBasePath) || '/' }],
+    };
   }
 
   private assertRoutesMutable(): void {

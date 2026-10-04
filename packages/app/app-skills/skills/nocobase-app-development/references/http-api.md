@@ -142,23 +142,51 @@ The application handles everything a route does not:
 
 ## Input
 
-Validate every input before using it — path parameters, query parameters and the JSON body — with a zod schema, through Hono's `validator()` and `parseApiInput()`. An invalid request is answered `400 INVALID_ARGUMENT` with reason `INVALID_INPUT` and a field violation for each problem, before the handler runs. The handler reads only `context.req.valid(...)`, never `context.req.json()` or `context.req.query()`.
+Validate every input before using it — path parameters, query parameters and the JSON body — with a zod schema, through `apiValidator(target, schema)` from `@nocobase/app-server/router`. An invalid request is answered `400 INVALID_ARGUMENT` with reason `INVALID_INPUT` and a field violation for each problem, before the handler runs. The handler reads only `context.req.valid(...)`, never `context.req.json()` or `context.req.query()`. `apiValidator()` also declares the schema in the [API documentation](#api-documentation), so every route declares itself with `describeRoute()` in the same place.
 
 ```ts
-import { parseApiInput } from '@nocobase/app-server/router';
-import { validator } from 'hono/validator';
+// server/routes/schemas.ts
 import { z } from 'zod';
 
-const OrderParams = z.object({ orderId: z.string() });
-const CancelOrderInput = z.strictObject({
-  reason: z.string().min(1),
+export const OrderParams = z.object({ orderId: z.string() });
+export const CancelOrderInput = z.strictObject({
+  reason: z
+    .string()
+    .min(1)
+    .meta({ description: 'Why the order is cancelled.' }),
 });
+export const Order = z
+  .object({ id: z.string(), status: z.enum(['open', 'cancelled']) })
+  .meta({ ref: 'Order' });
+```
+
+```ts
+// server/routes/orders.ts
+import {
+  apiErrorResponse,
+  apiErrorResponses,
+  apiValidator,
+  dataResponse,
+  describeRoute,
+} from '@nocobase/app-server/router';
+
+import { CancelOrderInput, Order, OrderParams } from './schemas.js';
 
 router.post(
   '/orders/:orderId/cancel',
+  describeRoute({
+    tags: ['Orders'],
+    summary: 'Cancel an order',
+    operationId: 'cancelOrder',
+    responses: {
+      '200': dataResponse(Order, 'The cancelled order.'),
+      ...apiErrorResponses,
+      '404': apiErrorResponse(404),
+    },
+  }),
   auth.required(),
-  validator('param', (value) => parseApiInput(OrderParams, value)),
-  validator('json', (value) => parseApiInput(CancelOrderInput, value)),
+  apiValidator('param', OrderParams),
+  apiValidator('json', CancelOrderInput),
   async (context) => {
     const { orderId } = context.req.valid('param');
     const input = context.req.valid('json');
@@ -166,6 +194,8 @@ router.post(
   },
 );
 ```
+
+`parseApiInput()` inside Hono's `validator()` answers the same error but declares nothing in the document. It is superseded: a route still using it keeps working until it is migrated, and new code uses `apiValidator()`.
 
 | Input           | Schema           | An unknown field                        |
 | --------------- | ---------------- | --------------------------------------- |
@@ -179,7 +209,7 @@ Field types: ids are `z.string()`, times `z.iso.datetime()`, booleans `z.boolean
 
 Put the schemas in the plugin's `server/routes/schemas.ts`, or a `schemas/` directory once there are many.
 
-A binary or multipart body, such as an upload, has no JSON schema to validate. Validate its path parameters, query and headers with `parseApiInput()` as above, and the body in code before using it, answering `413` or `415` as `INVALID_ARGUMENT` with `httpStatus` when it is too large or of the wrong type.
+A binary or multipart body, such as an upload, has no JSON schema to validate. Validate its path parameters, query and headers with `apiValidator()` as above, and the body in code before using it, answering `413` or `415` as `INVALID_ARGUMENT` with `httpStatus` when it is too large or of the wrong type.
 
 A size limit on the request body is optional. Set one on a route that needs it, such as an upload or a route whose input should stay small, with Hono's `bodyLimit`, and answer an oversized body in the standard shape:
 
@@ -207,6 +237,27 @@ router.post(
   // validators and handler
 );
 ```
+
+## API documentation
+
+The application generates an OpenAPI 3.1 document from its routes and serves it at `GET /api/swagger`, with Swagger UI at `GET /api/swagger/docs`. Both are served only to a request one of the registered access checks allows, such as one with a signed-in session or a valid API key, and answer `401 UNAUTHENTICATED` otherwise; while no check is registered they do not exist and answer `404 ROUTE_NOT_FOUND`. A plugin registers a check through `apiDocsToken`: `container.resolve(apiDocsToken).addAccess({ name, check: (context) => boolean })`.
+
+Every hand-written `/api` route declares itself with `describeRoute()` from `@nocobase/app-server/router`, as in the example above. A route that declares nothing is a defect the API check reports by name.
+
+- **`tags`**: the plugin name in PascalCase, such as `Hub`, `Users` or `AiEmployee`. The application's own routes tag the resource, such as `Orders`.
+- **`summary`**: an English verb phrase, such as `Deploy an app`.
+- **`operationId`**: the namespace, a verb and the resource in camelCase, unique across the application, such as `hubDeployApp`; the application's own routes have no namespace, `cancelOrder`.
+- **Inputs**: `apiValidator()` for every path, query and JSON input, which documents the parameters and the body.
+- **Responses**: `dataResponse(schema)` for `{ data }`, `listResponse(itemSchema, metaSchema?)` for `{ data, meta }`, `emptyResponse()` for a `204`, `...apiErrorResponses` for the errors nearly every route can answer (`400`, `401`, `403`, `500`), and `apiErrorResponse(404)` or `apiErrorResponse(409, 'When …')` for the route's own. Every error response is the standard error body.
+- **Schemas** live in the plugin's `server/routes/schemas.ts`. A schema several routes share carries `.meta({ ref: '<PluginName><Thing>' })`, such as `HubDeployment`, and becomes a named component; public fields carry `.meta({ description })`.
+
+Import all of these from `@nocobase/app-server/router`, never from `hono-openapi`: the declarations are attached to middleware under a symbol that module owns, and only the application's copy generates the document. A plugin that declares `hono-openapi` fails `pnpm peers:check`.
+
+A route that is not a contract for external callers declares `describeRoute({ hide: true })` with a one-line comment saying why. Only these are hidden: routes that serve the application's own shell or build (client bootstrap and configuration, locale bundles, artifact and asset serving, development-only routes); browser-only flows a script cannot meaningfully call (OAuth redirects and callbacks, cookie and session handshakes); the documentation routes themselves; and transports that are not HTTP request and response, such as a WebSocket upgrade. Everything an external caller — a script, an integration, an agent with an API key — may rely on is documented, admin and settings routes included.
+
+A streaming route documents its media type, `text/event-stream` or `application/x-ndjson`, with a description of its frame format, and lists the errors it answers before the stream opens like any other route.
+
+Data endpoints are documented by the framework: each action of each exposure gets its operation, with record and `values` schemas expanded field by field from the Collection, a filter schema listing each field's operators and the shared `RepositoryFilter` grammar. Fields the exposure's fixed Policy forbids are left out; an exposure whose Policy depends on the caller documents every field with a note. Routes a library defines, such as Better Auth's, are merged in by the plugin that mounts them with `container.resolve(apiDocsToken).addFragment({ owner, paths, components, tags })`. The document is cached; whatever changes what it describes, such as a Collection's fields, calls `invalidate()` on the same service.
 
 ## Limits
 
@@ -241,3 +292,4 @@ These `/api` routes keep their own shape. Nothing else is exempt, and code you w
 - A caller without permission gets `403` before any input validation and before anything is written.
 - Where a route sets a body limit, a body over it is `413` with reason `BODY_TOO_LARGE`.
 - A list returns `{ data, meta }`, and its paging parameters are honored and capped.
+- Every route is declared: it appears in `GET /api/swagger` with its tags, summary, operationId, inputs and responses, or declares `describeRoute({ hide: true })` for one of the reasons above. `findUndeclaredApiRoutes(app)` from `@nocobase/app-server/router` lists a started application's undeclared routes.

@@ -28,6 +28,7 @@ import {
 } from './api-error.js';
 import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
 import { getRepositoryRequestConstraints } from './repository-constraints.js';
+import { describeRepositoryEndpoint } from './openapi/repository-document.js';
 
 export type RepositoryApiAction =
   | 'findMany'
@@ -281,6 +282,21 @@ export function defineRepositoryApiRoutes<P = unknown>(
       for (const { action, maxLimit } of entry.actions) {
         router.post(
           `/${entry.name}/${action}`,
+          // Documented from the Collection when the API document is generated, not declared by hand.
+          describeRepositoryEndpoint({
+            exposure: entry.name,
+            collection: entry.collection,
+            connection: entry.connection,
+            action,
+            maxLimit,
+            policy:
+              typeof entry.policy === 'function' ? undefined : entry.policy,
+            loadCollection: () =>
+              app.container
+                .resolve(databaseManagerToken)
+                .collections(entry.connection)
+                .get(entry.collection),
+          }),
           bodyLimit({
             maxSize: 1024 * 1024,
             onError: (context) =>
