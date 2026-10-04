@@ -1,7 +1,7 @@
 import { getRequestLocale, getRequestTranslator } from '@nocobase/i18n/server';
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   type ApiErrorOptions,
 } from '@nocobase/app-server/router';
 import type { Context, ErrorHandler } from 'hono';
@@ -100,7 +100,7 @@ export function workflowErrorResponse(
   context: Context,
   error: ApiError,
 ): Response {
-  return apiErrorResponse(context, localizeWorkflowError(context, error));
+  return apiErrorHandler(localizeWorkflowError(context, error), context);
 }
 
 /**

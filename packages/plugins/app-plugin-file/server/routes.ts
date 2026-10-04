@@ -1,7 +1,6 @@
 import { Readable } from 'node:stream';
 import {
   ApiError,
-  apiErrorResponse,
   defineApiRoutes,
   defineRootRoutes,
   defineRepositoryApiRoutes,
@@ -212,14 +211,14 @@ export function defineFileRepositoryApiRoutes<P = unknown>(
                 config.maxSize ??
                 (action === 'uploadOne' ? 5 : 20) * 1024 * 1024,
               onError: (c) =>
-                apiErrorResponse(
-                  c,
+                apiErrorHandler(
                   uploadError(
                     'INVALID_ARGUMENT',
                     'BODY_TOO_LARGE',
                     'Upload request body is too large.',
                     413,
                   ),
+                  c,
                 ),
             }),
             async (c) => {
@@ -432,7 +431,7 @@ function fileRouter(): Hono {
   const router = new Hono();
   router.onError((error, c) => {
     if (error instanceof FileRepositoryError)
-      return apiErrorResponse(c, toFileApiError(error));
+      return apiErrorHandler(toFileApiError(error), c);
     return apiErrorHandler(error, c);
   });
   return router;

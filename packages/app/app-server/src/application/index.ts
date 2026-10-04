@@ -9,11 +9,12 @@ import {
 
 import type { AppPaths } from '../config/index.js';
 import {
-  apiErrorResponse,
+  apiErrorHandler,
   apiNotFoundHandler,
   type AppHttpMiddleware,
   type AppRouteContribution,
   requestIdMiddleware,
+  toApiError,
   RouterProvider,
   routerToken,
 } from '../router/index.js';
@@ -344,7 +345,9 @@ export class Application<
     const api = new Hono();
     api.use('*', requestIdMiddleware());
     // The last resort: anything no router recognized is an unexpected failure, answered with an opaque 500.
-    api.onError((error, context) => apiErrorResponse(context, error));
+    api.onError((error, context) =>
+      apiErrorHandler(toApiError(error), context),
+    );
     const roots: Hono[] = [];
     for (const routes of this.routes) {
       const router = await routes.createRouter(this);

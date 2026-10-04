@@ -8,7 +8,7 @@ import {
 import {
   addRepositoryRequestConstraint,
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   type RepositoryApiAction,
 } from '@nocobase/app-server/router';
 import type { Context, MiddlewareHandler } from 'hono';
@@ -130,13 +130,13 @@ export function createCompositeRepositoryAuthorization<
 
 /** The standard `403` for a Repository endpoint the composite resource does not permit. */
 function denied(context: Context, endpoint: string): Response {
-  return apiErrorResponse(
-    context,
+  return apiErrorHandler(
     new ApiError({
       status: 'PERMISSION_DENIED',
       reason: 'AUTHORIZATION_DENIED',
       domain: 'authorization',
       message: `Repository endpoint ${endpoint} is not permitted.`,
     }),
+    context,
   );
 }

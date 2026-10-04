@@ -1,6 +1,6 @@
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   apiErrorStatusFromHttp,
   type ApiErrorStatus,
   type ApiFieldViolation,
@@ -83,11 +83,11 @@ export function notificationApiErrorFromI18n(
  * body, so a router answers the same way mounted on a bare Hono, and rethrows everything else to the application.
  */
 export const notificationErrorHandler: ErrorHandler = (error, context) => {
-  if (error instanceof ApiError) return apiErrorResponse(context, error);
+  if (error instanceof ApiError) return apiErrorHandler(error, context);
   if (isNotificationI18nError(error))
-    return apiErrorResponse(
-      context,
+    return apiErrorHandler(
       notificationApiErrorFromI18n(context, error),
+      context,
     );
   throw error;
 };

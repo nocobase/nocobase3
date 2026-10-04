@@ -10,7 +10,6 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { loggingToken } from '@nocobase/app-server/logging';
 import {
   ApiError,
-  apiErrorResponse,
   defineApiRoutes,
   parseApiInput,
   apiErrorHandler,
@@ -52,7 +51,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.onError((error, context) => {
       const own = toUsersApiError(error);
       return own
-        ? apiErrorResponse(context, own)
+        ? apiErrorHandler(own, context)
         : apiErrorHandler(error, context);
     });
 

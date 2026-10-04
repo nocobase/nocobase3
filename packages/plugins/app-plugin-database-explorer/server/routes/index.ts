@@ -7,7 +7,7 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   defineApiRoutes,
   parseApiInput,
   type AppApiRouteContribution,
@@ -88,10 +88,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             'A connection could not be read.',
           );
         }
-        return apiErrorResponse(context, toApiError(error));
+        return apiErrorHandler(toApiError(error), context);
       }
       if (error instanceof ApiError || error instanceof HTTPException)
-        return apiErrorResponse(context, error);
+        return apiErrorHandler(error, context);
       throw error;
     });
 

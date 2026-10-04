@@ -15,7 +15,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   apiErrorStatusFromHttp,
 } from '@nocobase/app-server/router';
 import { databaseAdapter } from './better-auth/database-adapter.js';
@@ -286,14 +286,14 @@ export class Auth {
         throw error;
       }
       if (!auth) {
-        return apiErrorResponse(
-          context,
+        return apiErrorHandler(
           new ApiError({
             status: 'UNAUTHENTICATED',
             reason: 'AUTHENTICATION_REQUIRED',
             domain: 'authentication',
             message: 'Authentication required.',
           }),
+          context,
         );
       }
       context.set('auth', auth);
@@ -316,8 +316,7 @@ export function createAuthentication(
 
 /** A cookie-bearing write whose origin is neither the application's own nor a trusted one. */
 function invalidCsrfOrigin(context: Context): Response {
-  return apiErrorResponse(
-    context,
+  return apiErrorHandler(
     new ApiError({
       status: 'PERMISSION_DENIED',
       reason: 'INVALID_CSRF_ORIGIN',
@@ -325,13 +324,13 @@ function invalidCsrfOrigin(context: Context): Response {
       message:
         'The request origin is not trusted for a cookie-authenticated write.',
     }),
+    context,
   );
 }
 
 /** A credential Better Auth refused, answered in the standard API error body with Better Auth's code as the reason. */
 function rejectedCredential(context: Context, error: APIError): Response {
-  return apiErrorResponse(
-    context,
+  return apiErrorHandler(
     new ApiError({
       status: apiErrorStatusFromHttp(error.statusCode),
       reason:
@@ -343,5 +342,6 @@ function rejectedCredential(context: Context, error: APIError): Response {
       httpStatus: error.statusCode as ContentfulStatusCode,
       cause: error,
     }),
+    context,
   );
 }

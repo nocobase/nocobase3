@@ -22,7 +22,6 @@ import { stream } from 'hono/streaming';
 
 import {
   ApiError,
-  apiErrorResponse,
   appErrorDomain,
   apiErrorHandler,
   toApiError,
@@ -285,8 +284,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
           bodyLimit({
             maxSize: 1024 * 1024,
             onError: (context) =>
-              apiErrorResponse(
-                context,
+              apiErrorHandler(
                 new ApiError({
                   status: 'INVALID_ARGUMENT',
                   reason: 'BODY_TOO_LARGE',
@@ -294,6 +292,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
                   message: 'Repository request exceeds 1 MiB.',
                   httpStatus: 413,
                 }),
+                context,
               ),
           }),
           async (context) => {

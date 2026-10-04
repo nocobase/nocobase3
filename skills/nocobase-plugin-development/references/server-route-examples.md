@@ -220,13 +220,10 @@ export type CreateOrderInput = z.infer<typeof CreateOrderInput>;
 // server/routes/orders.ts
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
-import {
-  AuthorizationDeniedError,
-  type AuthorizationEnv,
-} from '@nocobase/authorization/core';
+import { type AuthorizationEnv } from '@nocobase/authorization/core';
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   parseApiInput,
 } from '@nocobase/app-server/router';
 import type { RepositoryPolicy } from '@nocobase/db';
@@ -247,13 +244,9 @@ export function createOrderRoutes(
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
 
-  // The application renders these under /api; rendering them here keeps the
-  // standard body when this router is tested on its own.
-  routes.onError((error, context) => {
-    if (error instanceof ApiError || error instanceof AuthorizationDeniedError)
-      return apiErrorResponse(context, error);
-    throw error;
-  });
+  // The application renders errors under /api; installing the handler here keeps
+  // the standard body when this router is tested on its own.
+  routes.onError(apiErrorHandler);
   routes.use('*', options.authentication.required());
   routes.use('*', options.authorization.middleware());
 

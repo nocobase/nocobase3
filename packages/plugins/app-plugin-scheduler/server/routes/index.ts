@@ -6,7 +6,7 @@ import {
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   defineApiRoutes,
   parseApiInput,
   type AppApiRouteContribution,
@@ -52,8 +52,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // body even when it is mounted on its own. Anything else belongs to the application's handler.
     schedules.onError((error, context) => {
       if (error instanceof ScheduleNotFoundError)
-        return apiErrorResponse(context, scheduleNotFound(error.scheduleId));
-      if (error instanceof ApiError) return apiErrorResponse(context, error);
+        return apiErrorHandler(scheduleNotFound(error.scheduleId), context);
+      if (error instanceof ApiError) return apiErrorHandler(error, context);
       throw error;
     });
 

@@ -1,6 +1,6 @@
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorHandler,
   type ApiErrorStatus,
 } from '@nocobase/app-server/router';
 import {
@@ -73,6 +73,6 @@ export function inAppNotificationApiError(
  * on a bare Hono, and rethrows everything else to the application.
  */
 export const inAppNotificationErrorHandler: ErrorHandler = (error, context) => {
-  if (error instanceof ApiError) return apiErrorResponse(context, error);
+  if (error instanceof ApiError) return apiErrorHandler(error, context);
   throw error;
 };

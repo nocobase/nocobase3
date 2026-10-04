@@ -33,7 +33,8 @@ import {
 
 import {
   addRepositoryRequestConstraint,
-  apiErrorResponse,
+  apiErrorHandler,
+  toApiError,
   defineRepositoryApiRoutes,
   type RepositoryApiActions,
   type DefineRepositoryApiRoutesOptions,
@@ -1644,7 +1645,9 @@ describe('Repository API routes', () => {
   });
 
   it('keeps unexpected failures as server errors rather than invalid input', async () => {
-    router.onError((error, context) => apiErrorResponse(context, error));
+    router.onError((error, context) =>
+      apiErrorHandler(toApiError(error), context),
+    );
     vi.spyOn(stubScopedRepository(database), 'count').mockRejectedValue(
       new Error('Database unavailable'),
     );

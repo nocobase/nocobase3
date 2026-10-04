@@ -1,10 +1,6 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import {
-  ApiError,
-  apiErrorResponse,
-  apiErrorHandler,
-} from '@nocobase/app-server/router';
+import { ApiError, apiErrorHandler } from '@nocobase/app-server/router';
 import type {
   AuthorizationContext,
   AuthorizationRouteHandler,
@@ -91,7 +87,7 @@ export function createSettingsRouter(
   routes.onError((error, context) => {
     const own = translate?.(error) ?? toAuthorizationApiError(error);
     return own
-      ? apiErrorResponse(context, own)
+      ? apiErrorHandler(own, context)
       : apiErrorHandler(error, context);
   });
   return routes;

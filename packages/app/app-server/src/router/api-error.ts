@@ -4,7 +4,6 @@ import { RepositoryError } from '@nocobase/db';
 
 import type {
   Context,
-  ErrorHandler,
   MiddlewareHandler,
   NotFoundHandler,
 } from 'hono';
@@ -261,8 +260,11 @@ export function apiErrorBody(
   return { error: error.toPayload(requestId) };
 }
 
-/** Answer with the standard error body for `error`, carrying the request's id. */
-export function apiErrorResponse(context: Context, error: unknown): Response {
+/**
+ * Answer with the standard error body for `error`, carrying the request's id; anything unrecognized is an opaque 500.
+ * Framework-internal: plugins answer through `apiErrorHandler`, which rethrows what it does not recognize.
+ */
+function apiErrorResponse(context: Context, error: unknown): Response {
   const apiError = toApiError(error);
   return context.json(
     apiErrorBody(apiError, getRequestId(context)),
@@ -276,11 +278,11 @@ export function apiErrorResponse(context: Context, error: unknown): Response {
  * with an opaque 500. A router that translates its own domain errors does that first and then delegates here. Install
  * it even though the application renders the same errors: a router tested on a bare Hono has no `/api` handler.
  */
-export const apiErrorHandler: ErrorHandler = (error, context) => {
+export function apiErrorHandler(error: unknown, context: Context): Response {
   const known = recognizeApiError(error);
   if (known) return apiErrorResponse(context, known);
   throw error;
-};
+}
 
 export const apiNotFoundHandler: NotFoundHandler = (context) =>
   apiErrorResponse(
