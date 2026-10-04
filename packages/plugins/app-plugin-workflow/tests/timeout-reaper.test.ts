@@ -1,5 +1,6 @@
 import { resolveIdGenerator } from '../server/engine/ids.js';
 import type { DatabaseManager, Row } from '@nocobase/db';
+import { type TestDatabase } from '@nocobase/app-testing/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,7 +12,7 @@ import { createTimeoutReaper } from '../server/engine/timeout-reaper.js';
 import type { WorkflowId } from '../server/engine/types.js';
 import { asIdFilter, serializeJson } from '../server/engine/utils.js';
 import {
-  createTestDatabase,
+  createWorkflowTestDatabase,
   createTestWorkflow,
   insertTestRun,
   testStore,
@@ -30,6 +31,7 @@ function minutesFromNow(minutes: number): string {
 }
 
 describe('timeout reaper', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
   let workflowId: WorkflowId;
 
@@ -60,7 +62,8 @@ describe('timeout reaper', () => {
   }
 
   beforeEach(async () => {
-    database = await createTestDatabase();
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
     const workflow = await createTestWorkflow(database, {
       key: 'reaped',
       nodes: [{ key: 'only', type: 'echo' }],
@@ -69,7 +72,7 @@ describe('timeout reaper', () => {
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   it('aborts a started run whose deadline has passed', async () => {

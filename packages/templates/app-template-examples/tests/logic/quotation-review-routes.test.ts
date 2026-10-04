@@ -1,7 +1,10 @@
 // @vitest-environment node
 import path from 'node:path';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { type DatabaseManager, databaseManagerToken } from '@nocobase/db';
+import {
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   workflowServiceToken,
@@ -16,13 +19,8 @@ import { type Hono, type MiddlewareHandler } from 'hono';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { quotationReviewTaskRoutes } from '../../server/routes/quotation-review-tasks.ts';
 
-const createDatabase = () =>
-  createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-let database: ReturnType<typeof createDatabase>;
+let database: DatabaseManager;
+let testDatabase: TestDatabase;
 let router: Hono;
 let id: number;
 const getRequest = vi.fn();
@@ -32,7 +30,8 @@ beforeEach(async () => {
   getPending
     .mockReset()
     .mockResolvedValue({ status: 'pending', correlation: null });
-  database = createDatabase();
+  testDatabase = await createTestDatabase();
+  database = testDatabase.database;
   await database
     .createMigrator({
       packageName: 'review-routes',
@@ -79,7 +78,7 @@ beforeEach(async () => {
   } as Application);
 });
 afterEach(async () => {
-  await database.destroy();
+  await testDatabase.destroy();
 });
 
 it.each([

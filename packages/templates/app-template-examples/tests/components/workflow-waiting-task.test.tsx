@@ -1,3 +1,4 @@
+import { ApiClientError } from '@nocobase/app-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nRuntime } from '@nocobase/i18n';
@@ -8,7 +9,8 @@ import enUS from '../../client/locales/en-US.ts';
 import TaskPage from '../../client/pages/workflow-waiting-tasks/task.tsx';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock('@nocobase/app-client', () => ({
+vi.mock('@nocobase/app-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nocobase/app-client')>()),
   useApiClient: () => ({ request }),
   useToaster: () => ({ show: vi.fn() }),
 }));
@@ -197,4 +199,27 @@ it('refreshes an accepted decision to show its final result', async () => {
   expect(
     await screen.findByText('Processing result: Decision applied'),
   ).toBeVisible();
+});
+
+it('focuses the decision field for the standard API invalid-decision reason', async () => {
+  request.mockImplementation(async ({ method }: { method?: string } = {}) => {
+    if (method === 'POST') {
+      throw new ApiClientError('Invalid decision', {
+        status: 400,
+        reason: 'INVALID_DECISION',
+        method: 'POST',
+        url: '/api/quotation-review-tasks/1/submit',
+      });
+    }
+    return { data: task, currentReviewer: { id: 'user-1', name: 'Admin' } };
+  });
+  await mount();
+  const decision = await screen.findByRole('combobox', { name: 'Decision' });
+  fireEvent.click(decision);
+  fireEvent.click(await screen.findByRole('option', { name: 'Approved' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Submit decision' }));
+  await waitFor(() => expect(decision).toHaveFocus());
+  expect(request).toHaveBeenCalledWith(
+    expect.objectContaining({ method: 'POST' }),
+  );
 });

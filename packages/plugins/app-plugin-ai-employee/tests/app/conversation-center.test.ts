@@ -34,8 +34,8 @@ const sessions = {
   historical: randomUUID(),
 };
 
-describe('app-wide conversation center', () => {
-  const fixture = createTestAIEmployeeFixture();
+describe('app-wide conversation center', async () => {
+  const fixture = await createTestAIEmployeeFixture();
   const { deps, services, repositories, container } = fixture;
   let app: Hono;
   let sessionUser: { id: string | number; [key: string]: unknown } | null = {
@@ -528,9 +528,13 @@ describe('app-wide conversation center', () => {
     for (const action of ['listAll', 'listUsers', 'getAllMessages']) {
       const response = await request(action);
       expect(response.status).toBe(401);
-      expect(await response.json()).toEqual({
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
+      expect(await response.json()).toMatchObject({
+        error: {
+          code: 401,
+          status: 'UNAUTHENTICATED',
+          reason: 'AUTHENTICATION_REQUIRED',
+          domain: 'authentication',
+        },
       });
     }
     expect(find).not.toHaveBeenCalled();

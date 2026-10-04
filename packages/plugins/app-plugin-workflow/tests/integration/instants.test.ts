@@ -23,12 +23,10 @@ import { createTestWorkflow, insertTestRun } from '../helpers.js';
 import {
   CREATE_MIGRATION,
   INSTANT_MIGRATION,
-  createIntegrationDatabase,
-  createTestPrefix,
-  dropEverything,
   integrationDialect,
   legacyTimestamp,
-  migrate,
+  startIntegrationDatabase,
+  type IntegrationDatabase,
 } from './helpers.js';
 
 /**
@@ -48,7 +46,7 @@ import {
  * driver decode them — so there is no dialect branch in the plugin any more,
  * and no connection option a deployment has to remember.
  *
- * This runs against whichever database `INTEGRATION_DB_CONNECTIONS` names,
+ * This runs against whichever database `NOCOBASE_TEST_DB_DIALECT` names,
  * defaulting to SQLite, which stores the string verbatim and therefore proves
  * the shape rather than the conversion. PostgreSQL and MySQL are the two that
  * convert; see `helpers.ts` for how to run them.
@@ -59,24 +57,17 @@ const CANONICAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const dialect = integrationDialect();
 
 describe(`workflow instants [${dialect}]`, () => {
-  let database: DatabaseManager | null = null;
-  let prefix = '';
+  let fixture: IntegrationDatabase | null = null;
 
   afterEach(async () => {
-    if (!database) return;
-    try {
-      await dropEverything(database, prefix);
-    } finally {
-      await database.destroy();
-      database = null;
-    }
+    await fixture?.destroy();
+    fixture = null;
   });
 
   async function start(upTo?: string): Promise<DatabaseManager> {
-    prefix = createTestPrefix();
-    database = createIntegrationDatabase(prefix);
-    await migrate(database, prefix, upTo);
-    return database;
+    fixture = await startIntegrationDatabase();
+    await fixture.migrate(upTo);
+    return fixture.database;
   }
 
   async function runOneNode(): Promise<{
@@ -215,18 +206,12 @@ describe(`workflow instants [${dialect}]`, () => {
       });
 
       for (const timezone of ['+08:00', 'Z', '-05:00']) {
-        const other = createIntegrationDatabase(prefix, {
-          mysqlTimezone: timezone,
+        const other = fixture!.open({ mysqlTimezone: timezone });
+        const row = await workflowStore(other).runs.findOne({
+          filter: { eventKey: 'instant-zone' },
+          select: (select) => select.fields('startedAt'),
         });
-        try {
-          const row = await workflowStore(other).runs.findOne({
-            filter: { eventKey: 'instant-zone' },
-            select: (select) => select.fields('startedAt'),
-          });
-          expect(row?.startedAt).toBe(instant);
-        } finally {
-          await other.destroy();
-        }
+        expect(row?.startedAt).toBe(instant);
       }
     },
   );
@@ -360,9 +345,7 @@ describe(`workflow instants [${dialect}]`, () => {
       })
       .execute();
 
-    // Only as far as the conversion: a later migration rebuilds the run tables
-    // without their rows.
-    await migrate(db, prefix, INSTANT_MIGRATION);
+    await fixture!.migrate(INSTANT_MIGRATION);
 
     const row = await workflowStore(db).runs.findOne({
       filter: { eventKey: 'instant-legacy' },

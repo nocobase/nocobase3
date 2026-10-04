@@ -4,8 +4,12 @@ import 'tsx/esm';
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { databaseManagerToken } from '@nocobase/db';
+import {
+  createTestDatabase,
+  provisionTestDatabases,
+  type ProvisionedTestDatabases,
+} from '@nocobase/app-testing/server';
 import { buildApplicationWorkflows } from '@nocobase/app-plugin-workflow/build';
 import {
   NODE_RUN_STATUS,
@@ -25,6 +29,7 @@ import { requireDate } from '../../workflows/example-analytics-report/server/met
 const root = path.resolve(import.meta.dirname, '../..');
 const temporary = mkdtempSync(path.join(root, '.workflow-examples-'));
 const artifactRoot = path.join(temporary, 'artifacts');
+let testDatabases: ProvisionedTestDatabases | undefined;
 let server: StandaloneServer;
 let cookie = '';
 const ids = new Map<string, string>();
@@ -93,7 +98,23 @@ beforeAll(async function buildExampleArtifacts() {
   });
 }, 120000);
 
+/**
+ * A provisioned connection as the configuration file spells it. The driver
+ * object cannot be written to a file and is not needed there: the application
+ * loads the official driver for the connection's dialect itself.
+ */
+function configuredConnection(name: string): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(testDatabases!.connectionConfig(name)).filter(
+      ([key]) => key !== 'databaseDriver',
+    ),
+  );
+}
+
 beforeAll(async function startExampleServer() {
+  testDatabases = await provisionTestDatabases({
+    connections: ['main', 'analytics'],
+  });
   const configPath = path.join(temporary, 'config.yml');
   writeFileSync(
     configPath,
@@ -105,14 +126,12 @@ beforeAll(async function startExampleServer() {
         default: 'main',
         connections: {
           main: {
-            dialect: 'sqlite',
-            database: path.join(temporary, 'main.sqlite'),
+            ...configuredConnection('main'),
             migrations: { autoRun: true },
             seeds: { autoRun: true },
           },
           analytics: {
-            dialect: 'sqlite',
-            database: path.join(temporary, 'analytics.sqlite'),
+            ...configuredConnection('analytics'),
             migrations: { autoRun: true },
             seeds: { autoRun: true },
           },
@@ -144,10 +163,6 @@ beforeAll(async function startExampleServer() {
     viteDevUrl: false,
     env: {
       AUTH_SECRET: 'workflow-examples-test-secret-at-least-32-characters',
-      DB_DATABASE: path.join(temporary, 'main.sqlite'),
-      DB_DIALECT: 'sqlite',
-      DB_MIGRATIONS_AUTO_RUN: 'true',
-      DB_SEEDS_AUTO_RUN: 'true',
     },
   });
   if ((await request('/workflows')).status !== 401)
@@ -174,8 +189,12 @@ beforeAll(async function startExampleServer() {
   if (ids.size !== 3) throw new Error('Expected three workflow examples.');
 }, 60000);
 afterAll(async () => {
-  await server?.close();
-  rmSync(temporary, { recursive: true, force: true });
+  try {
+    await server?.close();
+  } finally {
+    await testDatabases?.drop();
+    rmSync(temporary, { recursive: true, force: true });
+  }
 });
 
 it.each([
@@ -559,14 +578,10 @@ it('rejects invalid dates and monetary input in typed business functions', () =>
   );
 });
 it('creates report schema and metadata, supports concurrent idempotent writes, and rolls back', async () => {
-  const database = createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: {
-      main: { dialect: 'sqlite', filename: ':memory:' },
-      analytics: { dialect: 'sqlite', filename: ':memory:' },
-    },
+  const testDatabase = await createTestDatabase({
+    connections: ['main', 'analytics'],
   });
+  const { database } = testDatabase;
   try {
     const migrator = database.createMigrator({
       directory: path.join(root, 'database/main/migrations'),
@@ -624,6 +639,6 @@ it('creates report schema and metadata, supports concurrent idempotent writes, a
       await database.connection().collections.get('exampleDailyReports'),
     ).toBeUndefined();
   } finally {
-    await database.destroy();
+    await testDatabase.destroy();
   }
 });

@@ -4,13 +4,12 @@ import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
-import sqlite from '@nocobase/db-sqlite';
 import {
-  createDatabaseManager,
   databaseManagerToken,
   type DatabaseManager,
   type RepositoryPolicy,
 } from '@nocobase/db';
+import { createTestDatabase } from '@nocobase/app-testing/server';
 import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
 import { createPublicBasePathAdapter } from '@nocobase/app-server/runtime';
@@ -78,11 +77,9 @@ async function fixture(
 ) {
   const root = await mkdtemp(path.join(tmpdir(), 'file-repository-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
-  const db = createDatabaseManager({
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  cleanup.push(() => db.destroy());
+  const testDatabase = await createTestDatabase();
+  cleanup.push(() => testDatabase.destroy());
+  const db = testDatabase.database;
   await db.builder().createCollection('attachments', (collection) => {
     collection.uuid('id').primary().notNull();
     collection.string('disk', { length: 255 }).notNull();
@@ -352,7 +349,7 @@ describe('server repository and Client API', () => {
         await expect(client.findMany()).resolves.toEqual([]);
       } else {
         await expect(client.findMany()).rejects.toMatchObject({
-          code: 'INVALID_FILE_METADATA',
+          reason: 'INVALID_FILE_METADATA',
         });
       }
     },
@@ -433,7 +430,7 @@ describe('server repository and Client API', () => {
       },
     });
     await expect(client.createOne({ values: {} })).rejects.toMatchObject({
-      code: 'WRITE_FORBIDDEN',
+      reason: 'WRITE_FORBIDDEN',
     });
     expect(
       (
@@ -455,7 +452,7 @@ describe('server repository and Client API', () => {
     });
     expect(put).not.toHaveBeenCalled();
     await expect(client.findMany()).rejects.toMatchObject({
-      code: 'INVALID_FILE_COLLECTION',
+      reason: 'INVALID_FILE_COLLECTION',
     });
     expect(
       (

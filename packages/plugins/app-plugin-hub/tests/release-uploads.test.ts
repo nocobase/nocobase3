@@ -22,12 +22,11 @@ import {
   createAppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { createMigrator, type DatabaseManager } from '@nocobase/db';
 import {
-  createDatabaseManager,
-  createMigrator,
-  type DatabaseManager,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { c as createTar } from 'tar';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,6 +65,7 @@ interface UploadBody {
 
 let root: string;
 let uploadsDir: string;
+let testDatabase: TestDatabase;
 let db: DatabaseManager;
 let hub: DefaultHubService;
 let api: Awaited<ReturnType<typeof apiRoutes.createRouter>>;
@@ -194,11 +194,8 @@ function sessionDir(uploadId: string, app = 'crm'): string {
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'hub-release-uploads-'));
   uploadsDir = path.join(root, 'uploads');
-  db = createDatabaseManager({
-    drivers: { sqlite },
-    default: 'main',
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
+  testDatabase = await createTestDatabase();
+  db = testDatabase.database;
   await migrate(
     '@nocobase/app-plugin-authentication',
     '../../app-plugin-authentication/database/migrations',
@@ -306,7 +303,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await db.destroy();
+  await testDatabase.destroy();
   await rm(root, { recursive: true, force: true });
 });
 

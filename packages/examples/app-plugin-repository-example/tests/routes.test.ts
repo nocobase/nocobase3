@@ -15,7 +15,7 @@ describe('Repository CRM and order API', () => {
     f = await createFixture();
   });
   afterEach(async () => {
-    await f?.database.destroy();
+    await f?.destroy();
   });
   it('runs all seven actions and relation selections through the HTTP client', async () => {
     const customers = repository(f.api, 'customers');
@@ -105,7 +105,7 @@ describe('Repository CRM and order API', () => {
         ifVersion: created.version,
         values: { status: 'draft' },
       }),
-    ).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
+    ).rejects.toMatchObject({ status: 409, reason: 'VERSION_CONFLICT' });
     await expect(
       products.deleteOne({ filter: { id: 'product' } }),
     ).rejects.toThrow();

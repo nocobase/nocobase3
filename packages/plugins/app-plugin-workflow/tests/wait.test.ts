@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseManager } from '@nocobase/db';
+import type { TestDatabase } from '@nocobase/app-testing/server';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,7 +29,7 @@ import {
   serializeJson,
 } from '../server/engine/utils.js';
 import {
-  createTestDatabase,
+  createWorkflowTestDatabase,
   createTestWorkflow,
   createModuleRoot,
   listNodeRuns,
@@ -62,6 +63,7 @@ describe('wait instruction', () => {
   });
 
   let database: DatabaseManager;
+  let testDatabase: TestDatabase;
   let engine: WorkflowEngine;
   let wait: WaitInstructionApi;
   let jobs: ManagedJobExecutorService | null = null;
@@ -69,7 +71,8 @@ describe('wait instruction', () => {
   const additionalEngines: WorkflowEngine[] = [];
 
   beforeEach(async () => {
-    database = await createTestDatabase();
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
     engine = new WorkflowEngine({ database, timeoutReaper: false });
     await engine.initialize();
     wait = engine.getInstructionApi('wait');
@@ -85,7 +88,7 @@ describe('wait instruction', () => {
     if (jobsStoragePath)
       await rm(jobsStoragePath, { recursive: true, force: true });
     jobsStoragePath = '';
-    await database.destroy();
+    await testDatabase.destroy();
     await removeModuleRoots();
   });
 

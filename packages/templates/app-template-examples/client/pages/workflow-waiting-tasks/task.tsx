@@ -104,7 +104,7 @@ export default function WorkflowWaitingTaskPage(): ReactElement {
     } catch (submissionError) {
       if (
         submissionError instanceof ApiClientError &&
-        submissionError.code === 'INVALID_DECISION'
+        submissionError.reason === 'INVALID_DECISION'
       ) {
         setDecisionTouched(true);
         decisionRef.current?.focus();

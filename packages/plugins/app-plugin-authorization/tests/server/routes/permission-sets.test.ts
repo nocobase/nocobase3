@@ -10,9 +10,10 @@ import {
 } from '../../../server/index.js';
 import { createAuthorization } from '../../helpers/authorization-fixture.js';
 import {
-  createSqliteDatabase,
-  migratePlugins,
-} from '../../helpers/database-fixture.js';
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
+import { migratePlugins } from '../../helpers/database-fixture.js';
 import { MockPermissionSetStore } from '../../helpers/mock-permission-set-store.js';
 import {
   json,
@@ -423,11 +424,13 @@ describe('protected Permission Sets', () => {
 });
 
 describe('the subject types the root Permission Set accepts', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
   let router: Hono;
 
   beforeEach(async () => {
-    database = createSqliteDatabase();
+    testDatabase = await createTestDatabase();
+    database = testDatabase.database;
     await migratePlugins(database, 'app-plugin-authorization');
     const authz = createAppAuthorization({
       connection: database.connection(),
@@ -443,7 +446,7 @@ describe('the subject types the root Permission Set accepts', () => {
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   it('refuses the audience that would make every signed-in user unrestricted, and reports the restriction on the root set alone', async () => {

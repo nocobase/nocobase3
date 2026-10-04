@@ -1,16 +1,14 @@
 // @vitest-environment node
 import path from 'node:path';
-import { createDatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
-import type { Knex } from 'knex';
+import {
+  createTestDatabase,
+  inspectCollection,
+} from '@nocobase/app-testing/server';
 import { expect, it } from 'vitest';
 
 it('creates the quotation review tasks with their claim columns and rolls back', async () => {
-  const database = createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
+  const testDatabase = await createTestDatabase();
+  const { database } = testDatabase;
   try {
     const migrator = database.createMigrator({
       connection: 'main',
@@ -22,14 +20,15 @@ it('creates the quotation review tasks with their claim columns and rolls back',
     });
     await migrator.upTo('202609300002_create_quotation_review_tasks');
     const connection = database.connection('main');
-    const client = await connection.client<Knex>();
-    expect(await client('quotation_review_tasks').columnInfo()).toMatchObject({
-      run_id: { nullable: false },
-      quotation_id: { nullable: false },
-      total_cents: { nullable: false },
-      created_at: { nullable: false },
-      submitted_at: { nullable: true },
-      reviewer_id: { nullable: true },
+    expect(
+      (await inspectCollection(connection, 'quotationReviewTasks'))?.fields,
+    ).toMatchObject({
+      runId: { nullable: false },
+      quotationId: { nullable: false },
+      totalCents: { nullable: false },
+      createdAt: { nullable: false },
+      submittedAt: { nullable: true },
+      reviewerId: { nullable: true },
     });
     expect(
       await connection.collectionMetadata.get('quotationReviewTasks'),
@@ -68,8 +67,10 @@ it('creates the quotation review tasks with their claim columns and rolls back',
     ).rejects.toThrow();
 
     await migrator.upTo('202610020001_quotation_review_resume_request');
-    expect(await client('quotation_review_tasks').columnInfo()).toMatchObject({
-      resume_request_id: { nullable: true },
+    expect(
+      (await inspectCollection(connection, 'quotationReviewTasks'))?.fields,
+    ).toMatchObject({
+      resumeRequestId: { nullable: true },
     });
     await database.repository('quotationReviewTasks').updateOne({
       filter: { runId: 'run-1' },
@@ -82,19 +83,21 @@ it('creates the quotation review tasks with their claim columns and rolls back',
     ).toMatchObject({ resumeRequestId: '12345', reviewerId: 'reviewer-1' });
     await migrator.rollback();
     expect(
-      await client('quotation_review_tasks').columnInfo(),
-    ).not.toHaveProperty('resume_request_id');
+      (await inspectCollection(connection, 'quotationReviewTasks'))?.fields,
+    ).not.toHaveProperty('resumeRequestId');
     expect(
       await database.repository('quotationReviewTasks').findOne({
         filter: { runId: 'run-1' },
       }),
     ).toMatchObject({ reviewerId: 'reviewer-1' });
     await migrator.rollback();
-    expect(await client.schema.hasTable('quotation_review_tasks')).toBe(false);
+    expect(
+      await inspectCollection(connection, 'quotationReviewTasks'),
+    ).toBeUndefined();
     expect(
       await connection.collectionMetadata.get('quotationReviewTasks'),
     ).toBeUndefined();
   } finally {
-    await database.destroy();
+    await testDatabase.destroy();
   }
 });

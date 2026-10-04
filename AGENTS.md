@@ -120,6 +120,14 @@ Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename r
 
 Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/libs/db` does.
 
+### Database Tests Do Not Choose a Dialect
+
+A test outside the `@nocobase/db` packages that needs a database gets it from `@nocobase/db-testing` rather than configuring one: `createDatabaseTest()` gives each test migrated databases on the dialect `NOCOBASE_TEST_DB_DIALECT` names, SQLite when it is unset, and `describeMigration()` is the migration test described under "Database Migration Development". Such a test does not import a `@nocobase/db-<dialect>` package, does not configure `dialect: 'sqlite'` or `':memory:'`, and does not reach for SQL that only one database understands — `PRAGMA`, `sqlite_master`, triggers. Assert on the schema with `expectCollection()`, which compares Field and Collection names rather than physical ones, and prepare rows through a Repository or `connection.query`. `packages/libs/db-testing/README.md` lists what to write instead of each SQLite-specific form.
+
+A plugin, an example or an application template takes all of this from `@nocobase/app-testing` instead, and depends on it alone: `./server` re-exports `@nocobase/db-testing/vitest` and adds `createTestApp()` and `createAppTest()`, which start the whole application on test databases of its own, and `./cli` re-exports `@nocobase/app-cli/testing`. `@nocobase/app-plugin-authentication/testing` signs in through such an application, so a route's permission boundary is tested as a user meets it. Libraries, tools and the application runtime packages keep using `@nocobase/db-testing` and `@nocobase/app-cli/testing` directly, because `@nocobase/app-testing` is built on them. One entry keeps one copy of `@nocobase/db-testing` per package, whose provisioner cache and stale-database cleanup exist once per copy, and leaves a single package to name when an application's tests change.
+
+The default run stays on SQLite so `pnpm test` needs no server, which is exactly why a test that only works on SQLite goes unnoticed: nothing fails until someone selects another dialect. A test whose subject is SQLite itself — the SQLite driver, or configuration that names it — is the exception and stays where it is, declaring so in its first lines with `// db-test-portability: sqlite-only — <why>` (or `dialect-specific` for one about every dialect's configuration). `pnpm db-tests:check` (`scripts/check-db-test-portability.mjs`, part of `pnpm check` and CI) reads every test and test helper outside the database packages and fails on a dialect import, the SQLite driver, `':memory:'`, `dialect: 'sqlite'`, `PRAGMA`, `sqlite_master` or a trigger without that marker, and in a plugin, an example or a template it also fails on an import of `@nocobase/db-testing` or `@nocobase/app-cli/testing`, which no marker exempts. A template's tests ship to the applications it generates and carry no note about this repository's checks, so the few whose subject is SQLite are listed in the script's `EXEMPT` instead; the check fails once a listed file or a marker no longer covers a violation, so every exemption only shrinks.
+
 ### Never Assert a Package's Own Version as a Literal
 
 A test must not spell out the version of a package in this repository. Read it from the manifest instead:
@@ -175,7 +183,7 @@ Do not import or iterate over live collection schemas, field definitions, model 
 
 When a migration needs to create a collection, call `builder.createCollection` with its fixed name and declare every field, relation, index, and constraint in the migration itself. Write `down` with the corresponding explicit reverse operations in a safe dependency order. For an existing schema, use explicit `builder.alterCollection`, field, index, constraint, or metadata operations rather than synchronizing from the current collection definition.
 
-Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata.
+Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata. Outside the `@nocobase/db` packages, write it with `describeMigration()` — from `@nocobase/app-testing/server` in a plugin or an application, from `@nocobase/db-testing/vitest` in a library: it applies the migrations before this one, applies, rolls back and reapplies this one, checks after each step that metadata and tables agree and that rolling back restores exactly the tables that existed before, and runs on whichever dialect the environment selects.
 
 ### Choosing a data-access tool in a migration or seed
 
@@ -201,9 +209,11 @@ The loader flattens the application's sources and every registered plugin's into
 
 Before editing an existing migration, check its Git history and the status of the branch that introduced it. An existing migration may be corrected directly only while its introducing feature branch has not yet been merged. Once that branch has been merged into its target branch, never modify the migration again; implement every correction or subsequent schema change in a new migration. Do not use hard-coded previous checksum hashes to make an edited migration appear compatible.
 
+The one exception is a released migration that has never succeeded on a supported database and that no later migration can get past, because the failing statement is the one that creates the table — `@nocobase/app-plugin-hub`'s `202609010001_create_hub_app_tables` declared a unique index on a `varchar(1024)`, which exceeds MySQL's key length, so the plugin could not be installed there at all. Such a migration may be corrected in place, and only to the extent that makes it succeed. The changeset must say that it edits a released migration and why, and must tell operators of installations that already ran it to expect a checksum warning on the next `nocobase db apply` and to clear it with `nocobase db repair`.
+
 ## Database Integration Test Scheduling
 
-Run a dialect integration suite through the package that owns it: `pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no integration script of its own. Run one suite at a time locally: never start two at once, and never leave one in the background. The runners isolate their Compose projects and host ports, so the hazard is not a collision but contention for one machine's CPU, memory, and Docker I/O, which pushes service health checks past their start period and reports a flaky startup failure instead of a result. CI parallelizes safely because each selected dialect gets its own job and runner.
+Run a dialect integration suite through the package that owns it: `pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no integration script of its own. Run one suite at a time locally: never start two at once, and never leave one in the background. The runners isolate their Compose projects and host ports, so the hazard is not a collision but contention for one machine's CPU, memory, and Docker I/O, which pushes service health checks past their start period and reports a flaky startup failure instead of a result. CI parallelizes safely because each selected dialect gets its own job and runner. `pnpm test:db <dialect> --filter <package>` runs other packages' tests on a dialect the same way — a disposable Compose project from `packages/libs/db-<dialect>/scripts/integration-service.ts`, with `NOCOBASE_TEST_DB_DIALECT` set — one package after another, and the same one-at-a-time rule applies to it. `--all` in place of `--filter` selects every package that declares `@nocobase/db-testing` or `@nocobase/app-testing`, which is how the Database tests workflow (`.github/workflows/db-tests.yml`) runs them on PostgreSQL and MySQL nightly and on any dialect on demand; pull requests run them on SQLite only.
 
 On pull requests and pushes to `develop`, `scripts/select-db-integration-matrix.mjs` selects the Quality workflow's database matrix from changed paths. A dialect package change selects that dialect; changes to `db`, `db-testkit`, their shared dependencies, shared development configuration, or dependency/CI inputs select all eight. Unrelated changes skip the matrix. Selection covers entire package directories, including tests and documentation; deletions and both sides of renames count. An unavailable comparison range runs all eight conservatively. Keep the selector's shared paths current when adding database dependencies or changing the test setup.
 
@@ -356,6 +366,31 @@ This rule changed once, and the reason is worth recording. Client imports used t
 When the check reports something, inspect ownership and usage: declare an ordinary server dependency, declare a shared peer and its application provider, or remove a client or build-time import that leaked into server code. Adding a declaration only to silence the check can leave either a duplicate shared module or an unnecessary deployment dependency.
 
 `pnpm plugin:create` emits a generated plugin's `AGENTS.md` carrying this rule, so a plugin created tomorrow is told where a dependency goes before anyone adds one. When the rule changes here, change `packages/tools/create-plugin/template/AGENTS.md` in the same commit — the two are kept in step by a test, but only for the files' existence, not their content.
+
+## HTTP API Design
+
+Every route under `/api` follows one specification, Google's API design guidelines with custom methods separated by a slash instead of a colon. It is written once, in `packages/app/app-skills/skills/nocobase-app-development/references/http-api.md`, which every generated application receives through `@nocobase/app-skills`; read it before adding or changing a route in a plugin, an example or a template. In short:
+
+- Paths are camelCase, and a plugin's routes start with its namespace, the package name without `app-plugin-` in camelCase. A plugin whose main resource shares its name writes that segment once: `/api/users`, not `/api/users/users`.
+- Standard methods for reading and writing a resource; anything else is a custom method, `POST /{collection}/{id}/{verb}`. One operation has one URL. `GET` never changes data.
+- Success is `{ data }`, a list `{ data, meta }`. Paging is `pageSize` with `pageToken` and `nextPageToken`, or `page` with `pageSize`.
+- Failure is thrown as `ApiError` from `@nocobase/app-server/router` and rendered by the application as `{ error: { code, status, reason, domain, message, requestId } }`. Clients branch on `reason`, which `ApiClientError` exposes; `message` is for developers. Never write an error body by hand.
+- Input is validated with zod through Hono's `validator()` and `parseApiInput()`: a JSON body with `z.strictObject`, query and path parameters with `z.object`.
+
+The application owns what no route handles: `/api` answers an unexpected error with an opaque `500 INTERNAL`, an unknown path with a JSON `404 ROUTE_NOT_FOUND` rather than the SPA page, and echoes every request's id in `x-request-id`. A route's own `onError` runs first; it renders the errors it recognizes with `apiErrorResponse()` and rethrows the rest, so the request log still records them. A router tested on its own, outside an `Application`, has no `/api` handler, which is why the authorization and Repository routers render their known errors themselves.
+
+Two kinds of route are exempt: the Repository routes `defineRepositoryApiRoutes` generates keep their actions and always use `POST`, and Better Auth's routes under `/api/auth/` stay as the library defines them. Both report errors in the standard body where this repository controls it. Hand-written routes never imitate either.
+
+Most plugin routes predate the specification and are being migrated plugin by plugin, without keeping their old URLs; each migrated package is released as a major version. Until the last one lands, `ApiClientError` also reads a legacy `{ code }` body into `reason`, and that fallback is removed with it. A new route follows the specification from the start, even in a plugin not yet migrated.
+
+### API documentation declarations
+
+The OpenAPI document served at `GET /api/swagger` (JSON) and `GET /api/swagger/docs` (Swagger UI) is not implemented yet. When it lands, `hono-openapi` replaces `parseApiInput()` and every hand-written `/api` route declares itself; until then, write routes so the change is mechanical:
+
+- `describeRoute()` with `tags` (the plugin name in PascalCase), `summary` (an English verb phrase) and `operationId` (namespace + verb + resource in camelCase, unique across the application, such as `hubDeployApp`).
+- `validator('param' | 'query' | 'json', Schema)` for every input, and a declared schema for every success status, wrapped by framework helpers into `{ data }` or `{ data, meta }`; errors reference the shared error responses.
+- Schemas live in the plugin's `server/routes/schemas.ts`. A schema shared by several routes carries `.meta({ ref })` with a name that starts with the plugin name, such as `HubDeployment`. Public fields carry `.meta({ description })`.
+- CI will fail on an undeclared route, a missing `tags`, `summary` or `operationId`, a duplicate `operationId`, and an unacknowledged breaking change to the document.
 
 ## JSON Output of Command-Line Tools
 

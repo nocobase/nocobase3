@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import type { DatabaseManager } from '@nocobase/db';
+import type { TestDatabase } from '@nocobase/app-testing/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -19,7 +20,7 @@ import { asIdFilter } from '../server/engine/utils.js';
 import { WaitInstructionApi } from '../server/instructions/wait/api.js';
 import { defineTestInstruction } from './fixtures/instructions.js';
 import {
-  createTestDatabase,
+  createWorkflowTestDatabase,
   createTestWorkflow,
   listNodeRuns,
   readRun,
@@ -28,6 +29,7 @@ import {
 
 describe('processor checkpoints', () => {
   let database: DatabaseManager;
+  let testDatabase: TestDatabase;
   let engine: WorkflowEngine;
   let wait: WaitInstructionApi;
   const logger: WorkflowLogger = {
@@ -55,7 +57,8 @@ describe('processor checkpoints', () => {
     vi.clearAllMocks();
     observed = [];
     onGate = undefined;
-    database = await createTestDatabase();
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
     engine = new WorkflowEngine({ database, timeoutReaper: false, logger });
     engine.registerInstruction(probe);
     engine.registerInstruction(gate);
@@ -65,7 +68,7 @@ describe('processor checkpoints', () => {
 
   afterEach(async () => {
     await engine.dispose();
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   function api(
