@@ -13,6 +13,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
+import { NotificationTransportUnavailableError } from '../server/manager.js';
 import { apiRoutes } from '../server/routes/index.js';
 import serverLocales from '../server/locales/index.js';
 import {
@@ -101,6 +102,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
           fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
         },
       ],
+      meta: { total: 1 },
     });
     expect(listTestTargets).toHaveBeenCalledOnce();
     expect(can).not.toHaveBeenCalled();
@@ -190,6 +192,59 @@ describe('@nocobase/app-plugin-notification routes', () => {
         metadata: { name: 'cc' },
       },
     });
+  });
+
+  it('answers 503 only when the transport is unavailable and leaves other failures to the application', async () => {
+    const { router, sendTest } = await createRouter();
+    const send = (): Promise<Response> =>
+      router.request('/notifications/testSends', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-nocobase-notification-test': '1',
+        },
+        body: JSON.stringify({
+          channel: 'email',
+          values: { recipient: 'test@example.com' },
+        }),
+      });
+
+    sendTest.mockRejectedValueOnce(
+      new NotificationTransportUnavailableError('SMTP transport refused.'),
+    );
+    const unavailable = await send();
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: {
+        status: 'UNAVAILABLE',
+        reason: 'NOTIFICATION_TEST_FAILED',
+        domain: 'notifications',
+      },
+    });
+
+    // A defect is not reported as a test failure: the error reaches the application's handler unchanged.
+    const defect = new TypeError('Cannot read properties of undefined');
+    sendTest.mockRejectedValueOnce(defect);
+    const app = new Hono();
+    let seen: unknown;
+    app.onError((error, context) => {
+      seen = error;
+      return context.text('application handler', 500);
+    });
+    app.route('/', router);
+    const response = await app.request('/notifications/testSends', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-nocobase-notification-test': '1',
+      },
+      body: JSON.stringify({
+        channel: 'email',
+        values: { recipient: 'test@example.com' },
+      }),
+    });
+    expect(response.status).toBe(500);
+    expect(seen).toBe(defect);
   });
 
   it('restricts status lookup to the actor through the manager interface', async () => {

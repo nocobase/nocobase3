@@ -9,6 +9,7 @@ import {
   readdir,
   rm,
   stat,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -717,6 +718,37 @@ describe('@nocobase/app-plugin-hub service', () => {
       (await service.readLogs('customer', { cursor: page.cursor }, queued.id))
         .entries,
     ).toEqual([]);
+  });
+
+  it('reads App and deployment logs without pruning expired journals', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+    const longAgo = new Date(Date.now() - 365 * 86_400_000);
+    const appLogs = path.join(rootDir, 'app-volumes/customer/storage/logs');
+    const deploymentLogs = path.join(rootDir, 'hub/deployment-logs/customer');
+    await mkdir(appLogs, { recursive: true });
+    const staleFiles = [
+      path.join(appLogs, 'stale.log'),
+      path.join(deploymentLogs, 'stale.log'),
+    ];
+    for (const file of staleFiles) {
+      await writeFile(file, '');
+      await utimes(file, longAgo, longAgo);
+    }
+
+    await service.readLogs('customer', { fromStart: true });
+    await service.readLogs('customer', { fromStart: true }, queued.id);
+
+    // A GET never changes state: retention runs when a deployment finishes and in the App's own file logger.
+    for (const file of staleFiles)
+      await expect(stat(file)).resolves.toBeTruthy();
   });
 
   it('paginates deployments with stable ordering and app isolation', async () => {

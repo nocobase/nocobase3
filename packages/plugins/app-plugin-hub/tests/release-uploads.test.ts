@@ -120,8 +120,7 @@ async function startUpload(
 ): Promise<UploadBody> {
   const response = await start({ size: bytes.byteLength, sha256: digest });
   expect(response.status).toBe(201);
-  return ((await response.json()) as { data: { upload: UploadBody } }).data
-    .upload;
+  return ((await response.json()) as { data: UploadBody }).data;
 }
 
 function put(
@@ -392,20 +391,29 @@ describe('resumable Release uploads', () => {
     ).toEqual([{ requestKey: 'ci-run-1', releaseId }]);
   });
 
-  it('answers with the existing Release for a known checksum without staging anything', async () => {
+  it('answers a finished upload resource naming the existing Release for a known checksum without staging anything', async () => {
     const single = await api.request('/hub/apps/crm/releases', {
       method: 'POST',
       headers: { ...auth(), 'content-type': 'application/gzip' },
       body: archive,
     });
-    const stored = ((await single.json()) as { data: object }).data;
+    const stored = (
+      (await single.json()) as { data: { id: string; version: string } }
+    ).data;
     const response = await start({
       size: archive.byteLength,
       sha256: checksum,
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      data: { release: { ...stored, reused: true } },
+      data: {
+        offset: archive.byteLength,
+        size: archive.byteLength,
+        chunkSize: RELEASE_UPLOAD_CHUNK_SIZE,
+        releaseId: stored.id,
+        version: stored.version,
+        reused: true,
+      },
     });
     expect(await sessionDirs()).toEqual([]);
     // The checksum is scoped to its App: another App stages a new upload.
@@ -426,13 +434,11 @@ describe('resumable Release uploads', () => {
     expect(again.status).toBe(200);
     expect(await again.json()).toEqual({
       data: {
-        upload: {
-          uploadId: upload.uploadId,
-          offset: 10,
-          size: archive.byteLength,
-          chunkSize: RELEASE_UPLOAD_CHUNK_SIZE,
-          expiresAt: expect.any(String),
-        },
+        uploadId: upload.uploadId,
+        offset: 10,
+        size: archive.byteLength,
+        chunkSize: RELEASE_UPLOAD_CHUNK_SIZE,
+        expiresAt: expect.any(String),
       },
     });
     expect(await sessionDirs()).toEqual([upload.uploadId]);
@@ -521,7 +527,7 @@ describe('resumable Release uploads', () => {
     expect(await sessionDirs()).toEqual([]);
   });
 
-  it('forgets expired sessions on access and sweeps them when a session is created', async () => {
+  it('answers 404 for an expired session on read without deleting it, forgets it on write, and sweeps on create', async () => {
     const expired = await startUpload();
     const other = await startUpload(archive.subarray(0, 50));
     for (const uploadId of [expired.uploadId, other.uploadId]) {
@@ -537,8 +543,14 @@ describe('resumable Release uploads', () => {
         }),
       );
     }
+    // A GET never changes state: the expired session answers 404 but stays on disk until a writer or the sweep runs.
+    const read = await status(expired.uploadId);
+    expect(read.status).toBe(404);
+    expect(await errorOf(read)).toMatchObject({ reason: 'UPLOAD_NOT_FOUND' });
+    expect([...(await sessionDirs())].sort()).toEqual(
+      [expired.uploadId, other.uploadId].sort(),
+    );
     for (const response of [
-      await status(expired.uploadId),
       await put(expired.uploadId, 0, archive.subarray(0, 1)),
       await complete(expired.uploadId),
     ]) {
@@ -561,9 +573,7 @@ describe('resumable Release uploads', () => {
       { app: 'erp' },
     );
     expect(other.status).toBe(201);
-    const { uploadId } = (
-      (await other.json()) as { data: { upload: UploadBody } }
-    ).data.upload;
+    const { uploadId } = ((await other.json()) as { data: UploadBody }).data;
     const file = path.join(sessionDir(uploadId, 'erp'), 'meta.json');
     const meta = JSON.parse(await readFile(file, 'utf8')) as object;
     await writeFile(

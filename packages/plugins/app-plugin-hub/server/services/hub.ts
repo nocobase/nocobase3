@@ -378,21 +378,8 @@ export class DefaultHubService implements HubService {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
-      await pruneJournals(
-        directory,
-        {
-          retentionDays: policy?.retentionDays ?? (deployment ? 30 : 7),
-          maxSizeMB: deployment
-            ? (this.options.config.logging?.deployments?.maxTotalSizeMB ?? 1024)
-            : (normalizeRuntimeLogging(this.options.config.logging?.apps).file
-                ?.maxTotalSizeMB ??
-              policy?.maxSizeMB ??
-              500),
-        },
-        deployment && ['queued', 'deploying'].includes(deployment.status)
-          ? `${deployment.id}.log`
-          : undefined,
-      );
+      // Reading never removes anything: deployment journals are pruned when a deployment finishes, and an App's own
+      // journals by the App's file logger as it writes them.
       const result = await readJournal(
         directory,
         query,
@@ -1007,14 +994,15 @@ export class DefaultHubService implements HubService {
     uploadId: string,
   ): Promise<HubReleaseUploadState> {
     // `meta.json` is replaced by rename, so a read needs no lock and never waits behind a chunk still arriving.
+    // An expired session answers 404 but stays on disk: a read never deletes, and the sweep that runs when an upload
+    // starts removes it.
     const session = await this.uploads.read(appId, uploadId);
-    if (session && isReleaseUploadExpired(session))
-      return uploadState(
-        await this.withLock(`upload:${uploadId}`, () =>
-          this.releaseUploadSession(appId, uploadId),
-        ),
-      );
-    return uploadState(requireUploadSession(session, appId));
+    return uploadState(
+      requireUploadSession(
+        session && !isReleaseUploadExpired(session) ? session : null,
+        appId,
+      ),
+    );
   }
 
   public async appendReleaseUpload(

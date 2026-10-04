@@ -56,7 +56,7 @@ const ALL_HUB_ROLES = HUB_ROLES;
 const HUB_API_CASES: readonly ApiCase[] = [
   {
     name: 'rename an application',
-    method: 'PUT',
+    method: 'PATCH',
     path: '/hub/apps/customer/settings',
     body: json({ name: 'Renamed App' }),
     allowed: ADMINISTRATOR_AND_OPERATOR,
@@ -131,7 +131,7 @@ const HUB_API_CASES: readonly ApiCase[] = [
   },
   {
     name: 'update application settings',
-    method: 'PUT',
+    method: 'PATCH',
     path: '/hub/apps/customer/settings',
     body: json({ activation: 'lazy' }),
     allowed: ADMINISTRATOR_AND_OPERATOR,

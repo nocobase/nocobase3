@@ -109,7 +109,7 @@ export function defaultRoutes(state: UploadState): Record<string, Handler> {
     'GET ': () => data({ id: APP_ID, buildTarget: HOST_TARGET }),
     'POST releases/uploads': (request) => {
       state.size = (JSON.parse(request.body) as { size: number }).size;
-      return data({ upload: session() }, 201);
+      return data(session(), 201);
     },
     'PATCH releases/uploads/u1': (request) => {
       // Like the Hub, the mismatch reports the offset to go on from.

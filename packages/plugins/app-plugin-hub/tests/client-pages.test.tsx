@@ -508,7 +508,7 @@ describe('Hub client pages', () => {
     expect(save).toBeEnabled();
     mocks.client.request.mockImplementation(
       ({ path, method }: { path: string; method?: string }) => {
-        if (method === 'PUT') return Promise.resolve({ data: {} });
+        if (method === 'PATCH') return Promise.resolve({ data: {} });
         if (path === 'hub/apps/customer')
           return Promise.resolve({
             data: detail({ app: { ...detail().app, name: 'New name' } }),
@@ -523,7 +523,7 @@ describe('Hub client pages', () => {
     await screen.findByRole('heading', { name: 'New name' });
     expect(mocks.client.request).toHaveBeenCalledWith({
       path: 'hub/apps/customer/settings',
-      method: 'PUT',
+      method: 'PATCH',
       json: { name: 'New name', activation: 'eager' },
     });
     expect(

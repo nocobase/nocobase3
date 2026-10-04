@@ -4,17 +4,14 @@ import { authorizationToken } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
-  ApiError,
   apiErrorHandler,
   defineApiRoutes,
   parseApiInput,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
-import { HTTPException } from 'hono/http-exception';
 import { validator } from 'hono/validator';
 import type { z } from 'zod';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import type { Logger } from '@nocobase/logging';
 
 import { hubApiKeyServiceToken } from '../services/api-keys.js';
@@ -131,17 +128,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       if (context.req.header('authorization')) return next();
       return authorization.middleware()(context, next);
     });
-    // Render the errors the Hub recognizes in the standard body here too, so the routes answer the same mounted on a
-    // bare Hono as inside the application. Anything else is the application's to answer.
-    routes.onError((error, context) => {
-      if (
-        error instanceof ApiError ||
-        error instanceof AuthorizationDeniedError ||
-        error instanceof HTTPException
-      )
-        return apiErrorHandler(error, context);
-      throw error;
-    });
+    // `HubError` is an `ApiError`, so the framework's handler renders it, authorization denials and validation errors
+    // in the standard body even when the routes are mounted on a bare Hono, and rethrows anything else.
+    routes.onError(apiErrorHandler);
 
     // Publishing keys. `apps` is a fixed segment, so it is registered before the `:keyId` routes.
     routes.get('/apiKeys/apps', noStore, async (context) => {
@@ -305,13 +294,22 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           appId,
           context.req.valid('json'),
         );
+        // Every answer is the upload resource. When the App already has a Release with this checksum there is nothing
+        // to send: no session is created, so `uploadId` is absent, `offset` equals `size`, and `releaseId` names the
+        // Release, exactly as a completed upload reports it.
         if (started.kind === 'release')
-          return context.json(
-            { data: { release: uploadedReleaseResponse(started.release) } },
-            200,
-          );
+          return context.json({
+            data: {
+              offset: started.release.size,
+              size: started.release.size,
+              chunkSize: RELEASE_UPLOAD_CHUNK_SIZE,
+              releaseId: started.release.id,
+              version: started.release.version,
+              reused: true,
+            },
+          });
         return context.json(
-          { data: { upload: started.upload } },
+          { data: started.upload },
           started.kind === 'created' ? 201 : 200,
         );
       },
@@ -497,7 +495,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return context.json({ data: result });
       },
     );
-    routes.put(
+    // Settings are updated field by field: any of `name` and `activation` may be sent, so this is a partial update.
+    routes.patch(
       '/apps/:appId/settings',
       onApp('update-settings'),
       validator('param', (value) => parseApiInput(AppParams, value)),
@@ -704,11 +703,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       readonly data: unknown[];
       readonly meta: Readonly<Record<string, unknown>>;
     }> {
-      const { pageToken, q, fromStart, ...filters } = query;
+      const { pageToken, q, fromStart, since, until, ...filters } = query;
       const { entries, cursor, ...state } = await hub.readLogs(
         appId,
         {
           ...definedOnly(filters),
+          // Entries store milliseconds (`.000Z`) and are compared as text, so the bounds use the same form.
+          ...(since === undefined ? {} : { since: canonicalTime(since) }),
+          ...(until === undefined ? {} : { until: canonicalTime(until) }),
           ...(pageToken === undefined ? {} : { cursor: pageToken }),
           ...(q === undefined ? {} : { search: q }),
           fromStart: fromStart === 'true',
@@ -779,6 +781,10 @@ function definedOnly<T extends Record<string, unknown>>(
   return Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== undefined),
   ) as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
+function canonicalTime(value: string): string {
+  return new Date(value).toISOString();
 }
 
 /** The media type of a `Content-Type` header, without its parameters. */

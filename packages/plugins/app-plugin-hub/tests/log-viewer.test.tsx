@@ -90,7 +90,7 @@ it('shows a persisted deployment error and sends filters to the deployment endpo
   await waitFor(() =>
     expect(request).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        query: expect.objectContaining({ level: '' }),
+        query: expect.not.objectContaining({ level: expect.anything() }),
       }),
     ),
   );

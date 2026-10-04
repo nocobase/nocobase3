@@ -17,8 +17,8 @@ import { validator } from 'hono/validator';
 import { getRequestTranslator, type Translator } from '@nocobase/i18n/server';
 
 import { notificationRuntimeToken } from '../runtime.js';
+import { NotificationTransportUnavailableError } from '../manager.js';
 import {
-  isNotificationI18nError,
   notificationApiError,
   notificationErrorHandler,
 } from '../http-errors.js';
@@ -97,13 +97,13 @@ export const apiRoutes: AppApiRouteContribution<
     }
     await next();
   });
+  // The targets come from configuration, so the list is short and bounded: it is not paged but still reports its total.
   tests.get('/testTargets', (context) => {
     const t = getRequestTranslator(context);
-    return context.json({
-      data: notification
-        .listTestTargets()
-        .map((target) => localizeTestTarget(target, t)),
-    });
+    const data = notification
+      .listTestTargets()
+      .map((target) => localizeTestTarget(target, t));
+    return context.json({ data, meta: { total: data.length } });
   });
   tests.post(
     '/testSends',
@@ -119,7 +119,10 @@ export const apiRoutes: AppApiRouteContribution<
         // Accepted, not yet delivered: `GET /notifications/testSends/{notificationId}` reads its progress.
         return context.json({ data: result }, 202);
       } catch (error) {
-        if (isNotificationI18nError(error)) throw error;
+        // Only a transport that cannot be reached is the test's own failure; validation errors are translated by
+        // `onError`, and anything else is a defect the application answers.
+        if (!(error instanceof NotificationTransportUnavailableError))
+          throw error;
         throw notificationApiError(context, {
           status: 'UNAVAILABLE',
           reason: 'NOTIFICATION_TEST_FAILED',

@@ -65,6 +65,17 @@ export const ListAppsQuery: z.ZodObject<{
   q: z.string().trim().max(100).optional(),
 });
 
+/** The levels a journal entry carries, lowest first. */
+export const LOG_LEVELS: readonly [
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
 /**
  * A log read. `pageToken` is the `nextPageToken` of the previous read: logs are a feed read forward from it, and
  * reading from the same token again returns what was appended since. A read returns what fits in one bounded chunk
@@ -72,19 +83,20 @@ export const ListAppsQuery: z.ZodObject<{
  */
 export const LogQuery: z.ZodObject<{
   pageToken: z.ZodOptional<z.ZodString>;
-  level: z.ZodOptional<z.ZodString>;
+  level: z.ZodOptional<z.ZodEnum<{ [K in LogLevel]: K }>>;
   source: z.ZodOptional<z.ZodString>;
   q: z.ZodOptional<z.ZodString>;
-  since: z.ZodOptional<z.ZodString>;
-  until: z.ZodOptional<z.ZodString>;
+  since: z.ZodOptional<z.ZodISODateTime>;
+  until: z.ZodOptional<z.ZodISODateTime>;
   fromStart: z.ZodOptional<z.ZodEnum<{ true: 'true'; false: 'false' }>>;
 }> = z.object({
   pageToken: z.string().optional(),
-  level: z.string().optional(),
+  level: z.enum(LOG_LEVELS).optional(),
   source: z.string().optional(),
   q: z.string().optional(),
-  since: z.string().optional(),
-  until: z.string().optional(),
+  // RFC 3339 in UTC (`Z`), the form journal entries are stored in.
+  since: z.iso.datetime().optional(),
+  until: z.iso.datetime().optional(),
   fromStart: z.enum(['true', 'false']).optional(),
 });
 

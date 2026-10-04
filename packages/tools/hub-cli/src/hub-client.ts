@@ -264,8 +264,10 @@ export class HubClient {
       },
       false,
     );
-    if (isRecord(started.release)) return this.#uploaded(started.release);
-    let session = this.#session(started.upload);
+    // The answer is always the upload resource. Without an `uploadId` the Hub already has the archive and names its
+    // Release in `releaseId`, as a completed upload does.
+    if (started.uploadId === undefined) return this.#uploaded(started);
+    let session = this.#session(started);
     if (session.offset > 0)
       input.onProgress?.(
         `Resuming an earlier upload at ${String(Math.floor((session.offset / input.size) * 100))}%.`,

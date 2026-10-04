@@ -1710,7 +1710,7 @@ describe('Hub API Key HTTP boundary', () => {
       ['GET', '/hub/apps/crm/deployments/op-1'],
       ['GET', '/hub/apps/crm/config'],
       ['PUT', '/hub/apps/crm/config'],
-      ['PUT', '/hub/apps/crm/settings'],
+      ['PATCH', '/hub/apps/crm/settings'],
       ['POST', '/hub/apps/crm/rollback'],
       ['POST', '/hub/apps/crm/restart'],
       ['DELETE', '/hub/apps/crm'],

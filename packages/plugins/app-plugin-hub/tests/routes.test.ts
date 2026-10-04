@@ -62,6 +62,48 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     }
   });
 
+  it('validates log levels and RFC 3339 bounds, passing bounds in the journal form', async () => {
+    const readLogs = vi.fn<HubService['readLogs']>().mockResolvedValue({
+      entries: [],
+      cursor: '',
+      available: true,
+      hasMore: false,
+      reset: false,
+      enabled: true,
+    });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', { readLogs }),
+    );
+    for (const query of [
+      'level=verbose',
+      'level=',
+      'since=yesterday',
+      'until=2026-01-01',
+    ]) {
+      const response = await router.request(`/hub/apps/customer/logs?${query}`);
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { status: 'INVALID_ARGUMENT', reason: 'INVALID_INPUT' },
+      });
+    }
+    expect(readLogs).not.toHaveBeenCalled();
+
+    const response = await router.request(
+      '/hub/apps/customer/logs?level=warn&since=2026-01-01T00:00:00Z&until=2026-01-02T00:00:00.5Z',
+    );
+    expect(response.status).toBe(200);
+    expect(readLogs).toHaveBeenCalledWith(
+      'customer',
+      {
+        level: 'warn',
+        since: '2026-01-01T00:00:00.000Z',
+        until: '2026-01-02T00:00:00.500Z',
+        fromStart: false,
+      },
+      undefined,
+    );
+  });
+
   it('returns a paginated App catalog and passes query options', async () => {
     const listAppsPage = vi
       .fn<HubService['listAppsPage']>()
@@ -545,7 +587,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     );
 
     const response = await router.request('/hub/apps/customer/settings', {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ activation: 'lazy', name: 'Renamed App' }),
     });
@@ -571,7 +613,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
 
     for (const body of [{ activation: 'sometimes' }, { startupMode: 'lazy' }]) {
       const response = await router.request('/hub/apps/customer/settings', {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });

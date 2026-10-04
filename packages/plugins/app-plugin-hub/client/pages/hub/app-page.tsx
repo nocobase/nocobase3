@@ -617,7 +617,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
       void perform(async () => {
         await client.request({
           path: `hub/apps/${appId}/settings`,
-          method: 'PUT',
+          method: 'PATCH',
           json: settings,
         });
       }),

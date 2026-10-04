@@ -15,7 +15,6 @@ import {
 } from '@nocobase/app-server/router';
 import { databaseManagerToken } from '@nocobase/db';
 import { Hono } from 'hono';
-import { HTTPException } from 'hono/http-exception';
 import { validator } from 'hono/validator';
 
 import {
@@ -69,8 +68,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       ? container.resolve(loggingToken).getLogger('database-explorer')
       : undefined;
 
-    // Answer what this router recognizes in the standard error body, so it
-    // does so even when mounted on its own; rethrow anything else.
+    // Translate this plugin's own errors and hand everything to the framework's
+    // handler, which renders what it recognizes in the standard body even when
+    // this router is mounted on its own and rethrows anything else.
     routes.onError((error, context) => {
       if (error instanceof DatabaseExplorerError) {
         if (UNREADABLE_CONNECTION.has(error.code)) {
@@ -90,9 +90,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         }
         return apiErrorHandler(toApiError(error), context);
       }
-      if (error instanceof ApiError || error instanceof HTTPException)
-        return apiErrorHandler(error, context);
-      throw error;
+      return apiErrorHandler(error, context);
     });
 
     routes.use('*', authentication.required(), authorization.middleware());

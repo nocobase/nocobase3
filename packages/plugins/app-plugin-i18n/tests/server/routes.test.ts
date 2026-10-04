@@ -184,6 +184,29 @@ describe('PUT /i18n/locale', () => {
     },
   );
 
+  it('answers the standard error body when mounted on a bare Hono', async () => {
+    const runtime = new I18nRuntime({
+      defaultLocale: 'en-US',
+      locales: ['en-US'],
+    });
+    await runtime.init('en-US');
+    const container = new ServiceContainer();
+    container.instance(i18nToken, runtime);
+    const bare = new Hono();
+    bare.route('/', await i18nApiRoutes.createRouter({ container } as never));
+
+    const response = await bare.request('/i18n/locale', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { status: 'INVALID_ARGUMENT', reason: 'INVALID_INPUT' },
+    });
+  });
+
   it('succeeds with no session mounted', async () => {
     const { router } = await createRouter();
 

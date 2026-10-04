@@ -145,7 +145,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
 
-    // Each scope holds one value per user that is always written whole, so replacing it is a PUT.
+    // A role scope is a singleton configuration of the user: exactly one value per `(userId, scope)`, which always
+    // exists (unassigned is a value too) and is always written whole. Replacing a singleton is the one case the HTTP
+    // API rules keep PUT for; there are no fields to merge, so PATCH would mean the same thing less precisely.
     routes.put(
       '/:userId/roleScopes/:scope',
       allowed('assign-role'),

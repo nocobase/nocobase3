@@ -82,9 +82,10 @@ export function LogViewer({
   const endpoint = `hub/apps/${encodeURIComponent(appId)}/${deploymentId ? `deployments/${encodeURIComponent(deploymentId)}/` : ''}logs`;
   const query = useMemo(
     () => ({
-      q: search,
-      level,
-      source,
+      // Unset filters are left out: the Hub validates `level` as one of the levels and rejects an empty one.
+      ...(search ? { q: search } : {}),
+      ...(level ? { level } : {}),
+      ...(source ? { source } : {}),
       ...(since ? { since: since.toISOString() } : {}),
       ...(until ? { until: until.toISOString() } : {}),
     }),

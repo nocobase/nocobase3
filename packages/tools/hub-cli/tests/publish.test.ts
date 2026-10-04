@@ -137,7 +137,14 @@ describe('hub deploy', () => {
   it('deploys the Release the Hub already has for the archive instead of failing', async () => {
     const hub = fakeHub({
       'POST releases/uploads': () =>
-        data({ release: { releaseId: 'r0', version: '0.9.0', reused: true } }),
+        data({
+          offset: 10,
+          size: 10,
+          chunkSize: 4,
+          releaseId: 'r0',
+          version: '0.9.0',
+          reused: true,
+        }),
     });
     await writeArchive();
     const progress: string[] = [];
@@ -454,13 +461,11 @@ describe('hub upload', () => {
           String(input).endsWith('/releases/uploads')
           ? data(
               {
-                upload: {
-                  uploadId: 'u1',
-                  offset: 0,
-                  size: 10,
-                  chunkSize: 4,
-                  expiresAt: '2026-09-30T00:00:00.000Z',
-                },
+                uploadId: 'u1',
+                offset: 0,
+                size: 10,
+                chunkSize: 4,
+                expiresAt: '2026-09-30T00:00:00.000Z',
               },
               201,
             )

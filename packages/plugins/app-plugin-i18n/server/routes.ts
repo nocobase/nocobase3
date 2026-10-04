@@ -2,6 +2,7 @@ import { getContextSession, LOCALE_SESSION_KEY } from '@nocobase/i18n/server';
 import { i18nToken } from '@nocobase/app-server/i18n';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
+  apiErrorHandler,
   defineApiRoutes,
   parseApiInput,
   type AppApiRouteContribution,
@@ -23,6 +24,8 @@ export const i18nApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
     const runtime = container.resolve(i18nToken);
+    // Validation errors answer in the standard body even when the router is mounted on its own.
+    router.onError(apiErrorHandler);
 
     router.get('/i18n/locales', (context) =>
       context.json({
