@@ -79,18 +79,17 @@ export function notificationApiErrorFromI18n(
 }
 
 /**
- * The `onError` of every notification router. It renders `ApiError` and the runtime's localized errors in the standard
- * body, so a router answers the same way mounted on a bare Hono, and rethrows everything else to the application.
+ * The `onError` of every notification router. It translates the runtime's localized errors and leaves everything else to
+ * the framework's handler, which renders what it recognizes, such as `ApiError`, in the standard body, so a router
+ * answers the same way mounted on a bare Hono, and rethrows the rest to the application.
  */
-export const notificationErrorHandler: ErrorHandler = (error, context) => {
-  if (error instanceof ApiError) return apiErrorHandler(error, context);
-  if (isNotificationI18nError(error))
-    return apiErrorHandler(
-      notificationApiErrorFromI18n(context, error),
-      context,
-    );
-  throw error;
-};
+export const notificationErrorHandler: ErrorHandler = (error, context) =>
+  apiErrorHandler(
+    isNotificationI18nError(error)
+      ? notificationApiErrorFromI18n(context, error)
+      : error,
+    context,
+  );
 
 /** Whether `error` is a notification runtime error this plugin's routes translate. */
 export function isNotificationI18nError(error: unknown): error is AppI18nError {

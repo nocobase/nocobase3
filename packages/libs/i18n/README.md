@@ -238,32 +238,37 @@ import {
   apiErrorStatusFromHttp,
 } from '@nocobase/app-server/router';
 import {
+  type AppI18nError,
   getRequestLocale,
   isAppI18nError,
   serializeI18nError,
 } from '@nocobase/i18n/server';
+import type { Context } from 'hono';
 
-router.onError((error, context) => {
-  if (!isAppI18nError(error)) return apiErrorHandler(error, context);
+function toWorkflowsApiError(error: AppI18nError, context: Context): ApiError {
   const locale = getRequestLocale(context) ?? 'en-US';
   const serialized = serializeI18nError(i18n, error, locale);
-  return apiErrorHandler(
-    new ApiError({
-      status: apiErrorStatusFromHttp(error.status),
-      reason: serialized.code,
-      domain: 'workflows',
-      message: error.message,
-      localizedMessage: { locale, message: serialized.message },
-      metadata: {
-        ns: serialized.ns,
-        key: serialized.key,
-        ...(serialized.params ? { params: serialized.params } : {}),
-      },
-      cause: error,
-    }),
+  return new ApiError({
+    status: apiErrorStatusFromHttp(error.status),
+    reason: serialized.code,
+    domain: 'workflows',
+    message: error.message,
+    localizedMessage: { locale, message: serialized.message },
+    metadata: {
+      ns: serialized.ns,
+      key: serialized.key,
+      ...(serialized.params ? { params: serialized.params } : {}),
+    },
+    cause: error,
+  });
+}
+
+router.onError((error, context) =>
+  apiErrorHandler(
+    isAppI18nError(error) ? toWorkflowsApiError(error, context) : error,
     context,
-  );
-});
+  ),
+);
 ```
 
 The response then carries the error's code as `reason`, the translated text as `localizedMessage`, and the translation inputs in `metadata`:

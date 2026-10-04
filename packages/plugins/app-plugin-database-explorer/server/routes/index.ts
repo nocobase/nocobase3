@@ -72,25 +72,28 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // handler, which renders what it recognizes in the standard body even when
     // this router is mounted on its own and rethrows anything else.
     routes.onError((error, context) => {
-      if (error instanceof DatabaseExplorerError) {
-        if (UNREADABLE_CONNECTION.has(error.code)) {
-          // Only the classification is recorded. A driver's connection error
-          // quotes the host, database, and account it failed to reach, so
-          // writing the cause here would put into the log file exactly what
-          // the response body goes to such lengths to withhold -- and a log is
-          // the easier of the two to copy into an issue.
-          logger?.warn(
-            {
-              event: 'connection.unreadable',
-              code: error.code,
-              cause: classifyCause(error.cause),
-            },
-            'A connection could not be read.',
-          );
-        }
-        return apiErrorHandler(toApiError(error), context);
+      if (
+        error instanceof DatabaseExplorerError &&
+        UNREADABLE_CONNECTION.has(error.code)
+      ) {
+        // Only the classification is recorded. A driver's connection error
+        // quotes the host, database, and account it failed to reach, so
+        // writing the cause here would put into the log file exactly what
+        // the response body goes to such lengths to withhold -- and a log is
+        // the easier of the two to copy into an issue.
+        logger?.warn(
+          {
+            event: 'connection.unreadable',
+            code: error.code,
+            cause: classifyCause(error.cause),
+          },
+          'A connection could not be read.',
+        );
       }
-      return apiErrorHandler(error, context);
+      return apiErrorHandler(
+        error instanceof DatabaseExplorerError ? toApiError(error) : error,
+        context,
+      );
     });
 
     routes.use('*', authentication.required(), authorization.middleware());

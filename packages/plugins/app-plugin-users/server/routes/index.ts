@@ -48,12 +48,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       ? container.resolve(loggingToken).getLogger('security')
       : undefined;
 
-    routes.onError((error, context) => {
-      const own = toUsersApiError(error);
-      return own
-        ? apiErrorHandler(own, context)
-        : apiErrorHandler(error, context);
-    });
+    routes.onError((error, context) =>
+      apiErrorHandler(toUsersApiError(error) ?? error, context),
+    );
 
     routes.use('*', authentication.required(), authorization.middleware());
 

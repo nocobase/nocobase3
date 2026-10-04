@@ -450,11 +450,12 @@ function toFileApiError(error: FileRepositoryError): ApiError {
  */
 function fileRouter(): Hono {
   const router = new Hono();
-  router.onError((error, c) => {
-    if (error instanceof FileRepositoryError)
-      return apiErrorHandler(toFileApiError(error), c);
-    return apiErrorHandler(error, c);
-  });
+  router.onError((error, c) =>
+    apiErrorHandler(
+      error instanceof FileRepositoryError ? toFileApiError(error) : error,
+      c,
+    ),
+  );
   return router;
 }
 

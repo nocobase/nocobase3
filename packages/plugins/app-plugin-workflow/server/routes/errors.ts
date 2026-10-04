@@ -104,12 +104,19 @@ export function workflowErrorResponse(
 }
 
 /**
- * Renders the errors workflow routes raise, so each router answers the standard body even when it is mounted on its
- * own. Anything it does not recognize is rethrown for the application to answer.
+ * Translates and localizes the errors workflow routes raise, so each router answers the standard body even when it is
+ * mounted on its own. Everything else goes to the framework's handler, which renders what it recognizes and rethrows the
+ * rest for the application to answer.
  */
 export const workflowErrorHandler: ErrorHandler = (error, context) => {
-  if (error instanceof WorkflowInvocationError)
-    return workflowErrorResponse(context, invocationApiError(error));
-  if (error instanceof ApiError) return workflowErrorResponse(context, error);
-  throw error;
+  const translated =
+    error instanceof WorkflowInvocationError
+      ? invocationApiError(error)
+      : error;
+  return apiErrorHandler(
+    translated instanceof ApiError
+      ? localizeWorkflowError(context, translated)
+      : translated,
+    context,
+  );
 };

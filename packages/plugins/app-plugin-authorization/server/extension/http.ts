@@ -178,12 +178,12 @@ export function createSettingsRouter(
   translate?: AuthorizationErrorTranslator,
 ): Hono<SettingsRouterEnv> {
   const routes = new Hono<SettingsRouterEnv>();
-  routes.onError((error, context) => {
-    const own = translate?.(error) ?? toAuthorizationApiError(error);
-    return own
-      ? apiErrorHandler(own, context)
-      : apiErrorHandler(error, context);
-  });
+  routes.onError((error, context) =>
+    apiErrorHandler(
+      translate?.(error) ?? toAuthorizationApiError(error) ?? error,
+      context,
+    ),
+  );
   return routes;
 }
 

@@ -69,10 +69,7 @@ export function inAppNotificationApiError(
 }
 
 /**
- * The inbox router's `onError`: it renders `ApiError` in the standard body, so the router answers the same way mounted
- * on a bare Hono, and rethrows everything else to the application.
+ * The inbox router's `onError`: the framework's handler renders what it recognizes, such as `ApiError`, in the standard
+ * body, so the router answers the same way mounted on a bare Hono, and rethrows everything else to the application.
  */
-export const inAppNotificationErrorHandler: ErrorHandler = (error, context) => {
-  if (error instanceof ApiError) return apiErrorHandler(error, context);
-  throw error;
-};
+export const inAppNotificationErrorHandler: ErrorHandler = apiErrorHandler;

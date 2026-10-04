@@ -50,12 +50,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
     // Render this plugin's errors here as well as through the application, so the router answers with the standard
     // body even when it is mounted on its own. Anything else belongs to the application's handler.
-    schedules.onError((error, context) => {
-      if (error instanceof ScheduleNotFoundError)
-        return apiErrorHandler(scheduleNotFound(error.scheduleId), context);
-      if (error instanceof ApiError) return apiErrorHandler(error, context);
-      throw error;
-    });
+    schedules.onError((error, context) =>
+      apiErrorHandler(
+        error instanceof ScheduleNotFoundError
+          ? scheduleNotFound(error.scheduleId)
+          : error,
+        context,
+      ),
+    );
 
     schedules.use('*', authentication.required(), authorization.middleware());
     // Permission is checked before any schedule is looked up, so a caller without access cannot probe which ids exist.
