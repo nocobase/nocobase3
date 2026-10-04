@@ -1,63 +1,84 @@
-import type { Context, Hono } from 'hono';
+import { parseApiInput } from '@nocobase/app-server/router';
+import type { Hono } from 'hono';
+import { validator } from 'hono/validator';
+import type { z } from 'zod';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { UsageStatisticsRequest } from '../service/ai-usage-statistics-service.js';
-import { AI_USAGE_FILTER_FIELDS } from '../repository/ai-usage-event.js';
+import type { AISettingsActor } from './settings-access.js';
+import type { AIRouteGuards } from './settings-access.js';
+import {
+  UsageBreakdownQuery,
+  UsageQuery,
+  UsageSeriesQuery,
+  UsageSummaryQuery,
+} from './schemas.js';
 
-export const AI_USAGE_STATISTICS_PATHS = [
-  '/aiUsage:summary',
-  '/aiUsage:series',
-  '/aiUsage:breakdown',
-  '/aiUsage:filterOptions',
-] as const;
-
+/** `/aiEmployee/usage`: token usage across every user, read on the AI settings page. */
 export function createAIUsageStatisticsRouter(
   app: Hono,
   services: ServiceFactory,
+  { settings }: AIRouteGuards,
 ): void {
-  app.get('/aiUsage:summary', async (context) => {
-    const result = await services.usageStatisticsService.summary({
-      ...readRequest(context),
-      compareShiftHours: context.req.query('compareShiftHours'),
-    });
-    return context.json(result as never);
-  });
+  app.get(
+    '/aiEmployee/usage/summary',
+    settings,
+    validator('query', (value) => parseApiInput(UsageSummaryQuery, value)),
+    async (context) => {
+      const { compareShiftHours, ...query } = context.req.valid('query');
+      const data = await services.usageStatisticsService.summary({
+        ...usageRequest(context.var.aiSettingsActor, query),
+        compareShiftHours,
+      });
+      return context.json({ data });
+    },
+  );
 
-  app.get('/aiUsage:series', async (context) => {
-    const result = await services.usageStatisticsService.series({
-      ...readRequest(context),
-      granularity: context.req.query('granularity'),
-    });
-    return context.json(result as never);
-  });
+  app.get(
+    '/aiEmployee/usage/series',
+    settings,
+    validator('query', (value) => parseApiInput(UsageSeriesQuery, value)),
+    async (context) => {
+      const { granularity, ...query } = context.req.valid('query');
+      const data = await services.usageStatisticsService.series({
+        ...usageRequest(context.var.aiSettingsActor, query),
+        granularity,
+      });
+      return context.json({ data });
+    },
+  );
 
-  app.get('/aiUsage:breakdown', async (context) => {
-    const result = await services.usageStatisticsService.breakdown({
-      ...readRequest(context),
-      dimension: context.req.query('dimension'),
-      limit: context.req.query('limit'),
-    });
-    return context.json(result as never);
-  });
+  app.get(
+    '/aiEmployee/usage/breakdown',
+    settings,
+    validator('query', (value) => parseApiInput(UsageBreakdownQuery, value)),
+    async (context) => {
+      const { dimension, limit, ...query } = context.req.valid('query');
+      const data = await services.usageStatisticsService.breakdown({
+        ...usageRequest(context.var.aiSettingsActor, query),
+        dimension,
+        limit,
+      });
+      return context.json({ data });
+    },
+  );
 
-  app.get('/aiUsage:filterOptions', async (context) => {
-    const result = await services.usageStatisticsService.filterOptions(
-      readRequest(context),
-    );
-    return context.json(result as never);
-  });
+  app.get(
+    '/aiEmployee/usage/filterOptions',
+    settings,
+    validator('query', (value) => parseApiInput(UsageQuery, value)),
+    async (context) => {
+      const data = await services.usageStatisticsService.filterOptions(
+        usageRequest(context.var.aiSettingsActor, context.req.valid('query')),
+      );
+      return context.json({ data });
+    },
+  );
 }
 
-function readRequest(context: Context): UsageStatisticsRequest {
-  const filters: Record<string, string | undefined> = {};
-  for (const field of AI_USAGE_FILTER_FIELDS) {
-    filters[field] = context.req.query(field);
-  }
-  return {
-    actor: context.get('usageStatisticsActor'),
-    start: context.req.query('start'),
-    end: context.req.query('end'),
-    timezoneOffset: context.req.query('timezoneOffset'),
-    ...filters,
-  };
+function usageRequest(
+  actor: AISettingsActor,
+  query: z.infer<typeof UsageQuery>,
+): UsageStatisticsRequest {
+  return { actor, ...query };
 }

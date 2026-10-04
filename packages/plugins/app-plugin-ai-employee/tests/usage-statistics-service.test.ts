@@ -13,7 +13,7 @@ function createApi(): {
   api: ApiClient;
   request: ReturnType<typeof vi.fn>;
 } {
-  const request = vi.fn().mockResolvedValue({});
+  const request = vi.fn().mockResolvedValue({ data: {} });
   return { api: { request } as unknown as ApiClient, request };
 }
 
@@ -35,7 +35,7 @@ describe('usage statistics client requests', () => {
       await fetcher(api, query);
       expect(request).toHaveBeenCalledWith(
         expect.objectContaining({
-          path: `ai/aiUsage:${action}`,
+          path: `aiEmployee/usage/${action}`,
           method: 'GET',
           query: {
             start: 1_000,

@@ -99,7 +99,8 @@ export class AIFileService {
     canReadAnyFile?: () => Promise<boolean>;
   }): Promise<AIFilePreviewResult> {
     const metadata = await this.fileMetadata.findById(id);
-    if (!metadata) throw notFoundError('file not found');
+    if (!metadata)
+      throw notFoundError(`AI file ${id} was not found.`, 'FILE_NOT_FOUND');
 
     const record = metadata.entity;
     // Only the uploader reads a file by default. Anyone else — including for a
@@ -110,14 +111,20 @@ export class AIFileService {
       record.createdById != null &&
       String(record.createdById) === String(actor.id);
     if (!ownFile && !(await canReadAnyFile?.())) {
-      throw forbiddenError('forbidden');
+      throw forbiddenError(
+        'Only the uploader, or a user with AI settings access, may read this file.',
+        'FILE_ACCESS_DENIED',
+      );
     }
 
     let opened;
     try {
       opened = await this.fileStorage.openMetadata(metadata);
     } catch {
-      throw notFoundError('file content not found');
+      throw notFoundError(
+        `The content of AI file ${id} was not found.`,
+        'FILE_CONTENT_NOT_FOUND',
+      );
     }
 
     return {
@@ -163,8 +170,14 @@ export function aiFilePreviewUrl(
   apiBasePath: string,
   id: string | number,
 ): string {
-  return `${apiBasePath}/aiFiles:preview?id=${id}`;
+  return `${apiBasePath}/files/${encodeURIComponent(String(id))}/preview`;
 }
+
+/**
+ * The address releases before `/api/aiEmployee` returned for an upload, which a message may have stored with its
+ * attachment. It no longer resolves, so history replaces it with the current one.
+ */
+const LEGACY_PREVIEW_URL = /\/aiFiles:preview\?id=[^&#]*$/;
 
 type HistoryMessage = {
   content?: {
@@ -195,15 +208,18 @@ export function withAIFilePreviews<T extends { rows: unknown[] }>(
     if (
       !isRecord(source) ||
       source.collectionName !== 'aiFiles' ||
-      (typeof id !== 'string' && typeof id !== 'number') ||
-      typeof attachment.preview === 'string'
+      (typeof id !== 'string' && typeof id !== 'number')
     )
+      return attachment;
+    const current = (value: unknown): value is string =>
+      typeof value === 'string' && !LEGACY_PREVIEW_URL.test(value);
+    if (current(attachment.preview) && current(attachment.url))
       return attachment;
     const preview = aiFilePreviewUrl(apiBasePath, id);
     return {
       ...attachment,
-      preview,
-      url: typeof attachment.url === 'string' ? attachment.url : preview,
+      preview: current(attachment.preview) ? attachment.preview : preview,
+      url: current(attachment.url) ? attachment.url : preview,
     };
   };
   const withPreviews = (message: unknown): unknown => {

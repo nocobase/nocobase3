@@ -56,7 +56,7 @@ describe('AIFileService', () => {
       fileStorage: fileStorage,
       fileMetadata: metadataOf(metadata),
       snowflake: { generate: () => '42' } as never,
-      apiBasePath: '/runtime/api/ai',
+      apiBasePath: '/runtime/api/aiEmployee',
     });
 
     const result = await service.create({
@@ -73,14 +73,14 @@ describe('AIFileService', () => {
     expect(result).toMatchObject({
       disk: 'local',
       path: 'ai-files/42-hello.txt',
-      url: '/runtime/api/ai/aiFiles:preview?id=42',
-      preview: '/runtime/api/ai/aiFiles:preview?id=42',
+      url: '/runtime/api/aiEmployee/files/42/preview',
+      preview: '/runtime/api/aiEmployee/files/42/preview',
       data: {
-        url: '/runtime/api/ai/aiFiles:preview?id=42',
-        preview: '/runtime/api/ai/aiFiles:preview?id=42',
+        url: '/runtime/api/aiEmployee/files/42/preview',
+        preview: '/runtime/api/aiEmployee/files/42/preview',
       },
     });
-    expect(JSON.stringify(metadata.entity)).not.toContain('/runtime/api/ai');
+    expect(JSON.stringify(metadata.entity)).not.toContain('/runtime/api');
   });
 
   it('checks ownership and returns transport-neutral preview metadata', async () => {
@@ -104,7 +104,7 @@ describe('AIFileService', () => {
       fileStorage: fileStorage,
       fileMetadata: metadataOf(metadata),
       snowflake: { generate: () => '42' } as never,
-      apiBasePath: '/api/ai',
+      apiBasePath: '/api/aiEmployee',
     });
 
     await expect(
@@ -140,7 +140,7 @@ describe('AIFileService', () => {
         } as FileStorage<AIFileEntity, AIFileMetadataCreateContext>,
         fileMetadata: metadataOf({ ...metadata, entity }),
         snowflake: { generate: () => '42' } as never,
-        apiBasePath: '/api/ai',
+        apiBasePath: '/api/aiEmployee',
       });
     };
     const owned = storageFor(metadata.entity);
@@ -197,7 +197,7 @@ describe('AIFileService', () => {
         },
         fileMetadata: metadataOf(record),
         snowflake: { generate: () => '42' } as never,
-        apiBasePath: '/api/ai',
+        apiBasePath: '/api/aiEmployee',
       });
 
     await expect(

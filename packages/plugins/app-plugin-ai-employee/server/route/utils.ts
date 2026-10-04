@@ -1,10 +1,14 @@
 import { AgentServiceError } from '../agent/types.js';
 import { DomainError } from '../types.js';
 import type { AuthEnv, AuthSession } from '@nocobase/app-plugin-authentication';
+import { ApiError, apiErrorHandler } from '@nocobase/app-server/router';
 import type { Logger } from '@nocobase/logging';
 import type { Actor } from '../types.js';
-import type { Context as HonoContext, MiddlewareHandler } from 'hono';
-import { AI_API_BASE_PATH } from './contracts.js';
+import type {
+  Context as HonoContext,
+  ErrorHandler,
+  MiddlewareHandler,
+} from 'hono';
 import { SSEStreamTarget, sseResponseHeaders } from './sse.js';
 
 declare module 'hono' {
@@ -12,6 +16,9 @@ declare module 'hono' {
     currentUser: Actor;
   }
 }
+
+/** The `domain` of every error the AI employee routes report, whether about employees or any other AI resource. */
+export const AI_EMPLOYEE_ERROR_DOMAIN = 'aiEmployees';
 
 export interface AIRequestMiddlewareOptions {
   readonly ready: () => Promise<void>;
@@ -33,23 +40,47 @@ export function createAIRequestMiddleware(
   options: AIRequestMiddlewareOptions,
 ): MiddlewareHandler {
   return async (context, next) => {
-    const action = actionFromPath(context.req.path);
-
+    const action = `${context.req.method} ${context.req.path}`;
     try {
       await options.ready();
-      const currentUser = context.var.currentUser;
-      options.logger.info?.(
-        { action, userId: currentUser.id },
-        'AI local action',
-      );
-      await next();
-      context.header('x-local-ai', '1');
     } catch (error: unknown) {
       options.logger.error?.({ action, error }, 'AI local action failed');
-      return errorResponse(error);
+      throw error;
     }
+    options.logger.info?.(
+      { action, userId: context.var.currentUser.id },
+      'AI local action',
+    );
+    await next();
+    context.header('x-local-ai', '1');
   };
 }
+
+/**
+ * The `ApiError` a domain error from the AI services answers with. An unexpected failure, including a domain error
+ * that reports an internal fault, is not one: the application answers it with a 500 that reveals nothing.
+ */
+export function toAIEmployeeApiError(error: unknown): ApiError | undefined {
+  if (!(error instanceof DomainError) || error.apiStatus === 'INTERNAL')
+    return undefined;
+  return new ApiError({
+    status: error.apiStatus,
+    reason: error.reason,
+    domain: AI_EMPLOYEE_ERROR_DOMAIN,
+    message: error.message,
+    ...(error.fieldViolations?.length
+      ? { fieldViolations: error.fieldViolations }
+      : {}),
+    cause: error,
+  });
+}
+
+/**
+ * Translates the AI services' own domain errors into the standard body, and leaves everything else to the framework,
+ * which answers the errors it recognizes and passes the rest on to the application's handler.
+ */
+export const aiEmployeeErrorHandler: ErrorHandler = (error, context) =>
+  apiErrorHandler(toAIEmployeeApiError(error) ?? error, context);
 
 export function createAISSEStreamResponse(
   context: HonoContext,
@@ -88,37 +119,6 @@ function agentErrorCode(error: unknown): string | undefined {
   if (error instanceof AgentServiceError) return error.code;
   const cause = (error as { cause?: unknown } | undefined)?.cause;
   return cause instanceof AgentServiceError ? cause.code : undefined;
-}
-
-export function errorResponse(error: unknown): Response {
-  const message = error instanceof Error ? error.message : String(error);
-  const explicitStatus = Number((error as { status?: unknown })?.status);
-  const status =
-    error instanceof DomainError
-      ? error.status
-      : explicitStatus || statusForError(message);
-  return Response.json(
-    { errors: [{ message }], error: message },
-    { status, headers: { 'x-local-ai': '1' } },
-  );
-}
-
-export function requiredString(value: unknown, name: string): string {
-  if (typeof value !== 'string' || !value) {
-    throw new DomainError('VALIDATION_ERROR', `${name} is required`, 400);
-  }
-  return value;
-}
-
-function actionFromPath(pathname: string): string {
-  const prefix = `${AI_API_BASE_PATH}/`;
-  return pathname.startsWith(prefix) ? pathname.slice(prefix.length) : pathname;
-}
-
-function statusForError(message: string): number {
-  if (/not found/.test(message)) return 404;
-  if (/invalid|is required|must be|Expected/.test(message)) return 400;
-  return 500;
 }
 
 function actorFromSession(session: AuthSession, request: Request): Actor {

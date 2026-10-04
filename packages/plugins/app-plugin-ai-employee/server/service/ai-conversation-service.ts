@@ -65,6 +65,7 @@ import type {
   AIConversationListFilter,
 } from '../repository/ai-conversation.js';
 import type { GetAIConversationMessagesResult } from '../manager/ai-conversations-manager.js';
+import type { ConversationOptionsInput } from '../route/schemas.js';
 import { requireConversationReadAccess } from './utils.js';
 
 export interface ConversationUserSummary {
@@ -169,13 +170,40 @@ function sendErrorResponse(
  */
 const AGENT_ERROR_STATUS: Record<AgentServiceErrorCode, number> = {
   CONFIGURATION_ERROR: 503,
-  PROVIDER_ERROR: 502,
-  MODEL_RESPONSE_ERROR: 502,
-  EMPTY_RESPONSE: 502,
-  GRAPH_RECURSION_ERROR: 422,
+  PROVIDER_ERROR: 503,
+  MODEL_RESPONSE_ERROR: 503,
+  EMPTY_RESPONSE: 503,
+  GRAPH_RECURSION_ERROR: 400,
   PERSISTENCE_ERROR: 500,
-  ABORTED: 499,
+  ABORTED: 409,
 };
+
+/** The conversation the request's path names does not exist, or is not the caller's. */
+export function conversationNotFound(sessionId: string): ResourceActionError {
+  return new ResourceActionError(
+    404,
+    `Conversation ${sessionId} was not found.`,
+    {
+      reason: 'CONVERSATION_NOT_FOUND',
+    },
+  );
+}
+
+function messageNotFound(messageId: string): ResourceActionError {
+  return new ResourceActionError(404, `Message ${messageId} was not found.`, {
+    reason: 'MESSAGE_NOT_FOUND',
+  });
+}
+
+function toolCallNotFound(toolCallId: string): ResourceActionError {
+  return new ResourceActionError(
+    404,
+    `Tool call ${toolCallId} was not found.`,
+    {
+      reason: 'TOOL_CALL_NOT_FOUND',
+    },
+  );
+}
 
 function streamTarget(
   transport: ConversationTransport,
@@ -419,17 +447,48 @@ export class AIConversationService {
     return { status: 500, message: translate('Server unexpected error occur') };
   }
 
-  async getActiveState({
+  /** One of the caller's own conversations, with `llmActiveState` telling whether a run is still going. */
+  async get({
     actorId,
     sessionId,
   }: {
     actorId: string | number;
     sessionId: string;
-  }): Promise<{ llmActiveState: string }> {
-    const conversation = await this.repositories.aiConversations.findOne({
-      filter: { sessionId, userId: actorId },
+  }): Promise<AIConversationEntity & { llmActiveState: string }> {
+    const conversation = await this.requireOwnConversation(actorId, sessionId);
+    return {
+      ...conversation,
+      llmActiveState: conversation.llmActiveState ?? 'idle',
+    };
+  }
+
+  /** The caller's own chat conversation, or a 404 naming it. */
+  async requireOwnConversation(
+    actorId: string | number,
+    sessionId: string,
+  ): Promise<AIConversationEntity> {
+    loginInCheck(actorId);
+    const conversation = await this.aiConversationsManager.getConversation({
+      sessionId,
+      userId: String(actorId),
     });
-    return { llmActiveState: conversation?.llmActiveState ?? 'idle' };
+    if (!conversation) throw conversationNotFound(sessionId);
+    return conversation;
+  }
+
+  async markRead({
+    actorId,
+    sessionId,
+  }: {
+    actorId: string | number;
+    sessionId: string;
+  }): Promise<AIConversationEntity> {
+    await this.requireOwnConversation(actorId, sessionId);
+    await this.repositories.aiConversations.update({
+      filter: { sessionId, userId: String(actorId) },
+      values: { read: true },
+    });
+    return this.requireOwnConversation(actorId, sessionId);
   }
 
   async prependCancelledToolContinuation({
@@ -685,10 +744,12 @@ export class AIConversationService {
     actor,
     sessionId,
     cursor,
+    pageSize,
   }: {
     actor: ConversationManagementActor;
     sessionId: string;
     cursor?: string;
+    pageSize?: number;
   }): Promise<GetAIConversationMessagesResult> {
     requireConversationReadAccess(actor);
     if (
@@ -712,12 +773,13 @@ export class AIConversationService {
         await this.aiConversationsManager.getAllMessages({
           sessionId,
           cursor,
+          pageSize,
         }),
         AI_API_BASE_PATH,
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'invalid sessionId') {
-        throw new ResourceActionError(404, 'Conversation not found');
+        throw conversationNotFound(sessionId);
       }
       throw error;
     }
@@ -734,15 +796,6 @@ export class AIConversationService {
       },
     });
     return { count };
-  }
-
-  async unreadCounts({ actorId }: { actorId: string | number }) {
-    const userId = String(actorId);
-    const conversationUnreadCount =
-      await this.repositories.aiConversations.count({
-        filter: { userId, read: false, from: 'main-agent', category: 'chat' },
-      });
-    return { conversationUnreadCount };
   }
 
   async create({
@@ -770,10 +823,26 @@ export class AIConversationService {
       aiEmployee.username,
     );
     if (!employee) {
-      throw new ResourceActionError(400, 'AI employee not found');
+      throw new ResourceActionError(
+        400,
+        `AI employee ${aiEmployee.username} was not found.`,
+        {
+          reason: 'AI_EMPLOYEE_NOT_FOUND',
+          fieldViolations: [
+            {
+              field: 'aiEmployee.username',
+              description: 'No AI employee has this username.',
+            },
+          ],
+        },
+      );
     }
     if (!isAIEmployeeEnabled(employee)) {
-      throw new ResourceActionError(400, 'AI employee is disabled');
+      throw new ResourceActionError(
+        400,
+        `AI employee ${aiEmployee.username} is disabled.`,
+        { reason: 'AI_EMPLOYEE_DISABLED', apiStatus: 'FAILED_PRECONDITION' },
+      );
     }
 
     try {
@@ -790,7 +859,9 @@ export class AIConversationService {
       });
     } catch (error: any) {
       if (error.message === 'AI employee not found') {
-        throw new ResourceActionError(400, error.message);
+        throw new ResourceActionError(400, error.message, {
+          reason: 'AI_EMPLOYEE_NOT_FOUND',
+        });
       }
       throw error;
     }
@@ -806,17 +877,17 @@ export class AIConversationService {
     input: { title?: string };
   }) {
     const userId = String(actorId);
-    if (typeof sessionId !== 'string' || !sessionId) {
-      throw new ResourceActionError(400, 'invalid sessionId');
-    }
+    await this.requireOwnConversation(actorId, sessionId);
     const { title } = input;
-    return await this.aiConversationsManager.update({
+    await this.aiConversationsManager.update({
       userId,
       sessionId,
       title,
     });
+    return this.requireOwnConversation(actorId, sessionId);
   }
 
+  /** Replaces the conversation's options: a field left out of `input` is removed. */
   async updateOptions({
     actorId,
     sessionId,
@@ -824,62 +895,41 @@ export class AIConversationService {
   }: {
     actorId: string | number;
     sessionId: string;
-    input: Record<string, any>;
-  }) {
-    const userId = String(actorId);
-    if (!sessionId) {
-      throw new ResourceActionError(400, 'invalid sessionId');
-    }
-    const {
-      systemMessage,
-      skillSettings,
-      conversationSettings,
-      modelSettings,
-    } = input;
-    if (
-      !systemMessage &&
-      !skillSettings &&
-      !conversationSettings &&
-      !modelSettings
-    ) {
-      throw new ResourceActionError(400, 'invalid options');
-    }
-    try {
-      return await this.aiConversationsManager.update({
-        userId,
-        sessionId,
-        options: {
-          systemMessage,
-          skillSettings,
-          conversationSettings,
-          modelSettings,
-        },
-      });
-    } catch (error: any) {
-      if (error.message === 'invalid sessionId') {
-        throw new ResourceActionError(400, error.message);
-      }
-      throw error;
-    }
+    input: ConversationOptionsInput;
+  }): Promise<ConversationOptionsInput> {
+    await this.requireOwnConversation(actorId, sessionId);
+    const options: ConversationOptionsInput = {
+      ...(input.systemMessage === undefined
+        ? {}
+        : { systemMessage: input.systemMessage }),
+      ...(input.skillSettings === undefined
+        ? {}
+        : { skillSettings: input.skillSettings }),
+      ...(input.conversationSettings === undefined
+        ? {}
+        : { conversationSettings: input.conversationSettings }),
+      ...(input.modelSettings === undefined
+        ? {}
+        : { modelSettings: input.modelSettings }),
+    };
+    await this.repositories.aiConversations.update({
+      filter: { sessionId, userId: String(actorId) },
+      values: { options },
+    });
+    return options;
   }
 
   async destroy({
     actorId,
-    options,
+    sessionId,
   }: {
     actorId: string | number;
-    options: { sessionId?: string; filter?: Record<string, unknown> };
-  }) {
-    const userId = String(actorId);
-    const filter = isRecord(options.filter) ? options.filter : {};
-    const sessionId = options.sessionId;
-    const where: Record<string, any> = {
-      ...filter,
-      userId,
-    };
-    if (sessionId) where.sessionId = sessionId;
-    await this.repositories.aiConversations.destroy({ filter: where });
-    return null;
+    sessionId: string;
+  }): Promise<void> {
+    await this.requireOwnConversation(actorId, sessionId);
+    await this.repositories.aiConversations.destroy({
+      filter: { sessionId, userId: String(actorId) },
+    });
   }
 
   async getMessages({
@@ -890,75 +940,61 @@ export class AIConversationService {
     options: {
       sessionId: string;
       cursor?: string;
-      paginate?: boolean;
-      updateRead?: boolean;
+      pageSize?: number;
     };
-  }) {
+  }): Promise<GetAIConversationMessagesResult> {
     const userId = String(actorId);
-    const { sessionId, cursor } = options;
-    if (!sessionId) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
-    const paginate = options.paginate !== false;
-    const updateRead = options.updateRead === true;
+    const { sessionId, cursor, pageSize } = options;
     try {
+      // Reading history never marks it read; that is `markRead`, a separate request.
       return withAIFilePreviews(
         await this.aiConversationsManager.getMessages({
           userId,
           sessionId,
           cursor,
-          paginate,
-          updateRead,
+          pageSize,
         }),
         AI_API_BASE_PATH,
       );
     } catch (error: any) {
       if (error.message === 'invalid sessionId') {
-        throw new ResourceActionError(400, 'Invalid request');
+        throw conversationNotFound(sessionId);
       }
       throw error;
     }
   }
 
+  /** Replaces the arguments of one tool call the caller has not run yet. */
   async updateToolArgs({
     actorId,
-    input,
+    sessionId,
+    messageId,
+    toolCallId,
+    args,
   }: {
     actorId: string | number;
-    input: Record<string, any>;
-  }) {
-    const userId = String(actorId);
-    const { sessionId, messageId, tool } = input;
-    if (!sessionId) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
-    const conversation = await this.aiConversationsManager.getConversation({
-      sessionId,
-      userId,
-    });
-    if (!conversation) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
+    sessionId: string;
+    messageId: string;
+    toolCallId: string;
+    args: unknown;
+  }): Promise<Record<string, unknown>> {
+    await this.requireOwnConversation(actorId, sessionId);
     const messageRepository = this.repositories.aiMessages;
     const message = await messageRepository.findOne({
       filter: { sessionId, messageId },
     });
-    if (!message) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
+    if (!message) throw messageNotFound(messageId);
     const toolCalls = message.toolCalls || [];
     const index = toolCalls.findIndex(
-      (toolCall: { id: string }) => toolCall.id === tool.id,
+      (toolCall: { id: string }) => toolCall.id === toolCallId,
     );
-    if (index === -1) {
-      return null;
-    }
-    toolCalls[index] = { ...toolCalls[index], args: tool.args };
+    if (index === -1) throw toolCallNotFound(toolCallId);
+    toolCalls[index] = { ...toolCalls[index], args };
     await messageRepository.update({
       filter: { sessionId, messageId },
       values: { toolCalls },
     });
-    return null;
+    return toolCalls[index] as Record<string, unknown>;
   }
 
   async sendMessages({
@@ -1045,10 +1081,11 @@ export class AIConversationService {
           state.messageId,
         );
         throw new ResourceActionError(
-          400,
+          429,
           translate(
             'There are conversations in progress. Please try again later.',
           ),
+          { reason: 'CONVERSATION_LIMIT_REACHED' },
         );
       }
       if (conversation.category !== 'chat') {
@@ -1133,18 +1170,12 @@ export class AIConversationService {
   }) {
     const userId = String(actorId);
     const { sessionId } = input;
-    if (typeof sessionId !== 'string' || !sessionId) {
-      throw new ResourceActionError(400, 'sessionId is required');
-    }
     const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
       userId,
     });
-    if (!conversation) {
-      throw new ResourceActionError(404, 'conversation not found');
-    }
+    if (!conversation) throw conversationNotFound(sessionId);
     this.aiEmployeesManager.abortConversation(sessionId);
-    return null;
   }
 
   async resumeStream({
@@ -1292,10 +1323,11 @@ export class AIConversationService {
 
       if (await isReachParallelLimit(this.repositories, actor.id)) {
         throw new ResourceActionError(
-          400,
+          429,
           translate(
             'There are conversations in progress. Please try again later.',
           ),
+          { reason: 'CONVERSATION_LIMIT_REACHED' },
         );
       }
       if (conversation.category !== 'chat') {
@@ -1362,33 +1394,23 @@ export class AIConversationService {
       sessionId,
       userId,
     });
-    if (!conversation) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
+    if (!conversation) throw conversationNotFound(sessionId);
     const message = await this.repositories.aiMessages.findOne({
       filter: { sessionId, messageId },
     });
-    if (!message) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
+    if (!message) throw messageNotFound(messageId);
     const messageConversation =
       await this.aiConversationsManager.getConversation({
         sessionId: message.sessionId,
         userId,
       });
-    if (!messageConversation) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
+    if (!messageConversation) throw messageNotFound(messageId);
     const toolCalls = message.toolCalls;
-    if (!toolCalls?.length) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
-    const selectedToolCall = toolCalls.find(
+    const selectedToolCall = toolCalls?.find(
       (toolCall: { id?: string }) => toolCall.id === toolCallId,
     );
-    if (!selectedToolCall) {
-      throw new ResourceActionError(400, 'Invalid request');
-    }
+    if (!toolCalls?.length || !selectedToolCall)
+      throw toolCallNotFound(toolCallId);
     if (selectedToolCall.name === EXECUTE_FRONTEND_TOOL_NAME) {
       const toolId = isRecord(selectedToolCall.args)
         ? selectedToolCall.args.toolId
@@ -1407,6 +1429,10 @@ export class AIConversationService {
         throw new ResourceActionError(
           400,
           translate('Frontend tool is unavailable'),
+          {
+            reason: 'FRONTEND_TOOL_UNAVAILABLE',
+            apiStatus: 'FAILED_PRECONDITION',
+          },
         );
       }
     }

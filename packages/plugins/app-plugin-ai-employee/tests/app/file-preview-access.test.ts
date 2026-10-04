@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { aiEmployeeApiRoutes } from '../../server/route/plugin.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
 
-describe('aiFiles:preview access', async () => {
+describe('AI file preview access', async () => {
   const { deps, services, container } = await createTestAIEmployeeFixture();
   let sessionUser: { id: string } | null = null;
   let app: Hono;
@@ -83,12 +83,16 @@ describe('aiFiles:preview access', async () => {
       'file',
       new File(['attached'], 'note.txt', { type: 'text/plain' }),
     );
-    const uploaded = await app.request('/api/ai/aiFiles:create', {
+    const uploaded = await app.request('/api/aiEmployee/files', {
       method: 'POST',
       body: form,
     });
-    expect(uploaded.status).toBe(200);
-    fileId = String(((await uploaded.json()) as { id: string }).id);
+    expect(uploaded.status).toBe(201);
+    const { data } = (await uploaded.json()) as {
+      data: { id: string; preview: string };
+    };
+    fileId = String(data.id);
+    expect(data.preview).toBe(`/api/aiEmployee/files/${fileId}/preview`);
   });
 
   afterAll(async () => {
@@ -98,7 +102,7 @@ describe('aiFiles:preview access', async () => {
 
   async function preview(userId: string): Promise<Response> {
     sessionUser = { id: userId };
-    return app.request(`/api/ai/aiFiles:preview?id=${fileId}`);
+    return app.request(`/api/aiEmployee/files/${fileId}/preview`);
   }
 
   it('shows a file to the user who uploaded it', async () => {
@@ -108,25 +112,44 @@ describe('aiFiles:preview access', async () => {
   });
 
   it("refuses another user's file to a signed-in user without AI settings access", async () => {
-    expect((await preview('member')).status).toBe(403);
+    const response = await preview('member');
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toMatchObject({
+      reason: 'FILE_ACCESS_DENIED',
+      domain: 'aiEmployees',
+    });
+  });
+
+  it('refuses an upload that is not a multipart form', async () => {
+    sessionUser = { id: 'uploader' };
+    const response = await app.request('/api/aiEmployee/files', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ file: 'not a file' }),
+    });
+    expect(response.status).toBe(415);
+    expect((await response.json()).error).toMatchObject({
+      status: 'INVALID_ARGUMENT',
+      reason: 'UNSUPPORTED_MEDIA_TYPE',
+    });
   });
 
   it('keeps a Chinese file name, and sends it in an RFC 6266 header', async () => {
     sessionUser = { id: 'uploader' };
     const form = new FormData();
     form.set('file', new File(['截图'], '客户截图.png', { type: 'image/png' }));
-    const uploaded = await app.request('/api/ai/aiFiles:create', {
+    const uploaded = await app.request('/api/aiEmployee/files', {
       method: 'POST',
       body: form,
     });
-    const body = (await uploaded.json()) as {
-      id: string;
-      filename: string;
-      extname: string;
+    const { data: body } = (await uploaded.json()) as {
+      data: { id: string; filename: string; extname: string };
     };
     expect(body).toMatchObject({ filename: '客户截图.png', extname: '.png' });
 
-    const response = await app.request(`/api/ai/aiFiles:preview?id=${body.id}`);
+    const response = await app.request(
+      `/api/aiEmployee/files/${body.id}/preview`,
+    );
     expect(response.headers.get('content-disposition')).toBe(
       `inline; filename=".png"; filename*=UTF-8''${encodeURIComponent('客户截图.png')}`,
     );

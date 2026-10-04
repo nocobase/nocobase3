@@ -233,7 +233,7 @@ describe('AI usage statistics', async () => {
       end: String(rangeEnd),
       ...query,
     });
-    return app.request(`/api/ai/aiUsage:${action}?${search.toString()}`);
+    return app.request(`/api/aiEmployee/usage/${action}?${search.toString()}`);
   }
 
   it('refuses a user without AI settings access', async () => {
@@ -255,7 +255,7 @@ describe('AI usage statistics', async () => {
     expect(response.status).toBe(200);
     // Without a shift the comparison is the equally long window that just
     // ended, which here reaches back to the -40h event.
-    expect(await response.json()).toMatchObject({
+    expect((await response.json()).data).toMatchObject({
       totals: {
         eventCount: 4,
         inputTokens: 1500,
@@ -273,7 +273,7 @@ describe('AI usage statistics', async () => {
 
   it('moves the comparison window back by a whole period when asked', async () => {
     const response = await request('summary', { compareShiftHours: '24' });
-    const body = (await response.json()) as {
+    const body = ((await response.json()) as { data: unknown }).data as {
       previousRange: { start: number; end: number };
       previous: { eventCount: number; totalTokens: number };
       range: { start: number; end: number };
@@ -296,14 +296,14 @@ describe('AI usage statistics', async () => {
 
   it('applies dimension filters to the totals', async () => {
     const response = await request('summary', { model: 'gpt-5.2' });
-    expect(await response.json()).toMatchObject({
+    expect((await response.json()).data).toMatchObject({
       totals: { eventCount: 2, totalTokens: 330 },
     });
   });
 
   it('buckets the series by UTC day and reports empty days as zero', async () => {
     const response = await request('series', { granularity: 'day' });
-    const body = (await response.json()) as {
+    const body = ((await response.json()) as { data: unknown }).data as {
       granularity: string;
       buckets: { start: number; totalTokens: number; eventCount: number }[];
     };
@@ -325,7 +325,7 @@ describe('AI usage statistics', async () => {
       granularity: 'day',
       timezoneOffset: '480',
     });
-    const body = (await response.json()) as {
+    const body = ((await response.json()) as { data: unknown }).data as {
       range: { timezoneOffsetHours: number };
       buckets: { start: number; totalTokens: number }[];
     };
@@ -344,7 +344,7 @@ describe('AI usage statistics', async () => {
 
   it('breaks usage down by model, ordered by tokens', async () => {
     const response = await request('breakdown', { dimension: 'model' });
-    expect(await response.json()).toMatchObject({
+    expect((await response.json()).data).toMatchObject({
       dimension: 'model',
       rows: [
         { key: 'claude-opus-5', label: 'claude-opus-5', totalTokens: 1320 },
@@ -358,7 +358,7 @@ describe('AI usage statistics', async () => {
     const response = await request('breakdown', {
       dimension: 'aiEmployeeUsername',
     });
-    expect(await response.json()).toMatchObject({
+    expect((await response.json()).data).toMatchObject({
       rows: [
         { key: 'alice', label: 'alice', totalTokens: 880 },
         { key: 'nathan', label: 'Nathan', totalTokens: 770 },
@@ -368,7 +368,7 @@ describe('AI usage statistics', async () => {
 
   it('labels a user breakdown with the account name', async () => {
     const response = await request('breakdown', { dimension: 'userId' });
-    expect(await response.json()).toMatchObject({
+    expect((await response.json()).data).toMatchObject({
       rows: [
         { key: 'member-user', label: 'member', totalTokens: 1320 },
         { key: 'root-user', label: 'Root Admin', totalTokens: 330 },
@@ -383,7 +383,7 @@ describe('AI usage statistics', async () => {
 
   it('offers the models and employees present in the range', async () => {
     const response = await request('filterOptions');
-    expect(await response.json()).toMatchObject({
+    expect((await response.json()).data).toMatchObject({
       models: [{ value: 'claude-opus-5' }, { value: 'gpt-5.2' }],
       aiEmployees: [
         { value: 'alice', label: 'alice' },
@@ -394,7 +394,7 @@ describe('AI usage statistics', async () => {
 
   it('rejects a range longer than a year', async () => {
     const response = await app.request(
-      `/api/ai/aiUsage:summary?start=${rangeStart - 400 * 24 * HOUR_IN_MS}&end=${rangeEnd}`,
+      `/api/aiEmployee/usage/summary?start=${rangeStart - 400 * 24 * HOUR_IN_MS}&end=${rangeEnd}`,
     );
     expect(response.status).toBe(400);
   });

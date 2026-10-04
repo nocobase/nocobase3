@@ -1,6 +1,6 @@
 import type { ApiClient } from '@nocobase/app-client';
 
-import { requestAIAction, type AppActionQuery } from './api-client.js';
+import { aiPath, requestAI, type AIRequestQuery } from './api-client.js';
 
 export interface UsageTotals {
   eventCount: number;
@@ -81,7 +81,7 @@ export interface UsageQuery {
   aiEmployeeUsername?: string;
 }
 
-function toQuery(query: UsageQuery): AppActionQuery {
+function toQuery(query: UsageQuery): AIRequestQuery {
   return {
     start: query.start,
     end: query.end,
@@ -101,7 +101,7 @@ export function fetchUsageSummary(
   },
   signal?: AbortSignal,
 ): Promise<UsageSummary> {
-  return requestAIAction(api, 'aiUsage', 'summary', {
+  return requestAI(api, aiPath('aiEmployee', 'usage', 'summary'), {
     query: {
       ...toQuery(query),
       ...(query.compareShiftHours === undefined
@@ -117,7 +117,7 @@ export function fetchUsageSeries(
   query: UsageQuery,
   signal?: AbortSignal,
 ): Promise<UsageSeries> {
-  return requestAIAction(api, 'aiUsage', 'series', {
+  return requestAI(api, aiPath('aiEmployee', 'usage', 'series'), {
     query: toQuery(query),
     signal,
   });
@@ -128,7 +128,7 @@ export function fetchUsageBreakdown(
   query: UsageQuery & { dimension: UsageBreakdownDimension; limit?: number },
   signal?: AbortSignal,
 ): Promise<UsageBreakdown> {
-  return requestAIAction(api, 'aiUsage', 'breakdown', {
+  return requestAI(api, aiPath('aiEmployee', 'usage', 'breakdown'), {
     query: {
       ...toQuery(query),
       dimension: query.dimension,
@@ -144,7 +144,7 @@ export function fetchUsageFilterOptions(
   signal?: AbortSignal,
 ): Promise<UsageFilterOptions> {
   // Options describe the whole range, so the current selection is not applied.
-  return requestAIAction(api, 'aiUsage', 'filterOptions', {
+  return requestAI(api, aiPath('aiEmployee', 'usage', 'filterOptions'), {
     query: {
       start: query.start,
       end: query.end,
