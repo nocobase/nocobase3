@@ -187,13 +187,9 @@ describe('API document', () => {
         },
       },
     });
-    // A validator without a declared 400 is documented with the standard error body, not hono-openapi's own.
-    expect(cancel.responses!['400']).toMatchObject({
-      content: {
-        'application/json': {
-          schema: { $ref: '#/components/schemas/ApiErrorBody' },
-        },
-      },
+    // A validator adds the 400 in the standard error body, not hono-openapi's own.
+    expect(cancel.responses!['400']).toEqual({
+      $ref: '#/components/responses/InvalidInput',
     });
     expect(document.tags).toEqual([{ name: 'App' }, { name: 'Shop' }]);
   });

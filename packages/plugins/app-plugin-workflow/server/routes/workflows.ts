@@ -197,6 +197,10 @@ export function createWorkflowDefinitionRoutes(
       responses: {
         200: dataResponse(WorkflowParameterSettingsSchema),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The values do not match the parameter declarations of the revision (`INVALID_PARAMETER_VALUES`).',
+        ),
         404: workflowNotFound,
       },
     }),
@@ -239,6 +243,10 @@ export function createWorkflowDefinitionRoutes(
       responses: {
         200: dataResponse(WorkflowListItemSchema),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The path names an Artifact hash rather than a materialized id (`INVALID_WORKFLOW_ID`).',
+        ),
         404: apiErrorResponse(
           404,
           'No current revision has this id (`WORKFLOW_NOT_FOUND`).',

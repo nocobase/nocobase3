@@ -44,6 +44,10 @@ export function createWorkflowRunRoutes(
       responses: {
         200: listResponse(WorkflowRunSchema, WorkflowPageMeta),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The `workflowId` filter names no workflow (`WORKFLOW_NOT_FOUND`, `INVALID_WORKFLOW_ID`).',
+        ),
       },
     }),
     apiValidator('query', WorkflowRunListQuery),
@@ -104,6 +108,10 @@ export function createWorkflowRunRoutes(
           'The run that was started, or the run an earlier request with the same `Event-Key` started.',
         ),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          "The input does not match the workflow's input schema (`INVALID_INPUT`, with a field violation per issue).",
+        ),
         404: apiErrorResponse(
           404,
           'No workflow revision has this id, and no deployed Artifact has this hash (`WORKFLOW_NOT_FOUND`).',

@@ -45,8 +45,8 @@ export const apiRoutes: AppApiRouteContribution<Application> = defineApiRoutes(
         operationId: 'listOrders',
         responses: {
           '200': listResponse(OrderSchema),
-          // Only the statuses this route can answer: it validates a query and requires a session, but checks no permission.
-          '400': apiErrorResponse(400),
+          // It requires a session but checks no permission, so it lists its statuses instead of spreading apiErrorResponses.
+          // The query validator adds the 400 for invalid input.
           '401': apiErrorResponse(401),
           '500': apiErrorResponse(500),
         },
@@ -88,7 +88,7 @@ import {
 } from '@nocobase/app-plugin-authorization';
 import {
   ApiError,
-  apiErrorResponse,
+  apiErrorResponses,
   describeRoute,
   listResponse,
 } from '@nocobase/app-server/router';
@@ -109,10 +109,8 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
         operationId: 'listAdministeredOrders',
         responses: {
           '200': listResponse(OrderSchema),
-          // No input to validate, so no 400.
-          '401': apiErrorResponse(401),
-          '403': apiErrorResponse(403),
-          '500': apiErrorResponse(500),
+          // 401, 403 and 500: authenticated, with a permission check. No validator, so no 400.
+          ...apiErrorResponses,
         },
       }),
       async (context) => {
@@ -218,7 +216,6 @@ export function createOrderRoutes(options: CreateOrderRoutesOptions): Hono {
       operationId: 'getOrder',
       responses: {
         '200': dataResponse(OrderSchema),
-        '400': apiErrorResponse(400),
         '401': apiErrorResponse(401),
         '404': apiErrorResponse(404),
         '500': apiErrorResponse(500),

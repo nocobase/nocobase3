@@ -55,7 +55,8 @@ export function createAIFilesRouter(
       },
       responses: {
         201: dataResponse(AIFileResponse, 'The uploaded file.'),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         413: apiErrorResponse(
           413,
           `The upload exceeds the limit, ${AI_FILE_UPLOAD_MAX_BYTES} bytes unless the application configures another (\`BODY_TOO_LARGE\`).`,

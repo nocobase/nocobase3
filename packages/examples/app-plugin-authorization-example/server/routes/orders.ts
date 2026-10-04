@@ -168,7 +168,7 @@ export function createOrderRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), the tree is one the Policy refuses, or the order is no longer ready (`STATE_CONFLICT`).',
+          'The tree is one the Policy refuses, or the order is no longer ready (`STATE_CONFLICT`).',
         ),
         403: forbiddenResponse,
         413: bodyTooLargeResponse,
@@ -223,7 +223,7 @@ export function createOrderRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), the reference is blank (`DELIVERY_REFERENCE_REQUIRED`), or the order is no longer ready (`STATE_CONFLICT`).',
+          'The reference is blank (`DELIVERY_REFERENCE_REQUIRED`), or the order is no longer ready (`STATE_CONFLICT`).',
         ),
         403: forbiddenResponse,
         413: bodyTooLargeResponse,

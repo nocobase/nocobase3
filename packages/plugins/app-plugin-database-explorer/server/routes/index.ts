@@ -197,6 +197,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         responses: {
           200: listResponse(CollectionEntrySchema),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'The `pageToken` was not issued by this list (`INVALID_CURSOR`), or the listing options do not suit the connection (`INVALID_LIST_OPTIONS`).',
+          ),
           ...connectionErrors,
         },
       }),

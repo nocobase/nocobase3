@@ -1,7 +1,7 @@
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import {
   apiErrorHandler,
-  apiErrorResponses,
+  apiErrorResponse,
   dataResponse,
   describeRoute,
   getRequestId,
@@ -35,7 +35,8 @@ export function createAuthorizationRoutes(
         'What the client may show the signed-in user: either unrestricted access, or each resource with the actions its grants permit outright. An action permitted only conditionally is not listed; the server still checks every request.',
       responses: {
         200: dataResponse(AuthorizationSnapshotSchema),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     async (context) =>

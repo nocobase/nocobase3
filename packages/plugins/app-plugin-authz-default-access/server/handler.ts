@@ -115,6 +115,10 @@ export function createDefaultAccessHandler(
       responses: {
         201: dataResponse(RuleSchema, 'The created rule.'),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The registered model does not accept a resource, action, data scope or record access the rule names (`INVALID_AUTHORIZATION_INPUT`).',
+        ),
         409: apiErrorResponse(
           409,
           'A rule with this key already exists (`RULE_ALREADY_EXISTS`), or another default-access rule already covers this resource (`DEFAULT_ACCESS_CONFLICT`).',
@@ -145,6 +149,10 @@ export function createDefaultAccessHandler(
       responses: {
         200: dataResponse(RuleSchema),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The registered model does not accept a resource, action, data scope or record access the rule names (`INVALID_AUTHORIZATION_INPUT`).',
+        ),
         404: apiErrorResponse(
           404,
           'The rule does not exist (`RULE_NOT_FOUND`).',

@@ -194,7 +194,8 @@ export function createAIConversationsRouter(
         "The caller's own chat conversations, most recently updated first, read whole. `q` matches part of the title.",
       responses: {
         200: listResponse(ConversationResponse, BoundedListMeta),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     apiValidator('query', ConversationsQuery),
@@ -221,7 +222,12 @@ export function createAIConversationsRouter(
         "Starts an empty conversation with an employee; `send` puts the first message in it. The settings given are kept as the conversation's options. Answers `400` when the employee does not exist (`AI_EMPLOYEE_NOT_FOUND`) or is disabled (`AI_EMPLOYEE_DISABLED`).",
       responses: {
         201: dataResponse(ConversationResponse, 'The created conversation.'),
-        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The employee does not exist (`AI_EMPLOYEE_NOT_FOUND`) or is disabled (`FAILED_PRECONDITION`, `AI_EMPLOYEE_DISABLED`).',
+        ),
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         413: bodyTooLargeResponse,
       },
     }),
@@ -248,7 +254,8 @@ export function createAIConversationsRouter(
         'Main chat conversations whose latest answer the caller has not opened yet.',
       responses: {
         200: dataResponse(UnreadCountResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     async (context) => {
@@ -270,7 +277,8 @@ export function createAIConversationsRouter(
         "One of the caller's own conversations. `llmActiveState` tells whether a run is still going.",
       responses: {
         200: dataResponse(ConversationResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
       },
     }),
@@ -295,7 +303,8 @@ export function createAIConversationsRouter(
         "Changes the title of one of the caller's own conversations.",
       responses: {
         200: dataResponse(ConversationResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
         413: bodyTooLargeResponse,
       },
@@ -323,7 +332,8 @@ export function createAIConversationsRouter(
       description: "Deletes one of the caller's own conversations.",
       responses: {
         204: emptyResponse('The conversation was deleted.'),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
       },
     }),
@@ -348,7 +358,8 @@ export function createAIConversationsRouter(
         "Replaces the settings the conversation's runs use as a whole: a field left out is removed.",
       responses: {
         200: dataResponse(ConversationOptionsResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
         413: bodyTooLargeResponse,
       },
@@ -378,7 +389,8 @@ export function createAIConversationsRouter(
         'Newest first, `pageSize` (10 by default, at most 200) at a time; pass `meta.nextPageToken` as `pageToken` for the next older page. Reading never marks the conversation read; `markRead` does.',
       responses: {
         200: listResponse(MessageResponse, MessagePageMeta),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
       },
     }),
@@ -409,7 +421,8 @@ export function createAIConversationsRouter(
         "Marks one of the caller's own conversations read and answers it.",
       responses: {
         200: dataResponse(ConversationResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
       },
     }),
@@ -434,7 +447,8 @@ export function createAIConversationsRouter(
         'Stops the run in progress, if there is one, and answers the conversation. A conversation with no run in progress is answered unchanged.',
       responses: {
         200: dataResponse(ConversationResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
       },
     }),
@@ -461,7 +475,12 @@ export function createAIConversationsRouter(
         'Approves the call, rejects it with an optional message, or approves it with edited arguments. The decision is recorded; `resumeToolCall` continues the run. Answers `400 FAILED_PRECONDITION` (`FRONTEND_TOOL_UNAVAILABLE`) when a frontend tool the call needs is no longer offered by the page.',
       responses: {
         200: dataResponse(UserDecisionResponse),
-        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'A frontend tool the call needs is no longer offered by the page (`FAILED_PRECONDITION`, `FRONTEND_TOOL_UNAVAILABLE`).',
+        ),
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: toolCallNotFound,
         413: bodyTooLargeResponse,
       },
@@ -494,7 +513,8 @@ export function createAIConversationsRouter(
         'Replaces the arguments of a tool call that has not run yet, and answers the call.',
       responses: {
         200: dataResponse(ToolCallResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: toolCallNotFound,
         413: bodyTooLargeResponse,
       },
@@ -531,7 +551,12 @@ export function createAIConversationsRouter(
         "Adds the messages to the conversation and runs the employee on them, streaming the answer. `editingMessageId` replaces that message and everything after it. `systemMessage` and `skillSettings` are accepted and not applied; a run uses the conversation's options. Before the stream opens the request is answered `400` when no message has the role `user` (`INVALID_INPUT`) or the employee does not exist (`AI_EMPLOYEE_NOT_FOUND`), and `429` when the caller has too many runs in progress; the user messages of a refused send are kept, so `resend` can run them later.",
       responses: {
         200: runStreamResponse(),
-        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'No message has the role `user` (`INVALID_INPUT`), or the employee does not exist (`AI_EMPLOYEE_NOT_FOUND`).',
+        ),
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
         413: bodyTooLargeResponse,
         429: runLimitReached,
@@ -578,7 +603,12 @@ export function createAIConversationsRouter(
         "Runs the employee again from `messageId`, or from the latest message. Before the stream opens the request is answered `400` when `messageId` names no message of the conversation (`MESSAGE_NOT_FOUND`), `400 FAILED_PRECONDITION` when the conversation's employee no longer exists (`AI_EMPLOYEE_NOT_FOUND`) or the conversation has no message (`CONVERSATION_EMPTY`), and `429` when the caller has too many runs in progress.",
       responses: {
         200: runStreamResponse(),
-        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          "`messageId` names no message of the conversation (`MESSAGE_NOT_FOUND`), or (`FAILED_PRECONDITION`) the conversation's employee no longer exists (`AI_EMPLOYEE_NOT_FOUND`) or the conversation has no message (`CONVERSATION_EMPTY`).",
+        ),
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
         413: bodyTooLargeResponse,
         429: runLimitReached,
@@ -618,7 +648,12 @@ export function createAIConversationsRouter(
         "Continues the run of `messageId`, or of the latest message, once its tool calls have a decision or, for frontend tools, a result in `toolCallResults`. Before the stream opens the request is answered `400` when `messageId` names no message of the conversation (`MESSAGE_NOT_FOUND`), and `400 FAILED_PRECONDITION` when the conversation's employee no longer exists (`AI_EMPLOYEE_NOT_FOUND`), the conversation has no message (`CONVERSATION_EMPTY`) or the message has no tool calls (`NO_TOOL_CALLS`).",
       responses: {
         200: runStreamResponse(),
-        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          "`messageId` names no message of the conversation (`MESSAGE_NOT_FOUND`), or (`FAILED_PRECONDITION`) the conversation's employee no longer exists (`AI_EMPLOYEE_NOT_FOUND`), the conversation has no message (`CONVERSATION_EMPTY`) or the message has no tool calls (`NO_TOOL_CALLS`).",
+        ),
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
         413: bodyTooLargeResponse,
       },
@@ -659,7 +694,8 @@ export function createAIConversationsRouter(
         200: runStreamResponse(
           'Nothing is streamed when no run is in progress. When a run is in progress but its frames are no longer cached, the one frame is `{ "type": "chunks_cache_missing", "body": { "llmActiveState": "…" } }`; read the messages once it ends.',
         ),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: conversationNotFound,
       },
     }),

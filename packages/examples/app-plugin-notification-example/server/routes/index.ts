@@ -119,7 +119,6 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
           'The tasks the signed-in user created or is assigned, most recently updated first, paged by `page` and `pageSize`. A page past the last answers the last page.',
         responses: {
           200: listResponse(Task),
-          400: apiErrorResponse(400),
           401: apiErrorResponse(401),
           500: apiErrorResponse(500),
         },
@@ -178,7 +177,7 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
           500: apiErrorResponse(500),
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), or the assignee is not an active user (`ASSIGNEE_NOT_FOUND`).',
+            'The assignee is not an active user (`ASSIGNEE_NOT_FOUND`).',
           ),
         },
       }),
@@ -227,7 +226,7 @@ export const apiRoutes: AppApiRouteContribution<NotificationExampleApplication> 
           ...apiErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), or the new assignee is not an active user (`ASSIGNEE_NOT_FOUND`).',
+            'The new assignee is not an active user (`ASSIGNEE_NOT_FOUND`).',
           ),
           403: apiErrorResponse(
             403,

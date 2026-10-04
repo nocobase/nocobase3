@@ -10,7 +10,8 @@ import type { OpenAPIV3_1 } from 'openapi-types';
 import { apiNotFoundHandler } from '../api-error.js';
 import {
   apiDocumentBaseComponents,
-  validationErrorResponse,
+  invalidInputDescription,
+  invalidInputResponseName,
 } from './components.js';
 import { expandRepositoryOperations } from './repository-document.js';
 
@@ -388,12 +389,12 @@ export async function generateApiDocument(
 
 type GeneratedSpecs = Awaited<ReturnType<typeof generateSpecs>>;
 
-function generateRouterSpecs(
+async function generateRouterSpecs(
   router: Hono,
   options: GenerateApiDocumentOptions,
   base: OpenAPIV3_1.ComponentsObject,
 ): Promise<GeneratedSpecs> {
-  return generateSpecs(router, {
+  const specs = await generateSpecs(router, {
     documentation: {
       info: {
         title: options.info.title,
@@ -405,9 +406,88 @@ function generateRouterSpecs(
       ...(options.servers ? { servers: [...options.servers] } : {}),
       components: base,
     },
-    defaultValidationErrorResponse: validationErrorResponse(),
+    // The 400 for invalid input is added below, also to an operation that declares a 400 of its own.
+    defaultValidationErrorResponse: false,
     excludeMethods: ['OPTIONS'],
   });
+  addInvalidInputResponses(specs.paths, validatedOperations(router));
+  return specs;
+}
+
+/** An OpenAPI path for a Hono path, `/apps/:appId{[a-z]+}` becoming `/apps/{appId}`, as hono-openapi converts it. */
+function toOpenApiPath(path: string): string {
+  return path
+    .split('/')
+    .map((segment) => {
+      if (!segment.startsWith(':')) return segment;
+      const match = /^:([^{?]+)/.exec(segment);
+      return `{${match ? match[1] : segment.slice(1).replace(/\?$/, '')}}`;
+    })
+    .join('/');
+}
+
+interface ValidatedOperations {
+  /** `METHOD /openapi/path` of every endpoint with an `apiValidator()` of its own. */
+  readonly endpoints: ReadonlySet<string>;
+  /** Path prefixes a validator applied with `router.use()` covers. */
+  readonly prefixes: readonly string[];
+}
+
+/** The operations of a router that validate their input with `apiValidator()` (or any hono-openapi validator). */
+function validatedOperations(router: Hono): ValidatedOperations {
+  const endpoints = new Set<string>();
+  const prefixes: string[] = [];
+  for (const route of router.routes) {
+    const metadata = (
+      findTargetHandler(route.handler) as unknown as Record<
+        symbol,
+        Record<string, unknown> | undefined
+      >
+    )[uniqueSymbol];
+    // describeRoute() metadata carries `spec`; a validator's carries the schema conversion instead.
+    if (!metadata || 'spec' in metadata || !('toOpenAPISchema' in metadata))
+      continue;
+    const path = toOpenApiPath(route.path);
+    if (route.method === 'ALL') prefixes.push(pathPrefixOf(path));
+    else endpoints.add(`${route.method} ${path}`);
+  }
+  return { endpoints, prefixes };
+}
+
+/**
+ * Document the 400 an `apiValidator()` answers on every operation that has one, and on no other. A route declares a
+ * 400 itself only for another reason, such as a failed precondition: a declared `apiErrorResponse(400)` without a
+ * description already covers invalid input and is kept as it is, and a declared 400 with a description keeps it after
+ * the description of invalid input.
+ */
+function addInvalidInputResponses(
+  paths: OpenAPIV3_1.PathsObject,
+  validated: ValidatedOperations,
+): void {
+  for (const [path, item] of Object.entries(paths)) {
+    for (const method of httpMethods) {
+      const operation = item?.[method];
+      if (!operation) continue;
+      const covered =
+        validated.endpoints.has(`${method.toUpperCase()} ${path}`) ||
+        validated.prefixes.some(
+          (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+        );
+      if (!covered) continue;
+      const responses = (operation.responses ??= {});
+      const declared = responses['400'];
+      if (!declared) {
+        responses['400'] = {
+          $ref: `#/components/responses/${invalidInputResponseName}`,
+        };
+      } else if (!('$ref' in declared)) {
+        responses['400'] = {
+          ...declared,
+          description: `${invalidInputDescription}\n\n${declared.description}`,
+        };
+      }
+    }
+  }
 }
 
 function collectTags(

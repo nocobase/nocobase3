@@ -231,7 +231,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), or names an App or scope the creator may not grant (`INVALID_API_KEY_INPUT`).',
+            'The input names an App or scope the creator may not grant (`INVALID_API_KEY_INPUT`).',
           ),
         },
       }),
@@ -438,7 +438,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), the ID is malformed, reserved or overlaps the Hub’s own path (`INVALID_APP_ID`), the name is empty (`INVALID_APP_NAME`), or the creator is disabled (`APP_OWNER_UNAVAILABLE`).',
+            'The ID is malformed, reserved or overlaps the Hub’s own path (`INVALID_APP_ID`), the name is empty (`INVALID_APP_NAME`), or the creator is disabled (`APP_OWNER_UNAVAILABLE`).',
           ),
           409: apiErrorResponse(
             409,
@@ -505,7 +505,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), or the size or checksum is out of range or malformed (`INVALID_UPLOAD`).',
+            'The size or checksum is out of range or malformed (`INVALID_UPLOAD`).',
           ),
           404: appNotFoundResponse,
         },
@@ -589,7 +589,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The headers are invalid (`INVALID_INPUT`), the chunk extends past the declared size (`UPLOAD_TOO_LARGE`), the body is shorter or longer than `Content-Length` (`INCOMPLETE_CHUNK`, `INVALID_CHUNK`), or the upload is already completed (`UPLOAD_COMPLETED`, `FAILED_PRECONDITION`, with the session’s offset in `error.metadata.offset`).',
+            'The chunk extends past the declared size (`UPLOAD_TOO_LARGE`), the body is shorter or longer than `Content-Length` (`INCOMPLETE_CHUNK`, `INVALID_CHUNK`), or the upload is already completed (`UPLOAD_COMPLETED`, `FAILED_PRECONDITION`, with the session’s offset in `error.metadata.offset`).',
           ),
           404: uploadNotFound,
           409: apiErrorResponse(
@@ -738,7 +738,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The headers are invalid (`INVALID_INPUT`), or the archive is refused: its checksum does not match `X-Artifact-SHA256` or is malformed (`CHECKSUM_MISMATCH`, `INVALID_CHECKSUM`), it is empty, malformed or unsafe (`INVALID_ARTIFACT_SIZE`, `INVALID_ARTIFACT`, `UNSAFE_ARTIFACT`, `INVALID_ARTIFACT_VERSION`), it targets another platform (`BUILD_TARGET_MISMATCH`) or another base path (`BASE_PATH_MISMATCH`), or `Idempotency-Key` is malformed (`INVALID_IDEMPOTENCY_KEY`).',
+            'The archive is refused: its checksum does not match `X-Artifact-SHA256` or is malformed (`CHECKSUM_MISMATCH`, `INVALID_CHECKSUM`), it is empty, malformed or unsafe (`INVALID_ARTIFACT_SIZE`, `INVALID_ARTIFACT`, `UNSAFE_ARTIFACT`, `INVALID_ARTIFACT_VERSION`), it targets another platform (`BUILD_TARGET_MISMATCH`) or another base path (`BASE_PATH_MISMATCH`), or `Idempotency-Key` is malformed (`INVALID_IDEMPOTENCY_KEY`).',
           ),
           404: appNotFoundResponse,
           409: apiErrorResponse(
@@ -887,7 +887,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`) or not valid YAML (`INVALID_CONFIG_FILE`), or the current deployment’s configuration is not a Hub-managed file (`CONFIG_NOT_EDITABLE`, `FAILED_PRECONDITION`).',
+            'The content is not valid YAML (`INVALID_CONFIG_FILE`), or the current deployment’s configuration is not a Hub-managed file (`CONFIG_NOT_EDITABLE`, `FAILED_PRECONDITION`).',
           ),
           404: appNotFoundResponse,
           503: apiErrorResponse(
@@ -920,7 +920,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), or the name is empty or longer than 255 characters (`INVALID_APP_NAME`).',
+            'The name is empty or longer than 255 characters (`INVALID_APP_NAME`).',
           ),
           404: appNotFoundResponse,
         },
@@ -955,7 +955,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`, `INVALID_DEPLOYMENT_INPUT`, `INVALID_CONFIG_MODE`, `INVALID_CONFIG_FILE`), `releaseId` names no Release of the App (`RELEASE_NOT_FOUND`, as a field violation), `Idempotency-Key` is malformed (`INVALID_IDEMPOTENCY_KEY`), or another deployment of the App is in progress (`DEPLOYMENT_IN_PROGRESS`, `FAILED_PRECONDITION`).',
+            'The input is inconsistent (`INVALID_DEPLOYMENT_INPUT`, `INVALID_CONFIG_MODE`, `INVALID_CONFIG_FILE`), `releaseId` names no Release of the App (`RELEASE_NOT_FOUND`, as a field violation), `Idempotency-Key` is malformed (`INVALID_IDEMPOTENCY_KEY`), or another deployment of the App is in progress (`DEPLOYMENT_IN_PROGRESS`, `FAILED_PRECONDITION`).',
           ),
           404: appNotFoundResponse,
           409: apiErrorResponse(
@@ -1003,7 +1003,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const logReadErrors = {
       400: apiErrorResponse(
         400,
-        'The query is invalid (`INVALID_INPUT`), or `pageToken` was not issued for this log and query (`INVALID_LOG_CURSOR`).',
+        '`pageToken` was not issued for this log and query (`INVALID_LOG_CURSOR`).',
       ),
     };
     const logDescription =
@@ -1155,7 +1155,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...hubErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), `deploymentId` names no deployment of the App (`DEPLOYMENT_NOT_FOUND`, as a field violation) or one that did not succeed (`INVALID_ROLLBACK_TARGET`), `config.mode` differs from the target’s (`ROLLBACK_CONFIG_MODE_MISMATCH`), or another deployment is in progress (`DEPLOYMENT_IN_PROGRESS`).',
+            '`deploymentId` names no deployment of the App (`DEPLOYMENT_NOT_FOUND`, as a field violation) or one that did not succeed (`INVALID_ROLLBACK_TARGET`), `config.mode` differs from the target’s (`ROLLBACK_CONFIG_MODE_MISMATCH`), or another deployment is in progress (`DEPLOYMENT_IN_PROGRESS`).',
           ),
           404: appNotFoundResponse,
         },

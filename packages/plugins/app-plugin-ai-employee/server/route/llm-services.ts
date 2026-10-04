@@ -52,7 +52,8 @@ export function createLLMServicesRouter(
         "Grouped by enabled LLM service. `type=LLM` (the default) lists each service's enabled chat models, leaving out services with none or whose provider is not installed; `type=EMBEDDING` lists the embedding models each service's provider suggests, leaving out services whose provider has none. Any signed-in user may read it.",
       responses: {
         200: listResponse(ModelGroupResponse, BoundedListMeta),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     apiValidator('query', ModelsQuery),
@@ -76,7 +77,8 @@ export function createLLMServicesRouter(
         'The providers installed in the application and what each supports. Any signed-in user may read it.',
       responses: {
         200: listResponse(LLMProviderResponse, BoundedListMeta),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     async (context) => {
@@ -199,6 +201,10 @@ export function createLLMServicesRouter(
         "Read from the provider's own API with the service's credentials; `q` keeps the model ids containing it. Answers `400 FAILED_PRECONDITION` (`LLM_PROVIDER_NOT_FOUND`) when the service's provider is not installed. Requires AI settings access.",
       responses: {
         200: listResponse(ProviderModelResponse, BoundedListMeta),
+        400: apiErrorResponse(
+          400,
+          "The service's provider is not installed (`FAILED_PRECONDITION`, `LLM_PROVIDER_NOT_FOUND`).",
+        ),
         ...apiErrorResponses,
         404: llmServiceNotFound,
         503: apiErrorResponse(

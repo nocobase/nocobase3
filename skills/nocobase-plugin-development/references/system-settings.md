@@ -84,9 +84,7 @@ router.get(
     operationId: 'deliveryGetConfiguration',
     responses: {
       '200': dataResponse(DeliveryConfigurationView),
-      '401': apiErrorResponse(401),
-      '403': apiErrorResponse(403),
-      '500': apiErrorResponse(500),
+      ...apiErrorResponses,
     },
   }),
   async (c) => c.json({ data: await service.read() }),

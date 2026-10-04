@@ -155,6 +155,10 @@ export const apiRoutes: AppApiRouteContribution<
           'Accepted, not yet delivered. Follow it with `GET /api/notifications/testSends/{testSendId}`.',
         ),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The channel cannot be tested (`NOTIFICATION_TEST_TARGET_UNAVAILABLE`), or `values` names an unknown field, misses a required one or exceeds its `maxLength` (`NOTIFICATION_TEST_UNKNOWN_FIELD`, `NOTIFICATION_TEST_REQUIRED_FIELD`, `NOTIFICATION_TEST_FIELD_TOO_LONG`).',
+        ),
         503: apiErrorResponse(
           503,
           'The channel transport cannot be reached (`NOTIFICATION_TEST_FAILED`).',

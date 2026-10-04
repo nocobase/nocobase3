@@ -105,7 +105,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         operationId: 'ordersListOrders',
         responses: {
           '200': listResponse(OrderSchema),
-          // No input and no permission check, so neither 400 nor 403 can occur.
+          // No permission check, so no 403 and no apiErrorResponses; no validator, so no 400.
           '401': apiErrorResponse(401),
           '500': apiErrorResponse(500),
         },

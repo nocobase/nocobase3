@@ -72,16 +72,6 @@ export interface ApiValidatorOptions {
 }
 
 /**
- * Validate one part of the request — `param`, `query`, `json`, `header`, `form` or `cookie` — against a Standard Schema
- * such as a zod schema, and declare that schema in the API document. An invalid request is answered `400
- * INVALID_ARGUMENT` with reason `INVALID_INPUT`, domain `app`, and a field violation per issue before the handler
- * runs, exactly as `parseApiInput()` answers; the handler reads the parsed value from `context.req.valid(target)`.
- *
- * ```ts
- * router.post('/orders/:orderId/cancel', describeRoute({ ... }), apiValidator('param', OrderParams), apiValidator('json', CancelOrderInput), handler);
- * ```
- */
-/**
  * A Standard Schema prepared for `describeRoute({ responses })` or `requestBody`, converted under the document's
  * conventions: definitions become components under stable names, a property keeps its own description next to the
  * `$ref` of a shared schema, and a response object is open unless the schema is strict. The response helpers use it
@@ -152,6 +142,18 @@ function withoutIgnoredHeaders(
   };
 }
 
+/**
+ * Validate one part of the request — `param`, `query`, `json`, `header`, `form` or `cookie` — against a Standard Schema
+ * such as a zod schema, and declare that schema in the API document. An invalid request is answered `400
+ * INVALID_ARGUMENT` with reason `INVALID_INPUT`, domain `app`, and a field violation per issue before the handler
+ * runs, exactly as `parseApiInput()` answers; the handler reads the parsed value from `context.req.valid(target)`.
+ * Because of that, the document lists the 400 for invalid input on every route with a validator, without the route
+ * declaring it.
+ *
+ * ```ts
+ * router.post('/orders/:orderId/cancel', describeRoute({ ... }), apiValidator('param', OrderParams), apiValidator('json', CancelOrderInput), handler);
+ * ```
+ */
 export function apiValidator<
   Schema extends StandardSchemaV1,
   Target extends keyof ValidationTargets,
@@ -323,13 +325,16 @@ export function apiErrorResponse(
 }
 
 /**
- * The error responses nearly every `/api` route can answer: invalid input, no session or API key, refused permission
- * and an unexpected failure. Spread them into `responses` and add the route's own, such as `apiErrorResponse(404)`.
+ * The error responses of an authenticated route that checks a permission: no session or API key, refused permission
+ * and an unexpected failure. Spread them into `responses` and add the route's own, such as `apiErrorResponse(404)`. A
+ * route without a permission check lists `apiErrorResponse(401)` and `apiErrorResponse(500)` instead, and a public one
+ * only `apiErrorResponse(500)`. There is no 400 here: a route with an `apiValidator()` gets the 400 for invalid input
+ * in the document automatically, and lists `apiErrorResponse(400, description)` itself only for another reason, such
+ * as a failed precondition.
  */
 export const apiErrorResponses: Readonly<
-  Record<'400' | '401' | '403' | '500', ApiResponseObject>
+  Record<'401' | '403' | '500', ApiResponseObject>
 > = Object.freeze({
-  '400': apiErrorResponse(400),
   '401': apiErrorResponse(401),
   '403': apiErrorResponse(403),
   '500': apiErrorResponse(500),

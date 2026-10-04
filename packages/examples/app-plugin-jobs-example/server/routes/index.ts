@@ -103,7 +103,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...apiErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), the rule is built in and cannot be switched (`BUILT_IN_RULE`), or `every` is not an interval this rule accepts (`INVALID_INTERVAL`).',
+            'The rule is built in and cannot be switched (`BUILT_IN_RULE`), or `every` is not an interval this rule accepts (`INVALID_INTERVAL`).',
           ),
           404: apiErrorResponse(404, 'No rule has this name (`UNKNOWN_RULE`).'),
         },
@@ -131,7 +131,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...apiErrorResponses,
           400: apiErrorResponse(
             400,
-            'The input is invalid (`INVALID_INPUT`), or the rule is built in and cannot be switched (`BUILT_IN_RULE`).',
+            'The rule is built in and cannot be switched (`BUILT_IN_RULE`).',
           ),
           404: apiErrorResponse(404, 'No rule has this name (`UNKNOWN_RULE`).'),
         },

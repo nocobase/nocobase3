@@ -46,7 +46,7 @@ const quoteAccessDenied = apiErrorResponse(
 /** Answered when the visible quotes, invoices or lines exceed what the example renders. */
 const outputLimit = apiErrorResponse(
   400,
-  'The input is invalid (`INVALID_INPUT`), or the data exceeds what the example renders (`OUTPUT_LIMIT_EXCEEDED`).',
+  'The data exceeds what the example renders (`OUTPUT_LIMIT_EXCEEDED`).',
 );
 
 interface QuoteRecord {

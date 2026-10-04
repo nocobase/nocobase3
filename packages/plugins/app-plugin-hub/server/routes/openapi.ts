@@ -18,10 +18,11 @@ export function publishingKeyNote(
 
 /**
  * The errors every Hub route can answer, with the Hub's own reasons for `401` and `403`: a publishing key the Hub does
- * not accept, or one sent to a route that takes none.
+ * not accept, or one sent to a route that takes none. Every Hub route refuses a publishing key it does not take, so
+ * each can answer `403`.
  */
 export const hubErrorResponses: Readonly<
-  Record<'400' | '401' | '403' | '500', ApiResponseObject>
+  Record<'401' | '403' | '500', ApiResponseObject>
 > = Object.freeze({
   ...apiErrorResponses,
   '401': apiErrorResponse(

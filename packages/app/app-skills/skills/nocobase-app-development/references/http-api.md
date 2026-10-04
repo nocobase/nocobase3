@@ -186,7 +186,13 @@ router.post(
     operationId: 'cancelOrder',
     responses: {
       '200': dataResponse(Order, 'The cancelled order.'),
+      // 401, 403 and 500. The validators below add the 400 for invalid input.
       ...apiErrorResponses,
+      // A 400 for another reason than invalid input is listed by the route.
+      '400': apiErrorResponse(
+        400,
+        'The order is already cancelled (`ORDER_NOT_OPEN`).',
+      ),
       '404': apiErrorResponse(404),
     },
   }),
@@ -274,7 +280,7 @@ Every hand-written `/api` route declares itself with `describeRoute()` from `@no
 - **`operationId`**: the namespace, a verb and the resource in camelCase, unique across the application, such as `hubDeployApp`; the application's own routes have no namespace, `cancelOrder`.
 - **`description`**: what a caller cannot read from the schemas, such as the permission a route requires or which credential it expects. A credential that is not one of the document's security schemes is described here and only here, as the Hub's routes say which ones also accept a Hub publishing key in `Authorization: Bearer hub_app_…`.
 - **Inputs**: `apiValidator()` for every path, query, header and JSON input, which documents the parameters and the body.
-- **Responses**: `dataResponse(schema)` for `{ data }`, `listResponse(itemSchema, metaSchema?)` for `{ data, meta }`, `emptyResponse()` for a `204`, and the standard error body through `apiErrorResponse(status)` or `apiErrorResponse(409, 'When …')`. `...apiErrorResponses` spreads `400`, `401`, `403` and `500` for a route that takes input and checks a permission. List only the statuses the route can produce: a route without input does not answer `400`, and a route without a permission check does not answer `403`, so such a route lists `apiErrorResponse()` for each status it does answer instead of spreading the shared set.
+- **Responses**: `dataResponse(schema)` for `{ data }`, `listResponse(itemSchema, metaSchema?)` for `{ data, meta }`, `emptyResponse()` for a `204`, and the standard error body through `apiErrorResponse(status)` or `apiErrorResponse(409, 'When …')`. Do not list `400` for input validation: a route that uses `apiValidator` gets the `400` automatically. List `400` yourself only for another reason, such as a failed precondition. `apiErrorResponses` is `401`, `403` and `500`, for an authenticated route with a permission check; otherwise list each status the route can return with `apiErrorResponse(code)`.
 - **Security**: a route a caller reaches without a credential, such as a status probe or the locales the sign-in page reads, declares `security: []`. Every other route inherits the document's top-level requirement, a session cookie (`cookieAuth`) or an API key in `x-api-key` (`apiKeyAuth`), which the authentication and API keys plugins contribute.
 - **Schemas** live in the plugin's `server/routes/schemas.ts`. A schema several routes share carries `.meta({ ref: '<PluginName><Thing>' })`, such as `HubDeployment`, and becomes a named component; public fields carry `.meta({ description })`, which stays next to the `$ref` when the field's schema is a shared one. A response object is documented open, so adding a field later is not a breaking change, unless its schema is `z.strictObject()`; a JSON body validated with `z.strictObject()` is documented closed. Recursive schemas such as `z.json()` need no workaround: they become components, named by their `ref` when they declare one.
 - **Response schemas describe what the handler returns.** Read the handler and the service it calls rather than guessing, and annotate the schema with the service's view type, `export const OrderSchema: z.ZodType<OrderView> = z.object({ ... })`, so that a response and its documentation cannot drift apart without failing `typecheck`.

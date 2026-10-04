@@ -244,8 +244,9 @@ describe('response helpers', () => {
       type: 'object',
       properties: { id: { type: 'string' }, releaseId: { type: 'string' } },
     });
+    // The validators add the 400; `apiErrorResponses` itself has none.
     expect(deploy.responses!['400']).toEqual({
-      $ref: '#/components/responses/BadRequest',
+      $ref: '#/components/responses/InvalidInput',
     });
     expect(deploy.responses!['404']).toEqual({
       $ref: '#/components/responses/NotFound',
@@ -298,6 +299,132 @@ describe('response helpers', () => {
         data: { items: { type: 'string' } },
         meta: { $ref: '#/components/schemas/ApiListMeta' },
       },
+    });
+  });
+});
+
+describe('the 400 for invalid input', () => {
+  const declare = (operationId: string, responses = {}) =>
+    describeRoute({
+      tags: ['Shop'],
+      summary: operationId,
+      operationId,
+      responses: { '200': dataResponse({ type: 'string' }), ...responses },
+    });
+
+  async function operations(): Promise<
+    Record<string, import('../src/router/index.js').OpenAPIV3_1.OperationObject>
+  > {
+    const router = new Hono();
+    router.get(
+      '/shop/status',
+      declare('shopGetStatus', apiErrorResponses),
+      (c) => c.json({ data: 'ok' }),
+    );
+    router.get(
+      '/shop/orders/:orderId',
+      declare('shopGetOrder', apiErrorResponses),
+      apiValidator('param', z.object({ orderId: z.string() })),
+      (c) => c.json({ data: 'ok' }),
+    );
+    router.post(
+      '/shop/orders/:orderId/ship',
+      declare('shopShipOrder', {
+        ...apiErrorResponses,
+        '400': apiErrorResponse(
+          400,
+          'The order is not paid (`FAILED_PRECONDITION`).',
+        ),
+      }),
+      apiValidator('json', z.strictObject({ carrier: z.string() })),
+      (c) => c.json({ data: 'ok' }),
+    );
+    router.post(
+      '/shop/orders/:orderId/close',
+      declare('shopCloseOrder', {
+        '400': apiErrorResponse(
+          400,
+          'The order is still open (`FAILED_PRECONDITION`).',
+        ),
+      }),
+      (c) => c.json({ data: 'ok' }),
+    );
+    router.post(
+      '/shop/orders/:orderId/refund',
+      declare('shopRefundOrder', { '400': apiErrorResponse(400) }),
+      apiValidator('json', z.strictObject({ amount: z.number() })),
+      (c) => c.json({ data: 'ok' }),
+    );
+    const document = await generateApiDocument(router, {
+      info: { title: 'Test', version: '1.0.0' },
+    });
+    return Object.fromEntries(
+      Object.values(document.paths!).flatMap((item) =>
+        Object.values(item!).map((operation) => [
+          (operation as { operationId: string }).operationId,
+          operation,
+        ]),
+      ),
+    );
+  }
+
+  it('is absent from a route without a validator', async () => {
+    const { shopGetStatus } = await operations();
+
+    expect(Object.keys(shopGetStatus!.responses!).sort()).toEqual([
+      '200',
+      '401',
+      '403',
+      '500',
+    ]);
+  });
+
+  it('is added to a route with a validator, in the standard error body', async () => {
+    const document = await generateApiDocument(new Hono(), {
+      info: { title: 'Test', version: '1.0.0' },
+    });
+    const { shopGetOrder } = await operations();
+
+    expect(shopGetOrder!.responses!['400']).toEqual({
+      $ref: '#/components/responses/InvalidInput',
+    });
+    expect(document.components!.responses!.InvalidInput).toEqual({
+      description: expect.stringContaining('`INVALID_INPUT`'),
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ApiErrorBody' },
+        },
+      },
+    });
+  });
+
+  it('keeps a declared 400 after the description of invalid input', async () => {
+    const { shopShipOrder, shopCloseOrder, shopRefundOrder } =
+      await operations();
+
+    const ship = shopShipOrder!.responses!['400'] as {
+      description: string;
+    };
+    expect(ship.description).toMatch(
+      /^The request does not match .*`INVALID_INPUT`/,
+    );
+    expect(ship.description).toMatch(
+      /\n\nThe order is not paid \(`FAILED_PRECONDITION`\)\.$/,
+    );
+    expect(ship).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ApiErrorBody' },
+        },
+      },
+    });
+    // Without a validator the declared 400 is the only reason.
+    expect(shopCloseOrder!.responses!['400']).toMatchObject({
+      description: 'The order is still open (`FAILED_PRECONDITION`).',
+    });
+    // The shared BadRequest already describes invalid input as well.
+    expect(shopRefundOrder!.responses!['400']).toEqual({
+      $ref: '#/components/responses/BadRequest',
     });
   });
 });

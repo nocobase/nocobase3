@@ -70,6 +70,10 @@ export function createAIToolsRouter(
       description: CREATE_DESCRIPTION,
       responses: {
         201: dataResponse(ToolResponse, 'The created tool.'),
+        400: apiErrorResponse(
+          400,
+          'A backend tool cannot be created over HTTP, which cannot carry its code (`INVALID_REQUEST`).',
+        ),
         ...apiErrorResponses,
         409: apiErrorResponse(
           409,
@@ -123,6 +127,10 @@ export function createAIToolsRouter(
       description: UPDATE_DESCRIPTION,
       responses: {
         200: dataResponse(ToolResponse),
+        400: apiErrorResponse(
+          400,
+          'The update would make a tool registered without code a backend tool (`INVALID_REQUEST`).',
+        ),
         ...apiErrorResponses,
         404: toolNotFound,
         413: bodyTooLargeResponse,

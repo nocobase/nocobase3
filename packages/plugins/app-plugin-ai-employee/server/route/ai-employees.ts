@@ -61,7 +61,8 @@ export function createAIEmployeeRouter(
         "Every enabled employee, in the caller's own order, with the caller's own prompt for each and the skills and tools it may use. Any signed-in user may read it.",
       responses: {
         200: listResponse(AIEmployeeRosterEntryResponse, BoundedListMeta),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
       },
     }),
     async (context) => {
@@ -230,7 +231,8 @@ export function createAIEmployeeRouter(
         'The prompt is added to every conversation the caller has with this employee. Any signed-in user may set their own.',
       responses: {
         200: dataResponse(UserPromptResponse),
-        ...apiErrorResponses,
+        401: apiErrorResponse(401),
+        500: apiErrorResponse(500),
         404: employeeNotFound,
         413: bodyTooLargeResponse,
       },

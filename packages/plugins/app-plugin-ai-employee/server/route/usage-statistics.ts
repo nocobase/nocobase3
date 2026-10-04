@@ -1,4 +1,5 @@
 import {
+  apiErrorResponse,
   apiErrorResponses,
   apiValidator,
   dataResponse,
@@ -33,6 +34,11 @@ import {
 const RANGE =
   '`start` and `end` are RFC 3339 times with an offset and default to the last 7 days; the range is cut into whole hours and may span at most 366 days, otherwise the request is answered `400`. `timezoneOffset` (east-positive minutes) decides where days, weeks and months begin. The other parameters each keep the events with that value. Requires AI settings access.';
 
+const invalidRange = apiErrorResponse(
+  400,
+  'The range ends before it starts or spans more than 366 days (`INVALID_REQUEST`).',
+);
+
 /** A time the usage routes answer with: an RFC 3339 string, as their `start` and `end` parameters take. */
 type Time = string;
 
@@ -61,6 +67,7 @@ export function createAIUsageStatisticsRouter(
         RANGE,
       responses: {
         200: dataResponse(UsageSummaryResponse),
+        400: invalidRange,
         ...apiErrorResponses,
       },
     }),
@@ -87,6 +94,7 @@ export function createAIUsageStatisticsRouter(
         RANGE,
       responses: {
         200: dataResponse(UsageSeriesResponse),
+        400: invalidRange,
         ...apiErrorResponses,
       },
     }),
@@ -113,6 +121,7 @@ export function createAIUsageStatisticsRouter(
         RANGE,
       responses: {
         200: dataResponse(UsageBreakdownResponse),
+        400: invalidRange,
         ...apiErrorResponses,
       },
     }),
@@ -140,6 +149,7 @@ export function createAIUsageStatisticsRouter(
         RANGE,
       responses: {
         200: dataResponse(UsageFilterOptionsResponse),
+        400: invalidRange,
         ...apiErrorResponses,
       },
     }),

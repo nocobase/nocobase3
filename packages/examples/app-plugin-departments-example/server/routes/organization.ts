@@ -275,7 +275,7 @@ export function createOrganizationRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), the parent does not exist (`PARENT_NOT_FOUND`), or the head is not an enabled user (`USER_NOT_FOUND`).',
+          'The parent does not exist (`PARENT_NOT_FOUND`), or the head is not an enabled user (`USER_NOT_FOUND`).',
         ),
         409: apiErrorResponse(
           409,
@@ -365,7 +365,7 @@ export function createOrganizationRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), the parent does not exist (`PARENT_NOT_FOUND`) or lies below the department (`PARENT_CYCLE`), or the head is not an enabled user (`USER_NOT_FOUND`).',
+          'The parent does not exist (`PARENT_NOT_FOUND`) or lies below the department (`PARENT_CYCLE`), or the head is not an enabled user (`USER_NOT_FOUND`).',
         ),
         404: departmentNotFound,
       },
@@ -453,7 +453,7 @@ export function createOrganizationRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), or the user is not an enabled user (`USER_NOT_FOUND`).',
+          'The user is not an enabled user (`USER_NOT_FOUND`).',
         ),
         404: departmentNotFound,
       },

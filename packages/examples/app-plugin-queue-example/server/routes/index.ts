@@ -49,7 +49,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           'Publishes one greeting to the example queue, held back for `delay` milliseconds when given. `202` means the queue accepted the job; both handlers run afterwards, as `GET /api/queueExample/status` shows.',
         responses: {
           202: dataResponse(GreetingReceipt, 'The queue accepted the job.'),
-          400: apiErrorResponse(400),
           401: apiErrorResponse(401),
           500: apiErrorResponse(500),
         },

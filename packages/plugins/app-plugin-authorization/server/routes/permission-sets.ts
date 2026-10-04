@@ -166,6 +166,10 @@ export function createPermissionSetHandler(
       responses: {
         201: dataResponse(PermissionSetSchema, 'The created Permission Set.'),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'A grant the registered resource types do not accept (`INVALID_AUTHORIZATION_INPUT`), or the set’s protection forbids creating it (`PROTECTED_PERMISSION_SET`).',
+        ),
         409: apiErrorResponse(
           409,
           'A Permission Set with this key already exists (`PERMISSION_SET_CONFLICT`).',
@@ -227,6 +231,10 @@ export function createPermissionSetHandler(
           'The created assignment.',
         ),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The set may not be assigned to this subject type (`PERMISSION_SET_SUBJECT_NOT_ALLOWED`), or its protection forbids the assignment (`PROTECTED_PERMISSION_SET`).',
+        ),
         404: apiErrorResponse(
           404,
           'The Permission Set does not exist (`PERMISSION_SET_NOT_FOUND`).',
@@ -262,6 +270,10 @@ export function createPermissionSetHandler(
       responses: {
         204: emptyResponse('The assignment was revoked.'),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The set must keep at least one assignment (`LAST_ASSIGNMENT`), or its protection forbids revoking it (`PROTECTED_PERMISSION_SET`).',
+        ),
         404: apiErrorResponse(
           404,
           'The Permission Set has no assignment with this id (`ASSIGNMENT_NOT_FOUND`).',
@@ -322,6 +334,10 @@ export function createPermissionSetHandler(
       responses: {
         200: dataResponse(PermissionSetSchema),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'A grant the registered resource types do not accept (`INVALID_AUTHORIZATION_INPUT`), or the set’s protection forbids the change (`PROTECTED_PERMISSION_SET`).',
+        ),
         404: apiErrorResponse(
           404,
           'The Permission Set does not exist (`PERMISSION_SET_NOT_FOUND`).',
@@ -376,6 +392,10 @@ export function createPermissionSetHandler(
       responses: {
         204: emptyResponse('The Permission Set was deleted.'),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The set’s protection forbids deleting it (`PROTECTED_PERMISSION_SET`).',
+        ),
         404: apiErrorResponse(
           404,
           'The Permission Set does not exist (`PERMISSION_SET_NOT_FOUND`).',

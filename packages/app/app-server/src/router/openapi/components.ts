@@ -61,6 +61,10 @@ export function apiDocumentBaseComponents(): OpenAPIV3_1.ComponentsObject {
       content: { 'application/json': { schema: schemaRef('ApiErrorBody') } },
     };
   }
+  responses[invalidInputResponseName] = {
+    description: invalidInputDescription,
+    content: { 'application/json': { schema: schemaRef('ApiErrorBody') } },
+  };
   return {
     schemas: {
       ApiFieldViolation: {
@@ -146,10 +150,9 @@ export function apiDocumentBaseComponents(): OpenAPIV3_1.ComponentsObject {
   };
 }
 
-/** The response `validator()` failures are documented with when a route declares no 400 of its own. */
-export function validationErrorResponse(): OpenAPIV3_1.ResponseObject {
-  return {
-    description: errorDescriptions[400],
-    content: { 'application/json': { schema: schemaRef('ApiErrorBody') } },
-  };
-}
+/** The description of the 400 a route answers when `apiValidator()` rejects its input. */
+export const invalidInputDescription: string =
+  'The request does not match the parameters or body this operation accepts (`INVALID_ARGUMENT`, reason `INVALID_INPUT`, with `fieldViolations` naming each invalid field).';
+
+/** The shared response `apiValidator()` failures are documented with: the 400 every route with a validator can answer. */
+export const invalidInputResponseName = 'InvalidInput';

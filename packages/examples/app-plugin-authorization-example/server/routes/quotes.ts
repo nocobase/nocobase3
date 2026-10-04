@@ -43,7 +43,7 @@ export function createQuoteRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), or the quote is no longer a draft (`STATE_CONFLICT`).',
+          'The quote is no longer a draft (`STATE_CONFLICT`).',
         ),
         403: forbiddenResponse,
         413: bodyTooLargeResponse,
@@ -92,7 +92,7 @@ export function createQuoteRoutes(
         ...apiErrorResponses,
         400: apiErrorResponse(
           400,
-          'The input is invalid (`INVALID_INPUT`), the quote is no longer a draft (`STATE_CONFLICT`), or it has no positive amount (`QUOTE_AMOUNT_REQUIRED`).',
+          'The quote is no longer a draft (`STATE_CONFLICT`), or it has no positive amount (`QUOTE_AMOUNT_REQUIRED`).',
         ),
         403: forbiddenResponse,
       },

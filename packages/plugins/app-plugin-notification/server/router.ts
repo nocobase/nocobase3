@@ -47,6 +47,10 @@ export function createNotificationRouter({
       responses: {
         200: listResponse(NotificationLogDetailsSchema),
         ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The `pageToken` was not issued by this list (`INVALID_PAGE_TOKEN`).',
+        ),
       },
     }),
     apiValidator('query', NotificationLogListQuery),

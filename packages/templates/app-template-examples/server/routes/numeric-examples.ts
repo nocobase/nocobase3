@@ -51,7 +51,6 @@ export const numericExamplesRoutes: AppApiRouteContribution<Application> =
           'Numeric columns as the main connection returns them, with their aggregates, read with the query builder or through the Repository. `orderBy` lists fields, each optionally followed by ` desc`, such as `decimalValue desc,id`.',
         responses: {
           200: dataResponse(NumericExamples),
-          400: apiErrorResponse(400),
           401: apiErrorResponse(401),
           500: apiErrorResponse(500),
         },

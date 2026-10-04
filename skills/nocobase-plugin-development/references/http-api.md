@@ -95,7 +95,13 @@ router.post(
     operationId: 'ordersCancelOrder',
     responses: {
       '200': dataResponse(OrderSchema, 'The cancelled order.'),
+      // 401, 403 and 500. The validators below add the 400 for invalid input.
       ...apiErrorResponses,
+      // A 400 for another reason than invalid input is listed by the route.
+      '400': apiErrorResponse(
+        400,
+        'The order is already cancelled (`ORDER_NOT_OPEN`).',
+      ),
       '404': apiErrorResponse(404),
     },
   }),
@@ -137,7 +143,7 @@ bodyLimit({
 The application generates an OpenAPI 3.1 document from every `/api` route and serves it at `GET <APP_BASE_PATH>/api/swagger` (JSON) and `GET <APP_BASE_PATH>/api/swagger/docs` (Swagger UI) to a signed-in session or a valid API key; with no access check registered both answer `404`. To learn what an application or another plugin already serves, read that document rather than route sources: `curl -H "x-api-key: <key>" http://127.0.0.1:13000/main/api/swagger`, with `/main` replaced by the application's base path. The full rules are in the "API documentation" section of `packages/app/app-skills/skills/nocobase-app-development/references/http-api.md`; a plugin follows them like this:
 
 - **Every hand-written route declares itself** with `describeRoute()` after its authentication and permission middleware and before its `apiValidator()`s: `tags` is the plugin name in PascalCase (`Hub`, `AiEmployee`), `summary` an English verb phrase, `operationId` the namespace, a verb and the resource in camelCase, unique across the application (`hubDeployApp`). A route that declares nothing is a defect.
-- **Responses** use `dataResponse(schema)`, `listResponse(itemSchema, metaSchema?)`, `emptyResponse()` for `204`, and `apiErrorResponse(status, description?)` for each error status. `...apiErrorResponses` spreads `400`, `401`, `403` and `500`; list only the statuses the route can produce, so a route without input or without a permission check lists `apiErrorResponse()` for each status it does answer instead.
+- **Responses** use `dataResponse(schema)`, `listResponse(itemSchema, metaSchema?)`, `emptyResponse()` for `204`, and `apiErrorResponse(status, description?)` for each error status. Do not list `400` for input validation: a route that uses `apiValidator` gets the `400` automatically. List `400` yourself only for another reason, such as a failed precondition. `apiErrorResponses` is `401`, `403` and `500`, for an authenticated route with a permission check; otherwise list each status the route can return with `apiErrorResponse(code)`.
 - **Schemas** live in `server/routes/schemas.ts`. A schema several routes share carries `.meta({ ref: '<PluginName><Thing>' })`, public fields carry `.meta({ description })`, and a response schema describes what the handler returns, annotated with the service's view type (`export const OrderSchema: z.ZodType<OrderView> = z.object({ ... })`) so the two cannot drift apart without failing `typecheck`.
 - **A route reached without a credential** declares `security: []`; every other route inherits the session cookie or `x-api-key` requirement.
 - **Hide a route** with `describeRoute({ hide: true })` and a one-line comment saying why, only when it is (a) part of the application's shell or build, such as locale bundles, asset serving or development-only routes; (b) a browser-only flow such as an OAuth redirect or callback; (c) a documentation route; (d) a transport that is not HTTP request and response, such as a WebSocket upgrade; or (e) a fallback router registered only while the plugin is unconfigured, answering `503` until the real routes replace it. Admin and settings routes are documented.

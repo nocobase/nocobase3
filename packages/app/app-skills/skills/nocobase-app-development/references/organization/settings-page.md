@@ -26,9 +26,7 @@ routes.get(
     operationId: 'listDepartments',
     responses: {
       '200': dataResponse(z.array(DepartmentNodeSchema)),
-      '401': apiErrorResponse(401),
-      '403': apiErrorResponse(403),
-      '500': apiErrorResponse(500),
+      ...apiErrorResponses,
     },
   }),
   async (c) => c.json({ data: await organization.listTree() }),

@@ -92,6 +92,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         responses: {
           200: listResponse(ManagedUserSchema, UsersPageMeta),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'Only one of `roleScope` and `role` is given, or the role scope does not exist (`INVALID_ROLE_SCOPE_VALUE`, `ROLE_SCOPE_NOT_FOUND`).',
+          ),
         },
       }),
       apiValidator('query', ListUsersQuery),
@@ -121,6 +125,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         responses: {
           201: dataResponse(ManagedUserSchema, 'The created user.'),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'The password is too short or too long (`PASSWORD_TOO_SHORT`, `PASSWORD_TOO_LONG`), a role scope does not exist or is missing (`ROLE_SCOPE_NOT_FOUND`, `ROLE_SCOPE_REQUIRED`), a role value is invalid (`INVALID_ROLE_SCOPE_VALUE`), or a protected role cannot be assigned here (`PROTECTED_ROLE_ASSIGNMENT`).',
+          ),
           409: apiErrorResponse(
             409,
             'A user with this email or username already exists (`USER_IDENTITY_CONFLICT`).',
@@ -174,11 +182,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         tags,
         summary: 'Delete a user',
         operationId: 'usersDeleteUser',
-        description:
-          'Requires `confirm=true`. Answers `400 FAILED_PRECONDITION` when the application has not configured user deletion (`USER_DELETION_NOT_CONFIGURED`), when the caller deletes their own account (`SELF_DELETE_NOT_ALLOWED`), when a role scope refuses, or when the user is the last assignment of a Permission Set that must stay in use (`LAST_ASSIGNMENT`).',
+        description: 'Requires `confirm=true`.',
         responses: {
           204: emptyResponse('The user was deleted.'),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'The application has not configured user deletion (`USER_DELETION_NOT_CONFIGURED`), the caller deletes their own account (`SELF_DELETE_NOT_ALLOWED`), a role scope refuses, or the user is the last assignment of a Permission Set that must stay in use (`LAST_ASSIGNMENT`); all `FAILED_PRECONDITION`.',
+          ),
           404: apiErrorResponse(404),
         },
       }),
@@ -199,11 +210,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         tags,
         summary: 'Disable a user',
         operationId: 'usersDisableUser',
-        description:
-          'A disabled user can no longer sign in. Answers `400 FAILED_PRECONDITION` when a role scope refuses or the user is the last assignment of a Permission Set that must stay in use (`LAST_ASSIGNMENT`).',
+        description: 'A disabled user can no longer sign in.',
         responses: {
           200: dataResponse(ManagedUserSchema),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'A role scope refuses, or the user is the last assignment of a Permission Set that must stay in use (`LAST_ASSIGNMENT`); both `FAILED_PRECONDITION`.',
+          ),
           404: apiErrorResponse(404),
         },
       }),
@@ -253,6 +267,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         responses: {
           200: dataResponse(ManagedUserSchema),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'The value does not fit the scope or names an unknown role (`INVALID_ROLE_SCOPE_VALUE`), or a protected role cannot be assigned or removed here (`PROTECTED_ROLE_ASSIGNMENT`).',
+          ),
           404: apiErrorResponse(
             404,
             'The user or the role scope does not exist (`USER_NOT_FOUND`, `ROLE_SCOPE_NOT_FOUND`).',
@@ -283,6 +301,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         responses: {
           204: emptyResponse('The password was replaced.'),
           ...apiErrorResponses,
+          400: apiErrorResponse(
+            400,
+            'The password is too short or too long (`PASSWORD_TOO_SHORT`, `PASSWORD_TOO_LONG`).',
+          ),
           404: apiErrorResponse(404),
         },
       }),

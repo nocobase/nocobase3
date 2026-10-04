@@ -1,7 +1,6 @@
 import type { AuthEnv } from '@nocobase/app-plugin-authentication';
 import {
   apiErrorResponse,
-  apiErrorResponses,
   apiValidator,
   dataResponse,
   describeRoute,
@@ -36,6 +35,11 @@ export interface CreateInAppRouterOptions {
 const tags = ['NotificationInApp'];
 const inboxDescription =
   "Reads and changes only the signed-in user's inbox; another user's message answers 404.";
+// The inbox checks no permission: every signed-in user has one, and reaches only their own messages.
+const inboxErrorResponses = {
+  401: apiErrorResponse(401),
+  500: apiErrorResponse(500),
+};
 const messageNotFoundResponse = apiErrorResponse(
   404,
   "No message with this id is in the signed-in user's inbox (`IN_APP_NOTIFICATION_NOT_FOUND`).",
@@ -78,7 +82,11 @@ export function createInAppRouter(
         "The signed-in user's messages, newest first. `unreadOnly=true` lists only unread ones. Pages by `pageToken`: pass `meta.nextPageToken` back unchanged; it is absent on the last page, and a token this list did not issue answers 400 `IN_APP_NOTIFICATION_INVALID_PAGE_TOKEN`.",
       responses: {
         200: listResponse(InboxMessageSchema),
-        ...apiErrorResponses,
+        ...inboxErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The `pageToken` was not issued by this list (`IN_APP_NOTIFICATION_INVALID_PAGE_TOKEN`).',
+        ),
       },
     }),
     apiValidator('query', InboxListQuery),
@@ -119,7 +127,7 @@ export function createInAppRouter(
       description: inboxDescription,
       responses: {
         200: dataResponse(InboxUnreadCountSchema),
-        ...apiErrorResponses,
+        ...inboxErrorResponses,
       },
     }),
     async (context) =>
@@ -138,7 +146,7 @@ export function createInAppRouter(
       description: inboxDescription,
       responses: {
         200: dataResponse(InboxMarkAllReadSchema),
-        ...apiErrorResponses,
+        ...inboxErrorResponses,
       },
     }),
     async (context) =>
@@ -174,7 +182,7 @@ export function createInAppRouter(
             InboxMessageSchema,
             'The message after the change.',
           ),
-          ...apiErrorResponses,
+          ...inboxErrorResponses,
           404: messageNotFoundResponse,
         },
       }),
@@ -200,7 +208,7 @@ export function createInAppRouter(
       description: inboxDescription,
       responses: {
         204: emptyResponse('The message was deleted.'),
-        ...apiErrorResponses,
+        ...inboxErrorResponses,
         404: messageNotFoundResponse,
       },
     }),

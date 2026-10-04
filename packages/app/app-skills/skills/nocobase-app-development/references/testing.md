@@ -89,11 +89,21 @@ test('declares its routes in the API document', async ({ testApp }) => {
     .resolve(apiDocsToken)
     .getDocument();
   expect(findApiDocumentSchemaProblems(document)).toEqual([]);
-  expect(
-    document.paths?.['/api/orders/{orderId}/cancel']?.post?.operationId,
-  ).toBe('cancelOrder');
+  const cancel = document.paths?.['/api/orders/{orderId}/cancel']?.post;
+  expect(cancel?.operationId).toBe('cancelOrder');
+  // 401, 403 and 500 from apiErrorResponses, 400 from its validators and its own precondition, and its 404.
+  expect(Object.keys(cancel?.responses ?? {}).sort()).toEqual([
+    '200',
+    '400',
+    '401',
+    '403',
+    '404',
+    '500',
+  ]);
 });
 ```
+
+The document lists only the statuses a route can return: a route without a permission check has no `403`, and one without `apiValidator()` and no other `400` of its own has no `400`. [HTTP API design](http-api.md#declaring-a-route) states the rule.
 
 ## Test databases
 
