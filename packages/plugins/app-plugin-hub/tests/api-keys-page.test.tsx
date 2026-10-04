@@ -119,7 +119,7 @@ describe('App API Keys management', () => {
     fireEvent.click(submit);
     await screen.findByText('hub_app_test_secret');
     expect(api).toHaveBeenCalledWith({
-      path: 'hub/api-keys',
+      path: 'hub/apiKeys',
       method: 'POST',
       json: {
         name: 'CI',
@@ -193,7 +193,7 @@ describe('App API Keys management', () => {
     );
     await screen.findByText('test-only-secret');
     expect(api).toHaveBeenCalledWith({
-      path: 'hub/api-keys',
+      path: 'hub/apiKeys',
       method: 'POST',
       json: {
         name: 'Global CI',
@@ -225,7 +225,7 @@ describe('App API Keys management', () => {
       await screen.findByRole('menuitem', { name: 'Disable', exact: true }),
     );
     api
-      .mockReturnValueOnce({ data: { success: true } })
+      .mockReturnValueOnce({ data: { ...key, status: 'disabled' } })
       .mockReturnValue({ data: [{ ...key, status: 'disabled' }] });
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', {
@@ -235,7 +235,7 @@ describe('App API Keys management', () => {
     );
     await screen.findByText('Disabled');
     expect(api).toHaveBeenCalledWith({
-      path: 'hub/api-keys/key-id/disable',
+      path: 'hub/apiKeys/key-id/disable',
       method: 'POST',
     });
     await user.click(screen.getByRole('button', { name: 'Actions for CI' }));
@@ -272,7 +272,7 @@ describe('App API Keys management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy API Key CI' }));
     await screen.findByText('saved-test-secret');
     expect(api).toHaveBeenCalledWith({
-      path: 'hub/api-keys/key-id/reveal',
+      path: 'hub/apiKeys/key-id/reveal',
       method: 'POST',
     });
     expect(screen.getByRole('button', { name: 'Copy key' })).toBeEnabled();

@@ -1,8 +1,10 @@
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import {
-  AuthorizationDeniedError,
-  type AuthorizationEnv,
-} from '@nocobase/authorization/core';
+  getRequestId,
+  apiErrorHandler,
+  requestIdHeader,
+} from '@nocobase/app-server/router';
+import type { AuthorizationEnv } from '@nocobase/authorization/core';
 import { Hono, type Context } from 'hono';
 import type { AppAuthorization } from '../authorization.js';
 
@@ -15,11 +17,7 @@ export function createAuthorizationRoutes(
   authorization: AppAuthorization,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
-  routes.onError((error, context) => {
-    if (error instanceof AuthorizationDeniedError)
-      return context.json({ code: 'FORBIDDEN', message: error.message }, 403);
-    throw error;
-  });
+  routes.onError(apiErrorHandler);
   routes.use('*', auth.required());
   routes.use('*', authorization.middleware());
   routes.get('/permissions', async (context) =>
@@ -27,7 +25,7 @@ export function createAuthorizationRoutes(
   );
   routes.all('*', async (context, next) => {
     const response = authorization.routes.handle({
-      request: context.req.raw,
+      request: withRequestId(context.req.raw, getRequestId(context)),
       path: mountedPath(context),
       authorization: context.get('authz'),
     });
@@ -45,4 +43,12 @@ function mountedPath(context: Context<AuthorizationEnv>): string {
       ? ''
       : context.req.routePath.slice(0, wildcard).replace(/\/$/, '');
   return context.req.path.slice(mount.length) || '/';
+}
+
+/** The request carrying this request's id, so a settings router answers with the same one. */
+function withRequestId(request: Request, requestId: string): Request {
+  if (request.headers.get(requestIdHeader) === requestId) return request;
+  const headers = new Headers(request.headers);
+  headers.set(requestIdHeader, requestId);
+  return new Request(request, { headers });
 }

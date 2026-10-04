@@ -8,7 +8,7 @@ Every endpoint request goes through the HTTP client the application provides:
 
 ## Endpoints and types used in the examples
 
-All code in this handbook comes from the example "projects" domain: `GET` and `POST /api/projects`, `GET`, `PATCH` and `DELETE /api/projects/:id`, with a 409 `PROJECT_NAME_TAKEN` code for a duplicate name. The endpoint contract and `client/pages/projects/types.ts` are in [`example/types.md`](example/types.md).
+All code in this handbook comes from the example "projects" domain: `GET` and `POST /api/projects`, `GET`, `PATCH` and `DELETE /api/projects/:id`, with a 409 `ALREADY_EXISTS` error, reason `PROJECT_NAME_TAKEN`, for a duplicate name. They follow the application's HTTP API rules ([`../../http-api.md`](../../http-api.md)): ids are strings, a list answers `{ data, meta }`, and a failure carries a `reason`. The endpoint contract and `client/pages/projects/types.ts` are in [`example/types.md`](example/types.md).
 
 ## Getting the client
 
@@ -33,15 +33,15 @@ import type { Project, ProjectStatus } from './types.js';
 
 /** The page's own hook: returns a function that changes a project's status. */
 export function useSetProjectStatus(): (
-  id: number,
+  id: string,
   status: ProjectStatus,
 ) => Promise<Project> {
   // Get the client at the top level of the hook; the returned function can be called from event handlers.
   const api = useApiClient();
   return useCallback(
-    async (id: number, status: ProjectStatus) => {
+    async (id: string, status: ProjectStatus) => {
       const { data } = await api.request<{ data: Project }>({
-        path: `projects/${id}`,
+        path: `projects/${encodeURIComponent(id)}`,
         method: 'PATCH',
         json: { status },
       });
@@ -65,7 +65,7 @@ import { ServiceProvider } from '@nocobase/service-provider';
 
 // …
 
-/** Reports once after the application starts (assumes the backend provides POST /api/client-events). */
+/** Reports once after the application starts (assumes the backend provides POST /api/clientEvents). */
 export class ClientEventsProvider extends ServiceProvider<ClientApplication> {
   // Name a provider after the application's package, as client/service-provider.ts does.
   public readonly name: string = 'my-app/client-events';
@@ -76,7 +76,7 @@ export class ClientEventsProvider extends ServiceProvider<ClientApplication> {
     // Do not wait for the result; a failure is only logged and does not affect application startup.
     void api
       .request({
-        path: 'client-events',
+        path: 'clientEvents',
         method: 'POST',
         json: { type: 'app-started' },
       })
@@ -115,7 +115,7 @@ export interface ProjectChanges {
 // A plain function cannot call hooks: the caller passes the client in.
 export async function fetchProject(
   api: ApiClient,
-  id: number | string,
+  id: string,
   signal?: AbortSignal,
 ): Promise<Project> {
   const { data } = await api.request<{ data: Project }>({
@@ -127,11 +127,11 @@ export async function fetchProject(
 
 export async function updateProject(
   api: ApiClient,
-  id: number,
+  id: string,
   changes: ProjectChanges,
 ): Promise<Project> {
   const { data } = await api.request<{ data: Project }, ProjectChanges>({
-    path: `projects/${id}`,
+    path: `projects/${encodeURIComponent(id)}`,
     method: 'PATCH',
     json: changes,
   });
@@ -161,15 +161,16 @@ export async function updateProject(
 
 This handbook's project endpoints are called like this (`id` is the record id, `json` is the request body):
 
-| Operation | Code                                                                                  |
-| --------- | ------------------------------------------------------------------------------------- |
-| List      | `api.request<{ data: Project[] }>({ path: 'projects', query: { status: 'active' } })` |
-| Get one   | ``api.request<{ data: Project }>({ path: `projects/${id}` })``                        |
-| Create    | `api.request<{ data: Project }>({ path: 'projects', method: 'POST', json })`          |
-| Update    | ``api.request<{ data: Project }>({ path: `projects/${id}`, method: 'PATCH', json })`` |
-| Delete    | ``api.request<void>({ path: `projects/${id}`, method: 'DELETE' })``                   |
+| Operation | Code                                                                                                      |
+| --------- | --------------------------------------------------------------------------------------------------------- |
+| List      | `api.request<ProjectList>({ path: 'projects', query: { q, status: 'active', page: 1, pageSize: 20 } })`   |
+| Get one   | ``api.request<{ data: Project }>({ path: `projects/${encodeURIComponent(id)}` })``                        |
+| Create    | `api.request<{ data: Project }>({ path: 'projects', method: 'POST', json })`                              |
+| Update    | ``api.request<{ data: Project }>({ path: `projects/${encodeURIComponent(id)}`, method: 'PATCH', json })`` |
+| Delete    | ``api.request<void>({ path: `projects/${encodeURIComponent(id)}`, method: 'DELETE' })``                   |
 
-- When the id comes from a URL parameter or user input, encode it with `encodeURIComponent` before putting it into `path`.
+- Encode every id with `encodeURIComponent` before putting it into `path`; ids are strings and may come from a URL parameter or user input.
+- A list takes `q` for search, `orderBy` for ordering, and `page` with `pageSize` (20 by default, at most 100), and answers `{ data, meta: { page, pageSize, total } }`, typed `ProjectList` in [`example/types.md`](example/types.md). A feed or log pages with `pageSize` and `pageToken` instead, and its `meta` carries `nextPageToken` until the last page.
 
 ### Parameters and response bodies
 
@@ -178,7 +179,7 @@ This handbook's project endpoints are called like this (`id` is the record id, `
 - `json` is the request body; the client serializes it and sets `Content-Type: application/json`.
 - The options are named `query` and `json`, not axios's `params` and `data`.
 - `GET` and `HEAD` cannot carry `json` or `body`. Type checking does not catch this, but the browser's fetch throws right away.
-- The return value is the response body itself, not a fetch `Response`, and `data` is not unwrapped automatically: when the endpoint returns `{ data: [...] }`, type it `{ data: Project[] }`; when it returns `{ ok: true }`, write `{ ok: boolean }` without adding a `data` layer. The type parameter is only a declaration; nothing is validated at runtime.
+- The return value is the response body itself, not a fetch `Response`, and `data` is not unwrapped automatically: when the endpoint returns `{ data: Project }`, type it `{ data: Project }`; a list returns `{ data: [...], meta }`, so type both, such as `ProjectList`. An endpoint that answers `204` resolves to `undefined`; type it `void`. The type parameter is only a declaration; nothing is validated at runtime.
 - The status code and headers of a successful response are not available; do not read `response.status` or `response.headers`. An empty response (204, `HEAD`) resolves to `undefined`, and a response that is not JSON resolves to text.
 - A response that is not 2xx throws `ApiClientError`; see "Error handling".
 
@@ -190,14 +191,14 @@ Pass `FormData` in `body` (`client/pages/projects/upload-attachment.ts`):
 import type { ApiClient } from '@nocobase/app-client';
 
 export interface ProjectAttachment {
-  readonly id: number;
+  readonly id: string;
   readonly filename: string;
 }
 
 /** Assumes the backend provides POST /api/projects/:id/attachments, which accepts a multipart form. */
 export async function uploadProjectAttachment(
   api: ApiClient,
-  projectId: number,
+  projectId: string,
   file: File,
 ): Promise<ProjectAttachment> {
   const body = new FormData();
@@ -205,7 +206,7 @@ export async function uploadProjectAttachment(
   // Pass FormData in body; do not also pass json, and do not set Content-Type yourself:
   // the browser generates the multipart type with its boundary.
   const { data } = await api.request<{ data: ProjectAttachment }>({
-    path: `projects/${projectId}/attachments`,
+    path: `projects/${encodeURIComponent(projectId)}/attachments`,
     method: 'POST',
     body,
   });
@@ -302,14 +303,15 @@ Other points:
 
 When the response is not 2xx, `api.request` throws `ApiClientError`:
 
-| Field           | Contents                                                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `status`        | The HTTP status code                                                                           |
-| `code`          | The business error code, taken from `error.code` or `code` in the response body; may be absent |
-| `payload`       | The complete parsed response body, typed `unknown`                                             |
-| `requestId`     | The `x-request-id` response header, for matching the error with server logs; may be absent     |
-| `method`, `url` | The request method and full URL                                                                |
-| `message`       | Taken from the error message the backend returned; **do not show it to users**                 |
+| Field           | Contents                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| `status`        | The HTTP status code                                                                       |
+| `reason`        | The error reason from the standard error body, such as `PROJECT_NAME_TAKEN`; may be absent |
+| `domain`        | Who defined `reason`, such as `projects` or `app`; may be absent                           |
+| `payload`       | The complete parsed response body, typed `unknown`                                         |
+| `requestId`     | The request's id, for matching the error with server logs; may be absent                   |
+| `method`, `url` | The request method and full URL                                                            |
+| `message`       | Taken from the error message the backend returned; **do not show it to users**             |
 
 - Network errors (offline, server unreachable) and cancellations do not throw `ApiClientError`; they throw fetch's own errors. In `catch`, write `error: unknown`, narrow it with `error instanceof ApiClientError` first, and only then read these fields.
 - Handle only the errors you can handle; rethrow the rest for the caller.
@@ -318,16 +320,16 @@ When the response is not 2xx, `api.request` throws `ApiClientError`:
 
 Write the checks directly in the component that uses them (for example `ProjectSummary` above and `CompleteProjectButton` below); extract them only when several pages share them (["Basic conventions" in `../frontend-dev.md`](../frontend-dev.md#basic-conventions)).
 
-| Case                       | Check                                                                                          | Handling                                                                                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session ended              | `error instanceof ApiClientError && error.status === 401`                                      | The session expired or was revoked: no Retry; offer "Sign in again" where the error shows (below the table)                                                 |
-| Record not found           | `error instanceof ApiClientError && error.status === 404`                                      | Say the record does not exist or has been deleted, offer a next step (close the overlay, go back to the list) and refresh the list; no retry (guideline R3) |
-| No permission              | `error instanceof ApiClientError && error.status === 403`                                      | Say the user does not have permission; no retry (guideline S4)                                                                                              |
-| Business error code        | `error instanceof ApiClientError && error.code === 'PROJECT_NAME_TAKEN'`                       | Show it below the matching field with `form.setError(...)`; see [`form.md`](form.md)                                                                        |
-| Conflict                   | `error instanceof ApiClientError && error.status === 409 && error.code === 'VERSION_CONFLICT'` | Keep the input and offer "Load latest", not Retry (below the table)                                                                                         |
-| Other (network, 5xx, etc.) | None of the above                                                                              | Say "The request failed. Please try again."; when loading data, offer "Retry"                                                                               |
+| Case                       | Check                                                                                            | Handling                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session ended              | `error instanceof ApiClientError && error.status === 401`                                        | The session expired or was revoked: no Retry; offer "Sign in again" where the error shows (below the table)                                                 |
+| Record not found           | `error instanceof ApiClientError && error.status === 404`                                        | Say the record does not exist or has been deleted, offer a next step (close the overlay, go back to the list) and refresh the list; no retry (guideline R3) |
+| No permission              | `error instanceof ApiClientError && error.status === 403`                                        | Say the user does not have permission; no retry (guideline S4)                                                                                              |
+| Business error reason      | `error instanceof ApiClientError && error.reason === 'PROJECT_NAME_TAKEN'`                       | Show it below the matching field with `form.setError(...)`; see [`form.md`](form.md)                                                                        |
+| Conflict                   | `error instanceof ApiClientError && error.status === 409 && error.reason === 'VERSION_CONFLICT'` | Keep the input and offer "Load latest", not Retry (below the table)                                                                                         |
+| Other (network, 5xx, etc.) | None of the above                                                                                | Say "The request failed. Please try again."; when loading data, offer "Retry"                                                                               |
 
-- **Conflict (409)**: a write the server rejects because the record changed after it was loaded (`code: 'VERSION_CONFLICT'` from a Repository write, or your endpoint's own conflict code). Keep the input, say that someone else changed the record, and offer "Load latest" (reload the record, then let the user reapply the change) rather than "Retry", which would fail again (guideline R1).
+- **Conflict (409)**: a write the server rejects because the record changed after it was loaded (reason `VERSION_CONFLICT` from a Repository write, or your endpoint's own conflict reason). Keep the input, say that someone else changed the record, and offer "Load latest" (reload the record, then let the user reapply the change) rather than "Retry", which would fail again (guideline R1).
 - **Session ended (401)**: a loader, form or dialog renders `SessionExpiredAlert` ([`example/session-expired-alert.md`](example/session-expired-alert.md)); a single-click write puts the same button in the toast's `action`. The button calls `refresh()` from `useAuthentication()` (`@nocobase/app-plugin-authentication/client`). While it runs, `AuthenticationGuard` renders nothing, so the signed-in pages and their input unmount, and `RequiredAuthentication` then sends the user to sign in. That is why the user starts it: never call `refresh()` from an effect or a `catch` on your own.
 - **Do not show raw messages from the backend**: the text in `error.message` and `payload` may be an English exception, a stack trace or SQL, and must not appear in the UI (guideline I3).
 - Error copy goes in the feature's own copy group, for example `projects.error.notFound`, `projects.error.forbidden` and `projects.error.requestFailed`, in both Chinese and English (see [`i18n.md`](i18n.md)).
@@ -375,22 +377,22 @@ Get the toaster with `const toaster = useToaster()` from `@nocobase/app-client` 
 
 `api.repository(name)` is also an HTTP call from the frontend; it does not access the database directly. Use it only when the server exposes standard Repository actions with `defineRepositoryApiRoutes`: `name` is the exposed resource name, not an arbitrary table name, and the server decides which actions are exposed, as well as validation, authorization and write policy. For custom endpoints with their own contract (such as the project REST endpoints above), use `request()`.
 
-The following assumes the server has exposed `projects` as a Repository resource (`client/pages/projects/project-repository.ts`):
+The following assumes the server has exposed the projects Collection as a Repository resource named `projectRecords` (`client/pages/projects/project-repository.ts`). The name is the first path segment of every data endpoint, so it is a camelCase word that no REST route uses; naming it `projects` would put its endpoints beside `/api/projects/:id`.
 
 ```ts
 import { type ApiClient, buildFindManyOptions } from '@nocobase/app-client';
 
 import type { Project, ProjectStatus } from './types.js';
 
-// Assumes the server exposes projects as a standard Repository resource with defineRepositoryApiRoutes.
-// These requests go to paths such as POST /api/projects:findMany, not to the REST endpoints above.
+// Assumes the server exposes the projects Collection as projectRecords with defineRepositoryApiRoutes.
+// These requests go to paths such as POST /api/projectRecords/findMany, not to the REST endpoints above.
 
 export async function listProjectsByStatus(
   api: ApiClient,
   status: ProjectStatus,
 ): Promise<Project[]> {
   // The query object findMany returns sends the request only when awaited; the result is already unwrapped from data and is an array.
-  return api.repository<Project>('projects').findMany({
+  return api.repository<Project>('projectRecords').findMany({
     filter: (f) => f.string('status').eq(status),
     sort: (s) => s.field('updatedAt').desc(),
     limit: 50,
@@ -399,17 +401,17 @@ export async function listProjectsByStatus(
 
 export async function findProject(
   api: ApiClient,
-  id: number,
+  id: string,
 ): Promise<Project | undefined> {
   // Returns undefined when nothing is found; no 404 is thrown.
-  return api.repository<Project>('projects').findOne({ filter: { id } });
+  return api.repository<Project>('projectRecords').findOne({ filter: { id } });
 }
 
 export async function createProject(
   api: ApiClient,
   name: string,
 ): Promise<Project> {
-  const { record } = await api.repository<Project>('projects').createOne({
+  const { record } = await api.repository<Project>('projectRecords').createOne({
     values: { name, owner: null, status: 'planning' },
   });
   // createOne and updateOne return { record, ... }; the record is in record.
@@ -418,18 +420,18 @@ export async function createProject(
 
 export async function renameProject(
   api: ApiClient,
-  id: number,
+  id: string,
   name: string,
 ): Promise<Project> {
-  const { record } = await api.repository<Project>('projects').updateOne({
+  const { record } = await api.repository<Project>('projectRecords').updateOne({
     filter: { id },
     values: { name },
   });
   return record;
 }
 
-export async function deleteProject(api: ApiClient, id: number): Promise<void> {
-  await api.repository<Project>('projects').deleteOne({ filter: { id } });
+export async function deleteProject(api: ApiClient, id: string): Promise<void> {
+  await api.repository<Project>('projectRecords').deleteOne({ filter: { id } });
 }
 
 /** Sends the same query manually with request: convert the builder callbacks to JSON first. */
@@ -437,7 +439,7 @@ export async function listActiveProjectsByRequest(
   api: ApiClient,
 ): Promise<Project[]> {
   const { data } = await api.request<{ data: Project[] }>({
-    path: 'projects:findMany',
+    path: 'projectRecords/findMany',
     method: 'POST',
     json: buildFindManyOptions<Project>({
       filter: (f) => f.string('status').eq('active'),
@@ -449,7 +451,7 @@ export async function listActiveProjectsByRequest(
 }
 ```
 
-Every Repository method sends `POST /<name>:<action>` (relative to the API base URL), and its return value is already unwrapped from the response's `data`:
+Every Repository method sends `POST /{name}/{action}` (relative to the API base URL), and its return value is already unwrapped from the response's `data`:
 
 | Method                                    | Returns                                                                                                    |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
