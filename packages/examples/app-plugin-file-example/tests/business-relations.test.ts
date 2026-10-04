@@ -68,10 +68,10 @@ async function fixture() {
     const body = new FormData();
     for (const file of files) body.append('file', file);
     const response = await router.request(
-      `/main/api/${name}:${files.length === 1 ? 'uploadOne' : 'uploadMany'}`,
+      `/main/api/${name}/${files.length === 1 ? 'uploadOne' : 'uploadMany'}`,
       { method: 'POST', body },
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const payload = (await response.json()) as {
       data: { record?: UploadedRecord; records?: readonly UploadedRecord[] };
     };
@@ -121,7 +121,7 @@ it('links one uploaded avatar to a profile and replaces it on reconnect', async 
   expect(first!.contentUrl).toMatch(
     /^\/main\/uploads\/profile-avatars\/[0-9a-f-]+\.png$/,
   );
-  const connected = await action('fileExampleProfiles:updateOne', {
+  const connected = await action('fileExampleProfiles/updateOne', {
     filter: { id: 'profile-ada' },
     values: { avatar: { connect: { id: first!.id } } },
   });
@@ -138,7 +138,7 @@ it('links one uploaded avatar to a profile and replaces it on reconnect', async 
   const [second] = await upload('profileAvatars', [
     new File(['second avatar'], 'ada-new.png', { type: 'image/png' }),
   ]);
-  await action('fileExampleProfiles:updateOne', {
+  await action('fileExampleProfiles/updateOne', {
     filter: { id: 'profile-ada' },
     values: { avatar: { connect: { id: second!.id } } },
   });
@@ -154,7 +154,7 @@ it('links one uploaded avatar to a profile and replaces it on reconnect', async 
     'profile-ada',
   );
 
-  await action('fileExampleProfiles:updateOne', {
+  await action('fileExampleProfiles/updateOne', {
     filter: { id: 'profile-ada' },
     values: { avatar: { disconnect: true } },
   });
@@ -185,14 +185,14 @@ it('connects several uploaded attachments to one order and detaches them', async
     new File(['receipt'], 'receipt.png', { type: 'image/png' }),
   ]);
   expect(records).toHaveLength(2);
-  const response = await action('fileExampleOrders:updateOne', {
+  const response = await action('fileExampleOrders/updateOne', {
     filter: { id: 'order-2401' },
     values: {
       attachments: { connect: records.map((record) => ({ id: record.id })) },
     },
   });
   expect(response.status).toBe(200);
-  const listed = await action('orderAttachments:findMany', {
+  const listed = await action('orderAttachments/findMany', {
     filter: { orderId: 'order-2401' },
     sort: {
       kind: 'sort',
@@ -213,11 +213,11 @@ it('connects several uploaded attachments to one order and detaches them', async
     /^\/main\/uploads\/order-attachments\/[0-9a-f-]+\.pdf$/,
   );
 
-  await action('fileExampleOrders:updateOne', {
+  await action('fileExampleOrders/updateOne', {
     filter: { id: 'order-2401' },
     values: { attachments: { disconnect: [{ id: records[0]!.id }] } },
   });
-  const remaining = await action('orderAttachments:findMany', {
+  const remaining = await action('orderAttachments/findMany', {
     filter: { orderId: 'order-2401' },
   });
   const rest = (await remaining.json()) as {
@@ -239,7 +239,7 @@ it('runs the business seed and keeps it idempotent', async () => {
 
   // The repository validates temporal columns, so reading the seeded rows
   // proves the seed wrote values the App can actually use.
-  const profiles = await action('fileExampleProfiles:findMany', { limit: 10 });
+  const profiles = await action('fileExampleProfiles/findMany', { limit: 10 });
   expect(profiles.status).toBe(200);
   const profilePayload = (await profiles.json()) as {
     data: readonly { id: string }[];
@@ -249,6 +249,6 @@ it('runs the business seed and keeps it idempotent', async () => {
     'profile-lin',
     'profile-marco',
   ]);
-  const orders = await action('fileExampleOrders:findMany', { limit: 10 });
+  const orders = await action('fileExampleOrders/findMany', { limit: 10 });
   expect(orders.status).toBe(200);
 });

@@ -5,7 +5,6 @@ import {
   type NormalizedRepositoryPolicy,
   type PolicyRef,
   type RepositoryPolicy,
-  RepositoryError,
   type AggregateOptions,
   type GroupByOptions,
   type CreateOneOptions,
@@ -19,14 +18,13 @@ import {
 import type { ServiceContainer } from '@nocobase/service-provider';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { HTTPException } from 'hono/http-exception';
 import { stream } from 'hono/streaming';
 
 import {
   ApiError,
   apiErrorResponse,
-  apiErrorStatusFromHttp,
   appErrorDomain,
+  renderKnownApiErrors,
   toApiError,
 } from './api-error.js';
 import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
@@ -265,17 +263,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
 
   return defineApiRoutes((app: RepositoryApiRoutesApplication): Hono => {
     const router = new Hono();
-    // Render what this router knows; rethrow the rest so an enclosing router's
-    // handler, and the request log, still see it.
-    router.onError((error, context) => {
-      const known =
-        repositoryApiError(error) ??
-        (error instanceof ApiError || error instanceof HTTPException
-          ? error
-          : undefined);
-      if (known) return apiErrorResponse(context, known);
-      throw error;
-    });
+    router.onError(renderKnownApiErrors);
 
     for (const entry of repositories) {
       if (entry.actions.length === 0) continue;
@@ -426,7 +414,7 @@ function recordFrame(record: RepositoryRecord): string {
 function errorFrame(error: Error): string {
   return JSON.stringify({
     type: 'error',
-    error: toApiError(repositoryApiError(error) ?? error).toPayload(),
+    error: toApiError(error).toPayload(),
   });
 }
 
@@ -593,36 +581,6 @@ function fail(status: 400 | 403 | 415, reason: string, message: string): never {
 }
 
 /**
- * The standard API error for a Repository error the caller may see, or `undefined` for one that is the server's own
- * fault and must surface as an opaque 500.
- */
-function repositoryApiError(error: unknown): ApiError | undefined {
-  if (!(error instanceof RepositoryError)) return undefined;
-  const httpStatus = repositoryErrorStatus(error);
-  if (httpStatus === undefined) return undefined;
-  const exposesTarget = [
-    'WRITE_FORBIDDEN',
-    'FIELD_WRITE_FORBIDDEN',
-    'RELATION_WRITE_FORBIDDEN',
-  ].includes(error.code);
-  return new ApiError({
-    status: apiErrorStatusFromHttp(httpStatus),
-    reason: error.code,
-    domain: appErrorDomain,
-    message: error.message,
-    ...(exposesTarget
-      ? {
-          metadata: {
-            ...(error.path === undefined ? {} : { path: error.path }),
-            ...(error.details === undefined ? {} : { details: error.details }),
-          },
-        }
-      : {}),
-    cause: error,
-  });
-}
-
-/**
  * Resolve the principal a Policy function is built from.
  *
  * No principal means no Policy, and no Policy would mean an unrestricted
@@ -673,51 +631,6 @@ function assertBindablePolicy(
   if (policy.read !== true && policy.read !== false)
     walk(policy.read, ['read']);
   return policy;
-}
-
-function repositoryErrorStatus(
-  error: RepositoryError,
-): 400 | 403 | 404 | 409 | undefined {
-  // SCOPE_VIOLATION is 403 rather than 404 because the caller can see the
-  // record; it was their own values that pushed it out of scope. Saying so
-  // leaks nothing about anyone else's data, and the request cannot be
-  // repaired without being told. A scope that simply does not match is a
-  // different thing and never reaches here: it is mapped to 404 or an empty
-  // result, so that forbidden and absent stay indistinguishable.
-  switch (error.code) {
-    case 'WRITE_FORBIDDEN':
-    case 'FIELD_WRITE_FORBIDDEN':
-    case 'RELATION_WRITE_FORBIDDEN':
-    case 'READ_FORBIDDEN':
-    case 'FIELD_READ_FORBIDDEN':
-    case 'RELATION_READ_FORBIDDEN':
-    case 'SCOPE_VIOLATION':
-      return 403;
-    case 'RECORD_NOT_FOUND':
-    case 'RELATION_TARGET_NOT_FOUND':
-      return 404;
-    case 'VERSION_CONFLICT':
-    case 'MULTIPLE_RECORDS_MATCHED':
-    case 'MULTIPLE_RELATION_TARGETS_MATCHED':
-    case 'RELATION_UPSERT_TARGET_OUTSIDE_SCOPE':
-    case 'RECORD_OUTSIDE_SCOPE':
-    case 'RELATION_REASSIGNMENT_REQUIRED':
-      return 409;
-    // A Policy is server-owned, so a Policy this router could not build or
-    // bind is a misconfiguration rather than something the caller got wrong.
-    // Reporting it as 400 would blame the request for the server's mistake.
-    // Event listeners nesting writes too deep is a server-side defect too.
-    case 'INVALID_POLICY':
-    case 'POLICY_REQUIRED':
-    case 'COLLECTION_NOT_FOUND':
-    case 'INVALID_STORED_VALUE':
-    case 'QUERY_ALREADY_CONSUMED':
-    case 'QUERY_TRANSACTION_COMPLETED':
-    case 'REPOSITORY_EVENT_RECURSION':
-      return undefined;
-    default:
-      return 400;
-  }
 }
 
 function assertConfig(

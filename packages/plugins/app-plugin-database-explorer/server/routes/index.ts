@@ -6,23 +6,35 @@ import {
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
+  ApiError,
+  apiErrorResponse,
   defineApiRoutes,
+  parseApiInput,
   type AppApiRouteContribution,
   type AppRouteContribution,
 } from '@nocobase/app-server/router';
 import { databaseManagerToken } from '@nocobase/db';
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+import { validator } from 'hono/validator';
 
 import {
   listCollections,
   listConnections,
   readCollection,
   readPhysicalCollection,
-  MAX_COLLECTION_PAGE_SIZE,
   type ExplorerDatabaseConfig,
 } from '../explorer.js';
 import { isSchemaInspectorError } from '../errors.js';
-import { DatabaseExplorerError } from '../types.js';
+import {
+  DatabaseExplorerError,
+  type DatabaseExplorerErrorCode,
+} from '../types.js';
+import {
+  CollectionParams,
+  ConnectionParams,
+  ListCollectionsQuery,
+} from './schemas.js';
 
 /**
  * The page this plugin owns. The Client Route declares the same resource, so a
@@ -30,6 +42,21 @@ import { DatabaseExplorerError } from '../types.js';
  * entry and a direct call to these endpoints.
  */
 export const DATABASE_EXPLORER_PAGE: string = 'database-explorer';
+
+/**
+ * The plugin's URL namespace, which is also the domain of its error reasons.
+ */
+export const DATABASE_EXPLORER_NAMESPACE: string = 'databaseExplorer';
+
+/**
+ * Failures of a database this application could not read, which an operator
+ * needs to hear about.
+ */
+const UNREADABLE_CONNECTION: ReadonlySet<DatabaseExplorerErrorCode> = new Set([
+  'CONNECTION_UNAVAILABLE',
+  'CONNECTION_UNREACHABLE',
+  'SCHEMA_READ_DENIED',
+]);
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes((app) => {
@@ -42,27 +69,30 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       ? container.resolve(loggingToken).getLogger('database-explorer')
       : undefined;
 
+    // Answer what this router recognizes in the standard error body, so it
+    // does so even when mounted on its own; rethrow anything else.
     routes.onError((error, context) => {
-      if (!(error instanceof DatabaseExplorerError)) throw error;
-      if (error.status === 502) {
-        // Only the classification is recorded. A driver's connection error
-        // quotes the host, database, and account it failed to reach, so
-        // writing the cause here would put into the log file exactly what the
-        // response body goes to such lengths to withhold -- and a log is the
-        // easier of the two to copy into an issue.
-        logger?.warn(
-          {
-            event: 'connection.unreadable',
-            code: error.code,
-            cause: classifyCause(error.cause),
-          },
-          'A connection could not be read.',
-        );
+      if (error instanceof DatabaseExplorerError) {
+        if (UNREADABLE_CONNECTION.has(error.code)) {
+          // Only the classification is recorded. A driver's connection error
+          // quotes the host, database, and account it failed to reach, so
+          // writing the cause here would put into the log file exactly what
+          // the response body goes to such lengths to withhold -- and a log is
+          // the easier of the two to copy into an issue.
+          logger?.warn(
+            {
+              event: 'connection.unreadable',
+              code: error.code,
+              cause: classifyCause(error.cause),
+            },
+            'A connection could not be read.',
+          );
+        }
+        return apiErrorResponse(context, toApiError(error));
       }
-      return context.json(
-        { code: error.code, message: error.message },
-        error.status,
-      );
+      if (error instanceof ApiError || error instanceof HTTPException)
+        return apiErrorResponse(context, error);
+      throw error;
     });
 
     routes.use('*', authentication.required(), authorization.middleware());
@@ -73,29 +103,27 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         action: 'access',
       });
       if (!allowed) {
-        return context.json(
-          {
-            code: 'DATABASE_EXPLORER_FORBIDDEN',
-            message: 'Database Explorer access is required.',
-          },
-          403,
-        );
+        throw new ApiError({
+          status: 'PERMISSION_DENIED',
+          reason: 'DATABASE_EXPLORER_FORBIDDEN',
+          domain: DATABASE_EXPLORER_NAMESPACE,
+          message: 'Database Explorer access is required.',
+        });
       }
       await next();
     });
 
-    routes.use('*', async (context, next) => {
+    routes.use('*', async (_context, next) => {
       // `database.default: none` leaves the Manager unregistered while the
       // configuration may still list connections. Reporting those would offer
       // a list of databases that cannot be opened.
       if (!container.has(databaseManagerToken)) {
-        return context.json(
-          {
-            code: 'DATABASE_UNAVAILABLE',
-            message: 'This application is configured without a database.',
-          },
-          503,
-        );
+        throw new ApiError({
+          status: 'UNAVAILABLE',
+          reason: 'DATABASE_UNAVAILABLE',
+          domain: DATABASE_EXPLORER_NAMESPACE,
+          message: 'This application is configured without a database.',
+        });
       }
       await next();
     });
@@ -106,52 +134,82 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       app.config.get<ExplorerDatabaseConfig>('database');
     const manager = () => container.resolve(databaseManagerToken);
 
-    routes.get('/connections', (context) =>
-      context.json({ data: listConnections(config()) }),
-    );
-
-    routes.get('/connections/:connection/collections', async (context) => {
-      const data = await listCollections(
-        manager(),
-        config(),
-        context.req.param('connection'),
-        {
-          ...optionalLimit(context.req.query('limit')),
-          ...optionalCursor(context.req.query('cursor')),
-        },
-      );
-      return context.json({ data });
+    // Every connection in one response: they come from configuration, so the
+    // list is short and costs nothing to read. The default one is marked by
+    // `isDefault` on its entry.
+    routes.get('/connections', (context) => {
+      const { items } = listConnections(config());
+      return context.json({ data: items, meta: { total: items.length } });
     });
 
     routes.get(
-      '/connections/:connection/collections/:collection',
+      '/connections/:connection/collections',
+      validator('param', (value) => parseApiInput(ConnectionParams, value)),
+      validator('query', (value) => parseApiInput(ListCollectionsQuery, value)),
       async (context) => {
-        const data = await readCollection(
-          manager(),
-          config(),
-          context.req.param('connection'),
-          context.req.param('collection'),
-        );
-        return context.json({ data });
+        const { connection } = context.req.valid('param');
+        const query = context.req.valid('query');
+        const page = await listCollections(manager(), config(), connection, {
+          ...(query.pageSize === undefined ? {} : { pageSize: query.pageSize }),
+          ...(query.pageToken === undefined
+            ? {}
+            : { pageToken: query.pageToken }),
+        });
+        return context.json({
+          data: page.items,
+          meta:
+            page.nextPageToken === undefined
+              ? {}
+              : { nextPageToken: page.nextPageToken },
+        });
       },
     );
 
     routes.get(
-      '/connections/:connection/collections/:collection/physical',
+      '/connections/:connection/collections/:collection',
+      validator('param', (value) => parseApiInput(CollectionParams, value)),
       async (context) => {
-        const data = await readPhysicalCollection(
+        const { connection, collection } = context.req.valid('param');
+        const data = await readCollection(
           manager(),
           config(),
-          context.req.param('connection'),
-          context.req.param('collection'),
+          connection,
+          collection,
         );
         return context.json({ data });
       },
     );
 
-    router.route('/database-explorer', routes);
+    // A singleton sub-resource of the Collection: the physical schema behind
+    // it, read on demand because each read runs a full inspection.
+    routes.get(
+      '/connections/:connection/collections/:collection/physicalSchema',
+      validator('param', (value) => parseApiInput(CollectionParams, value)),
+      async (context) => {
+        const { connection, collection } = context.req.valid('param');
+        const data = await readPhysicalCollection(
+          manager(),
+          config(),
+          connection,
+          collection,
+        );
+        return context.json({ data });
+      },
+    );
+
+    router.route(`/${DATABASE_EXPLORER_NAMESPACE}`, routes);
     return router;
   });
+
+function toApiError(error: DatabaseExplorerError): ApiError {
+  return new ApiError({
+    status: error.status,
+    reason: error.code,
+    domain: DATABASE_EXPLORER_NAMESPACE,
+    message: error.message,
+    cause: error,
+  });
+}
 
 /**
  * Names the kind of failure underneath without quoting it. An inspector error
@@ -161,35 +219,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 function classifyCause(cause: unknown): string {
   if (isSchemaInspectorError(cause)) return cause.code;
   return cause instanceof Error ? cause.name : typeof cause;
-}
-
-function optionalLimit(value: string | undefined): { limit?: number } {
-  if (value === undefined) return {};
-  const limit = Number(value);
-  if (
-    !Number.isInteger(limit) ||
-    limit <= 0 ||
-    limit > MAX_COLLECTION_PAGE_SIZE
-  ) {
-    throw new DatabaseExplorerError(
-      'INVALID_LIST_OPTIONS',
-      400,
-      `The limit must be an integer between 1 and ${MAX_COLLECTION_PAGE_SIZE}.`,
-    );
-  }
-  return { limit };
-}
-
-function optionalCursor(value: string | undefined): { cursor?: string } {
-  if (value === undefined) return {};
-  if (value.length === 0) {
-    throw new DatabaseExplorerError(
-      'INVALID_CURSOR',
-      400,
-      'The cursor must not be empty.',
-    );
-  }
-  return { cursor: value };
 }
 
 const routes: readonly AppRouteContribution<AppPluginApplication>[] = [

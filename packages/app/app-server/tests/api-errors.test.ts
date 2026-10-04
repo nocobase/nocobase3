@@ -1,3 +1,4 @@
+import { RepositoryError } from '@nocobase/db';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +11,7 @@ import {
   ApiError,
   type ApiInputSchema,
   parseApiInput,
+  renderKnownApiErrors,
   defineApiRoutes,
   defineRootRoutes,
 } from '../src/router/index.js';
@@ -88,6 +90,12 @@ function createApp(): Application {
           reason: 'AUTHORIZATION_DENIED',
           domain: 'authorization',
         });
+      });
+      router.post('/orders/:orderId/close', () => {
+        throw new RepositoryError('VERSION_CONFLICT', 'The order changed.');
+      });
+      router.post('/orders/broken', () => {
+        throw new RepositoryError('INVALID_POLICY', 'Policy secret detail.');
       });
       router.get('/crash', () => {
         throw new Error('database password is hunter2');
@@ -260,5 +268,44 @@ describe('/api errors', () => {
         ],
       },
     });
+  });
+
+  it("answers a Repository error a route lets propagate, and hides one that is the server's fault", async () => {
+    const conflict = await request(createApp(), '/api/orders/7/close', {
+      method: 'POST',
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({
+      error: { status: 'ABORTED', reason: 'VERSION_CONFLICT', domain: 'app' },
+    });
+
+    const broken = await request(createApp(), '/api/orders/broken', {
+      method: 'POST',
+    });
+    const body = JSON.stringify(await broken.json());
+    expect(broken.status).toBe(500);
+    expect(body).toContain('INTERNAL_ERROR');
+    expect(body).not.toContain('secret');
+  });
+
+  it('renders recognized errors from a router mounted on a bare Hono and rethrows the rest', async () => {
+    const router = new Hono();
+    router.onError(renderKnownApiErrors);
+    router.get('/missing', () => {
+      throw new RepositoryError('RECORD_NOT_FOUND', 'No such order.');
+    });
+    router.get('/crash', () => {
+      throw new Error('boom');
+    });
+    const outer = new Hono();
+    outer.onError((_error, context) => context.text('outer', 500));
+    outer.route('/', router);
+
+    const missing = await outer.request('/missing');
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { reason: 'RECORD_NOT_FOUND' },
+    });
+    expect(await (await outer.request('/crash')).text()).toBe('outer');
   });
 });

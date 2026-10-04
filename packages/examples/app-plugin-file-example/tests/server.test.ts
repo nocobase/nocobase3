@@ -116,11 +116,11 @@ it('composes public core services with example routes for upload and download', 
     'file',
     new File(['example'], 'example.txt', { type: 'text/plain' }),
   );
-  const response = await router.request('/main/api/attachments:uploadOne', {
+  const response = await router.request('/main/api/attachments/uploadOne', {
     method: 'POST',
     body,
   });
-  expect(response.status).toBe(200);
+  expect(response.status).toBe(201);
   const { data } = (await response.json()) as {
     data: { record: { contentUrl: string } };
   };

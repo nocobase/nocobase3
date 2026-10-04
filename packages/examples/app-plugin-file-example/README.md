@@ -58,12 +58,12 @@ await profiles.updateOne({
 
 示例 Server 通过 `defineFileRepositoryApiRoutes()` 声明三个文件仓库，使用 `main` 数据库连接、`local` 盘、`stream` 模式。三者共用同一份 Policy：`read: true`、`delete: true`，`create` 是一个空白名单节点而不是 `false` —— 上传本身走的就是 create，节点为 `false` 会连上传一起拒绝，而空白名单只拒绝调用方自带字段的文件记录。
 
-- `POST /api/attachments:<action>`、`POST /api/profileAvatars:<action>`、`POST /api/orderAttachments:<action>`：findMany、findOne、count、exists、deleteOne、uploadOne、uploadMany。
+- `POST /api/attachments/<action>`、`POST /api/profileAvatars/<action>`、`POST /api/orderAttachments/<action>`：findMany、findOne、count、exists、deleteOne、uploadOne、uploadMany。
 - `GET /uploads/attachments/<uuid>.<ext>`、`GET /uploads/profile-avatars/<uuid>.<ext>`、`GET /uploads/order-attachments/<uuid>.<ext>`：下载完整文件；无扩展名省略后缀。
 
 业务仓库通过 `defineRepositoryApiRoutes()` 声明，只暴露读接口和 `updateOne`，可写字段与关系操作由各自的 Policy 限定：
 
-- `POST /api/fileExampleProfiles:<action>`、`POST /api/fileExampleOrders:<action>`。
+- `POST /api/fileExampleProfiles/<action>`、`POST /api/fileExampleOrders/<action>`。
 
 内容入口属于根路由，不在 `/api` 下。部署前缀由宿主添加一次，例如 `/main/uploads/profile-avatars/...`。页面直接使用响应中的 `contentUrl`；业务表通过 `findMany()` 读取后与文件表的 `profileId`、`orderId` 在前端分组。React 页面从核心插件导入 `clientFileRepositoryManagerToken`，通过 `useService(clientFileRepositoryManagerToken)` 获取文件仓库管理器；通过 `@nocobase/app-client` 的 `useApiClient()` 获取宿主 HTTP 客户端，再调用 `api.repository()` 访问业务仓库。
 

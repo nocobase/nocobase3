@@ -68,7 +68,7 @@ The application renders it as `{ error: { code, status, reason, domain, message,
 
 Which resource is missing decides the status. The resource the URL names is missing: `404 NOT_FOUND`, never a 400 or 500. A resource the body or query refers to is missing: `400 INVALID_ARGUMENT` with a `fieldViolations` entry naming the field. Check permission before existence, so a caller without access gets `403` whether the resource exists or not.
 
-A router's own `onError` may only turn domain errors into `ApiError`, or render errors it recognizes with `apiErrorResponse()`, and must rethrow the rest. Render recognized errors that way even though the application would: a router tested on a bare Hono has no `/api` handler, and its tests should still see the standard body.
+A router's own `onError` may only turn the plugin's own domain errors into `ApiError`, and hands everything else to `renderKnownApiErrors` from `@nocobase/app-server/router`: it renders what the framework recognizes — `ApiError`, `HTTPException`, an error carrying a 4xx `status` such as `AuthorizationDeniedError`, and a Repository error the caller can act on — and rethrows the rest. Use it even though the application would render the same errors: a router tested on a bare Hono has no `/api` handler, and its tests should still see the standard body. Never translate a Repository error yourself; let it propagate.
 
 ## Input
 

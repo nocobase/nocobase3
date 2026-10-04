@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { RepositoryError } from '@nocobase/db';
+
 import type {
   Context,
   ErrorHandler,
@@ -174,12 +176,16 @@ export function apiErrorStatusFromHttp(code: number): ApiErrorStatus {
 }
 
 /**
- * Convert anything a route threw into an `ApiError`. Hono's `HTTPException`, and any error that carries a 4xx `status`
- * the way Hono's `getResponse()` convention does (such as `AuthorizationDeniedError`), keep their status and message,
- * and a string `reason` and `domain` on such an error are kept too. Anything else is an unexpected failure and becomes
- * a 500 that reveals nothing about its cause.
+ * The `ApiError` for an error the framework recognizes, or `undefined` for one it does not:
+ *
+ * - an `ApiError` as it is;
+ * - Hono's `HTTPException`, and any error that carries a 4xx `status` the way Hono's `getResponse()` convention does
+ *   (such as `AuthorizationDeniedError`), with their status and message, and a string `reason` and `domain` on such an
+ *   error kept too;
+ * - a `RepositoryError` the caller may see (a refused write, a missing record, a version conflict), with its code as
+ *   `reason` and domain `app`. One that is the server's own fault, such as an invalid Policy, is not recognized.
  */
-export function toApiError(error: unknown): ApiError {
+export function recognizeApiError(error: unknown): ApiError | undefined {
   if (error instanceof ApiError) return error;
   if (error instanceof HTTPException) {
     return new ApiError({
@@ -191,6 +197,8 @@ export function toApiError(error: unknown): ApiError {
       cause: error,
     });
   }
+  const repositoryError = repositoryApiError(error);
+  if (repositoryError) return repositoryError;
   const statusError = readStatusError(error);
   if (statusError) {
     return new ApiError({
@@ -202,13 +210,24 @@ export function toApiError(error: unknown): ApiError {
       cause: error,
     });
   }
-  return new ApiError({
-    status: 'INTERNAL',
-    reason: 'INTERNAL_ERROR',
-    domain: appErrorDomain,
-    message: 'Internal server error.',
-    cause: error,
-  });
+  return undefined;
+}
+
+/**
+ * Convert anything a route threw into an `ApiError`: what `recognizeApiError` recognizes, and anything else as an
+ * unexpected failure answered with a 500 that reveals nothing about its cause.
+ */
+export function toApiError(error: unknown): ApiError {
+  return (
+    recognizeApiError(error) ??
+    new ApiError({
+      status: 'INTERNAL',
+      reason: 'INTERNAL_ERROR',
+      domain: appErrorDomain,
+      message: 'Internal server error.',
+      cause: error,
+    })
+  );
 }
 
 interface StatusError {
@@ -254,6 +273,18 @@ export function apiErrorResponse(context: Context, error: unknown): Response {
 /** The `onError` handler for `/api`, installed by the application. Exported for routers tested on their own. */
 export const apiErrorHandler: ErrorHandler = (error, context) =>
   apiErrorResponse(context, error);
+
+/**
+ * The `onError` for a router that may be mounted outside an application's `/api`, such as one tested on a bare Hono:
+ * it answers every error `recognizeApiError` recognizes in the standard body and rethrows the rest, so the enclosing
+ * handler, and the request log, still see an unexpected failure. A router that translates its own domain errors does
+ * that first and then delegates here.
+ */
+export const renderKnownApiErrors: ErrorHandler = (error, context) => {
+  const known = recognizeApiError(error);
+  if (known) return apiErrorResponse(context, known);
+  throw error;
+};
 
 export const apiNotFoundHandler: NotFoundHandler = (context) =>
   apiErrorResponse(
@@ -345,4 +376,79 @@ export function requestIdMiddleware(): MiddlewareHandler {
       context.res.headers.set(requestIdHeader, requestId);
     }
   });
+}
+
+/**
+ * The standard API error for a Repository error the caller may see, or `undefined` for one that is the server's own
+ * fault and must surface as an opaque 500. Any route that lets a Repository error propagate answers this way.
+ */
+function repositoryApiError(error: unknown): ApiError | undefined {
+  if (!(error instanceof RepositoryError)) return undefined;
+  const httpStatus = repositoryErrorStatus(error);
+  if (httpStatus === undefined) return undefined;
+  const exposesTarget = [
+    'WRITE_FORBIDDEN',
+    'FIELD_WRITE_FORBIDDEN',
+    'RELATION_WRITE_FORBIDDEN',
+  ].includes(error.code);
+  return new ApiError({
+    status: apiErrorStatusFromHttp(httpStatus),
+    reason: error.code,
+    domain: appErrorDomain,
+    message: error.message,
+    ...(exposesTarget
+      ? {
+          metadata: {
+            ...(error.path === undefined ? {} : { path: error.path }),
+            ...(error.details === undefined ? {} : { details: error.details }),
+          },
+        }
+      : {}),
+    cause: error,
+  });
+}
+
+function repositoryErrorStatus(
+  error: RepositoryError,
+): 400 | 403 | 404 | 409 | undefined {
+  // SCOPE_VIOLATION is 403 rather than 404 because the caller can see the
+  // record; it was their own values that pushed it out of scope. Saying so
+  // leaks nothing about anyone else's data, and the request cannot be
+  // repaired without being told. A scope that simply does not match is a
+  // different thing and never reaches here: it is mapped to 404 or an empty
+  // result, so that forbidden and absent stay indistinguishable.
+  switch (error.code) {
+    case 'WRITE_FORBIDDEN':
+    case 'FIELD_WRITE_FORBIDDEN':
+    case 'RELATION_WRITE_FORBIDDEN':
+    case 'READ_FORBIDDEN':
+    case 'FIELD_READ_FORBIDDEN':
+    case 'RELATION_READ_FORBIDDEN':
+    case 'SCOPE_VIOLATION':
+      return 403;
+    case 'RECORD_NOT_FOUND':
+    case 'RELATION_TARGET_NOT_FOUND':
+      return 404;
+    case 'VERSION_CONFLICT':
+    case 'MULTIPLE_RECORDS_MATCHED':
+    case 'MULTIPLE_RELATION_TARGETS_MATCHED':
+    case 'RELATION_UPSERT_TARGET_OUTSIDE_SCOPE':
+    case 'RECORD_OUTSIDE_SCOPE':
+    case 'RELATION_REASSIGNMENT_REQUIRED':
+      return 409;
+    // A Policy is server-owned, so a Policy this router could not build or
+    // bind is a misconfiguration rather than something the caller got wrong.
+    // Reporting it as 400 would blame the request for the server's mistake.
+    // Event listeners nesting writes too deep is a server-side defect too.
+    case 'INVALID_POLICY':
+    case 'POLICY_REQUIRED':
+    case 'COLLECTION_NOT_FOUND':
+    case 'INVALID_STORED_VALUE':
+    case 'QUERY_ALREADY_CONSUMED':
+    case 'QUERY_TRANSACTION_COMPLETED':
+    case 'REPOSITORY_EVENT_RECURSION':
+      return undefined;
+    default:
+      return 400;
+  }
 }

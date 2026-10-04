@@ -412,6 +412,22 @@ describe('server repository and Client API', () => {
     expect(record.contentUrl).toBe(`/main/uploads/attachments/${record.id}`);
     expect((await router.request(record.contentUrl!)).status).toBe(200);
   });
+  it('answers an upload with 201 and the created record', async () => {
+    const { router } = await fixture();
+    for (const action of ['uploadOne', 'uploadMany']) {
+      const body = new FormData();
+      body.append('file', file());
+      const response = await router.request(`/main/api/attachments/${action}`, {
+        method: 'POST',
+        body,
+      });
+      expect(response.status).toBe(201);
+      const { data } = (await response.json()) as {
+        data: { record?: { contentUrl?: string }; records?: unknown[] };
+      };
+      expect(data.record?.contentUrl ?? data.records).toBeDefined();
+    }
+  });
   it('keeps server findMany lazy and async iterable', async () => {
     const { files } = await fixture();
     const query = files.findMany();
@@ -432,9 +448,20 @@ describe('server repository and Client API', () => {
     await expect(client.createOne({ values: {} })).rejects.toMatchObject({
       reason: 'WRITE_FORBIDDEN',
     });
+    // An upload creates a record too, so the same refusal answers 403 rather than an opaque 500.
+    const body = new FormData();
+    body.append('file', file());
+    const upload = await router.request('/main/api/attachments/uploadOne', {
+      method: 'POST',
+      body,
+    });
+    expect(upload.status).toBe(403);
+    expect(await upload.json()).toMatchObject({
+      error: { status: 'PERMISSION_DENIED', reason: 'WRITE_FORBIDDEN' },
+    });
     expect(
       (
-        await router.request('/main/api/attachments:createMany', {
+        await router.request('/main/api/attachments/createMany', {
           method: 'POST',
         })
       ).status,
@@ -452,7 +479,9 @@ describe('server repository and Client API', () => {
     });
     expect(put).not.toHaveBeenCalled();
     await expect(client.findMany()).rejects.toMatchObject({
+      status: 500,
       reason: 'INVALID_FILE_COLLECTION',
+      domain: 'file',
     });
     expect(
       (
@@ -507,37 +536,63 @@ describe('upload boundary and access modes', () => {
     const put = vi.spyOn(drive.use('local'), 'putStream');
     await expect(
       client.uploadOne({ file: file('large.txt', 'x'.repeat(1024)) }),
-    ).rejects.toMatchObject({ status: 413 });
+    ).rejects.toMatchObject({
+      status: 413,
+      reason: 'BODY_TOO_LARGE',
+      domain: 'file',
+    });
     await expect(
       client.uploadMany({
         files: [file('a', 'x'.repeat(400)), file('b', 'x'.repeat(400))],
       }),
-    ).rejects.toMatchObject({ status: 413 });
+    ).rejects.toMatchObject({ status: 413, reason: 'BODY_TOO_LARGE' });
     expect(put).not.toHaveBeenCalled();
     const body = new FormData();
     body.append('file', file());
     body.append('file', file());
-    expect(
-      (
-        await router.request('/main/api/attachments:uploadOne', {
-          method: 'POST',
-          body,
-        })
-      ).status,
-    ).toBe(400);
+    const twoFiles = await router.request('/main/api/attachments/uploadOne', {
+      method: 'POST',
+      body,
+    });
+    expect(twoFiles.status).toBe(400);
+    expect(await twoFiles.json()).toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'INVALID_FILE',
+        domain: 'file',
+      },
+    });
     await expect(client.uploadMany({ files: [] })).rejects.toMatchObject({
       status: 400,
+      reason: 'INVALID_FILES',
     });
     const textBody = new FormData();
     textBody.append('file', 'text');
-    expect(
-      (
-        await router.request('/main/api/attachments:uploadMany', {
-          method: 'POST',
-          body: textBody,
-        })
-      ).status,
-    ).toBe(400);
+    const text = await router.request('/main/api/attachments/uploadMany', {
+      method: 'POST',
+      body: textBody,
+    });
+    expect(text.status).toBe(400);
+    expect(await text.json()).toMatchObject({
+      error: { reason: 'INVALID_FILES' },
+    });
+    const notMultipart = await router.request(
+      '/main/api/attachments/uploadOne',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
+    expect(notMultipart.status).toBe(415);
+    expect(await notMultipart.json()).toMatchObject({
+      error: {
+        code: 415,
+        status: 'INVALID_ARGUMENT',
+        reason: 'UNSUPPORTED_MEDIA_TYPE',
+        domain: 'file',
+      },
+    });
   });
   it('redirects public objects and fails explicitly for unavailable private URLs', async () => {
     const { files, client, router } = await fixture({
@@ -560,9 +615,13 @@ describe('upload boundary and access modes', () => {
     const failure = await privateFixture.router.request(
       privateUpload.record.contentUrl!,
     );
-    expect(failure.status).toBe(500);
+    expect(failure.status).toBe(503);
     expect(await failure.json()).toMatchObject({
-      code: 'STORAGE_URL_UNAVAILABLE',
+      error: {
+        status: 'UNAVAILABLE',
+        reason: 'STORAGE_URL_UNAVAILABLE',
+        domain: 'file',
+      },
     });
   });
   it('uses record.disk and signed URLs, with no-store and no redirect loops', async () => {
@@ -578,7 +637,7 @@ describe('upload boundary and access modes', () => {
     ).toBe('private, no-store');
     expect(signed).toHaveBeenCalledWith(record.key, { expiresIn: '5 mins' });
     signed.mockResolvedValue(`http://localhost${record.contentUrl}`);
-    expect((await router.request(record.contentUrl!)).status).toBe(500);
+    expect((await router.request(record.contentUrl!)).status).toBe(503);
     const publicUrl = vi
       .spyOn(drive.use('public'), 'getUrl')
       .mockResolvedValue('https://cdn.example.test/file');
@@ -601,11 +660,11 @@ describe('upload boundary and access modes', () => {
       );
       const { record } = await client.uploadOne({ file: file() });
       const response = await router.request(record.contentUrl!);
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(503);
       expect(response.headers.get('location')).toBeNull();
       expect(response.headers.get('cache-control')).toBe('private, no-store');
       expect(await response.json()).toMatchObject({
-        code: 'STORAGE_URL_UNAVAILABLE',
+        error: { reason: 'STORAGE_URL_UNAVAILABLE' },
       });
     },
   );
@@ -634,10 +693,10 @@ describe('upload boundary and access modes', () => {
       const { record } = await client.uploadOne({ file: file() });
       const response = await router.request(record.contentUrl!);
       if (expectedBase === null) {
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(503);
         expect(response.headers.get('location')).toBeNull();
         expect(await response.json()).toMatchObject({
-          code: 'STORAGE_URL_UNAVAILABLE',
+          error: { reason: 'STORAGE_URL_UNAVAILABLE' },
         });
       } else {
         expect(response.status).toBe(302);
