@@ -1,5 +1,9 @@
-import { RepositoryError } from '@nocobase/db';
-import { Hono } from 'hono';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+  RepositoryError,
+} from '@nocobase/db';
+import { Hono, type Context, type Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { describe, expect, it } from 'vitest';
 
@@ -13,8 +17,10 @@ import {
   parseApiInput,
   apiErrorHandler,
   defineApiRoutes,
+  defineRepositoryApiRoutes,
   defineRootRoutes,
 } from '../src/router/index.js';
+import { defineServerPlugin } from '../src/plugins/index.js';
 
 const config = new AppConfig();
 await config.loadAll();
@@ -335,5 +341,163 @@ describe('/api errors', () => {
       error: { reason: 'RECORD_NOT_FOUND' },
     });
     expect(await (await outer.request('/crash')).text()).toBe('outer');
+  });
+});
+
+function routesOf(
+  register: (router: Hono) => void,
+): ReturnType<typeof defineApiRoutes<Application>> {
+  return defineApiRoutes(() => {
+    const router = new Hono();
+    register(router);
+    return router;
+  });
+}
+
+function createBareApp(): Application {
+  return new Application({
+    config,
+    paths: createAppPaths({ rootDir: '/test/app' }),
+  });
+}
+
+const ok = (context: Context): Response => context.json({ data: true });
+
+describe('duplicate API routes', () => {
+  it('fails start when two contributions register the same method and path', async () => {
+    const app = createBareApp();
+    app.addRoutes(
+      routesOf((router) => router.post('/x/y', ok)),
+      { owner: '@nocobase/app-plugin-first' },
+    );
+    app.addRoutes(
+      routesOf((router) => router.post('/x/y', ok)),
+      { owner: '@nocobase/app-plugin-second' },
+    );
+
+    await expect(app.start()).rejects.toThrow(
+      'Duplicate API route: POST /api/x/y from @nocobase/app-plugin-first and POST /api/x/y from @nocobase/app-plugin-second',
+    );
+  });
+
+  it('names a plugin by its package name and an unlabelled contribution by its position', async () => {
+    const app = createBareApp();
+    app.addRoutes(routesOf((router) => router.get('/healthz', ok)));
+    app.addServerPlugins({
+      appPackageName: '@nocobase/app-test',
+      plugins: [
+        defineServerPlugin({
+          baseDir: import.meta.dirname,
+          packageName: '@nocobase/app-plugin-health',
+          routes: [routesOf((router) => router.get('/healthz', ok))],
+        }),
+      ].map((definition) => ({
+        definition,
+        metadata: {
+          packageName: definition.packageName,
+          version: 'test',
+          rootDir: '/test/plugins/health',
+          jobLocations: [],
+        },
+      })),
+    });
+
+    await expect(app.start()).rejects.toThrow(
+      'GET /api/healthz from route contribution #1 and GET /api/healthz from @nocobase/app-plugin-health',
+    );
+  });
+
+  it('treats parameter names as irrelevant and an ALL route as every method', async () => {
+    const renamed = createBareApp();
+    renamed.addRoutes(routesOf((router) => router.get('/a/:id', ok)));
+    renamed.addRoutes(routesOf((router) => router.get('/a/:orderId', ok)));
+    await expect(renamed.start()).rejects.toThrow(
+      'GET /api/a/:id from route contribution #1 and GET /api/a/:orderId from route contribution #2',
+    );
+
+    const all = createBareApp();
+    all.addRoutes(routesOf((router) => router.delete('/b', ok)));
+    all.addRoutes(routesOf((router) => router.all('/b', ok)));
+    await expect(all.start()).rejects.toThrow('Duplicate API route');
+  });
+
+  it('fails start when one router registers the same handler route twice', async () => {
+    const app = createBareApp();
+    app.addRoutes(
+      routesOf((router) => {
+        router.get('/twice', ok);
+        router.get('/twice', ok);
+      }),
+      { owner: 'app' },
+    );
+
+    await expect(app.start()).rejects.toThrow(
+      'GET /api/twice from app and GET /api/twice from app',
+    );
+  });
+
+  it('accepts the same path under different methods, a parameter beside a fixed segment, middleware and handler chains', async () => {
+    const app = createBareApp();
+    const guard = async (_context: Context, next: Next): Promise<void> => {
+      await next();
+    };
+    app.addRoutes(
+      routesOf((router) => {
+        router.use('*', guard);
+        router.use('/x/*', guard);
+        router.get('/x/y', guard, ok);
+        router.post(
+          '/apps/:appId/deploy',
+          guard,
+          validator('json', (value) => parseApiInput(deployInput, value)),
+          ok,
+        );
+        router.get('/users/findMany', ok);
+      }),
+    );
+    app.addRoutes(
+      routesOf((router) => {
+        router.use('*', guard);
+        router.use('/x/*', guard);
+        router.post('/x/y', guard, ok);
+        router.get('/users/:userId', ok);
+        router.route('/nested', new Hono().get('/z', ok));
+      }),
+    );
+
+    await app.start();
+    expect((await request(app, '/api/x/y', { method: 'POST' })).status).toBe(
+      200,
+    );
+    expect((await request(app, '/api/users/7')).status).toBe(200);
+    expect((await request(app, '/api/nested/z')).status).toBe(200);
+  });
+
+  it('fails start when a data endpoint collides with a hand-written route', async () => {
+    const app = createBareApp();
+    app.container.instance(databaseManagerToken, {
+      repository: () => ({}),
+    } as unknown as DatabaseManager);
+    app.addRoutes(
+      defineRepositoryApiRoutes({
+        principal: () => undefined,
+        repositories: [
+          {
+            name: 'users',
+            policy: () => ({ read: true }),
+            actions: { findMany: {} },
+          },
+        ],
+      }),
+      { owner: 'the users exposure' },
+    );
+    app.addRoutes(
+      routesOf((router) => router.post('/users/findMany', ok)),
+      { owner: '@nocobase/app-plugin-users' },
+    );
+
+    await expect(app.start()).rejects.toThrow(
+      'POST /api/users/findMany from the users exposure and POST /api/users/findMany from @nocobase/app-plugin-users',
+    );
   });
 });

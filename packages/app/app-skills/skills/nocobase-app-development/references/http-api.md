@@ -12,7 +12,8 @@ See [server routes](server-routes.md) for mounting, authentication and authoriza
 - **When the resource word differs from the plugin's, the namespace comes first.** The scheduler plugin lists schedules at `/scheduler/schedules`. `@nocobase/app-plugin-notification-in-app` owns `/notificationInApp/...`.
 - **A plugin mounted through another plugin's dispatcher keeps the host's namespace.** The authorization rule plugins answer under `/authorization/defaultAccess`, `/authorization/sharingRules` and `/authorization/restrictionRules`, because the authorization plugin owns `/authorization` and dispatches to them. Their errors use the host's domain too.
 - **`/swagger`, `/auth` and `/healthz` are reserved** for the generated API documentation, Better Auth and the health check.
-- **Fixed segments go before path parameters.** Hono matches in registration order and the first match wins without warning, so register `/workflows/runs` before `/workflows/:workflowId`. A user-chosen id must then never equal a fixed sibling segment: reject it when the resource is created, with `400 INVALID_ARGUMENT` and a field violation. An AI employee named `skills` would otherwise be unreachable behind `/aiEmployees/skills`.
+- **Fixed segments go before path parameters.** Hono matches in registration order and the first match wins without warning, so register `/workflows/runs` before `/workflows/:workflowId`. A user-chosen id must then never equal a fixed sibling segment: reject it when the resource is created, with `400 INVALID_ARGUMENT` and a field violation. An AI employee named `roster` would otherwise be unreachable behind `/aiEmployees/roster`.
+- **Two routes with the same method and path fail application start.** Hono would otherwise run only the first; parameter names do not distinguish routes, so `/orders/:id` and `/orders/:orderId` are the same route, while `/orders/:orderId` and `/orders/archived` are not.
 - **The client encodes ids.** An id containing `/` or `:` reaches the route encoded and arrives decoded in `context.req.param()`.
 
 ## Standard methods
@@ -34,7 +35,7 @@ See [server routes](server-routes.md) for mounting, authentication and authoriza
 
 Use one only when no standard method expresses the operation without changing its meaning: deploy, roll back, enable, disable, send, copy. An operation that is a field update is a `PATCH`.
 
-The method follows the resource it acts on: `/{collection}/{id}/{verb}` for one resource, `/{collection}/{verb}` for a whole collection, and `/{scope}/{verbNoun}` for a computation on no stored resource, such as `/ai/translateText`. It is `POST` when it changes anything, and `GET` only when it is a pure read whose input fits in the query string.
+The method follows the resource it acts on: `/{collection}/{id}/{verb}` for one resource, `/{collection}/{verb}` for a whole collection, and `/{namespace}/{verbNoun}` for a computation on no stored resource: a plugin whose namespace is `translation` serves `/translation/translateText`, while an application's own computation has no namespace and is the verbNoun alone, `/translateText`. It is `POST` when it changes anything, and `GET` only when it is a pure read whose input fits in the query string.
 
 | Rule                                                                                  | Right                                  | Wrong                       |
 | ------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------- |
@@ -114,7 +115,7 @@ Every failed `/api` response then has this body, with the same `requestId` in th
   | `INTERNAL`            | 500  | Never thrown on purpose; the application answers it       |
   | `UNAVAILABLE`         | 503  | A dependency is down; retrying later may succeed          |
 
-  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a request body over the route's size limit and `415` for an unsupported request content type. Nothing else overrides the status, and neither covers anything else: a generated output that grows too large is `400 FAILED_PRECONDITION`, and a file with the wrong extension is `400 INVALID_ARGUMENT`. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
+  Two HTTP statuses exist outside this table, both as an `INVALID_ARGUMENT` that passes `httpStatus`: `413` for a request body over the route's size limit or the application's `api.bodyLimit` and `415` for an unsupported request content type. Nothing else overrides the status, and neither covers anything else: a generated output that grows too large is `400 FAILED_PRECONDITION`, and a file with the wrong extension is `400 INVALID_ARGUMENT`. There is no `422`: an invalid request is `INVALID_ARGUMENT` and a valid one the state forbids is `FAILED_PRECONDITION`, both `400`. There is no `502`: a failing upstream is `503 UNAVAILABLE`.
 
 - **`reason`** is what clients branch on: UPPER_SNAKE_CASE, unique within its domain, stable once released. A client never parses `message`.
 - **`domain`** is the namespace of whoever defined the reason: the plugin namespace, or the application's name for its own routes. The framework uses `app`. A plugin has one domain even when it serves several URL prefixes: every AI employee error is `aiEmployees`, including those under `/aiEmployee/...`, and every AI knowledge base error is `aiKnowledgeBases`. An error passed through from another plugin keeps the domain of the plugin that defined its reason, so the users plugin passing on `LAST_ASSIGNMENT` answers with domain `authorization`.
@@ -174,7 +175,7 @@ router.post(
 
 A strict body catches a misspelled field instead of silently ignoring it. So a client sends only the fields it changes, never a whole record read back from the server. Derive the service's types with `z.infer` instead of writing a second `interface`.
 
-Field types: ids are `z.string()`, times `z.iso.datetime()`, booleans `z.boolean()`, enumerations `z.enum([...])`. "May be omitted" is `.optional()` and "may be null" is `.nullable()`; do not use one for the other.
+Field types: ids are `z.string()`, times `z.iso.datetime()`, booleans `z.boolean()`, enumerations `z.enum([...])`. "May be omitted" is `.optional()` and "may be null" is `.nullable()`; do not use one for the other. Never use `z.any()`; use `z.unknown()` only for a value that is genuinely free-form, such as a user-defined JSON payload, with a comment saying why it cannot be described precisely.
 
 Put the schemas in the plugin's `server/routes/schemas.ts`, or a `schemas/` directory once there are many.
 
@@ -206,6 +207,21 @@ router.post(
   // validators and handler
 );
 ```
+
+## Limits
+
+The application may also set limits that every `/api` request meets before its route, in the `api` section of `config.yml`. They are all off by default and nothing is installed for one that is unset, so a route never relies on them: its own `bodyLimit` above stays required, and the global one is only a ceiling over all routes.
+
+```yaml
+api:
+  bodyLimit: 10mb # 413 INVALID_ARGUMENT, reason BODY_TOO_LARGE
+  timeout: 30s # 503 UNAVAILABLE, reason REQUEST_TIMEOUT
+  rateLimit: # 429 RESOURCE_EXHAUSTED, reason RATE_LIMITED, with Retry-After in seconds
+    max: 600
+    window: 1m
+```
+
+All three answer in the standard body with domain `app`. The timeout covers the time until the handler returns its response, so a streaming response that has started is not cut off; the handler is not cancelled and its late result is discarded. The rate limit counts per client address, in each process separately, exempts `GET /api/healthz` and does count Better Auth's sign-in routes. A client that receives `429` waits for `Retry-After` before trying again.
 
 ## Exceptions
 

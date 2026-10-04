@@ -10,7 +10,7 @@ Every route a plugin contributes with `defineApiRoutes()` follows these rules. T
 - **When the resource word differs, it follows the namespace.** The scheduler plugin serves `/scheduler/schedules`; `@nocobase/app-plugin-notification-in-app` serves `/notificationInApp/...`.
 - **A plugin mounted through another plugin's dispatcher keeps the host's namespace.** The authorization rule plugins are registered with `authz.routes.add` and answer under `/authorization/defaultAccess`, `/authorization/sharingRules` and `/authorization/restrictionRules`; their errors use the domain `authorization`.
 - **`/auth`, `/healthz` and `/swagger` are reserved** for Better Auth, the health check and the API documentation.
-- **Register fixed segments before path parameters.** Hono matches in registration order and the first match wins silently, so `/workflows/runs` goes before `/workflows/:workflowId`. A user-chosen id must never equal a fixed sibling segment: reject it at creation with `400 INVALID_ARGUMENT` and a field violation, as the AI employee plugin rejects an employee named `skills`.
+- **Register fixed segments before path parameters.** Hono matches in registration order and the first match wins silently, so `/workflows/runs` goes before `/workflows/:workflowId`. A user-chosen id must never equal a fixed sibling segment: reject it at creation with `400 INVALID_ARGUMENT` and a field violation, as the AI employee plugin rejects an employee named `roster` or `templates`.
 - **Do not repeat `/api`** or a deployment base path in the source path; the runtime adds both.
 
 ## Methods
@@ -93,7 +93,7 @@ router.post(
 );
 ```
 
-Keep schemas in `server/routes/schemas.ts`, or a `server/routes/schemas/` directory, and derive service types with `z.infer` rather than a second interface. `zod` is a `dependency` of the plugin. A binary or multipart body validates its headers, path parameters and query the same way and its body in code, answering `413` or `415` through `httpStatus` when it is too large or of the wrong type.
+Keep schemas in `server/routes/schemas.ts`, or a `server/routes/schemas/` directory, and derive service types with `z.infer` rather than a second interface. Never use `z.any()`; use `z.unknown()` only for a value that is genuinely free-form, such as a user-defined JSON payload, with a comment saying why it cannot be described precisely. `zod` is a `dependency` of the plugin. A binary or multipart body validates its headers, path parameters and query the same way and its body in code, answering `413` or `415` through `httpStatus` when it is too large or of the wrong type.
 
 Every request body has a size limit, uploads and JSON routes alike. Apply `bodyLimit` from `hono/body-limit` and answer an oversized body in the standard shape:
 
