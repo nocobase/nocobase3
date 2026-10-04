@@ -260,7 +260,8 @@ export class Auth {
       try {
         context.set('auth', await this.getSession(context.req.raw.headers));
       } catch (error) {
-        if (error instanceof APIError) return rejectedCredential(context, error);
+        if (error instanceof APIError)
+          return rejectedCredential(context, error);
         throw error;
       }
       await next();
@@ -280,7 +281,8 @@ export class Auth {
         auth = await this.getSession(context.req.raw.headers);
         // A refused credential is Better Auth's APIError; answer with its status, and its code as the reason.
       } catch (error) {
-        if (error instanceof APIError) return rejectedCredential(context, error);
+        if (error instanceof APIError)
+          return rejectedCredential(context, error);
         throw error;
       }
       if (!auth) {

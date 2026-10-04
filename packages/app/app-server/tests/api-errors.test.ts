@@ -17,7 +17,12 @@ import {
 const config = new AppConfig();
 await config.loadAll();
 config.mergeDefaults({
-  app: { name: 'main', publicBasePath: '/main', internalBasePath: '', publicApiUrl: '/main/api' },
+  app: {
+    name: 'main',
+    publicBasePath: '/main',
+    internalBasePath: '',
+    publicApiUrl: '/main/api',
+  },
 });
 
 // Shaped like zod's `safeParse`, which `parseApiInput` matches structurally.
@@ -28,13 +33,24 @@ const deployInput: ApiInputSchema<{ releaseId: string }> = {
       ? { success: true, data: { releaseId } }
       : {
           success: false,
-          error: { issues: [{ path: ['releaseId'], message: 'Expected a string.', code: 'invalid_type' }] },
+          error: {
+            issues: [
+              {
+                path: ['releaseId'],
+                message: 'Expected a string.',
+                code: 'invalid_type',
+              },
+            ],
+          },
         };
   },
 };
 
 function createApp(): Application {
-  const app = new Application({ config, paths: createAppPaths({ rootDir: '/test/app' }) });
+  const app = new Application({
+    config,
+    paths: createAppPaths({ rootDir: '/test/app' }),
+  });
   app.addRoutes(
     defineRootRoutes(() => {
       const router = new Hono();
@@ -98,7 +114,11 @@ function createApp(): Application {
   return app;
 }
 
-async function request(app: Application, path: string, init?: RequestInit): Promise<Response> {
+async function request(
+  app: Application,
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
   return app.fetch(new Request(`http://localhost${path}`, init));
 }
 
@@ -124,11 +144,16 @@ describe('/api errors', () => {
   });
 
   it('includes field violations', async () => {
-    const response = await request(createApp(), '/api/workflows', { method: 'POST' });
+    const response = await request(createApp(), '/api/workflows', {
+      method: 'POST',
+    });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      error: { status: 'INVALID_ARGUMENT', fieldViolations: [{ field: 'title', description: 'Required.' }] },
+      error: {
+        status: 'INVALID_ARGUMENT',
+        fieldViolations: [{ field: 'title', description: 'Required.' }],
+      },
     });
   });
 
@@ -137,7 +162,13 @@ describe('/api errors', () => {
 
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
-      error: { code: 403, status: 'PERMISSION_DENIED', reason: 'HTTP_403', domain: 'app', message: 'Nope.' },
+      error: {
+        code: 403,
+        status: 'PERMISSION_DENIED',
+        reason: 'HTTP_403',
+        domain: 'app',
+        message: 'Nope.',
+      },
     });
   });
 
@@ -146,7 +177,12 @@ describe('/api errors', () => {
 
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
-      error: { status: 'PERMISSION_DENIED', reason: 'AUTHORIZATION_DENIED', domain: 'authorization', message: 'Not yours.' },
+      error: {
+        status: 'PERMISSION_DENIED',
+        reason: 'AUTHORIZATION_DENIED',
+        domain: 'authorization',
+        message: 'Not yours.',
+      },
     });
   });
 
@@ -156,7 +192,12 @@ describe('/api errors', () => {
 
     expect(response.status).toBe(500);
     expect(body).toMatchObject({
-      error: { code: 500, status: 'INTERNAL', reason: 'INTERNAL_ERROR', message: 'Internal server error.' },
+      error: {
+        code: 500,
+        status: 'INTERNAL',
+        reason: 'INTERNAL_ERROR',
+        message: 'Internal server error.',
+      },
     });
     expect(JSON.stringify(body)).not.toContain('hunter2');
     expect(body.error.requestId).toBe(response.headers.get('x-request-id'));
@@ -169,7 +210,9 @@ describe('/api errors', () => {
     expect(await response.json()).toMatchObject({
       error: { status: 'NOT_FOUND', reason: 'ROUTE_NOT_FOUND', domain: 'app' },
     });
-    expect((await request(createApp(), '/settings')).headers.get('content-type')).toContain('text/html');
+    expect(
+      (await request(createApp(), '/settings')).headers.get('content-type'),
+    ).toContain('text/html');
   });
 
   it("leaves a route's own error handler in charge", async () => {
@@ -181,7 +224,9 @@ describe('/api errors', () => {
 
   it('generates a request id when the caller sends none or an unsafe one', async () => {
     const generated = await request(createApp(), '/api/ok');
-    const unsafe = await request(createApp(), '/api/ok', { headers: { 'x-request-id': 'a b<script>' } });
+    const unsafe = await request(createApp(), '/api/ok', {
+      headers: { 'x-request-id': 'a b<script>' },
+    });
 
     expect(generated.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
     expect(unsafe.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
@@ -206,7 +251,13 @@ describe('/api errors', () => {
         status: 'INVALID_ARGUMENT',
         reason: 'INVALID_INPUT',
         domain: 'app',
-        fieldViolations: [{ field: 'releaseId', description: 'Expected a string.', reason: 'invalid_type' }],
+        fieldViolations: [
+          {
+            field: 'releaseId',
+            description: 'Expected a string.',
+            reason: 'invalid_type',
+          },
+        ],
       },
     });
   });

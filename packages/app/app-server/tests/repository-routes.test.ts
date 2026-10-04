@@ -467,7 +467,10 @@ describe('Repository API routes', () => {
         filter: { id: 'parent' },
         values: { children: { create: { id: 'second' } } },
       }),
-    ).rejects.toMatchObject({ status: 403, reason: 'RELATION_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({
+      status: 403,
+      reason: 'RELATION_WRITE_FORBIDDEN',
+    });
     await expect(
       api.repository('policyClosed').createOne({
         values: { id: 'closed', children: { create: { id: 'denied' } } },
@@ -482,7 +485,9 @@ describe('Repository API routes', () => {
       }),
     });
     expect(rejected.status).toBe(403);
-    expect(await rejected.json()).toMatchObject({ error: { reason: 'WRITE_FORBIDDEN' } });
+    expect(await rejected.json()).toMatchObject({
+      error: { reason: 'WRITE_FORBIDDEN' },
+    });
     for (const action of ['createOne', 'updateOne']) {
       const response = await router.request(`/api/policyClosed:${action}`, {
         method: 'POST',
@@ -494,7 +499,9 @@ describe('Repository API routes', () => {
         }),
       });
       expect(response.status).toBe(400);
-      expect(await response.json()).toMatchObject({ error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' } });
+      expect(await response.json()).toMatchObject({
+        error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' },
+      });
     }
     expect(await database.repository('policyParents').count()).toBe(1);
     expect(await database.repository('policyChildren').findMany()).toEqual([
@@ -634,7 +641,9 @@ describe('Repository API routes', () => {
           }),
         });
         expect(response.status).toBe(403);
-        expect(await response.json()).toMatchObject({ error: { reason: 'WRITE_FORBIDDEN' } });
+        expect(await response.json()).toMatchObject({
+          error: { reason: 'WRITE_FORBIDDEN' },
+        });
       }
     }
     // A node with no `fields` is not the same as `false`: it grants nothing to
@@ -649,7 +658,9 @@ describe('Repository API routes', () => {
       },
     );
     expect(nothingAllowed.status).toBe(403);
-    expect(await nothingAllowed.json()).toMatchObject({ error: { reason: 'FIELD_WRITE_FORBIDDEN' } });
+    expect(await nothingAllowed.json()).toMatchObject({
+      error: { reason: 'FIELD_WRITE_FORBIDDEN' },
+    });
     const response = await router.request('/api/fieldsPolicy:createOne', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1428,7 +1439,9 @@ describe('Repository API routes', () => {
         },
       );
       expect(smuggled.status).toBe(400);
-      expect(await smuggled.json()).toMatchObject({ error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' } });
+      expect(await smuggled.json()).toMatchObject({
+        error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' },
+      });
     }
   });
 
@@ -1488,7 +1501,9 @@ describe('Repository API routes', () => {
     // an unrestricted Repository.
     const anonymous = await request();
     expect(anonymous.status).toBe(403);
-    expect(await anonymous.json()).toMatchObject({ error: { reason: 'PRINCIPAL_REQUIRED' } });
+    expect(await anonymous.json()).toMatchObject({
+      error: { reason: 'PRINCIPAL_REQUIRED' },
+    });
   });
 
   it('rejects a reference in a Policy built from the principal', async () => {

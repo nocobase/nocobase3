@@ -14,7 +14,7 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 | ------------------------------------------------------------ | ------------------------------------ |
 | Any frontend change: pages, routes, components, styles, copy | `references/frontend/ui-workflow.md` |
 | Add an HTTP endpoint                                         | `references/server-routes.md`        |
-| Name an endpoint, shape its response or errors, validate it | `references/http-api.md`             |
+| Name an endpoint, shape its response or errors, validate it  | `references/http-api.md`             |
 | Read or write data                                           | `references/database-and-data.md`    |
 | Change the schema                                            | `references/migrations.md`           |
 | Switch or add a database connection                          | `references/database-connections.md` |

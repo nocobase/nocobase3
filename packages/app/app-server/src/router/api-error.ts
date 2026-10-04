@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Context, ErrorHandler, MiddlewareHandler, NotFoundHandler } from 'hono';
+import type {
+  Context,
+  ErrorHandler,
+  MiddlewareHandler,
+  NotFoundHandler,
+} from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -114,7 +119,10 @@ export class ApiError extends Error {
   public readonly metadata: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: ApiErrorOptions) {
-    super(options.message, options.cause === undefined ? undefined : { cause: options.cause });
+    super(
+      options.message,
+      options.cause === undefined ? undefined : { cause: options.cause },
+    );
     this.name = 'ApiError';
     this.code = options.httpStatus ?? apiErrorStatusCodes[options.status];
     this.status = options.status;
@@ -132,8 +140,12 @@ export class ApiError extends Error {
       reason: this.reason,
       domain: this.domain,
       message: this.message,
-      ...(this.localizedMessage ? { localizedMessage: this.localizedMessage } : {}),
-      ...(this.fieldViolations?.length ? { fieldViolations: this.fieldViolations } : {}),
+      ...(this.localizedMessage
+        ? { localizedMessage: this.localizedMessage }
+        : {}),
+      ...(this.fieldViolations?.length
+        ? { fieldViolations: this.fieldViolations }
+        : {}),
       ...(this.metadata ? { metadata: this.metadata } : {}),
       ...(requestId ? { requestId } : {}),
     };
@@ -156,7 +168,9 @@ const statusByHttpCode: Readonly<Record<number, ApiErrorStatus>> = {
 
 /** The canonical status for an HTTP status code, for errors raised as bare HTTP statuses. */
 export function apiErrorStatusFromHttp(code: number): ApiErrorStatus {
-  return statusByHttpCode[code] ?? (code >= 500 ? 'INTERNAL' : 'FAILED_PRECONDITION');
+  return (
+    statusByHttpCode[code] ?? (code >= 500 ? 'INTERNAL' : 'FAILED_PRECONDITION')
+  );
 }
 
 /**
@@ -173,7 +187,7 @@ export function toApiError(error: unknown): ApiError {
       reason: `HTTP_${error.status}`,
       domain: appErrorDomain,
       message: error.message || `Request failed with status ${error.status}.`,
-      httpStatus: error.status as ContentfulStatusCode,
+      httpStatus: error.status,
       cause: error,
     });
   }
@@ -207,8 +221,12 @@ interface StatusError {
 function readStatusError(error: unknown): StatusError | undefined {
   if (!(error instanceof Error) || !('status' in error)) return undefined;
   const { status } = error;
-  if (typeof status !== 'number' || status < 400 || status > 499) return undefined;
-  const fields = error as Error & { readonly reason?: unknown; readonly domain?: unknown };
+  if (typeof status !== 'number' || status < 400 || status > 499)
+    return undefined;
+  const fields = error as Error & {
+    readonly reason?: unknown;
+    readonly domain?: unknown;
+  };
   return {
     status,
     message: error.message,
@@ -217,14 +235,20 @@ function readStatusError(error: unknown): StatusError | undefined {
   };
 }
 
-export function apiErrorBody(error: ApiError, requestId?: string): ApiErrorBody {
+export function apiErrorBody(
+  error: ApiError,
+  requestId?: string,
+): ApiErrorBody {
   return { error: error.toPayload(requestId) };
 }
 
 /** Answer with the standard error body for `error`, carrying the request's id. */
 export function apiErrorResponse(context: Context, error: unknown): Response {
   const apiError = toApiError(error);
-  return context.json(apiErrorBody(apiError, getRequestId(context)), apiError.code);
+  return context.json(
+    apiErrorBody(apiError, getRequestId(context)),
+    apiError.code,
+  );
 }
 
 /** The `onError` handler for `/api`, installed by the application. Exported for routers tested on their own. */
@@ -251,11 +275,12 @@ export interface ApiInputIssue {
 
 /** A schema with zod's `safeParse`, matched by shape so the framework does not depend on a zod version. */
 export interface ApiInputSchema<T> {
-  safeParse(
-    value: unknown,
-  ):
+  safeParse(value: unknown):
     | { readonly success: true; readonly data: T }
-    | { readonly success: false; readonly error: { readonly issues: readonly ApiInputIssue[] } };
+    | {
+        readonly success: false;
+        readonly error: { readonly issues: readonly ApiInputIssue[] };
+      };
 }
 
 /**
@@ -298,7 +323,11 @@ export function getRequestId(context: Context): string {
   if (existing) return existing;
   const incoming = context.req.header(requestIdHeader);
   const requestId =
-    incoming && incoming.length <= maxRequestIdLength && requestIdPattern.test(incoming) ? incoming : randomUUID();
+    incoming &&
+    incoming.length <= maxRequestIdLength &&
+    requestIdPattern.test(incoming)
+      ? incoming
+      : randomUUID();
   context.set('requestId', requestId);
   return requestId;
 }

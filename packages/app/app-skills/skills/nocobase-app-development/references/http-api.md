@@ -14,16 +14,16 @@ See [server routes](server-routes.md) for mounting, authentication and authoriza
 
 ## Standard methods
 
-| Operation                         | Method   | Path                           | Success                   |
-| --------------------------------- | -------- | ------------------------------ | ------------------------- |
-| List                              | `GET`    | `/orders`                      | `200 { data: [], meta }`  |
-| Get one                           | `GET`    | `/orders/{orderId}`            | `200 { data }`            |
-| Create                            | `POST`   | `/orders`                      | `201 { data }`            |
-| Update some fields                | `PATCH`  | `/orders/{orderId}`            | `200 { data }`            |
-| Replace a singleton configuration | `PUT`    | `/orders/{orderId}/config`     | `200 { data }`            |
-| Delete                            | `DELETE` | `/orders/{orderId}`            | `204`, no body            |
-| Custom method on one resource     | `POST`   | `/orders/{orderId}/cancel`     | `200 { data }` or `202`   |
-| Custom method on a collection     | `POST`   | `/orders/archiveCompleted`     | `200 { data }` or `204`   |
+| Operation                         | Method   | Path                       | Success                  |
+| --------------------------------- | -------- | -------------------------- | ------------------------ |
+| List                              | `GET`    | `/orders`                  | `200 { data: [], meta }` |
+| Get one                           | `GET`    | `/orders/{orderId}`        | `200 { data }`           |
+| Create                            | `POST`   | `/orders`                  | `201 { data }`           |
+| Update some fields                | `PATCH`  | `/orders/{orderId}`        | `200 { data }`           |
+| Replace a singleton configuration | `PUT`    | `/orders/{orderId}/config` | `200 { data }`           |
+| Delete                            | `DELETE` | `/orders/{orderId}`        | `204`, no body           |
+| Custom method on one resource     | `POST`   | `/orders/{orderId}/cancel` | `200 { data }` or `202`  |
+| Custom method on a collection     | `POST`   | `/orders/archiveCompleted` | `200 { data }` or `204`  |
 
 `GET` never changes data: browsers prefetch, crawlers follow links and caches replay requests without the user asking. Marking a message read when a list is opened is a separate `POST`. `DELETE` carries no body; a confirmation is a query parameter, `DELETE /users/5?confirm=true`.
 
@@ -33,14 +33,14 @@ Use one only when no standard method expresses the operation without changing it
 
 The method follows the resource it acts on: `/{collection}/{id}/{verb}` for one resource, `/{collection}/{verb}` for a whole collection, and `/{scope}/{verbNoun}` for a computation on no stored resource, such as `/ai/translateText`. It is `POST` when it changes anything, and `GET` only when it is a pure read whose input fits in the query string.
 
-| Rule                                                                                  | Right                                    | Wrong                          |
-| ------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------ |
-| A verb or verb + noun, camelCase                                                      | `/deploy`, `/markRead`, `/batchDelete`   | `/deployment`, `/mark-read`    |
-| Verbs act, plural nouns are sub-resources                                             | `/users/5/activate`, `/users/5/roles`    | `/users/5/activation`          |
-| Not a standard verb: `get`, `list`, `create`, `update` and `delete` are methods above | `GET /orders/7`                          | `/getDetails`, `/listAll`      |
-| No prepositions; conditions are parameters                                            | `/send` with `{ userId }`                | `/sendToUser`                  |
-| No `Async`; a long operation returns a resource whose progress can be read            | `/deploy` returning the deployment       | `/deployAsync`                 |
-| Paired operations take paired verbs                                                   | `/enable` and `/disable`                 | `/enable` and `/turnOff`       |
+| Rule                                                                                  | Right                                  | Wrong                       |
+| ------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------- |
+| A verb or verb + noun, camelCase                                                      | `/deploy`, `/markRead`, `/batchDelete` | `/deployment`, `/mark-read` |
+| Verbs act, plural nouns are sub-resources                                             | `/users/5/activate`, `/users/5/roles`  | `/users/5/activation`       |
+| Not a standard verb: `get`, `list`, `create`, `update` and `delete` are methods above | `GET /orders/7`                        | `/getDetails`, `/listAll`   |
+| No prepositions; conditions are parameters                                            | `/send` with `{ userId }`              | `/sendToUser`               |
+| No `Async`; a long operation returns a resource whose progress can be read            | `/deploy` returning the deployment     | `/deployAsync`              |
+| Paired operations take paired verbs                                                   | `/enable` and `/disable`               | `/enable` and `/turnOff`    |
 
 One operation has one URL across the whole system. Enabling a workflow is `POST /workflows/{workflowId}/enable` and nothing else.
 
@@ -93,18 +93,18 @@ Every failed `/api` response then has this body, with the same `requestId` in th
 
 - **`status`** is one of a fixed set, and decides the HTTP status. Pick the one that matches:
 
-  | `status`                                   | HTTP | Use for                                                     |
-  | ------------------------------------------ | ---- | ----------------------------------------------------------- |
-  | `INVALID_ARGUMENT`                         | 400  | The request itself is malformed or a field is invalid      |
-  | `FAILED_PRECONDITION`                      | 400  | The request is valid, but the resource's state forbids it  |
-  | `UNAUTHENTICATED`                          | 401  | No valid session or API key                                 |
-  | `PERMISSION_DENIED`                        | 403  | Not allowed                                                 |
-  | `NOT_FOUND`                                | 404  | Allowed, but the resource does not exist                    |
-  | `ALREADY_EXISTS`                           | 409  | Creating something that already exists                      |
-  | `ABORTED`                                  | 409  | A concurrent change won, such as a version conflict         |
-  | `RESOURCE_EXHAUSTED`                       | 429  | A rate limit or quota                                       |
-  | `INTERNAL`                                 | 500  | Never thrown on purpose; the application answers it         |
-  | `UNAVAILABLE`                              | 503  | A dependency is down; retrying later may succeed            |
+  | `status`              | HTTP | Use for                                                   |
+  | --------------------- | ---- | --------------------------------------------------------- |
+  | `INVALID_ARGUMENT`    | 400  | The request itself is malformed or a field is invalid     |
+  | `FAILED_PRECONDITION` | 400  | The request is valid, but the resource's state forbids it |
+  | `UNAUTHENTICATED`     | 401  | No valid session or API key                               |
+  | `PERMISSION_DENIED`   | 403  | Not allowed                                               |
+  | `NOT_FOUND`           | 404  | Allowed, but the resource does not exist                  |
+  | `ALREADY_EXISTS`      | 409  | Creating something that already exists                    |
+  | `ABORTED`             | 409  | A concurrent change won, such as a version conflict       |
+  | `RESOURCE_EXHAUSTED`  | 429  | A rate limit or quota                                     |
+  | `INTERNAL`            | 500  | Never thrown on purpose; the application answers it       |
+  | `UNAVAILABLE`         | 503  | A dependency is down; retrying later may succeed          |
 
 - **`reason`** is what clients branch on: UPPER_SNAKE_CASE, unique within its domain, stable once released. A client never parses `message`.
 - **`domain`** is the namespace of whoever defined the reason: the plugin namespace, or the application's name for its own routes. The framework uses `app`.
@@ -149,11 +149,11 @@ router.post(
 );
 ```
 
-| Input           | Schema           | An unknown field                         |
-| --------------- | ---------------- | ---------------------------------------- |
-| JSON body       | `z.strictObject` | Rejected with `400`, naming the field    |
-| Query string    | `z.object`       | Dropped; proxies and libraries add some  |
-| Path parameters | `z.object`       | Cannot occur                             |
+| Input           | Schema           | An unknown field                        |
+| --------------- | ---------------- | --------------------------------------- |
+| JSON body       | `z.strictObject` | Rejected with `400`, naming the field   |
+| Query string    | `z.object`       | Dropped; proxies and libraries add some |
+| Path parameters | `z.object`       | Cannot occur                            |
 
 A strict body catches a misspelled field instead of silently ignoring it. So a client sends only the fields it changes, never a whole record read back from the server. Derive the service's types with `z.infer` instead of writing a second `interface`.
 
