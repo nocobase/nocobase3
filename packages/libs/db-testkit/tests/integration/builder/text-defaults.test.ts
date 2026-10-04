@@ -11,6 +11,8 @@ import { describeIntegrationDatabases } from '../helpers.js';
  */
 describeIntegrationDatabases('text field defaults', (context) => {
   const supported = context.profile.schema.textDefaults !== 'unsupported';
+  const alterable =
+    supported && context.profile.schema.textAlterations !== 'unsupported';
 
   it.runIf(supported)(
     'gives a row inserted without the column the default of a created text field',
@@ -72,7 +74,7 @@ describeIntegrationDatabases('text field defaults', (context) => {
     },
   );
 
-  it.runIf(supported)(
+  it.runIf(alterable)(
     'gives a row inserted without the column the default an altered text field gained',
     async () => {
       await context.builder.createCollection(

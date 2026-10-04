@@ -59,6 +59,11 @@ export interface DatabaseIntegrationProfile {
      * `defaultValue` is applied by the Repository alone there. `supported` when omitted.
      */
     readonly textDefaults?: 'supported' | 'unsupported';
+    /**
+     * Whether an existing TEXT column can be redefined. Oracle refuses to MODIFY a CLOB column with its type restated
+     * (ORA-22859), which is how Knex compiles every column alteration. `supported` when omitted.
+     */
+    readonly textAlterations?: 'supported' | 'unsupported';
     readonly comments: 'complete' | 'unsupported';
     readonly booleanStorage: 'native' | 'integer' | 'decimal';
     readonly emptyStringIsNull: boolean;
