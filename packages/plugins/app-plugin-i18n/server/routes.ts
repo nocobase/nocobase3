@@ -35,6 +35,8 @@ export const i18nApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         tags: ['I18n'],
         summary: 'List the languages the server answers in',
         operationId: 'i18nListLocales',
+        // The sign-in page reads it before anyone is signed in.
+        security: [],
         description:
           'The server’s default language and every language it offers. Needs no session or API key.',
         responses: {

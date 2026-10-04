@@ -18,6 +18,8 @@ export const healthCheckApiRoutes: AppApiRouteContribution<HealthCheckRoutesAppl
         tags: ['App'],
         summary: 'Check that the application is up',
         operationId: 'checkHealth',
+        // Probes call it without a credential.
+        security: [],
         description:
           'Answers while the application serves requests. Probes and load balancers read this body, which keeps its own shape rather than `{ data }`.',
         responses: {

@@ -62,6 +62,26 @@ middleware, the other Route, or Server contribution order. The App Route guard
 and Settings access independently protect browser navigation; Client checks do
 not replace Server authentication or authorization.
 
+Every `/api` route declares itself for the application's API document, which a signed-in user reads at `/api/swagger/docs`. The API Route does it with `describeRoute()` from `@nocobase/app-server/router`, placed after the authentication middleware and before the handler; its response schema lives in `server/routes/schemas.ts` and carries `.meta({ ref })` so the document names it:
+
+```ts
+router.get(
+  '/routesExample',
+  describeRoute({
+    tags: ['RoutesExample'],
+    summary: 'Get the routes example greeting',
+    operationId: 'routesExampleGetGreeting',
+    responses: {
+      200: dataResponse(RoutesExampleGreeting),
+      ...apiErrorResponses,
+    },
+  }),
+  (context) => context.json({ data: { scope: 'api', ... } }),
+);
+```
+
+The tag is the plugin's namespace in PascalCase and the `operationId` is the namespace, a verb and the resource in camelCase, unique across the application. A route that reads input validates it with `apiValidator(target, schema)`, which answers `400 INVALID_INPUT` and documents the schema at once; the Root Route is outside `/api` and is not part of the document.
+
 The two small Server Routes are declared directly inside their production
 contribution factories, and their tests execute the real `createRouter()`
 functions with a test container. Complex domains may instead extract a focused

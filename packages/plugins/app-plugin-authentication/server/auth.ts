@@ -329,6 +329,14 @@ export class Auth {
     };
   }
 
+  /**
+   * The name of the cookie that carries a signed-in session, as Better Auth sets it under this configuration: the cookie
+   * prefix (`advanced.cookiePrefix`), `__Secure-` in front when cookies are secure, and any `advanced.cookies` rename.
+   */
+  async sessionCookieName(): Promise<string> {
+    return (await this.auth.$context).authCookies.sessionToken.name;
+  }
+
   /** @internal Used by the Authentication-owned administration service. */
   administrationContext(): typeof this.auth.$context {
     return this.auth.$context;

@@ -29,11 +29,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   BROWSER_ONLY_AUTH_PATHS,
+  PUBLIC_AUTH_PATHS,
   createAuthenticationApiFragment,
+  createSessionSecurityFragment,
 } from '../../api-docs.js';
 import type { Auth, AuthOpenAPISchema } from '../../auth.js';
 import authentication from '../../plugin.js';
 import { signIn, type TestSession } from '../../testing.js';
+import { createAuthFixture } from './support.js';
 
 const ORIGIN = 'http://localhost';
 const USER = {
@@ -160,7 +163,8 @@ describe('API documentation access and the Better Auth fragment', () => {
       operationId: 'signInEmail',
       summary: 'Sign in with email and password',
     });
-    expect(signInEmail).not.toHaveProperty('security');
+    // Signing in needs no credential, unlike the document's default.
+    expect(signInEmail?.security).toEqual([]);
     expect(paths['/api/auth/sign-in/username']?.post).toMatchObject({
       tags: ['Authentication'],
       operationId: 'signInUsername',
@@ -193,8 +197,66 @@ describe('API documentation access and the Better Auth fragment', () => {
     );
   });
 
+  it('names the session cookie as the security scheme every non-public operation requires', async () => {
+    const response = await request('/api/swagger', { cookie: session.cookie });
+    const document = (await response.json()) as ApiDocument;
+    const paths = document.paths ?? {};
+
+    expect(document.components?.securitySchemes).toEqual({
+      cookieAuth: expect.objectContaining({
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'main.session_token',
+      }),
+    });
+    expect(session.cookie).toContain('main.session_token=');
+    expect(document.security).toEqual([{ cookieAuth: [] }]);
+    for (const [pathname, item] of Object.entries(paths)) {
+      if (!pathname.startsWith('/api/auth/')) continue;
+      const isPublic = PUBLIC_AUTH_PATHS.includes(
+        pathname.slice('/api/auth'.length),
+      );
+      for (const operation of operations(item)) {
+        expect({ pathname, security: operation.security }).toEqual({
+          pathname,
+          security: isPublic ? [] : undefined,
+        });
+      }
+    }
+    for (const pathname of [
+      '/api/auth/get-session',
+      '/api/auth/sign-up/email',
+      '/api/auth/request-password-reset',
+      '/api/auth/is-username-available',
+    ])
+      expect(Object.keys(paths)).toContain(pathname);
+    expect(paths['/api/auth/list-sessions']?.get).not.toHaveProperty(
+      'security',
+    );
+  });
+
   it('declares every route the plugin registers', () => {
     expect(findUndeclaredApiRoutes(app.apiRouter!)).toEqual([]);
+  });
+});
+
+describe('createSessionSecurityFragment()', () => {
+  it('names the cookie Better Auth actually sets, with its prefix and the secure prefix', async () => {
+    const fixture = await createAuthFixture({
+      baseURL: 'https://shop.example.com/api/auth',
+      advanced: { cookiePrefix: 'shop-8443' },
+    });
+    try {
+      const fragment = await createSessionSecurityFragment(fixture.auth);
+      expect(fragment.components?.securitySchemes?.cookieAuth).toMatchObject({
+        type: 'apiKey',
+        in: 'cookie',
+        name: '__Secure-shop-8443.session_token',
+      });
+      expect(fragment.security).toEqual([{ cookieAuth: [] }]);
+    } finally {
+      await fixture.dispose();
+    }
   });
 });
 
@@ -227,6 +289,8 @@ describe('createAuthenticationApiFragment()', () => {
     expect(fragment.paths?.['/api/auth/is-username-available']?.post).toEqual({
       tags: ['Authentication'],
       responses: {},
+      // Answered without a session.
+      security: [],
     });
   });
 });

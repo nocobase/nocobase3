@@ -246,6 +246,8 @@ describe('the API document', () => {
     expect(document.paths?.['/api/i18n/locales']?.get).toMatchObject({
       operationId: 'i18nListLocales',
       tags: ['I18n'],
+      // Public: the document's credential requirement does not apply to it.
+      security: [],
     });
   });
 });

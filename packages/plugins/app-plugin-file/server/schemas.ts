@@ -13,6 +13,16 @@ const binary: SchemaObject = {
     'The file content. Its name and type become `filename`, `ext` and `mimeType`.',
 };
 
+/**
+ * The URL a file record's content is served at. It is added to every record a file exposure returns, the data endpoints'
+ * included, where it is declared as a computed field.
+ */
+export const contentUrlSchema: SchemaObject = {
+  type: 'string',
+  description:
+    "The stable URL that serves the content: the application's public base path, the exposure's access path, then `{id}.{ext}` (or `{id}` without an extension). It is derived, never persisted, and present when the record carries `id` and `ext`.",
+};
+
 /** The file record an upload creates, with the content URL the response adds. */
 export const fileRecordSchema: SchemaObject = {
   type: 'object',
@@ -45,11 +55,7 @@ export const fileRecordSchema: SchemaObject = {
     size: { type: 'integer', minimum: 0, description: 'The size in bytes.' },
     createdAt: { type: 'string', description: 'An ISO 8601 timestamp.' },
     updatedAt: { type: 'string', description: 'An ISO 8601 timestamp.' },
-    contentUrl: {
-      type: 'string',
-      description:
-        "The stable URL that serves the content: the application's public base path, the exposure's access path, then `{id}.{ext}` (or `{id}` without an extension). It is derived, never persisted.",
-    },
+    contentUrl: contentUrlSchema,
   },
 };
 

@@ -31,6 +31,7 @@ import {
   type ServerFileRepository,
 } from './repository.js';
 import {
+  contentUrlSchema,
   uploadManyBodySchema,
   uploadManyResultSchema,
   uploadOneBodySchema,
@@ -143,6 +144,8 @@ export function defineFileRepositoryApiRoutes<P = unknown>(
         connection,
         policy,
         actions,
+        // Added by the decoration middleware below to every record these endpoints return.
+        computedFields: { contentUrl: contentUrlSchema },
       }),
     ),
   });

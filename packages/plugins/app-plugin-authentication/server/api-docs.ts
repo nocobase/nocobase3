@@ -29,6 +29,34 @@ export const BROWSER_ONLY_AUTH_PATHS: readonly string[] = [
   '/error',
 ];
 
+/**
+ * Better Auth endpoints a caller reaches without being signed in, as paths relative to Better Auth's base path. Their
+ * operations declare `security: []`, so the document does not claim they need the credential every other operation
+ * does. A path the configured Better Auth plugins do not serve is simply absent from the document.
+ */
+export const PUBLIC_AUTH_PATHS: readonly string[] = [
+  '/ok',
+  '/get-session',
+  '/sign-up/email',
+  '/sign-in/email',
+  '/sign-in/username',
+  '/is-username-available',
+  '/request-password-reset',
+  '/forget-password',
+  '/reset-password',
+  '/send-verification-email',
+  '/sign-in/anonymous',
+  '/sign-in/magic-link',
+  '/sign-in/email-otp',
+  '/email-otp/send-verification-otp',
+  '/email-otp/verify-email',
+  '/email-otp/reset-password',
+  '/forget-password/email-otp',
+];
+
+/** The security scheme a signed-in session's cookie satisfies, in `components.securitySchemes`. */
+export const SESSION_SECURITY_SCHEME = 'cookieAuth';
+
 const PACKAGE_NAME = '@nocobase/app-plugin-authentication';
 
 /**
@@ -57,9 +85,37 @@ export function createSessionApiDocsAccess(
 }
 
 /**
+ * The session cookie as the document's security scheme, `cookieAuth`, and a top-level requirement naming it. The
+ * cookie's name is the one Better Auth sets under this application's configuration, prefix and `__Secure-` included.
+ * A browser on the application's origin sends it with every request, Swagger UI's included, so there is nothing to
+ * enter under "Authorize" for it.
+ */
+export async function createSessionSecurityFragment(
+  auth: Pick<Auth, 'sessionCookieName'>,
+): Promise<ApiDocumentFragment> {
+  return {
+    owner: PACKAGE_NAME,
+    namespace: AUTHENTICATION_API_NAMESPACE,
+    components: {
+      securitySchemes: {
+        [SESSION_SECURITY_SCHEME]: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: await auth.sessionCookieName(),
+          description:
+            'The session cookie Better Auth sets on sign-in. A browser sends it by itself; a script signs in through `/api/auth/sign-in/*` and sends the cookie back.',
+        },
+      },
+    },
+    security: [{ [SESSION_SECURITY_SCHEME]: [] }],
+  };
+}
+
+/**
  * Better Auth's endpoints as an API document fragment, built from Better Auth's own OpenAPI generator: every endpoint
  * the configured Better Auth plugins serve, at its full `/api/auth/...` path below the application's base path, tagged
- * `Authentication`. The endpoints in `BROWSER_ONLY_AUTH_PATHS` are left out.
+ * `Authentication`. The endpoints in `BROWSER_ONLY_AUTH_PATHS` are left out, and those in `PUBLIC_AUTH_PATHS` declare
+ * `security: []`.
  */
 export async function createAuthenticationApiFragment(
   auth: Auth,
@@ -73,7 +129,7 @@ export async function createAuthenticationApiFragment(
     const operations: OpenAPIV3_1.PathItemObject = {};
     for (const [method, operation] of Object.entries(item)) {
       (operations as Record<string, OpenAPIV3_1.OperationObject>)[method] =
-        toOperation(operation);
+        toOperation(operation, PUBLIC_AUTH_PATHS.includes(path));
     }
     paths[`${prefix}${path}`] = operations;
   }
@@ -104,9 +160,11 @@ function appLocalPath(basePath: string, publicBasePath: string): string {
 
 function toOperation(
   operation: AuthOpenAPIOperation,
+  isPublic: boolean,
 ): OpenAPIV3_1.OperationObject {
   // Better Auth marks every operation as bearer-authenticated, which no NocoBase application configures; a session
-  // cookie or an API key is what authenticates these requests, so the claim is dropped rather than repeated.
+  // cookie or an API key is what authenticates these requests, which the document's own requirement says. A public
+  // endpoint opts out of that requirement with `security: []`.
   const { security: _security, description, tags: _tags, ...rest } = operation;
   const summary =
     description ??
@@ -115,6 +173,7 @@ function toOperation(
     ...(rest as OpenAPIV3_1.OperationObject),
     tags: [AUTHENTICATION_API_TAG],
     ...(summary ? { summary } : {}),
+    ...(isPublic ? { security: [] } : {}),
   };
 }
 

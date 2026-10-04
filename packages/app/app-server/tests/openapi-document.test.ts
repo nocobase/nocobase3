@@ -404,6 +404,90 @@ describe('API document fragments', () => {
     expect(document.components!.schemas!.ExtThing2).toEqual({ type: 'number' });
     expect(warnings).toHaveLength(4);
   });
+
+  it('has no security schemes or requirement while nothing contributes one', async () => {
+    const document = await documentOf(createApp());
+
+    expect(document).not.toHaveProperty('security');
+    expect(document.components).not.toHaveProperty('securitySchemes');
+  });
+
+  it('lists contributed security schemes and offers each requirement as an alternative', async () => {
+    const app = createApp((docs) => {
+      docs.addFragment({
+        owner: '@nocobase/app-plugin-authentication',
+        components: {
+          securitySchemes: {
+            cookieAuth: {
+              type: 'apiKey',
+              in: 'cookie',
+              name: 'main.session_token',
+            },
+          },
+        },
+        security: [{ cookieAuth: [] }],
+      });
+      docs.addFragment(() => ({
+        owner: '@nocobase/app-plugin-api-keys',
+        components: {
+          securitySchemes: {
+            apiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+          },
+        },
+        security: [{ apiKeyAuth: [] }, { cookieAuth: [] }],
+      }));
+    });
+    const document = await documentOf(app);
+
+    expect(document.components!.securitySchemes).toEqual({
+      cookieAuth: { type: 'apiKey', in: 'cookie', name: 'main.session_token' },
+      apiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+    });
+    expect(document.security).toEqual([{ cookieAuth: [] }, { apiKeyAuth: [] }]);
+    // A route that needs no credential says so, overriding the document's requirement.
+    expect(document.paths!['/api/healthz']!.get!.security).toEqual([]);
+    expect(document.paths!['/api/orders/{orderId}']!.get).not.toHaveProperty(
+      'security',
+    );
+  });
+
+  it('follows a renamed security scheme into the requirements that name it', () => {
+    const document: ApiDocument = {
+      openapi: '3.1.0',
+      info: { title: 't', version: '1' },
+      paths: {},
+      components: {
+        securitySchemes: { tokenAuth: { type: 'http', scheme: 'bearer' } },
+      },
+      security: [{ tokenAuth: [] }],
+    };
+    mergeApiDocumentFragment(document, {
+      owner: 'example',
+      namespace: 'ext',
+      paths: {
+        '/api/x': { get: { security: [{ tokenAuth: [] }], responses: {} } },
+      },
+      components: {
+        securitySchemes: {
+          tokenAuth: { type: 'apiKey', in: 'header', name: 'x-token' },
+        },
+      },
+      security: [{ tokenAuth: [] }],
+    });
+
+    expect(document.components!.securitySchemes!.extTokenAuth).toEqual({
+      type: 'apiKey',
+      in: 'header',
+      name: 'x-token',
+    });
+    expect(document.security).toEqual([
+      { tokenAuth: [] },
+      { extTokenAuth: [] },
+    ]);
+    expect(document.paths!['/api/x']!.get!.security).toEqual([
+      { extTokenAuth: [] },
+    ]);
+  });
 });
 
 describe('API documentation routes', () => {
@@ -498,7 +582,9 @@ describe('API documentation routes', () => {
     const initializer = await request(app, '/api/swagger/docs/initializer.js', {
       headers,
     });
-    expect(await initializer.text()).toContain("url: '../swagger'");
+    const script = await initializer.text();
+    expect(script).toContain("url: '../swagger'");
+    expect(script).toContain('persistAuthorization: true');
 
     const css = await request(app, '/api/swagger/docs/swagger-ui.css', {
       headers,

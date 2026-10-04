@@ -29,6 +29,7 @@ import {
 import type { Context } from 'hono';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { createApiKeySecurityFragment } from '../server/api-docs.js';
 import apiKeys, { apiKey, createApiKeyApiDocsAccess } from '../server/index.js';
 
 const ORIGIN = 'http://localhost';
@@ -235,5 +236,68 @@ describe('API documentation access with an API key', () => {
     ])
       expect(Object.keys(paths)).toContain(pathname);
     expect(findUndeclaredApiRoutes(app.apiRouter!)).toEqual([]);
+  });
+
+  it('offers the session cookie and the API key as alternative credentials, and none for public routes', async () => {
+    const { key } = await issueKey('security-reader');
+    const response = await request('/api/swagger', {
+      headers: { 'x-api-key': key },
+    });
+    const document = (await response.json()) as ApiDocument;
+
+    expect(document.components?.securitySchemes).toEqual({
+      cookieAuth: expect.objectContaining({
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'main.session_token',
+      }),
+      apiKeyAuth: expect.objectContaining({
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-api-key',
+      }),
+    });
+    expect(document.security).toEqual([{ cookieAuth: [] }, { apiKeyAuth: [] }]);
+    const paths = document.paths ?? {};
+    expect(paths['/api/auth/sign-in/email']?.post?.security).toEqual([]);
+    expect(paths['/api/auth/api-key/create']?.post).not.toHaveProperty(
+      'security',
+    );
+  });
+});
+
+describe('createApiKeySecurityFragment()', () => {
+  const authWith = (plugin: unknown) => () => ({
+    plugin: <T>() => plugin as T,
+  });
+
+  it('names the first header a configuration reads keys from', () => {
+    const fragment = createApiKeySecurityFragment(
+      authWith(apiKey({ apiKeyHeaders: ['x-token', 'x-api-key'] })),
+    );
+    expect(fragment.components?.securitySchemes?.apiKeyAuth).toMatchObject({
+      type: 'apiKey',
+      in: 'header',
+      name: 'x-token',
+    });
+    expect(
+      (
+        fragment.components?.securitySchemes?.apiKeyAuth as {
+          description: string;
+        }
+      ).description,
+    ).toContain('`x-api-key`');
+    expect(fragment.security).toEqual([{ apiKeyAuth: [] }]);
+  });
+
+  it('contributes nothing when keys do not authenticate requests', () => {
+    for (const plugin of [
+      undefined,
+      apiKey({ enableSessionForAPIKeys: false }),
+    ]) {
+      expect(createApiKeySecurityFragment(authWith(plugin))).toEqual({
+        owner: '@nocobase/app-plugin-api-keys',
+      });
+    }
   });
 });

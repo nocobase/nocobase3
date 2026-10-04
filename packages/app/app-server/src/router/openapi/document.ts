@@ -38,6 +38,14 @@ export interface ApiDocumentFragment {
   readonly paths?: OpenAPIV3_1.PathsObject;
   readonly components?: OpenAPIV3_1.ComponentsObject;
   readonly tags?: readonly OpenAPIV3_1.TagObject[];
+  /**
+   * Security requirements the fragment adds to the document's top-level `security`, naming schemes declared in its
+   * `components.securitySchemes`. The document lists every contributed requirement, each one an alternative: a
+   * request satisfying any of them is authenticated, such as `[{ cookieAuth: [] }, { apiKeyAuth: [] }]`. A route that
+   * needs no credential declares `security: []` in its `describeRoute()`. With nothing contributed the document has no
+   * top-level `security`.
+   */
+  readonly security?: readonly OpenAPIV3_1.SecurityRequirementObject[];
 }
 
 export interface GenerateApiDocumentOptions {
@@ -340,12 +348,14 @@ function sameJson(left: unknown, right: unknown): boolean {
  * Merge one fragment into a document in place.
  *
  * - A component whose name is free is added; one identical to an existing component is shared; one that differs is
- *   renamed with the fragment's namespace in PascalCase as prefix (`AuthSession`), and every `$ref` in the fragment
- *   follows the rename.
+ *   renamed with the fragment's namespace in PascalCase as prefix (`AuthSession`; a security scheme takes it in
+ *   camelCase, `authCookieAuth`), and every `$ref` and security requirement in the fragment follows the rename.
  * - An operation whose method and path the document already has is dropped with a warning: a declared route is what
  *   actually answers.
  * - An `operationId` already in use is prefixed with the namespace (`authSignIn`), then numbered if still taken.
  * - Tags merge by name; a description already in the document wins.
+ * - Security requirements are appended to the document's top-level `security` unless an identical one is already
+ *   there, following any rename of the security schemes they name.
  */
 export function mergeApiDocumentFragment(
   document: ApiDocument,
@@ -373,8 +383,12 @@ export function mergeApiDocumentFragment(
         continue;
       }
       if (sameJson(existing, component)) continue;
+      // Security schemes are named in camelCase, as a requirement names them (`authCookieAuth`); every other component
+      // in PascalCase (`AuthSession`).
       const renamed = uniqueName(
-        `${capitalize(namespace)}${name}`,
+        kind === 'securitySchemes'
+          ? `${namespace}${capitalize(name)}`
+          : `${capitalize(namespace)}${name}`,
         (candidate) =>
           components[kind]?.[candidate] !== undefined ||
           fragmentComponents[kind]?.[candidate] !== undefined,
@@ -391,6 +405,31 @@ export function mergeApiDocumentFragment(
   }
   for (const [kind, name, component] of additions) {
     (components[kind] ??= {})[name] = rewriteRefs(component, renames);
+  }
+  // A security requirement names its scheme by key rather than by `$ref`, so a renamed scheme is followed here.
+  const schemeRenames = new Map<string, string>();
+  for (const [from, to] of renames) {
+    const prefix = '#/components/securitySchemes/';
+    if (from.startsWith(prefix))
+      schemeRenames.set(from.slice(prefix.length), to.slice(prefix.length));
+  }
+  const renameSecurity = (
+    requirements: readonly OpenAPIV3_1.SecurityRequirementObject[],
+  ): OpenAPIV3_1.SecurityRequirementObject[] =>
+    requirements.map((requirement) =>
+      Object.fromEntries(
+        Object.entries(requirement).map(([name, scopes]) => [
+          schemeRenames.get(name) ?? name,
+          scopes,
+        ]),
+      ),
+    );
+  if (fragment.security && fragment.security.length > 0) {
+    const security = (document.security ??= []);
+    for (const requirement of renameSecurity(fragment.security)) {
+      if (!security.some((existing) => sameJson(existing, requirement)))
+        security.push(requirement);
+    }
   }
 
   const operationIds = new Set<string>();
@@ -418,6 +457,8 @@ export function mergeApiDocumentFragment(
         continue;
       }
       const operation = { ...(value as OpenAPIV3_1.OperationObject) };
+      if (operation.security && schemeRenames.size > 0)
+        operation.security = renameSecurity(operation.security);
       if (operation.operationId && operationIds.has(operation.operationId)) {
         const renamed = uniqueName(
           `${namespace}${capitalize(operation.operationId)}`,

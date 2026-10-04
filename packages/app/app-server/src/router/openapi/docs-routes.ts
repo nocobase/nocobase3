@@ -62,6 +62,9 @@ const initializer = `window.ui = SwaggerUIBundle({
   url: '../swagger',
   dom_id: '#swagger-ui',
   deepLinking: true,
+  // Keep what "Authorize" was given, such as an API key, across reloads of the page. A signed-in session needs
+  // nothing here: the browser sends its cookie with every request the page makes to its own origin.
+  persistAuthorization: true,
 });
 `;
 

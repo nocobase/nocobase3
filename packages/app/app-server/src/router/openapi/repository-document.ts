@@ -14,6 +14,8 @@ import { describeRoute, type DescribeRouteOptions } from 'hono-openapi';
 import type { OpenAPIV3_1 } from 'openapi-types';
 
 import type { RepositoryApiAction } from '../repository-routes.js';
+import type { ApiSchema } from './describe.js';
+import { convertApiSchema } from './schema.js';
 
 /** The operation extension a data endpoint's declaration carries until the document generator expands it. */
 const repositoryExtension = 'x-nocobase-repository';
@@ -29,6 +31,8 @@ export interface RepositoryEndpointDescriptor {
   readonly maxLimit: number;
   /** The exposure's fixed Policy, or `undefined` when the Policy is built per request from the principal. */
   readonly policy: NormalizedRepositoryPolicy | undefined;
+  /** Fields the exposure adds to every returned record, documented read-only in its record schema. */
+  readonly computedFields: Readonly<Record<string, ApiSchema>>;
   readonly loadCollection: () => Promise<CollectionDefinition | undefined>;
 }
 
@@ -423,19 +427,62 @@ interface ExposureSchemas {
   readonly sortableFields: readonly string[];
 }
 
-function buildExposureSchemas(
+/**
+ * The exposure's computed fields as read-only record properties, converted under the document's conventions, with the
+ * components their schemas refer to added to `schemas`. A name the Collection also has is left to the Collection: the
+ * routes refuse such a declaration when they are created, so this only happens when the Collection gained the field
+ * afterwards.
+ */
+async function computedFieldProperties(
   descriptor: RepositoryEndpointDescriptor,
   collection: CollectionDefinition | undefined,
   schemas: Record<string, SchemaOrRef>,
-): ExposureSchemas {
+): Promise<Record<string, SchemaOrRef>> {
+  const taken = new Set((collection?.fields ?? []).map((field) => field.name));
+  const properties: Record<string, SchemaOrRef> = {};
+  for (const [name, schema] of Object.entries(descriptor.computedFields)) {
+    if (taken.has(name)) continue;
+    let converted: SchemaOrRef;
+    if (typeof schema === 'object' && '~standard' in schema) {
+      const result = await convertApiSchema(schema, 'output');
+      converted = result.schema;
+      for (const [key, component] of Object.entries(
+        result.components?.schemas ?? {},
+      ))
+        schemas[key] ??= component;
+    } else {
+      converted = schema;
+    }
+    properties[name] = { ...converted, readOnly: true };
+  }
+  return properties;
+}
+
+function computedNote(names: readonly string[]): string {
+  if (names.length === 0) return '';
+  return ` ${names.map((name) => `\`${name}\``).join(', ')} ${names.length > 1 ? 'are' : 'is'} added by the server to the records it returns rather than stored: never written, selected, filtered or sorted on.`;
+}
+
+async function buildExposureSchemas(
+  descriptor: RepositoryEndpointDescriptor,
+  collection: CollectionDefinition | undefined,
+  schemas: Record<string, SchemaOrRef>,
+): Promise<ExposureSchemas> {
   const prefix = pascal(descriptor.exposure);
   const principalDependent = descriptor.policy === undefined;
   const note = principalDependent ? principalNote : '';
+  const computed = await computedFieldProperties(
+    descriptor,
+    collection,
+    schemas,
+  );
+  const computedText = computedNote(Object.keys(computed));
   if (!collection) {
     const missing = `The Collection \`${descriptor.collection}\` could not be read when this document was generated, so its fields are not listed.`;
     schemas[`${prefix}Record`] = {
       type: 'object',
-      description: missing,
+      description: `${missing}${computedText}`,
+      ...(Object.keys(computed).length > 0 ? { properties: computed } : {}),
       additionalProperties: true,
     };
     return {
@@ -486,9 +533,10 @@ function buildExposureSchemas(
       description: `The \`${relation.type}\` relation to \`${relation.target}\`. Returned only when \`select\` includes it.`,
     };
   }
+  Object.assign(recordProperties, computed);
   schemas[`${prefix}Record`] = {
     type: 'object',
-    description: `A \`${collection.name ?? descriptor.collection}\` record as \`${descriptor.exposure}\` returns it. Without \`select\` every listed scalar field is returned.${note}`,
+    description: `A \`${collection.name ?? descriptor.collection}\` record as \`${descriptor.exposure}\` returns it. Without \`select\` every listed scalar field is returned.${computedText}${note}`,
     properties: recordProperties,
   };
 

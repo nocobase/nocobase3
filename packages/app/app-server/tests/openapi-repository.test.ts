@@ -11,6 +11,7 @@ import {
 } from '@nocobase/db-testing';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import {
   afterAll,
   afterEach,
@@ -430,5 +431,99 @@ describe('data endpoints in the API document', () => {
     ).toEqual({
       $ref: '#/components/schemas/RepositoryFilter',
     });
+  });
+
+  it('lists computed fields read-only in the record schema and nowhere in the request', async () => {
+    const document = await documentFor([
+      {
+        name: 'salesOrders',
+        collection: 'orders',
+        policy: open,
+        actions: { findMany: {}, findOne: {}, createOne: {}, deleteOne: {} },
+        computedFields: {
+          trackingUrl: z
+            .string()
+            .meta({ description: 'Where to track the order.' }),
+          summary: {
+            type: 'object',
+            properties: { lines: { type: 'integer' } },
+          },
+        },
+      },
+    ]);
+
+    const record = schemaOf(document, 'SalesOrdersRecord');
+    expect(record.properties!.trackingUrl).toEqual({
+      type: 'string',
+      description: 'Where to track the order.',
+      readOnly: true,
+    });
+    expect(record.properties!.summary).toMatchObject({
+      type: 'object',
+      readOnly: true,
+    });
+    expect(record.description).toContain(
+      '`trackingUrl`, `summary` are added by the server',
+    );
+    // Every record a response carries is this one schema, so findMany, findOne and the mutation results all list them.
+    const success = (action: string) =>
+      (
+        document.paths![`/api/salesOrders/${action}`]!.post!.responses![
+          '200'
+        ] as OpenAPIV3_1.ResponseObject
+      ).content!['application/json']!.schema;
+    expect(JSON.stringify(success('findMany'))).toContain('SalesOrdersRecord');
+    expect(JSON.stringify(success('createOne'))).toContain('SalesOrdersRecord');
+
+    expect(
+      schemaOf(document, 'SalesOrdersCreateValues').properties,
+    ).not.toHaveProperty('trackingUrl');
+    const shorthand = (
+      schemaOf(document, 'SalesOrdersFilter').anyOf as Schema[]
+    )[0]!;
+    expect(shorthand.properties).not.toHaveProperty('trackingUrl');
+    expect(
+      JSON.stringify(schemaOf(document, 'SalesOrdersFilterCondition')),
+    ).not.toContain('trackingUrl');
+    expect(
+      requestSchema(document, '/api/salesOrders/findMany').properties.sort!
+        .description,
+    ).not.toContain('trackingUrl');
+  });
+
+  it('refuses a computed field named like a field of the Collection when the routes are created', async () => {
+    const routes = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'salesOrders',
+          collection: 'orders',
+          policy: open,
+          actions: { findOne: {} },
+          computedFields: { title: z.string() },
+        },
+      ],
+    });
+    await expect(
+      Promise.resolve(routes.createRouter({ container })),
+    ).rejects.toThrow(
+      'Repository API exposure "salesOrders" declares computed field "title", which is also a field of the Collection "orders".',
+    );
+  });
+
+  it('refuses a malformed computedFields declaration where it is written', () => {
+    expect(() =>
+      defineRepositoryApiRoutes({
+        repositories: [
+          {
+            name: 'salesOrders',
+            policy: open,
+            actions: {},
+            computedFields: { trackingUrl: 'string' as never },
+          },
+        ],
+      }),
+    ).toThrow(
+      'computed field "trackingUrl" must be described by a Standard Schema or an OpenAPI schema object',
+    );
   });
 });

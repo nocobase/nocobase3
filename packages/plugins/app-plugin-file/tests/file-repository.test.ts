@@ -840,6 +840,75 @@ describe('API document', () => {
     ]);
     expect(upload?.description).toContain('1024 bytes');
   });
+
+  it('documents every computed field the responses carry, read-only in the record schema', async () => {
+    const { apiRouter, router, db } = await fixture();
+    const document = await generateApiDocument(apiRouter, {
+      info: { title: 'test', version: '0.0.0' },
+    });
+    const record = document.components?.schemas?.AttachmentsRecord as {
+      properties: Record<string, { readOnly?: boolean; type?: string }>;
+    };
+    expect(record.properties.contentUrl).toMatchObject({
+      type: 'string',
+      readOnly: true,
+    });
+    expect(
+      (
+        document.components?.schemas?.AttachmentsCreateValues as {
+          properties: Record<string, unknown>;
+        }
+      ).properties,
+    ).not.toHaveProperty('contentUrl');
+    // The computed fields are the record properties the Collection does not have.
+    const collection = await db.collections().get('attachments');
+    const stored = new Set((collection?.fields ?? []).map(({ name }) => name));
+    const computed = Object.keys(record.properties).filter(
+      (name) => !stored.has(name),
+    );
+    expect(computed).toEqual(['contentUrl']);
+
+    const post = async (action: string, body: unknown) => {
+      const response = await router.request(`/main/api/attachments/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { data: Record<string, unknown> })
+        .data;
+    };
+    const now = new Date().toISOString().slice(0, 23);
+    const created = (await post('createOne', {
+      values: {
+        id: '7b0e8a52-3c1d-4e9a-9f2b-0c6d5e4f3a21',
+        disk: 'local',
+        key: 'manual/report.pdf',
+        filename: 'report.pdf',
+        ext: 'pdf',
+        mimeType: 'application/pdf',
+        size: '42',
+        createdAt: now,
+        updatedAt: now,
+      },
+    })) as { record: Record<string, unknown> };
+    const found = await post('findOne', {
+      filter: { id: '7b0e8a52-3c1d-4e9a-9f2b-0c6d5e4f3a21' },
+    });
+    const [listed] = (await post('findMany', {})) as unknown as Record<
+      string,
+      unknown
+    >[];
+    for (const returned of [created.record, found, listed]) {
+      for (const name of computed)
+        expect({ [name]: returned?.[name] }).toEqual({
+          [name]: expect.any(String),
+        });
+    }
+    expect(found.contentUrl).toBe(
+      '/main/uploads/attachments/7b0e8a52-3c1d-4e9a-9f2b-0c6d5e4f3a21.pdf',
+    );
+  });
 });
 
 describe('service providers and uncertain commits', () => {

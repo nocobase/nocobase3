@@ -133,16 +133,30 @@ export function findRequestApiKey(
   plugin: Pick<ApiKeysPlugin, 'options'>,
   headers: Headers,
 ): string | undefined {
+  for (const name of requestApiKeyHeaders(plugin)) {
+    const value = headers.get(name);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
+ * The headers a request may carry its API key in, in the order `findRequestApiKey` reads them: those of each
+ * configuration that turns keys into sessions, `x-api-key` unless configured, without one that has a
+ * `customAPIKeyGetter`.
+ */
+export function requestApiKeyHeaders(
+  plugin: Pick<ApiKeysPlugin, 'options'>,
+): string[] {
+  const headers: string[] = [];
   for (const configuration of plugin.options.configurations) {
     if (!configuration.enableSessionForAPIKeys) continue;
     if (configuration.customAPIKeyGetter) continue;
     const names = configuration.apiKeyHeaders ?? 'x-api-key';
-    for (const name of Array.isArray(names) ? names : [names]) {
-      const value = headers.get(name);
-      if (value) return value;
-    }
+    for (const name of Array.isArray(names) ? names : [names])
+      if (!headers.includes(name)) headers.push(name);
   }
-  return undefined;
+  return headers;
 }
 
 export function apiKey(

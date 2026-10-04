@@ -51,7 +51,8 @@ export interface ApiDocsTarget {
  *   registered, and only to a request one of them allows. With none registered the routes answer `404
  *   ROUTE_NOT_FOUND`, exactly like a path that does not exist: an application that has no way to tell who is asking
  *   does not publish its API. With checks registered and none allowing, they answer `401 UNAUTHENTICATED`.
- * - Fragments: paths, components and tags a plugin documents itself, merged after the declared routes.
+ * - Fragments: paths, components, tags and security schemes a plugin documents itself, merged after the declared
+ *   routes.
  * - Cache: the document is generated on the first request and kept until `invalidate()`, which anything that changes
  *   what the document describes calls — a Collection's metadata changing changes its data endpoints' schemas.
  */
