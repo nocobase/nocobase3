@@ -358,7 +358,7 @@ Hub 的发布密钥（`Authorization: Bearer hub_app_…`）不是全应用通�
 
 **2. 认证插件和 API Key 插件：访问检查、认证方式和 Better Auth 的接口。** 认证插件注册会话检查，补上 `cookieAuth`，再调用 Better Auth 自己的 OpenAPI 生成器，把它服务的全部接口（包括应用配置的 Better Auth 插件的接口）以 `/api/auth/...` 的完整路径合并进来，归入 `Authentication` 分组。只在浏览器里走的步骤，比如第三方登录跳转、OAuth 回调、邮件里的链接和错误页，不放进文档；Better Auth 自带的 `/reference` 页面也不提供，全应用只有一个文档入口。API Key 插件注册 API Key 检查，补上 `apiKeyAuth`。
 
-**3. 权限插件：分发器后面的设置接口。** `/api/authorization` 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册一个 Hono 路由，路由里的每一条都用 `describeRoute()` 声明。这样注册的路由会以完整的 `/api/authorization/...` 路径自动进入文档，也和其他路由一样接受检查。
+**3. 权限插件：分发器后面的设置接口。** `/api/authorization` 是一个分发器，请求到达时才转给权限插件和三个规则插件注册的处理函数。规则插件用 `authz.routes.add(path, createRouteHandler(router))` 注册一个 Hono 路由，路由里的每一条都用 `describeRoute()` 声明。这样注册的路由会以完整的 `/api/authorization/...` 路径自动进入文档，也和其他路由一样接受检查。这背后是 app-server 提供的通用机制：任何通过运行时分发器转发请求的插件，都用 `apiDocsToken` 的 `addApiRouter()` 登记被转发的路由器，用 `addUndeclaredApiRoute()` 登记看不进去的转发目标（比如一个普通函数，它总是被报告为未声明），权限插件启动时调用的 `documentAuthorizationRoutes()` 就是基于它们实现的。
 
 **4. 每个插件和应用：在路由上写声明。** 写法见下一节。
 
