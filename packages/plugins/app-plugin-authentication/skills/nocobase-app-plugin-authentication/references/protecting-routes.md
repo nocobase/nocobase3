@@ -24,7 +24,9 @@ export const apiRoutes: AppApiRouteContribution<Application> = defineApiRoutes(
     routes.use('/orders/*', auth.required());
     routes.get('/orders', (context) => {
       const { user, session } = context.get('auth')!;
-      return context.json({ userId: user.id, expiresAt: session.expiresAt });
+      return context.json({
+        data: { userId: user.id, expiresAt: session.expiresAt.toISOString() },
+      });
     });
 
     return routes;
