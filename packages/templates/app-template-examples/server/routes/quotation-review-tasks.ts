@@ -10,7 +10,12 @@ import type { Application } from '@nocobase/app-server/application';
 import {
   ApiError,
   apiErrorHandler,
-  parseApiInput,
+  apiValidator,
+  apiErrorResponse,
+  dataResponse,
+  describeRoute,
+  listResponse,
+  resolver,
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
@@ -22,9 +27,14 @@ import {
 } from '@nocobase/db';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { validator } from 'hono/validator';
-import { EXAMPLES_APP_DOMAIN } from './domain.js';
 import {
+  EXAMPLES_APP_DOMAIN,
+  EXAMPLES_APP_TAGS as tags,
+  hideDatabaseUnavailable,
+} from './domain.js';
+import {
+  QuotationReviewTask,
+  QuotationReviewDetail,
   QuotationReviewParams,
   QuotationReviewQuery,
   QuotationReviewDecision,
@@ -46,7 +56,7 @@ export const quotationReviewTaskRoutes: AppApiRouteContribution<Application> =
       !app.container.has(databaseManagerToken) ||
       !app.container.has(workflowServiceToken)
     ) {
-      routes.all('*', () => {
+      routes.all('*', hideDatabaseUnavailable, () => {
         throw new ApiError({
           status: 'UNAVAILABLE',
           reason: 'SERVICE_UNAVAILABLE',
@@ -98,7 +108,18 @@ export const quotationReviewTaskRoutes: AppApiRouteContribution<Application> =
 
     routes.get(
       '/',
-      validator('query', (value) => parseApiInput(QuotationReviewQuery, value)),
+      describeRoute({
+        tags,
+        summary: 'List quotation review tasks',
+        operationId: 'examplesListQuotationReviewTasks',
+        responses: {
+          200: listResponse(QuotationReviewTask),
+          401: apiErrorResponse(401),
+          413: apiErrorResponse(413),
+          500: apiErrorResponse(500),
+        },
+      }),
+      apiValidator('query', QuotationReviewQuery),
       async (c) => {
         const { page, pageSize, q: search, status } = c.req.valid('query');
         const filter =
@@ -136,9 +157,24 @@ export const quotationReviewTaskRoutes: AppApiRouteContribution<Application> =
 
     routes.get(
       '/:taskId',
-      validator('param', (value) =>
-        parseApiInput(QuotationReviewParams, value),
-      ),
+      describeRoute({
+        tags,
+        summary: 'Get a quotation review task',
+        operationId: 'examplesGetQuotationReviewTask',
+        responses: {
+          200: {
+            description: 'The task and the current reviewer.',
+            content: {
+              'application/json': { schema: resolver(QuotationReviewDetail) },
+            },
+          },
+          401: apiErrorResponse(401),
+          404: apiErrorResponse(404),
+          413: apiErrorResponse(413),
+          500: apiErrorResponse(500),
+        },
+      }),
+      apiValidator('param', QuotationReviewParams),
       async (c) => {
         const { taskId: id } = c.req.valid('param');
         const row = await repository.findOne({ filter: { id } });
@@ -161,12 +197,23 @@ export const quotationReviewTaskRoutes: AppApiRouteContribution<Application> =
 
     routes.post(
       '/:taskId/submit',
-      validator('param', (value) =>
-        parseApiInput(QuotationReviewParams, value),
-      ),
-      validator('json', (value) =>
-        parseApiInput(QuotationReviewDecision, value),
-      ),
+      describeRoute({
+        tags,
+        summary: 'Submit a quotation review decision',
+        operationId: 'examplesSubmitQuotationReviewTask',
+        description:
+          'Records the decision and its resume request. Read the task processing status to learn whether the wait applied it.',
+        responses: {
+          200: dataResponse(QuotationReviewTask),
+          401: apiErrorResponse(401),
+          404: apiErrorResponse(404),
+          409: apiErrorResponse(409),
+          413: apiErrorResponse(413),
+          500: apiErrorResponse(500),
+        },
+      }),
+      apiValidator('param', QuotationReviewParams),
+      apiValidator('json', QuotationReviewDecision),
       async (c) => {
         const { taskId: id } = c.req.valid('param');
         const input = c.req.valid('json');

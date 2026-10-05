@@ -1,3 +1,4 @@
+import type { ReviewTask } from '../../client/pages/workflow-waiting-tasks/types.js';
 import { z } from 'zod';
 
 export const articleStatuses = ['draft', 'published', 'archived'] as const;
@@ -112,3 +113,119 @@ export const QuotationReviewDecision = z.strictObject({
   decision: z.enum(['approved', 'rejected']),
   comment: z.string().max(2000).trim(),
 });
+// Response schemas. Each carries a `ref` so the API document names it once and refers to it from every route.
+
+export const ExampleGreeting = z
+  .object({
+    scope: z.literal('api'),
+    message: z
+      .string()
+      .meta({ description: "The message the application's provider gives." }),
+  })
+  .meta({ ref: 'ExamplesGreeting' });
+
+export const Article = z
+  .object({
+    id: z.string().meta({ description: 'The article id, as a string.' }),
+    title: z.string(),
+    summary: z.string().nullable(),
+    content: z.string(),
+    status: z.enum(articleStatuses),
+    publishedAt: z.iso.datetime().nullable().meta({
+      description: 'When the article was first published; `null` until then.',
+    }),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .meta({ ref: 'ExamplesArticle' });
+
+const numericValue = z.unknown().meta({
+  description:
+    'As the driver returns it: a number, or a string for a type the dialect returns as text, such as `bigint` or `decimal` on some dialects; `null` when unset.',
+});
+
+export const NumericExamples = z
+  .object({
+    dialect: z
+      .string()
+      .meta({ description: 'The dialect of the main connection.' }),
+    source: z.enum(['query', 'repository']).meta({
+      description:
+        'Whether the rows were read with the query builder or through the Repository.',
+    }),
+    sample: z.enum(['all', 'null', 'empty']),
+    rows: z
+      .array(
+        z.object({
+          sample: z.string(),
+          id: numericValue,
+          integerValue: numericValue,
+          bigintValue: numericValue,
+          decimalValue: numericValue,
+          floatValue: numericValue,
+          doubleValue: numericValue,
+        }),
+      )
+      .meta({ description: 'At most 100 rows, in `orderBy` order.' }),
+    aggregates: z
+      .array(
+        z.object({
+          field: z.enum(numericOrderFields),
+          count: numericValue,
+          sum: numericValue,
+          avg: numericValue,
+          min: numericValue,
+          max: numericValue,
+        }),
+      )
+      .meta({
+        description: 'Count, sum, average, minimum and maximum per field.',
+      }),
+  })
+  .meta({ ref: 'ExamplesNumericExamples' });
+
+export const QuotationReviewTask: z.ZodType<ReviewTask> = z
+  .object({
+    id: z.string(),
+    runId: z.string(),
+    quotationId: z.string(),
+    totalCents: z.number(),
+    route: z.enum(['standard', 'manual-follow-up']),
+    status: z.enum(['pending', 'submitting', 'submitted', 'unavailable']),
+    waitStatus: z.string(),
+    resumeRequestId: z.string().nullable(),
+    resumeRequest: z
+      .union([
+        z.object({
+          status: z.enum(['executing', 'queued', 'processing', 'consumed']),
+          reason: z.null(),
+        }),
+        z.object({
+          status: z.literal('rejected'),
+          reason: z.enum([
+            'stale',
+            'run-ended',
+            'target-missing',
+            'commit-failed',
+          ]),
+        }),
+        z.object({ status: z.literal('not-found') }),
+      ])
+      .nullable(),
+    confirmedBy: z.string().nullable(),
+    reviewerId: z.string().nullable(),
+    decision: z.enum(['approved', 'rejected']).nullable(),
+    comment: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    submittedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ ref: 'ExamplesQuotationReviewTask' });
+
+export const QuotationReviewDetail = z
+  .object({
+    data: QuotationReviewTask,
+    meta: z.object({
+      currentReviewer: z.object({ id: z.string(), name: z.string() }),
+    }),
+  })
+  .meta({ ref: 'ExamplesQuotationReviewDetail' });

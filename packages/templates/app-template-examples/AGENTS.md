@@ -68,7 +68,7 @@ A feature with a page and an API touches five places: a migration for the table,
 
 Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [pages and routes](.agents/skills/nocobase-app-development/references/frontend/references/page.md) for each layout's scope.
 
-`client/layouts/components/layout-header.tsx` and `layout-sidebar.tsx` are presentation containers accepting children. App, Settings and Dev layouts own menus, branding, permissions, redirects, sidebar arrangement and mobile close controls; sidebar contents own scrolling and collapsed presentation. Desktop icon mode uses tooltips for leaf labels and hover popovers for groups, preserving filtered navigation, parent-page links and inline nested groups. Keep this behavior aligned across layouts. Desktop collapse state is shared through `useSidebarPreference` at `nocobase:sidebar:collapsed` across applications on the same origin; mobile visibility stays local to each layout.
+`client/layouts/components/layout-header.tsx` is a presentation container accepting children. The sidebar is shadcn's Sidebar: `components/app-sidebar.tsx` wraps its provider, desktop icon mode and phone sheet, and `components/navigation-menu.tsx` draws the permission-filtered route tree with `SidebarMenu*` and controlled `Collapsible` sub-menus. Leave `client/components/ui/sidebar.tsx` as the shadcn CLI writes it and customize from outside: widths go through the provider's `style` in spacing units, the phone sheet is rendered in `app-sidebar.tsx` with a translated title, and the provider's Ctrl/Cmd+B shortcut is stopped at `document`. App, Settings and Dev layouts own menus, branding, permissions and redirects. Desktop icon mode shows leaf labels as zero-delay tooltips and opens groups in hover and keyboard-focus popovers, preserving filtered navigation, parent-page links, nested groups and the selected group's highlight. Keep this behavior aligned across layouts. Desktop collapse state is shared through `useSidebarPreference` at `nocobase:sidebar:collapsed` across applications on the same origin; whether the phone sheet is open stays local to each layout.
 
 The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
@@ -122,7 +122,7 @@ pnpm exec prettier --write client/components/ui/card.tsx
 
 Build your own components by composing these primitives, and put them in `client/components/`. A page below another one — a covering child page, a record's own page — leaves by `BackButton` (`client/components/back-button.tsx`) above its heading; `Breadcrumbs` replaces it only when the user asks for breadcrumbs.
 
-`PageContainer`, `PageHeader`, `RouteDialog`, `RouteDrawer`, `RouteChildPage`, `useRouteOverlay` and `BackButton` in `client/components/` come from the NocoBase UI Library, as do the authentication layout and forms in `client/extensions/nocobase-auth-ui/`; like the rest of the source, they belong to the application. `yes n | pnpm exec shadcn add @nocobase/<item>` adds another item from the library: a single component lands in `client/components/`, a complete feature in `client/extensions/nocobase-<item>/`. A table and a date field come from it too, added before the first page that needs one rather than written from scratch: `@nocobase/data-table` adds `DataTable` with `DataTableColumnHeader`, `DataTablePagination` and `DataTableViewOptions` in `client/components/data-table/`, and `@nocobase/date-picker` adds `DatePicker` and `DateRangePicker` in `client/components/date-picker.tsx`, or `@nocobase/date-time-picker` for a time as well. The CLI adds the packages an item needs to `dependencies`: move the new ones, such as `@tanstack/react-table`, to `devDependencies`, as "Adding a dependency" below explains for everything client code imports, but leave `@nocobase/i18n` in `dependencies`, where the server needs it, and put back the `^` of its range, which the CLI pins.
+`PageContainer`, `PageHeader`, `RouteDialog`, `RouteDrawer`, `RouteChildPage`, `useRouteOverlay` and `BackButton` in `client/components/` come from the NocoBase UI Library, as do the authentication blocks in `client/extensions/nocobase-auth-forms/`, `nocobase-auth-methods/` and `nocobase-auth-split-layout/` that `client/pages/auth/` composes; like the rest of the source, they belong to the application. `yes n | pnpm exec shadcn add @nocobase/<item>` adds another item from the library: a single component lands in `client/components/`, a complete feature in `client/extensions/nocobase-<item>/`. A table and a date field come from it too, added before the first page that needs one rather than written from scratch: `@nocobase/data-table` adds `DataTable` with `DataTableColumnHeader`, `DataTablePagination` and `DataTableViewOptions` in `client/components/data-table/`, and `@nocobase/date-picker` adds `DatePicker` and `DateRangePicker` in `client/components/date-picker.tsx`, or `@nocobase/date-time-picker` for a time as well. The CLI adds the packages an item needs to `dependencies`: move the new ones, such as `@tanstack/react-table`, to `devDependencies`, as "Adding a dependency" below explains for everything client code imports, but leave `@nocobase/i18n` in `dependencies`, where the server needs it, and put back the `^` of its range, which the CLI pins.
 
 **Look components up in the shadcn skill.** The development Skill carries the shadcn/ui skill, unchanged from shadcn 4.21.0, in `.agents/skills/nocobase-app-development/references/frontend/shadcn/`. Read `references/frontend/references/shadcn.md` first: it routes to the skill's rules and states where this application departs from them, among others `pnpm exec shadcn` instead of `npx shadcn@latest`, no `shadcn apply` or `--preset`, and create, edit and detail as `RouteDialog` or `RouteDrawer` child routes rather than a `Sheet`. `pnpm exec shadcn docs <name>` gives one primitive's documentation and examples for the Base UI version. For a whole page, start from the worked example that `references/frontend/references/example.md` indexes.
 
@@ -141,8 +141,22 @@ export const apiRoutes: AppApiRouteContribution<Application> = defineApiRoutes(
     const auth = app.container.resolve(authenticationToken);
 
     router.use('/orders', auth.required());
-    router.get('/orders', async (context) =>
-      context.json({ data: await listOrders() }),
+    router.get(
+      '/orders',
+      describeRoute({
+        tags: ['Orders'],
+        summary: 'List orders',
+        operationId: 'listOrders',
+        responses: {
+          '200': listResponse(OrderSchema),
+          // A session but no permission check; the query validator adds the 400.
+          '401': apiErrorResponse(401),
+          '500': apiErrorResponse(500),
+        },
+      }),
+      apiValidator('query', ListOrdersQuery),
+      async (context) =>
+        context.json(await listOrders(context.req.valid('query'))),
     );
 
     return router;
@@ -150,7 +164,7 @@ export const apiRoutes: AppApiRouteContribution<Application> = defineApiRoutes(
 );
 ```
 
-**Every `/api` route follows the HTTP API design** in `.agents/skills/nocobase-app-development/references/http-api.md`: camelCase paths, `{ data }` on success, `throw new ApiError(...)` from `@nocobase/app-server/router` on failure, and input validated with zod through `parseApiInput()`. Never write an error body by hand.
+**Every `/api` route follows the HTTP API design** in `.agents/skills/nocobase-app-development/references/http-api.md`: camelCase paths, `{ data }` on success, `throw new ApiError(...)` from `@nocobase/app-server/router` on failure, input validated with zod through `apiValidator()`, and a `describeRoute()` declaration for the API document, all from `@nocobase/app-server/router`. Never write an error body by hand.
 
 **Every route owns its own security.** Mounting under `/api` does not authenticate anything. Install `auth.required()` on the paths the route owns, and add `authorization.middleware()` with an explicit `resource`/`action` check when the operation needs permission rather than just identity. Never rely on middleware from another route or on the order routes happen to be registered in.
 
@@ -161,6 +175,20 @@ A webhook that a third party calls cannot use a login session, so it is delibera
 Keep HTTP concerns in the route and domain logic in a service under `server/providers/`. Services do not read Hono contexts, return HTTP status codes, or decide retry behavior.
 
 Bind services to their existing tokens in a provider's `register()`; calling `createServiceToken` twice with the same name creates different keys. Do not connect to databases, start workers, or execute route factories at module top level. Acquire long-lived resources in `start()` and release them in `shutdown()`. Providers and routes read typed configuration rather than `process.env`.
+
+### API documentation
+
+The running application serves an OpenAPI 3.1 document of every `/api` route it has — its own, every registered plugin's, the data endpoints and Better Auth's `/api/auth/...` — at `<origin><APP_BASE_PATH>/api/swagger` (JSON), with Swagger UI at `<origin><APP_BASE_PATH>/api/swagger/docs`. Locally that is `http://127.0.0.1:13000/main/api/swagger/docs`, with `/main` replaced by the actual `APP_BASE_PATH`.
+
+Reading either needs a signed-in session or an API key: open the Swagger UI in a browser where you are signed in, or send a key in `x-api-key`. A user creates keys at `<APP_BASE_PATH>/settings/api-keys`; the `nocobase-app-plugin-api-keys` Skill covers the plugin. Without a valid credential the routes answer `401` with reason `API_DOCS_UNAUTHENTICATED`, and an application with no access check registered, such as one without the authentication plugin, answers `404`.
+
+```bash
+curl -H "x-api-key: <key>" http://127.0.0.1:13000/main/api/swagger
+```
+
+**Learn the available endpoints from this document instead of reading route sources.** Before calling an endpoint or building on one, fetch the JSON with a key the user gives you and find the operations by `tags` or `operationId`; read the source only for what the document does not say. Fetch it again after registering a plugin or changing a Collection.
+
+Every `/api` route the application writes declares itself, as in the example above: `tags`, an English `summary` and a unique camelCase `operationId`; input through `apiValidator()`; responses through `dataResponse()`, `listResponse()`, `emptyResponse()` and `apiErrorResponse(status)` for exactly the statuses the route can produce. Do not list `400` for input validation: a route that uses `apiValidator` gets the `400` automatically. List `400` yourself only for another reason, such as a failed precondition. `apiErrorResponses` is `401`, `403` and `500`, for an authenticated route with a permission check; otherwise list each status the route can return with `apiErrorResponse(code)`. Response schemas live in `server/routes/schemas.ts`, typed against what the service returns. A route reached without a credential adds `security: []`. Hide a route with `describeRoute({ hide: true })` and a comment only for the few reasons `references/http-api.md` lists. Data endpoints are documented without a declaration; a field a data exposure adds to every record goes in its `computedFields`. A test starting the application expects `findUndeclaredApiRoutes()` and `findApiDocumentSchemaProblems()` to be empty; `.agents/skills/nocobase-app-development/references/testing.md` shows it.
 
 ### Database
 
@@ -196,7 +224,7 @@ At runtime, resolve `databaseManagerToken` from the container and use `database.
 
 ### User-facing text
 
-Every string a user reads goes through a translation key. `client/locales/en-US.ts` states the wording and derives the shape that other locales are checked against, so a missing key in `zh-CN.ts` is a compile error. Both spread the sign-in pages' copy from `client/extensions/nocobase-auth-ui/locales/` ahead of the application's own keys in `messages`, so a new language needs a translation of that file too; `.agents/skills/nocobase-app-development/references/frontend/references/i18n.md` shows how.
+Every string a user reads goes through a translation key. `client/locales/en-US.ts` states the wording and derives the shape that other locales are checked against, so a missing key in `zh-CN.ts` is a compile error. The sign-in pages' copy lives there too, under `auth.*`: the authentication components take their text as props, which the pages in `client/pages/auth/` translate.
 
 ```tsx
 const { t } = useTranslation();
