@@ -352,7 +352,6 @@ export async function generateApiDocument(
       responses: { ...base.responses, ...generated.components.responses },
     },
   };
-  await expandRepositoryOperations(document);
   const warn = options.onWarning ?? (() => undefined);
   // Routes behind a runtime dispatcher are declared routes too: merged before the fragments, so a fragment operation on
   // the same method and path is the one dropped. Their components are generated from the same base, so the shared
@@ -380,6 +379,9 @@ export async function generateApiDocument(
       warn,
     );
   }
+  // Data endpoints are expanded once every router is in, so a dispatcher forwarding one documents it in full too.
+  // Fragments come after: they carry finished operations, never a data endpoint placeholder.
+  await expandRepositoryOperations(document);
   for (const fragment of options.fragments ?? []) {
     mergeApiDocumentFragment(document, fragment, warn);
   }

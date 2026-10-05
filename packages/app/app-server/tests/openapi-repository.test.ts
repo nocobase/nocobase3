@@ -133,6 +133,41 @@ describe('data endpoints in the API document', () => {
     return document;
   }
 
+  it('expands data endpoints a runtime dispatcher forwards to, as it does those mounted on /api', async () => {
+    const forwarded = await defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'salesOrders',
+          collection: 'orders',
+          policy: open,
+          actions: { findOne: {}, createOne: {} },
+        },
+      ],
+    }).createRouter({ container });
+    const document = await generateApiDocument(new Hono(), {
+      info: { title: 'Test', version: '1' },
+      forwarded: {
+        routers: [
+          { owner: 'dispatcher', prefix: '/api/dispatched', router: forwarded },
+        ],
+        undeclared: [],
+      },
+    });
+
+    expect(findApiDocumentSchemaProblems(document)).toEqual([]);
+    expect(JSON.stringify(document)).not.toContain('x-nocobase-repository');
+    const operation =
+      document.paths!['/api/dispatched/salesOrders/createOne']!.post!;
+    expect(operation.operationId).toBe('salesOrdersCreateOne');
+    expect(
+      requestSchema(document, '/api/dispatched/salesOrders/createOne')
+        .properties.values,
+    ).toBeDefined();
+    expect(schemaOf(document, 'SalesOrdersRecord').properties).toHaveProperty(
+      'title',
+    );
+  });
+
   it('documents every action of an exposure without a hand-written declaration', async () => {
     const document = await documentFor([
       {
