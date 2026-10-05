@@ -459,14 +459,20 @@ The child modules default-export their content and do not add a second Tabs root
 
 ## Behavior test for redirect, query, and access fallback
 
-The following test uses Vitest, Testing Library, and React Router directly, following the repository's current page-test pattern. Its module mocks are declared in the test itself; it does not rely on a fictional render helper.
+The following test uses Vitest, Testing Library, and React Router directly, following the repository's current page-test pattern. It mocks only the services the page reaches outside itself for, declared in the test, and renders with the real, strict translation runtime from `@nocobase/i18n/testing` and the plugin's own locale file: a mocked `t` returns whatever key it is given, so a misspelt key, a key the locale file lacks, or a page reading the wrong namespace would all pass.
 
 ```tsx
 // tests/client/audit-log-settings-page.test.tsx
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
 import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import enUS from '../../client/locales/en-US.js';
 
 const mocks = vi.hoisted(() => ({
   authorizationClientToken: Symbol('authorization-client'),
@@ -483,10 +489,6 @@ vi.mock('@nocobase/app-client', () => ({
 vi.mock('@nocobase/app-plugin-authorization/client', () => ({
   authorizationClientToken: mocks.authorizationClientToken,
   useAuthorizationRevision: () => 0,
-}));
-
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 import AuditLogSettingsPage from '../../client/pages/settings/index.js';
@@ -510,18 +512,25 @@ function TestShell(): ReactElement {
   );
 }
 
+// Strict: a key the locale file lacks fails the render instead of showing the key.
+const i18n = await createTestI18nRuntime({
+  namespaces: { '@nocobase/app-plugin-audit-log': enUS },
+});
+
 function renderAt(entry: string): void {
   render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route element={<TestShell />}>
-          <Route path='/settings/audit-log' element={<AuditLogSettingsPage />}>
-            <Route path='general' element={<p>General panel</p>} />
-            <Route path='retention' element={<p>Retention panel</p>} />
+    <TestI18nProvider runtime={i18n} namespace='@nocobase/app-plugin-audit-log'>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route element={<TestShell />}>
+            <Route path='/settings/audit-log' element={<AuditLogSettingsPage />}>
+              <Route path='general' element={<p>General panel</p>} />
+              <Route path='retention' element={<p>Retention panel</p>} />
+            </Route>
           </Route>
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+        </Routes>
+      </MemoryRouter>
+    </TestI18nProvider>,
   );
 }
 
@@ -543,7 +552,7 @@ describe('AuditLogSettingsPage', () => {
       '/settings/audit-log/retention?source=menu',
     );
     expect(
-      screen.queryByRole('tab', { name: 'settings.tabs.general' }),
+      screen.queryByRole('tab', { name: enUS.settings.tabs.general }),
     ).not.toBeInTheDocument();
   });
 
@@ -555,7 +564,7 @@ describe('AuditLogSettingsPage', () => {
       '/settings/audit-log/retention?source=link',
     );
     expect(
-      screen.getByRole('tab', { name: 'settings.tabs.retention' }),
+      screen.getByRole('tab', { name: enUS.settings.tabs.retention }),
     ).toHaveAttribute('data-active');
   });
 });
