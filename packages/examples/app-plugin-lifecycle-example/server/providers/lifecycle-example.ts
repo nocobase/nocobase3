@@ -20,7 +20,12 @@ import {
   LIFECYCLE_EXAMPLE_SCOPE,
 } from '../scope.js';
 import { LifecycleExampleService } from '../services/lifecycle-example.js';
-import { lifecycleExampleServiceToken } from '../tokens.js';
+import { createApprovalLabStore } from '../approval-lab/store.js';
+import { ApprovalLabService } from '../approval-lab/service.js';
+import {
+  approvalLabServiceToken,
+  lifecycleExampleServiceToken,
+} from '../tokens.js';
 
 /** How often the triggers are swept and expired attempts taken back. */
 export const TRIGGER_SWEEP_MS: number = 10_000;
@@ -41,6 +46,14 @@ export class LifecycleExampleProvider extends ServiceProvider<AppPluginApplicati
 
   public override register(): void {
     this.app.container.singleton(
+      approvalLabServiceToken,
+      () =>
+        new ApprovalLabService(
+          this.app.container.resolve(databaseManagerToken),
+          this.lifecycleRuntime(),
+        ),
+    );
+    this.app.container.singleton(
       lifecycleExampleServiceToken,
       () =>
         new LifecycleExampleService(
@@ -52,6 +65,7 @@ export class LifecycleExampleProvider extends ServiceProvider<AppPluginApplicati
 
   public override async start(): Promise<void> {
     const runtime = this.lifecycleRuntime();
+    await this.app.container.resolve(approvalLabServiceToken).start();
     await this.effectJobs().start(runtime);
   }
 
@@ -67,14 +81,16 @@ export class LifecycleExampleProvider extends ServiceProvider<AppPluginApplicati
       .resolve(loggingToken)
       .getLogger('lifecycle-example');
     const runtime = new LifecycleRuntime({
-      store: createRepositoryLifecycleStore(
-        this.app.container.resolve(databaseManagerToken),
-        {
-          collections: {
-            transitions: LIFECYCLE_EXAMPLE_COLLECTIONS.transitions,
-            effectRuns: LIFECYCLE_EXAMPLE_COLLECTIONS.effectRuns,
+      store: createApprovalLabStore(
+        createRepositoryLifecycleStore(
+          this.app.container.resolve(databaseManagerToken),
+          {
+            collections: {
+              transitions: LIFECYCLE_EXAMPLE_COLLECTIONS.transitions,
+              effectRuns: LIFECYCLE_EXAMPLE_COLLECTIONS.effectRuns,
+            },
           },
-        },
+        ),
       ),
       dispatcher: this.effectJobs(),
       logger: {
@@ -122,6 +138,7 @@ export class LifecycleExampleProvider extends ServiceProvider<AppPluginApplicati
       sweepEveryMs: TRIGGER_SWEEP_MS,
       // Succeeded and cancelled runs are kept for a week, then pruned.
       onSweep: async () => {
+        await this.app.container.resolve(approvalLabServiceToken).sweep(false);
         await this.lifecycleRuntime().prune({
           olderThan: new Date(Date.now() - RUN_RETENTION_MS),
         });

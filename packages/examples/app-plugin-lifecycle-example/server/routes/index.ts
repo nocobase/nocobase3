@@ -15,6 +15,7 @@ import { LifecycleError } from '@nocobase/lifecycle';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
+import { approvalLabRoutes } from './approval-lab.js';
 import { parseItems } from '../../shared/expense.js';
 import { person } from '../../shared/people.js';
 import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
@@ -169,6 +170,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
 const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [
   apiRoutes,
+  approvalLabRoutes,
 ];
 
 export default routes;

@@ -21,7 +21,10 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LifecycleExampleProvider } from '../server/providers/lifecycle-example.js';
-import { lifecycleExampleServiceToken } from '../server/tokens.js';
+import {
+  approvalLabServiceToken,
+  lifecycleExampleServiceToken,
+} from '../server/tokens.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 let directory: string;
@@ -197,6 +200,46 @@ describe('lifecycle example provider', () => {
         status: 'closed',
         closedReason: 'timeout',
       });
+    } finally {
+      await stop();
+    }
+  });
+  it('executes approval lab installments through the real jobs service and persists their references', async () => {
+    const { container, stop } = await start();
+    try {
+      const service = container.resolve(approvalLabServiceToken);
+      const payment = await service.create(
+        'payment',
+        { executionMode: 'immediate' },
+        'zhang',
+      );
+      await service.runtime.fire('paymentRequests', payment.id, 'submit', {
+        actor: { id: 'zhang' },
+      });
+      await service.runtime.fire('paymentRequests', payment.id, 'approve', {
+        actor: { id: 'finA' },
+      });
+      const detail = await eventually(
+        () =>
+          service.runtime.view('paymentRequests', payment.id, { id: 'zhang' }),
+        (value) => value.state === 'executed',
+      );
+      expect(detail.record.installmentsPaid).toBe(2);
+      expect(detail.record.paidCents).toBe(100000);
+      expect(
+        detail.history.transitions.filter((item) => item.transition === 'paid'),
+      ).toHaveLength(2);
+      const operations = (await service.overview('zhang')).operations.filter(
+        (item) => item.kind === 'pay',
+      );
+      expect(operations).toHaveLength(2);
+      expect(
+        await database.repository('scenarioPaymentReservations').findMany(),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'reserve', amountCents: 100000 }),
+        ]),
+      );
     } finally {
       await stop();
     }
