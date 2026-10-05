@@ -62,8 +62,10 @@ export function FilePreviewContent(
     return (
       <div role='alert'>{t(messageKey(error), { defaultValue: error })}</div>
     );
-  if (!url && kind !== 'unsupported')
-    return (
+  if (!url)
+    return kind === 'unsupported' ? (
+      <DownloadFallback file={file} onDownload={onDownload} />
+    ) : (
       <div role='status'>
         {t('files.loadingPreview', { defaultValue: 'Loading preview...' })}
       </div>
@@ -124,7 +126,7 @@ function MarkdownPreview(inputProps: { readonly text?: string }): ReactElement {
 
 function ImagePreview(inputProps: {
   readonly file: FileRecord;
-  readonly url?: string;
+  readonly url: string;
   readonly onDownload?: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-file');
@@ -142,7 +144,7 @@ function ImagePreview(inputProps: {
           defaultValue:
             'This image could not be displayed. It may be corrupted or in an unsupported format.',
         })}
-        imageFailed
+        thumbnailIconOnly
         onDownload={onDownload}
       />
     );
@@ -223,7 +225,7 @@ function OfficePreview(inputProps: {
 function DownloadFallback(inputProps: {
   readonly file: FileRecord;
   readonly message?: string;
-  readonly imageFailed?: boolean;
+  readonly thumbnailIconOnly?: boolean;
   readonly onDownload?: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-file');
@@ -232,16 +234,15 @@ function DownloadFallback(inputProps: {
     message = t('files.previewUnavailable', {
       defaultValue: 'Preview is unavailable for this file type.',
     }),
-    imageFailed = false,
+    thumbnailIconOnly = false,
     onDownload,
   } = inputProps;
 
   return (
     <div className='flex flex-col items-center gap-3 py-8'>
       <div className='h-24 w-24'>
-        {/* The thumbnail would load the bytes that just failed; an empty URL
-            makes it show the file-type icon instead. */}
-        <FileThumbnail file={file} url={imageFailed ? '' : undefined} />
+        {/* After an image fails, a thumbnail would load the same bytes again. */}
+        <FileThumbnail file={file} iconOnly={thumbnailIconOnly} />
       </div>
       <p>{message}</p>
       {onDownload ? (

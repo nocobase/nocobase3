@@ -44,10 +44,13 @@ export function FileThumbnail({
   file,
   url,
   alt = file.filename,
+  iconOnly = false,
 }: FileThumbnailProps): ReactElement {
-  const imageUrl = resolveSafeFileUrl(
-    url ?? (isSafeImagePreview(file) ? (file.contentUrl ?? '') : ''),
-  );
+  const imageUrl = iconOnly
+    ? undefined
+    : resolveSafeFileUrl(
+        url ?? (isSafeImagePreview(file) ? (file.contentUrl ?? '') : ''),
+      );
   // Remember which URL failed rather than a flag, so a new URL is tried again.
   const [failedUrl, setFailedUrl] = useState<string>();
   return imageUrl && imageUrl !== failedUrl ? (
